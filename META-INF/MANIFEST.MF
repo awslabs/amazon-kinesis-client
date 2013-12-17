@@ -1,0 +1,33 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Amazon Kinesis Client Library for Java
+Bundle-SymbolicName: com.amazonaws.kinesisclientlibrary;singleton:=true
+Bundle-Version: 1.0.0
+Bundle-Vendor: Amazon Technologies, Inc
+Bundle-RequiredExecutionEnvironment: JavaSE-1.7
+Require-Bundle: org.apache.commons.codec;bundle-version="1.3.0",
+ org.apache.commons.logging;bundle-version="1.1.1";visibility:=reexport,
+ com.fasterxml.jackson.core.jackson-databind;bundle-version="2.1.1",
+ com.fasterxml.jackson.core.jackson-core;bundle-version="2.1.1",
+ com.fasterxml.jackson.core.jackson-annotations;bundle-version="2.1.1",
+ org.apache.httpcomponents.httpcore;bundle-version="4.2.0",
+ org.apache.httpcomponents.httpclient;bundle-version="4.2.0"
+ com.amazonaws.sdk;bundle-version="1.6.9",
+Export-Package: com.amazonaws.services.kinesis,
+ com.amazonaws.services.kinesis.clientlibrary,
+ com.amazonaws.services.kinesis.clientlibrary.exceptions,
+ com.amazonaws.services.kinesis.clientlibrary.exceptions.internal,
+ com.amazonaws.services.kinesis.clientlibrary.interfaces,
+ com.amazonaws.services.kinesis.clientlibrary.types,
+ com.amazonaws.services.kinesis.clientlibrary.proxies,
+ com.amazonaws.services.kinesis.clientlibrary.lib,
+ com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint,
+ com.amazonaws.services.kinesis.clientlibrary.lib.worker,
+ com.amazonaws.services.kinesis.leases,
+ com.amazonaws.services.kinesis.leases.exceptions,
+ com.amazonaws.services.kinesis.leases.impl,
+ com.amazonaws.services.kinesis.leases.interfaces,
+ com.amazonaws.services.kinesis.leases.util,
+ com.amazonaws.services.kinesis.metrics,
+ com.amazonaws.services.kinesis.metrics.impl,
+ com.amazonaws.services.kinesis.metrics.interfaces
