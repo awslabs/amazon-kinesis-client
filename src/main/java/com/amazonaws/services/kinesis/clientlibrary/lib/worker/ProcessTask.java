@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -71,7 +71,9 @@ class ProcessTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
     }
 
-    /* (non-Javadoc)
+    /*
+     * (non-Javadoc)
+     * 
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
@@ -92,7 +94,7 @@ class ProcessTask implements ITask {
                 return new TaskResult(null, shardEndReached);
             }
             List<Record> records = getRecords();
-            
+
             if (records.isEmpty()) {
                 LOG.debug("Kinesis didn't return any records for shard " + shardInfo.getShardId());
 
@@ -111,12 +113,12 @@ class ProcessTask implements ITask {
             }
 
             if ((!records.isEmpty()) || streamConfig.shouldCallProcessRecordsEvenForEmptyRecordList()) {
-                
+
                 // If we got more records, record the max sequence number. Sleep if there are no records.
                 if (!records.isEmpty()) {
                     String maxSequenceNumber = getMaxSequenceNumber(scope, records);
-                    recordProcessorCheckpointer.setSequenceNumber(maxSequenceNumber);                
-                }                
+                    recordProcessorCheckpointer.setLargestPermittedCheckpointValue(maxSequenceNumber);
+                }
                 try {
                     LOG.debug("Calling application processRecords() with " + records.size() + " records from "
                             + shardInfo.getShardId());
@@ -126,7 +128,7 @@ class ProcessTask implements ITask {
                             + ": Application processRecords() threw an exception when processing shard ", e);
                     LOG.error("ShardId " + shardInfo.getShardId() + ": Skipping over the following data records: "
                             + records);
-                }                
+                }
             }
         } catch (RuntimeException | KinesisClientLibException e) {
             LOG.error("ShardId " + shardInfo.getShardId() + ": Caught exception: ", e);
@@ -142,6 +144,7 @@ class ProcessTask implements ITask {
 
         return new TaskResult(exception);
     }
+
     // CHECKSTYLE:ON CyclomaticComplexity
 
     /**
@@ -192,7 +195,7 @@ class ProcessTask implements ITask {
              * Advance the iterator to after the greatest processed sequence number (remembered by
              * recordProcessorCheckpointer).
              */
-            dataFetcher.advanceIteratorAfter(recordProcessorCheckpointer.getSequenceNumber());
+            dataFetcher.advanceIteratorAfter(recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
 
             // Try a second time - if we fail this time, expose the failure.
             try {

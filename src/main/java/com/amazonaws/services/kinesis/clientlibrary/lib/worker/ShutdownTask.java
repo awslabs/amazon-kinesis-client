@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -65,8 +65,10 @@ class ShutdownTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
     }
 
-    /* Invokes RecordProcessor shutdown() API.
+    /*
+     * Invokes RecordProcessor shutdown() API.
      * (non-Javadoc)
+     * 
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
     @Override
@@ -77,9 +79,11 @@ class ShutdownTask implements ITask {
         try {
             // If we reached end of the shard, set sequence number to SHARD_END.
             if (reason == ShutdownReason.TERMINATE) {
-                recordProcessorCheckpointer.setSequenceNumber(SentinelCheckpoint.SHARD_END.toString());
+                recordProcessorCheckpointer.setSequenceNumberAtShardEnd(
+                        recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
+                recordProcessorCheckpointer.setLargestPermittedCheckpointValue(SentinelCheckpoint.SHARD_END.toString());
             }
-            
+
             LOG.debug("Invoking shutdown() for shard " + shardInfo.getShardId() + ", concurrencyToken "
                     + shardInfo.getConcurrencyToken() + ". Shutdown reason: " + reason);
             try {
@@ -97,7 +101,7 @@ class ShutdownTask implements ITask {
                 applicationException = true;
                 throw e;
             }
-            
+
             if (reason == ShutdownReason.TERMINATE) {
                 LOG.debug("Looking for child shards of shard " + shardInfo.getShardId());
                 // create leases for the child shards
@@ -127,7 +131,9 @@ class ShutdownTask implements ITask {
         return new TaskResult(exception);
     }
 
-    /* (non-Javadoc)
+    /*
+     * (non-Javadoc)
+     * 
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#getTaskType()
      */
     @Override

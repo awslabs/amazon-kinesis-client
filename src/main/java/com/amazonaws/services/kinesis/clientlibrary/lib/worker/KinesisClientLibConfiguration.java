@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.regions.RegionUtils;
 
 /**
  * Configuration for the Amazon Kinesis Client Library.
@@ -31,51 +32,51 @@ public class KinesisClientLibConfiguration {
      * the number of DynamoDB IOPS required for tracking leases.
      */
     public static final long DEFAULT_FAILOVER_TIME_MILLIS = 10000L;
-    
+
     /**
      * Max records to fetch from Kinesis in a single GetRecords call.
      */
     public static final int DEFAULT_MAX_RECORDS = 10000;
-    
+
     /**
      * Idle time between record reads in milliseconds.
      */
     public static final long DEFAULT_IDLETIME_BETWEEN_READS_MILLIS = 1000L;
-    
+
     /**
      * Don't call processRecords() on the record processor for empty record lists.
      */
     public static final boolean DEFAULT_DONT_CALL_PROCESS_RECORDS_FOR_EMPTY_RECORD_LIST = false;
-    
+
     /**
      * Interval in milliseconds between polling to check for parent shard completion.
      * Polling frequently will take up more DynamoDB IOPS (when there are leases for shards waiting on
      * completion of parent shards).
      */
     public static final long DEFAULT_PARENT_SHARD_POLL_INTERVAL_MILLIS = 10000L;
-    
+
     /**
      * Shard sync interval in milliseconds - e.g. wait for this long between shard sync tasks.
      */
     public static final long DEFAULT_SHARD_SYNC_INTERVAL_MILLIS = 60000L;
-    
+
     /**
      * Cleanup leases upon shards completion (don't wait until they expire in Kinesis).
      * Keeping leases takes some tracking/resources (e.g. they need to be renewed, assigned), so by default we try
      * to delete the ones we don't need any longer.
      */
     public static final boolean DEFAULT_CLEANUP_LEASES_UPON_SHARDS_COMPLETION = true;
-    
+
     /**
      * Backoff time in milliseconds for Amazon Kinesis Client Library tasks (in the event of failures).
      */
     public static final long DEFAULT_TASK_BACKOFF_TIME_MILLIS = 500L;
-    
+
     /**
      * Buffer metrics for at most this long before publishing to CloudWatch.
      */
     public static final long DEFAULT_METRICS_BUFFER_TIME_MILLIS = 10000L;
-    
+
     /**
      * Buffer at most this many metrics before publishing to CloudWatch.
      */
@@ -84,7 +85,13 @@ public class KinesisClientLibConfiguration {
     /**
      * User agent set when Amazon Kinesis Client Library makes AWS requests.
      */
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.0.0";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.1.0";
+
+    /**
+     * KCL will validate client provided sequence numbers with a call to Amazon Kinesis before checkpointing for calls
+     * to {@link RecordProcessorCheckpointer#checkpoint(String)} by default.
+     */
+    public static final boolean DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING = true;
 
     private String applicationName;
     private String streamName;
@@ -108,12 +115,15 @@ public class KinesisClientLibConfiguration {
     private long taskBackoffTimeMillis;
     private long metricsBufferTimeMillis;
     private int metricsMaxQueueSize;
+    private boolean validateSequenceNumberBeforeCheckpointing;
+    private String regionName;
 
     /**
      * Constructor.
+     * 
      * @param applicationName Name of the Amazon Kinesis application.
-     *     By default the application name is included in the user agent string used to make AWS requests. This
-     *     can assist with troubleshooting (e.g. distinguish requests made by separate applications).
+     *        By default the application name is included in the user agent string used to make AWS requests. This
+     *        can assist with troubleshooting (e.g. distinguish requests made by separate applications).
      * @param streamName Name of the Kinesis stream
      * @param credentialsProvider Provides credentials used to sign AWS requests
      * @param workerId Used to distinguish different workers/processes of a Kinesis application
@@ -127,9 +137,10 @@ public class KinesisClientLibConfiguration {
 
     /**
      * Constructor.
+     * 
      * @param applicationName Name of the Amazon Kinesis application
-     *     By default the application name is included in the user agent string used to make AWS requests. This
-     *     can assist with troubleshooting (e.g. distinguish requests made by separate applications).
+     *        By default the application name is included in the user agent string used to make AWS requests. This
+     *        can assist with troubleshooting (e.g. distinguish requests made by separate applications).
      * @param streamName Name of the Kinesis stream
      * @param kinesisCredentialsProvider Provides credentials used to access Kinesis
      * @param dynamoDBCredentialsProvider Provides credentials used to access DynamoDB
@@ -148,18 +159,18 @@ public class KinesisClientLibConfiguration {
                 DEFAULT_DONT_CALL_PROCESS_RECORDS_FOR_EMPTY_RECORD_LIST, DEFAULT_PARENT_SHARD_POLL_INTERVAL_MILLIS,
                 DEFAULT_SHARD_SYNC_INTERVAL_MILLIS, DEFAULT_CLEANUP_LEASES_UPON_SHARDS_COMPLETION,
                 new ClientConfiguration(), new ClientConfiguration(), new ClientConfiguration(),
-                DEFAULT_TASK_BACKOFF_TIME_MILLIS, DEFAULT_METRICS_BUFFER_TIME_MILLIS,
-                DEFAULT_METRICS_MAX_QUEUE_SIZE);
+                DEFAULT_TASK_BACKOFF_TIME_MILLIS, DEFAULT_METRICS_BUFFER_TIME_MILLIS, DEFAULT_METRICS_MAX_QUEUE_SIZE,
+                DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING, null);
     }
 
     /**
      * @param applicationName Name of the Kinesis application
-     *     By default the application name is included in the user agent string used to make AWS requests. This
-     *     can assist with troubleshooting (e.g. distinguish requests made by separate applications).
+     *        By default the application name is included in the user agent string used to make AWS requests. This
+     *        can assist with troubleshooting (e.g. distinguish requests made by separate applications).
      * @param streamName Name of the Kinesis stream
      * @param kinesisEndpoint Kinesis endpoint
      * @param initialPositionInStream One of LATEST or TRIM_HORIZON. The KinesisClientLibrary will start fetching
-     *        records from that location in the stream when an application starts up for the first time and there 
+     *        records from that location in the stream when an application starts up for the first time and there
      *        are no checkpoints. If there are checkpoints, then we start from the checkpoint position.
      * @param kinesisCredentialsProvider Provides credentials used to access Kinesis
      * @param dynamoDBCredentialsProvider Provides credentials used to access DynamoDB
@@ -180,10 +191,14 @@ public class KinesisClientLibConfiguration {
      * @param taskBackoffTimeMillis Backoff period when tasks encounter an exception
      * @param metricsBufferTimeMillis Metrics are buffered for at most this long before publishing to CloudWatch
      * @param metricsMaxQueueSize Max number of metrics to buffer before publishing to CloudWatch
+     * @param validateSequenceNumberBeforeCheckpointing whether KCL should validate client provided sequence numbers
+     *        with a call to Amazon Kinesis before checkpointing for calls to
+     *        {@link RecordProcessorCheckpointer#checkpoint(String)}
+     * @param regionName The region name for the service
      * 
      */
-    // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 25 LINES
-    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 25 LINES
+    // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
+    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
     public KinesisClientLibConfiguration(String applicationName,
             String streamName,
             String kinesisEndpoint,
@@ -204,7 +219,9 @@ public class KinesisClientLibConfiguration {
             ClientConfiguration cloudWatchClientConfig,
             long taskBackoffTimeMillis,
             long metricsBufferTimeMillis,
-            int metricsMaxQueueSize) {
+            int metricsMaxQueueSize,
+            boolean validateSequenceNumberBeforeCheckpointing,
+            String regionName) {
         // Check following values are greater than zero
         checkIsValuePositive("FailoverTimeMillis", failoverTimeMillis);
         checkIsValuePositive("IdleTimeBetweenReadsInMillis", idleTimeBetweenReadsInMillis);
@@ -214,6 +231,7 @@ public class KinesisClientLibConfiguration {
         checkIsValuePositive("TaskBackoffTimeMillis", taskBackoffTimeMillis);
         checkIsValuePositive("MetricsBufferTimeMills", metricsBufferTimeMillis);
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
+        checkIsRegionNameValid(regionName);
         this.applicationName = applicationName;
         this.streamName = streamName;
         this.kinesisEndpoint = kinesisEndpoint;
@@ -229,15 +247,14 @@ public class KinesisClientLibConfiguration {
         this.shardSyncIntervalMillis = shardSyncIntervalMillis;
         this.cleanupLeasesUponShardCompletion = cleanupTerminatedShardsBeforeExpiry;
         this.workerIdentifier = workerId;
-        this.kinesisClientConfig = 
-                checkAndAppendKinesisClientLibUserAgent(kinesisClientConfig);
-        this.dynamoDBClientConfig = 
-                checkAndAppendKinesisClientLibUserAgent(dynamoDBClientConfig);
-        this.cloudWatchClientConfig = 
-                checkAndAppendKinesisClientLibUserAgent(cloudWatchClientConfig);
+        this.kinesisClientConfig = checkAndAppendKinesisClientLibUserAgent(kinesisClientConfig);
+        this.dynamoDBClientConfig = checkAndAppendKinesisClientLibUserAgent(dynamoDBClientConfig);
+        this.cloudWatchClientConfig = checkAndAppendKinesisClientLibUserAgent(cloudWatchClientConfig);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.metricsBufferTimeMillis = metricsBufferTimeMillis;
         this.metricsMaxQueueSize = metricsMaxQueueSize;
+        this.validateSequenceNumberBeforeCheckpointing = validateSequenceNumberBeforeCheckpointing;
+        this.regionName = regionName;
     }
 
     // Check if value is positive, otherwise throw an exception
@@ -247,7 +264,7 @@ public class KinesisClientLibConfiguration {
                     + " should be positive, but current value is " + value);
         }
     }
-    
+
     // Check if user agent in configuration is the default agent.
     // If so, replace it with application name plus KINESIS_CLIENT_LIB_USER_AGENT.
     // If not, append KINESIS_CLIENT_LIB_USER_AGENT to the end.
@@ -261,6 +278,12 @@ public class KinesisClientLibConfiguration {
         }
         config.setUserAgent(existingUserAgent);
         return config;
+    }
+    
+    private void checkIsRegionNameValid(String regionNameToCheck) {
+        if (regionNameToCheck != null && RegionUtils.getRegion(regionNameToCheck) == null) {
+            throw new IllegalArgumentException("The specified region name is not valid");
+        }  
     }
 
     /**
@@ -369,19 +392,19 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
-     * @return Kinesis client configuration 
+     * @return Kinesis client configuration
      */
     public ClientConfiguration getKinesisClientConfiguration() {
         return kinesisClientConfig;
     }
-    
+
     /**
      * @return DynamoDB client configuration
      */
     public ClientConfiguration getDynamoDBClientConfiguration() {
         return dynamoDBClientConfig;
     }
-    
+
     /**
      * @return CloudWatch client configuration
      */
@@ -417,7 +440,22 @@ public class KinesisClientLibConfiguration {
         return cleanupLeasesUponShardCompletion;
     }
 
-    // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 180 LINES
+    /**
+     * @return true if KCL should validate client provided sequence numbers with a call to Amazon Kinesis before
+     *         checkpointing for calls to {@link RecordProcessorCheckpointer#checkpoint(String)}
+     */
+    public boolean shouldValidateSequenceNumberBeforeCheckpointing() {
+        return validateSequenceNumberBeforeCheckpointing;
+    }
+
+    /**
+     * @return Region for the service
+     */
+    public String getRegionName() {
+        return regionName;
+    }
+
+    // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 190 LINES
     /**
      * @param kinesisEndpoint Kinesis endpoint
      * @return KinesisClientLibConfiguration
@@ -484,7 +522,7 @@ public class KinesisClientLibConfiguration {
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withCallProcessRecordsEvenForEmptyRecordList(
-        boolean callProcessRecordsEvenForEmptyRecordList) {
+            boolean callProcessRecordsEvenForEmptyRecordList) {
         this.callProcessRecordsEvenForEmptyRecordList = callProcessRecordsEvenForEmptyRecordList;
         return this;
     }
@@ -505,18 +543,17 @@ public class KinesisClientLibConfiguration {
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withCleanupLeasesUponShardCompletion(
-        boolean cleanupLeasesUponShardCompletion) {
+            boolean cleanupLeasesUponShardCompletion) {
         this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
         return this;
     }
-    
+
     /**
      * @param clientConfig Common client configuration used by Kinesis/DynamoDB/CloudWatch client
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withCommonClientConfig(ClientConfiguration clientConfig) {
-        ClientConfiguration tempClientConfig = 
-                checkAndAppendKinesisClientLibUserAgent(clientConfig);
+        ClientConfiguration tempClientConfig = checkAndAppendKinesisClientLibUserAgent(clientConfig);
         this.kinesisClientConfig = tempClientConfig;
         this.dynamoDBClientConfig = tempClientConfig;
         this.cloudWatchClientConfig = tempClientConfig;
@@ -528,33 +565,31 @@ public class KinesisClientLibConfiguration {
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withKinesisClientConfig(ClientConfiguration kinesisClientConfig) {
-        this.kinesisClientConfig = 
-                checkAndAppendKinesisClientLibUserAgent(kinesisClientConfig);
+        this.kinesisClientConfig = checkAndAppendKinesisClientLibUserAgent(kinesisClientConfig);
         return this;
     }
-    
+
     /**
      * @param dynamoDBClientConfig Client configuration used by DynamoDB client
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withDynamoDBClientConfig(ClientConfiguration dynamoDBClientConfig) {
-        this.dynamoDBClientConfig = 
-                checkAndAppendKinesisClientLibUserAgent(dynamoDBClientConfig);
+        this.dynamoDBClientConfig = checkAndAppendKinesisClientLibUserAgent(dynamoDBClientConfig);
         return this;
     }
-    
+
     /**
      * @param cloudWatchClientConfig Client configuration used by CloudWatch client
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withCloudWatchClientConfig(ClientConfiguration cloudWatchClientConfig) {
-        this.cloudWatchClientConfig = 
-                checkAndAppendKinesisClientLibUserAgent(cloudWatchClientConfig);
+        this.cloudWatchClientConfig = checkAndAppendKinesisClientLibUserAgent(cloudWatchClientConfig);
         return this;
     }
-    
+
     /**
      * Override the default user agent (application name).
+     * 
      * @param userAgent User agent to use in AWS requests
      * @return KinesisClientLibConfiguration
      */
@@ -593,6 +628,31 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withMetricsMaxQueueSize(int metricsMaxQueueSize) {
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
         this.metricsMaxQueueSize = metricsMaxQueueSize;
+        return this;
+    }
+
+    /**
+     * 
+     * @param validateSequenceNumberBeforeCheckpointing whether KCL should validate client provided sequence numbers
+     *        with a call to Amazon Kinesis before checkpointing for calls to
+     *        {@link RecordProcessorCheckpointer#checkpoint(String)}.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withValidateSequenceNumberBeforeCheckpointing(
+            boolean validateSequenceNumberBeforeCheckpointing) {
+        this.validateSequenceNumberBeforeCheckpointing = validateSequenceNumberBeforeCheckpointing;
+        return this;
+    }
+
+    /**
+     * 
+     * @param regionName The region name for the service
+     * @return KinesisClientLibConfiguration
+     */
+    // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 2 LINES
+    public KinesisClientLibConfiguration withRegionName(String regionName) {
+        checkIsRegionNameValid(regionName);
+        this.regionName = regionName;
         return this;
     }
 }

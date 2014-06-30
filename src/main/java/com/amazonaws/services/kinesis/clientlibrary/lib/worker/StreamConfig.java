@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ class StreamConfig {
     private final long idleTimeInMilliseconds;
     private final boolean callProcessRecordsEvenForEmptyRecordList;
     private InitialPositionInStream initialPositionInStream;
+    private final boolean validateSequenceNumberBeforeCheckpointing;
 
     /**
      * @param proxy Used to fetch records and information about the stream
@@ -33,13 +34,15 @@ class StreamConfig {
      * @param idleTimeInMilliseconds Idle time between get calls to the stream
      * @param callProcessRecordsEvenForEmptyRecordList Call the RecordProcessor::processRecords() API even if
      *        GetRecords returned an empty record list.
+     * @param validateSequenceNumberBeforeCheckpointing Whether to call Amazon Kinesis to validate sequence numbers
      */
     StreamConfig(IKinesisProxy proxy,
             int maxRecords,
             long idleTimeInMilliseconds,
-            boolean callProcessRecordsEvenForEmptyRecordList) {
+            boolean callProcessRecordsEvenForEmptyRecordList,
+            boolean validateSequenceNumberBeforeCheckpointing) {
         this(proxy, maxRecords, idleTimeInMilliseconds, callProcessRecordsEvenForEmptyRecordList,
-                InitialPositionInStream.LATEST);
+                validateSequenceNumberBeforeCheckpointing, InitialPositionInStream.LATEST);
     }
 
     /**
@@ -48,17 +51,20 @@ class StreamConfig {
      * @param idleTimeInMilliseconds Idle time between get calls to the stream
      * @param callProcessRecordsEvenForEmptyRecordList Call the IRecordProcessor::processRecords() API even if
      *        GetRecords returned an empty record list.
+     * @param validateSequenceNumberBeforeCheckpointing Whether to call Amazon Kinesis to validate sequence numbers
      * @param initialPositionInStream Initial position in stream
      */
     StreamConfig(IKinesisProxy proxy,
             int maxRecords,
             long idleTimeInMilliseconds,
             boolean callProcessRecordsEvenForEmptyRecordList,
+            boolean validateSequenceNumberBeforeCheckpointing,
             InitialPositionInStream initialPositionInStream) {
         this.streamProxy = proxy;
         this.maxRecords = maxRecords;
         this.idleTimeInMilliseconds = idleTimeInMilliseconds;
         this.callProcessRecordsEvenForEmptyRecordList = callProcessRecordsEvenForEmptyRecordList;
+        this.validateSequenceNumberBeforeCheckpointing = validateSequenceNumberBeforeCheckpointing;
         this.initialPositionInStream = initialPositionInStream;
     }
 
@@ -95,6 +101,13 @@ class StreamConfig {
      */
     InitialPositionInStream getInitialPositionInStream() {
         return initialPositionInStream;
+    }
+
+    /**
+     * @return validateSequenceNumberBeforeCheckpointing
+     */
+    boolean shouldValidateSequenceNumberBeforeCheckpointing() {
+        return validateSequenceNumberBeforeCheckpointing;
     }
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -75,7 +75,6 @@ class ShardConsumer {
     private boolean beginShutdown;
     private ShutdownReason shutdownReason;
 
-
     /**
      * @param shardInfo Shard information
      * @param streamConfig Stream configuration to use
@@ -103,7 +102,13 @@ class ShardConsumer {
         this.executorService = executorService;
         this.shardInfo = shardInfo;
         this.checkpoint = checkpoint;
-        this.recordProcessorCheckpointer = new RecordProcessorCheckpointer(shardInfo, checkpoint);
+        this.recordProcessorCheckpointer =
+                new RecordProcessorCheckpointer(shardInfo,
+                        checkpoint,
+                        new SequenceNumberValidator(streamConfig.getStreamProxy(),
+                                shardInfo.getShardId(),
+                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
+                        new CheckpointValueComparator());
         this.dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
         this.leaseManager = leaseManager;
         this.metricsFactory = metricsFactory;
@@ -145,7 +150,7 @@ class ShardConsumer {
                                         + " is blocked on completion of parent shard.");
                             } else {
                                 LOG.debug("Caught exception running " + currentTask.getTaskType() + " task: ",
-                                        result.getException());                                
+                                        result.getException());
                             }
                         }
                     }
@@ -184,11 +189,13 @@ class ShardConsumer {
 
         return submittedNewTask;
     }
+
     // CHECKSTYLE:ON CyclomaticComplexity
 
     /**
      * Shutdown this ShardConsumer (including invoking the RecordProcessor shutdown API).
      * This is called by Worker when it loses responsibility for a shard.
+     * 
      * @return true if shutdown is complete (false if shutdown is still in progress)
      */
     synchronized boolean beginShutdown() {
@@ -198,7 +205,7 @@ class ShardConsumer {
         }
         return isShutdown();
     }
-    
+
     synchronized void markForShutdown(ShutdownReason reason) {
         beginShutdown = true;
         // ShutdownReason.ZOMBIE takes precedence over TERMINATE (we won't be able to save checkpoint at end of shard)
@@ -216,7 +223,7 @@ class ShardConsumer {
     boolean isShutdown() {
         return currentState == ShardConsumerState.SHUTDOWN_COMPLETE;
     }
-    
+
     /**
      * @return the shutdownReason
      */
@@ -226,6 +233,7 @@ class ShardConsumer {
 
     /**
      * Figure out next task to run based on current state, task, and shutdown context.
+     * 
      * @return Return next task to run
      */
     private ITask getNextTask() {
@@ -280,6 +288,7 @@ class ShardConsumer {
     /**
      * Note: This is a private/internal method with package level access solely for testing purposes.
      * Update state based on information about: task success, current state, and shutdown info.
+     * 
      * @param taskCompletedSuccessfully Whether (current) task completed successfully.
      */
     // CHECKSTYLE:OFF CyclomaticComplexity

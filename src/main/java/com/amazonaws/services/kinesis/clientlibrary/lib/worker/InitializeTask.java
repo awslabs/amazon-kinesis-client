@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -52,8 +52,10 @@ class InitializeTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
     }
 
-    /* Initializes the data fetcher (position in shard) and invokes the RecordProcessor initialize() API.
+    /*
+     * Initializes the data fetcher (position in shard) and invokes the RecordProcessor initialize() API.
      * (non-Javadoc)
+     * 
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
     @Override
@@ -65,7 +67,7 @@ class InitializeTask implements ITask {
             LOG.debug("Initializing ShardId " + shardInfo.getShardId());
             String initialCheckpoint = checkpoint.getCheckpoint(shardInfo.getShardId());
             dataFetcher.initialize(initialCheckpoint);
-            recordProcessorCheckpointer.setSequenceNumber(initialCheckpoint);
+            recordProcessorCheckpointer.setLargestPermittedCheckpointValue(initialCheckpoint);
             try {
                 LOG.debug("Calling the record processor initialize().");
                 recordProcessor.initialize(shardInfo.getShardId());
@@ -94,7 +96,9 @@ class InitializeTask implements ITask {
         return new TaskResult(exception);
     }
 
-    /* (non-Javadoc)
+    /*
+     * (non-Javadoc)
+     * 
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#getTaskType()
      */
     @Override

@@ -22,6 +22,11 @@ The **Amazon Kinesis Client Library for Java** enables Java developers to easily
 
 After you've downloaded the code from GitHub, you can build it using Maven. To disable GPG signing in the build, use this command: `mvn clean install -Dgpg.skip=true`
 
+## Release Notes
+### Release 1.1 (June 30, 2014)
+* **Checkpointing at a specific sequence number** &mdash; The IRecordProcessorCheckpointer interface now supports checkpointing at a sequence number specified by the record processor.
+* **Set region** &mdash; KinesisClientLibConfiguration now supports setting the region name to indicate the location of the Amazon Kinesis service. The Amazon DynamoDB table and Amazon CloudWatch metrics associated with your application will also use this region setting.
+
 [kinesis]: http://aws.amazon.com/kinesis
 [kinesis-forum]: http://developer.amazonwebservices.com/connect/forum.jspa?forumID=169
 [kinesis-client-library-issues]: https://github.com/awslabs/amazon-kinesis-client/issues
