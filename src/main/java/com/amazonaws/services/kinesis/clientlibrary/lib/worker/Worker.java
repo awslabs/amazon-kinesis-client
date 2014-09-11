@@ -74,9 +74,9 @@ public class Worker implements Runnable {
     private boolean shutdown;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
-    // id, value is ShardConsumer.
-    private ConcurrentMap<String, ShardConsumer> shardIdShardConsumerMap =
-            new ConcurrentHashMap<String, ShardConsumer>();
+    // info, value is ShardConsumer.
+    private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap =
+            new ConcurrentHashMap<ShardInfo, ShardConsumer>();
     private final boolean cleanupLeasesUponShardCompletion;
 
     /**
@@ -328,7 +328,7 @@ public class Worker implements Runnable {
         while (!shutdown) {
             try {
                 boolean foundCompletedShard = false;
-                Set<String> assignedShardIds = new HashSet<String>();
+                Set<ShardInfo> assignedShards = new HashSet<ShardInfo>();
                 for (ShardInfo shardInfo : getShardInfoForAssignments()) {
                     ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
                     if (shardConsumer.isShutdown()
@@ -337,7 +337,7 @@ public class Worker implements Runnable {
                     } else {
                         shardConsumer.consumeShard();
                     }
-                    assignedShardIds.add(shardInfo.getShardId());
+                    assignedShards.add(shardInfo);
                 }
 
                 if (foundCompletedShard) {
@@ -345,7 +345,7 @@ public class Worker implements Runnable {
                 }
 
                 // clean up shard consumers for unassigned shards
-                cleanupShardConsumers(assignedShardIds);
+                cleanupShardConsumers(assignedShards);
 
                 wlog.info("Sleeping ...");
                 Thread.sleep(idleTimeInMilliseconds);
@@ -415,14 +415,24 @@ public class Worker implements Runnable {
         }
     }
 
-    private void cleanupShardConsumers(Set<String> assignedShardIds) {
-        for (String shardId : shardIdShardConsumerMap.keySet()) {
-            if (!assignedShardIds.contains(shardId)) {
+    /**
+     * NOTE: This method is internal/private to the Worker class. It has package
+     * access solely for testing.
+     * 
+     * This method relies on ShardInfo.equals() method returning true for ShardInfo objects which may have been
+     * instantiated with parentShardIds in a different order (and rest of the fields being the equal). For example
+     * shardInfo1.equals(shardInfo2) should return true with shardInfo1 and shardInfo2 defined as follows.
+     * ShardInfo shardInfo1 = new ShardInfo(shardId1, concurrencyToken1, Arrays.asList("parent1", "parent2"));
+     * ShardInfo shardInfo2 = new ShardInfo(shardId1, concurrencyToken1, Arrays.asList("parent2", "parent1"));
+     */
+    void cleanupShardConsumers(Set<ShardInfo> assignedShards) {
+        for (ShardInfo shard : shardInfoShardConsumerMap.keySet()) {
+            if (!assignedShards.contains(shard)) {
                 // Shutdown the consumer since we are not longer responsible for
                 // the shard.
-                boolean isShutdown = shardIdShardConsumerMap.get(shardId).beginShutdown();
+                boolean isShutdown = shardInfoShardConsumerMap.get(shard).beginShutdown();
                 if (isShutdown) {
-                    shardIdShardConsumerMap.remove(shardId);
+                    shardInfoShardConsumerMap.remove(shard);
                 }
             }
         }
@@ -468,9 +478,8 @@ public class Worker implements Runnable {
      * @return ShardConsumer for the shard
      */
     ShardConsumer createOrGetShardConsumer(ShardInfo shardInfo, IRecordProcessorFactory factory) {
-        synchronized (shardIdShardConsumerMap) {
-            String shardId = shardInfo.getShardId();
-            ShardConsumer consumer = shardIdShardConsumerMap.get(shardId);
+        synchronized (shardInfoShardConsumerMap) {
+            ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
             // Instantiate a new consumer if we don't have one, or the one we
             // had was from an earlier
             // lease instance (and was shutdown). Don't need to create another
@@ -491,9 +500,8 @@ public class Worker implements Runnable {
                                 executorService,
                                 metricsFactory,
                                 taskBackoffTimeMillis);
-                shardIdShardConsumerMap.put(shardId, consumer);
-                wlog.infoForce("Created new shardConsumer for shardId: " + shardId + ", concurrencyToken: "
-                        + shardInfo.getConcurrencyToken());
+                shardInfoShardConsumerMap.put(shardInfo, consumer);
+                wlog.infoForce("Created new shardConsumer for : " + shardInfo);
             }
             return consumer;
         }

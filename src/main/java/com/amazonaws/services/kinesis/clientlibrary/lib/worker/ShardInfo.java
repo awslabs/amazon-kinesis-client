@@ -23,7 +23,7 @@ import java.util.List;
  * Used to pass shard related info among different classes and as a key to the map of shard consumers.
  */
 class ShardInfo {
-    
+
     private final String shardId;
     private final String concurrencyToken;
     // Sorted list of parent shardIds.
@@ -41,6 +41,8 @@ class ShardInfo {
         if (parentShardIds != null) {
             this.parentShardIds.addAll(parentShardIds);
         }
+        // ShardInfo stores parent shard Ids in canonical order in the parentShardIds list.
+        // This makes it easy to check for equality in ShardInfo.equals method.
         Collections.sort(this.parentShardIds);
     }
 
@@ -83,6 +85,14 @@ class ShardInfo {
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
     // CHECKSTYLE:OFF NPathComplexity
+    /**
+     * This method assumes parentShardIds is ordered. The Worker.cleanupShardConsumers() method relies on this method
+     * returning true for ShardInfo objects which may have been instantiated with parentShardIds in a different order
+     * (and rest of the fields being the equal). For example shardInfo1.equals(shardInfo2) should return true with
+     * shardInfo1 and shardInfo2 defined as follows.
+     * ShardInfo shardInfo1 = new ShardInfo(shardId1, concurrencyToken1, Arrays.asList("parent1", "parent2"));
+     * ShardInfo shardInfo2 = new ShardInfo(shardId1, concurrencyToken1, Arrays.asList("parent2", "parent1"));
+     */
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
@@ -118,8 +128,14 @@ class ShardInfo {
         }
         return true;
     }
+
     // CHECKSTYLE:ON CyclomaticComplexity
     // CHECKSTYLE:ON NPathComplexity
-        
+
+    @Override
+    public String toString() {
+        return "ShardInfo [shardId=" + shardId + ", concurrencyToken=" + concurrencyToken + ", parentShardIds="
+                + parentShardIds + "]";
+    }
 
 }

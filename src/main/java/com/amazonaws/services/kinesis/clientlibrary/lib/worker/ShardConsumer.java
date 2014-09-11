@@ -350,4 +350,13 @@ class ShardConsumer {
         return currentState;
     }
 
+    /**
+     * Private/Internal method - has package level access solely for testing purposes.
+     * 
+     * @return the beginShutdown
+     */
+    boolean isBeginShutdown() {
+        return beginShutdown;
+    }
+
 }
