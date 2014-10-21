@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.metrics.impl;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Random;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -41,6 +42,10 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
     private boolean shuttingDown = false;
     private boolean shutdown = false;
     private long lastFlushTime = Long.MAX_VALUE;
+    private int maxJitter;
+
+    private Random rand = new Random();
+    private int nextJitterValueToUse = 0;
 
     /**
      * Constructor.
@@ -55,17 +60,27 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
             long bufferTimeMillis,
             int maxQueueSize,
             int batchSize) {
+        this(metricsPublisher, bufferTimeMillis, maxQueueSize, batchSize, 0);
+    }
+
+    public CWPublisherRunnable(ICWMetricsPublisher<KeyType> metricsPublisher,
+            long bufferTimeMillis,
+            int maxQueueSize,
+            int batchSize,
+            int maxJitter) {
         if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Constructing CWPublisherRunnable with maxBufferTimeMillis %d maxQueueSize %d batchSize %d",
+            LOG.debug(String.format("Constructing CWPublisherRunnable with maxBufferTimeMillis %d maxQueueSize %d batchSize %d maxJitter %d",
                     bufferTimeMillis,
                     maxQueueSize,
-                    batchSize));
+                    batchSize,
+                    maxJitter));
         }
 
         this.metricsPublisher = metricsPublisher;
         this.bufferTimeMillis = bufferTimeMillis;
         this.queue = new MetricAccumulatingQueue<KeyType>(maxQueueSize);
         this.flushSize = batchSize;
+        this.maxJitter = maxJitter;
     }
 
     @Override
@@ -130,7 +145,12 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
             } catch (Throwable t) {
                 LOG.error("Caught exception thrown by metrics Publisher in CWPublisherRunnable", t);
             }
-            lastFlushTime = getTime();
+            // Changing the value of lastFlushTime will change the time when metrics are flushed next.
+            lastFlushTime = getTime() + nextJitterValueToUse;
+            if (maxJitter != 0) {
+                // nextJittervalueToUse will be a value between (-maxJitter,+maxJitter)
+                nextJitterValueToUse = maxJitter - rand.nextInt(2 * maxJitter);
+            }
         }
     }
 

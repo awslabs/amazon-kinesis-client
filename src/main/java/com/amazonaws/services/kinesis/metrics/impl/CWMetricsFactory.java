@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.metrics.impl;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
@@ -74,7 +75,7 @@ public class CWMetricsFactory implements IMetricsFactory {
      * @param bufferTimeMillis time to buffer metrics before publishing to CloudWatch
      * @param maxQueueSize maximum number of metrics that we can have in a queue
      */
-    public CWMetricsFactory(AmazonCloudWatchClient cloudWatchClient,
+    public CWMetricsFactory(AmazonCloudWatch cloudWatchClient,
             String namespace,
             long bufferTimeMillis,
             int maxQueueSize) {

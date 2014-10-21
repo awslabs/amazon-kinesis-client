@@ -68,6 +68,7 @@ class InitializeTask implements ITask {
             String initialCheckpoint = checkpoint.getCheckpoint(shardInfo.getShardId());
             dataFetcher.initialize(initialCheckpoint);
             recordProcessorCheckpointer.setLargestPermittedCheckpointValue(initialCheckpoint);
+            recordProcessorCheckpointer.setInitialCheckpointValue(initialCheckpoint);
             try {
                 LOG.debug("Calling the record processor initialize().");
                 recordProcessor.initialize(shardInfo.getShardId());

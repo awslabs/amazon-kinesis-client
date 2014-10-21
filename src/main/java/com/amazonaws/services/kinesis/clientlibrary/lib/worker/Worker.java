@@ -28,8 +28,11 @@ import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
@@ -145,9 +148,9 @@ public class Worker implements Runnable {
      */
     public Worker(IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config,
-            AmazonKinesisClient kinesisClient,
-            AmazonDynamoDBClient dynamoDBClient,
-            AmazonCloudWatchClient cloudWatchClient) {
+            AmazonKinesis kinesisClient,
+            AmazonDynamoDB dynamoDBClient,
+            AmazonCloudWatch cloudWatchClient) {
         this(recordProcessorFactory, config, kinesisClient, dynamoDBClient, cloudWatchClient,
                 Executors.newCachedThreadPool());
     }
@@ -163,9 +166,9 @@ public class Worker implements Runnable {
      */
     public Worker(IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config,
-            AmazonKinesisClient kinesisClient,
-            AmazonDynamoDBClient dynamoDBClient,
-            AmazonCloudWatchClient cloudWatchClient,
+            AmazonKinesis kinesisClient,
+            AmazonDynamoDB dynamoDBClient,
+            AmazonCloudWatch cloudWatchClient,
             ExecutorService execService) {
         this(recordProcessorFactory, config, kinesisClient, dynamoDBClient, new CWMetricsFactory(cloudWatchClient,
                 config.getApplicationName(),
@@ -189,8 +192,8 @@ public class Worker implements Runnable {
      */
     public Worker(IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config,
-            AmazonKinesisClient kinesisClient,
-            AmazonDynamoDBClient dynamoDBClient,
+            AmazonKinesis kinesisClient,
+            AmazonDynamoDB dynamoDBClient,
             IMetricsFactory metricsFactory,
             ExecutorService execService) {
         this(
@@ -563,5 +566,80 @@ public class Worker implements Runnable {
                 infoReporting = true;
             }
         }
+    }
+
+    // Backwards compatible constructors
+    /**
+     * This constructor is for binary compatibility with code compiled against
+     * version of the KCL that only have constructors taking "Client" objects.
+     * 
+     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
+     * @param config Kinesis Client Library configuration
+     * @param kinesisClient Kinesis Client used for fetching data
+     * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
+     * @param cloudWatchClient CloudWatch Client for publishing metrics
+     */
+    public Worker(IRecordProcessorFactory recordProcessorFactory,
+            KinesisClientLibConfiguration config,
+            AmazonKinesisClient kinesisClient,
+            AmazonDynamoDBClient dynamoDBClient,
+            AmazonCloudWatchClient cloudWatchClient) {
+        this(recordProcessorFactory,
+                 config,
+                (AmazonKinesis) kinesisClient,
+                (AmazonDynamoDB) dynamoDBClient,
+                (AmazonCloudWatch) cloudWatchClient);
+    }
+
+    /**
+     * This constructor is for binary compatibility with code compiled against
+     * version of the KCL that only have constructors taking "Client" objects.
+     * 
+     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
+     * @param config Kinesis Client Library configuration
+     * @param kinesisClient Kinesis Client used for fetching data
+     * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
+     * @param cloudWatchClient CloudWatch Client for publishing metrics
+     * @param execService ExecutorService to use for processing records (support for multi-threaded
+     *        consumption)
+     */
+    public Worker(IRecordProcessorFactory recordProcessorFactory,
+            KinesisClientLibConfiguration config,
+            AmazonKinesisClient kinesisClient,
+            AmazonDynamoDBClient dynamoDBClient,
+            AmazonCloudWatchClient cloudWatchClient,
+            ExecutorService execService) {
+        this(recordProcessorFactory,
+                 config,
+                 (AmazonKinesis) kinesisClient,
+                 (AmazonDynamoDB) dynamoDBClient,
+                 (AmazonCloudWatch) cloudWatchClient,
+                 execService);
+    }
+
+    /**
+     * This constructor is for binary compatibility with code compiled against
+     * version of the KCL that only have constructors taking "Client" objects.
+     * 
+     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
+     * @param config Kinesis Client Library configuration
+     * @param kinesisClient Kinesis Client used for fetching data
+     * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
+     * @param metricsFactory Metrics factory used to emit metrics
+     * @param execService ExecutorService to use for processing records (support for multi-threaded
+     *        consumption)
+     */
+    public Worker(IRecordProcessorFactory recordProcessorFactory,
+            KinesisClientLibConfiguration config,
+            AmazonKinesisClient kinesisClient,
+            AmazonDynamoDBClient dynamoDBClient,
+            IMetricsFactory metricsFactory,
+            ExecutorService execService) {
+        this(recordProcessorFactory,
+                 config,
+                (AmazonKinesis) kinesisClient,
+                (AmazonDynamoDB) dynamoDBClient,
+                 metricsFactory,
+                 execService);
     }
 }

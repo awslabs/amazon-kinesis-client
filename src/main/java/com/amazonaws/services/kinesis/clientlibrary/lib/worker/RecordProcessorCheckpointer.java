@@ -90,8 +90,7 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
          * If there isn't a last checkpoint value, we only care about checking the upper bound.
          * If there is a last checkpoint value, we want to check both the lower and upper bound.
          */
-        if ((lastCheckpointValue == null
-                || checkpointValueComparator.compare(lastCheckpointValue, sequenceNumber) <= 0)
+        if ((checkpointValueComparator.compare(lastCheckpointValue, sequenceNumber) <= 0)
                 && checkpointValueComparator.compare(sequenceNumber, largestPermittedCheckpointValue) <= 0) {
 
             this.advancePosition(sequenceNumber);
@@ -109,6 +108,11 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
      */
     String getLastCheckpointValue() {
         return lastCheckpointValue;
+    }
+
+
+    synchronized void setInitialCheckpointValue(String initialCheckpoint) {
+        lastCheckpointValue = initialCheckpoint;
     }
 
     /**

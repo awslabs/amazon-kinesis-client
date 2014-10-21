@@ -24,6 +24,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.model.DescribeStreamRequest;
 import com.amazonaws.services.kinesis.model.DescribeStreamResult;
@@ -50,7 +51,7 @@ public class KinesisProxy implements IKinesisProxy {
     private static String defaultServiceName = "kinesis";
     private static String defaultRegionId = "us-east-1";;
 
-    private AmazonKinesisClient client;
+    private AmazonKinesis client;
     private AWSCredentialsProvider credentialsProvider;
 
     private final String streamName;
@@ -91,11 +92,22 @@ public class KinesisProxy implements IKinesisProxy {
             String regionId,
             long describeStreamBackoffTimeInMillis,
             int maxDescribeStreamRetryAttempts) {
-        this(streamName, credentialProvider, new AmazonKinesisClient(credentialProvider),
-                describeStreamBackoffTimeInMillis, maxDescribeStreamRetryAttempts);
-        client.setEndpoint(endpoint, serviceName, regionId);
+        this(streamName, credentialProvider, buildClientSettingEndpoint(credentialProvider,
+                endpoint,
+                serviceName,
+                regionId), describeStreamBackoffTimeInMillis, maxDescribeStreamRetryAttempts);
+        
 
         LOG.debug("KinesisProxy has created a kinesisClient");
+    }
+    
+    private static AmazonKinesisClient buildClientSettingEndpoint(AWSCredentialsProvider credentialProvider,
+            String endpoint,
+            String serviceName,
+            String regionId) {
+        AmazonKinesisClient client = new AmazonKinesisClient(credentialProvider);
+        client.setEndpoint(endpoint, serviceName, regionId);
+        return client;
     }
 
     /**
@@ -109,7 +121,7 @@ public class KinesisProxy implements IKinesisProxy {
      */
     public KinesisProxy(final String streamName,
             AWSCredentialsProvider credentialProvider,
-            AmazonKinesisClient kinesisClient,
+            AmazonKinesis kinesisClient,
             long describeStreamBackoffTimeInMillis,
             int maxDescribeStreamRetryAttempts) {
         this.streamName = streamName;
