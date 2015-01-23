@@ -373,7 +373,7 @@ public class Worker implements Runnable {
         boolean isDone = false;
         Exception lastException = null;
 
-        for (int i = 0; (!isDone) && (i < MAX_INITIALIZATION_ATTEMPTS); i++) {
+        for (int i = 0; (!isDone) && (i < MAX_INITIALIZATION_ATTEMPTS) && (!shutdown); i++) {
             try {
                 LOG.info("Initialization attempt " + (i + 1));
                 LOG.info("Initializing LeaseCoordinator");
@@ -413,7 +413,7 @@ public class Worker implements Runnable {
             }
         }
 
-        if (!isDone) {
+        if (!isDone && (lastException != null)) {
             throw new RuntimeException(lastException);
         }
     }
