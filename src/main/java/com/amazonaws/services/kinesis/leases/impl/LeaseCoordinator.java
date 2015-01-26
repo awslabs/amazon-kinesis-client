@@ -227,18 +227,22 @@ public class LeaseCoordinator<T extends Lease> {
      * Stops background threads.
      */
     public void stop() {
-        threadpool.shutdown();
-        try {
-            if (threadpool.awaitTermination(STOP_WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS)) {
-                LOG.info(String.format("Worker %s has successfully stopped lease-tracking threads", leaseTaker.getWorkerIdentifier()));
-            } else {
-                threadpool.shutdownNow();
-                LOG.info(String.format("Worker %s stopped lease-tracking threads %dms after stop",
+        if (threadpool != null) {
+            threadpool.shutdown();
+            try {
+                if (threadpool.awaitTermination(STOP_WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS)) {
+                    LOG.info(String.format("Worker %s has successfully stopped lease-tracking threads", leaseTaker.getWorkerIdentifier()));
+                } else {
+                    threadpool.shutdownNow();
+                    LOG.info(String.format("Worker %s stopped lease-tracking threads %dms after stop",
                         leaseTaker.getWorkerIdentifier(),
                         STOP_WAIT_TIME_MILLIS));
+                }
+            } catch (InterruptedException e) {
+                LOG.debug("Encountered InterruptedException when awaiting threadpool termination");
             }
-        } catch (InterruptedException e) {
-            LOG.debug("Encountered InterruptedException when awaiting threadpool termination");
+        } else {
+            LOG.debug("Threadpool was null, no need to shutdown/terminate threadpool.");
         }
 
         leaseRenewer.clearCurrentlyHeldLeases();

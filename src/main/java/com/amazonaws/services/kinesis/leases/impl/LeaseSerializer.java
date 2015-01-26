@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ public class LeaseSerializer implements ILeaseSerializer<Lease> {
         if (lease.getLeaseOwner() == null) {
             eav = new ExpectedAttributeValue(false);
         } else {
-            new ExpectedAttributeValue(DynamoUtils.createAttributeValue(lease.getLeaseOwner()));
+            eav = new ExpectedAttributeValue(DynamoUtils.createAttributeValue(lease.getLeaseOwner()));
         }
         
         result.put(LEASE_OWNER_KEY, eav);

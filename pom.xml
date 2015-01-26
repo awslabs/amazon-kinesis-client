@@ -6,7 +6,7 @@
     <artifactId>amazon-kinesis-client</artifactId>
     <packaging>jar</packaging>
     <name>Amazon Kinesis Client Library for Java</name>
-    <version>1.2.0</version>
+    <version>1.2.1</version>
     <description>The Amazon Kinesis Client Library for Java enables Java developers to easily consume and process data from Amazon Kinesis.</description>
     <url>https://aws.amazon.com/kinesis</url>
 
@@ -23,7 +23,7 @@
     </licenses>
 
     <properties>
-        <aws-java-sdk.version>1.7.13</aws-java-sdk.version>
+        <aws-java-sdk.version>1.9.16</aws-java-sdk.version>
     </properties>
 
     <dependencies>
@@ -51,6 +51,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.2</version>
             <configuration>
               <source>1.7</source>
               <target>1.7</target>
@@ -64,6 +65,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-gpg-plugin</artifactId>
+          <version>1.5</version>
           <executions>
             <execution>
               <id>sign-artifacts</id>

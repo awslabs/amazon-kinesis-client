@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -73,6 +73,10 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
     @Override
     public synchronized void checkpoint()
         throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Checkpointing " + shardInfo.getShardId() + ", " + " token " + shardInfo.getConcurrencyToken()
+                    + " at largest permitted value " + this.largestPermittedCheckpointValue);
+        }
         advancePosition(this.largestPermittedCheckpointValue);
     }
 
@@ -86,6 +90,10 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
 
         // throws exception if sequence number shouldn't be checkpointed for this shard
         sequenceNumberValidator.validateSequenceNumber(sequenceNumber);
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Validated checkpoint sequence number " + sequenceNumber + " for " + shardInfo.getShardId()
+                    + ", token " + shardInfo.getConcurrencyToken());
+        }
         /*
          * If there isn't a last checkpoint value, we only care about checking the upper bound.
          * If there is a last checkpoint value, we want to check both the lower and upper bound.
@@ -93,6 +101,10 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
         if ((checkpointValueComparator.compare(lastCheckpointValue, sequenceNumber) <= 0)
                 && checkpointValueComparator.compare(sequenceNumber, largestPermittedCheckpointValue) <= 0) {
 
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Checkpointing " + shardInfo.getShardId() + ", token " + shardInfo.getConcurrencyToken()
+                        + " at specific sequence number " + sequenceNumber);
+            }
             this.advancePosition(sequenceNumber);
         } else {
             throw new IllegalArgumentException("Could not checkpoint at sequence number " + sequenceNumber
@@ -162,15 +174,14 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
         // Don't checkpoint a value we already successfully checkpointed
         if (sequenceNumber != null && !sequenceNumber.equals(lastCheckpointValue)) {
             try {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Setting " + shardInfo.getShardId() + ", token " + shardInfo.getConcurrencyToken()
+                            + " checkpoint to " + checkpointValue);
+                }
                 checkpoint.setCheckpoint(shardInfo.getShardId(), checkpointValue, shardInfo.getConcurrencyToken());
                 lastCheckpointValue = checkpointValue;
-            } catch (ThrottlingException e) {
-                throw e;
-            } catch (ShutdownException e) {
-                throw e;
-            } catch (InvalidStateException e) {
-                throw e;
-            } catch (KinesisClientLibDependencyException e) {
+            } catch (ThrottlingException | ShutdownException | InvalidStateException
+                    | KinesisClientLibDependencyException e) {
                 throw e;
             } catch (KinesisClientLibException e) {
                 LOG.warn("Caught exception setting checkpoint.", e);

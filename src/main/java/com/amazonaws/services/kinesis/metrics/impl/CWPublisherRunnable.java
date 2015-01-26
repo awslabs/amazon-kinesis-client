@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -157,7 +157,7 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
     /**
      * Overrideable for testing purposes.
      */
-    long getTime() {
+    protected long getTime() {
         return System.currentTimeMillis();
     }
 
