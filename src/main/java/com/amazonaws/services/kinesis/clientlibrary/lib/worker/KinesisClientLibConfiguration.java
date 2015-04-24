@@ -289,6 +289,16 @@ public class KinesisClientLibConfiguration {
             throw new IllegalArgumentException("The specified region name is not valid");
         }  
     }
+    
+    private void checkIsCloudWatchMetricsFactoryNameValid(String cloudWatchMetricsFactoryName) {
+    	if ("CWMetricsFactory".equals(cloudWatchMetricsFactoryName) ||
+    			"NullMetricsFactory".equals(cloudWatchMetricsFactoryName) ||
+    			"LogMetricsFactory".equals(cloudWatchMetricsFactoryName) ){
+    		return;
+    	}
+    	
+        throw new IllegalArgumentException("The specified Cloud Watch Metrics Factory Name is not valid");
+    }
 
     /**
      * @return Name of the application
@@ -457,6 +467,13 @@ public class KinesisClientLibConfiguration {
      */
     public String getRegionName() {
         return regionName;
+    }
+    
+    /**
+     * @return Custom CloudWatch Metrics Factory Name.
+     */
+    public String getCustomCloudWatchMetricsFactoryName() {
+    	return customCloudWatchMetricsFactoryName;
     }
     
     /**
@@ -677,4 +694,17 @@ public class KinesisClientLibConfiguration {
         this.regionName = regionName;
         return this;
     }
+    
+    /**
+     * 
+     * @param customCloudWatchMetricsFactoryName The region name for the service
+     * @return KinesisClientLibConfiguration
+     */
+    // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 2 LINES
+    public KinesisClientLibConfiguration withCustomCloudWatchMetricsFactoryName(String customCloudWatchMetricsFactoryName) {
+        checkIsCloudWatchMetricsFactoryNameValid(customCloudWatchMetricsFactoryName);
+        this.customCloudWatchMetricsFactoryName = customCloudWatchMetricsFactoryName;
+        return this;
+    }
+    
 }
