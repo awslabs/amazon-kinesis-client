@@ -26,6 +26,7 @@ import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 
 /**
  * Main app that launches the worker that runs the multi-language record processor.
@@ -72,6 +73,21 @@ public class MultiLangDaemon implements Callable<Integer> {
             MultiLangRecordProcessorFactory recordProcessorFactory,
             ExecutorService workerThreadPool) {
         this(new Worker(recordProcessorFactory, configuration, workerThreadPool));
+    }
+    
+    /**
+     * Constructor with custom CloudWatch Metrics Factory.
+     * 
+     * @param configuration The KCL config to use.
+     * @param recordProcessorFactory A record processor factory to create record processors that abide by the multi-lang
+     *        protocol.
+     * @param cloudWatchMetricsFactory A customized Cloudwatch Metric Factory implementation.
+     * @param workerThreadPool The executor service to run the daemon in.
+     */
+    public MultiLangDaemon(KinesisClientLibConfiguration configuration,
+            MultiLangRecordProcessorFactory recordProcessorFactory, IMetricsFactory cloudWatchMetricsFactory,
+            ExecutorService workerThreadPool) {
+        this(new Worker(recordProcessorFactory, configuration, cloudWatchMetricsFactory, workerThreadPool));
     }
 
     /**
@@ -133,10 +149,22 @@ public class MultiLangDaemon implements Callable<Integer> {
         ExecutorService executorService = config.getExecutorService();
 
         // Daemon
-        MultiLangDaemon daemon = new MultiLangDaemon(
-                config.getKinesisClientLibConfiguration(),
-                config.getRecordProcessorFactory(),
-                executorService);
+        KinesisClientLibConfiguration kinesisClientLibConfiguration = config.getKinesisClientLibConfiguration();
+        IMetricsFactory customCWMetricsFactory = kinesisClientLibConfiguration.getCustomCloudWatchMetricsFactory();
+        
+        MultiLangDaemon daemon = null;
+         
+        if (customCWMetricsFactory == null){
+            daemon = new MultiLangDaemon(
+                    config.getKinesisClientLibConfiguration(),
+                    config.getRecordProcessorFactory(),
+                    executorService);
+        } else {
+            daemon = new MultiLangDaemon(
+                    config.getKinesisClientLibConfiguration(),
+                    config.getRecordProcessorFactory(), customCWMetricsFactory,
+                    executorService);
+        }
 
         Future<Integer> future = executorService.submit(daemon);
         try {
