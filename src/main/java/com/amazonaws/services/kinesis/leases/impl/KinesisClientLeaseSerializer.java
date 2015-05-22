@@ -95,15 +95,11 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
     public Map<String, AttributeValueUpdate> getDynamoTakeLeaseUpdate(KinesisClientLease lease, String newOwner) {
         Map<String, AttributeValueUpdate> result = baseSerializer.getDynamoTakeLeaseUpdate(lease, newOwner);
 
-        Long ownerSwitchesSinceCheckpoint = lease.getOwnerSwitchesSinceCheckpoint();
         String oldOwner = lease.getLeaseOwner();
         if (oldOwner != null && !oldOwner.equals(newOwner)) {
-            ownerSwitchesSinceCheckpoint++;
+            result.put(OWNER_SWITCHES_KEY, new AttributeValueUpdate(DynamoUtils.createAttributeValue(1L),
+                    AttributeAction.ADD));
         }
-
-        result.put(OWNER_SWITCHES_KEY,
-                new AttributeValueUpdate(DynamoUtils.createAttributeValue(ownerSwitchesSinceCheckpoint),
-                        AttributeAction.PUT));
 
         return result;
     }

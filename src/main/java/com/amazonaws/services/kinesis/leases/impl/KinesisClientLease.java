@@ -49,7 +49,7 @@ public class KinesisClientLease extends Lease {
         }
         KinesisClientLease casted = (KinesisClientLease) other;
 
-        // Do not update ownerSwitchesSinceCheckpoint here - that field is maintained by the leasing library.
+        setOwnerSwitchesSinceCheckpoint(casted.ownerSwitchesSinceCheckpoint);
         setCheckpoint(casted.checkpoint);
         setParentShardIds(casted.parentShardIds);
     }

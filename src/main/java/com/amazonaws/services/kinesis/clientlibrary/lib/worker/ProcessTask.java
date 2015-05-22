@@ -22,6 +22,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
@@ -37,6 +38,8 @@ class ProcessTask implements ITask {
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     private static final String DATA_BYTES_PROCESSED_METRIC = "DataBytesProcessed";
     private static final String RECORDS_PROCESSED_METRIC = "RecordsProcessed";
+    private static final String MILLIS_BEHIND_LATEST_METRIC = "MillisBehindLatest";
+
     private static final Log LOG = LogFactory.getLog(ProcessTask.class);
 
     private final ShardInfo shardInfo;
@@ -93,7 +96,14 @@ class ProcessTask implements ITask {
                 boolean shardEndReached = true;
                 return new TaskResult(null, shardEndReached);
             }
-            List<Record> records = getRecords();
+            final GetRecordsResult getRecordsResult = getRecords();
+
+            if (getRecordsResult.getMillisBehindLatest() != null) {
+                scope.addData(MILLIS_BEHIND_LATEST_METRIC, getRecordsResult.getMillisBehindLatest(),
+                        StandardUnit.Milliseconds);
+            }
+
+            final List<Record> records = getRecordsResult.getRecords();
 
             if (records.isEmpty()) {
                 LOG.debug("Kinesis didn't return any records for shard " + shardInfo.getShardId());
@@ -180,7 +190,7 @@ class ProcessTask implements ITask {
      * @throws KinesisClientLibException if reading checkpoints fails in the edge case where we haven't passed any
      *         records to the client code yet
      */
-    private List<Record> getRecords() throws KinesisClientLibException {
+    private GetRecordsResult getRecords() throws KinesisClientLibException {
         int maxRecords = streamConfig.getMaxRecords();
         try {
             return dataFetcher.getRecords(maxRecords);

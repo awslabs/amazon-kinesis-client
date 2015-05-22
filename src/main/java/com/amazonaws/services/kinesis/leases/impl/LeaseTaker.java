@@ -25,6 +25,7 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -68,7 +69,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
     public LeaseTaker(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis) {
         this.leaseManager = leaseManager;
         this.workerIdentifier = workerIdentifier;
-        this.leaseDurationNanos = leaseDurationMillis * 1000000;
+        this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
     }
 
     /**
