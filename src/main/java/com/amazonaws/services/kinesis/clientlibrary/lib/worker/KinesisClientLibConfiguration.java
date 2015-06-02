@@ -17,6 +17,9 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.RegionUtils;
+import com.amazonaws.services.kinesis.metrics.impl.LogMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 
 /**
  * Configuration for the Amazon Kinesis Client Library.
@@ -117,6 +120,7 @@ public class KinesisClientLibConfiguration {
     private int metricsMaxQueueSize;
     private boolean validateSequenceNumberBeforeCheckpointing;
     private String regionName;
+    private String customCloudWatchMetricsFactoryName;
 
     /**
      * Constructor.
@@ -284,6 +288,16 @@ public class KinesisClientLibConfiguration {
         if (regionNameToCheck != null && RegionUtils.getRegion(regionNameToCheck) == null) {
             throw new IllegalArgumentException("The specified region name is not valid");
         }  
+    }
+    
+    private void checkIsCloudWatchMetricsFactoryNameValid(String cloudWatchMetricsFactoryName) {
+    	if ("CWMetricsFactory".equals(cloudWatchMetricsFactoryName) ||
+    			"NullMetricsFactory".equals(cloudWatchMetricsFactoryName) ||
+    			"LogMetricsFactory".equals(cloudWatchMetricsFactoryName) ){
+    		return;
+    	}
+    	
+        throw new IllegalArgumentException("The specified Cloud Watch Metrics Factory Name is not valid");
     }
 
     /**
@@ -453,6 +467,31 @@ public class KinesisClientLibConfiguration {
      */
     public String getRegionName() {
         return regionName;
+    }
+    
+    /**
+     * @return Custom CloudWatch Metrics Factory Name.
+     */
+    public String getCustomCloudWatchMetricsFactoryName() {
+    	return customCloudWatchMetricsFactoryName;
+    }
+    
+    /**
+     * @return Custom CloudWatch Metrics Factory. In case of the default MetricsFactory CWMetricsFactory, null is returned.
+     */
+    public IMetricsFactory getCustomCloudWatchMetricsFactory() {
+    	IMetricsFactory customCloudWatchMetricsFactory = null;
+        if (customCloudWatchMetricsFactoryName != null && customCloudWatchMetricsFactoryName != "CWMetricsFactory"){
+        	switch (customCloudWatchMetricsFactoryName) {
+			case "NullMetricsFactory":
+				customCloudWatchMetricsFactory = new NullMetricsFactory();
+				break;
+			case "LogMetricsFactory":
+				customCloudWatchMetricsFactory = new LogMetricsFactory();
+				break;
+			}
+        }
+    	return customCloudWatchMetricsFactory;
     }
 
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 190 LINES
@@ -655,4 +694,17 @@ public class KinesisClientLibConfiguration {
         this.regionName = regionName;
         return this;
     }
+    
+    /**
+     * 
+     * @param customCloudWatchMetricsFactoryName The region name for the service
+     * @return KinesisClientLibConfiguration
+     */
+    // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 2 LINES
+    public KinesisClientLibConfiguration withCustomCloudWatchMetricsFactoryName(String customCloudWatchMetricsFactoryName) {
+        checkIsCloudWatchMetricsFactoryNameValid(customCloudWatchMetricsFactoryName);
+        this.customCloudWatchMetricsFactoryName = customCloudWatchMetricsFactoryName;
+        return this;
+    }
+    
 }
