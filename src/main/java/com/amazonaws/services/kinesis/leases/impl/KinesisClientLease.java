@@ -15,15 +15,18 @@
 package com.amazonaws.services.kinesis.leases.impl;
 
 import java.util.Collection;
+
 import java.util.HashSet;
 import java.util.Set;
+
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
 /**
  * A Lease subclass containing KinesisClientLibrary related fields for checkpoints.
  */
 public class KinesisClientLease extends Lease {
 
-    private String checkpoint;
+    private ExtendedSequenceNumber checkpoint;
     private Long ownerSwitchesSinceCheckpoint = 0L;
     private Set<String> parentShardIds = new HashSet<String>();
 
@@ -58,7 +61,7 @@ public class KinesisClientLease extends Lease {
      * @return most recently application-supplied checkpoint value. During fail over, the new worker will pick up after
      *         the old worker's last checkpoint.
      */
-    public String getCheckpoint() {
+    public ExtendedSequenceNumber getCheckpoint() {
         return checkpoint;
     }
 
@@ -81,7 +84,7 @@ public class KinesisClientLease extends Lease {
      * 
      * @param checkpoint may not be null
      */
-    public void setCheckpoint(String checkpoint) {
+    public void setCheckpoint(ExtendedSequenceNumber checkpoint) {
         verifyNotNull(checkpoint, "Checkpoint should not be null");
 
         this.checkpoint = checkpoint;

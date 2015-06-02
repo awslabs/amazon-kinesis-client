@@ -17,9 +17,10 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
@@ -81,17 +82,21 @@ class ShutdownTask implements ITask {
             if (reason == ShutdownReason.TERMINATE) {
                 recordProcessorCheckpointer.setSequenceNumberAtShardEnd(
                         recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
-                recordProcessorCheckpointer.setLargestPermittedCheckpointValue(SentinelCheckpoint.SHARD_END.toString());
+                recordProcessorCheckpointer.setLargestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
             }
 
             LOG.debug("Invoking shutdown() for shard " + shardInfo.getShardId() + ", concurrencyToken "
                     + shardInfo.getConcurrencyToken() + ". Shutdown reason: " + reason);
             try {
-                recordProcessor.shutdown(recordProcessorCheckpointer, reason);
-                String lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
+                final ShutdownInput shutdownInput = new ShutdownInput()
+                    .withShutdownReason(reason)
+                    .withCheckpointer(recordProcessorCheckpointer);
+                recordProcessor.shutdown(shutdownInput);
+                ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
+
                 if (reason == ShutdownReason.TERMINATE) {
                     if ((lastCheckpointValue == null)
-                            || (!lastCheckpointValue.equals(SentinelCheckpoint.SHARD_END.toString()))) {
+                            || (!lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END))) {
                         throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
                                 + shardInfo.getShardId());
                     }

@@ -29,6 +29,7 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -90,7 +91,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    boolean setCheckpoint(String shardId, String checkpoint, UUID concurrencyToken)
+    boolean setCheckpoint(String shardId, ExtendedSequenceNumber checkpoint, UUID concurrencyToken)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         KinesisClientLease lease = getCurrentlyHeldLease(shardId);
         if (lease == null) {
@@ -111,7 +112,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * {@inheritDoc}
      */
     @Override
-    public void setCheckpoint(String shardId, String checkpointValue, String concurrencyToken)
+    public void setCheckpoint(String shardId, ExtendedSequenceNumber checkpointValue, String concurrencyToken)
         throws KinesisClientLibException {
         try {
             boolean wasSuccessful = setCheckpoint(shardId, checkpointValue, UUID.fromString(concurrencyToken));
@@ -133,7 +134,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * {@inheritDoc}
      */
     @Override
-    public String getCheckpoint(String shardId) throws KinesisClientLibException {
+    public ExtendedSequenceNumber getCheckpoint(String shardId) throws KinesisClientLibException {
         try {
             return leaseManager.getLease(shardId).getCheckpoint();
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {

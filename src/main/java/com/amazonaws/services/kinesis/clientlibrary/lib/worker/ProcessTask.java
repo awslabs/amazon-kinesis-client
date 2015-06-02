@@ -15,20 +15,27 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.ListIterator;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.amazonaws.services.cloudwatch.model.StandardUnit;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxyExtended;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
+import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.cloudwatch.model.StandardUnit;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
+import com.amazonaws.services.kinesis.model.Shard;
 
 /**
  * Task for fetching data records and invoking processRecords() on the record processor instance.
@@ -49,6 +56,7 @@ class ProcessTask implements ITask {
     private final TaskType taskType = TaskType.PROCESS;
     private final StreamConfig streamConfig;
     private final long backoffTimeMillis;
+    private final Shard shard;
 
     /**
      * @param shardInfo contains information about the shard
@@ -72,11 +80,20 @@ class ProcessTask implements ITask {
         this.dataFetcher = dataFetcher;
         this.streamConfig = streamConfig;
         this.backoffTimeMillis = backoffTimeMillis;
+        IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
+        if (kinesisProxy instanceof IKinesisProxyExtended) {
+            this.shard = ((IKinesisProxyExtended) kinesisProxy).getShard(this.shardInfo.getShardId());
+        } else {
+            LOG.warn("Cannot get the shard for this ProcessTask, so duplicate KPL user records "
+                    + "in the event of resharding will not be dropped during deaggregation of Amazon "
+                    + "Kinesis records.");
+            this.shard = null;
+        }
     }
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
@@ -96,6 +113,7 @@ class ProcessTask implements ITask {
                 boolean shardEndReached = true;
                 return new TaskResult(null, shardEndReached);
             }
+            
             final GetRecordsResult getRecordsResult = getRecords();
 
             if (getRecordsResult.getMillisBehindLatest() != null) {
@@ -122,22 +140,41 @@ class ProcessTask implements ITask {
                 }
             }
 
-            if ((!records.isEmpty()) || streamConfig.shouldCallProcessRecordsEvenForEmptyRecordList()) {
+            int numKinesisRecords = records.size();
+            int numUserRecords = 0;
+            List<UserRecord> subRecords = new ArrayList<>();
 
-                // If we got more records, record the max sequence number. Sleep if there are no records.
-                if (!records.isEmpty()) {
-                    String maxSequenceNumber = getMaxSequenceNumber(scope, records);
-                    recordProcessorCheckpointer.setLargestPermittedCheckpointValue(maxSequenceNumber);
+            // If we got more records, record the max extended sequence number. Sleep if there are no records.
+            if (!records.isEmpty()) {
+                scope.addData(RECORDS_PROCESSED_METRIC, numKinesisRecords, StandardUnit.Count);
+                if (this.shard != null) {
+                    subRecords = UserRecord.deaggregate(records, 
+                              new BigInteger(this.shard.getHashKeyRange().getStartingHashKey()),
+                              new BigInteger(this.shard.getHashKeyRange().getEndingHashKey()));
+                } else {
+                    subRecords = UserRecord.deaggregate(records);
                 }
+                recordProcessorCheckpointer.setLargestPermittedCheckpointValue(
+                        filterAndGetMaxExtendedSequenceNumber(scope, subRecords,
+                                recordProcessorCheckpointer.getLastCheckpointValue()));
+                numUserRecords = subRecords.size();
+            }
+
+            if ((!subRecords.isEmpty()) || streamConfig.shouldCallProcessRecordsEvenForEmptyRecordList()) {
                 try {
-                    LOG.debug("Calling application processRecords() with " + records.size() + " records from "
-                            + shardInfo.getShardId());
-                    recordProcessor.processRecords(records, recordProcessorCheckpointer);
+                    LOG.debug("Calling application processRecords() with " + numKinesisRecords + " Kinesis records ("
+                            + numUserRecords + " user records) from " + shardInfo.getShardId());
+                    @SuppressWarnings("unchecked")
+                    final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
+                        .withRecords((List<Record>) (List<?>) subRecords)
+                        .withCheckpointer(recordProcessorCheckpointer);
+
+                    recordProcessor.processRecords(processRecordsInput);
                 } catch (Exception e) {
                     LOG.error("ShardId " + shardInfo.getShardId()
                             + ": Application processRecords() threw an exception when processing shard ", e);
                     LOG.error("ShardId " + shardInfo.getShardId() + ": Skipping over the following data records: "
-                            + records);
+                            + subRecords);
                 }
             }
         } catch (RuntimeException | KinesisClientLibException e) {
@@ -155,37 +192,44 @@ class ProcessTask implements ITask {
         return new TaskResult(exception);
     }
 
-    // CHECKSTYLE:ON CyclomaticComplexity
-
     /**
-     * Scans a list of records and returns the greatest sequence number from the records. Also emits metrics about the
-     * records.
-     * 
+     * Scans a list of records to filter out records up to and including the most recent checkpoint value and to get
+     * the greatest extended sequence number from the retained records. Also emits metrics about the records.
+     *
      * @param scope metrics scope to emit metrics into
-     * @param records list of records to scan
-     * @return greatest sequence number out of all the records.
+     * @param records list of records to scan and change in-place as needed
+     * @param lastCheckpointValue the most recent checkpoint value
+     * @return the largest extended sequence number among the retained records
      */
-    private String getMaxSequenceNumber(IMetricsScope scope, List<Record> records) {
-        scope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.Count);
-        ListIterator<Record> recordIterator = records.listIterator();
-        BigInteger maxSequenceNumber = BigInteger.ZERO;
-
+    private ExtendedSequenceNumber filterAndGetMaxExtendedSequenceNumber(IMetricsScope scope, List<UserRecord> records,
+            final ExtendedSequenceNumber lastCheckpointValue) {
+        ExtendedSequenceNumber largestExtendedSequenceNumber = lastCheckpointValue;
+        ListIterator<UserRecord> recordIterator = records.listIterator();
         while (recordIterator.hasNext()) {
-            Record record = recordIterator.next();
-            BigInteger sequenceNumber = new BigInteger(record.getSequenceNumber());
-            if (maxSequenceNumber.compareTo(sequenceNumber) < 0) {
-                maxSequenceNumber = sequenceNumber;
+            UserRecord record = recordIterator.next();
+            ExtendedSequenceNumber extendedSequenceNumber
+                = new ExtendedSequenceNumber(record.getSequenceNumber(), record.getSubSequenceNumber());
+
+            if (extendedSequenceNumber.compareTo(lastCheckpointValue) <= 0) {
+                recordIterator.remove();
+                LOG.debug("removing record with ESN " + extendedSequenceNumber
+                        + " because the ESN is <= checkpoint (" + lastCheckpointValue + ")");
+                continue;
+            }
+
+            if (largestExtendedSequenceNumber == null
+                    || largestExtendedSequenceNumber.compareTo(extendedSequenceNumber) < 0) {
+                largestExtendedSequenceNumber = extendedSequenceNumber;
             }
 
             scope.addData(DATA_BYTES_PROCESSED_METRIC, record.getData().limit(), StandardUnit.Bytes);
         }
-
-        return maxSequenceNumber.toString();
+        return largestExtendedSequenceNumber;
     }
 
     /**
      * Gets records from Kinesis and retries once in the event of an ExpiredIteratorException.
-     * 
+     *
      * @return list of data records from Kinesis
      * @throws KinesisClientLibException if reading checkpoints fails in the edge case where we haven't passed any
      *         records to the client code yet
@@ -205,7 +249,8 @@ class ProcessTask implements ITask {
              * Advance the iterator to after the greatest processed sequence number (remembered by
              * recordProcessorCheckpointer).
              */
-            dataFetcher.advanceIteratorAfter(recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
+            dataFetcher.advanceIteratorTo(
+                    recordProcessorCheckpointer.getLargestPermittedCheckpointValue().getSequenceNumber());
 
             // Try a second time - if we fail this time, expose the failure.
             try {

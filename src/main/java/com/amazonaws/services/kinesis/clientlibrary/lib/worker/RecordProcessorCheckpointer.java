@@ -24,7 +24,9 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
+import com.amazonaws.services.kinesis.model.Record;
 
 /**
  * This class is used to enable RecordProcessors to checkpoint their progress.
@@ -37,34 +39,29 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
 
     private ICheckpoint checkpoint;
 
-    private String largestPermittedCheckpointValue;
+    private ExtendedSequenceNumber largestPermittedCheckpointValue;
     // Set to the last value set via checkpoint().
     // Sample use: verify application shutdown() invoked checkpoint() at the end of a shard.
-    private String lastCheckpointValue;
+    private ExtendedSequenceNumber lastCheckpointValue;
 
     private ShardInfo shardInfo;
 
     private SequenceNumberValidator sequenceNumberValidator;
 
-    private CheckpointValueComparator checkpointValueComparator;
-
-    private String sequenceNumberAtShardEnd;
+    private ExtendedSequenceNumber sequenceNumberAtShardEnd;
 
     /**
      * Only has package level access, since only the Amazon Kinesis Client Library should be creating these.
-     * 
+     *
      * @param checkpoint Used to checkpoint progress of a RecordProcessor
      * @param validator Used for validating sequence numbers
-     * @param comparator Used for checking the order of checkpoint values
      */
     RecordProcessorCheckpointer(ShardInfo shardInfo,
             ICheckpoint checkpoint,
-            SequenceNumberValidator validator,
-            CheckpointValueComparator comparator) {
+            SequenceNumberValidator validator) {
         this.shardInfo = shardInfo;
         this.checkpoint = checkpoint;
         this.sequenceNumberValidator = validator;
-        this.checkpointValueComparator = comparator;
     }
 
     /**
@@ -84,9 +81,40 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
      * {@inheritDoc}
      */
     @Override
+    public synchronized void checkpoint(Record record)
+        throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
+        IllegalArgumentException {
+        if (record == null) {
+            throw new IllegalArgumentException("Could not checkpoint a null record");
+        } else if (record instanceof UserRecord) {
+            checkpoint(record.getSequenceNumber(), ((UserRecord) record).getSubSequenceNumber());
+        } else {
+            checkpoint(record.getSequenceNumber(), 0);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public synchronized void checkpoint(String sequenceNumber)
         throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
         IllegalArgumentException {
+        checkpoint(sequenceNumber, 0);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public synchronized void checkpoint(String sequenceNumber, long subSequenceNumber)
+        throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
+        IllegalArgumentException {
+
+        if (subSequenceNumber < 0) {
+            throw new IllegalArgumentException("Could not checkpoint at invalid, negative subsequence number "
+                    + subSequenceNumber);
+        }
 
         // throws exception if sequence number shouldn't be checkpointed for this shard
         sequenceNumberValidator.validateSequenceNumber(sequenceNumber);
@@ -98,66 +126,68 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
          * If there isn't a last checkpoint value, we only care about checking the upper bound.
          * If there is a last checkpoint value, we want to check both the lower and upper bound.
          */
-        if ((checkpointValueComparator.compare(lastCheckpointValue, sequenceNumber) <= 0)
-                && checkpointValueComparator.compare(sequenceNumber, largestPermittedCheckpointValue) <= 0) {
+        ExtendedSequenceNumber newCheckpoint = new ExtendedSequenceNumber(sequenceNumber, subSequenceNumber);
+        if ((lastCheckpointValue.compareTo(newCheckpoint) <= 0)
+                && newCheckpoint.compareTo(largestPermittedCheckpointValue) <= 0) {
 
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Checkpointing " + shardInfo.getShardId() + ", token " + shardInfo.getConcurrencyToken()
-                        + " at specific sequence number " + sequenceNumber);
+                        + " at specific extended sequence number " + newCheckpoint);
             }
-            this.advancePosition(sequenceNumber);
+            this.advancePosition(newCheckpoint);
         } else {
-            throw new IllegalArgumentException("Could not checkpoint at sequence number " + sequenceNumber
-                    + " it did not fall into acceptable range between the last sequence number checkpointed "
-                    + this.lastCheckpointValue + " and the greatest sequence number passed to this record processor "
-                    + this.largestPermittedCheckpointValue);
+            throw new IllegalArgumentException(String.format(
+                    "Could not checkpoint at extended sequence number %s as it did not fall into acceptable range "
+                    + "between the last checkpoint %s and the greatest extended sequence number passed to this "
+                    + "record processor %s",
+                    newCheckpoint, this.lastCheckpointValue, this.largestPermittedCheckpointValue));
         }
-
     }
 
     /**
      * @return the lastCheckpointValue
      */
-    String getLastCheckpointValue() {
+    ExtendedSequenceNumber getLastCheckpointValue() {
         return lastCheckpointValue;
     }
 
-
-    synchronized void setInitialCheckpointValue(String initialCheckpoint) {
+    synchronized void setInitialCheckpointValue(ExtendedSequenceNumber initialCheckpoint) {
         lastCheckpointValue = initialCheckpoint;
     }
 
     /**
      * Used for testing.
-     * 
-     * @return the sequenceNumber
+     *
+     * @return the largest permitted checkpoint
      */
-    synchronized String getLargestPermittedCheckpointValue() {
+    synchronized ExtendedSequenceNumber getLargestPermittedCheckpointValue() {
         return largestPermittedCheckpointValue;
     }
 
     /**
-     * @param largestPermittedCheckpointValue the checkpoint value to set
+     * @param checkpoint the checkpoint value to set
      */
-    synchronized void setLargestPermittedCheckpointValue(String checkpointValue) {
-        this.largestPermittedCheckpointValue = checkpointValue;
+    synchronized void setLargestPermittedCheckpointValue(ExtendedSequenceNumber largestPermittedCheckpointValue) {
+        this.largestPermittedCheckpointValue = largestPermittedCheckpointValue;
     }
 
     /**
-     * Used to remember the last sequence number before SHARD_END to allow us to prevent the checkpointer from
-     * checkpointing at the end of the shard twice (i.e. at the last sequence number and then again at SHARD_END).
-     * 
-     * @param sequenceNumber
+     * Used to remember the last extended sequence number before SHARD_END to allow us to prevent the checkpointer
+     * from checkpointing at the end of the shard twice (i.e. at the last extended sequence number and then again
+     * at SHARD_END).
+     *
+     * @param extendedSequenceNumber
      */
-    synchronized void setSequenceNumberAtShardEnd(String sequenceNumber) {
-        this.sequenceNumberAtShardEnd = sequenceNumber;
+    synchronized void setSequenceNumberAtShardEnd(ExtendedSequenceNumber extendedSequenceNumber) {
+        this.sequenceNumberAtShardEnd = extendedSequenceNumber;
     }
+
 
     /**
      * Internal API - has package level access only for testing purposes.
-     * 
+     *
      * @param sequenceNumber
-     * 
+     *
      * @throws KinesisClientLibDependencyException
      * @throws ThrottlingException
      * @throws ShutdownException
@@ -165,21 +195,26 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
      */
     void advancePosition(String sequenceNumber)
         throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
-        String checkpointValue = sequenceNumber;
-        if (sequenceNumberAtShardEnd != null && sequenceNumberAtShardEnd.equals(sequenceNumber)) {
+        advancePosition(new ExtendedSequenceNumber(sequenceNumber));
+    }
+
+    void advancePosition(ExtendedSequenceNumber extendedSequenceNumber)
+        throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+        ExtendedSequenceNumber checkpointToRecord = extendedSequenceNumber;
+        if (sequenceNumberAtShardEnd != null && sequenceNumberAtShardEnd.equals(extendedSequenceNumber)) {
             // If we are about to checkpoint the very last sequence number for this shard, we might as well
             // just checkpoint at SHARD_END
-            checkpointValue = SentinelCheckpoint.SHARD_END.toString();
+            checkpointToRecord = ExtendedSequenceNumber.SHARD_END;
         }
         // Don't checkpoint a value we already successfully checkpointed
-        if (sequenceNumber != null && !sequenceNumber.equals(lastCheckpointValue)) {
+        if (extendedSequenceNumber != null && !extendedSequenceNumber.equals(lastCheckpointValue)) {
             try {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("Setting " + shardInfo.getShardId() + ", token " + shardInfo.getConcurrencyToken()
-                            + " checkpoint to " + checkpointValue);
+                            + " checkpoint to " + checkpointToRecord);
                 }
-                checkpoint.setCheckpoint(shardInfo.getShardId(), checkpointValue, shardInfo.getConcurrencyToken());
-                lastCheckpointValue = checkpointValue;
+                checkpoint.setCheckpoint(shardInfo.getShardId(), checkpointToRecord, shardInfo.getConcurrencyToken());
+                lastCheckpointValue = checkpointToRecord;
             } catch (ThrottlingException | ShutdownException | InvalidStateException
                     | KinesisClientLibDependencyException e) {
                 throw e;

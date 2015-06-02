@@ -18,6 +18,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -74,9 +75,9 @@ public class KinesisClientLeaseManager extends LeaseManager<KinesisClientLease> 
      * {@inheritDoc}
      */
     @Override
-    public String getCheckpoint(String shardId)
+    public ExtendedSequenceNumber getCheckpoint(String shardId)
         throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        String checkpoint = null;
+    	ExtendedSequenceNumber checkpoint = null;
         KinesisClientLease lease = getLease(shardId);
         if (lease != null) {
             checkpoint = lease.getCheckpoint();

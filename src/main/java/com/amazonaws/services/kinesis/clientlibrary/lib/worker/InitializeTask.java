@@ -18,7 +18,9 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 
 /**
  * Task for initializing shard position and invoking the RecordProcessor initialize() API.
@@ -55,7 +57,7 @@ class InitializeTask implements ITask {
     /*
      * Initializes the data fetcher (position in shard) and invokes the RecordProcessor initialize() API.
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
     @Override
@@ -65,13 +67,17 @@ class InitializeTask implements ITask {
 
         try {
             LOG.debug("Initializing ShardId " + shardInfo.getShardId());
-            String initialCheckpoint = checkpoint.getCheckpoint(shardInfo.getShardId());
-            dataFetcher.initialize(initialCheckpoint);
+            ExtendedSequenceNumber initialCheckpoint = checkpoint.getCheckpoint(shardInfo.getShardId());
+
+            dataFetcher.initialize(initialCheckpoint.getSequenceNumber());
             recordProcessorCheckpointer.setLargestPermittedCheckpointValue(initialCheckpoint);
             recordProcessorCheckpointer.setInitialCheckpointValue(initialCheckpoint);
             try {
                 LOG.debug("Calling the record processor initialize().");
-                recordProcessor.initialize(shardInfo.getShardId());
+                final InitializationInput initializationInput = new InitializationInput()
+                    .withShardId(shardInfo.getShardId())
+                    .withExtendedSequenceNumber(initialCheckpoint);
+                recordProcessor.initialize(initializationInput);
                 LOG.debug("Record processor initialize() completed.");
             } catch (Exception e) {
                 applicationException = true;
@@ -99,7 +105,7 @@ class InitializeTask implements ITask {
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#getTaskType()
      */
     @Override

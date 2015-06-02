@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.leases.interfaces;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -35,7 +36,7 @@ public interface IKinesisClientLeaseManager extends ILeaseManager<KinesisClientL
      * @throws InvalidStateException if lease table does not exist
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    public abstract String getCheckpoint(String shardId)
+    public abstract ExtendedSequenceNumber getCheckpoint(String shardId)
         throws ProvisionedThroughputException, InvalidStateException, DependencyException;
 
 }
