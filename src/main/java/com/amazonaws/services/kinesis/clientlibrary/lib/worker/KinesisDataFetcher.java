@@ -14,13 +14,10 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.util.List;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
-import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
@@ -57,17 +54,15 @@ class KinesisDataFetcher {
      * @param maxRecords Max records to fetch
      * @return list of records of up to maxRecords size
      */
-    public List<Record> getRecords(int maxRecords) {
+    public GetRecordsResult getRecords(int maxRecords) {
         if (!isInitialized) {
             throw new IllegalArgumentException("KinesisDataFetcher.getRecords called before initialization.");
         }
 
-        List<Record> records = null;
         GetRecordsResult response = null;
         if (nextIterator != null) {
             try {
                 response = kinesisProxy.get(nextIterator, maxRecords);
-                records = response.getRecords();
                 nextIterator = response.getNextShardIterator();
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
@@ -80,7 +75,7 @@ class KinesisDataFetcher {
             isShardEndReached = true;
         }
 
-        return records;
+        return response;
     }
 
     /**

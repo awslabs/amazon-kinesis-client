@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.leases.impl;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -160,14 +161,14 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
 
     @Override
     public boolean waitUntilLeaseTableExists(long secondsBetweenPolls, long timeoutSeconds) throws DependencyException {
-        long sleepTimeRemaining = timeoutSeconds * 1000;
+        long sleepTimeRemaining = TimeUnit.SECONDS.toMillis(timeoutSeconds);
 
         while (!leaseTableExists()) {
             if (sleepTimeRemaining <= 0) {
                 return false;
             }
 
-            long timeToSleepMillis = Math.min(1000 * secondsBetweenPolls, sleepTimeRemaining);
+            long timeToSleepMillis = Math.min(TimeUnit.SECONDS.toMillis(secondsBetweenPolls), sleepTimeRemaining);
 
             sleepTimeRemaining -= sleep(timeToSleepMillis);
         }
@@ -385,7 +386,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         verifyNotNull(owner, "owner cannot be null");
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Taking lease with shardId %s from %s to %s",
+            LOG.debug(String.format("Taking lease with leaseKey %s from %s to %s",
                     lease.getLeaseKey(),
                     lease.getLeaseOwner() == null ? "nobody" : lease.getLeaseOwner(),
                     owner));
@@ -428,7 +429,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         verifyNotNull(lease, "lease cannot be null");
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Voiding lease with shardId %s owned by %s",
+            LOG.debug(String.format("Evicting lease with leaseKey %s owned by %s",
                     lease.getLeaseKey(),
                     lease.getLeaseOwner()));
         }
@@ -485,7 +486,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         verifyNotNull(lease, "lease cannot be null");
 
         if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Deleting lease with shardId %s", lease.getLeaseKey()));
+            LOG.debug(String.format("Deleting lease with leaseKey %s", lease.getLeaseKey()));
         }
 
         DeleteItemRequest deleteRequest = new DeleteItemRequest();

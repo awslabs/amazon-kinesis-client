@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.leases.impl;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.util.json.JSONObject;
 
@@ -31,11 +32,8 @@ public class Lease {
      * 
      * Sometimes System.nanoTime's return values will wrap due to overflow. When they do, the difference between two
      * values will be very large. We will consider leases to be expired if they are more than a year old.
-     * 
-     * 365 days per year * 24 hours per day * 60 minutes per hour * 60 seconds per minute * 1000000000
-     * nanoseconds/second
      */
-    private static final long MAX_ABS_AGE_NANOS = 365 * 24 * 60 * 60 * 1000000000L;
+    private static final long MAX_ABS_AGE_NANOS = TimeUnit.DAYS.toNanos(365);
 
     private String leaseKey;
     private String leaseOwner;

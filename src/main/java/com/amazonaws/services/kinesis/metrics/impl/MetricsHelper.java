@@ -80,16 +80,16 @@ public class MetricsHelper {
     public static void addSuccessAndLatency(String prefix, long startTimeMillis, boolean success) {
         addSuccessAndLatencyPerShard(null, prefix, startTimeMillis, success);
     }
-    
+
     public static void addSuccessAndLatencyPerShard (
-            String shardId, 
-            String prefix, 
-            long startTimeMillis, 
+            String shardId,
+            String prefix,
+            long startTimeMillis,
             boolean success) {
         IMetricsScope scope = getMetricsScope();
 
         String realPrefix = prefix == null ? "" : prefix + SEP;
-        
+
         if (shardId != null) {
             scope.addDimension("ShardId", shardId);
         }
@@ -103,10 +103,9 @@ public class MetricsHelper {
     public static void endScope() {
         IMetricsScope scope = getMetricsScope();
         if (scope != null) {
-            Integer refCount = referenceCount.get();
-            refCount--;
+            referenceCount.set(referenceCount.get() - 1);
 
-            if (refCount == 0) {
+            if (referenceCount.get() == 0) {
                 scope.end();
                 currentScope.remove();
             }

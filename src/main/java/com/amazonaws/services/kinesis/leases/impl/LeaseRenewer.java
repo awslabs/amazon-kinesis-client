@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -57,7 +58,7 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
     public LeaseRenewer(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis) {
         this.leaseManager = leaseManager;
         this.workerIdentifier = workerIdentifier;
-        this.leaseDurationNanos = leaseDurationMillis * 1000000L;
+        this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
     }
 
     /**
