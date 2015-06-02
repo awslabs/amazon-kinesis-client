@@ -23,6 +23,8 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.MetricsCollectingKinesisProxyDecorator;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
  */
@@ -37,7 +39,7 @@ class KinesisDataFetcher {
     private boolean isInitialized;
 
     /**
-     * 
+     *
      * @param kinesisProxy Kinesis proxy
      * @param shardId shardId (we'll fetch data for this shard)
      * @param checkpoint used to get current checkpoint from which to start fetching records
@@ -50,7 +52,7 @@ class KinesisDataFetcher {
 
     /**
      * Get records from the current position in the stream (up to maxRecords).
-     * 
+     *
      * @param maxRecords Max records to fetch
      * @return list of records of up to maxRecords size
      */
@@ -79,32 +81,28 @@ class KinesisDataFetcher {
     }
 
     /**
-     * Initializes this KinesisDataFetcher's iterator based on the checkpoint.
-     * @param initialCheckpoint Current checkpoint for this shard.
-     * 
+     * Initializes this KinesisDataFetcher's iterator based on the checkpointed sequence number.
+     * @param initialCheckpoint Current checkpoint sequence number for this shard.
+     *
      */
     public void initialize(String initialCheckpoint) {
-
         LOG.info("Initializing shard " + shardId + " with " + initialCheckpoint);
-        advanceIteratorAfter(initialCheckpoint);
+        advanceIteratorTo(initialCheckpoint);
         isInitialized = true;
     }
     
-    /**
-     * Advances this KinesisDataFetcher's internal iterator to be after the passed-in sequence number.
-     * 
-     * @param sequenceNumber advance the iterator to the first record after this sequence number.
-     */
-    private void advanceIteratorAfterSequenceNumber(String sequenceNumber) {
-        nextIterator = getIterator(ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(), sequenceNumber);
+    public void initialize(ExtendedSequenceNumber initialCheckpoint) {
+        LOG.info("Initializing shard " + shardId + " with " + initialCheckpoint.getSequenceNumber());
+        advanceIteratorTo(initialCheckpoint.getSequenceNumber());
+        isInitialized = true;
     }
-    
+
     /**
-     * Advances this KinesisDataFetcher's internal iterator to be after the passed-in sequence number.
-     * 
-     * @param sequenceNumber advance the iterator to the first record after this sequence number.
+     * Advances this KinesisDataFetcher's internal iterator to be at the passed-in sequence number.
+     *
+     * @param sequenceNumber advance the iterator to the record at this sequence number.
      */
-    void advanceIteratorAfter(String sequenceNumber) {
+    void advanceIteratorTo(String sequenceNumber) {
         if (sequenceNumber == null) {
             throw new IllegalArgumentException("SequenceNumber should not be null: shardId " + shardId);
         } else if (sequenceNumber.equals(SentinelCheckpoint.LATEST.toString())) {
@@ -114,24 +112,24 @@ class KinesisDataFetcher {
         } else if (sequenceNumber.equals(SentinelCheckpoint.SHARD_END.toString())) {
             nextIterator = null;
         } else {
-            advanceIteratorAfterSequenceNumber(sequenceNumber);
+            nextIterator = getIterator(ShardIteratorType.AT_SEQUENCE_NUMBER.toString(), sequenceNumber);
         }
         if (nextIterator == null) {
             isShardEndReached = true;
         }
     }
-    
+
     /**
      * @param iteratorType
      * @param sequenceNumber
-     * 
+     *
      * @return iterator or null if we catch a ResourceNotFound exception
      */
     private String getIterator(String iteratorType, String sequenceNumber) {
         String iterator = null;
-        try {            
+        try {
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Calling getIterator for " + shardId + ", iterator type " + iteratorType 
+                LOG.debug("Calling getIterator for " + shardId + ", iterator type " + iteratorType
                     + " and sequence number " + sequenceNumber);
             }
             iterator = kinesisProxy.getIterator(shardId, iteratorType, sequenceNumber);

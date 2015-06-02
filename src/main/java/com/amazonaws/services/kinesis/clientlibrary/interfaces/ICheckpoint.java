@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.interfaces;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
 /**
  * Interface for checkpoint trackers.
@@ -22,17 +23,17 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibE
 public interface ICheckpoint {
 
     /**
-     * Record a checkpoint for a shard (e.g. sequence number of last record processed by application).
-     * Upon failover, record processing is resumed from this point.
+     * Record a checkpoint for a shard (e.g. sequence and subsequence numbers of last record processed 
+     * by application). Upon failover, record processing is resumed from this point.
      * 
      * @param shardId Checkpoint is specified for this shard.
-     * @param checkpointValue Value of the checkpoint (e.g. Kinesis sequence number)
+     * @param checkpointValue Value of the checkpoint (e.g. Kinesis sequence number and subsequence number)
      * @param concurrencyToken Used with conditional writes to prevent stale updates
      *        (e.g. if there was a fail over to a different record processor, we don't want to 
      *        overwrite it's checkpoint)
      * @throws KinesisClientLibException Thrown if we were unable to save the checkpoint
      */
-    void setCheckpoint(String shardId, String checkpointValue, String concurrencyToken)
+    void setCheckpoint(String shardId, ExtendedSequenceNumber checkpointValue, String concurrencyToken)
         throws KinesisClientLibException;
 
     /**
@@ -43,6 +44,6 @@ public interface ICheckpoint {
      * @return Current checkpoint for this shard, null if there is no record for this shard.
      * @throws KinesisClientLibException Thrown if we are unable to fetch the checkpoint
      */
-    String getCheckpoint(String shardId) throws KinesisClientLibException;
+    ExtendedSequenceNumber getCheckpoint(String shardId) throws KinesisClientLibException;
 
 }

@@ -18,7 +18,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 
@@ -65,8 +65,8 @@ class BlockOnParentShardTask implements ITask {
             for (String shardId : shardInfo.getParentShardIds()) {
                 KinesisClientLease lease = leaseManager.getLease(shardId);
                 if (lease != null) {
-                    String checkpoint = lease.getCheckpoint();
-                    if ((checkpoint == null) || (!checkpoint.equals(SentinelCheckpoint.SHARD_END.toString()))) {
+                    ExtendedSequenceNumber checkpoint = lease.getCheckpoint();
+                    if ((checkpoint == null) || (!checkpoint.equals(ExtendedSequenceNumber.SHARD_END))) {
                         LOG.debug("Shard " + shardId + " is not yet done. Its current checkpoint is " + checkpoint);
                         blockedOnParentShard = true;
                         exception = new BlockedOnParentShardException("Parent shard not yet done");

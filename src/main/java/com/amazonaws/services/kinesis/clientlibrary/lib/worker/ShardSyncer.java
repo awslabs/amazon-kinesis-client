@@ -29,16 +29,16 @@ import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.model.Shard;
 
 /**
  * Helper class to sync leases with shards of the Kinesis stream.
@@ -364,7 +364,7 @@ class ShardSyncer {
                                 shardIdToNewLeaseMap,
                                 memoizationContext);
                 if (isDescendant) {
-                    newLease.setCheckpoint(SentinelCheckpoint.TRIM_HORIZON.toString());
+                    newLease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
                 } else {
                     newLease.setCheckpoint(convertToCheckpoint(initialPosition));
                 }
@@ -449,7 +449,7 @@ class ShardSyncer {
                             }
 
                             if (descendantParentShardIds.contains(parentShardId)) {
-                                lease.setCheckpoint(SentinelCheckpoint.TRIM_HORIZON.toString());
+                                lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
                             } else {
                                 lease.setCheckpoint(convertToCheckpoint(initialPosition));
                             }
@@ -607,7 +607,7 @@ class ShardSyncer {
         Set<String> shardIdsOfClosedShards = new HashSet<>();
         List<KinesisClientLease> leasesOfClosedShards = new ArrayList<>();
         for (KinesisClientLease lease : currentLeases) {
-            if (lease.getCheckpoint().equals(SentinelCheckpoint.SHARD_END.toString())) {
+            if (lease.getCheckpoint().equals(ExtendedSequenceNumber.SHARD_END)) {
                 shardIdsOfClosedShards.add(lease.getLeaseKey());
                 leasesOfClosedShards.add(lease);
             }
@@ -662,11 +662,11 @@ class ShardSyncer {
         }
         
         if ((leaseForClosedShard != null)
-                && (leaseForClosedShard.getCheckpoint().equals(SentinelCheckpoint.SHARD_END.toString()))
+                && (leaseForClosedShard.getCheckpoint().equals(ExtendedSequenceNumber.SHARD_END))
                 && (childShardLeases.size() == childShardIds.size())) {
             boolean okayToDelete = true;
             for (KinesisClientLease lease : childShardLeases) {
-                if (lease.getCheckpoint().equals(SentinelCheckpoint.TRIM_HORIZON.toString())) {
+                if (lease.getCheckpoint().equals(ExtendedSequenceNumber.TRIM_HORIZON)) {
                     okayToDelete = false;
                     break;
                 }
@@ -736,13 +736,13 @@ class ShardSyncer {
         return openShards;
     }
 
-    private static String convertToCheckpoint(InitialPositionInStream position) {
-        String checkpoint = null;
+    private static ExtendedSequenceNumber convertToCheckpoint(InitialPositionInStream position) {
+        ExtendedSequenceNumber checkpoint = null;
         
         if (position.equals(InitialPositionInStream.TRIM_HORIZON)) {
-            checkpoint = SentinelCheckpoint.TRIM_HORIZON.toString();
+            checkpoint = ExtendedSequenceNumber.TRIM_HORIZON;
         } else if (position.equals(InitialPositionInStream.LATEST)) {
-            checkpoint = SentinelCheckpoint.LATEST.toString();
+            checkpoint = ExtendedSequenceNumber.LATEST;
         }
         
         return checkpoint;

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -44,7 +45,7 @@ import com.amazonaws.services.kinesis.model.StreamStatus;
 /**
  * Kinesis proxy - used to make calls to Amazon Kinesis (e.g. fetch data records and list of shards).
  */
-public class KinesisProxy implements IKinesisProxy {
+public class KinesisProxy implements IKinesisProxyExtended {
 
     private static final Log LOG = LogFactory.getLog(KinesisProxy.class);
 
@@ -53,6 +54,7 @@ public class KinesisProxy implements IKinesisProxy {
 
     private AmazonKinesis client;
     private AWSCredentialsProvider credentialsProvider;
+    private AtomicReference<List<Shard>> listOfShardsSinceLastGet = new AtomicReference();
 
     private final String streamName;
 
@@ -191,6 +193,26 @@ public class KinesisProxy implements IKinesisProxy {
      * {@inheritDoc}
      */
     @Override
+    public Shard getShard(String shardId) {
+        if (this.listOfShardsSinceLastGet.get() == null) {
+            //Update this.listOfShardsSinceLastGet as needed.
+            this.getShardList();
+        }
+
+        for (Shard shard : listOfShardsSinceLastGet.get()) {
+            if (shard.getShardId().equals(shardId))  {
+                return shard;
+            }
+        }
+        
+        LOG.warn("Cannot find the shard given the shardId " + shardId);
+        return null;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public List<Shard> getShardList() {
         List<Shard> result = new ArrayList<Shard>();
 
@@ -212,7 +234,7 @@ public class KinesisProxy implements IKinesisProxy {
                 lastShardId = shards.get(shards.size() - 1).getShardId();
             }
         } while (response.getStreamDescription().isHasMoreShards());
-
+        this.listOfShardsSinceLastGet.set(result);
         return result;
     }
 

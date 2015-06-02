@@ -21,6 +21,7 @@ import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.model.InvalidArgumentException;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
@@ -33,7 +34,7 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
  * which could prevent another shard consumer instance from processing the shard later on). This class also provides a
  * utility function {@link #isDigits(String)} which is used to check whether a string is all digits
  */
-class SequenceNumberValidator {
+public class SequenceNumberValidator {
 
     private static final Log LOG = LogFactory.getLog(SequenceNumberValidator.class);
 
@@ -95,6 +96,15 @@ class SequenceNumberValidator {
             }
             // Just throw any other exceptions, e.g. 400 errors caused by the client
             throw e;
+        }
+    }
+
+    void validateSequenceNumber(ExtendedSequenceNumber checkpoint)
+        throws IllegalArgumentException, ThrottlingException, KinesisClientLibDependencyException {
+        validateSequenceNumber(checkpoint.getSequenceNumber());
+        if (checkpoint.getSubSequenceNumber() < 0) {
+            throw new IllegalArgumentException("SubSequence number must be non-negative, but was "
+                    + checkpoint.getSubSequenceNumber());
         }
     }
 

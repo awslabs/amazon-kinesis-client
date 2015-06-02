@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.leases.impl;
 
+import java.lang.Long;
 import java.util.Collection;
 import java.util.Map;
 
@@ -23,6 +24,7 @@ import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.dynamodbv2.model.AttributeValueUpdate;
 import com.amazonaws.services.dynamodbv2.model.ExpectedAttributeValue;
 import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSerializer;
 import com.amazonaws.services.kinesis.leases.util.DynamoUtils;
 
@@ -32,7 +34,8 @@ import com.amazonaws.services.kinesis.leases.util.DynamoUtils;
 public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisClientLease> {
 
     private static final String OWNER_SWITCHES_KEY = "ownerSwitchesSinceCheckpoint";
-    private static final String CHECKPOINT_KEY = "checkpoint";
+    private static final String CHECKPOINT_SEQUENCE_NUMBER_KEY = "checkpoint";
+    private static final String CHECKPOINT_SUBSEQUENCE_NUMBER_KEY = "checkpointSubSequenceNumber";
     public final String PARENT_SHARD_ID_KEY = "parentShardId";
 
     private final LeaseSerializer baseSerializer = new LeaseSerializer(KinesisClientLease.class);
@@ -42,7 +45,8 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
         Map<String, AttributeValue> result = baseSerializer.toDynamoRecord(lease);
 
         result.put(OWNER_SWITCHES_KEY, DynamoUtils.createAttributeValue(lease.getOwnerSwitchesSinceCheckpoint()));
-        result.put(CHECKPOINT_KEY, DynamoUtils.createAttributeValue(lease.getCheckpoint()));
+        result.put(CHECKPOINT_SEQUENCE_NUMBER_KEY, DynamoUtils.createAttributeValue(lease.getCheckpoint().getSequenceNumber()));
+        result.put(CHECKPOINT_SUBSEQUENCE_NUMBER_KEY, DynamoUtils.createAttributeValue(lease.getCheckpoint().getSubSequenceNumber()));
         if (lease.getParentShardIds() != null && !lease.getParentShardIds().isEmpty()) {
             result.put(PARENT_SHARD_ID_KEY, DynamoUtils.createAttributeValue(lease.getParentShardIds()));
         }
@@ -55,7 +59,11 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
         KinesisClientLease result = (KinesisClientLease) baseSerializer.fromDynamoRecord(dynamoRecord);
 
         result.setOwnerSwitchesSinceCheckpoint(DynamoUtils.safeGetLong(dynamoRecord, OWNER_SWITCHES_KEY));
-        result.setCheckpoint(DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_KEY));
+        result.setCheckpoint(
+            new ExtendedSequenceNumber(
+                DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_SEQUENCE_NUMBER_KEY),
+                DynamoUtils.safeGetLong(dynamoRecord, CHECKPOINT_SUBSEQUENCE_NUMBER_KEY))
+        );
         result.setParentShardIds(DynamoUtils.safeGetSS(dynamoRecord, PARENT_SHARD_ID_KEY));
 
         return result;
@@ -113,7 +121,9 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
     public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(KinesisClientLease lease) {
         Map<String, AttributeValueUpdate> result = baseSerializer.getDynamoUpdateLeaseUpdate(lease);
 
-        result.put(CHECKPOINT_KEY, new AttributeValueUpdate(DynamoUtils.createAttributeValue(lease.getCheckpoint()),
+        result.put(CHECKPOINT_SEQUENCE_NUMBER_KEY, new AttributeValueUpdate(DynamoUtils.createAttributeValue(lease.getCheckpoint().getSequenceNumber()),
+                AttributeAction.PUT));
+        result.put(CHECKPOINT_SUBSEQUENCE_NUMBER_KEY, new AttributeValueUpdate(DynamoUtils.createAttributeValue(lease.getCheckpoint().getSubSequenceNumber()),
                 AttributeAction.PUT));
         result.put(OWNER_SWITCHES_KEY,
                 new AttributeValueUpdate(DynamoUtils.createAttributeValue(lease.getOwnerSwitchesSinceCheckpoint()),

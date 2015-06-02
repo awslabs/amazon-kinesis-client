@@ -23,7 +23,7 @@ import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
@@ -107,8 +107,7 @@ class ShardConsumer {
                         checkpoint,
                         new SequenceNumberValidator(streamConfig.getStreamProxy(),
                                 shardInfo.getShardId(),
-                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
-                        new CheckpointValueComparator());
+                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()));
         this.dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
         this.leaseManager = leaseManager;
         this.metricsFactory = metricsFactory;

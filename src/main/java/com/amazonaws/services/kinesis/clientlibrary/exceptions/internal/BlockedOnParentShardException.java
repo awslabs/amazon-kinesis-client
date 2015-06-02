@@ -44,5 +44,4 @@ public class BlockedOnParentShardException extends KinesisClientLibRetryableExce
         super(message, e);
     }
 
-
 }
