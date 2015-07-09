@@ -15,7 +15,9 @@
 package com.amazonaws.services.kinesis.clientlibrary.types;
 
 import java.util.List;
+
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 
 /**
@@ -27,6 +29,7 @@ public class ProcessRecordsInput {
 
     private List<Record> records;
     private IRecordProcessorCheckpointer checkpointer;
+    private GetRecordsResult getRecordsResult;
 
     /**
      * Default constructor.
@@ -71,6 +74,26 @@ public class ProcessRecordsInput {
      */
     public ProcessRecordsInput withCheckpointer(IRecordProcessorCheckpointer checkpointer) {
         this.checkpointer = checkpointer;
+        return this;
+    }
+
+    /**
+     * Get the GetRecordsResult that was for the current batch.
+     *
+     * @return GetRecordsResult for the records to be processed
+     */
+    public GetRecordsResult getGetRecordsResult() {
+        return getRecordsResult;
+    }
+
+    /**
+     * Set GetRecordsResult.
+     *
+     * @param getRecordsResult GetRecordsResult for the records
+     * @return A reference to this updated object so that method calls can be chained together.
+     */
+    public ProcessRecordsInput withGetRecordsResult(GetRecordsResult getRecordsResult) {
+        this.getRecordsResult = getRecordsResult;
         return this;
     }
 }
