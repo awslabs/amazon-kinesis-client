@@ -167,6 +167,7 @@ class ProcessTask implements ITask {
                     @SuppressWarnings("unchecked")
                     final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
                         .withRecords((List<Record>) (List<?>) subRecords)
+                        .withGetRecordsResult(getRecordsResult)
                         .withCheckpointer(recordProcessorCheckpointer);
 
                     recordProcessor.processRecords(processRecordsInput);
