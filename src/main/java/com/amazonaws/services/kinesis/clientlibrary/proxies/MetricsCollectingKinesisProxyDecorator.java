@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import com.amazonaws.services.kinesis.model.PutRecordResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * IKinesisProxy implementation that wraps another implementation and collects metrics.
@@ -73,7 +74,8 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
             success = true;
             return response;
         } finally {
-            MetricsHelper.addSuccessAndLatencyPerShard(getRecordsShardId, getRecordsMetric, startTime, success);
+            MetricsHelper.addSuccessAndLatencyPerShard(getRecordsShardId, getRecordsMetric, startTime, success,
+                    MetricsLevel.DETAILED);
         }
     }
 
@@ -89,7 +91,7 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
             success = true;
             return response;
         } finally {
-            MetricsHelper.addSuccessAndLatency(getStreamInfoMetric, startTime, success);
+            MetricsHelper.addSuccessAndLatency(getStreamInfoMetric, startTime, success, MetricsLevel.DETAILED);
         }
     }
 
@@ -105,7 +107,7 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
             success = true;
             return response;
         } finally {
-            MetricsHelper.addSuccessAndLatency(getStreamInfoMetric, startTime, success);
+            MetricsHelper.addSuccessAndLatency(getStreamInfoMetric, startTime, success, MetricsLevel.DETAILED);
         }
     }
 
@@ -122,7 +124,7 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
             success = true;
             return response;
         } finally {
-            MetricsHelper.addSuccessAndLatency(getIteratorMetric, startTime, success);
+            MetricsHelper.addSuccessAndLatency(getIteratorMetric, startTime, success, MetricsLevel.DETAILED);
         }
     }
 
@@ -138,7 +140,7 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
             success = true;
             return response;
         } finally {
-            MetricsHelper.addSuccessAndLatency(getShardListMetric, startTime, success);
+            MetricsHelper.addSuccessAndLatency(getShardListMetric, startTime, success, MetricsLevel.DETAILED);
         }
     }
 
@@ -157,7 +159,7 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
             success = true;
             return response;
         } finally {
-            MetricsHelper.addSuccessAndLatency(putRecordMetric, startTime, success);
+            MetricsHelper.addSuccessAndLatency(putRecordMetric, startTime, success, MetricsLevel.DETAILED);
         }
     }
 }

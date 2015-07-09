@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
 
@@ -23,7 +24,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxyExtended;
@@ -32,6 +32,7 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
@@ -42,12 +43,13 @@ import com.amazonaws.services.kinesis.model.Shard;
  */
 class ProcessTask implements ITask {
 
+    private static final Log LOG = LogFactory.getLog(ProcessTask.class);
+
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     private static final String DATA_BYTES_PROCESSED_METRIC = "DataBytesProcessed";
     private static final String RECORDS_PROCESSED_METRIC = "RecordsProcessed";
     private static final String MILLIS_BEHIND_LATEST_METRIC = "MillisBehindLatest";
-
-    private static final Log LOG = LogFactory.getLog(ProcessTask.class);
+    private static final String RECORD_PROCESSOR_PROCESS_RECORDS_METRIC = "RecordProcessor.processRecords";
 
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
@@ -101,9 +103,9 @@ class ProcessTask implements ITask {
     public TaskResult call() {
         long startTimeMillis = System.currentTimeMillis();
         IMetricsScope scope = MetricsHelper.getMetricsScope();
-        scope.addDimension("ShardId", shardInfo.getShardId());
-        scope.addData(RECORDS_PROCESSED_METRIC, 0, StandardUnit.Count);
-        scope.addData(DATA_BYTES_PROCESSED_METRIC, 0, StandardUnit.Bytes);
+        scope.addDimension(MetricsHelper.SHARD_ID_DIMENSION_NAME, shardInfo.getShardId());
+        scope.addData(RECORDS_PROCESSED_METRIC, 0, StandardUnit.Count, MetricsLevel.SUMMARY);
+        scope.addData(DATA_BYTES_PROCESSED_METRIC, 0, StandardUnit.Bytes, MetricsLevel.SUMMARY);
 
         Exception exception = null;
 
@@ -113,14 +115,8 @@ class ProcessTask implements ITask {
                 boolean shardEndReached = true;
                 return new TaskResult(null, shardEndReached);
             }
-            
-            final GetRecordsResult getRecordsResult = getRecords();
 
-            if (getRecordsResult.getMillisBehindLatest() != null) {
-                scope.addData(MILLIS_BEHIND_LATEST_METRIC, getRecordsResult.getMillisBehindLatest(),
-                        StandardUnit.Milliseconds);
-            }
-
+            final GetRecordsResult getRecordsResult = getRecordsResult();
             final List<Record> records = getRecordsResult.getRecords();
 
             if (records.isEmpty()) {
@@ -146,7 +142,7 @@ class ProcessTask implements ITask {
 
             // If we got more records, record the max extended sequence number. Sleep if there are no records.
             if (!records.isEmpty()) {
-                scope.addData(RECORDS_PROCESSED_METRIC, numKinesisRecords, StandardUnit.Count);
+                scope.addData(RECORDS_PROCESSED_METRIC, numKinesisRecords, StandardUnit.Count, MetricsLevel.SUMMARY);
                 if (this.shard != null) {
                     subRecords = UserRecord.deaggregate(records, 
                               new BigInteger(this.shard.getHashKeyRange().getStartingHashKey()),
@@ -161,23 +157,28 @@ class ProcessTask implements ITask {
             }
 
             if ((!subRecords.isEmpty()) || streamConfig.shouldCallProcessRecordsEvenForEmptyRecordList()) {
-                try {
-                    LOG.debug("Calling application processRecords() with " + numKinesisRecords + " Kinesis records ("
-                            + numUserRecords + " user records) from " + shardInfo.getShardId());
-                    @SuppressWarnings("unchecked")
-                    final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
-                        .withRecords((List<Record>) (List<?>) subRecords)
-                        .withCheckpointer(recordProcessorCheckpointer);
+                LOG.debug("Calling application processRecords() with " + numKinesisRecords + " Kinesis records ("
+                        + numUserRecords + " user records) from " + shardInfo.getShardId());
+                @SuppressWarnings("unchecked")
+                final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
+                    .withRecords((List<Record>) (List<?>) subRecords)
+                    .withCheckpointer(recordProcessorCheckpointer)
+                    .withMillisBehindLatest(getRecordsResult.getMillisBehindLatest());
 
+                final long recordProcessorStartTimeMillis = System.currentTimeMillis();
+                try {
                     recordProcessor.processRecords(processRecordsInput);
                 } catch (Exception e) {
                     LOG.error("ShardId " + shardInfo.getShardId()
                             + ": Application processRecords() threw an exception when processing shard ", e);
                     LOG.error("ShardId " + shardInfo.getShardId() + ": Skipping over the following data records: "
                             + subRecords);
+                } finally {
+                    MetricsHelper.addLatencyPerShard(shardInfo.getShardId(), RECORD_PROCESSOR_PROCESS_RECORDS_METRIC,
+                            recordProcessorStartTimeMillis, MetricsLevel.SUMMARY);
                 }
             }
-        } catch (RuntimeException | KinesisClientLibException e) {
+        } catch (RuntimeException e) {
             LOG.error("ShardId " + shardInfo.getShardId() + ": Caught exception: ", e);
             exception = e;
 
@@ -190,6 +191,12 @@ class ProcessTask implements ITask {
         }
 
         return new TaskResult(exception);
+    }
+    // CHECKSTYLE:ON CyclomaticComplexity
+
+    @Override
+    public TaskType getTaskType() {
+        return taskType;
     }
 
     /**
@@ -222,7 +229,8 @@ class ProcessTask implements ITask {
                 largestExtendedSequenceNumber = extendedSequenceNumber;
             }
 
-            scope.addData(DATA_BYTES_PROCESSED_METRIC, record.getData().limit(), StandardUnit.Bytes);
+            scope.addData(DATA_BYTES_PROCESSED_METRIC, record.getData().limit(), StandardUnit.Bytes,
+                    MetricsLevel.SUMMARY);
         }
         return largestExtendedSequenceNumber;
     }
@@ -231,19 +239,17 @@ class ProcessTask implements ITask {
      * Gets records from Kinesis and retries once in the event of an ExpiredIteratorException.
      *
      * @return list of data records from Kinesis
-     * @throws KinesisClientLibException if reading checkpoints fails in the edge case where we haven't passed any
-     *         records to the client code yet
      */
-    private GetRecordsResult getRecords() throws KinesisClientLibException {
-        int maxRecords = streamConfig.getMaxRecords();
+    private GetRecordsResult getRecordsResult() {
         try {
-            return dataFetcher.getRecords(maxRecords);
+            return getRecordsResultAndRecordMillisBehindLatest();
         } catch (ExpiredIteratorException e) {
             // If we see a ExpiredIteratorException, try once to restart from the greatest remembered sequence number
             LOG.info("ShardId " + shardInfo.getShardId()
                     + ": getRecords threw ExpiredIteratorException - restarting after greatest seqNum "
                     + "passed to customer", e);
-            MetricsHelper.getMetricsScope().addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.Count);
+            MetricsHelper.getMetricsScope().addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.Count,
+                    MetricsLevel.SUMMARY);
 
             /*
              * Advance the iterator to after the greatest processed sequence number (remembered by
@@ -254,7 +260,7 @@ class ProcessTask implements ITask {
 
             // Try a second time - if we fail this time, expose the failure.
             try {
-                return dataFetcher.getRecords(maxRecords);
+                return getRecordsResultAndRecordMillisBehindLatest();
             } catch (ExpiredIteratorException ex) {
                 String msg =
                         "Shard " + shardInfo.getShardId()
@@ -265,9 +271,27 @@ class ProcessTask implements ITask {
         }
     }
 
-    @Override
-    public TaskType getTaskType() {
-        return taskType;
+    /**
+     * Gets records from Kinesis and records the MillisBehindLatest metric if present.
+     *
+     * @return list of data records from Kinesis
+     */
+    private GetRecordsResult getRecordsResultAndRecordMillisBehindLatest() {
+        final GetRecordsResult getRecordsResult = dataFetcher.getRecords(streamConfig.getMaxRecords());
+
+        if (getRecordsResult == null) {
+            // Stream no longer exists
+            return new GetRecordsResult().withRecords(Collections.<Record>emptyList());
+        }
+
+        if (getRecordsResult.getMillisBehindLatest() != null) {
+            MetricsHelper.getMetricsScope().addData(MILLIS_BEHIND_LATEST_METRIC,
+                    getRecordsResult.getMillisBehindLatest(),
+                    StandardUnit.Milliseconds,
+                    MetricsLevel.SUMMARY);
+        }
+
+        return getRecordsResult;
     }
 
 }

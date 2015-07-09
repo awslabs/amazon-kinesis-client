@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import com.amazonaws.services.kinesis.metrics.impl.LogMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * LeaseCoordinator abstracts away LeaseTaker and LeaseRenewer from the application code that's using leasing. It owns
@@ -174,7 +175,7 @@ public class LeaseCoordinator<T extends Lease> {
             success = true;
         } finally {
             scope.addDimension(WORKER_IDENTIFIER_METRIC, getWorkerIdentifier());
-            MetricsHelper.addSuccessAndLatency(startTime, success);
+            MetricsHelper.addSuccessAndLatency(startTime, success, MetricsLevel.SUMMARY);
             MetricsHelper.endScope();
         }
     }
@@ -195,7 +196,7 @@ public class LeaseCoordinator<T extends Lease> {
             success = true;
         } finally {
             scope.addDimension(WORKER_IDENTIFIER_METRIC, getWorkerIdentifier());
-            MetricsHelper.addSuccessAndLatency(startTime, success);
+            MetricsHelper.addSuccessAndLatency(startTime, success, MetricsLevel.SUMMARY);
             MetricsHelper.endScope();
         }
     }

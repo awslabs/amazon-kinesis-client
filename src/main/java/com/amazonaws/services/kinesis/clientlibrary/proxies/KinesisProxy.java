@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
     private AmazonKinesis client;
     private AWSCredentialsProvider credentialsProvider;
-    private AtomicReference<List<Shard>> listOfShardsSinceLastGet = new AtomicReference();
+    private AtomicReference<List<Shard>> listOfShardsSinceLastGet = new AtomicReference<>();
 
     private final String streamName;
 

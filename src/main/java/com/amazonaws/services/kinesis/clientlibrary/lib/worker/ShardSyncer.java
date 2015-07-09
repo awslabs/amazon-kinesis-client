@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputExc
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.amazonaws.services.kinesis.model.Shard;
 
 /**
@@ -126,7 +127,7 @@ class ShardSyncer {
                 leaseManager.createLeaseIfNotExists(lease);
                 success = true;
             } finally {
-                MetricsHelper.addSuccessAndLatency("CreateLease", startTimeMillis, success);
+                MetricsHelper.addSuccessAndLatency("CreateLease", startTimeMillis, success, MetricsLevel.DETAILED);
             }
         }
         

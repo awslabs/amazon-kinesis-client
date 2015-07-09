@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputExc
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * An implementation of ILeaseRenewer that uses DynamoDB via LeaseManager.
@@ -86,8 +87,10 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
             }
         }
 
-        MetricsHelper.getMetricsScope().addData("LostLeases", lostLeases, StandardUnit.Count);
-        MetricsHelper.getMetricsScope().addData("CurrentLeases", ownedLeases.size(), StandardUnit.Count);
+        MetricsHelper.getMetricsScope().addData(
+                "LostLeases", lostLeases, StandardUnit.Count, MetricsLevel.SUMMARY);
+        MetricsHelper.getMetricsScope().addData(
+                "CurrentLeases", ownedLeases.size(), StandardUnit.Count, MetricsLevel.SUMMARY);
     }
 
     private boolean renewLease(T lease) throws DependencyException, InvalidStateException {
@@ -128,7 +131,7 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
                 }
             }
         } finally {
-            MetricsHelper.addSuccessAndLatency("RenewLease", startTime, success);
+            MetricsHelper.addSuccessAndLatency("RenewLease", startTime, success, MetricsLevel.DETAILED);
         }
 
         return renewedLease;
@@ -258,7 +261,7 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
                 return updatedLease;
             }
         } finally {
-            MetricsHelper.addSuccessAndLatency("UpdateLease", startTime, success);
+            MetricsHelper.addSuccessAndLatency("UpdateLease", startTime, success, MetricsLevel.DETAILED);
         }
     }
 

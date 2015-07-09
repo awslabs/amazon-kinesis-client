@@ -30,23 +30,6 @@ class StreamConfig {
 
     /**
      * @param proxy Used to fetch records and information about the stream
-     * @param maxRecords Max records to fetch in a call
-     * @param idleTimeInMilliseconds Idle time between get calls to the stream
-     * @param callProcessRecordsEvenForEmptyRecordList Call the RecordProcessor::processRecords() API even if
-     *        GetRecords returned an empty record list.
-     * @param validateSequenceNumberBeforeCheckpointing Whether to call Amazon Kinesis to validate sequence numbers
-     */
-    StreamConfig(IKinesisProxy proxy,
-            int maxRecords,
-            long idleTimeInMilliseconds,
-            boolean callProcessRecordsEvenForEmptyRecordList,
-            boolean validateSequenceNumberBeforeCheckpointing) {
-        this(proxy, maxRecords, idleTimeInMilliseconds, callProcessRecordsEvenForEmptyRecordList,
-                validateSequenceNumberBeforeCheckpointing, InitialPositionInStream.LATEST);
-    }
-
-    /**
-     * @param proxy Used to fetch records and information about the stream
      * @param maxRecords Max records to be fetched in a call
      * @param idleTimeInMilliseconds Idle time between get calls to the stream
      * @param callProcessRecordsEvenForEmptyRecordList Call the IRecordProcessor::processRecords() API even if

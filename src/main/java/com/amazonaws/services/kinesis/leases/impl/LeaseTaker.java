@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseTaker;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * An implementation of ILeaseTaker that uses DynamoDB via LeaseManager.
@@ -116,7 +117,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                 }
             }
         } finally {
-            MetricsHelper.addSuccessAndLatency("ListLeases", startTime, success);
+            MetricsHelper.addSuccessAndLatency("ListLeases", startTime, success, MetricsLevel.DETAILED);
         }
 
         if (lastException != null) {
@@ -157,7 +158,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                     }
                 }
             } finally {
-                MetricsHelper.addSuccessAndLatency("TakeLease", startTime, success);
+                MetricsHelper.addSuccessAndLatency("TakeLease", startTime, success, MetricsLevel.DETAILED);
             }
         }
 
@@ -175,7 +176,8 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                     stringJoin(untakenLeaseKeys, ", ")));
         }
 
-        MetricsHelper.getMetricsScope().addData("TakenLeases", takenLeases.size(), StandardUnit.Count);
+        MetricsHelper.getMetricsScope().addData(
+                "TakenLeases", takenLeases.size(), StandardUnit.Count, MetricsLevel.SUMMARY);
 
         return takenLeases;
     }
@@ -356,11 +358,11 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
         }
         
         IMetricsScope metrics = MetricsHelper.getMetricsScope();
-        metrics.addData("TotalLeases", numLeases, StandardUnit.Count);
-        metrics.addData("ExpiredLeases", originalExpiredLeasesSize, StandardUnit.Count);
-        metrics.addData("NumWorkers", numWorkers, StandardUnit.Count);
-        metrics.addData("NeededLeases", numLeasesToReachTarget, StandardUnit.Count);
-        metrics.addData("LeasesToTake", leasesToTake.size(), StandardUnit.Count);
+        metrics.addData("TotalLeases", numLeases, StandardUnit.Count, MetricsLevel.DETAILED);
+        metrics.addData("ExpiredLeases", originalExpiredLeasesSize, StandardUnit.Count, MetricsLevel.SUMMARY);
+        metrics.addData("NumWorkers", numWorkers, StandardUnit.Count, MetricsLevel.SUMMARY);
+        metrics.addData("NeededLeases", numLeasesToReachTarget, StandardUnit.Count, MetricsLevel.DETAILED);
+        metrics.addData("LeasesToTake", leasesToTake.size(), StandardUnit.Count, MetricsLevel.DETAILED);
 
         return leasesToTake;
     }

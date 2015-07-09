@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.metrics.impl;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 public abstract class InterceptingMetricsFactory implements IMetricsFactory {
 
@@ -41,6 +42,10 @@ public abstract class InterceptingMetricsFactory implements IMetricsFactory {
         scope.addData(name, value, unit);
     }
 
+    protected void interceptAddData(String name, double value, StandardUnit unit, MetricsLevel level, IMetricsScope scope) {
+        scope.addData(name, value, unit, level);
+    }
+
     protected void interceptAddDimension(String name, String value, IMetricsScope scope) {
         scope.addDimension(name, value);
     }
@@ -60,6 +65,11 @@ public abstract class InterceptingMetricsFactory implements IMetricsFactory {
         @Override
         public void addData(String name, double value, StandardUnit unit) {
             interceptAddData(name, value, unit, other);
+        }
+
+        @Override
+        public void addData(String name, double value, StandardUnit unit, MetricsLevel level) {
+            interceptAddData(name, value, unit, level, other);
         }
 
         @Override

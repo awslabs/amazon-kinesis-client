@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * Task for invoking the RecordProcessor shutdown() callback.
@@ -31,6 +33,9 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 class ShutdownTask implements ITask {
 
     private static final Log LOG = LogFactory.getLog(ShutdownTask.class);
+
+    private static final String RECORD_PROCESSOR_SHUTDOWN_METRIC = "RecordProcessor.shutdown";
+
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
@@ -87,10 +92,11 @@ class ShutdownTask implements ITask {
 
             LOG.debug("Invoking shutdown() for shard " + shardInfo.getShardId() + ", concurrencyToken "
                     + shardInfo.getConcurrencyToken() + ". Shutdown reason: " + reason);
-            try {
-                final ShutdownInput shutdownInput = new ShutdownInput()
+            final ShutdownInput shutdownInput = new ShutdownInput()
                     .withShutdownReason(reason)
                     .withCheckpointer(recordProcessorCheckpointer);
+            final long recordProcessorStartTimeMillis = System.currentTimeMillis();
+            try {
                 recordProcessor.shutdown(shutdownInput);
                 ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
 
@@ -105,6 +111,9 @@ class ShutdownTask implements ITask {
             } catch (Exception e) {
                 applicationException = true;
                 throw e;
+            } finally {
+                MetricsHelper.addLatency(RECORD_PROCESSOR_SHUTDOWN_METRIC, recordProcessorStartTimeMillis,
+                        MetricsLevel.SUMMARY);
             }
 
             if (reason == ShutdownReason.TERMINATE) {

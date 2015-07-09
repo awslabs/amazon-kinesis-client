@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * Task for initializing shard position and invoking the RecordProcessor initialize() API.
@@ -28,6 +30,9 @@ import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 class InitializeTask implements ITask {
 
     private static final Log LOG = LogFactory.getLog(InitializeTask.class);
+
+    private static final String RECORD_PROCESSOR_INITIALIZE_METRIC = "RecordProcessor.initialize";
+
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
     private final KinesisDataFetcher dataFetcher;
@@ -72,16 +77,21 @@ class InitializeTask implements ITask {
             dataFetcher.initialize(initialCheckpoint.getSequenceNumber());
             recordProcessorCheckpointer.setLargestPermittedCheckpointValue(initialCheckpoint);
             recordProcessorCheckpointer.setInitialCheckpointValue(initialCheckpoint);
+
+            LOG.debug("Calling the record processor initialize().");
+            final InitializationInput initializationInput = new InitializationInput()
+                .withShardId(shardInfo.getShardId())
+                .withExtendedSequenceNumber(initialCheckpoint);
+            final long recordProcessorStartTimeMillis = System.currentTimeMillis();
             try {
-                LOG.debug("Calling the record processor initialize().");
-                final InitializationInput initializationInput = new InitializationInput()
-                    .withShardId(shardInfo.getShardId())
-                    .withExtendedSequenceNumber(initialCheckpoint);
                 recordProcessor.initialize(initializationInput);
                 LOG.debug("Record processor initialize() completed.");
             } catch (Exception e) {
                 applicationException = true;
                 throw e;
+            } finally {
+                MetricsHelper.addLatency(RECORD_PROCESSOR_INITIALIZE_METRIC, recordProcessorStartTimeMillis,
+                        MetricsLevel.SUMMARY);
             }
 
             return new TaskResult(null);

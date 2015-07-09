@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * Decorates an ITask and reports metrics about its timing and success/failure.
@@ -23,7 +24,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 class MetricsCollectingTaskDecorator implements ITask {
 
     private final ITask other;
-    private IMetricsFactory factory;
+    private final IMetricsFactory factory;
 
     /**
      * Constructor.
@@ -41,15 +42,16 @@ class MetricsCollectingTaskDecorator implements ITask {
      */
     @Override
     public TaskResult call() {
-        String taskName = other.getClass().getSimpleName();
-        MetricsHelper.startScope(factory, taskName);
-
-        long startTimeMillis = System.currentTimeMillis();
-        TaskResult result = other.call();
-
-        MetricsHelper.addSuccessAndLatency(null, startTimeMillis, result.getException() == null);
-        MetricsHelper.endScope();
-
+        MetricsHelper.startScope(factory, other.getClass().getSimpleName());
+        TaskResult result = null;
+        final long startTimeMillis = System.currentTimeMillis();
+        try {
+            result = other.call();
+        } finally {
+            MetricsHelper.addSuccessAndLatency(startTimeMillis, result != null && result.getException() == null,
+                    MetricsLevel.SUMMARY);
+            MetricsHelper.endScope();
+        }
         return result;
     }
 

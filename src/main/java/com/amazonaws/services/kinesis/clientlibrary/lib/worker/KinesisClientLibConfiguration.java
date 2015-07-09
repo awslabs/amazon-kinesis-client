@@ -14,9 +14,15 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.util.Set;
+
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.RegionUtils;
+import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import com.google.common.collect.ImmutableSet;
 
 /**
  * Configuration for the Amazon Kinesis Client Library.
@@ -24,6 +30,12 @@ import com.amazonaws.regions.RegionUtils;
 public class KinesisClientLibConfiguration {
 
     private static final long EPSILON_MS = 25;
+
+    /**
+     * The location in the shard from which the KinesisClientLibrary will start fetching records from
+     * when the application starts for the first time and there is no checkpoint for the shard.
+     */
+    public static final InitialPositionInStream DEFAULT_INITIAL_POSITION_IN_STREAM = InitialPositionInStream.LATEST;
 
     /**
      * Fail over time in milliseconds. A worker which does not renew it's lease within this time interval
@@ -83,9 +95,31 @@ public class KinesisClientLibConfiguration {
     public static final int DEFAULT_METRICS_MAX_QUEUE_SIZE = 10000;
 
     /**
+     * Metrics level for which to enable CloudWatch metrics.
+     */
+    public static final MetricsLevel DEFAULT_METRICS_LEVEL = MetricsLevel.DETAILED;
+
+    /**
+     * Metrics dimensions that always will be enabled regardless of the config provided by user.
+     */
+    public static final Set<String> METRICS_ALWAYS_ENABLED_DIMENSIONS = ImmutableSet.of(
+            MetricsHelper.OPERATION_DIMENSION_NAME);
+
+    /**
+     * Allowed dimensions for CloudWatch metrics. By default, worker ID dimension will be disabled.
+     */
+    public static final Set<String> DEFAULT_METRICS_ENABLED_DIMENSIONS = ImmutableSet.<String>builder().addAll(
+            METRICS_ALWAYS_ENABLED_DIMENSIONS).add(MetricsHelper.SHARD_ID_DIMENSION_NAME).build();
+
+    /**
+     * Metrics dimensions that signify all possible dimensions.
+     */
+    public static final Set<String> METRICS_DIMENSIONS_ALL = ImmutableSet.of(IMetricsScope.METRICS_DIMENSIONS_ALL);
+
+    /**
      * User agent set when Amazon Kinesis Client Library makes AWS requests.
      */
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.4.0";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.5.0";
 
     /**
      * KCL will validate client provided sequence numbers with a call to Amazon Kinesis before checkpointing for calls
@@ -115,6 +149,8 @@ public class KinesisClientLibConfiguration {
     private long taskBackoffTimeMillis;
     private long metricsBufferTimeMillis;
     private int metricsMaxQueueSize;
+    private MetricsLevel metricsLevel;
+    private Set<String> metricsEnabledDimensions;
     private boolean validateSequenceNumberBeforeCheckpointing;
     private String regionName;
 
@@ -153,7 +189,7 @@ public class KinesisClientLibConfiguration {
             AWSCredentialsProvider dynamoDBCredentialsProvider,
             AWSCredentialsProvider cloudWatchCredentialsProvider,
             String workerId) {
-        this(applicationName, streamName, null, InitialPositionInStream.LATEST, kinesisCredentialsProvider,
+        this(applicationName, streamName, null, DEFAULT_INITIAL_POSITION_IN_STREAM, kinesisCredentialsProvider,
                 dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, DEFAULT_FAILOVER_TIME_MILLIS, workerId,
                 DEFAULT_MAX_RECORDS, DEFAULT_IDLETIME_BETWEEN_READS_MILLIS,
                 DEFAULT_DONT_CALL_PROCESS_RECORDS_FOR_EMPTY_RECORD_LIST, DEFAULT_PARENT_SHARD_POLL_INTERVAL_MILLIS,
@@ -253,6 +289,8 @@ public class KinesisClientLibConfiguration {
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.metricsBufferTimeMillis = metricsBufferTimeMillis;
         this.metricsMaxQueueSize = metricsMaxQueueSize;
+        this.metricsLevel = DEFAULT_METRICS_LEVEL;
+        this.metricsEnabledDimensions = DEFAULT_METRICS_ENABLED_DIMENSIONS;
         this.validateSequenceNumberBeforeCheckpointing = validateSequenceNumberBeforeCheckpointing;
         this.regionName = regionName;
     }
@@ -352,7 +390,7 @@ public class KinesisClientLibConfiguration {
     /**
      * @return true if processRecords() should be called even for empty record lists
      */
-    boolean shouldCallProcessRecordsEvenForEmptyRecordList() {
+    public boolean shouldCallProcessRecordsEvenForEmptyRecordList() {
         return callProcessRecordsEvenForEmptyRecordList;
     }
 
@@ -420,17 +458,32 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
-     * @return Metrics are buffered for at most this long before publishing to CloudWatch
+     * @return Metrics are buffered for at most this long before publishing.
      */
     public long getMetricsBufferTimeMillis() {
         return metricsBufferTimeMillis;
     }
 
     /**
-     * @return Max number of metrics to buffer before publishing to CloudWatch
+     * @return Max number of metrics to buffer before publishing.
      */
     public int getMetricsMaxQueueSize() {
         return metricsMaxQueueSize;
+    }
+
+    /**
+     * @return Metrics level enabled for metrics.
+     */
+    public MetricsLevel getMetricsLevel() {
+        return metricsLevel;
+    }
+
+    /**
+     * @return Enabled dimensions for metrics.
+     */
+    public Set<String> getMetricsEnabledDimensions() {
+        // Unmodifiable set.
+        return metricsEnabledDimensions;
     }
 
     /**
@@ -628,6 +681,46 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withMetricsMaxQueueSize(int metricsMaxQueueSize) {
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
         this.metricsMaxQueueSize = metricsMaxQueueSize;
+        return this;
+    }
+
+    /**
+     * @param metricsLevel Metrics level to enable.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withMetricsLevel(MetricsLevel metricsLevel) {
+        this.metricsLevel = metricsLevel == null ? DEFAULT_METRICS_LEVEL : metricsLevel;
+        return this;
+    }
+
+    /**
+     * Sets metrics level that should be enabled. Possible values are:
+     * NONE
+     * SUMMARY
+     * DETAILED
+     * 
+     * @param metricsLevel Metrics level to enable.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withMetricsLevel(String metricsLevel) {
+        this.metricsLevel = MetricsLevel.fromName(metricsLevel);
+        return this;
+    }
+
+    /**
+     * Sets the dimensions that are allowed to be emitted in metrics.
+     * @param metricsEnabledDimensions Set of dimensions that are allowed.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withMetricsEnabledDimensions(Set<String> metricsEnabledDimensions) {
+        if (metricsEnabledDimensions == null) {
+            this.metricsEnabledDimensions = METRICS_ALWAYS_ENABLED_DIMENSIONS;
+        } else if (metricsEnabledDimensions.contains(IMetricsScope.METRICS_DIMENSIONS_ALL)) {
+            this.metricsEnabledDimensions = METRICS_DIMENSIONS_ALL;
+        } else {
+            this.metricsEnabledDimensions = ImmutableSet.<String>builder().addAll(
+                    metricsEnabledDimensions).addAll(METRICS_ALWAYS_ENABLED_DIMENSIONS).build();
+        }
         return this;
     }
 

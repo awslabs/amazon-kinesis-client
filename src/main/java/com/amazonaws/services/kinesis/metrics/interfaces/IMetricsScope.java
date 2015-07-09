@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -23,6 +23,11 @@ import com.amazonaws.services.cloudwatch.model.StandardUnit;
 public interface IMetricsScope {
 
     /**
+     * Value that signifies that all dimensions are allowed for the metrics scope.
+     */
+    public static final String METRICS_DIMENSIONS_ALL = "ALL";
+
+    /**
      * Adds a data point to this IMetricsScope. Multiple calls against the same IMetricsScope with the same name
      * parameter will result in accumulation.
      * 
@@ -31,6 +36,17 @@ public interface IMetricsScope {
      * @param unit unit of data point
      */
     public void addData(String name, double value, StandardUnit unit);
+
+    /**
+     * Adds a data point to this IMetricsScope if given metrics level is enabled. Multiple calls against the same
+     * IMetricsScope with the same name parameter will result in accumulation.
+     * 
+     * @param name data point name
+     * @param value data point value
+     * @param unit unit of data point
+     * @param level metrics level of this data point
+     */
+    public void addData(String name, double value, StandardUnit unit, MetricsLevel level);
 
     /**
      * Adds a dimension that applies to all metrics in this IMetricsScope.

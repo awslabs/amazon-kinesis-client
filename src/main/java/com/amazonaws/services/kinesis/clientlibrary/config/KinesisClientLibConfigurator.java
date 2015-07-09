@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2014-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -67,7 +67,8 @@ public class KinesisClientLibConfigurator {
                         new AWSCredentialsProviderPropertyValueDecoder(),
                         new StringPropertyValueDecoder(),
                         new InitialPositionInStreamPropertyValueDecoder(),
-                        new ClientConfigurationPropertyValueDecoder());
+                        new ClientConfigurationPropertyValueDecoder(),
+                        new SetPropertyValueDecoder());
 
         classToDecoder = new Hashtable<Class<?>, IPropertyValueDecoder<?>>();
         for (IPropertyValueDecoder<?> getter : getters) {

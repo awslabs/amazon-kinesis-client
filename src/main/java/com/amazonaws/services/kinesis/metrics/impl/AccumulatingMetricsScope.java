@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import java.util.Map;
 import com.amazonaws.services.cloudwatch.model.MetricDatum;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.cloudwatch.model.StatisticSet;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * An IMetricsScope that accumulates data from multiple calls to addData with
@@ -45,6 +46,11 @@ public abstract class AccumulatingMetricsScope<KeyType> extends EndingMetricsSco
 
     @Override
     public void addData(String name, double value, StandardUnit unit) {
+        addData(getKey(name), name, value, unit);
+    }
+
+    @Override
+    public void addData(String name, double value, StandardUnit unit, MetricsLevel level) {
         addData(getKey(name), name, value, unit);
     }
 

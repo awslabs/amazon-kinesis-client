@@ -35,14 +35,16 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxyFactory;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * Worker is the high level class that Kinesis applications use to start
@@ -177,10 +179,8 @@ public class Worker implements Runnable {
             AmazonDynamoDB dynamoDBClient,
             AmazonCloudWatch cloudWatchClient,
             ExecutorService execService) {
-        this(recordProcessorFactory, config, kinesisClient, dynamoDBClient, new CWMetricsFactory(cloudWatchClient,
-                config.getApplicationName(),
-                config.getMetricsBufferTimeMillis(),
-                config.getMetricsMaxQueueSize()), execService);
+        this(recordProcessorFactory, config, kinesisClient, dynamoDBClient,
+                getMetricsFactory(cloudWatchClient, config), execService);
         if (config.getRegionName() != null) {
             Region region = RegionUtils.getRegion(config.getRegionName());
             cloudWatchClient.setRegion(region);
@@ -212,7 +212,8 @@ public class Worker implements Runnable {
                             .getProxy(config.getStreamName()),
                         config.getMaxRecords(), config.getIdleTimeBetweenReadsInMillis(),
                         config.shouldCallProcessRecordsEvenForEmptyRecordList(),
-                        config.shouldValidateSequenceNumberBeforeCheckpointing()),
+                        config.shouldValidateSequenceNumberBeforeCheckpointing(),
+                        config.getInitialPositionInStream()),
                 config.getInitialPositionInStream(),
                 config.getParentShardPollIntervalMillis(),
                 config.getShardSyncIntervalMillis(),
@@ -640,6 +641,24 @@ public class Worker implements Runnable {
     }
 
     /**
+     * Given configuration, returns appropriate metrics factory.
+     * @param cloudWatchClient Amazon CloudWatch client
+     * @param config KinesisClientLibConfiguration
+     * @return Returns metrics factory based on the config.
+     */
+    private static IMetricsFactory getMetricsFactory(
+            AmazonCloudWatch cloudWatchClient, KinesisClientLibConfiguration config) {
+        return config.getMetricsLevel() == MetricsLevel.NONE
+                ? new NullMetricsFactory() : new CWMetricsFactory(
+                        cloudWatchClient,
+                        config.getApplicationName(),
+                        config.getMetricsBufferTimeMillis(),
+                        config.getMetricsMaxQueueSize(),
+                        config.getMetricsLevel(),
+                        config.getMetricsEnabledDimensions());
+    }
+
+    /**
      * Builder to construct a Worker instance.
      */
     public static class Builder {
@@ -805,10 +824,7 @@ public class Worker implements Runnable {
                 }
             }
             if (metricsFactory == null) {
-                metricsFactory = new CWMetricsFactory(cloudWatchClient,
-                        config.getApplicationName(),
-                        config.getMetricsBufferTimeMillis(),
-                        config.getMetricsMaxQueueSize());
+                metricsFactory = getMetricsFactory(cloudWatchClient, config);
             }
 
             return new Worker(config.getApplicationName(),
@@ -818,7 +834,8 @@ public class Worker implements Runnable {
                             config.getMaxRecords(),
                             config.getIdleTimeBetweenReadsInMillis(),
                             config.shouldCallProcessRecordsEvenForEmptyRecordList(),
-                            config.shouldValidateSequenceNumberBeforeCheckpointing()),
+                            config.shouldValidateSequenceNumberBeforeCheckpointing(),
+                            config.getInitialPositionInStream()),
                     config.getInitialPositionInStream(),
                     config.getParentShardPollIntervalMillis(),
                     config.getShardSyncIntervalMillis(),

@@ -27,6 +27,7 @@ public class ProcessRecordsInput {
 
     private List<Record> records;
     private IRecordProcessorCheckpointer checkpointer;
+    private Long millisBehindLatest;
 
     /**
      * Default constructor.
@@ -71,6 +72,28 @@ public class ProcessRecordsInput {
      */
     public ProcessRecordsInput withCheckpointer(IRecordProcessorCheckpointer checkpointer) {
         this.checkpointer = checkpointer;
+        return this;
+    }
+
+    /**
+     * Get milliseconds behind latest.
+     *
+     * @return The number of milliseconds this batch of records is from the tip of the stream,
+     *         indicating how far behind current time the record processor is.
+     */
+    public Long getMillisBehindLatest() {
+        return millisBehindLatest;
+    }
+
+    /**
+     * Set milliseconds behind latest.
+     *
+     * @param millisBehindLatest The number of milliseconds this batch of records is from the tip of the stream,
+     *         indicating how far behind current time the record processor is.
+     * @return A reference to this updated object so that method calls can be chained together.
+     */
+    public ProcessRecordsInput withMillisBehindLatest(Long millisBehindLatest) {
+        this.millisBehindLatest = millisBehindLatest;
         return this;
     }
 }

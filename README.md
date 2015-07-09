@@ -29,6 +29,14 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
 ## Release Notes
+### Release 1.5.0 (July 9, 2015)
+* **[Metrics Enhancements][kinesis-guide-monitoring-with-kcl]**
+	* Support metrics level and dimension configurations to control CloudWatch metrics emitted by the KCL.
+	* Add new metrics that track time spent in record processor methods.
+	* Disable WorkerIdentifier dimension by default.
+* **Exception Reporting** &mdash; Do not silently ignore exceptions in ShardConsumer.
+* **AWS SDK Component Dependencies** &mdash; Depend only on AWS SDK components that are used.
+
 ### Release 1.4.0 (June 2, 2015)
 * Integration with the **[Kinesis Producer Library (KPL)][kinesis-guide-kpl]**
 	* Automatically de-aggregate records put into the Kinesis stream using the KPL.
@@ -40,10 +48,10 @@ To make it easier for developers to write record processors in other languages, 
 * A new metric called "MillisBehindLatest", which tracks how far consumers are from real time, is now uploaded to CloudWatch.
 
 ### Release 1.2.1 (January 26, 2015)
-* **MultiLangDaemon** Changes to the MultiLangDaemon to make it easier to provide a custom worker.
+* **MultiLangDaemon** &mdash; Changes to the MultiLangDaemon to make it easier to provide a custom worker.
 
 ### Release 1.2 (October 21, 2014)
-* **Multi-Language Support** Amazon KCL now supports implementing record processors in any language by communicating with the daemon over [STDIN and STDOUT][multi-lang-protocol]. Python developers can directly use the [Amazon Kinesis Client Library for Python][kclpy] to write their data processing applications.
+* **Multi-Language Support** &mdash; Amazon KCL now supports implementing record processors in any language by communicating with the daemon over [STDIN and STDOUT][multi-lang-protocol]. Python developers can directly use the [Amazon Kinesis Client Library for Python][kclpy] to write their data processing applications.
 
 ### Release 1.1 (June 30, 2014)
 * **Checkpointing at a specific sequence number** &mdash; The IRecordProcessorCheckpointer interface now supports checkpointing at a sequence number specified by the record processor.
@@ -57,6 +65,7 @@ To make it easier for developers to write record processors in other languages, 
 [kinesis-guide-begin]: http://docs.aws.amazon.com/kinesis/latest/dev/before-you-begin.html
 [kinesis-guide-create]: http://docs.aws.amazon.com/kinesis/latest/dev/step-one-create-stream.html
 [kinesis-guide-applications]: http://docs.aws.amazon.com/kinesis/latest/dev/kinesis-record-processor-app.html
+[kinesis-guide-monitoring-with-kcl]: http://docs.aws.amazon.com//kinesis/latest/dev/monitoring-with-kcl.html
 [kinesis-guide-kpl]: http://docs.aws.amazon.com//kinesis/latest/dev/developing-producers-with-kpl.html
 [kinesis-guide-consumer-deaggregation]: http://docs.aws.amazon.com//kinesis/latest/dev/kinesis-kpl-consumer-deaggregation.html
 [kclpy]: https://github.com/awslabs/amazon-kinesis-client-python

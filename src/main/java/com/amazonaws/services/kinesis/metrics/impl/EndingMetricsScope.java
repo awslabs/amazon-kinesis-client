@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.metrics.impl;
 
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 public abstract class EndingMetricsScope extends DimensionTrackingMetricsScope {
 
@@ -22,6 +23,13 @@ public abstract class EndingMetricsScope extends DimensionTrackingMetricsScope {
 
     @Override
     public void addData(String name, double value, StandardUnit unit) {
+        if (ended) {
+            throw new IllegalArgumentException("Cannot call addData after calling IMetricsScope.end()");
+        }
+    }
+
+    @Override
+    public void addData(String name, double value, StandardUnit unit, MetricsLevel level) {
         if (ended) {
             throw new IllegalArgumentException("Cannot call addData after calling IMetricsScope.end()");
         }

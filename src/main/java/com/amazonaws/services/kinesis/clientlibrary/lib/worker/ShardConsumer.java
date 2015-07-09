@@ -14,7 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
@@ -153,14 +152,8 @@ class ShardConsumer {
                             }
                         }
                     }
-                } catch (InterruptedException e) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug(currentTask.getTaskType() + " task was interrupted: ", e);
-                    }
-                } catch (ExecutionException e) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug(currentTask.getTaskType() + " task encountered execution exception: ", e);
-                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
             }
             updateState(taskCompletedSuccessfully);

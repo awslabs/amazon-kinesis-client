@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -16,37 +16,32 @@ package com.amazonaws.services.kinesis.metrics.impl;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import com.amazonaws.services.cloudwatch.model.MetricDatum;
-import com.amazonaws.services.cloudwatch.model.StandardUnit;
-import com.amazonaws.services.kinesis.metrics.impl.AccumulateByNameMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
-public class CWMetricsScope extends AccumulateByNameMetricsScope implements IMetricsScope {
+/**
+ * Metrics scope for CloudWatch metrics.
+ */
+public class CWMetricsScope extends FilteringMetricsScope implements IMetricsScope {
 
     private CWPublisherRunnable<CWMetricKey> publisher;
 
     /**
-     * Each CWMetricsScope takes a publisher which contains the logic of when to publish metrics.
-     * 
-     * @param publisher publishing logic
+     * Creates a CloudWatch metrics scope with given metrics level and enabled dimensions.
+     * @param publisher Publisher that emits CloudWatch metrics periodically.
+     * @param metricsLevel Metrics level to enable. All data with level below this will be dropped.
+     * @param metricsEnabledDimensions Enabled dimensions for CloudWatch metrics.
      */
-
-    public CWMetricsScope(CWPublisherRunnable<CWMetricKey> publisher) {
+    public CWMetricsScope(CWPublisherRunnable<CWMetricKey> publisher,
+            MetricsLevel metricsLevel, Set<String> metricsEnabledDimensions) {
+        super(metricsLevel, metricsEnabledDimensions);
         this.publisher = publisher;
     }
 
-    @Override
-    public void addData(String name, double value, StandardUnit unit) {
-        super.addData(name, value, unit);
-    }
-
-    @Override
-    public void addDimension(String name, String value) {
-        super.addDimension(name, value);
-    }
-
-    /*
+    /**
      * Once we call this method, all MetricDatums added to the scope will be enqueued to the publisher runnable.
      * We enqueue MetricDatumWithKey because the publisher will aggregate similar metrics (i.e. MetricDatum with the
      * same metricName) in the background thread. Hence aggregation using MetricDatumWithKey will be especially useful

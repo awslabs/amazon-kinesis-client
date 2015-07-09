@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import org.apache.commons.logging.LogFactory;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
  * MetricsHelper assists with common metrics operations, most notably the storage of IMetricsScopes objects in a
@@ -37,6 +38,7 @@ public class MetricsHelper {
      * Constants used to publish metrics.
      */
     public static final String OPERATION_DIMENSION_NAME = "Operation";
+    public static final String SHARD_ID_DIMENSION_NAME = "ShardId";
     public static final String TIME = "Time";
     public static final String SUCCESS = "Success";
     private static final String SEP = ".";
@@ -73,31 +75,53 @@ public class MetricsHelper {
         }
     }
 
-    public static void addSuccessAndLatency(long startTimeMillis, boolean success) {
-        addSuccessAndLatency(null, startTimeMillis, success);
+    public static void addSuccessAndLatency(long startTimeMillis, boolean success, MetricsLevel level) {
+        addSuccessAndLatency(null, startTimeMillis, success, level);
     }
 
-    public static void addSuccessAndLatency(String prefix, long startTimeMillis, boolean success) {
-        addSuccessAndLatencyPerShard(null, prefix, startTimeMillis, success);
+    public static void addSuccessAndLatency(
+            String prefix, long startTimeMillis, boolean success, MetricsLevel level) {
+        addSuccessAndLatencyPerShard(null, prefix, startTimeMillis, success, level);
     }
 
     public static void addSuccessAndLatencyPerShard (
             String shardId,
             String prefix,
             long startTimeMillis,
-            boolean success) {
+            boolean success,
+            MetricsLevel level) {
+        addSuccessAndLatency(shardId, prefix, startTimeMillis, success, level, true, true);
+    }
+
+    public static void addLatency(long startTimeMillis, MetricsLevel level) {
+        addLatency(null, startTimeMillis, level);
+    }
+
+    public static void addLatency(String prefix, long startTimeMillis, MetricsLevel level) {
+        addLatencyPerShard(null, prefix, startTimeMillis, level);
+    }
+
+    public static void addLatencyPerShard(String shardId, String prefix, long startTimeMillis, MetricsLevel level) {
+        addSuccessAndLatency(shardId, prefix, startTimeMillis, false, level, false, true);
+    }
+
+    private static void addSuccessAndLatency(
+            String shardId, String prefix, long startTimeMillis, boolean success, MetricsLevel level,
+            boolean includeSuccess, boolean includeLatency) {
         IMetricsScope scope = getMetricsScope();
 
         String realPrefix = prefix == null ? "" : prefix + SEP;
 
         if (shardId != null) {
-            scope.addDimension("ShardId", shardId);
+            scope.addDimension(SHARD_ID_DIMENSION_NAME, shardId);
         }
-
-        scope.addData(realPrefix + MetricsHelper.SUCCESS, success ? 1 : 0, StandardUnit.Count);
-        scope.addData(realPrefix + MetricsHelper.TIME,
-                System.currentTimeMillis() - startTimeMillis,
-                StandardUnit.Milliseconds);
+        if (includeSuccess) {
+            scope.addData(realPrefix + MetricsHelper.SUCCESS, success ? 1 : 0, StandardUnit.Count, level);
+        }
+        if (includeLatency) {
+            scope.addData(realPrefix + MetricsHelper.TIME,
+                    System.currentTimeMillis() - startTimeMillis, StandardUnit.Milliseconds, level);
+        }
     }
 
     public static void endScope() {
