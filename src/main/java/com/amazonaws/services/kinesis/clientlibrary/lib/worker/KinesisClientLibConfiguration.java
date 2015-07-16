@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.net.ProxySelector;
 import java.util.Set;
 
 import com.amazonaws.ClientConfiguration;
