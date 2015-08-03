@@ -15,7 +15,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
@@ -98,7 +97,9 @@ class ProcessTask implements ITask {
      *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
+    
     // CHECKSTYLE:OFF CyclomaticComplexity
+    @SuppressWarnings("unchecked")
     @Override
     public TaskResult call() {
         long startTimeMillis = System.currentTimeMillis();
@@ -117,9 +118,11 @@ class ProcessTask implements ITask {
             }
 
             final GetRecordsResult getRecordsResult = getRecordsResult();
-            final List<Record> records = getRecordsResult.getRecords();
-
-            if (records.isEmpty()) {
+            List<Record> records = getRecordsResult.getRecords();
+            
+            if (!records.isEmpty()) {
+                scope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.Count, MetricsLevel.SUMMARY);
+            } else {
                 LOG.debug("Kinesis didn't return any records for shard " + shardInfo.getShardId());
 
                 long sleepTimeMillis =
@@ -135,35 +138,30 @@ class ProcessTask implements ITask {
                     }
                 }
             }
-
-            int numKinesisRecords = records.size();
-            int numUserRecords = 0;
-            List<UserRecord> subRecords = new ArrayList<>();
-
-            // If we got more records, record the max extended sequence number. Sleep if there are no records.
-            if (!records.isEmpty()) {
-                scope.addData(RECORDS_PROCESSED_METRIC, numKinesisRecords, StandardUnit.Count, MetricsLevel.SUMMARY);
+            
+            // We deaggregate if and only if we got actual Kinesis records, i.e.
+            // not instances of some subclass thereof.
+            if (!records.isEmpty() && records.get(0).getClass().equals(Record.class)) {
                 if (this.shard != null) {
-                    subRecords = UserRecord.deaggregate(records, 
+                    records = (List<Record>) (List<?>) UserRecord.deaggregate(records, 
                               new BigInteger(this.shard.getHashKeyRange().getStartingHashKey()),
                               new BigInteger(this.shard.getHashKeyRange().getEndingHashKey()));
                 } else {
-                    subRecords = UserRecord.deaggregate(records);
+                    records = (List<Record>) (List<?>) UserRecord.deaggregate(records);
                 }
-                recordProcessorCheckpointer.setLargestPermittedCheckpointValue(
-                        filterAndGetMaxExtendedSequenceNumber(scope, subRecords,
-                                recordProcessorCheckpointer.getLastCheckpointValue()));
-                numUserRecords = subRecords.size();
             }
+            
+            recordProcessorCheckpointer.setLargestPermittedCheckpointValue(
+                    filterAndGetMaxExtendedSequenceNumber(scope, records,
+                            recordProcessorCheckpointer.getLastCheckpointValue()));
 
-            if ((!subRecords.isEmpty()) || streamConfig.shouldCallProcessRecordsEvenForEmptyRecordList()) {
-                LOG.debug("Calling application processRecords() with " + numKinesisRecords + " Kinesis records ("
-                        + numUserRecords + " user records) from " + shardInfo.getShardId());
-                @SuppressWarnings("unchecked")
+            if ((!records.isEmpty()) || streamConfig.shouldCallProcessRecordsEvenForEmptyRecordList()) {
+                LOG.debug("Calling application processRecords() with " + records.size()
+                        + " records from " + shardInfo.getShardId());
                 final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
-                    .withRecords((List<Record>) (List<?>) subRecords)
-                    .withCheckpointer(recordProcessorCheckpointer)
-                    .withMillisBehindLatest(getRecordsResult.getMillisBehindLatest());
+                        .withRecords(records)
+                        .withCheckpointer(recordProcessorCheckpointer)
+                        .withMillisBehindLatest(getRecordsResult.getMillisBehindLatest());
 
                 final long recordProcessorStartTimeMillis = System.currentTimeMillis();
                 try {
@@ -172,7 +170,7 @@ class ProcessTask implements ITask {
                     LOG.error("ShardId " + shardInfo.getShardId()
                             + ": Application processRecords() threw an exception when processing shard ", e);
                     LOG.error("ShardId " + shardInfo.getShardId() + ": Skipping over the following data records: "
-                            + subRecords);
+                            + records);
                 } finally {
                     MetricsHelper.addLatencyPerShard(shardInfo.getShardId(), RECORD_PROCESSOR_PROCESS_RECORDS_METRIC,
                             recordProcessorStartTimeMillis, MetricsLevel.SUMMARY);
@@ -208,14 +206,17 @@ class ProcessTask implements ITask {
      * @param lastCheckpointValue the most recent checkpoint value
      * @return the largest extended sequence number among the retained records
      */
-    private ExtendedSequenceNumber filterAndGetMaxExtendedSequenceNumber(IMetricsScope scope, List<UserRecord> records,
+    private ExtendedSequenceNumber filterAndGetMaxExtendedSequenceNumber(IMetricsScope scope, List<Record> records,
             final ExtendedSequenceNumber lastCheckpointValue) {
         ExtendedSequenceNumber largestExtendedSequenceNumber = lastCheckpointValue;
-        ListIterator<UserRecord> recordIterator = records.listIterator();
+        ListIterator<Record> recordIterator = records.listIterator();
         while (recordIterator.hasNext()) {
-            UserRecord record = recordIterator.next();
-            ExtendedSequenceNumber extendedSequenceNumber
-                = new ExtendedSequenceNumber(record.getSequenceNumber(), record.getSubSequenceNumber());
+            Record record = recordIterator.next();
+            ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(
+                    record.getSequenceNumber(),
+                    record instanceof UserRecord
+                            ? ((UserRecord) record).getSubSequenceNumber()
+                            : null);
 
             if (extendedSequenceNumber.compareTo(lastCheckpointValue) <= 0) {
                 recordIterator.remove();

@@ -19,11 +19,13 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.amazonaws.services.kinesis.clientlibrary.utils.NamedThreadFactory;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
@@ -56,6 +58,8 @@ public class LeaseCoordinator<T extends Lease> {
     // Time to wait for in-flight Runnables to finish when calling .stop();
     private static final long STOP_WAIT_TIME_MILLIS = 2000L;
 
+    private static final ThreadFactory THREAD_FACTORY = new NamedThreadFactory("LeaseCoordinator-");
+
     private final ILeaseRenewer<T> leaseRenewer;
     private final ILeaseTaker<T> leaseTaker;
     private final long renewerIntervalMillis;
@@ -64,7 +68,7 @@ public class LeaseCoordinator<T extends Lease> {
     protected final IMetricsFactory metricsFactory;
 
     private ScheduledExecutorService threadpool;
-    private boolean running = false;
+    private volatile boolean running = false;
 
     /**
      * Constructor.
@@ -148,7 +152,7 @@ public class LeaseCoordinator<T extends Lease> {
         leaseRenewer.initialize();
         
         // 2 because we know we'll have at most 2 concurrent tasks at a time.
-        threadpool = Executors.newScheduledThreadPool(2);
+        threadpool = Executors.newScheduledThreadPool(2, THREAD_FACTORY);
 
         // Taker runs with fixed DELAY because we want it to run slower in the event of performance degredation.
         threadpool.scheduleWithFixedDelay(new TakerRunnable(), 0L, takerIntervalMillis, TimeUnit.MILLISECONDS);
