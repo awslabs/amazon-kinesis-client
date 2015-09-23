@@ -20,6 +20,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 
 import org.apache.commons.lang.StringUtils;
@@ -75,6 +76,7 @@ public class UserRecord extends Record {
         this.setSequenceNumber(record.getSequenceNumber());
         this.setData(record.getData());
         this.setPartitionKey(record.getPartitionKey());
+        this.setApproximateArrivalTimestamp(record.getApproximateArrivalTimestamp());
     }
 
     /**
@@ -195,6 +197,7 @@ public class UserRecord extends Record {
      *          partition keys fall within the range of the startingHashKey and
      *          the endingHashKey.
      */
+    // CHECKSTYLE:OFF NPathComplexity
     public static List<UserRecord> deaggregate(List<Record> records, BigInteger startingHashKey,
             BigInteger endingHashKey) {
         List<UserRecord> result = new ArrayList<>();
@@ -232,6 +235,8 @@ public class UserRecord extends Record {
                         Messages.AggregatedRecord ar = Messages.AggregatedRecord.parseFrom(messageData);
                         List<String> pks = ar.getPartitionKeyTableList();
                         List<String> ehks = ar.getExplicitHashKeyTableList();
+                        long aat = r.getApproximateArrivalTimestamp() == null
+                                ? -1 : r.getApproximateArrivalTimestamp().getTime();
                         try {
                             int recordsInCurrRecord = 0;
                             for (Messages.Record mr : ar.getRecordsList()) {
@@ -257,7 +262,8 @@ public class UserRecord extends Record {
                                 Record record = new Record()
                                         .withData(ByteBuffer.wrap(mr.getData().toByteArray()))
                                         .withPartitionKey(partitionKey)
-                                        .withSequenceNumber(r.getSequenceNumber());
+                                        .withSequenceNumber(r.getSequenceNumber())
+                                        .withApproximateArrivalTimestamp(aat < 0 ? null : new Date(aat));
                                 result.add(new UserRecord(true, record, subSeqNum++, explicitHashKey));
                             }
                         } catch (Exception e) {
@@ -295,4 +301,5 @@ public class UserRecord extends Record {
         }
         return result;
     }
+    // CHECKSTYLE:ON NPathComplexity
 }

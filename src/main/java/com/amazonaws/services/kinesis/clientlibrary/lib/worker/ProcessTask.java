@@ -153,7 +153,8 @@ class ProcessTask implements ITask {
             
             recordProcessorCheckpointer.setLargestPermittedCheckpointValue(
                     filterAndGetMaxExtendedSequenceNumber(scope, records,
-                            recordProcessorCheckpointer.getLastCheckpointValue()));
+                            recordProcessorCheckpointer.getLastCheckpointValue(),
+                            recordProcessorCheckpointer.getLargestPermittedCheckpointValue()));
 
             if ((!records.isEmpty()) || streamConfig.shouldCallProcessRecordsEvenForEmptyRecordList()) {
                 LOG.debug("Calling application processRecords() with " + records.size()
@@ -204,11 +205,13 @@ class ProcessTask implements ITask {
      * @param scope metrics scope to emit metrics into
      * @param records list of records to scan and change in-place as needed
      * @param lastCheckpointValue the most recent checkpoint value
+     * @param lastLargestPermittedCheckpointValue previous largest permitted checkpoint value
      * @return the largest extended sequence number among the retained records
      */
     private ExtendedSequenceNumber filterAndGetMaxExtendedSequenceNumber(IMetricsScope scope, List<Record> records,
-            final ExtendedSequenceNumber lastCheckpointValue) {
-        ExtendedSequenceNumber largestExtendedSequenceNumber = lastCheckpointValue;
+            final ExtendedSequenceNumber lastCheckpointValue,
+            final ExtendedSequenceNumber lastLargestPermittedCheckpointValue) {
+        ExtendedSequenceNumber largestExtendedSequenceNumber = lastLargestPermittedCheckpointValue;
         ListIterator<Record> recordIterator = records.listIterator();
         while (recordIterator.hasNext()) {
             Record record = recordIterator.next();
