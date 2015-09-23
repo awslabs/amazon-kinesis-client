@@ -99,11 +99,25 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
      */
     @Override
     public boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
-        throws ProvisionedThroughputException, DependencyException {
+            throws ProvisionedThroughputException, DependencyException {
         verifyNotNull(readCapacity, "readCapacity cannot be null");
         verifyNotNull(writeCapacity, "writeCapacity cannot be null");
 
         boolean tableDidNotExist = true;
+
+        // First, attempt to describe the table and short-circuit if it already existed
+        try {
+            dynamoDBClient.describeTable(table);
+            return false;
+        } catch (ResourceNotFoundException e) {
+            tableDidNotExist = true;
+        } catch (AmazonClientException e) {
+            // In order to insulate ourselves from failures specific to DescribeTable, we swallow this exception;
+            // we can still rely on CreateTable request failing if present.
+            LOG.error("Failed to retrieve table description for table " + table, e);
+        }
+
+        // We believe the table does not exist, so we proceed to creating it
         CreateTableRequest request = new CreateTableRequest();
         request.setTableName(table);
         request.setKeySchema(serializer.getKeySchema());
