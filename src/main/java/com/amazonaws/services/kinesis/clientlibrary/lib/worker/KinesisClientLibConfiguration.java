@@ -40,7 +40,7 @@ public class KinesisClientLibConfiguration {
     /**
      * Fail over time in milliseconds. A worker which does not renew it's lease within this time interval
      * will be regarded as having problems and it's shards will be assigned to other workers.
-     * For applications that have a large number of shards, this msy be set to a higher number to reduce
+     * For applications that have a large number of shards, this may be set to a higher number to reduce
      * the number of DynamoDB IOPS required for tracking leases.
      */
     public static final long DEFAULT_FAILOVER_TIME_MILLIS = 10000L;
