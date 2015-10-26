@@ -157,6 +157,7 @@ public class KinesisClientLibConfiguration {
     private String applicationName;
     private String streamName;
     private String kinesisEndpoint;
+    private String dynamoDBEndpoint;
     private InitialPositionInStream initialPositionInStream;
     private AWSCredentialsProvider kinesisCredentialsProvider;
     private AWSCredentialsProvider dynamoDBCredentialsProvider;
@@ -220,7 +221,7 @@ public class KinesisClientLibConfiguration {
             AWSCredentialsProvider dynamoDBCredentialsProvider,
             AWSCredentialsProvider cloudWatchCredentialsProvider,
             String workerId) {
-        this(applicationName, streamName, null, DEFAULT_INITIAL_POSITION_IN_STREAM, kinesisCredentialsProvider,
+        this(applicationName, streamName, null, null, DEFAULT_INITIAL_POSITION_IN_STREAM, kinesisCredentialsProvider,
                 dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, DEFAULT_FAILOVER_TIME_MILLIS, workerId,
                 DEFAULT_MAX_RECORDS, DEFAULT_IDLETIME_BETWEEN_READS_MILLIS,
                 DEFAULT_DONT_CALL_PROCESS_RECORDS_FOR_EMPTY_RECORD_LIST, DEFAULT_PARENT_SHARD_POLL_INTERVAL_MILLIS,
@@ -236,6 +237,7 @@ public class KinesisClientLibConfiguration {
      *        can assist with troubleshooting (e.g. distinguish requests made by separate applications).
      * @param streamName Name of the Kinesis stream
      * @param kinesisEndpoint Kinesis endpoint
+     * @param dynamoDBEndpoint DynamoDB endpoint
      * @param initialPositionInStream One of LATEST or TRIM_HORIZON. The KinesisClientLibrary will start fetching
      *        records from that location in the stream when an application starts up for the first time and there
      *        are no checkpoints. If there are checkpoints, then we start from the checkpoint position.
@@ -269,6 +271,7 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration(String applicationName,
             String streamName,
             String kinesisEndpoint,
+            String dynamoDBEndpoint,
             InitialPositionInStream initialPositionInStream,
             AWSCredentialsProvider kinesisCredentialsProvider,
             AWSCredentialsProvider dynamoDBCredentialsProvider,
@@ -302,6 +305,7 @@ public class KinesisClientLibConfiguration {
         this.applicationName = applicationName;
         this.streamName = streamName;
         this.kinesisEndpoint = kinesisEndpoint;
+        this.dynamoDBEndpoint = dynamoDBEndpoint;
         this.initialPositionInStream = initialPositionInStream;
         this.kinesisCredentialsProvider = kinesisCredentialsProvider;
         this.dynamoDBCredentialsProvider = dynamoDBCredentialsProvider;
@@ -451,6 +455,13 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
+     * @return DynamoDB endpoint
+     */
+    public String getDynamoDBEndpoint() {
+        return dynamoDBEndpoint;
+    }
+
+    /**
      * @return the initialPositionInStream
      */
     public InitialPositionInStream getInitialPositionInStream() {
@@ -578,6 +589,15 @@ public class KinesisClientLibConfiguration {
      */
     public KinesisClientLibConfiguration withKinesisEndpoint(String kinesisEndpoint) {
         this.kinesisEndpoint = kinesisEndpoint;
+        return this;
+    }
+
+    /**
+     * @param dynamoDBEndpoint DynamoDB endpoint
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withDynamoDBEndpoint(String dynamoDBEndpoint) {
+        this.dynamoDBEndpoint = dynamoDBEndpoint;
         return this;
     }
 
