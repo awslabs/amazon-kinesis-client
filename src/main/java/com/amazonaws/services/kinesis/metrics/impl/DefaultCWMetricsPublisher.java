@@ -62,7 +62,7 @@ public class DefaultCWMetricsPublisher implements ICWMetricsPublisher<CWMetricKe
             try {
                 cloudWatchClient.putMetricData(request);
 
-                LOG.info(String.format("Successfully published %d datums.", endIndex - startIndex));
+                LOG.debug(String.format("Successfully published %d datums.", endIndex - startIndex));
             } catch (AmazonClientException e) {
                 LOG.warn(String.format("Could not publish %d datums to CloudWatch", endIndex - startIndex), e);
             }
