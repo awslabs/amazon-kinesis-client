@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.leases.util.DynamoUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -367,7 +368,19 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
                         + " because the lease counter was not " + lease.getLeaseCounter());
             }
 
-            return false;
+            // If we had a spurious retry during the Dynamo update, then this conditional PUT failure
+            // might be incorrect. So, we get the item straight away and check if the lease owner + lease counter
+            // are what we expected.
+            String expectedOwner = lease.getLeaseOwner();
+            Long expectedCounter = lease.getLeaseCounter() + 1;
+            T updatedLease = getLease(lease.getLeaseKey());
+            if (updatedLease == null || !expectedOwner.equals(updatedLease.getLeaseOwner()) ||
+                    !expectedCounter.equals(updatedLease.getLeaseCounter())) {
+                return false;
+            }
+
+            LOG.info("Detected spurious renewal failure for lease with key " + lease.getLeaseKey()
+                    + ", but recovered");
         } catch (AmazonClientException e) {
             throw convertAndRethrowExceptions("renew", lease.getLeaseKey(), e);
         }
