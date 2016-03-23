@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
@@ -54,8 +55,10 @@ import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
  */
 public class Worker implements Runnable {
 
-    private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
     private static final Log LOG = LogFactory.getLog(Worker.class);
+
+    private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
+
     private WorkerLog wlog = new WorkerLog();
 
     private final String applicationName;
@@ -71,12 +74,14 @@ public class Worker implements Runnable {
     private final IMetricsFactory metricsFactory;
     // Backoff time when running tasks if they encounter exceptions
     private final long taskBackoffTimeMillis;
+    private final long failoverTimeMillis;
 
     // private final KinesisClientLeaseManager leaseManager;
     private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager controlServer;
 
     private volatile boolean shutdown;
+    private volatile long shutdownStartTimeMillis;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -93,7 +98,7 @@ public class Worker implements Runnable {
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config) {
-        this(recordProcessorFactory, config, Executors.newCachedThreadPool());
+        this(recordProcessorFactory, config, getExecutorService());
     }
 
     /**
@@ -125,7 +130,7 @@ public class Worker implements Runnable {
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config,
             IMetricsFactory metricsFactory) {
-        this(recordProcessorFactory, config, metricsFactory, Executors.newCachedThreadPool());
+        this(recordProcessorFactory, config, metricsFactory, getExecutorService());
     }
 
     /**
@@ -159,8 +164,7 @@ public class Worker implements Runnable {
             AmazonKinesis kinesisClient,
             AmazonDynamoDB dynamoDBClient,
             AmazonCloudWatch cloudWatchClient) {
-        this(recordProcessorFactory, config, kinesisClient, dynamoDBClient, cloudWatchClient,
-                Executors.newCachedThreadPool());
+        this(recordProcessorFactory, config, kinesisClient, dynamoDBClient, cloudWatchClient, getExecutorService());
     }
 
     /**
@@ -181,11 +185,6 @@ public class Worker implements Runnable {
             ExecutorService execService) {
         this(recordProcessorFactory, config, kinesisClient, dynamoDBClient,
                 getMetricsFactory(cloudWatchClient, config), execService);
-        if (config.getRegionName() != null) {
-            Region region = RegionUtils.getRegion(config.getRegionName());
-            cloudWatchClient.setRegion(region);
-            LOG.debug("The region of Amazon CloudWatch client has been set to " + config.getRegionName());
-        }
     }
 
     /**
@@ -221,11 +220,18 @@ public class Worker implements Runnable {
                 null,
                 new KinesisClientLibLeaseCoordinator(
                         new KinesisClientLeaseManager(config.getApplicationName(), dynamoDBClient),
-                        config.getWorkerIdentifier(), config.getFailoverTimeMillis(), config.getEpsilonMillis(),
-                        metricsFactory),
+                        config.getWorkerIdentifier(),
+                        config.getFailoverTimeMillis(),
+                        config.getEpsilonMillis(),
+                        config.getMaxLeasesForWorker(),
+                        config.getMaxLeasesToStealAtOneTime(),
+                        metricsFactory)
+                    .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
+                    .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
                 execService,
                 metricsFactory,
-                config.getTaskBackoffTimeMillis());
+                config.getTaskBackoffTimeMillis(),
+                config.getFailoverTimeMillis());
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
             Region region = RegionUtils.getRegion(config.getRegionName());
@@ -279,7 +285,8 @@ public class Worker implements Runnable {
             KinesisClientLibLeaseCoordinator leaseCoordinator,
             ExecutorService execService,
             IMetricsFactory metricsFactory,
-            long taskBackoffTimeMillis) {
+            long taskBackoffTimeMillis,
+            long failoverTimeMillis) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.streamConfig = streamConfig;
@@ -300,6 +307,7 @@ public class Worker implements Runnable {
                         metricsFactory,
                         executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
+        this.failoverTimeMillis = failoverTimeMillis;
     }
 
     /**
@@ -314,6 +322,10 @@ public class Worker implements Runnable {
      * record processors.
      */
     public void run() {
+        if (shutdown) {
+            return;
+        }
+
         try {
             initialize();
             LOG.info("Initialization complete. Starting worker loop.");
@@ -322,7 +334,7 @@ public class Worker implements Runnable {
             shutdown();
         }
 
-        while (!shutdown) {
+        while (!shouldShutdown()) {
             try {
                 boolean foundCompletedShard = false;
                 Set<ShardInfo> assignedShards = new HashSet<ShardInfo>();
@@ -359,8 +371,8 @@ public class Worker implements Runnable {
             wlog.resetInfoLogging();
         }
 
-        LOG.info("Stopping LeaseCoordinator.");
-        leaseCoordinator.stop();
+        finalShutdown();
+        LOG.info("Worker loop is complete. Exiting from worker.");
     }
 
     private void initialize() {
@@ -425,7 +437,7 @@ public class Worker implements Runnable {
     void cleanupShardConsumers(Set<ShardInfo> assignedShards) {
         for (ShardInfo shard : shardInfoShardConsumerMap.keySet()) {
             if (!assignedShards.contains(shard)) {
-                // Shutdown the consumer since we are not longer responsible for
+                // Shutdown the consumer since we are no longer responsible for
                 // the shard.
                 boolean isShutdown = shardInfoShardConsumerMap.get(shard).beginShutdown();
                 if (isShutdown) {
@@ -459,11 +471,60 @@ public class Worker implements Runnable {
     }
 
     /**
-     * Sets the killed flag so this worker will stop on the next iteration of
-     * its loop.
+     * Signals worker to shutdown. Worker will try initiating shutdown of all record processors. Note that
+     * if executor services were passed to the worker by the user, worker will not attempt to shutdown
+     * those resources.
      */
     public void shutdown() {
-        this.shutdown = true;
+        LOG.info("Worker shutdown requested.");
+
+        // Set shutdown flag, so Worker.run can start shutdown process.
+        shutdown = true;
+        shutdownStartTimeMillis = System.currentTimeMillis();
+
+        // Stop lease coordinator, so leases are not renewed or stolen from other workers.
+        // Lost leases will force Worker to begin shutdown process for all shard consumers in
+        // Worker.run().
+        leaseCoordinator.stop();
+    }
+
+    /**
+     * Perform final shutdown related tasks for the worker including shutting down worker owned
+     * executor services, threads, etc.
+     */
+    private void finalShutdown() {
+        LOG.info("Starting worker's final shutdown.");
+
+        if (executorService instanceof WorkerThreadPoolExecutor) {
+            // This should interrupt all active record processor tasks.
+            executorService.shutdownNow();
+        }
+        if (metricsFactory instanceof WorkerCWMetricsFactory) {
+            ((CWMetricsFactory) metricsFactory).shutdown();
+        }
+    }
+
+    /**
+     * Returns whether worker can shutdown immediately. Note that this method is called from Worker's {{@link #run()}
+     * method before every loop run, so method must do minimum amount of work to not impact shard processing timings.
+     * @return Whether worker should shutdown immediately.
+     */
+    private boolean shouldShutdown() {
+        if (executorService.isShutdown()) {
+            LOG.error("Worker executor service has been shutdown, so record processors cannot be shutdown.");
+            return true;
+        }
+        if (shutdown) {
+            if (shardInfoShardConsumerMap.isEmpty()) {
+                LOG.info("All record processors have been shutdown successfully.");
+                return true;
+            }
+            if ((System.currentTimeMillis() - shutdownStartTimeMillis) >= failoverTimeMillis) {
+                LOG.info("Lease failover time is reached, so forcing shutdown.");
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -475,33 +536,31 @@ public class Worker implements Runnable {
      * @return ShardConsumer for the shard
      */
     ShardConsumer createOrGetShardConsumer(ShardInfo shardInfo, IRecordProcessorFactory factory) {
-        synchronized (shardInfoShardConsumerMap) {
-            ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
-            // Instantiate a new consumer if we don't have one, or the one we
-            // had was from an earlier
-            // lease instance (and was shutdown). Don't need to create another
-            // one if the shard has been
-            // completely processed (shutdown reason terminate).
-            if ((consumer == null)
-                    || (consumer.isShutdown() && consumer.getShutdownReason().equals(ShutdownReason.ZOMBIE))) {
-                IRecordProcessor recordProcessor = factory.createProcessor();
+        ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
+        // Instantiate a new consumer if we don't have one, or the one we
+        // had was from an earlier
+        // lease instance (and was shutdown). Don't need to create another
+        // one if the shard has been
+        // completely processed (shutdown reason terminate).
+        if ((consumer == null)
+                || (consumer.isShutdown() && consumer.getShutdownReason().equals(ShutdownReason.ZOMBIE))) {
+            IRecordProcessor recordProcessor = factory.createProcessor();
 
-                consumer =
-                        new ShardConsumer(shardInfo,
-                                streamConfig,
-                                checkpointTracker,
-                                recordProcessor,
-                                leaseCoordinator.getLeaseManager(),
-                                parentShardPollIntervalMillis,
-                                cleanupLeasesUponShardCompletion,
-                                executorService,
-                                metricsFactory,
-                                taskBackoffTimeMillis);
-                shardInfoShardConsumerMap.put(shardInfo, consumer);
-                wlog.infoForce("Created new shardConsumer for : " + shardInfo);
-            }
-            return consumer;
+            consumer =
+                    new ShardConsumer(shardInfo,
+                           streamConfig,
+                           checkpointTracker,
+                           recordProcessor,
+                           leaseCoordinator.getLeaseManager(),
+                           parentShardPollIntervalMillis,
+                           cleanupLeasesUponShardCompletion,
+                           executorService,
+                           metricsFactory,
+                           taskBackoffTimeMillis);
+            shardInfoShardConsumerMap.put(shardInfo, consumer);
+            wlog.infoForce("Created new shardConsumer for : " + shardInfo);
         }
+        return consumer;
     }
 
     /**
@@ -648,14 +707,65 @@ public class Worker implements Runnable {
      */
     private static IMetricsFactory getMetricsFactory(
             AmazonCloudWatch cloudWatchClient, KinesisClientLibConfiguration config) {
-        return config.getMetricsLevel() == MetricsLevel.NONE
-                ? new NullMetricsFactory() : new CWMetricsFactory(
-                        cloudWatchClient,
-                        config.getApplicationName(),
-                        config.getMetricsBufferTimeMillis(),
-                        config.getMetricsMaxQueueSize(),
-                        config.getMetricsLevel(),
-                        config.getMetricsEnabledDimensions());
+        IMetricsFactory metricsFactory;
+        if (config.getMetricsLevel() == MetricsLevel.NONE) {
+            metricsFactory = new NullMetricsFactory();
+        } else {
+            if (config.getRegionName() != null) {
+                Region region = RegionUtils.getRegion(config.getRegionName());
+                cloudWatchClient.setRegion(region);
+                LOG.debug("The region of Amazon CloudWatch client has been set to " + config.getRegionName());
+            }
+            metricsFactory = new WorkerCWMetricsFactory(
+                    cloudWatchClient,
+                    config.getApplicationName(),
+                    config.getMetricsBufferTimeMillis(),
+                    config.getMetricsMaxQueueSize(),
+                    config.getMetricsLevel(),
+                    config.getMetricsEnabledDimensions());
+        }
+        return metricsFactory;
+    }
+
+    /**
+     * Returns default executor service that should be used by the worker.
+     * @return Default executor service that should be used by the worker.
+     */
+    private static ExecutorService getExecutorService() {
+        return new WorkerThreadPoolExecutor();
+    }
+
+    /**
+     * Extension to CWMetricsFactory, so worker can identify whether it owns the metrics factory instance
+     * or not.
+     * Visible and non-final only for testing.
+     */
+    static class WorkerCWMetricsFactory extends CWMetricsFactory {
+
+        WorkerCWMetricsFactory(AmazonCloudWatch cloudWatchClient,
+                String namespace,
+                long bufferTimeMillis,
+                int maxQueueSize,
+                MetricsLevel metricsLevel,
+                Set<String> metricsEnabledDimensions) {
+            super(cloudWatchClient, namespace, bufferTimeMillis,
+                    maxQueueSize, metricsLevel, metricsEnabledDimensions);
+        }
+    }
+
+    /**
+     * Extension to ThreadPoolExecutor, so worker can identify whether it owns the executor service instance
+     * or not.
+     * Visible and non-final only for testing.
+     */
+    static class WorkerThreadPoolExecutor extends ThreadPoolExecutor {
+        private static final long DEFAULT_KEEP_ALIVE_TIME = 60L;
+
+        WorkerThreadPoolExecutor() {
+            // Defaults are based on Executors.newCachedThreadPool()
+            super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE_TIME, TimeUnit.SECONDS,
+                    new SynchronousQueue<Runnable>());
+        }
     }
 
     /**
@@ -785,8 +895,9 @@ public class Worker implements Runnable {
                 throw new IllegalArgumentException(
                         "A Record Processor Factory needs to be provided to build Worker");
             }
+
             if (execService == null) {
-                execService = Executors.newCachedThreadPool();
+                execService = getExecutorService();
             }
             if (kinesisClient == null) {
                 kinesisClient = new AmazonKinesisClient(config.getKinesisCredentialsProvider(),
@@ -846,10 +957,15 @@ public class Worker implements Runnable {
                             config.getWorkerIdentifier(),
                             config.getFailoverTimeMillis(),
                             config.getEpsilonMillis(),
-                            metricsFactory),
+                            config.getMaxLeasesForWorker(),
+                            config.getMaxLeasesToStealAtOneTime(),
+                            metricsFactory)
+                        .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
+                        .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
                     execService,
                     metricsFactory,
-                    config.getTaskBackoffTimeMillis());
+                    config.getTaskBackoffTimeMillis(),
+                    config.getFailoverTimeMillis());
         }
 
     }

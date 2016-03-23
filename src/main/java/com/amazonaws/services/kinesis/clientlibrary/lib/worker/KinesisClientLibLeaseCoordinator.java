@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -44,9 +44,14 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLease> implements ICheckpoint {
 
     private static final Log LOG = LogFactory.getLog(KinesisClientLibLeaseCoordinator.class);
+
+    private static final long DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
+    private static final long DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
+
     private final ILeaseManager<KinesisClientLease> leaseManager;
-    private final long initialLeaseTableReadCapacity = 10L;
-    private final long initialLeaseTableWriteCapacity = 10L;
+
+    private long initialLeaseTableReadCapacity = DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY;
+    private long initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
 
     /**
      * @param leaseManager Lease manager which provides CRUD lease operations.
@@ -76,6 +81,53 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
             IMetricsFactory metricsFactory) {
         super(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, metricsFactory);
         this.leaseManager = leaseManager;
+    }
+
+    /**
+     * @param leaseManager Lease manager which provides CRUD lease operations.
+     * @param workerIdentifier Used to identify this worker process
+     * @param leaseDurationMillis Duration of a lease in milliseconds
+     * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
+     * @param maxLeasesForWorker Max leases this worker can handle at a time
+     * @param maxLeasesToStealAtOneTime Steal up to this many leases at a time (for load balancing)
+     * @param metricsFactory Metrics factory used to emit metrics
+     */
+    public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
+            String workerIdentifier,
+            long leaseDurationMillis,
+            long epsilonMillis,
+            int maxLeasesForWorker,
+            int maxLeasesToStealAtOneTime,
+            IMetricsFactory metricsFactory) {
+        super(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
+                maxLeasesToStealAtOneTime, metricsFactory);
+        this.leaseManager = leaseManager;
+    }
+
+    /**
+     * @param readCapacity The DynamoDB table used for tracking leases will be provisioned with the specified initial
+     *        read capacity
+     * @return KinesisClientLibLeaseCoordinator
+     */
+    public KinesisClientLibLeaseCoordinator withInitialLeaseTableReadCapacity(long readCapacity) {
+        if (readCapacity <= 0) {
+            throw new IllegalArgumentException("readCapacity should be >= 1");
+        }
+        this.initialLeaseTableReadCapacity = readCapacity;
+        return this;
+    }
+
+    /**
+     * @param writeCapacity The DynamoDB table used for tracking leases will be provisioned with the specified initial
+     *        write capacity
+     * @return KinesisClientLibLeaseCoordinator
+     */
+    public KinesisClientLibLeaseCoordinator withInitialLeaseTableWriteCapacity(long writeCapacity) {
+        if (writeCapacity <= 0) {
+            throw new IllegalArgumentException("writeCapacity should be >= 1");
+        }
+        this.initialLeaseTableWriteCapacity = writeCapacity;
+        return this;
     }
 
     /**
@@ -173,7 +225,9 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
         final boolean newTableCreated =
                 leaseManager.createLeaseTableIfNotExists(initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity);
         if (newTableCreated) {
-            LOG.info("Created new lease table for coordinator");
+            LOG.info(String.format(
+                "Created new lease table for coordinator with initial read capacity of %d and write capacity of %d.",
+                initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity));
         }
         // Need to wait for table in active state.
         final long secondsBetweenPolls = 10L;

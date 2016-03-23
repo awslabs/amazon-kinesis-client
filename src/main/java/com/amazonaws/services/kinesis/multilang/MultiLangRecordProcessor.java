@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2014-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -40,6 +40,9 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
 
     private static final Log LOG = LogFactory.getLog(MultiLangRecordProcessor.class);
     private static final int EXIT_VALUE = 1;
+
+    /** Whether or not record processor initialization is successful. Defaults to false. */
+    private volatile boolean initialized;
 
     private String shardId;
 
@@ -115,8 +118,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
                  * The process builder has thrown an exception while starting the child process so we would like to shut
                  * down
                  */
-                stopProcessing("Failed to start client executable", e);
-                return;
+                throw new IOException("Failed to start client executable", e);
             }
             // Initialize all of our utility objects that will handle interacting with the process over
             // STDIN/STDOUT/STDERR
@@ -131,7 +133,10 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
             if (!protocol.initialize()) {
                 throw new RuntimeException("Failed to initialize child process");
             }
+
+            initialized = true;
         } catch (Throwable t) {
+            // Any exception in initialize results in MultiLangDaemon shutdown.
             stopProcessing("Encountered an error while trying to initialize record processor", t);
         }
     }
@@ -149,6 +154,15 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
 
     @Override
     public void shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason) {
+        // In cases where KCL loses lease for the shard after creating record processor instance but before
+        // record processor initialize() is called, then shutdown() may be called directly before initialize().
+        if (!initialized) {
+            LOG.info("Record processor was not initialized and will not have a child process, "
+                    + "so not invoking child process shutdown.");
+            this.state = ProcessState.SHUTDOWN;
+            return;
+        }
+
         try {
             if (ProcessState.ACTIVE.equals(this.state)) {
                 if (!protocol.shutdown(checkpointer, reason)) {

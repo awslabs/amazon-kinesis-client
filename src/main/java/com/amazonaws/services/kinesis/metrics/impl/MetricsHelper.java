@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -61,6 +61,29 @@ public class MetricsHelper {
         }
 
         return result;
+    }
+
+    /**
+     * Sets given metrics scope for the current thread.
+     *
+     * Method must be used with care. Metrics helper is designed such that separate metrics scopes are associated
+     * with each thread. However, when sharing metrics scope and setting it explicitly on a thread, thread safety must
+     * also be taken into account.
+     * @param scope
+     */
+    public static void setMetricsScope(IMetricsScope scope) {
+        if (currentScope.get() != null) {
+            throw new RuntimeException(String.format(
+                    "Metrics scope is already set for the current thread %s", Thread.currentThread().getName()));
+        }
+        currentScope.set(scope);
+    }
+
+    /**
+     * Unsets the metrics scope for the current thread.
+     */
+    public static void unsetMetricsScope() {
+        currentScope.remove();
     }
 
     public static IMetricsScope getMetricsScope() {

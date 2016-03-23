@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Amazon Kinesis Client Library for Java
 Bundle-SymbolicName: com.amazonaws.kinesisclientlibrary;singleton:=true
-Bundle-Version: 1.6.1
+Bundle-Version: 1.6.2
 Bundle-Vendor: Amazon Technologies, Inc
 Bundle-RequiredExecutionEnvironment: JavaSE-1.7
 Require-Bundle: org.apache.commons.codec;bundle-version="1.6",
@@ -12,7 +12,7 @@ Require-Bundle: org.apache.commons.codec;bundle-version="1.6",
  com.fasterxml.jackson.core.jackson-annotations;bundle-version="2.5.0",
  org.apache.httpcomponents.httpcore;bundle-version="4.3.3",
  org.apache.httpcomponents.httpclient;bundle-version="4.3.6"
- com.amazonaws.sdk;bundle-version="1.10.20",
+ com.amazonaws.sdk;bundle-version="1.10.61",
 Export-Package: com.amazonaws.services.kinesis,
  com.amazonaws.services.kinesis.clientlibrary,
  com.amazonaws.services.kinesis.clientlibrary.config,

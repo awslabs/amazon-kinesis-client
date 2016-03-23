@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
@@ -63,14 +62,52 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
     private final String workerIdentifier;
     private final Map<String, T> allLeases = new HashMap<String, T>();
     private final long leaseDurationNanos;
+    private int maxLeasesForWorker = Integer.MAX_VALUE;
+    private int maxLeasesToStealAtOneTime = 1;
 
-    private Random random = new Random();
     private long lastScanTimeNanos = 0L;
 
     public LeaseTaker(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis) {
         this.leaseManager = leaseManager;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
+    }
+
+    /**
+     * Worker will not acquire more than the specified max number of leases even if there are more
+     * shards that need to be processed. This can be used in scenarios where a worker is resource constrained or
+     * to prevent lease thrashing when small number of workers pick up all leases for small amount of time during
+     * deployment.
+     * Note that setting a low value may cause data loss (e.g. if there aren't enough Workers to make progress on all
+     * shards). When setting the value for this property, one must ensure enough workers are present to process
+     * shards and should consider future resharding, child shards that may be blocked on parent shards, some workers
+     * becoming unhealthy, etc.
+     *
+     * @param maxLeasesForWorker Max leases this Worker can handle at a time
+     * @return LeaseTaker
+     */
+    public LeaseTaker<T> withMaxLeasesForWorker(int maxLeasesForWorker) {
+        if (maxLeasesForWorker <= 0) {
+            throw new IllegalArgumentException("maxLeasesForWorker should be >= 1");
+        }
+        this.maxLeasesForWorker = maxLeasesForWorker;
+        return this;
+    }
+
+    /**
+     * Max leases to steal from a more loaded Worker at one time (for load balancing).
+     * Setting this to a higher number can allow for faster load convergence (e.g. during deployments, cold starts),
+     * but can cause higher churn in the system.
+     *
+     * @param maxLeasesToStealAtOneTime Steal up to this many leases at one time (for load balancing)
+     * @return LeaseTaker
+     */
+    public LeaseTaker<T> withMaxLeasesToStealAtOneTime(int maxLeasesToStealAtOneTime) {
+        if (maxLeasesToStealAtOneTime <= 0) {
+            throw new IllegalArgumentException("maxLeasesToStealAtOneTime should be >= 1");
+        }
+        this.maxLeasesToStealAtOneTime = maxLeasesToStealAtOneTime;
+        return this;
     }
 
     /**
@@ -293,6 +330,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
     private Set<T> computeLeasesToTake(List<T> expiredLeases) {
         Map<String, Integer> leaseCounts = computeLeaseCounts(expiredLeases);
         Set<T> leasesToTake = new HashSet<T>();
+        IMetricsScope metrics = MetricsHelper.getMetricsScope();
 
         int numLeases = allLeases.size();
         int numWorkers = leaseCounts.size();
@@ -313,6 +351,22 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
              * Our target for each worker is numLeases / numWorkers (+1 if numWorkers doesn't evenly divide numLeases)
              */
             target = numLeases / numWorkers + (numLeases % numWorkers == 0 ? 0 : 1);
+
+            // Spill over is the number of leases this worker should have claimed, but did not because it would
+            // exceed the max allowed for this worker.
+            int leaseSpillover = Math.max(0, target - maxLeasesForWorker);
+            if (target > maxLeasesForWorker) {
+                LOG.warn(String.format("Worker %s target is %d leases and maxLeasesForWorker is %d."
+                        + " Resetting target to %d, lease spillover is %d. "
+                        + " Note that some shards may not be processed if no other workers are able to pick them up.",
+                        workerIdentifier,
+                        target,
+                        maxLeasesForWorker,
+                        maxLeasesForWorker,
+                        leaseSpillover));
+                target = maxLeasesForWorker;
+            }
+            metrics.addData("LeaseSpillover", leaseSpillover, StandardUnit.Count, MetricsLevel.SUMMARY);
         }
 
         int myCount = leaseCounts.get(workerIdentifier);
@@ -333,9 +387,9 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                 leasesToTake.add(expiredLeases.remove(0));
             }
         } else {
-            // If there are no expired leases and we need a lease, consider stealing one
-            T leaseToSteal = chooseLeaseToSteal(leaseCounts, numLeasesToReachTarget, target);
-            if (leaseToSteal != null) {
+            // If there are no expired leases and we need a lease, consider stealing.
+            List<T> leasesToSteal = chooseLeasesToSteal(leaseCounts, numLeasesToReachTarget, target);
+            for (T leaseToSteal : leasesToSteal) {
                 LOG.info(String.format("Worker %s needed %d leases but none were expired, so it will steal lease %s from %s",
                         workerIdentifier,
                         numLeasesToReachTarget,
@@ -356,8 +410,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                     myCount,
                     leasesToTake.size()));
         }
-        
-        IMetricsScope metrics = MetricsHelper.getMetricsScope();
+
         metrics.addData("TotalLeases", numLeases, StandardUnit.Count, MetricsLevel.DETAILED);
         metrics.addData("ExpiredLeases", originalExpiredLeasesSize, StandardUnit.Count, MetricsLevel.SUMMARY);
         metrics.addData("NumWorkers", numWorkers, StandardUnit.Count, MetricsLevel.SUMMARY);
@@ -368,17 +421,21 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
     }
 
     /**
-     * Choose a lease to steal by randomly selecting one from the most loaded worker. Stealing rules:
+     * Choose leases to steal by randomly selecting one or more (up to max) from the most loaded worker.
+     * Stealing rules:
      * 
-     * Steal one lease from the most loaded worker if
-     * a) he has > target leases and I need >= 1 leases
-     * b) he has == target leases and I need > 1 leases
+     * Steal up to maxLeasesToStealAtOneTime leases from the most loaded worker if
+     * a) he has > target leases and I need >= 1 leases : steal min(leases needed, maxLeasesToStealAtOneTime)
+     * b) he has == target leases and I need > 1 leases : steal 1
      * 
      * @param leaseCounts map of workerIdentifier to lease count
+     * @param needed # of leases needed to reach the target leases for the worker
      * @param target target # of leases per worker
-     * @return Lease to steal, or null if we should not steal
+     * @return Leases to steal, or empty list if we should not steal
      */
-    private T chooseLeaseToSteal(Map<String, Integer> leaseCounts, int needed, int target) {
+    private List<T> chooseLeasesToSteal(Map<String, Integer> leaseCounts, int needed, int target) {
+        List<T> leasesToSteal = new ArrayList<>();
+
         Entry<String, Integer> mostLoadedWorker = null;
         // Find the most loaded worker
         for (Entry<String, Integer> worker : leaseCounts.entrySet()) {
@@ -387,7 +444,18 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
             }
         }
 
-        if (mostLoadedWorker.getValue() < target + (needed > 1 ? 0 : 1)) {
+        int numLeasesToSteal = 0;
+        if ((mostLoadedWorker.getValue() >= target) && (needed > 0)) {
+            int leasesOverTarget = mostLoadedWorker.getValue() - target;
+            numLeasesToSteal = Math.min(needed, leasesOverTarget);
+            // steal 1 if we need > 1 and max loaded worker has target leases.
+            if ((needed > 1) && (numLeasesToSteal == 0)) {
+                numLeasesToSteal = 1;
+            }
+            numLeasesToSteal = Math.min(numLeasesToSteal, maxLeasesToStealAtOneTime);
+        }
+
+        if (numLeasesToSteal <= 0) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug(String.format("Worker %s not stealing from most loaded worker %s.  He has %d,"
                         + " target is %d, and I need %d",
@@ -397,8 +465,18 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                         target,
                         needed));
             }
-
-            return null;
+            return leasesToSteal;
+        } else {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(String.format("Worker %s will attempt to steal %d leases from most loaded worker %s. "
+                        + " He has %d leases, target is %d, I need %d, maxLeasesToSteatAtOneTime is %d.",
+                        workerIdentifier,
+                        mostLoadedWorker.getKey(),
+                        mostLoadedWorker.getValue(),
+                        target,
+                        needed,
+                        maxLeasesToStealAtOneTime));
+            }
         }
 
         String mostLoadedWorkerIdentifier = mostLoadedWorker.getKey();
@@ -410,9 +488,12 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
             }
         }
 
-        // Return a random one
-        int randomIndex = random.nextInt(candidates.size());
-        return candidates.get(randomIndex);
+        // Return random ones
+        Collections.shuffle(candidates);
+        int toIndex = Math.min(candidates.size(), numLeasesToSteal);
+        leasesToSteal.addAll(candidates.subList(0, toIndex));
+
+        return leasesToSteal;
     }
 
     /**

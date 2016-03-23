@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -17,9 +17,12 @@ package com.amazonaws.services.kinesis.leases.impl;
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
@@ -58,21 +61,31 @@ public class LeaseCoordinator<T extends Lease> {
     // Time to wait for in-flight Runnables to finish when calling .stop();
     private static final long STOP_WAIT_TIME_MILLIS = 2000L;
 
-    private static final ThreadFactory THREAD_FACTORY = new NamedThreadFactory("LeaseCoordinator-");
+    private static final int DEFAULT_MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
+    private static final int DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
+
+    private static final ThreadFactory LEASE_COORDINATOR_THREAD_FACTORY = new NamedThreadFactory("LeaseCoordinator-");
+    private static final ThreadFactory LEASE_RENEWAL_THREAD_FACTORY = new NamedThreadFactory("LeaseRenewer-");
+
+    // Package level access for testing.
+    static final int MAX_LEASE_RENEWAL_THREAD_COUNT = 20;
 
     private final ILeaseRenewer<T> leaseRenewer;
     private final ILeaseTaker<T> leaseTaker;
     private final long renewerIntervalMillis;
     private final long takerIntervalMillis;
 
+    private final Object shutdownLock = new Object();
+
     protected final IMetricsFactory metricsFactory;
 
-    private ScheduledExecutorService threadpool;
+    private ScheduledExecutorService leaseCoordinatorThreadPool;
+    private ExecutorService leaseRenewalThreadpool;
     private volatile boolean running = false;
 
     /**
      * Constructor.
-     * 
+     *
      * @param leaseManager LeaseManager instance to use
      * @param workerIdentifier Identifies the worker (e.g. useful to track lease ownership)
      * @param leaseDurationMillis Duration of a lease
@@ -87,7 +100,7 @@ public class LeaseCoordinator<T extends Lease> {
 
     /**
      * Constructor.
-     * 
+     *
      * @param leaseManager LeaseManager instance to use
      * @param workerIdentifier Identifies the worker (e.g. useful to track lease ownership)
      * @param leaseDurationMillis Duration of a lease
@@ -99,17 +112,47 @@ public class LeaseCoordinator<T extends Lease> {
             long leaseDurationMillis,
             long epsilonMillis,
             IMetricsFactory metricsFactory) {
-        this.leaseTaker = new LeaseTaker<T>(leaseManager, workerIdentifier, leaseDurationMillis);
-        this.leaseRenewer = new LeaseRenewer<T>(leaseManager, workerIdentifier, leaseDurationMillis);
+        this(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis,
+                DEFAULT_MAX_LEASES_FOR_WORKER, DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME, metricsFactory);
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param leaseManager LeaseManager instance to use
+     * @param workerIdentifier Identifies the worker (e.g. useful to track lease ownership)
+     * @param leaseDurationMillis Duration of a lease
+     * @param epsilonMillis Allow for some variance when calculating lease expirations
+     * @param maxLeasesForWorker Max leases this Worker can handle at a time
+     * @param maxLeasesToStealAtOneTime Steal up to these many leases at a time (for load balancing)
+     * @param metricsFactory Used to publish metrics about lease operations
+     */
+    public LeaseCoordinator(ILeaseManager<T> leaseManager,
+            String workerIdentifier,
+            long leaseDurationMillis,
+            long epsilonMillis,
+            int maxLeasesForWorker,
+            int maxLeasesToStealAtOneTime,
+            IMetricsFactory metricsFactory) {
+        this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(MAX_LEASE_RENEWAL_THREAD_COUNT);
+        this.leaseTaker = new LeaseTaker<T>(leaseManager, workerIdentifier, leaseDurationMillis)
+                .withMaxLeasesForWorker(maxLeasesForWorker)
+                .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
+        this.leaseRenewer = new LeaseRenewer<T>(
+                leaseManager, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool);
         this.renewerIntervalMillis = leaseDurationMillis / 3 - epsilonMillis;
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
         this.metricsFactory = metricsFactory;
 
-        LOG.info(String.format("With failover time %dms and epsilon %dms, LeaseCoordinator will renew leases every %dms and take leases every %dms",
+        LOG.info(String.format(
+                "With failover time %d ms and epsilon %d ms, LeaseCoordinator will renew leases every %d ms, take" +
+                        "leases every %d ms, process maximum of %d leases and steal %d lease(s) at a time.",
                 leaseDurationMillis,
                 epsilonMillis,
                 renewerIntervalMillis,
-                takerIntervalMillis));
+                takerIntervalMillis,
+                maxLeasesForWorker,
+                maxLeasesToStealAtOneTime));
     }
 
     private class TakerRunnable implements Runnable {
@@ -150,14 +193,14 @@ public class LeaseCoordinator<T extends Lease> {
      */
     public void start() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         leaseRenewer.initialize();
-        
+
         // 2 because we know we'll have at most 2 concurrent tasks at a time.
-        threadpool = Executors.newScheduledThreadPool(2, THREAD_FACTORY);
+        leaseCoordinatorThreadPool = Executors.newScheduledThreadPool(2, LEASE_COORDINATOR_THREAD_FACTORY);
 
         // Taker runs with fixed DELAY because we want it to run slower in the event of performance degredation.
-        threadpool.scheduleWithFixedDelay(new TakerRunnable(), 0L, takerIntervalMillis, TimeUnit.MILLISECONDS);
+        leaseCoordinatorThreadPool.scheduleWithFixedDelay(new TakerRunnable(), 0L, takerIntervalMillis, TimeUnit.MILLISECONDS);
         // Renewer runs at fixed INTERVAL because we want it to run at the same rate in the event of degredation.
-        threadpool.scheduleAtFixedRate(new RenewerRunnable(), 0L, renewerIntervalMillis, TimeUnit.MILLISECONDS);
+        leaseCoordinatorThreadPool.scheduleAtFixedRate(new RenewerRunnable(), 0L, renewerIntervalMillis, TimeUnit.MILLISECONDS);
         running = true;
     }
 
@@ -175,7 +218,13 @@ public class LeaseCoordinator<T extends Lease> {
         try {
             Map<String, T> takenLeases = leaseTaker.takeLeases();
 
-            leaseRenewer.addLeasesToRenew(takenLeases.values());
+            // Only add taken leases to renewer if coordinator is still running.
+            synchronized (shutdownLock) {
+                if (running) {
+                    leaseRenewer.addLeasesToRenew(takenLeases.values());
+                }
+            }
+
             success = true;
         } finally {
             scope.addDimension(WORKER_IDENTIFIER_METRIC, getWorkerIdentifier());
@@ -229,16 +278,19 @@ public class LeaseCoordinator<T extends Lease> {
     }
 
     /**
-     * Stops background threads.
+     * Stops background threads and waits for {@link #STOP_WAIT_TIME_MILLIS} for all background tasks to complete.
+     * If tasks are not completed after this time, method will shutdown thread pool forcefully and return.
      */
     public void stop() {
-        if (threadpool != null) {
-            threadpool.shutdown();
+        if (leaseCoordinatorThreadPool != null) {
+            leaseCoordinatorThreadPool.shutdown();
             try {
-                if (threadpool.awaitTermination(STOP_WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS)) {
-                    LOG.info(String.format("Worker %s has successfully stopped lease-tracking threads", leaseTaker.getWorkerIdentifier()));
+                if (leaseCoordinatorThreadPool.awaitTermination(STOP_WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS)) {
+                    LOG.info(String.format("Worker %s has successfully stopped lease-tracking threads",
+                            leaseTaker.getWorkerIdentifier()));
                 } else {
-                    threadpool.shutdownNow();
+                    leaseCoordinatorThreadPool.shutdownNow();
+                    leaseRenewalThreadpool.shutdownNow();
                     LOG.info(String.format("Worker %s stopped lease-tracking threads %dms after stop",
                         leaseTaker.getWorkerIdentifier(),
                         STOP_WAIT_TIME_MILLIS));
@@ -250,8 +302,10 @@ public class LeaseCoordinator<T extends Lease> {
             LOG.debug("Threadpool was null, no need to shutdown/terminate threadpool.");
         }
 
-        leaseRenewer.clearCurrentlyHeldLeases();
-        running = false;
+        synchronized (shutdownLock) {
+            leaseRenewer.clearCurrentlyHeldLeases();
+            running = false;
+        }
     }
 
     /**
@@ -278,4 +332,15 @@ public class LeaseCoordinator<T extends Lease> {
         return leaseRenewer.updateLease(lease, concurrencyToken);
     }
 
+    /**
+     * Returns executor service that should be used for lease renewal.
+     * @param maximumPoolSize Maximum allowed thread pool size
+     * @return Executor service that should be used for lease renewal.
+     */
+    private static ExecutorService getLeaseRenewalExecutorService(int maximumPoolSize) {
+        ThreadPoolExecutor exec = new ThreadPoolExecutor(maximumPoolSize, maximumPoolSize,
+                60L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), LEASE_RENEWAL_THREAD_FACTORY);
+        exec.allowCoreThreadTimeOut(true);
+        return exec;
+    }
 }

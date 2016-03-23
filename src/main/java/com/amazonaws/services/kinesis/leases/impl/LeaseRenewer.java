@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -14,14 +14,19 @@
  */
 package com.amazonaws.services.kinesis.leases.impl;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
@@ -34,6 +39,8 @@ import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputExc
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingScope;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
 /**
@@ -48,6 +55,7 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
     private final ConcurrentNavigableMap<String, T> ownedLeases = new ConcurrentSkipListMap<String, T>();
     private final String workerIdentifier;
     private final long leaseDurationNanos;
+    private final ExecutorService executorService;
 
     /**
      * Constructor.
@@ -55,11 +63,14 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
      * @param leaseManager LeaseManager to use
      * @param workerIdentifier identifier of this worker
      * @param leaseDurationMillis duration of a lease in milliseconds
+     * @param executorService ExecutorService to use for renewing leases in parallel
      */
-    public LeaseRenewer(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis) {
+    public LeaseRenewer(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis,
+            ExecutorService executorService) {
         this.leaseManager = leaseManager;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
+        this.executorService = executorService;
     }
 
     /**
@@ -77,23 +88,78 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
         }
 
         /*
+         * Lease renewals are done in parallel so many leases can be renewed for short lease fail over time
+         * configuration. In this case, metrics scope is also shared across different threads, so scope must be thread
+         * safe.
+         */
+        IMetricsScope renewLeaseTaskMetricsScope = new ThreadSafeMetricsDelegatingScope(
+                MetricsHelper.getMetricsScope());
+
+        /*
          * We iterate in descending order here so that the synchronized(lease) inside renewLease doesn't "lead" calls
          * to getCurrentlyHeldLeases. They'll still cross paths, but they won't interleave their executions.
          */
         int lostLeases = 0;
+        List<Future<Boolean>> renewLeaseTasks = new ArrayList<Future<Boolean>>();
         for (T lease : ownedLeases.descendingMap().values()) {
-            if (!renewLease(lease)) {
-                lostLeases++;
+            renewLeaseTasks.add(executorService.submit(new RenewLeaseTask(lease, renewLeaseTaskMetricsScope)));
+        }
+        int leasesInUnknownState = 0;
+        Exception lastException = null;
+        for (Future<Boolean> renewLeaseTask : renewLeaseTasks) {
+            try {
+                if (!renewLeaseTask.get()) {
+                    lostLeases++;
+                }
+            } catch (InterruptedException e) {
+                LOG.info("Interrupted while waiting for a lease to renew.");
+                leasesInUnknownState += 1;
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
+                LOG.error("Encountered an exception while renewing a lease.", e.getCause());
+                leasesInUnknownState += 1;
+                lastException = e;
             }
         }
 
-        MetricsHelper.getMetricsScope().addData(
+        renewLeaseTaskMetricsScope.addData(
                 "LostLeases", lostLeases, StandardUnit.Count, MetricsLevel.SUMMARY);
-        MetricsHelper.getMetricsScope().addData(
+        renewLeaseTaskMetricsScope.addData(
                 "CurrentLeases", ownedLeases.size(), StandardUnit.Count, MetricsLevel.SUMMARY);
+        if (leasesInUnknownState > 0) {
+            throw new DependencyException(String.format("Encountered an exception while renewing leases. "
+                    + "The number of leases which might not have been renewed is %d",
+                    leasesInUnknownState),
+                    lastException);
+        }
+    }
+
+    private class RenewLeaseTask implements Callable<Boolean> {
+
+        private final T lease;
+        private final IMetricsScope metricsScope;
+
+        public RenewLeaseTask(T lease, IMetricsScope metricsScope) {
+            this.lease = lease;
+            this.metricsScope = metricsScope;
+        }
+
+        @Override
+        public Boolean call() throws Exception {
+            MetricsHelper.setMetricsScope(metricsScope);
+            try {
+                return renewLease(lease);
+            } finally {
+                MetricsHelper.unsetMetricsScope();
+            }
+        }
     }
 
     private boolean renewLease(T lease) throws DependencyException, InvalidStateException {
+        return renewLease(lease, false);
+    }
+
+    private boolean renewLease(T lease, boolean renewEvenIfExpired) throws DependencyException, InvalidStateException {
         String leaseKey = lease.getLeaseKey();
 
         boolean success = false;
@@ -103,7 +169,12 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
             for (int i = 1; i <= RENEWAL_RETRIES; i++) {
                 try {
                     synchronized (lease) {
-                        renewedLease = leaseManager.renewLease(lease);
+                        // Don't renew expired lease during regular renewals. getCopyOfHeldLease may have returned null
+                        // triggering the application processing to treat this as a lost lease (fail checkpoint with
+                        // ShutdownException).
+                        if (renewEvenIfExpired || (!lease.isExpired(leaseDurationNanos, System.nanoTime()))) {
+                            renewedLease = leaseManager.renewLease(lease);
+                        }
                         if (renewedLease) {
                             lease.setLastCounterIncrementNanos(System.nanoTime());
                         }
@@ -305,11 +376,15 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
     public void initialize() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         Collection<T> leases = leaseManager.listLeases();
         List<T> myLeases = new LinkedList<T>();
+        boolean renewEvenIfExpired = true;
 
         for (T lease : leases) {
             if (workerIdentifier.equals(lease.getLeaseOwner())) {
                 LOG.info(String.format(" Worker %s found lease %s", workerIdentifier, lease));
-                if (renewLease(lease)) {
+                // Okay to renew even if lease is expired, because we start with an empty list and we add the lease to
+                // our list only after a successful renew. So we don't need to worry about the edge case where we could
+                // continue renewing a lease after signaling a lease loss to the application.
+                if (renewLease(lease, renewEvenIfExpired)) {
                     myLeases.add(lease);
                 }
             } else {
@@ -319,7 +394,7 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
 
         addLeasesToRenew(myLeases);
     }
-    
+
     private void verifyNotNull(Object object, String message) {
         if (object == null) {
             throw new IllegalArgumentException(message);

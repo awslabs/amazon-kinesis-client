@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -71,8 +72,8 @@ class ShardConsumer {
      * Used to track if we lost the primary responsibility. Once set to true, we will start shutting down.
      * If we regain primary responsibility before shutdown is complete, Worker should create a new ShardConsumer object.
      */
-    private boolean beginShutdown;
-    private ShutdownReason shutdownReason;
+    private volatile boolean beginShutdown;
+    private volatile ShutdownReason shutdownReason;
 
     /**
      * @param shardInfo Shard information
@@ -154,16 +155,26 @@ class ShardConsumer {
                     }
                 } catch (Exception e) {
                     throw new RuntimeException(e);
+                } finally {
+                    // Setting future to null so we don't misinterpret task completion status in case of exceptions
+                    future = null;
                 }
             }
             updateState(taskCompletedSuccessfully);
             ITask nextTask = getNextTask();
             if (nextTask != null) {
                 currentTask = nextTask;
-                future = executorService.submit(currentTask);
-                currentTaskSubmitTime = System.currentTimeMillis();
-                submittedNewTask = true;
-                LOG.debug("Submitted new " + currentTask.getTaskType() + " task for shard " + shardInfo.getShardId());
+                try {
+                    future = executorService.submit(currentTask);
+                    currentTaskSubmitTime = System.currentTimeMillis();
+                    submittedNewTask = true;
+                    LOG.debug("Submitted new " + currentTask.getTaskType()
+                            + " task for shard " + shardInfo.getShardId());
+                } catch (RejectedExecutionException e) {
+                    LOG.info(currentTask.getTaskType() + " task was not accepted for execution.", e);
+                } catch (RuntimeException e) {
+                    LOG.info(currentTask.getTaskType() + " task encountered exception ", e);
+                }
             } else {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug(String.format("No new task to submit for shard %s, currentState %s",

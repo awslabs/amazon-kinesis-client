@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -119,13 +119,40 @@ public class KinesisClientLibConfiguration {
     /**
      * User agent set when Amazon Kinesis Client Library makes AWS requests.
      */
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.6.1";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.6.2";
 
     /**
      * KCL will validate client provided sequence numbers with a call to Amazon Kinesis before checkpointing for calls
      * to {@link RecordProcessorCheckpointer#checkpoint(String)} by default.
      */
     public static final boolean DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING = true;
+
+    /**
+     * The max number of leases (shards) this worker should process.
+     * This can be useful to avoid overloading (and thrashing) a worker when a host has resource constraints
+     * or during deployment.
+     * NOTE: Setting this to a low value can cause data loss if workers are not able to pick up all shards in the
+     * stream due to the max limit.
+     */
+    public static final int DEFAULT_MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
+
+    /**
+     * Max leases to steal from another worker at one time (for load balancing).
+     * Setting this to a higher number can allow for faster load convergence (e.g. during deployments, cold starts),
+     * but can cause higher churn in the system.
+     */
+    public static final int DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
+
+    /**
+     * The Amazon DynamoDB table used for tracking leases will be provisioned with this read capacity.
+     */
+    public static final int DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY = 10;
+
+    /**
+     * The Amazon DynamoDB table used for tracking leases will be provisioned with this write capacity.
+     */
+    public static final int DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10;
+
 
     private String applicationName;
     private String streamName;
@@ -153,6 +180,10 @@ public class KinesisClientLibConfiguration {
     private Set<String> metricsEnabledDimensions;
     private boolean validateSequenceNumberBeforeCheckpointing;
     private String regionName;
+    private int maxLeasesForWorker;
+    private int maxLeasesToStealAtOneTime;
+    private int initialLeaseTableReadCapacity;
+    private int initialLeaseTableWriteCapacity;
 
     /**
      * Constructor.
@@ -293,6 +324,10 @@ public class KinesisClientLibConfiguration {
         this.metricsEnabledDimensions = DEFAULT_METRICS_ENABLED_DIMENSIONS;
         this.validateSequenceNumberBeforeCheckpointing = validateSequenceNumberBeforeCheckpointing;
         this.regionName = regionName;
+        this.maxLeasesForWorker = DEFAULT_MAX_LEASES_FOR_WORKER;
+        this.maxLeasesToStealAtOneTime = DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME;
+        this.initialLeaseTableReadCapacity = DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY;
+        this.initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
     }
 
     // Check if value is positive, otherwise throw an exception
@@ -506,6 +541,34 @@ public class KinesisClientLibConfiguration {
      */
     public String getRegionName() {
         return regionName;
+    }
+
+    /**
+     * @return Max leases this Worker can handle at a time
+     */
+    public int getMaxLeasesForWorker() {
+        return maxLeasesForWorker;
+    }
+
+    /**
+     * @return Max leases to steal at one time (for load balancing)
+     */
+    public int getMaxLeasesToStealAtOneTime() {
+        return maxLeasesToStealAtOneTime;
+    }
+
+    /**
+     * @return Read capacity to provision when creating the lease table.
+     */
+    public int getInitialLeaseTableReadCapacity() {
+        return initialLeaseTableReadCapacity;
+    }
+
+    /**
+     * @return Write capacity to provision when creating the lease table.
+     */
+    public int getInitialLeaseTableWriteCapacity() {
+        return initialLeaseTableWriteCapacity;
     }
 
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 190 LINES
@@ -746,6 +809,59 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withRegionName(String regionName) {
         checkIsRegionNameValid(regionName);
         this.regionName = regionName;
+        return this;
+    }
+
+    /**
+     * Worker will not acquire more than the specified max number of leases even if there are more
+     * shards that need to be processed. This can be used in scenarios where a worker is resource constrained or
+     * to prevent lease thrashing when small number of workers pick up all leases for small amount of time during
+     * deployment.
+     * Note that setting a low value may cause data loss (e.g. if there aren't enough Workers to make progress on all
+     * shards). When setting the value for this property, one must ensure enough workers are present to process
+     * shards and should consider future resharding, child shards that may be blocked on parent shards, some workers
+     * becoming unhealthy, etc.
+     *
+     * @param maxLeasesForWorker Max leases this Worker can handle at a time
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withMaxLeasesForWorker(int maxLeasesForWorker) {
+        checkIsValuePositive("maxLeasesForWorker", maxLeasesForWorker);
+        this.maxLeasesForWorker = maxLeasesForWorker;
+        return this;
+    }
+
+    /**
+     * Max leases to steal from a more loaded Worker at one time (for load balancing).
+     * Setting this to a higher number can allow for faster load convergence (e.g. during deployments, cold starts),
+     * but can cause higher churn in the system.
+     *
+     * @param maxLeasesToStealAtOneTime Steal up to this many leases at one time (for load balancing)
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withMaxLeasesToStealAtOneTime(int maxLeasesToStealAtOneTime) {
+        checkIsValuePositive("maxLeasesToStealAtOneTime", maxLeasesToStealAtOneTime);
+        this.maxLeasesToStealAtOneTime = maxLeasesToStealAtOneTime;
+        return this;
+    }
+
+    /**
+     * @param initialLeaseTableReadCapacity Read capacity to provision when creating the lease table.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withInitialLeaseTableReadCapacity(int initialLeaseTableReadCapacity) {
+        checkIsValuePositive("initialLeaseTableReadCapacity", initialLeaseTableReadCapacity);
+        this.initialLeaseTableReadCapacity = initialLeaseTableReadCapacity;
+        return this;
+    }
+
+    /**
+     * @param initialLeaseTableWriteCapacity Write capacity to provision when creating the lease table.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withInitialLeaseTableWriteCapacity(int initialLeaseTableWriteCapacity) {
+        checkIsValuePositive("initialLeaseTableWriteCapacity", initialLeaseTableWriteCapacity);
+        this.initialLeaseTableWriteCapacity = initialLeaseTableWriteCapacity;
         return this;
     }
 }
