@@ -115,6 +115,9 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         request.setProvisionedThroughput(throughput);
 
         try {
+            if (leaseTableExists()) {
+                return false;
+            }
             dynamoDBClient.createTable(request);
         } catch (ResourceInUseException e) {
             tableDidNotExist = false;
