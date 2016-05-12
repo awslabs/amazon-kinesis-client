@@ -471,6 +471,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                 LOG.debug(String.format("Worker %s will attempt to steal %d leases from most loaded worker %s. "
                         + " He has %d leases, target is %d, I need %d, maxLeasesToSteatAtOneTime is %d.",
                         workerIdentifier,
+                        numLeasesToSteal,
                         mostLoadedWorker.getKey(),
                         mostLoadedWorker.getValue(),
                         target,
