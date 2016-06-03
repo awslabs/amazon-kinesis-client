@@ -226,7 +226,7 @@ public class Lease {
 
     @Override
     public String toString() {
-       return Jackson.toJsonString(this);
+       return Jackson.toJsonPrettyString(this);
     }
 
     /**

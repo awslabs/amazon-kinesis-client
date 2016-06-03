@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.clientlibrary.proxies;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
@@ -129,8 +130,8 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
             ClientConfiguration clientConfig,
             String endpoint,
             String regionId) {
-        AmazonKinesisClient client = new AmazonKinesisClient(credentialProvider, clientConfig)
-                    .withRegion(Regions.fromName(regionId));
+        AmazonKinesisClient client = new AmazonKinesisClient(credentialProvider, clientConfig);
+        client.setRegion(Region.getRegion(Regions.fromName(regionId)));
         client.setEndpoint(endpoint);
         return client;
     }

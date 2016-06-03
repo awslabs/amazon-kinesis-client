@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -107,7 +108,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
             String endpoint,
             String regionId) {
         AmazonKinesisClient client = new AmazonKinesisClient(credentialProvider);
-        client.withRegion(Regions.fromName(regionId));
+        client.setRegion(Region.getRegion(Regions.fromName(regionId)));
         client.setEndpoint(endpoint);
         return client;
     }
