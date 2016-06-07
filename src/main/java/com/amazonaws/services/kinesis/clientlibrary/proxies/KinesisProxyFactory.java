@@ -16,6 +16,8 @@ package com.amazonaws.services.kinesis.clientlibrary.proxies;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 
@@ -40,7 +42,7 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
      * @param endpoint Amazon Kinesis endpoint to use
      */
     public KinesisProxyFactory(AWSCredentialsProvider credentialProvider, String endpoint) {
-        this(credentialProvider, new ClientConfiguration(), endpoint, defaultServiceName, defaultRegionId,
+        this(credentialProvider, new ClientConfiguration(), endpoint, defaultRegionId,
                 DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS, DEFAULT_DESCRIBE_STREAM_RETRY_TIMES);
     }
 
@@ -54,7 +56,7 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
     public KinesisProxyFactory(AWSCredentialsProvider credentialProvider,
             ClientConfiguration clientConfig,
             String endpoint) {
-        this(credentialProvider, clientConfig, endpoint, defaultServiceName, defaultRegionId,
+        this(credentialProvider, clientConfig, endpoint, defaultRegionId,
                 DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS, DEFAULT_DESCRIBE_STREAM_RETRY_TIMES);
     }
 
@@ -74,7 +76,6 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
      * @param credentialProvider credentials provider used to sign requests
      * @param clientConfig Client Configuration used when instantiating an AmazonKinesisClient
      * @param endpoint Amazon Kinesis endpoint to use
-     * @param serviceName service name
      * @param regionId region id
      * @param describeStreamBackoffTimeInMillis backoff time for describing stream in millis
      * @param maxDescribeStreamRetryAttempts Number of retry attempts for DescribeStream calls
@@ -82,14 +83,12 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
     KinesisProxyFactory(AWSCredentialsProvider credentialProvider,
             ClientConfiguration clientConfig,
             String endpoint,
-            String serviceName,
             String regionId,
             long describeStreamBackoffTimeInMillis,
             int maxDescribeStreamRetryAttempts) {
         this(credentialProvider, buildClientSettingEndpoint(credentialProvider,
                 clientConfig,
                 endpoint,
-                serviceName,
                 regionId),
                 describeStreamBackoffTimeInMillis, maxDescribeStreamRetryAttempts);
         
@@ -130,10 +129,10 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
     private static AmazonKinesisClient buildClientSettingEndpoint(AWSCredentialsProvider credentialProvider,
             ClientConfiguration clientConfig,
             String endpoint,
-            String serviceName,
             String regionId) {
         AmazonKinesisClient client = new AmazonKinesisClient(credentialProvider, clientConfig);
-        client.setEndpoint(endpoint, serviceName, regionId);
+        client.setRegion(Region.getRegion(Regions.fromName(regionId)));
+        client.setEndpoint(endpoint);
         return client;
     }
 }

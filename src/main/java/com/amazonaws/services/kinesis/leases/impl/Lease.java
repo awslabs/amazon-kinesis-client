@@ -14,10 +14,10 @@
  */
 package com.amazonaws.services.kinesis.leases.impl;
 
+import com.amazonaws.util.json.Jackson;
+
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-
-import com.amazonaws.util.json.JSONObject;
 
 /**
  * This class contains data pertaining to a Lease. Distributed systems may use leases to partition work across a
@@ -226,7 +226,7 @@ public class Lease {
 
     @Override
     public String toString() {
-        return new JSONObject(this).toString();
+       return Jackson.toJsonPrettyString(this);
     }
 
     /**

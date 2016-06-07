@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -82,7 +84,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
      * @param streamName Data records will be fetched from this stream
      * @param credentialProvider Provides credentials for signing Kinesis requests
      * @param endpoint Kinesis endpoint
-     * @param serviceName service name
+     * @param serviceName This parameter is ignored
      * @param regionId region id
      * @param describeStreamBackoffTimeInMillis Backoff time for DescribeStream calls in milliseconds
      * @param maxDescribeStreamRetryAttempts Number of retry attempts for DescribeStream calls
@@ -96,7 +98,6 @@ public class KinesisProxy implements IKinesisProxyExtended {
             int maxDescribeStreamRetryAttempts) {
         this(streamName, credentialProvider, buildClientSettingEndpoint(credentialProvider,
                 endpoint,
-                serviceName,
                 regionId), describeStreamBackoffTimeInMillis, maxDescribeStreamRetryAttempts);
         
 
@@ -105,10 +106,10 @@ public class KinesisProxy implements IKinesisProxyExtended {
     
     private static AmazonKinesisClient buildClientSettingEndpoint(AWSCredentialsProvider credentialProvider,
             String endpoint,
-            String serviceName,
             String regionId) {
         AmazonKinesisClient client = new AmazonKinesisClient(credentialProvider);
-        client.setEndpoint(endpoint, serviceName, regionId);
+        client.setRegion(Region.getRegion(Regions.fromName(regionId)));
+        client.setEndpoint(endpoint);
         return client;
     }
 
