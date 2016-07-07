@@ -6,7 +6,7 @@
     <artifactId>amazon-kinesis-client</artifactId>
     <packaging>jar</packaging>
     <name>Amazon Kinesis Client Library for Java</name>
-    <version>1.6.3</version>
+    <version>1.6.4</version>
     <description>The Amazon Kinesis Client Library for Java enables Java developers to easily consume and process data from Amazon Kinesis.</description>
     <url>https://aws.amazon.com/kinesis</url>
 
@@ -23,7 +23,7 @@
     </licenses>
 
     <properties>
-        <aws-java-sdk.version>1.10.61</aws-java-sdk.version>
+        <aws-java-sdk.version>1.11.14</aws-java-sdk.version>
     </properties>
 
     <dependencies>

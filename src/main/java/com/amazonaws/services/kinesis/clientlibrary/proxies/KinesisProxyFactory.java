@@ -35,7 +35,7 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
 
     /**
      * Constructor for creating a KinesisProxy factory, using the specified credentials provider and endpoint.
-     * 
+     *
      * @param credentialProvider credentials provider used to sign requests
      * @param endpoint Amazon Kinesis endpoint to use
      */
@@ -46,7 +46,7 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
 
     /**
      * Constructor for KinesisProxy factory using the client configuration to use when interacting with Kinesis.
-     * 
+     *
      * @param credentialProvider credentials provider used to sign requests
      * @param clientConfig Client Configuration used when instantiating an AmazonKinesisClient
      * @param endpoint Amazon Kinesis endpoint to use
@@ -133,7 +133,8 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
             String serviceName,
             String regionId) {
         AmazonKinesisClient client = new AmazonKinesisClient(credentialProvider, clientConfig);
-        client.setEndpoint(endpoint, serviceName, regionId);
+        client.setEndpoint(endpoint);
+        client.setSignerRegionOverride(regionId);
         return client;
     }
 }

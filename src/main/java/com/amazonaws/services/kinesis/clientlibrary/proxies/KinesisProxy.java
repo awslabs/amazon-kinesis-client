@@ -108,7 +108,8 @@ public class KinesisProxy implements IKinesisProxyExtended {
             String serviceName,
             String regionId) {
         AmazonKinesisClient client = new AmazonKinesisClient(credentialProvider);
-        client.setEndpoint(endpoint, serviceName, regionId);
+        client.setEndpoint(endpoint);
+        client.setSignerRegionOverride(regionId);
         return client;
     }
 
