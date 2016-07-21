@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.metrics.impl;
 
 import java.util.Set;
 
+import com.amazonaws.AbortedException;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
@@ -142,6 +143,11 @@ public class CWMetricsFactory implements IMetricsFactory {
 
     public void shutdown() {
         runnable.shutdown();
+        try {
+            publicationThread.join();
+        } catch (InterruptedException e) {
+            throw new AbortedException(e.getMessage(), e);
+        }
     }
 
 }
