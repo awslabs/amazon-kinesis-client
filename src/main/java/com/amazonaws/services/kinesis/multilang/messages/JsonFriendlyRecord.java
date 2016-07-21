@@ -16,6 +16,8 @@ package com.amazonaws.services.kinesis.multilang.messages;
 
 import com.amazonaws.services.kinesis.model.Record;
 
+import java.util.Date;
+
 /**
  * Class for encoding Record objects to json. Needed because Records have byte buffers for their data field which causes
  * problems for the json library we're using.
@@ -24,6 +26,7 @@ public class JsonFriendlyRecord {
     private byte[] data;
     private String partitionKey;
     private String sequenceNumber;
+    private Date approximateArrivalTimestamp;
 
     /**
      * Default Constructor.
@@ -33,12 +36,14 @@ public class JsonFriendlyRecord {
 
     /**
      * Convenience constructor.
-     * 
+     *
      * @param record The record that this message will represent.
      */
     public JsonFriendlyRecord(Record record) {
         this.withData(record.getData() == null ? null : record.getData().array())
-                .withPartitionKey(record.getPartitionKey()).withSequenceNumber(record.getSequenceNumber());
+                .withPartitionKey(record.getPartitionKey())
+                .withSequenceNumber(record.getSequenceNumber())
+                .withApproximateArrivalTimestamp(record.getApproximateArrivalTimestamp());
     }
 
     /**
@@ -63,6 +68,13 @@ public class JsonFriendlyRecord {
     }
 
     /**
+     * @return The approximate arrival timestamp.
+     */
+    public Date getApproximateArrivalTimestamp() {
+        return approximateArrivalTimestamp;
+    }
+
+    /**
      * @param data The data.
      */
     public void setData(byte[] data) {
@@ -84,8 +96,15 @@ public class JsonFriendlyRecord {
     }
 
     /**
+     * @param approximateArrivalTimestamp The approximate arrival timestamp.
+     */
+    public void setApproximateArrivalTimestamp(Date approximateArrivalTimestamp) {
+        this.approximateArrivalTimestamp = approximateArrivalTimestamp;
+    }
+
+    /**
      * @param data The data.
-     * 
+     *
      * @return this
      */
     public JsonFriendlyRecord withData(byte[] data) {
@@ -95,7 +114,7 @@ public class JsonFriendlyRecord {
 
     /**
      * @param partitionKey The partition key.
-     * 
+     *
      * @return this
      */
     public JsonFriendlyRecord withPartitionKey(String partitionKey) {
@@ -105,11 +124,25 @@ public class JsonFriendlyRecord {
 
     /**
      * @param sequenceNumber The sequence number.
-     * 
+     *
      * @return this
      */
     public JsonFriendlyRecord withSequenceNumber(String sequenceNumber) {
         this.setSequenceNumber(sequenceNumber);
         return this;
     }
+
+    /**
+     * @param approximateArrivalTimestamp The approximate arrival timestamp.
+     *
+     * @return this
+     */
+    public JsonFriendlyRecord withApproximateArrivalTimestamp(Date approximateArrivalTimestamp){
+        this.setApproximateArrivalTimestamp(approximateArrivalTimestamp);
+        return this;
+    }
+
+
+
+
 }
