@@ -29,6 +29,21 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
 ## Release Notes
+### Release 1.6.5 (July 25, 2016)
+* Change LeaseManager to call DescribeTable before attempting to create the lease table.
+  * [Issue #36](https://github.com/awslabs/amazon-kinesis-client/issues/36)
+  * [PR #41](https://github.com/awslabs/amazon-kinesis-client/pull/41)
+  * [PR #67](https://github.com/awslabs/amazon-kinesis-client/pull/67)
+* Allow DynamoDB lease table name to be specified
+  * [PR #61](https://github.com/awslabs/amazon-kinesis-client/pull/61)
+* Add approximateArrivalTimestamp for JsonFriendlyRecord
+  * [PR #86](https://github.com/awslabs/amazon-kinesis-client/pull/86)
+* Shutdown lease renewal thread pool on exit.
+  * [PR #84](https://github.com/awslabs/amazon-kinesis-client/pull/84)
+* Wait for CloudWatch publishing thread to finish before exiting.
+  * [PR #82](https://github.com/awslabs/amazon-kinesis-client/pull/82)
+* Added unit, and integration tests for the library.
+
 ### Release 1.6.4 (July 6, 2016)
 * Upgrade to AWS SDK for Java 1.11.14
   * [Issue #74](https://github.com/awslabs/amazon-kinesis-client/issues/74)
