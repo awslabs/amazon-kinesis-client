@@ -29,6 +29,7 @@ import java.lang.Thread.State;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -80,7 +81,6 @@ import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
 import com.amazonaws.services.kinesis.model.Shard;
-import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
 /**
  * Unit tests of Worker.
@@ -101,7 +101,10 @@ public class WorkerTest {
     private final boolean cleanupLeasesUponShardCompletion = true;
     // We don't want any of these tests to run checkpoint validation
     private final boolean skipCheckpointValidationValue = false;
-    private final InitialPositionInStream initialPositionInStream = InitialPositionInStream.LATEST;
+    private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
+    private static final InitialPositionInStreamExtended INITIAL_POSITION_TRIM_HORIZON =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
     private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY = 
@@ -167,9 +170,7 @@ public class WorkerTest {
                 new StreamConfig(proxy,
                         maxRecords,
                         idleTimeInMilliseconds,
-                        callProcessRecordsForEmptyRecordList,
-                        skipCheckpointValidationValue,
-                        initialPositionInStream);
+                        callProcessRecordsForEmptyRecordList, skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
         final String testConcurrencyToken = "testToken";
         final String anotherConcurrencyToken = "anotherTestToken";
         final String dummyKinesisShardId = "kinesis-0-0";
@@ -182,9 +183,7 @@ public class WorkerTest {
 
         Worker worker =
                 new Worker(stageName,
-                        streamletFactory,
-                        streamConfig,
-                        InitialPositionInStream.LATEST,
+                        streamletFactory, streamConfig, INITIAL_POSITION_LATEST,
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
@@ -219,9 +218,7 @@ public class WorkerTest {
                 new StreamConfig(proxy,
                         maxRecords,
                         idleTimeInMilliseconds,
-                        callProcessRecordsForEmptyRecordList,
-                        skipCheckpointValidationValue,
-                        initialPositionInStream);
+                        callProcessRecordsForEmptyRecordList, skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
         final String concurrencyToken = "testToken";
         final String anotherConcurrencyToken = "anotherTestToken";
         final String dummyKinesisShardId = "kinesis-0-0";
@@ -235,9 +232,7 @@ public class WorkerTest {
 
         Worker worker =
                 new Worker(stageName,
-                        streamletFactory,
-                        streamConfig,
-                        InitialPositionInStream.LATEST,
+                        streamletFactory, streamConfig, INITIAL_POSITION_LATEST,
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
@@ -283,9 +278,7 @@ public class WorkerTest {
                 new StreamConfig(proxy,
                         maxRecords,
                         idleTimeInMilliseconds,
-                        callProcessRecordsForEmptyRecordList,
-                        skipCheckpointValidationValue,
-                        initialPositionInStream);
+                        callProcessRecordsForEmptyRecordList, skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
         KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
         @SuppressWarnings("unchecked")
         ILeaseManager<KinesisClientLease> leaseManager = mock(ILeaseManager.class);
@@ -295,8 +288,7 @@ public class WorkerTest {
         Worker worker =
                 new Worker(stageName,
                         recordProcessorFactory,
-                        streamConfig,
-                        InitialPositionInStream.TRIM_HORIZON,
+                        streamConfig, INITIAL_POSITION_TRIM_HORIZON,
                         shardPollInterval,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
@@ -621,6 +613,7 @@ public class WorkerTest {
     /**
      * Returns executor service that will be owned by the worker. This is useful to test the scenario
      * where worker shuts down the executor service also during shutdown flow.
+     *
      * @return Executor service that will be owned by the worker.
      */
     private WorkerThreadPoolExecutor getWorkerThreadPoolExecutor() {
@@ -665,7 +658,7 @@ public class WorkerTest {
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
             KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
-            lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+            lease.setCheckpoint(ExtendedSequenceNumber.AT_TIMESTAMP);
             initialLeases.add(lease);
         }
         runAndTestWorker(shardList, threadPoolSize, initialLeases, callProcessRecordsForEmptyRecordList, numberOfRecordsPerShard);
@@ -719,7 +712,7 @@ public class WorkerTest {
         final long epsilonMillis = 1000L;
         final long idleTimeInMilliseconds = 2L;
 
-        AmazonDynamoDB ddbClient = DynamoDBEmbedded.create();
+        AmazonDynamoDB ddbClient = DynamoDBEmbedded.create().amazonDynamoDB();
         LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("foo", ddbClient);
         leaseManager.createLeaseTableIfNotExists(1L, 1L);
         for (KinesisClientLease initialLease : initialLeases) {
@@ -733,19 +726,17 @@ public class WorkerTest {
                         epsilonMillis,
                         metricsFactory);
 
-        StreamConfig streamConfig =
-                new StreamConfig(kinesisProxy,
-                        maxRecords,
-                        idleTimeInMilliseconds,
-                        callProcessRecordsForEmptyRecordList,
-                        skipCheckpointValidationValue,
-                        initialPositionInStream);
+        final Date timestamp = new Date(KinesisLocalFileDataCreator.STARTING_TIMESTAMP);
+        StreamConfig streamConfig = new StreamConfig(kinesisProxy,
+                maxRecords,
+                idleTimeInMilliseconds,
+                callProcessRecordsForEmptyRecordList,
+                skipCheckpointValidationValue, InitialPositionInStreamExtended.newInitialPositionAtTimestamp(timestamp));
 
         Worker worker =
                 new Worker(stageName,
                         recordProcessorFactory,
-                        streamConfig,
-                        InitialPositionInStream.TRIM_HORIZON,
+                        streamConfig, INITIAL_POSITION_TRIM_HORIZON,
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
@@ -843,7 +834,8 @@ public class WorkerTest {
                 findShardIdsAndStreamLetsOfShardsWithOnlyOneProcessor(recordProcessorFactory);
         for (Shard shard : shardList) {
             String shardId = shard.getShardId();
-            String iterator = fileBasedProxy.getIterator(shardId, ShardIteratorType.TRIM_HORIZON.toString(), null);
+            String iterator =
+                    fileBasedProxy.getIterator(shardId, new Date(KinesisLocalFileDataCreator.STARTING_TIMESTAMP));
             List<Record> expectedRecords = fileBasedProxy.get(iterator, numRecs).getRecords();
             if (shardIdsAndStreamLetsOfShardsWithOnlyOneProcessor.containsKey(shardId)) {
                 verifyAllRecordsWereConsumedExactlyOnce(expectedRecords,
@@ -859,7 +851,8 @@ public class WorkerTest {
             Map<String, List<Record>> shardStreamletsRecords) {
         for (Shard shard : shardList) {
             String shardId = shard.getShardId();
-            String iterator = fileBasedProxy.getIterator(shardId, ShardIteratorType.TRIM_HORIZON.toString(), null);
+            String iterator =
+                    fileBasedProxy.getIterator(shardId, new Date(KinesisLocalFileDataCreator.STARTING_TIMESTAMP));
             List<Record> expectedRecords = fileBasedProxy.get(iterator, numRecs).getRecords();
             verifyAllRecordsWereConsumedAtLeastOnce(expectedRecords, shardStreamletsRecords.get(shardId));
         }

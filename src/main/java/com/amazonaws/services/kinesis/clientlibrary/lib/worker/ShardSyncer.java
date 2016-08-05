@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ class ShardSyncer {
 
     static synchronized void bootstrapShardLeases(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStream initialPositionInStream,
+            InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
         syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards);
@@ -82,7 +82,7 @@ class ShardSyncer {
      */
     static synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStream initialPositionInStream,
+            InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
         syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards);
@@ -106,7 +106,7 @@ class ShardSyncer {
     // CHECKSTYLE:OFF CyclomaticComplexity
     private static synchronized void syncShardLeases(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStream initialPosition,
+            InitialPositionInStreamExtended initialPosition,
             boolean cleanupLeasesOfCompletedShards)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
         List<Shard> shards = getShardList(kinesisProxy);
@@ -327,15 +327,15 @@ class ShardSyncer {
      * when persisting the leases in DynamoDB will ensure that we recover gracefully if we fail
      * before creating all the leases.
      * 
-     * @param shardIds Set of all shardIds in Kinesis (we'll create new leases based on this set)
+     * @param shards List of all shards in Kinesis (we'll create new leases based on this set)
      * @param currentLeases List of current leases
-     * @param initialPosition One of LATEST or TRIM_HORIZON. We'll start fetching records from that location in the
-     *        shard (when an application starts up for the first time - and there are no checkpoints).
+     * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. We'll start fetching records from that
+     *        location in the shard (when an application starts up for the first time - and there are no checkpoints).
      * @return List of new leases to create sorted by starting sequenceNumber of the corresponding shard
      */
     static List<KinesisClientLease> determineNewLeasesToCreate(List<Shard> shards,
             List<KinesisClientLease> currentLeases,
-            InitialPositionInStream initialPosition) {
+            InitialPositionInStreamExtended initialPosition) {
         Map<String, KinesisClientLease> shardIdToNewLeaseMap = new HashMap<String, KinesisClientLease>();
         Map<String, Shard> shardIdToShardMapOfAllKinesisShards = constructShardIdToShardMap(shards);
 
@@ -364,7 +364,32 @@ class ShardSyncer {
                                 shardIdToShardMapOfAllKinesisShards,
                                 shardIdToNewLeaseMap,
                                 memoizationContext);
-                if (isDescendant) {
+
+                /**
+                 * If the shard is a descendant and the specified initial position is AT_TIMESTAMP, then the
+                 * checkpoint should be set to AT_TIMESTAMP, else to TRIM_HORIZON. For AT_TIMESTAMP, we will add a
+                 * lease just like we do for TRIM_HORIZON. However we will only return back records with server-side
+                 * timestamp at or after the specified initial position timestamp.
+                 *
+                 * Shard structure (each level depicts a stream segment):
+                 * 0 1 2 3 4   5   - shards till epoch 102
+                 * \ / \ / |   |
+                 *  6   7  4   5   - shards from epoch 103 - 205
+                 *   \ /   |  /\
+                 *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
+                 *
+                 * Current leases: empty set
+                 *
+                 * For the above example, suppose the initial position in stream is set to AT_TIMESTAMP with
+                 * timestamp value 206. We will then create new leases for all the shards (with checkpoint set to
+                 * AT_TIMESTAMP), including the ancestor shards with epoch less than 206. However as we begin
+                 * processing the ancestor shards, their checkpoints would be updated to SHARD_END and their leases
+                 * would then be deleted since they won't have records with server-side timestamp at/after 206. And
+                 * after that we will begin processing the descendant shards with epoch at/after 206 and we will
+                 * return the records that meet the timestamp requirement for these shards.
+                 */
+                if (isDescendant && !initialPosition.getInitialPositionInStream()
+                        .equals(InitialPositionInStream.AT_TIMESTAMP)) {
                     newLease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
                 } else {
                     newLease.setCheckpoint(convertToCheckpoint(initialPosition));
@@ -388,8 +413,10 @@ class ShardSyncer {
      * Create leases for the ancestors of this shard as required.
      * See javadoc of determineNewLeasesToCreate() for rules and example.
      * 
-     * @param shardIds Ancestors of these shards will be considered for addition into the new lease map
-     * @param shardIdsOfCurrentLeases
+     * @param shardId The shardId to check.
+     * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. We'll start fetching records from that
+     *        location in the shard (when an application starts up for the first time - and there are no checkpoints).
+     * @param shardIdsOfCurrentLeases The shardIds for the current leases.
      * @param shardIdToShardMapOfAllKinesisShards ShardId->Shard map containing all shards obtained via DescribeStream.
      * @param shardIdToLeaseMapOfNewShards Add lease POJOs corresponding to ancestors to this map.
      * @param memoizationContext Memoization of shards that have been evaluated as part of the evaluation
@@ -397,7 +424,7 @@ class ShardSyncer {
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
     static boolean checkIfDescendantAndAddNewLeasesForAncestors(String shardId,
-            InitialPositionInStream initialPosition,
+            InitialPositionInStreamExtended initialPosition,
             Set<String> shardIdsOfCurrentLeases,
             Map<String, Shard> shardIdToShardMapOfAllKinesisShards,
             Map<String, KinesisClientLease> shardIdToLeaseMapOfNewShards,
@@ -449,7 +476,9 @@ class ShardSyncer {
                                 shardIdToLeaseMapOfNewShards.put(parentShardId, lease);
                             }
 
-                            if (descendantParentShardIds.contains(parentShardId)) {
+                            if (descendantParentShardIds.contains(parentShardId)
+                                    && !initialPosition.getInitialPositionInStream()
+                                        .equals(InitialPositionInStream.AT_TIMESTAMP)) {
                                 lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
                             } else {
                                 lease.setCheckpoint(convertToCheckpoint(initialPosition));
@@ -457,8 +486,13 @@ class ShardSyncer {
                         }
                     }
                 } else {
-                    // This shard should be included, if the customer wants to process all records in the stream.
-                    if (initialPosition.equals(InitialPositionInStream.TRIM_HORIZON)) {
+                    // This shard should be included, if the customer wants to process all records in the stream or
+                    // if the initial position is AT_TIMESTAMP. For AT_TIMESTAMP, we will add a lease just like we do
+                    // for TRIM_HORIZON. However we will only return back records with server-side timestamp at or
+                    // after the specified initial position timestamp.
+                    if (initialPosition.getInitialPositionInStream().equals(InitialPositionInStream.TRIM_HORIZON)
+                            || initialPosition.getInitialPositionInStream()
+                                .equals(InitialPositionInStream.AT_TIMESTAMP)) {
                         isDescendant = true;
                     }
                 }
@@ -737,13 +771,15 @@ class ShardSyncer {
         return openShards;
     }
 
-    private static ExtendedSequenceNumber convertToCheckpoint(InitialPositionInStream position) {
+    private static ExtendedSequenceNumber convertToCheckpoint(InitialPositionInStreamExtended position) {
         ExtendedSequenceNumber checkpoint = null;
         
-        if (position.equals(InitialPositionInStream.TRIM_HORIZON)) {
+        if (position.getInitialPositionInStream().equals(InitialPositionInStream.TRIM_HORIZON)) {
             checkpoint = ExtendedSequenceNumber.TRIM_HORIZON;
-        } else if (position.equals(InitialPositionInStream.LATEST)) {
+        } else if (position.getInitialPositionInStream().equals(InitialPositionInStream.LATEST)) {
             checkpoint = ExtendedSequenceNumber.LATEST;
+        } else if (position.getInitialPositionInStream().equals(InitialPositionInStream.AT_TIMESTAMP)) {
+            checkpoint = ExtendedSequenceNumber.AT_TIMESTAMP;
         }
         
         return checkpoint;

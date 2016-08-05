@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ class StreamConfig {
     private final int maxRecords;
     private final long idleTimeInMilliseconds;
     private final boolean callProcessRecordsEvenForEmptyRecordList;
-    private InitialPositionInStream initialPositionInStream;
+    private InitialPositionInStreamExtended initialPositionInStream;
     private final boolean validateSequenceNumberBeforeCheckpointing;
 
     /**
@@ -42,7 +42,7 @@ class StreamConfig {
             long idleTimeInMilliseconds,
             boolean callProcessRecordsEvenForEmptyRecordList,
             boolean validateSequenceNumberBeforeCheckpointing,
-            InitialPositionInStream initialPositionInStream) {
+            InitialPositionInStreamExtended initialPositionInStream) {
         this.streamProxy = proxy;
         this.maxRecords = maxRecords;
         this.idleTimeInMilliseconds = idleTimeInMilliseconds;
@@ -82,7 +82,7 @@ class StreamConfig {
     /**
      * @return the initialPositionInStream
      */
-    InitialPositionInStream getInitialPositionInStream() {
+    InitialPositionInStreamExtended getInitialPositionInStream() {
         return initialPositionInStream;
     }
 
@@ -92,5 +92,4 @@ class StreamConfig {
     boolean shouldValidateSequenceNumberBeforeCheckpointing() {
         return validateSequenceNumberBeforeCheckpointing;
     }
-
 }

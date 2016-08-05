@@ -25,6 +25,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -65,7 +66,9 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
         /** Partition key associated with data record. */
         PARTITION_KEY(2),
         /** Data. */
-        DATA(3);
+        DATA(3),
+        /** Approximate arrival timestamp. */
+        APPROXIMATE_ARRIVAL_TIMESTAMP(4);
 
         private final int position;
 
@@ -149,7 +152,7 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
                 String[] strArr = str.split(",");
                 if (strArr.length != NUM_FIELDS_IN_FILE) {
                     throw new InvalidArgumentException("Unexpected input in file."
-                            + "Expected format (shardId, sequenceNumber, partitionKey, dataRecord)");
+                            + "Expected format (shardId, sequenceNumber, partitionKey, dataRecord, timestamp)");
                 }
                 String shardId = strArr[LocalFileFields.SHARD_ID.getPosition()];
                 Record record = new Record();
@@ -157,6 +160,9 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
                 record.setPartitionKey(strArr[LocalFileFields.PARTITION_KEY.getPosition()]);
                 ByteBuffer byteBuffer = encoder.encode(CharBuffer.wrap(strArr[LocalFileFields.DATA.getPosition()]));
                 record.setData(byteBuffer);
+                Date timestamp =
+                        new Date(Long.parseLong(strArr[LocalFileFields.APPROXIMATE_ARRIVAL_TIMESTAMP.getPosition()]));
+                record.setApproximateArrivalTimestamp(timestamp);
                 List<Record> shardRecords = shardedDataRecords.get(shardId);
                 if (shardRecords == null) {
                     shardRecords = new ArrayList<Record>();
@@ -221,11 +227,8 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
         return new IteratorInfo(splits[0], splits[1]);
     }
 
-    /*
-     * (non-Javadoc)
-     *
-     * @see com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy#getIterator(java.lang.String,
-     * java.lang.String, java.lang.String)
+    /**
+     * {@inheritDoc}
      */
     @Override
     public String getIterator(String shardId, String iteratorEnum, String sequenceNumber)
@@ -260,6 +263,77 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
         } else {
             throw new IllegalArgumentException("IteratorEnum value was invalid: " + iteratorEnum);
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String getIterator(String shardId, String iteratorEnum)
+        throws ResourceNotFoundException, InvalidArgumentException {
+        /*
+         * If we don't have records in this shard, any iterator will return the empty list. Using a
+         * sequence number of 1 on an empty shard will give this behavior.
+         */
+        List<Record> shardRecords = shardedDataRecords.get(shardId);
+        if (shardRecords == null) {
+            throw new ResourceNotFoundException(shardId + " does not exist");
+        }
+        if (shardRecords.isEmpty()) {
+            return serializeIterator(shardId, "1");
+        }
+
+        final String serializedIterator;
+        if (ShardIteratorType.LATEST.toString().equals(iteratorEnum)) {
+            /*
+             * If we do have records, LATEST should return an iterator that can be used to read the
+             * last record. Our iterators are inclusive for convenience.
+             */
+            Record last = shardRecords.get(shardRecords.size() - 1);
+            serializedIterator = serializeIterator(shardId, last.getSequenceNumber());
+        } else if (ShardIteratorType.TRIM_HORIZON.toString().equals(iteratorEnum)) {
+            serializedIterator = serializeIterator(shardId, shardRecords.get(0).getSequenceNumber());
+        } else {
+            throw new IllegalArgumentException("IteratorEnum value was invalid: " + iteratorEnum);
+        }
+        return serializedIterator;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String getIterator(String shardId, Date timestamp)
+        throws ResourceNotFoundException, InvalidArgumentException {
+        /*
+         * If we don't have records in this shard, any iterator will return the empty list. Using a
+         * sequence number of 1 on an empty shard will give this behavior.
+         */
+        List<Record> shardRecords = shardedDataRecords.get(shardId);
+        if (shardRecords == null) {
+            throw new ResourceNotFoundException(shardId + " does not exist");
+        }
+        if (shardRecords.isEmpty()) {
+            return serializeIterator(shardId, "1");
+        }
+
+        final String serializedIterator;
+        if (timestamp != null) {
+            String seqNumAtTimestamp = findSequenceNumberAtTimestamp(shardRecords, timestamp);
+            serializedIterator = serializeIterator(shardId, seqNumAtTimestamp);
+        } else {
+            throw new IllegalArgumentException("Timestamp must be specified for AT_TIMESTAMP iterator");
+        }
+        return serializedIterator;
+    }
+
+    private String findSequenceNumberAtTimestamp(final List<Record> shardRecords, final Date timestamp) {
+        for (Record rec : shardRecords) {
+            if (rec.getApproximateArrivalTimestamp().getTime() >= timestamp.getTime()) {
+                return rec.getSequenceNumber();
+            }
+        }
+        return null;
     }
 
     /*

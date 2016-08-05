@@ -66,7 +66,8 @@ public class ProcessTaskTest {
     private final boolean callProcessRecordsForEmptyRecordList = true;
     // We don't want any of these tests to run checkpoint validation
     private final boolean skipCheckpointValidationValue = false;
-    private final InitialPositionInStream initialPositionInStream = InitialPositionInStream.LATEST;
+    private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
 
     private @Mock KinesisDataFetcher mockDataFetcher;
     private @Mock IRecordProcessor mockRecordProcessor;
@@ -84,7 +85,8 @@ public class ProcessTaskTest {
         // Set up process task
         final StreamConfig config =
                 new StreamConfig(null, maxRecords, idleTimeMillis, callProcessRecordsForEmptyRecordList,
-                        skipCheckpointValidationValue, initialPositionInStream);
+                        skipCheckpointValidationValue,
+                        INITIAL_POSITION_LATEST);
         final ShardInfo shardInfo = new ShardInfo(shardId, null, null);
         processTask = new ProcessTask(
                 shardInfo, config, mockRecordProcessor, mockCheckpointer, mockDataFetcher, taskBackoffTimeMillis);

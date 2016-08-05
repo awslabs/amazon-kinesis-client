@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ class ShutdownTask implements ITask {
     private final ShutdownReason reason;
     private final IKinesisProxy kinesisProxy;
     private final ILeaseManager<KinesisClientLease> leaseManager;
-    private final InitialPositionInStream initialPositionInStream;
+    private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
     private final TaskType taskType = TaskType.SHUTDOWN;
     private final long backoffTimeMillis;
@@ -56,7 +56,7 @@ class ShutdownTask implements ITask {
             RecordProcessorCheckpointer recordProcessorCheckpointer,
             ShutdownReason reason,
             IKinesisProxy kinesisProxy,
-            InitialPositionInStream initialPositionInStream,
+            InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards,
             ILeaseManager<KinesisClientLease> leaseManager,
             long backoffTimeMillis) {

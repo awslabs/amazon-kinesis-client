@@ -86,9 +86,9 @@ public class SequenceNumberValidatorTest {
             IKinesisProxy proxy,
             boolean validateWithGetIterator) {
 
-        String[] nonNumericStrings =
-        { null, "bogus-sequence-number", SentinelCheckpoint.LATEST.toString(),
-                SentinelCheckpoint.SHARD_END.toString(), SentinelCheckpoint.TRIM_HORIZON.toString() };
+        String[] nonNumericStrings = { null, "bogus-sequence-number", SentinelCheckpoint.LATEST.toString(),
+                SentinelCheckpoint.SHARD_END.toString(), SentinelCheckpoint.TRIM_HORIZON.toString(),
+                SentinelCheckpoint.AT_TIMESTAMP.toString() };
 
         for (String nonNumericString : nonNumericStrings) {
             try {

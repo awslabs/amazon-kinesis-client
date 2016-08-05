@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.clientlibrary.proxies;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -40,6 +41,7 @@ import com.amazonaws.services.kinesis.model.PutRecordRequest;
 import com.amazonaws.services.kinesis.model.PutRecordResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.Shard;
+import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamStatus;
 
 /**
@@ -263,12 +265,50 @@ public class KinesisProxy implements IKinesisProxyExtended {
      */
     @Override
     public String getIterator(String shardId, String iteratorType, String sequenceNumber) {
+        if (!iteratorType.equals(ShardIteratorType.AT_SEQUENCE_NUMBER.toString()) || !iteratorType.equals(
+                ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString())) {
+            LOG.info("This method should only be used for AT_SEQUENCE_NUMBER and AFTER_SEQUENCE_NUMBER "
+                    + "ShardIteratorTypes. For methods to use with other ShardIteratorTypes, see IKinesisProxy.java");
+        }
         final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
         getShardIteratorRequest.setRequestCredentials(credentialsProvider.getCredentials());
         getShardIteratorRequest.setStreamName(streamName);
         getShardIteratorRequest.setShardId(shardId);
         getShardIteratorRequest.setShardIteratorType(iteratorType);
         getShardIteratorRequest.setStartingSequenceNumber(sequenceNumber);
+        getShardIteratorRequest.setTimestamp(null);
+        final GetShardIteratorResult response = client.getShardIterator(getShardIteratorRequest);
+        return response.getShardIterator();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String getIterator(String shardId, String iteratorType) {
+        final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
+        getShardIteratorRequest.setRequestCredentials(credentialsProvider.getCredentials());
+        getShardIteratorRequest.setStreamName(streamName);
+        getShardIteratorRequest.setShardId(shardId);
+        getShardIteratorRequest.setShardIteratorType(iteratorType);
+        getShardIteratorRequest.setStartingSequenceNumber(null);
+        getShardIteratorRequest.setTimestamp(null);
+        final GetShardIteratorResult response = client.getShardIterator(getShardIteratorRequest);
+        return response.getShardIterator();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String getIterator(String shardId, Date timestamp) {
+        final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
+        getShardIteratorRequest.setRequestCredentials(credentialsProvider.getCredentials());
+        getShardIteratorRequest.setStreamName(streamName);
+        getShardIteratorRequest.setShardId(shardId);
+        getShardIteratorRequest.setShardIteratorType(ShardIteratorType.AT_TIMESTAMP);
+        getShardIteratorRequest.setStartingSequenceNumber(null);
+        getShardIteratorRequest.setTimestamp(timestamp);
         final GetShardIteratorResult response = client.getShardIterator(getShardIteratorRequest);
         return response.getShardIterator();
     }

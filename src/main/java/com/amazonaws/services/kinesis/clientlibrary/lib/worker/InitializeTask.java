@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ class InitializeTask implements ITask {
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     // Back off for this interval if we encounter a problem (exception)
     private final long backoffTimeMillis;
+    private final StreamConfig streamConfig;
 
     /**
      * Constructor.
@@ -50,13 +51,15 @@ class InitializeTask implements ITask {
             ICheckpoint checkpoint,
             RecordProcessorCheckpointer recordProcessorCheckpointer,
             KinesisDataFetcher dataFetcher,
-            long backoffTimeMillis) {
+            long backoffTimeMillis,
+            StreamConfig streamConfig) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.checkpoint = checkpoint;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
         this.dataFetcher = dataFetcher;
         this.backoffTimeMillis = backoffTimeMillis;
+        this.streamConfig = streamConfig;
     }
 
     /*
@@ -74,7 +77,7 @@ class InitializeTask implements ITask {
             LOG.debug("Initializing ShardId " + shardInfo.getShardId());
             ExtendedSequenceNumber initialCheckpoint = checkpoint.getCheckpoint(shardInfo.getShardId());
 
-            dataFetcher.initialize(initialCheckpoint.getSequenceNumber());
+            dataFetcher.initialize(initialCheckpoint.getSequenceNumber(), streamConfig.getInitialPositionInStream());
             recordProcessorCheckpointer.setLargestPermittedCheckpointValue(initialCheckpoint);
             recordProcessorCheckpointer.setInitialCheckpointValue(initialCheckpoint);
 
