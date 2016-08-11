@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.proxies;
 
 import java.nio.ByteBuffer;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 
@@ -121,6 +122,40 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
         boolean success = false;
         try {
             String response = other.getIterator(shardId, iteratorEnum, sequenceNumber);
+            success = true;
+            return response;
+        } finally {
+            MetricsHelper.addSuccessAndLatency(getIteratorMetric, startTime, success, MetricsLevel.DETAILED);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String getIterator(String shardId, String iteratorEnum)
+        throws ResourceNotFoundException, InvalidArgumentException {
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        try {
+            String response = other.getIterator(shardId, iteratorEnum);
+            success = true;
+            return response;
+        } finally {
+            MetricsHelper.addSuccessAndLatency(getIteratorMetric, startTime, success, MetricsLevel.DETAILED);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String getIterator(String shardId, Date timestamp)
+        throws ResourceNotFoundException, InvalidArgumentException {
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        try {
+            String response = other.getIterator(shardId, timestamp);
             success = true;
             return response;
         } finally {

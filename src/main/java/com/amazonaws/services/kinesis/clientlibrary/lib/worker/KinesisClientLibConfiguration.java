@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.util.Date;
 import java.util.Set;
 
 import com.amazonaws.ClientConfiguration;
@@ -185,6 +186,7 @@ public class KinesisClientLibConfiguration {
     private int maxLeasesToStealAtOneTime;
     private int initialLeaseTableReadCapacity;
     private int initialLeaseTableWriteCapacity;
+    private InitialPositionInStreamExtended initialPositionInStreamExtended;
 
     /**
      * Constructor.
@@ -263,7 +265,6 @@ public class KinesisClientLibConfiguration {
      *        with a call to Amazon Kinesis before checkpointing for calls to
      *        {@link RecordProcessorCheckpointer#checkpoint(String)}
      * @param regionName The region name for the service
-     * 
      */
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
@@ -330,6 +331,8 @@ public class KinesisClientLibConfiguration {
         this.maxLeasesToStealAtOneTime = DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME;
         this.initialLeaseTableReadCapacity = DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY;
         this.initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
+        this.initialPositionInStreamExtended =
+                InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
     }
 
     // Check if value is positive, otherwise throw an exception
@@ -580,6 +583,22 @@ public class KinesisClientLibConfiguration {
         return initialLeaseTableWriteCapacity;
     }
 
+    /**
+     * Keeping it protected to forbid outside callers from depending on this internal object.
+     * @return The initialPositionInStreamExtended object.
+     */
+    protected InitialPositionInStreamExtended getInitialPositionInStreamExtended() {
+        return initialPositionInStreamExtended;
+    }
+
+    /**
+     * @return The timestamp from where we need to start the application.
+     * Valid only for initial position of type AT_TIMESTAMP, returns null for other positions.
+     */
+    public Date getTimestampAtInitialPositionInStream() {
+        return initialPositionInStreamExtended.getTimestamp();
+    }
+
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 190 LINES
     /**
      * @param tableName name of the lease table in DynamoDB
@@ -600,13 +619,25 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
-     * @param initialPositionInStream One of LATEST or TRIM_HORIZON. The Amazon Kinesis Client Library will start
-     *        fetching records from this position when the application starts up if there are no checkpoints. If there
-     *        are checkpoints, we will process records from the checkpoint position.
+     * @param initialPositionInStream One of LATEST or TRIM_HORIZON. The Amazon Kinesis Client Library
+     *        will start fetching records from this position when the application starts up if there are no checkpoints.
+     *        If there are checkpoints, we will process records from the checkpoint position.
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withInitialPositionInStream(InitialPositionInStream initialPositionInStream) {
         this.initialPositionInStream = initialPositionInStream;
+        this.initialPositionInStreamExtended =
+                InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
+        return this;
+    }
+
+    /**
+     * @param timestamp The timestamp to use with the AT_TIMESTAMP value for initialPositionInStream.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withTimestampAtInitialPositionInStream(Date timestamp) {
+        this.initialPositionInStream = InitialPositionInStream.AT_TIMESTAMP;
+        this.initialPositionInStreamExtended = InitialPositionInStreamExtended.newInitialPositionAtTimestamp(timestamp);
         return this;
     }
 

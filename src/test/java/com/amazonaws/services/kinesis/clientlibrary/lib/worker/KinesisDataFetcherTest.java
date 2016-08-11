@@ -20,6 +20,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import org.junit.Assert;
@@ -46,9 +47,14 @@ public class KinesisDataFetcherTest {
 
     private static final int MAX_RECORDS = 1;
     private static final String SHARD_ID = "shardId-1";
-    private static final String AFTER_SEQUENCE_NUMBER = ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString();
     private static final String AT_SEQUENCE_NUMBER = ShardIteratorType.AT_SEQUENCE_NUMBER.toString();
     private static final ShardInfo SHARD_INFO = new ShardInfo(SHARD_ID, null, null);
+    private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
+    private static final InitialPositionInStreamExtended INITIAL_POSITION_TRIM_HORIZON =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final InitialPositionInStreamExtended INITIAL_POSITION_AT_TIMESTAMP =
+            InitialPositionInStreamExtended.newInitialPositionAtTimestamp(new Date(1000));
 
     /**
      * @throws java.lang.Exception
@@ -63,7 +69,9 @@ public class KinesisDataFetcherTest {
      */
     @Test
     public final void testInitializeLatest() throws Exception {
-        testInitializeAndFetch(ShardIteratorType.LATEST.toString(), ShardIteratorType.LATEST.toString());
+        testInitializeAndFetch(ShardIteratorType.LATEST.toString(),
+                ShardIteratorType.LATEST.toString(),
+                INITIAL_POSITION_LATEST);
     }
 
     /**
@@ -71,15 +79,28 @@ public class KinesisDataFetcherTest {
      */
     @Test
     public final void testInitializeTimeZero() throws Exception {
-        testInitializeAndFetch(ShardIteratorType.TRIM_HORIZON.toString(), ShardIteratorType.TRIM_HORIZON.toString());
+        testInitializeAndFetch(ShardIteratorType.TRIM_HORIZON.toString(),
+                ShardIteratorType.TRIM_HORIZON.toString(),
+                INITIAL_POSITION_TRIM_HORIZON);
     }
+
+    /**
+     * Test initialize() with the AT_TIMESTAMP iterator instruction
+     */
+    @Test
+    public final void testInitializeAtTimestamp() throws Exception {
+        testInitializeAndFetch(ShardIteratorType.AT_TIMESTAMP.toString(),
+                ShardIteratorType.AT_TIMESTAMP.toString(),
+                INITIAL_POSITION_AT_TIMESTAMP);
+    }
+
 
     /**
      * Test initialize() when a flushpoint exists.
      */
     @Test
     public final void testInitializeFlushpoint() throws Exception {
-        testInitializeAndFetch("foo", "123");
+        testInitializeAndFetch("foo", "123", INITIAL_POSITION_LATEST);
     }
 
     /**
@@ -87,7 +108,7 @@ public class KinesisDataFetcherTest {
      */
     @Test(expected = IllegalArgumentException.class)
     public final void testInitializeInvalid() throws Exception {
-        testInitializeAndFetch("foo", null);
+        testInitializeAndFetch("foo", null, INITIAL_POSITION_LATEST);
     }
 
     @Test
@@ -114,31 +135,36 @@ public class KinesisDataFetcherTest {
         when(kinesis.get(iteratorB, MAX_RECORDS)).thenReturn(outputB);
 
         when(checkpoint.getCheckpoint(SHARD_ID)).thenReturn(new ExtendedSequenceNumber(seqA));
-        fetcher.initialize(seqA);
+        fetcher.initialize(seqA, null);
 
-        fetcher.advanceIteratorTo(seqA);
+        fetcher.advanceIteratorTo(seqA, null);
         Assert.assertEquals(recordsA, fetcher.getRecords(MAX_RECORDS).getRecords());
 
-        fetcher.advanceIteratorTo(seqB);
+        fetcher.advanceIteratorTo(seqB, null);
         Assert.assertEquals(recordsB, fetcher.getRecords(MAX_RECORDS).getRecords());
     }
 
     @Test
-    public void testadvanceIteratorToTrimHorizonAndLatest() {
+    public void testadvanceIteratorToTrimHorizonLatestAndAtTimestamp() {
         IKinesisProxy kinesis = mock(IKinesisProxy.class);
 
         KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
 
         String iteratorHorizon = "horizon";
-        when(kinesis.getIterator(SHARD_ID,
-                ShardIteratorType.TRIM_HORIZON.toString(), null)).thenReturn(iteratorHorizon);
-        fetcher.advanceIteratorTo(ShardIteratorType.TRIM_HORIZON.toString());
+        when(kinesis.getIterator(SHARD_ID, ShardIteratorType.TRIM_HORIZON.toString())).thenReturn(iteratorHorizon);
+        fetcher.advanceIteratorTo(ShardIteratorType.TRIM_HORIZON.toString(), INITIAL_POSITION_TRIM_HORIZON);
         Assert.assertEquals(iteratorHorizon, fetcher.getNextIterator());
 
         String iteratorLatest = "latest";
-        when(kinesis.getIterator(SHARD_ID, ShardIteratorType.LATEST.toString(), null)).thenReturn(iteratorLatest);
-        fetcher.advanceIteratorTo(ShardIteratorType.LATEST.toString());
+        when(kinesis.getIterator(SHARD_ID, ShardIteratorType.LATEST.toString())).thenReturn(iteratorLatest);
+        fetcher.advanceIteratorTo(ShardIteratorType.LATEST.toString(), INITIAL_POSITION_LATEST);
         Assert.assertEquals(iteratorLatest, fetcher.getNextIterator());
+
+        Date timestamp  = new Date(1000L);
+        String iteratorAtTimestamp = "AT_TIMESTAMP";
+        when(kinesis.getIterator(SHARD_ID, timestamp)).thenReturn(iteratorAtTimestamp);
+        fetcher.advanceIteratorTo(ShardIteratorType.AT_TIMESTAMP.toString(), INITIAL_POSITION_AT_TIMESTAMP);
+        Assert.assertEquals(iteratorAtTimestamp, fetcher.getNextIterator());
     }
 
     @Test
@@ -149,12 +175,12 @@ public class KinesisDataFetcherTest {
 
         // Set up proxy mock methods
         KinesisProxy mockProxy = mock(KinesisProxy.class);
-        doReturn(nextIterator).when(mockProxy).getIterator(SHARD_ID, ShardIteratorType.LATEST.toString(), null);
+        doReturn(nextIterator).when(mockProxy).getIterator(SHARD_ID, ShardIteratorType.LATEST.toString());
         doThrow(new ResourceNotFoundException("Test Exception")).when(mockProxy).get(nextIterator, maxRecords);
 
         // Create data fectcher and initialize it with latest type checkpoint
         KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO);
-        dataFetcher.initialize(SentinelCheckpoint.LATEST.toString());
+        dataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
         // Call getRecords of dataFetcher which will throw an exception
         dataFetcher.getRecords(maxRecords);
 
@@ -162,24 +188,25 @@ public class KinesisDataFetcherTest {
         Assert.assertTrue("Shard should reach the end", dataFetcher.isShardEndReached());
     }
 
-    private void testInitializeAndFetch(String iteratorType, String seqNo) throws Exception {
+    private void testInitializeAndFetch(String iteratorType,
+            String seqNo,
+            InitialPositionInStreamExtended initialPositionInStream) throws Exception {
         IKinesisProxy kinesis = mock(IKinesisProxy.class);
         String iterator = "foo";
         List<Record> expectedRecords = new ArrayList<Record>();
         GetRecordsResult response = new GetRecordsResult();
         response.setRecords(expectedRecords);
 
-
-        when(kinesis.getIterator(SHARD_ID, iteratorType, null)).thenReturn(iterator);
+        when(kinesis.getIterator(SHARD_ID, initialPositionInStream.getTimestamp())).thenReturn(iterator);
         when(kinesis.getIterator(SHARD_ID, AT_SEQUENCE_NUMBER, seqNo)).thenReturn(iterator);
+        when(kinesis.getIterator(SHARD_ID, iteratorType)).thenReturn(iterator);
         when(kinesis.get(iterator, MAX_RECORDS)).thenReturn(response);
 
         ICheckpoint checkpoint = mock(ICheckpoint.class);
         when(checkpoint.getCheckpoint(SHARD_ID)).thenReturn(new ExtendedSequenceNumber(seqNo));
 
         KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
-
-        fetcher.initialize(seqNo);
+        fetcher.initialize(seqNo, initialPositionInStream);
         List<Record> actualRecords = fetcher.getRecords(MAX_RECORDS).getRecords();
 
         Assert.assertEquals(expectedRecords, actualRecords);

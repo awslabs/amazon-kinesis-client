@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -252,7 +252,8 @@ class ShardConsumer {
                                 checkpoint,
                                 recordProcessorCheckpointer,
                                 dataFetcher,
-                                taskBackoffTimeMillis);
+                                taskBackoffTimeMillis,
+                                streamConfig);
                 break;
             case PROCESSING:
                 nextTask =

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ class ShardSyncTaskManager {
     private final ILeaseManager<KinesisClientLease> leaseManager;
     private final IMetricsFactory metricsFactory;
     private final ExecutorService executorService;
-    private final InitialPositionInStream initialPositionInStream;
+    private final InitialPositionInStreamExtended initialPositionInStream;
     private boolean cleanupLeasesUponShardCompletion;
     private final long shardSyncIdleTimeMillis;
 
@@ -61,7 +61,7 @@ class ShardSyncTaskManager {
      */
     ShardSyncTaskManager(final IKinesisProxy kinesisProxy,
             final ILeaseManager<KinesisClientLease> leaseManager,
-            final InitialPositionInStream initialPositionInStream,
+            final InitialPositionInStreamExtended initialPositionInStream,
             final boolean cleanupLeasesUponShardCompletion,
             final long shardSyncIdleTimeMillis,
             final IMetricsFactory metricsFactory,

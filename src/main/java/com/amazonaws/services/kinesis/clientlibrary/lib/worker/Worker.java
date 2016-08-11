@@ -64,7 +64,7 @@ public class Worker implements Runnable {
     private final String applicationName;
     private final IRecordProcessorFactory recordProcessorFactory;
     private final StreamConfig streamConfig;
-    private final InitialPositionInStream initialPosition;
+    private final InitialPositionInStreamExtended initialPosition;
     private final ICheckpoint checkpointTracker;
     private final long idleTimeInMilliseconds;
     // Backoff time when polling to check if application has finished processing
@@ -212,8 +212,8 @@ public class Worker implements Runnable {
                         config.getMaxRecords(), config.getIdleTimeBetweenReadsInMillis(),
                         config.shouldCallProcessRecordsEvenForEmptyRecordList(),
                         config.shouldValidateSequenceNumberBeforeCheckpointing(),
-                        config.getInitialPositionInStream()),
-                config.getInitialPositionInStream(),
+                        config.getInitialPositionInStreamExtended()),
+                config.getInitialPositionInStreamExtended(),
                 config.getParentShardPollIntervalMillis(),
                 config.getShardSyncIntervalMillis(),
                 config.shouldCleanupLeasesUponShardCompletion(),
@@ -258,9 +258,9 @@ public class Worker implements Runnable {
      * @param applicationName Name of the Kinesis application
      * @param recordProcessorFactory Used to get record processor instances for processing data from shards
      * @param streamConfig Stream configuration
-     * @param initialPositionInStream One of LATEST or TRIM_HORIZON. The KinesisClientLibrary will start fetching data
-     *        from this location in the stream when an application starts up for the first time and there are no
-     *        checkpoints. If there are checkpoints, we start from the checkpoint position.
+     * @param initialPositionInStream One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. The KinesisClientLibrary will start
+     *        fetching data from this location in the stream when an application starts up for the first time and
+     *        there are no checkpoints. If there are checkpoints, we start from the checkpoint position.
      * @param parentShardPollIntervalMillis Wait for this long between polls to check if parent shards are done
      * @param shardSyncIdleTimeMillis Time between tasks to sync leases and Kinesis shards
      * @param cleanupLeasesUponShardCompletion Clean up shards we've finished processing (don't wait till they expire in
@@ -277,7 +277,7 @@ public class Worker implements Runnable {
     Worker(String applicationName,
             IRecordProcessorFactory recordProcessorFactory,
             StreamConfig streamConfig,
-            InitialPositionInStream initialPositionInStream,
+            InitialPositionInStreamExtended initialPositionInStream,
             long parentShardPollIntervalMillis,
             long shardSyncIdleTimeMillis,
             boolean cleanupLeasesUponShardCompletion,
@@ -946,8 +946,8 @@ public class Worker implements Runnable {
                             config.getIdleTimeBetweenReadsInMillis(),
                             config.shouldCallProcessRecordsEvenForEmptyRecordList(),
                             config.shouldValidateSequenceNumberBeforeCheckpointing(),
-                            config.getInitialPositionInStream()),
-                    config.getInitialPositionInStream(),
+                            config.getInitialPositionInStreamExtended()),
+                    config.getInitialPositionInStreamExtended(),
                     config.getParentShardPollIntervalMillis(),
                     config.getShardSyncIntervalMillis(),
                     config.shouldCleanupLeasesUponShardCompletion(),

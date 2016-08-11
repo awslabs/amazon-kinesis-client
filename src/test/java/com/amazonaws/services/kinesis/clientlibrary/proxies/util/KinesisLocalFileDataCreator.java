@@ -51,6 +51,17 @@ public class KinesisLocalFileDataCreator {
     private static final int PARTITION_KEY_LENGTH = 10;
     private static final int DATA_LENGTH = 40;
 
+    /**
+     * Starting timestamp - also referenced in KinesisLocalFileProxyTest.
+     */
+    public static final long STARTING_TIMESTAMP = 1462345678910L;
+
+    /**
+     * This is used to allow few records to have the same timestamps (to mimic real life scenarios).
+     * Records 5n-1 and 5n will have the same timestamp (n > 0).
+     */
+    private static final int DIVISOR = 5;
+
     private KinesisLocalFileDataCreator() {
     }
 
@@ -96,6 +107,7 @@ public class KinesisLocalFileDataCreator {
             fileWriter.write(serializedShardList);
             fileWriter.newLine();
             BigInteger sequenceNumberIncrement = new BigInteger("0");
+            long timestamp = STARTING_TIMESTAMP;
             for (int i = 0; i < numRecordsPerShard; i++) {
                 for (Shard shard : shardList) {
                     BigInteger sequenceNumber =
@@ -112,7 +124,12 @@ public class KinesisLocalFileDataCreator {
                     String partitionKey =
                             PARTITION_KEY_PREFIX + shard.getShardId() + generateRandomString(PARTITION_KEY_LENGTH);
                     String data = generateRandomString(DATA_LENGTH);
-                    String line = shard.getShardId() + "," + sequenceNumber + "," + partitionKey + "," + data;
+
+                    // Allow few records to have the same timestamps (to mimic real life scenarios).
+                    timestamp = (i % DIVISOR == 0) ? timestamp : timestamp + 1;
+                    String line = shard.getShardId() + "," + sequenceNumber + "," + partitionKey + "," + data + ","
+                            + timestamp;
+
                     fileWriter.write(line);
                     fileWriter.newLine();
                     sequenceNumberIncrement = sequenceNumberIncrement.add(BigInteger.ONE);

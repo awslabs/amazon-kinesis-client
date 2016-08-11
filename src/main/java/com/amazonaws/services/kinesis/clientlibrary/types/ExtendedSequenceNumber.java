@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -36,9 +36,10 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
     private final String sequenceNumber;
     private final long subSequenceNumber;
 
-    // Define TRIM_HORIZON and LATEST to be less than all sequence numbers
+    // Define TRIM_HORIZON, LATEST, and AT_TIMESTAMP to be less than all sequence numbers
     private static final BigInteger TRIM_HORIZON_BIG_INTEGER_VALUE = BigInteger.valueOf(-2);
     private static final BigInteger LATEST_BIG_INTEGER_VALUE = BigInteger.valueOf(-1);
+    private static final BigInteger AT_TIMESTAMP_BIG_INTEGER_VALUE = BigInteger.valueOf(-3);
 
     /**
      * Special value for LATEST.
@@ -57,6 +58,12 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
      */
     public static final ExtendedSequenceNumber TRIM_HORIZON = 
             new ExtendedSequenceNumber(SentinelCheckpoint.TRIM_HORIZON.toString());
+
+    /**
+     * Special value for AT_TIMESTAMP.
+     */
+    public static final ExtendedSequenceNumber AT_TIMESTAMP =
+            new ExtendedSequenceNumber(SentinelCheckpoint.AT_TIMESTAMP.toString());
 
     /**
      * Construct an ExtendedSequenceNumber. The sub-sequence number defaults to
@@ -87,7 +94,7 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
      * Compares this with another ExtendedSequenceNumber using these rules.
      * 
      * SHARD_END is considered greatest
-     * TRIM_HORIZON and LATEST are considered less than sequence numbers
+     * TRIM_HORIZON, LATEST and AT_TIMESTAMP are considered less than sequence numbers
      * sequence numbers are given their big integer value
      * 
      * @param extendedSequenceNumber The ExtendedSequenceNumber to compare against
@@ -183,8 +190,8 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
     /**
      * Sequence numbers are converted, sentinels are given a value of -1. Note this method is only used after special
      * logic associated with SHARD_END and the case of comparing two sentinel values has already passed, so we map
-     * sentinel values LATEST and TRIM_HORIZON to negative numbers so that they are considered less than sequence
-     * numbers.
+     * sentinel values LATEST, TRIM_HORIZON and AT_TIMESTAMP to negative numbers so that they are considered less than
+     * sequence numbers.
      * 
      * @param sequenceNumber The string to convert to big integer value
      * @return a BigInteger value representation of the sequenceNumber
@@ -196,9 +203,11 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
             return LATEST_BIG_INTEGER_VALUE;
         } else if (SentinelCheckpoint.TRIM_HORIZON.toString().equals(sequenceNumber)) {
             return TRIM_HORIZON_BIG_INTEGER_VALUE;
+        } else if (SentinelCheckpoint.AT_TIMESTAMP.toString().equals(sequenceNumber)) {
+            return AT_TIMESTAMP_BIG_INTEGER_VALUE;
         } else {
-            throw new IllegalArgumentException("Expected a string of digits, TRIM_HORIZON, or LATEST but received "
-                    + sequenceNumber);
+            throw new IllegalArgumentException("Expected a string of digits, TRIM_HORIZON, LATEST or AT_TIMESTAMP but "
+                    + "received " + sequenceNumber);
         }
     }
 

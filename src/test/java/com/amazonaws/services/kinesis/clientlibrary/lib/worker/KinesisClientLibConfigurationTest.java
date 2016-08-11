@@ -15,6 +15,10 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import junit.framework.Assert;
 
 import org.junit.Test;
@@ -30,6 +34,8 @@ import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
+
+import java.util.Date;
 
 public class KinesisClientLibConfigurationTest {
     private static final long INVALID_LONG = 0L;
@@ -58,7 +64,7 @@ public class KinesisClientLibConfigurationTest {
                 new KinesisClientLibConfiguration(TEST_STRING,
                         TEST_STRING,
                         TEST_STRING,
-                        null,
+                        InitialPositionInStream.LATEST,
                         null,
                         null,
                         null,
@@ -95,7 +101,7 @@ public class KinesisClientLibConfigurationTest {
                         new KinesisClientLibConfiguration(TEST_STRING,
                                 TEST_STRING,
                                 TEST_STRING,
-                                null,
+                                InitialPositionInStream.LATEST,
                                 null,
                                 null,
                                 null,
@@ -128,7 +134,7 @@ public class KinesisClientLibConfigurationTest {
                         new KinesisClientLibConfiguration(TEST_STRING,
                                 TEST_STRING,
                                 TEST_STRING,
-                                null,
+                                InitialPositionInStream.LATEST,
                                 null,
                                 null,
                                 null,
@@ -345,5 +351,51 @@ public class KinesisClientLibConfigurationTest {
         config.withMetricsEnabledDimensions(ImmutableSet.of("WorkerIdentifier"));
         // Operation dimension should always be there.
         assertEquals(config.getMetricsEnabledDimensions(), ImmutableSet.of("Operation", "WorkerIdentifier"));
+    }
+
+    @Test
+    public void testKCLConfigurationWithInvalidInitialPositionInStream() {
+        KinesisClientLibConfiguration config;
+        try {
+            config = new KinesisClientLibConfiguration("TestApplication",
+                    "TestStream",
+                    null,
+                    "TestWorker").withInitialPositionInStream(InitialPositionInStream.AT_TIMESTAMP);
+            fail("Should have thrown");
+        } catch (Exception e) {
+            assertTrue(e instanceof IllegalArgumentException);
+        }
+
+        try {
+            config = new KinesisClientLibConfiguration("TestApplication",
+                    "TestStream",
+                    null, "TestWorker").withTimestampAtInitialPositionInStream(null);
+            fail("Should have thrown");
+        } catch (Exception e) {
+            assertTrue(e instanceof IllegalArgumentException);
+        }
+
+        try {
+            Date timestamp = new Date(1000L);
+            config = new KinesisClientLibConfiguration("TestApplication",
+                    "TestStream", null, "TestWorker").withTimestampAtInitialPositionInStream(timestamp);
+            assertEquals(config.getInitialPositionInStreamExtended().getInitialPositionInStream(),
+                    InitialPositionInStream.AT_TIMESTAMP);
+            assertEquals(config.getInitialPositionInStreamExtended().getTimestamp(), timestamp);
+        } catch (Exception e) {
+            fail("Should not have thrown");
+        }
+
+        try {
+            config = new KinesisClientLibConfiguration("TestApplication",
+                    "TestStream",
+                    null,
+                    "TestWorker").withInitialPositionInStream(InitialPositionInStream.LATEST);
+            assertEquals(config.getInitialPositionInStreamExtended().getInitialPositionInStream(),
+                    InitialPositionInStream.LATEST);
+            assertNull(config.getInitialPositionInStreamExtended().getTimestamp());
+        } catch (Exception e) {
+            fail("Should not have thrown");
+        }
     }
 }

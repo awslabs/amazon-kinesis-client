@@ -18,6 +18,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.when;
 import java.io.File;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.concurrent.ExecutionException;
@@ -77,7 +79,8 @@ public class ShardConsumerTest {
     private final boolean cleanupLeasesOfCompletedShards = true;
     // We don't want any of these tests to run checkpoint validation
     private final boolean skipCheckpointValidationValue = false;
-    private final InitialPositionInStream initialPositionInStream = InitialPositionInStream.LATEST;
+    private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
 
     // Use Executors.newFixedThreadPool since it returns ThreadPoolExecutor, which is
     // ... a non-final public class, and so can be mocked and spied.
@@ -102,8 +105,7 @@ public class ShardConsumerTest {
                         1,
                         10,
                         callProcessRecordsForEmptyRecordList,
-                        skipCheckpointValidationValue,
-                        initialPositionInStream);
+                        skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
         ShardConsumer consumer =
                 new ShardConsumer(shardInfo,
@@ -153,8 +155,7 @@ public class ShardConsumerTest {
                         1,
                         10,
                         callProcessRecordsForEmptyRecordList,
-                        skipCheckpointValidationValue,
-                        initialPositionInStream);
+                        skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
         ShardConsumer consumer =
                 new ShardConsumer(shardInfo,
@@ -198,8 +199,7 @@ public class ShardConsumerTest {
                         1,
                         10,
                         callProcessRecordsForEmptyRecordList,
-                        skipCheckpointValidationValue,
-                        initialPositionInStream);
+                        skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
         ShardConsumer consumer =
                 new ShardConsumer(shardInfo,
@@ -287,8 +287,7 @@ public class ShardConsumerTest {
                         maxRecords,
                         idleTimeMS,
                         callProcessRecordsForEmptyRecordList,
-                        skipCheckpointValidationValue,
-                        initialPositionInStream);
+                        skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
         ShardInfo shardInfo = new ShardInfo(streamShardId, testConcurrencyToken, null);
         ShardConsumer consumer =
@@ -334,9 +333,100 @@ public class ShardConsumerTest {
         executorService.shutdown();
         executorService.awaitTermination(60, TimeUnit.SECONDS);
 
-        String iterator = fileBasedProxy.getIterator(streamShardId, ShardIteratorType.TRIM_HORIZON.toString(), null);
+        String iterator = fileBasedProxy.getIterator(streamShardId, ShardIteratorType.TRIM_HORIZON.toString());
         List<Record> expectedRecords = toUserRecords(fileBasedProxy.get(iterator, numRecs).getRecords());
         verifyConsumedRecords(expectedRecords, processor.getProcessedRecords());
+        file.delete();
+    }
+
+    /**
+     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardConsumer#consumeShard()}
+     * that starts from initial position of type AT_TIMESTAMP.
+     */
+    @Test
+    public final void testConsumeShardWithInitialPositionAtTimestamp() throws Exception {
+        int numRecs = 7;
+        BigInteger startSeqNum = BigInteger.ONE;
+        Date timestamp = new Date(KinesisLocalFileDataCreator.STARTING_TIMESTAMP + 3);
+        InitialPositionInStreamExtended atTimestamp =
+                InitialPositionInStreamExtended.newInitialPositionAtTimestamp(timestamp);
+        String streamShardId = "kinesis-0-0";
+        String testConcurrencyToken = "testToken";
+        File file =
+                KinesisLocalFileDataCreator.generateTempDataFile(1,
+                        "kinesis-0-",
+                        numRecs,
+                        startSeqNum,
+                        "unitTestSCT002");
+
+        IKinesisProxy fileBasedProxy = new KinesisLocalFileProxy(file.getAbsolutePath());
+
+        final int maxRecords = 2;
+        final int idleTimeMS = 0; // keep unit tests fast
+        ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
+        checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.AT_TIMESTAMP, testConcurrencyToken);
+        @SuppressWarnings("unchecked")
+        ILeaseManager<KinesisClientLease> leaseManager = mock(ILeaseManager.class);
+        when(leaseManager.getLease(anyString())).thenReturn(null);
+
+        TestStreamlet processor = new TestStreamlet();
+
+        StreamConfig streamConfig =
+                new StreamConfig(fileBasedProxy,
+                        maxRecords,
+                        idleTimeMS,
+                        callProcessRecordsForEmptyRecordList,
+                        skipCheckpointValidationValue,
+                        atTimestamp);
+
+        ShardInfo shardInfo = new ShardInfo(streamShardId, testConcurrencyToken, null);
+        ShardConsumer consumer =
+                new ShardConsumer(shardInfo,
+                        streamConfig,
+                        checkpoint,
+                        processor,
+                        leaseManager,
+                        parentShardPollIntervalMillis,
+                        cleanupLeasesOfCompletedShards,
+                        executorService,
+                        metricsFactory,
+                        taskBackoffTimeMillis);
+
+        assertThat(consumer.getCurrentState(), is(equalTo(ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        consumer.consumeShard(); // check on parent shards
+        Thread.sleep(50L);
+        consumer.consumeShard(); // start initialization
+        assertThat(consumer.getCurrentState(), is(equalTo(ShardConsumerState.INITIALIZING)));
+        consumer.consumeShard(); // initialize
+        Thread.sleep(50L);
+
+        // We expect to process all records in numRecs calls
+        for (int i = 0; i < numRecs;) {
+            boolean newTaskSubmitted = consumer.consumeShard();
+            if (newTaskSubmitted) {
+                LOG.debug("New processing task was submitted, call # " + i);
+                assertThat(consumer.getCurrentState(), is(equalTo(ShardConsumerState.PROCESSING)));
+                // CHECKSTYLE:IGNORE ModifiedControlVariable FOR NEXT 1 LINES
+                i += maxRecords;
+            }
+            Thread.sleep(50L);
+        }
+
+        assertThat(processor.getShutdownReason(), nullValue());
+        consumer.beginShutdown();
+        Thread.sleep(50L);
+        assertThat(consumer.getCurrentState(), is(equalTo(ShardConsumerState.SHUTTING_DOWN)));
+        consumer.beginShutdown();
+        assertThat(consumer.getCurrentState(), is(equalTo(ShardConsumerState.SHUTDOWN_COMPLETE)));
+        assertThat(processor.getShutdownReason(), is(equalTo(ShutdownReason.ZOMBIE)));
+
+        executorService.shutdown();
+        executorService.awaitTermination(60, TimeUnit.SECONDS);
+
+        String iterator = fileBasedProxy.getIterator(streamShardId, timestamp);
+        List<Record> expectedRecords = toUserRecords(fileBasedProxy.get(iterator, numRecs).getRecords());
+        verifyConsumedRecords(expectedRecords, processor.getProcessedRecords());
+        assertEquals(4, processor.getProcessedRecords().size());
         file.delete();
     }
 

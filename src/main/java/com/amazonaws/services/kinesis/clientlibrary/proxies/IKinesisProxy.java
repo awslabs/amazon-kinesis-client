@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.proxies;
 
 import java.nio.ByteBuffer;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 
@@ -72,7 +73,16 @@ public interface IKinesisProxy {
 
     /**
      * Fetch a shard iterator from the specified position in the shard.
-     * 
+     * This is to fetch a shard iterator for ShardIteratorType AT_SEQUENCE_NUMBER or AFTER_SEQUENCE_NUMBER which
+     * requires the starting sequence number.
+     *
+     * NOTE: Currently this method continues to fetch iterators for ShardIteratorTypes TRIM_HORIZON, LATEST,
+     * AT_SEQUENCE_NUMBER and AFTER_SEQUENCE_NUMBER.
+     * But this behavior will change in the next release, after which this method will only serve
+     * AT_SEQUENCE_NUMBER or AFTER_SEQUENCE_NUMBER ShardIteratorTypes.
+     * We recommend users who call this method directly to use the appropriate getIterator method based on the
+     * ShardIteratorType.
+     *
      * @param shardId Shard id
      * @param iteratorEnum one of: TRIM_HORIZON, LATEST, AT_SEQUENCE_NUMBER, AFTER_SEQUENCE_NUMBER
      * @param sequenceNumber the sequence number - must be null unless iteratorEnum is AT_SEQUENCE_NUMBER or
@@ -83,6 +93,31 @@ public interface IKinesisProxy {
      */
     String getIterator(String shardId, String iteratorEnum, String sequenceNumber)
         throws ResourceNotFoundException, InvalidArgumentException;
+
+    /**
+     * Fetch a shard iterator from the specified position in the shard.
+     * This is to fetch a shard iterator for ShardIteratorType LATEST or TRIM_HORIZON which doesn't require a starting
+     * sequence number.
+     *
+     * @param shardId Shard id
+     * @param iteratorEnum Either TRIM_HORIZON or LATEST.
+     * @return shard iterator which can be used to read data from Kinesis.
+     * @throws ResourceNotFoundException The Kinesis stream or shard was not found
+     * @throws InvalidArgumentException Invalid input parameters
+     */
+    String getIterator(String shardId, String iteratorEnum) throws ResourceNotFoundException, InvalidArgumentException;
+
+    /**
+     * Fetch a shard iterator from the specified position in the shard.
+     * This is to fetch a shard iterator for ShardIteratorType AT_TIMESTAMP which requires the timestamp field.
+     *
+     * @param shardId   Shard id
+     * @param timestamp The timestamp.
+     * @return shard iterator which can be used to read data from Kinesis.
+     * @throws ResourceNotFoundException The Kinesis stream or shard was not found
+     * @throws InvalidArgumentException  Invalid input parameters
+     */
+    String getIterator(String shardId, Date timestamp) throws ResourceNotFoundException, InvalidArgumentException;
 
     /**
      * @param sequenceNumberForOrdering (optional) used for record ordering
