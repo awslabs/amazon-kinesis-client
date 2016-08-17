@@ -154,6 +154,10 @@ public class KinesisClientLibConfiguration {
      */
     public static final int DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10;
 
+    /**
+     * Default Shard prioritization strategy.
+     */
+    public static final ShardPrioritization DEFAULT_SHARD_PRIORITIZATION = new NoOpShardPrioritization();
 
     private String applicationName;
     private String tableName;
@@ -187,6 +191,7 @@ public class KinesisClientLibConfiguration {
     private int initialLeaseTableReadCapacity;
     private int initialLeaseTableWriteCapacity;
     private InitialPositionInStreamExtended initialPositionInStreamExtended;
+    private ShardPrioritization shardPrioritization;
 
     /**
      * Constructor.
@@ -333,6 +338,7 @@ public class KinesisClientLibConfiguration {
         this.initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
         this.initialPositionInStreamExtended =
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
+        this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
     }
 
     // Check if value is positive, otherwise throw an exception
@@ -597,6 +603,13 @@ public class KinesisClientLibConfiguration {
      */
     public Date getTimestampAtInitialPositionInStream() {
         return initialPositionInStreamExtended.getTimestamp();
+    }
+
+    /**
+     * @return Shard prioritization strategy.
+     */
+    public ShardPrioritization getShardPrioritizationStrategy() {
+        return shardPrioritization;
     }
 
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 190 LINES
@@ -911,6 +924,18 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withInitialLeaseTableWriteCapacity(int initialLeaseTableWriteCapacity) {
         checkIsValuePositive("initialLeaseTableWriteCapacity", initialLeaseTableWriteCapacity);
         this.initialLeaseTableWriteCapacity = initialLeaseTableWriteCapacity;
+        return this;
+    }
+
+    /**
+     * @param shardPrioritization Implementation of ShardPrioritization interface that should be used during processing.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withShardPrioritizationStrategy(ShardPrioritization shardPrioritization) {
+        if (shardPrioritization == null) {
+            throw new IllegalArgumentException("shardPrioritization cannot be null");
+        }
+        this.shardPrioritization = shardPrioritization;
         return this;
     }
 }

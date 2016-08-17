@@ -297,36 +297,35 @@ class ShardConsumer {
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
     void updateState(boolean taskCompletedSuccessfully) {
+        if (currentState == ShardConsumerState.SHUTDOWN_COMPLETE) {
+            // Shutdown was completed and there nothing we can do after that
+            return;
+        }
+        if ((currentTask == null) && beginShutdown) {
+            // Shard didn't start any tasks and can be shutdown fast
+            currentState = ShardConsumerState.SHUTDOWN_COMPLETE;
+            return;
+        }
+        if (beginShutdown && currentState != ShardConsumerState.SHUTTING_DOWN) {
+            // Shard received signal to start shutdown.
+            // Whatever task we were working on should be stopped and shutdown task should be executed
+            currentState = ShardConsumerState.SHUTTING_DOWN;
+            return;
+        }
         switch (currentState) {
             case WAITING_ON_PARENT_SHARDS:
                 if (taskCompletedSuccessfully && TaskType.BLOCK_ON_PARENT_SHARDS.equals(currentTask.getTaskType())) {
-                    if (beginShutdown) {
-                        currentState = ShardConsumerState.SHUTTING_DOWN;
-                    } else {
-                        currentState = ShardConsumerState.INITIALIZING;
-                    }
-                } else if ((currentTask == null) && beginShutdown) {
-                    currentState = ShardConsumerState.SHUTDOWN_COMPLETE;
+                    currentState = ShardConsumerState.INITIALIZING;
                 }
                 break;
             case INITIALIZING:
                 if (taskCompletedSuccessfully && TaskType.INITIALIZE.equals(currentTask.getTaskType())) {
-                    if (beginShutdown) {
-                        currentState = ShardConsumerState.SHUTTING_DOWN;
-                    } else {
-                        currentState = ShardConsumerState.PROCESSING;
-                    }
-                } else if ((currentTask == null) && beginShutdown) {
-                    currentState = ShardConsumerState.SHUTDOWN_COMPLETE;
+                    currentState = ShardConsumerState.PROCESSING;
                 }
                 break;
             case PROCESSING:
                 if (taskCompletedSuccessfully && TaskType.PROCESS.equals(currentTask.getTaskType())) {
-                    if (beginShutdown) {
-                        currentState = ShardConsumerState.SHUTTING_DOWN;
-                    } else {
-                        currentState = ShardConsumerState.PROCESSING;
-                    }
+                    currentState = ShardConsumerState.PROCESSING;
                 }
                 break;
             case SHUTTING_DOWN:
@@ -334,8 +333,6 @@ class ShardConsumer {
                         || (taskCompletedSuccessfully && TaskType.SHUTDOWN.equals(currentTask.getTaskType()))) {
                     currentState = ShardConsumerState.SHUTDOWN_COMPLETE;
                 }
-                break;
-            case SHUTDOWN_COMPLETE:
                 break;
             default:
                 LOG.error("Unexpected state: " + currentState);

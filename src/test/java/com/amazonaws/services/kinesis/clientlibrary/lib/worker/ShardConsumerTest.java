@@ -92,7 +92,7 @@ public class ShardConsumerTest {
     @SuppressWarnings("unchecked")
     @Test
     public final void testInitializationStateUponFailure() throws Exception {
-        ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null);
+        ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null, ExtendedSequenceNumber.TRIM_HORIZON);
         ICheckpoint checkpoint = mock(ICheckpoint.class);
 
         when(checkpoint.getCheckpoint(anyString())).thenThrow(NullPointerException.class);
@@ -141,7 +141,7 @@ public class ShardConsumerTest {
     @SuppressWarnings("unchecked")
     @Test
     public final void testInitializationStateUponSubmissionFailure() throws Exception {
-        ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null);
+        ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null, ExtendedSequenceNumber.TRIM_HORIZON);
         ICheckpoint checkpoint = mock(ICheckpoint.class);
         ExecutorService spyExecutorService = spy(executorService);
 
@@ -189,7 +189,7 @@ public class ShardConsumerTest {
     @SuppressWarnings("unchecked")
     @Test
     public final void testRecordProcessorThrowable() throws Exception {
-        ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null);
+        ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null, ExtendedSequenceNumber.TRIM_HORIZON);
         ICheckpoint checkpoint = mock(ICheckpoint.class);
         IRecordProcessor processor = mock(IRecordProcessor.class);
         IKinesisProxy streamProxy = mock(IKinesisProxy.class);
@@ -289,7 +289,7 @@ public class ShardConsumerTest {
                         callProcessRecordsForEmptyRecordList,
                         skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
-        ShardInfo shardInfo = new ShardInfo(streamShardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(streamShardId, testConcurrencyToken, null, null);
         ShardConsumer consumer =
                 new ShardConsumer(shardInfo,
                         streamConfig,
@@ -379,7 +379,7 @@ public class ShardConsumerTest {
                         skipCheckpointValidationValue,
                         atTimestamp);
 
-        ShardInfo shardInfo = new ShardInfo(streamShardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(streamShardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         ShardConsumer consumer =
                 new ShardConsumer(shardInfo,
                         streamConfig,

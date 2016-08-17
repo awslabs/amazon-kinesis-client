@@ -19,6 +19,8 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+
 /**
  * Used to pass shard related info among different classes and as a key to the map of shard consumers.
  */
@@ -28,13 +30,18 @@ class ShardInfo {
     private final String concurrencyToken;
     // Sorted list of parent shardIds.
     private final List<String> parentShardIds;
+    private final ExtendedSequenceNumber checkpoint;
 
     /**
      * @param shardId Kinesis shardId
      * @param concurrencyToken Used to differentiate between lost and reclaimed leases
      * @param parentShardIds Parent shards of the shard identified by Kinesis shardId
+     * @param checkpoint the latest checkpoint from lease 
      */
-    public ShardInfo(String shardId, String concurrencyToken, Collection<String> parentShardIds) {
+    public ShardInfo(String shardId,
+            String concurrencyToken,
+            Collection<String> parentShardIds,
+            ExtendedSequenceNumber checkpoint) {
         this.shardId = shardId;
         this.concurrencyToken = concurrencyToken;
         this.parentShardIds = new LinkedList<String>();
@@ -44,6 +51,7 @@ class ShardInfo {
         // ShardInfo stores parent shard Ids in canonical order in the parentShardIds list.
         // This makes it easy to check for equality in ShardInfo.equals method.
         Collections.sort(this.parentShardIds);
+        this.checkpoint = checkpoint;
     }
 
     /**
@@ -68,6 +76,13 @@ class ShardInfo {
     }
 
     /**
+     * @return completion status of the shard
+     */
+    protected boolean isCompleted() {
+        return ExtendedSequenceNumber.SHARD_END.equals(checkpoint);
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -77,6 +92,7 @@ class ShardInfo {
         result = prime * result + ((concurrencyToken == null) ? 0 : concurrencyToken.hashCode());
         result = prime * result + ((parentShardIds == null) ? 0 : parentShardIds.hashCode());
         result = prime * result + ((shardId == null) ? 0 : shardId.hashCode());
+        result = prime * result + ((checkpoint == null) ? 0 : checkpoint.hashCode());
         return result;
     }
 
@@ -126,6 +142,13 @@ class ShardInfo {
         } else if (!shardId.equals(other.shardId)) {
             return false;
         }
+        if (checkpoint == null) {
+            if (other.checkpoint != null) {
+                return false;
+            }
+        } else if (!checkpoint.equals(other.checkpoint)) {
+            return false;
+        }
         return true;
     }
 
@@ -135,7 +158,44 @@ class ShardInfo {
     @Override
     public String toString() {
         return "ShardInfo [shardId=" + shardId + ", concurrencyToken=" + concurrencyToken + ", parentShardIds="
-                + parentShardIds + "]";
+                + parentShardIds + ", checkpoint=" + checkpoint + "]";
+    }
+
+    /**
+     * Builder class for ShardInfo.
+     */
+    public static class Builder {
+        private String shardId;
+        private String concurrencyToken;
+        private List<String> parentShardIds = Collections.emptyList();
+        private ExtendedSequenceNumber checkpoint = ExtendedSequenceNumber.LATEST;
+
+        public Builder() {
+        }
+
+        public Builder withShardId(String shardId) {
+            this.shardId = shardId;
+            return this;
+        }
+
+        public Builder withConcurrencyToken(String concurrencyToken) {
+            this.concurrencyToken = concurrencyToken;
+            return this;
+        }
+
+        public Builder withParentShards(List<String> parentShardIds) {
+            this.parentShardIds = parentShardIds;
+            return this;
+        }
+
+        public Builder withCheckpoint(ExtendedSequenceNumber checkpoint) {
+            this.checkpoint = checkpoint;
+            return this;
+        }
+
+        public ShardInfo build() {
+            return new ShardInfo(shardId, concurrencyToken, parentShardIds, checkpoint);
+        }
     }
 
 }
