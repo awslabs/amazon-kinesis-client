@@ -11,6 +11,8 @@ import java.util.Random;
 
 import org.junit.Test;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+
 public class ParentsFirstShardPrioritizationUnitTest {
 
     @Test(expected = IllegalArgumentException.class)
@@ -144,17 +146,54 @@ public class ParentsFirstShardPrioritizationUnitTest {
         return "shardId-" + shardNumber;
     }
 
+    /**
+     * Builder class for ShardInfo.
+     */
+    static class ShardInfoBuilder {
+        private String shardId;
+        private String concurrencyToken;
+        private List<String> parentShardIds = Collections.emptyList();
+        private ExtendedSequenceNumber checkpoint = ExtendedSequenceNumber.LATEST;
+
+        ShardInfoBuilder() {
+        }
+
+        ShardInfoBuilder withShardId(String shardId) {
+            this.shardId = shardId;
+            return this;
+        }
+
+        ShardInfoBuilder withConcurrencyToken(String concurrencyToken) {
+            this.concurrencyToken = concurrencyToken;
+            return this;
+        }
+
+        ShardInfoBuilder withParentShards(List<String> parentShardIds) {
+            this.parentShardIds = parentShardIds;
+            return this;
+        }
+
+        ShardInfoBuilder withCheckpoint(ExtendedSequenceNumber checkpoint) {
+            this.checkpoint = checkpoint;
+            return this;
+        }
+
+        ShardInfo build() {
+            return new ShardInfo(shardId, concurrencyToken, parentShardIds, checkpoint);
+        }
+    }
+
     private static ShardInfo shardInfo(String shardId, List<String> parentShardIds) {
         // copy into new list just in case ShardInfo will stop doing it
         List<String> newParentShardIds = new ArrayList<>(parentShardIds);
-        return new ShardInfo.Builder()
+        return new ShardInfoBuilder()
                 .withShardId(shardId)
                 .withParentShards(newParentShardIds)
                 .build();
     }
 
     private static ShardInfo shardInfo(String shardId, String... parentShardIds) {
-        return new ShardInfo.Builder()
+        return new ShardInfoBuilder()
                 .withShardId(shardId)
                 .withParentShards(Arrays.asList(parentShardIds))
                 .build();
