@@ -20,10 +20,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import junit.framework.Assert;
-
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
 public class ShardInfoTest {
     private static final String CONCURRENCY_TOKEN = UUID.randomUUID().toString();
@@ -37,12 +38,12 @@ public class ShardInfoTest {
         parentShardIds.add("shard-1");
         parentShardIds.add("shard-2");
 
-        testShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds);
+        testShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds, ExtendedSequenceNumber.LATEST);
     }
 
     @Test
     public void testPacboyShardInfoEqualsWithSameArgs() {
-        ShardInfo equalShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds);
+        ShardInfo equalShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds, ExtendedSequenceNumber.LATEST);
         Assert.assertTrue("Equal should return true for arguments all the same", testShardInfo.equals(equalShardInfo));
     }
 
@@ -53,18 +54,18 @@ public class ShardInfoTest {
 
     @Test
     public void testPacboyShardInfoEqualsForShardId() {
-        ShardInfo diffShardInfo = new ShardInfo("shardId-diff", CONCURRENCY_TOKEN, parentShardIds);
+        ShardInfo diffShardInfo = new ShardInfo("shardId-diff", CONCURRENCY_TOKEN, parentShardIds, ExtendedSequenceNumber.LATEST);
         Assert.assertFalse("Equal should return false with different shard id", diffShardInfo.equals(testShardInfo));
-        diffShardInfo = new ShardInfo(null, CONCURRENCY_TOKEN, parentShardIds);
+        diffShardInfo = new ShardInfo(null, CONCURRENCY_TOKEN, parentShardIds, ExtendedSequenceNumber.LATEST);
         Assert.assertFalse("Equal should return false with null shard id", diffShardInfo.equals(testShardInfo));
     }
 
     @Test
     public void testPacboyShardInfoEqualsForfToken() {
-        ShardInfo diffShardInfo = new ShardInfo(SHARD_ID, UUID.randomUUID().toString(), parentShardIds);
+        ShardInfo diffShardInfo = new ShardInfo(SHARD_ID, UUID.randomUUID().toString(), parentShardIds, ExtendedSequenceNumber.LATEST);
         Assert.assertFalse("Equal should return false with different concurrency token",
                 diffShardInfo.equals(testShardInfo));
-        diffShardInfo = new ShardInfo(SHARD_ID, null, parentShardIds);
+        diffShardInfo = new ShardInfo(SHARD_ID, null, parentShardIds, ExtendedSequenceNumber.LATEST);
         Assert.assertFalse("Equal should return false for null concurrency token", diffShardInfo.equals(testShardInfo));
     }
 
@@ -74,7 +75,7 @@ public class ShardInfoTest {
         differentlyOrderedParentShardIds.add("shard-2");
         differentlyOrderedParentShardIds.add("shard-1");
         ShardInfo shardInfoWithDifferentlyOrderedParentShardIds =
-                new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, differentlyOrderedParentShardIds);
+                new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, differentlyOrderedParentShardIds, ExtendedSequenceNumber.LATEST);
         Assert.assertTrue("Equal should return true even with parent shard Ids reordered",
                 shardInfoWithDifferentlyOrderedParentShardIds.equals(testShardInfo));
     }
@@ -84,16 +85,24 @@ public class ShardInfoTest {
         Set<String> diffParentIds = new HashSet<>();
         diffParentIds.add("shard-3");
         diffParentIds.add("shard-4");
-        ShardInfo diffShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, diffParentIds);
+        ShardInfo diffShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, diffParentIds, ExtendedSequenceNumber.LATEST);
         Assert.assertFalse("Equal should return false with different parent shard Ids",
                 diffShardInfo.equals(testShardInfo));
-        diffShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, null);
+        diffShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, null, ExtendedSequenceNumber.LATEST);
         Assert.assertFalse("Equal should return false with null parent shard Ids", diffShardInfo.equals(testShardInfo));
     }
 
     @Test
+    public void testPacboyShardInfoEqualsForCheckpoint() {
+        ShardInfo diffShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds, ExtendedSequenceNumber.SHARD_END);
+        Assert.assertFalse("Equal should return false with different checkpoint", diffShardInfo.equals(testShardInfo));
+        diffShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds, null);
+        Assert.assertFalse("Equal should return false with null checkpoint", diffShardInfo.equals(testShardInfo));
+    }
+
+    @Test
     public void testPacboyShardInfoSameHashCode() {
-        ShardInfo equalShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds);
+        ShardInfo equalShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds, ExtendedSequenceNumber.LATEST);
         Assert.assertTrue("Shard info objects should have same hashCode for the same arguments",
                 equalShardInfo.hashCode() == testShardInfo.hashCode());
     }

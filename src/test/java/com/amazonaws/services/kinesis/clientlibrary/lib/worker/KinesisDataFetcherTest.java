@@ -48,7 +48,7 @@ public class KinesisDataFetcherTest {
     private static final int MAX_RECORDS = 1;
     private static final String SHARD_ID = "shardId-1";
     private static final String AT_SEQUENCE_NUMBER = ShardIteratorType.AT_SEQUENCE_NUMBER.toString();
-    private static final ShardInfo SHARD_INFO = new ShardInfo(SHARD_ID, null, null);
+    private static final ShardInfo SHARD_INFO = new ShardInfo(SHARD_ID, null, null, null);
     private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
     private static final InitialPositionInStreamExtended INITIAL_POSITION_TRIM_HORIZON =

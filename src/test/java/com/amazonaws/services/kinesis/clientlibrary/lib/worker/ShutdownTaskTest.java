@@ -20,10 +20,9 @@ import static org.mockito.Mockito.when;
 import java.util.HashSet;
 import java.util.Set;
 
-import junit.framework.Assert;
-
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -50,7 +49,8 @@ public class ShutdownTaskTest {
     String defaultShardId = "shardId-0000397840";
     ShardInfo defaultShardInfo = new ShardInfo(defaultShardId,
             defaultConcurrencyToken,
-            defaultParentShardIds);
+            defaultParentShardIds,
+            ExtendedSequenceNumber.LATEST);
     IRecordProcessor defaultRecordProcessor = new TestStreamlet();
 
     /**

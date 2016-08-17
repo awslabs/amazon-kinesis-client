@@ -38,6 +38,7 @@ import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.Builder;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxyFactory;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
@@ -79,6 +80,8 @@ public class Worker implements Runnable {
     // private final KinesisClientLeaseManager leaseManager;
     private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager controlServer;
+
+    private final ShardPrioritization shardPrioritization;
 
     private volatile boolean shutdown;
     private volatile long shutdownStartTimeMillis;
@@ -231,7 +234,8 @@ public class Worker implements Runnable {
                 execService,
                 metricsFactory,
                 config.getTaskBackoffTimeMillis(),
-                config.getFailoverTimeMillis());
+                config.getFailoverTimeMillis(),
+                config.getShardPrioritizationStrategy());
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
             Region region = RegionUtils.getRegion(config.getRegionName());
@@ -271,6 +275,7 @@ public class Worker implements Runnable {
      *        consumption)
      * @param metricsFactory Metrics factory used to emit metrics
      * @param taskBackoffTimeMillis Backoff period when tasks encounter an exception
+     * @param shardPrioritization Provides prioritization logic to decide which available shards process first
      */
     // NOTE: This has package level access solely for testing
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
@@ -286,7 +291,8 @@ public class Worker implements Runnable {
             ExecutorService execService,
             IMetricsFactory metricsFactory,
             long taskBackoffTimeMillis,
-            long failoverTimeMillis) {
+            long failoverTimeMillis,
+            ShardPrioritization shardPrioritization) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.streamConfig = streamConfig;
@@ -308,6 +314,7 @@ public class Worker implements Runnable {
                         executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.failoverTimeMillis = failoverTimeMillis;
+        this.shardPrioritization = shardPrioritization;
     }
 
     /**
@@ -449,12 +456,13 @@ public class Worker implements Runnable {
 
     private List<ShardInfo> getShardInfoForAssignments() {
         List<ShardInfo> assignedStreamShards = leaseCoordinator.getCurrentAssignments();
+        List<ShardInfo> prioritizedShards = shardPrioritization.prioritize(assignedStreamShards);
 
-        if ((assignedStreamShards != null) && (!assignedStreamShards.isEmpty())) {
+        if ((prioritizedShards != null) && (!prioritizedShards.isEmpty())) {
             if (wlog.isInfoEnabled()) {
                 StringBuilder builder = new StringBuilder();
                 boolean firstItem = true;
-                for (ShardInfo shardInfo : assignedStreamShards) {
+                for (ShardInfo shardInfo : prioritizedShards) {
                     if (!firstItem) {
                         builder.append(", ");
                     }
@@ -467,7 +475,7 @@ public class Worker implements Runnable {
             wlog.info("No activities assigned");
         }
 
-        return assignedStreamShards;
+        return prioritizedShards;
     }
 
     /**
@@ -780,6 +788,7 @@ public class Worker implements Runnable {
         private AmazonCloudWatch cloudWatchClient;
         private IMetricsFactory metricsFactory;
         private ExecutorService execService;
+        private ShardPrioritization shardPrioritization;
 
         /**
          * Default constructor.
@@ -880,6 +889,19 @@ public class Worker implements Runnable {
         }
 
         /**
+         * Provides logic how to prioritize shard processing.
+         * 
+         * @param shardPrioritization
+         *            shardPrioritization is responsible to order shards before processing
+         * 
+         * @return A reference to this updated object so that method calls can be chained together.
+         */
+        public Builder shardPrioritization(ShardPrioritization shardPrioritization) {
+            this.shardPrioritization = shardPrioritization;
+            return this;
+        }
+
+        /**
          * Build the Worker instance.
          *
          * @return a Worker instance.
@@ -937,6 +959,9 @@ public class Worker implements Runnable {
             if (metricsFactory == null) {
                 metricsFactory = getMetricsFactory(cloudWatchClient, config);
             }
+            if (shardPrioritization == null) {
+                shardPrioritization = new ParentsFirstShardPrioritization(1);
+            }
 
             return new Worker(config.getApplicationName(),
                     recordProcessorFactory,
@@ -965,7 +990,8 @@ public class Worker implements Runnable {
                     execService,
                     metricsFactory,
                     config.getTaskBackoffTimeMillis(),
-                    config.getFailoverTimeMillis());
+                    config.getFailoverTimeMillis(),
+                    shardPrioritization);
         }
 
     }

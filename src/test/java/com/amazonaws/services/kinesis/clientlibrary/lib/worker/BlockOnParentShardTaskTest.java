@@ -20,12 +20,11 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.List;
 
-import junit.framework.Assert;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -47,7 +46,7 @@ public class BlockOnParentShardTaskTest {
     private final String shardId = "shardId-97";
     private final String concurrencyToken = "testToken";
     private final List<String> emptyParentShardIds = new ArrayList<String>();
-    ShardInfo defaultShardInfo = new ShardInfo(shardId, concurrencyToken, emptyParentShardIds);
+    ShardInfo defaultShardInfo = new ShardInfo(shardId, concurrencyToken, emptyParentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
 
     /**
      * @throws java.lang.Exception
@@ -122,14 +121,14 @@ public class BlockOnParentShardTaskTest {
 
         // test single parent
         parentShardIds.add(parent1ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds);
+        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
         Assert.assertNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds);
+        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
         Assert.assertNull(result.getException());
@@ -164,14 +163,14 @@ public class BlockOnParentShardTaskTest {
 
         // test single parent
         parentShardIds.add(parent1ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds);
+        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
         Assert.assertNotNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds);
+        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
         Assert.assertNotNull(result.getException());
@@ -191,7 +190,7 @@ public class BlockOnParentShardTaskTest {
         String parentShardId = "shardId-1";
         List<String> parentShardIds = new ArrayList<>();
         parentShardIds.add(parentShardId);
-        ShardInfo shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds);
+        ShardInfo shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         TaskResult result = null;
         KinesisClientLease parentLease = new KinesisClientLease();
         ILeaseManager<KinesisClientLease> leaseManager = mock(ILeaseManager.class);

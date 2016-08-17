@@ -105,6 +105,7 @@ public class WorkerTest {
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
     private static final InitialPositionInStreamExtended INITIAL_POSITION_TRIM_HORIZON =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private final ShardPrioritization shardPrioritization = new NoOpShardPrioritization();
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
     private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY = 
@@ -192,14 +193,15 @@ public class WorkerTest {
                         execService,
                         nullMetricsFactory,
                         taskBackoffTimeMillis,
-                        failoverTimeMillis);
-        ShardInfo shardInfo = new ShardInfo(dummyKinesisShardId, testConcurrencyToken, null);
+                        failoverTimeMillis,
+                        shardPrioritization);
+        ShardInfo shardInfo = new ShardInfo(dummyKinesisShardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         ShardConsumer consumer = worker.createOrGetShardConsumer(shardInfo, streamletFactory);
         Assert.assertNotNull(consumer);
         ShardConsumer consumer2 = worker.createOrGetShardConsumer(shardInfo, streamletFactory);
         Assert.assertSame(consumer, consumer2);
         ShardInfo shardInfoWithSameShardIdButDifferentConcurrencyToken =
-                new ShardInfo(dummyKinesisShardId, anotherConcurrencyToken, null);
+                new ShardInfo(dummyKinesisShardId, anotherConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         ShardConsumer consumer3 =
                 worker.createOrGetShardConsumer(shardInfoWithSameShardIdButDifferentConcurrencyToken, streamletFactory);
         Assert.assertNotNull(consumer3);
@@ -241,12 +243,13 @@ public class WorkerTest {
                         execService,
                         nullMetricsFactory,
                         taskBackoffTimeMillis,
-                        failoverTimeMillis);
+                        failoverTimeMillis,
+                        shardPrioritization);
 
-        ShardInfo shardInfo1 = new ShardInfo(dummyKinesisShardId, concurrencyToken, null);
+        ShardInfo shardInfo1 = new ShardInfo(dummyKinesisShardId, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         ShardInfo duplicateOfShardInfo1ButWithAnotherConcurrencyToken =
-                new ShardInfo(dummyKinesisShardId, anotherConcurrencyToken, null);
-        ShardInfo shardInfo2 = new ShardInfo(anotherDummyKinesisShardId, concurrencyToken, null);
+                new ShardInfo(dummyKinesisShardId, anotherConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
+        ShardInfo shardInfo2 = new ShardInfo(anotherDummyKinesisShardId, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
 
         ShardConsumer consumerOfShardInfo1 = worker.createOrGetShardConsumer(shardInfo1, streamletFactory);
         ShardConsumer consumerOfDuplicateOfShardInfo1ButWithAnotherConcurrencyToken =
@@ -297,7 +300,8 @@ public class WorkerTest {
                         execService,
                         nullMetricsFactory,
                         taskBackoffTimeMillis,
-                        failoverTimeMillis);
+                        failoverTimeMillis,
+                        shardPrioritization);
         worker.run();
         Assert.assertTrue(count > 0);
     }
@@ -745,7 +749,8 @@ public class WorkerTest {
                         executorService,
                         metricsFactory,
                         taskBackoffTimeMillis,
-                        failoverTimeMillis);
+                        failoverTimeMillis,
+                        shardPrioritization);
 
         WorkerThread workerThread = new WorkerThread(worker);
         workerThread.start();

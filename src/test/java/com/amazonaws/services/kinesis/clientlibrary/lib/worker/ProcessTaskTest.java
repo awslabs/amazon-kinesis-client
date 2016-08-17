@@ -87,7 +87,7 @@ public class ProcessTaskTest {
                 new StreamConfig(null, maxRecords, idleTimeMillis, callProcessRecordsForEmptyRecordList,
                         skipCheckpointValidationValue,
                         INITIAL_POSITION_LATEST);
-        final ShardInfo shardInfo = new ShardInfo(shardId, null, null);
+        final ShardInfo shardInfo = new ShardInfo(shardId, null, null, null);
         processTask = new ProcessTask(
                 shardInfo, config, mockRecordProcessor, mockCheckpointer, mockDataFetcher, taskBackoffTimeMillis);
     }
