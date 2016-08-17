@@ -14,6 +14,10 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertThat;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -93,11 +97,20 @@ public class ShardInfoTest {
     }
 
     @Test
-    public void testPacboyShardInfoEqualsForCheckpoint() {
-        ShardInfo diffShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds, ExtendedSequenceNumber.SHARD_END);
-        Assert.assertFalse("Equal should return false with different checkpoint", diffShardInfo.equals(testShardInfo));
-        diffShardInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds, null);
-        Assert.assertFalse("Equal should return false with null checkpoint", diffShardInfo.equals(testShardInfo));
+    public void testShardInfoCheckpointEqualsHashCode() {
+        ShardInfo baseInfo = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds,
+                ExtendedSequenceNumber.TRIM_HORIZON);
+        ShardInfo differentCheckpoint = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds,
+                new ExtendedSequenceNumber("1234"));
+        ShardInfo nullCheckpoint = new ShardInfo(SHARD_ID, CONCURRENCY_TOKEN, parentShardIds, null);
+
+        assertThat("Checkpoint should not be included in equality.", baseInfo.equals(differentCheckpoint), is(true));
+        assertThat("Checkpoint should not be included in equality.", baseInfo.equals(nullCheckpoint), is(true));
+
+        assertThat("Checkpoint should not be included in hash code.", baseInfo.hashCode(),
+                equalTo(differentCheckpoint.hashCode()));
+        assertThat("Checkpoint should not be included in hash code.", baseInfo.hashCode(),
+                equalTo(nullCheckpoint.hashCode()));
     }
 
     @Test

@@ -38,7 +38,6 @@ import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.Builder;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxyFactory;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
@@ -47,6 +46,7 @@ import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Worker is the high level class that Kinesis applications use to start
@@ -342,44 +342,47 @@ public class Worker implements Runnable {
         }
 
         while (!shouldShutdown()) {
-            try {
-                boolean foundCompletedShard = false;
-                Set<ShardInfo> assignedShards = new HashSet<ShardInfo>();
-                for (ShardInfo shardInfo : getShardInfoForAssignments()) {
-                    ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
-                    if (shardConsumer.isShutdown()
-                            && shardConsumer.getShutdownReason().equals(ShutdownReason.TERMINATE)) {
-                        foundCompletedShard = true;
-                    } else {
-                        shardConsumer.consumeShard();
-                    }
-                    assignedShards.add(shardInfo);
-                }
-
-                if (foundCompletedShard) {
-                    controlServer.syncShardAndLeaseInfo(null);
-                }
-
-                // clean up shard consumers for unassigned shards
-                cleanupShardConsumers(assignedShards);
-
-                wlog.info("Sleeping ...");
-                Thread.sleep(idleTimeInMilliseconds);
-            } catch (Exception e) {
-                LOG.error(String.format("Worker.run caught exception, sleeping for %s milli seconds!",
-                        String.valueOf(idleTimeInMilliseconds)),
-                        e);
-                try {
-                    Thread.sleep(idleTimeInMilliseconds);
-                } catch (InterruptedException ex) {
-                    LOG.info("Worker: sleep interrupted after catching exception ", ex);
-                }
-            }
-            wlog.resetInfoLogging();
+            runProcessLoop();
         }
 
         finalShutdown();
         LOG.info("Worker loop is complete. Exiting from worker.");
+    }
+
+    @VisibleForTesting
+    void runProcessLoop() {
+        try {
+            boolean foundCompletedShard = false;
+            Set<ShardInfo> assignedShards = new HashSet<>();
+            for (ShardInfo shardInfo : getShardInfoForAssignments()) {
+                ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
+                if (shardConsumer.isShutdown() && shardConsumer.getShutdownReason().equals(ShutdownReason.TERMINATE)) {
+                    foundCompletedShard = true;
+                } else {
+                    shardConsumer.consumeShard();
+                }
+                assignedShards.add(shardInfo);
+            }
+
+            if (foundCompletedShard) {
+                controlServer.syncShardAndLeaseInfo(null);
+            }
+
+            // clean up shard consumers for unassigned shards
+            cleanupShardConsumers(assignedShards);
+
+            wlog.info("Sleeping ...");
+            Thread.sleep(idleTimeInMilliseconds);
+        } catch (Exception e) {
+            LOG.error(String.format("Worker.run caught exception, sleeping for %s milli seconds!",
+                    String.valueOf(idleTimeInMilliseconds)), e);
+            try {
+                Thread.sleep(idleTimeInMilliseconds);
+            } catch (InterruptedException ex) {
+                LOG.info("Worker: sleep interrupted after catching exception ", ex);
+            }
+        }
+        wlog.resetInfoLogging();
     }
 
     private void initialize() {
@@ -552,23 +555,20 @@ public class Worker implements Runnable {
         // completely processed (shutdown reason terminate).
         if ((consumer == null)
                 || (consumer.isShutdown() && consumer.getShutdownReason().equals(ShutdownReason.ZOMBIE))) {
-            IRecordProcessor recordProcessor = factory.createProcessor();
-
-            consumer =
-                    new ShardConsumer(shardInfo,
-                           streamConfig,
-                           checkpointTracker,
-                           recordProcessor,
-                           leaseCoordinator.getLeaseManager(),
-                           parentShardPollIntervalMillis,
-                           cleanupLeasesUponShardCompletion,
-                           executorService,
-                           metricsFactory,
-                           taskBackoffTimeMillis);
+            consumer = buildConsumer(shardInfo, factory);
             shardInfoShardConsumerMap.put(shardInfo, consumer);
             wlog.infoForce("Created new shardConsumer for : " + shardInfo);
         }
         return consumer;
+    }
+
+    protected ShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory factory) {
+        IRecordProcessor recordProcessor = factory.createProcessor();
+
+        return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor,
+                leaseCoordinator.getLeaseManager(), parentShardPollIntervalMillis, cleanupLeasesUponShardCompletion,
+                executorService, metricsFactory, taskBackoffTimeMillis);
+
     }
 
     /**
