@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.clientlibrary.proxies;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -50,6 +51,9 @@ import com.amazonaws.services.kinesis.model.StreamStatus;
 public class KinesisProxy implements IKinesisProxyExtended {
 
     private static final Log LOG = LogFactory.getLog(KinesisProxy.class);
+
+    private static final EnumSet<ShardIteratorType> EXPECTED_ITERATOR_TYPES = EnumSet
+            .of(ShardIteratorType.AT_SEQUENCE_NUMBER, ShardIteratorType.AFTER_SEQUENCE_NUMBER);
 
     private static String defaultServiceName = "kinesis";
     private static String defaultRegionId = "us-east-1";;
@@ -265,8 +269,15 @@ public class KinesisProxy implements IKinesisProxyExtended {
      */
     @Override
     public String getIterator(String shardId, String iteratorType, String sequenceNumber) {
-        if (!iteratorType.equals(ShardIteratorType.AT_SEQUENCE_NUMBER.toString()) || !iteratorType.equals(
-                ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString())) {
+        ShardIteratorType shardIteratorType;
+        try {
+            shardIteratorType = ShardIteratorType.fromValue(iteratorType);
+        } catch (IllegalArgumentException iae) {
+            LOG.error("Caught illegal argument exception while parsing iteratorType: " + iteratorType, iae);
+            shardIteratorType = null;
+        }
+
+        if (!EXPECTED_ITERATOR_TYPES.contains(shardIteratorType)) {
             LOG.info("This method should only be used for AT_SEQUENCE_NUMBER and AFTER_SEQUENCE_NUMBER "
                     + "ShardIteratorTypes. For methods to use with other ShardIteratorTypes, see IKinesisProxy.java");
         }
