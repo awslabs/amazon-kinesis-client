@@ -89,7 +89,8 @@ public class ProcessTaskTest {
                         INITIAL_POSITION_LATEST);
         final ShardInfo shardInfo = new ShardInfo(shardId, null, null, null);
         processTask = new ProcessTask(
-                shardInfo, config, mockRecordProcessor, mockCheckpointer, mockDataFetcher, taskBackoffTimeMillis);
+                shardInfo, config, mockRecordProcessor, mockCheckpointer, mockDataFetcher, taskBackoffTimeMillis,
+                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
     }
 
     @Test

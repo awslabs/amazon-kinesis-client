@@ -154,6 +154,13 @@ public class KinesisClientLibConfiguration {
      */
     public static final int DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10;
 
+    /*
+     * The Worker will skip shard sync during initialization if there are one or more leases in the lease table.
+     * This assumes that the shards and leases are in-sync.
+     * This enables customers to choose faster startup times (e.g. during incremental deployments of an application).
+     */
+    public static final boolean DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST = false;
+
     /**
      * Default Shard prioritization strategy.
      */
@@ -191,6 +198,8 @@ public class KinesisClientLibConfiguration {
     private int initialLeaseTableReadCapacity;
     private int initialLeaseTableWriteCapacity;
     private InitialPositionInStreamExtended initialPositionInStreamExtended;
+    // This is useful for optimizing deployments to large fleets working on a stable stream.
+    private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
 
     /**
@@ -338,6 +347,7 @@ public class KinesisClientLibConfiguration {
         this.initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
         this.initialPositionInStreamExtended =
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
+        this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
     }
 
@@ -559,6 +569,13 @@ public class KinesisClientLibConfiguration {
      */
     public String getRegionName() {
         return regionName;
+    }
+
+    /**
+     * @return true if Worker should skip syncing shards and leases at startup if leases are present
+     */
+    public boolean getSkipShardSyncAtWorkerInitializationIfLeasesExist() {
+        return skipShardSyncAtWorkerInitializationIfLeasesExist;
     }
 
     /**
@@ -859,6 +876,21 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withValidateSequenceNumberBeforeCheckpointing(
             boolean validateSequenceNumberBeforeCheckpointing) {
         this.validateSequenceNumberBeforeCheckpointing = validateSequenceNumberBeforeCheckpointing;
+        return this;
+    }
+
+    /**
+     * If set to true, the Worker will not sync shards and leases during initialization if there are one or more leases
+     * in the lease table. This assumes that the shards and leases are in-sync.
+     * This enables customers to choose faster startup times (e.g. during incremental deployments of an application).
+     * 
+     * @param skipShardSyncAtStartupIfLeasesExist Should Worker skip syncing shards and leases at startup (Worker
+     *        initialization).
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withSkipShardSyncAtStartupIfLeasesExist(
+            boolean skipShardSyncAtStartupIfLeasesExist) {
+        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtStartupIfLeasesExist;
         return this;
     }
 
