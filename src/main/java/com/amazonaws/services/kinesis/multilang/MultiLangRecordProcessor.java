@@ -16,7 +16,6 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -24,10 +23,10 @@ import java.util.concurrent.Future;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
-import com.amazonaws.services.kinesis.model.Record;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -61,56 +60,10 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
 
     private MultiLangProtocol protocol;
 
-    /**
-     * Used to tell whether the processor has been shutdown already.
-     */
-    private enum ProcessState {
-        ACTIVE, SHUTDOWN
-    }
-
-    /**
-     * Constructor.
-     * 
-     * @param processBuilder Provides process builder functionality.
-     * @param executorService An executor
-     * @param objectMapper An obejct mapper.
-     */
-    MultiLangRecordProcessor(ProcessBuilder processBuilder, ExecutorService executorService,
-            ObjectMapper objectMapper) {
-        this(processBuilder, executorService, objectMapper, new MessageWriter(), new MessageReader(),
-                new DrainChildSTDERRTask());
-    }
-
-    /**
-     * Note: This constructor has package level access solely for testing purposes.
-     * 
-     * @param processBuilder Provides the child process for this record processor
-     * @param executorService The executor service which is provided by the {@link MultiLangRecordProcessorFactory}
-     * @param objectMapper Object mapper
-     * @param messageWriter Message write to write to child process's stdin
-     * @param messageReader Message reader to read from child process's stdout
-     * @param readSTDERRTask Error reader to read from child process's stderr
-     */
-    MultiLangRecordProcessor(ProcessBuilder processBuilder,
-            ExecutorService executorService,
-            ObjectMapper objectMapper,
-            MessageWriter messageWriter,
-            MessageReader messageReader,
-            DrainChildSTDERRTask readSTDERRTask) {
-        this.executorService = executorService;
-        this.processBuilder = processBuilder;
-        this.objectMapper = objectMapper;
-        this.messageWriter = messageWriter;
-        this.messageReader = messageReader;
-        this.readSTDERRTask = readSTDERRTask;
-
-        this.state = ProcessState.ACTIVE;
-    }
-
     @Override
-    public void initialize(String shardIdToProcess) {
+    public void initialize(InitializationInput initializationInput) {
         try {
-            this.shardId = shardIdToProcess;
+            this.shardId = initializationInput.getShardId();
             try {
                 this.process = startProcess();
             } catch (IOException e) {
@@ -129,7 +82,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
             // Submit the error reader for execution
             stderrReadTask = executorService.submit(readSTDERRTask);
 
-            protocol = new MultiLangProtocol(messageReader, messageWriter, shardId);
+            protocol = new MultiLangProtocol(messageReader, messageWriter, initializationInput);
             if (!protocol.initialize()) {
                 throw new RuntimeException("Failed to initialize child process");
             }
@@ -142,9 +95,9 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
     }
 
     @Override
-    public void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer) {
+    public void processRecords(ProcessRecordsInput processRecordsInput) {
         try {
-            if (!protocol.processRecords(records, checkpointer)) {
+            if (!protocol.processRecords(processRecordsInput)) {
                 throw new RuntimeException("Child process failed to process records");
             }
         } catch (Throwable t) {
@@ -153,7 +106,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
     }
 
     @Override
-    public void shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason) {
+    public void shutdown(ShutdownInput shutdownInput) {
         // In cases where KCL loses lease for the shard after creating record processor instance but before
         // record processor initialize() is called, then shutdown() may be called directly before initialize().
         if (!initialized) {
@@ -165,7 +118,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
 
         try {
             if (ProcessState.ACTIVE.equals(this.state)) {
-                if (!protocol.shutdown(checkpointer, reason)) {
+                if (!protocol.shutdown(shutdownInput.getCheckpointer(), shutdownInput.getShutdownReason())) {
                     throw new RuntimeException("Child process failed to shutdown");
                 }
 
@@ -181,7 +134,57 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
                         + " but it appears the processor has already been shutdown", t);
             }
         }
+    }
 
+    /**
+     * Used to tell whether the processor has been shutdown already.
+     */
+    private enum ProcessState {
+        ACTIVE, SHUTDOWN
+    }
+
+    /**
+     * Constructor.
+     * 
+     * @param processBuilder
+     *            Provides process builder functionality.
+     * @param executorService
+     *            An executor
+     * @param objectMapper
+     *            An obejct mapper.
+     */
+    MultiLangRecordProcessor(ProcessBuilder processBuilder, ExecutorService executorService,
+            ObjectMapper objectMapper) {
+        this(processBuilder, executorService, objectMapper, new MessageWriter(), new MessageReader(),
+                new DrainChildSTDERRTask());
+    }
+
+    /**
+     * Note: This constructor has package level access solely for testing purposes.
+     * 
+     * @param processBuilder
+     *            Provides the child process for this record processor
+     * @param executorService
+     *            The executor service which is provided by the {@link MultiLangRecordProcessorFactory}
+     * @param objectMapper
+     *            Object mapper
+     * @param messageWriter
+     *            Message write to write to child process's stdin
+     * @param messageReader
+     *            Message reader to read from child process's stdout
+     * @param readSTDERRTask
+     *            Error reader to read from child process's stderr
+     */
+    MultiLangRecordProcessor(ProcessBuilder processBuilder, ExecutorService executorService, ObjectMapper objectMapper,
+            MessageWriter messageWriter, MessageReader messageReader, DrainChildSTDERRTask readSTDERRTask) {
+        this.executorService = executorService;
+        this.processBuilder = processBuilder;
+        this.objectMapper = objectMapper;
+        this.messageWriter = messageWriter;
+        this.messageReader = messageReader;
+        this.readSTDERRTask = readSTDERRTask;
+
+        this.state = ProcessState.ACTIVE;
     }
 
     /**

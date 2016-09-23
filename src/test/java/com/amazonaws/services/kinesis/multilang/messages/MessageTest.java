@@ -18,6 +18,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -31,8 +33,8 @@ public class MessageTest {
     @Test
     public void toStringTest() {
         Message[] messages =
-                new Message[] { new CheckpointMessage("1234567890", null), new InitializeMessage("shard-123"),
-                        new ProcessRecordsMessage(new ArrayList<Record>() {
+                new Message[] { new CheckpointMessage("1234567890", 0L, null), new InitializeMessage(new InitializationInput().withShardId("shard-123")),
+                        new ProcessRecordsMessage(new ProcessRecordsInput().withRecords(new ArrayList<Record>() {
                             {
                                 this.add(new Record() {
                                     {
@@ -42,7 +44,7 @@ public class MessageTest {
                                     }
                                 });
                             }
-                        }), new ShutdownMessage(ShutdownReason.ZOMBIE), new StatusMessage("processRecords"),
+                        })), new ShutdownMessage(ShutdownReason.ZOMBIE), new StatusMessage("processRecords"),
                         new InitializeMessage(), new ProcessRecordsMessage() };
 
         for (int i = 0; i < messages.length; i++) {

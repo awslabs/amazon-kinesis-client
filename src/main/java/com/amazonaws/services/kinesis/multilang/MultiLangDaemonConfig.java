@@ -14,6 +14,8 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -131,7 +133,7 @@ public class MultiLangDaemonConfig {
 
     private static Properties loadProperties(ClassLoader classLoader, String propertiesFileName) throws IOException {
         Properties properties = new Properties();
-        try (InputStream propertiesStream = classLoader.getResourceAsStream(propertiesFileName)) {
+        try (InputStream propertiesStream = new FileInputStream(new File(propertiesFileName))) {
             properties.load(propertiesStream);
             return properties;
         }

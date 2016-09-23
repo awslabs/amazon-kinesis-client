@@ -17,11 +17,16 @@ package com.amazonaws.services.kinesis.multilang.messages;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.Record;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * A message to indicate to the client's process that it should process a list of records.
  */
+@Getter
+@Setter
 public class ProcessRecordsMessage extends Message {
     /**
      * The name used for the action field in {@link Message}.
@@ -32,6 +37,7 @@ public class ProcessRecordsMessage extends Message {
      * The records that the client's process needs to handle.
      */
     private List<JsonFriendlyRecord> records;
+    private Long millisBehindLatest;
 
     /**
      * Default constructor.
@@ -42,27 +48,15 @@ public class ProcessRecordsMessage extends Message {
     /**
      * Convenience constructor.
      * 
-     * @param records The records.
+     * @param processRecordsInput
+     *            the process records input to be sent to the child
      */
-    public ProcessRecordsMessage(List<Record> records) {
+    public ProcessRecordsMessage(ProcessRecordsInput processRecordsInput) {
+        this.millisBehindLatest = processRecordsInput.getMillisBehindLatest();
         List<JsonFriendlyRecord> recordMessages = new ArrayList<JsonFriendlyRecord>();
-        for (Record record : records) {
+        for (Record record : processRecordsInput.getRecords()) {
             recordMessages.add(new JsonFriendlyRecord(record));
         }
         this.setRecords(recordMessages);
-    }
-
-    /**
-     * @return The records.
-     */
-    public List<JsonFriendlyRecord> getRecords() {
-        return records;
-    }
-
-    /**
-     * @param records The records.
-     */
-    public void setRecords(List<JsonFriendlyRecord> records) {
-        this.records = records;
     }
 }

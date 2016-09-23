@@ -23,6 +23,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -54,7 +56,7 @@ public class MessageWriterTest {
      */
     @Test
     public void writeCheckpointMessageNoErrorTest() throws IOException, InterruptedException, ExecutionException {
-        Future<Boolean> future = this.messageWriter.writeCheckpointMessageWithError("1234", null);
+        Future<Boolean> future = this.messageWriter.writeCheckpointMessageWithError("1234", 0L, null);
         future.get();
         Mockito.verify(this.stream, Mockito.atLeastOnce()).write(Mockito.any(byte[].class), Mockito.anyInt(),
                 Mockito.anyInt());
@@ -63,7 +65,7 @@ public class MessageWriterTest {
 
     @Test
     public void writeCheckpointMessageWithErrorTest() throws IOException, InterruptedException, ExecutionException {
-        Future<Boolean> future = this.messageWriter.writeCheckpointMessageWithError("1234", new Throwable());
+        Future<Boolean> future = this.messageWriter.writeCheckpointMessageWithError("1234", 0L, new Throwable());
         future.get();
         Mockito.verify(this.stream, Mockito.atLeastOnce()).write(Mockito.any(byte[].class), Mockito.anyInt(),
                 Mockito.anyInt());
@@ -72,7 +74,7 @@ public class MessageWriterTest {
 
     @Test
     public void writeInitializeMessageTest() throws IOException, InterruptedException, ExecutionException {
-        Future<Boolean> future = this.messageWriter.writeInitializeMessage(shardId);
+        Future<Boolean> future = this.messageWriter.writeInitializeMessage(new InitializationInput().withShardId(shardId));
         future.get();
         Mockito.verify(this.stream, Mockito.atLeastOnce()).write(Mockito.any(byte[].class), Mockito.anyInt(),
                 Mockito.anyInt());
@@ -93,7 +95,7 @@ public class MessageWriterTest {
                 this.add(new Record());
             }
         };
-        Future<Boolean> future = this.messageWriter.writeProcessRecordsMessage(records);
+        Future<Boolean> future = this.messageWriter.writeProcessRecordsMessage(new ProcessRecordsInput().withRecords(records));
         future.get();
 
         Mockito.verify(this.stream, Mockito.atLeastOnce()).write(Mockito.any(byte[].class), Mockito.anyInt(),
@@ -114,7 +116,7 @@ public class MessageWriterTest {
     @Test
     public void streamIOExceptionTest() throws IOException, InterruptedException, ExecutionException {
         Mockito.doThrow(IOException.class).when(stream).flush();
-        Future<Boolean> initializeTask = this.messageWriter.writeInitializeMessage(shardId);
+        Future<Boolean> initializeTask = this.messageWriter.writeInitializeMessage(new InitializationInput().withShardId(shardId));
         Boolean result = initializeTask.get();
         Assert.assertNotNull(result);
         Assert.assertFalse(result);
@@ -144,7 +146,7 @@ public class MessageWriterTest {
         Assert.assertFalse(this.messageWriter.isOpen());
         try {
             // Any message should fail
-            this.messageWriter.writeInitializeMessage(shardId);
+            this.messageWriter.writeInitializeMessage(new InitializationInput().withShardId(shardId));
             Assert.fail("MessageWriter should be closed and unable to write.");
         } catch (IllegalStateException e) {
             // This should happen.
