@@ -14,6 +14,15 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.argThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -24,10 +33,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-import com.amazonaws.services.kinesis.multilang.messages.Message;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,21 +48,18 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibD
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.multilang.messages.InitializeMessage;
+import com.amazonaws.services.kinesis.multilang.messages.Message;
 import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class StreamingRecordProcessorTest {
@@ -197,7 +199,8 @@ public class StreamingRecordProcessorTest {
 
         phases(answer);
 
-        verify(messageWriter).writeInitializeMessage(new InitializationInput().withShardId(shardId));
+        verify(messageWriter)
+                .writeInitializeMessage(argThat(Matchers.withInit(new InitializationInput().withShardId(shardId))));
         verify(messageWriter, times(2)).writeProcessRecordsMessage(any(ProcessRecordsInput.class));
         verify(messageWriter).writeShutdownMessage(ShutdownReason.ZOMBIE);
     }
@@ -228,7 +231,8 @@ public class StreamingRecordProcessorTest {
 
         phases(answer);
 
-        verify(messageWriter).writeInitializeMessage(new InitializationInput().withShardId(shardId));
+        verify(messageWriter).writeInitializeMessage(argThat(Matchers.withInit(new InitializationInput()
+                .withShardId(shardId))));
         verify(messageWriter, times(2)).writeProcessRecordsMessage(any(ProcessRecordsInput.class));
         verify(messageWriter, never()).writeShutdownMessage(ShutdownReason.ZOMBIE);
         Assert.assertEquals(1, systemExitCount);

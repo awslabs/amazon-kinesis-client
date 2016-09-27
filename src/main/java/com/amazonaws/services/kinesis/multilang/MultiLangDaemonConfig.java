@@ -16,17 +16,22 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfigurator;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
  * This class captures the configuration needed to run the MultiLangDaemon.
@@ -133,10 +138,29 @@ public class MultiLangDaemonConfig {
 
     private static Properties loadProperties(ClassLoader classLoader, String propertiesFileName) throws IOException {
         Properties properties = new Properties();
-        try (InputStream propertiesStream = new FileInputStream(new File(propertiesFileName))) {
-            properties.load(propertiesStream);
+        InputStream propertyStream = null;
+        try {
+            propertyStream = classLoader.getResourceAsStream(propertiesFileName);
+            if (propertyStream == null) {
+                File propertyFile = new File(propertiesFileName);
+                if (propertyFile.exists()) {
+                    propertyStream = new FileInputStream(propertyFile);
+                }
+            }
+
+            if (propertyStream == null) {
+                throw new FileNotFoundException(
+                        "Unable to find property file in classpath, or file system: '" + propertiesFileName + "'");
+            }
+
+            properties.load(propertyStream);
             return properties;
+        } finally {
+            if (propertyStream != null) {
+                propertyStream.close();
+            }
         }
+
     }
 
     private static boolean validateProperties(Properties properties) {
@@ -149,13 +173,16 @@ public class MultiLangDaemonConfig {
 
     private static ExecutorService buildExecutorService(Properties properties) {
         int maxActiveThreads = getMaxActiveThreads(properties);
+        ThreadFactoryBuilder builder = new ThreadFactoryBuilder().setNameFormat("multi-lang-daemon-%04d");
         LOG.debug(String.format("Value for %s property is %d", PROP_MAX_ACTIVE_THREADS, maxActiveThreads));
         if (maxActiveThreads <= 0) {
             LOG.info("Using a cached thread pool.");
-            return Executors.newCachedThreadPool();
+            return new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>(),
+                    builder.build());
         } else {
             LOG.info(String.format("Using a fixed thread pool with %d max active threads.", maxActiveThreads));
-            return Executors.newFixedThreadPool(maxActiveThreads);
+            return new ThreadPoolExecutor(maxActiveThreads, maxActiveThreads, 0L, TimeUnit.MILLISECONDS,
+                    new LinkedBlockingQueue<Runnable>(), builder.build());
         }
     }
 

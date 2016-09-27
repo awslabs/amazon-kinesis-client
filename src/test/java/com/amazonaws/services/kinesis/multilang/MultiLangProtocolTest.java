@@ -14,17 +14,22 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertThat;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.argThat;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.google.common.util.concurrent.SettableFuture;
-import org.junit.Assert;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -37,21 +42,15 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibD
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
 import com.amazonaws.services.kinesis.multilang.messages.Message;
 import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import com.google.common.util.concurrent.SettableFuture;
 
 public class MultiLangProtocolTest {
 
@@ -87,7 +86,9 @@ public class MultiLangProtocolTest {
 
     @Test
     public void initializeTest() throws InterruptedException, ExecutionException {
-        when(messageWriter.writeInitializeMessage(new InitializationInput().withShardId(shardId))).thenReturn(buildFuture(true));
+        when(messageWriter
+                .writeInitializeMessage(argThat(Matchers.withInit(new InitializationInput().withShardId(shardId)))))
+                        .thenReturn(buildFuture(true));
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(new StatusMessage("initialize"), Message.class));
         assertThat(protocol.initialize(), equalTo(true));
     }
