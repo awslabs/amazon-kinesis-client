@@ -46,6 +46,7 @@ import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Worker is the high level class that Kinesis applications use to start
@@ -64,7 +65,7 @@ public class Worker implements Runnable {
     private final String applicationName;
     private final IRecordProcessorFactory recordProcessorFactory;
     private final StreamConfig streamConfig;
-    private final InitialPositionInStream initialPosition;
+    private final InitialPositionInStreamExtended initialPosition;
     private final ICheckpoint checkpointTracker;
     private final long idleTimeInMilliseconds;
     // Backoff time when polling to check if application has finished processing
@@ -79,6 +80,8 @@ public class Worker implements Runnable {
     // private final KinesisClientLeaseManager leaseManager;
     private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager controlServer;
+
+    private final ShardPrioritization shardPrioritization;
 
     private volatile boolean shutdown;
     private volatile long shutdownStartTimeMillis;
@@ -212,8 +215,8 @@ public class Worker implements Runnable {
                         config.getMaxRecords(), config.getIdleTimeBetweenReadsInMillis(),
                         config.shouldCallProcessRecordsEvenForEmptyRecordList(),
                         config.shouldValidateSequenceNumberBeforeCheckpointing(),
-                        config.getInitialPositionInStream()),
-                config.getInitialPositionInStream(),
+                        config.getInitialPositionInStreamExtended()),
+                config.getInitialPositionInStreamExtended(),
                 config.getParentShardPollIntervalMillis(),
                 config.getShardSyncIntervalMillis(),
                 config.shouldCleanupLeasesUponShardCompletion(),
@@ -231,7 +234,8 @@ public class Worker implements Runnable {
                 execService,
                 metricsFactory,
                 config.getTaskBackoffTimeMillis(),
-                config.getFailoverTimeMillis());
+                config.getFailoverTimeMillis(),
+                config.getShardPrioritizationStrategy());
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
             Region region = RegionUtils.getRegion(config.getRegionName());
@@ -263,9 +267,9 @@ public class Worker implements Runnable {
      * @param applicationName Name of the Kinesis application
      * @param recordProcessorFactory Used to get record processor instances for processing data from shards
      * @param streamConfig Stream configuration
-     * @param initialPositionInStream One of LATEST or TRIM_HORIZON. The KinesisClientLibrary will start fetching data
-     *        from this location in the stream when an application starts up for the first time and there are no
-     *        checkpoints. If there are checkpoints, we start from the checkpoint position.
+     * @param initialPositionInStream One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. The KinesisClientLibrary will start
+     *        fetching data from this location in the stream when an application starts up for the first time and
+     *        there are no checkpoints. If there are checkpoints, we start from the checkpoint position.
      * @param parentShardPollIntervalMillis Wait for this long between polls to check if parent shards are done
      * @param shardSyncIdleTimeMillis Time between tasks to sync leases and Kinesis shards
      * @param cleanupLeasesUponShardCompletion Clean up shards we've finished processing (don't wait till they expire in
@@ -276,13 +280,14 @@ public class Worker implements Runnable {
      *        consumption)
      * @param metricsFactory Metrics factory used to emit metrics
      * @param taskBackoffTimeMillis Backoff period when tasks encounter an exception
+     * @param shardPrioritization Provides prioritization logic to decide which available shards process first
      */
     // NOTE: This has package level access solely for testing
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     Worker(String applicationName,
             IRecordProcessorFactory recordProcessorFactory,
             StreamConfig streamConfig,
-            InitialPositionInStream initialPositionInStream,
+            InitialPositionInStreamExtended initialPositionInStream,
             long parentShardPollIntervalMillis,
             long shardSyncIdleTimeMillis,
             boolean cleanupLeasesUponShardCompletion,
@@ -291,7 +296,8 @@ public class Worker implements Runnable {
             ExecutorService execService,
             IMetricsFactory metricsFactory,
             long taskBackoffTimeMillis,
-            long failoverTimeMillis) {
+            long failoverTimeMillis,
+            ShardPrioritization shardPrioritization) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.streamConfig = streamConfig;
@@ -313,6 +319,7 @@ public class Worker implements Runnable {
                         executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.failoverTimeMillis = failoverTimeMillis;
+        this.shardPrioritization = shardPrioritization;
     }
 
     /**
@@ -340,44 +347,47 @@ public class Worker implements Runnable {
         }
 
         while (!shouldShutdown()) {
-            try {
-                boolean foundCompletedShard = false;
-                Set<ShardInfo> assignedShards = new HashSet<ShardInfo>();
-                for (ShardInfo shardInfo : getShardInfoForAssignments()) {
-                    ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
-                    if (shardConsumer.isShutdown()
-                            && shardConsumer.getShutdownReason().equals(ShutdownReason.TERMINATE)) {
-                        foundCompletedShard = true;
-                    } else {
-                        shardConsumer.consumeShard();
-                    }
-                    assignedShards.add(shardInfo);
-                }
-
-                if (foundCompletedShard) {
-                    controlServer.syncShardAndLeaseInfo(null);
-                }
-
-                // clean up shard consumers for unassigned shards
-                cleanupShardConsumers(assignedShards);
-
-                wlog.info("Sleeping ...");
-                Thread.sleep(idleTimeInMilliseconds);
-            } catch (Exception e) {
-                LOG.error(String.format("Worker.run caught exception, sleeping for %s milli seconds!",
-                        String.valueOf(idleTimeInMilliseconds)),
-                        e);
-                try {
-                    Thread.sleep(idleTimeInMilliseconds);
-                } catch (InterruptedException ex) {
-                    LOG.info("Worker: sleep interrupted after catching exception ", ex);
-                }
-            }
-            wlog.resetInfoLogging();
+            runProcessLoop();
         }
 
         finalShutdown();
         LOG.info("Worker loop is complete. Exiting from worker.");
+    }
+
+    @VisibleForTesting
+    void runProcessLoop() {
+        try {
+            boolean foundCompletedShard = false;
+            Set<ShardInfo> assignedShards = new HashSet<>();
+            for (ShardInfo shardInfo : getShardInfoForAssignments()) {
+                ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
+                if (shardConsumer.isShutdown() && shardConsumer.getShutdownReason().equals(ShutdownReason.TERMINATE)) {
+                    foundCompletedShard = true;
+                } else {
+                    shardConsumer.consumeShard();
+                }
+                assignedShards.add(shardInfo);
+            }
+
+            if (foundCompletedShard) {
+                controlServer.syncShardAndLeaseInfo(null);
+            }
+
+            // clean up shard consumers for unassigned shards
+            cleanupShardConsumers(assignedShards);
+
+            wlog.info("Sleeping ...");
+            Thread.sleep(idleTimeInMilliseconds);
+        } catch (Exception e) {
+            LOG.error(String.format("Worker.run caught exception, sleeping for %s milli seconds!",
+                    String.valueOf(idleTimeInMilliseconds)), e);
+            try {
+                Thread.sleep(idleTimeInMilliseconds);
+            } catch (InterruptedException ex) {
+                LOG.info("Worker: sleep interrupted after catching exception ", ex);
+            }
+        }
+        wlog.resetInfoLogging();
     }
 
     private void initialize() {
@@ -454,12 +464,13 @@ public class Worker implements Runnable {
 
     private List<ShardInfo> getShardInfoForAssignments() {
         List<ShardInfo> assignedStreamShards = leaseCoordinator.getCurrentAssignments();
+        List<ShardInfo> prioritizedShards = shardPrioritization.prioritize(assignedStreamShards);
 
-        if ((assignedStreamShards != null) && (!assignedStreamShards.isEmpty())) {
+        if ((prioritizedShards != null) && (!prioritizedShards.isEmpty())) {
             if (wlog.isInfoEnabled()) {
                 StringBuilder builder = new StringBuilder();
                 boolean firstItem = true;
-                for (ShardInfo shardInfo : assignedStreamShards) {
+                for (ShardInfo shardInfo : prioritizedShards) {
                     if (!firstItem) {
                         builder.append(", ");
                     }
@@ -472,7 +483,7 @@ public class Worker implements Runnable {
             wlog.info("No activities assigned");
         }
 
-        return assignedStreamShards;
+        return prioritizedShards;
     }
 
     /**
@@ -549,23 +560,20 @@ public class Worker implements Runnable {
         // completely processed (shutdown reason terminate).
         if ((consumer == null)
                 || (consumer.isShutdown() && consumer.getShutdownReason().equals(ShutdownReason.ZOMBIE))) {
-            IRecordProcessor recordProcessor = factory.createProcessor();
-
-            consumer =
-                    new ShardConsumer(shardInfo,
-                           streamConfig,
-                           checkpointTracker,
-                           recordProcessor,
-                           leaseCoordinator.getLeaseManager(),
-                           parentShardPollIntervalMillis,
-                           cleanupLeasesUponShardCompletion,
-                           executorService,
-                           metricsFactory,
-                           taskBackoffTimeMillis);
+            consumer = buildConsumer(shardInfo, factory);
             shardInfoShardConsumerMap.put(shardInfo, consumer);
             wlog.infoForce("Created new shardConsumer for : " + shardInfo);
         }
         return consumer;
+    }
+
+    protected ShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory factory) {
+        IRecordProcessor recordProcessor = factory.createProcessor();
+
+        return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor,
+                leaseCoordinator.getLeaseManager(), parentShardPollIntervalMillis, cleanupLeasesUponShardCompletion,
+                executorService, metricsFactory, taskBackoffTimeMillis);
+
     }
 
     /**
@@ -785,6 +793,7 @@ public class Worker implements Runnable {
         private AmazonCloudWatch cloudWatchClient;
         private IMetricsFactory metricsFactory;
         private ExecutorService execService;
+        private ShardPrioritization shardPrioritization;
 
         /**
          * Default constructor.
@@ -885,6 +894,19 @@ public class Worker implements Runnable {
         }
 
         /**
+         * Provides logic how to prioritize shard processing.
+         * 
+         * @param shardPrioritization
+         *            shardPrioritization is responsible to order shards before processing
+         * 
+         * @return A reference to this updated object so that method calls can be chained together.
+         */
+        public Builder shardPrioritization(ShardPrioritization shardPrioritization) {
+            this.shardPrioritization = shardPrioritization;
+            return this;
+        }
+
+        /**
          * Build the Worker instance.
          *
          * @return a Worker instance.
@@ -942,6 +964,9 @@ public class Worker implements Runnable {
             if (metricsFactory == null) {
                 metricsFactory = getMetricsFactory(cloudWatchClient, config);
             }
+            if (shardPrioritization == null) {
+                shardPrioritization = new ParentsFirstShardPrioritization(1);
+            }
 
             return new Worker(config.getApplicationName(),
                     recordProcessorFactory,
@@ -951,8 +976,8 @@ public class Worker implements Runnable {
                             config.getIdleTimeBetweenReadsInMillis(),
                             config.shouldCallProcessRecordsEvenForEmptyRecordList(),
                             config.shouldValidateSequenceNumberBeforeCheckpointing(),
-                            config.getInitialPositionInStream()),
-                    config.getInitialPositionInStream(),
+                            config.getInitialPositionInStreamExtended()),
+                    config.getInitialPositionInStreamExtended(),
                     config.getParentShardPollIntervalMillis(),
                     config.getShardSyncIntervalMillis(),
                     config.shouldCleanupLeasesUponShardCompletion(),
@@ -970,7 +995,8 @@ public class Worker implements Runnable {
                     execService,
                     metricsFactory,
                     config.getTaskBackoffTimeMillis(),
-                    config.getFailoverTimeMillis());
+                    config.getFailoverTimeMillis(),
+                    shardPrioritization);
         }
 
     }

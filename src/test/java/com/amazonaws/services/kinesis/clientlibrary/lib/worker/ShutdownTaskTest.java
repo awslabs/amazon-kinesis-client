@@ -20,10 +20,9 @@ import static org.mockito.Mockito.when;
 import java.util.HashSet;
 import java.util.Set;
 
-import junit.framework.Assert;
-
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -42,12 +41,16 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
  */
 public class ShutdownTaskTest {
     private static final long TASK_BACKOFF_TIME_MILLIS = 1L;
+    private static final InitialPositionInStreamExtended INITIAL_POSITION_TRIM_HORIZON =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+
     Set<String> defaultParentShardIds = new HashSet<>();
     String defaultConcurrencyToken = "testToken4398";
     String defaultShardId = "shardId-0000397840";
     ShardInfo defaultShardInfo = new ShardInfo(defaultShardId,
             defaultConcurrencyToken,
-            defaultParentShardIds);
+            defaultParentShardIds,
+            ExtendedSequenceNumber.LATEST);
     IRecordProcessor defaultRecordProcessor = new TestStreamlet();
 
     /**
@@ -88,16 +91,15 @@ public class ShutdownTaskTest {
         IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         boolean cleanupLeasesOfCompletedShards = false;
-        ShutdownTask task =
-                new ShutdownTask(defaultShardInfo,
-                        defaultRecordProcessor,
-                        checkpointer,
-                        ShutdownReason.TERMINATE,
-                        kinesisProxy,
-                        InitialPositionInStream.TRIM_HORIZON,
-                        cleanupLeasesOfCompletedShards ,
-                        leaseManager,
-                        TASK_BACKOFF_TIME_MILLIS);
+        ShutdownTask task = new ShutdownTask(defaultShardInfo,
+                defaultRecordProcessor,
+                checkpointer,
+                ShutdownReason.TERMINATE,
+                kinesisProxy,
+                INITIAL_POSITION_TRIM_HORIZON,
+                cleanupLeasesOfCompletedShards,
+                leaseManager,
+                TASK_BACKOFF_TIME_MILLIS);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
@@ -114,16 +116,15 @@ public class ShutdownTaskTest {
         when(kinesisProxy.getShardList()).thenReturn(null);
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         boolean cleanupLeasesOfCompletedShards = false;
-        ShutdownTask task =
-                new ShutdownTask(defaultShardInfo,
-                        defaultRecordProcessor,
-                        checkpointer,
-                        ShutdownReason.TERMINATE,
-                        kinesisProxy,
-                        InitialPositionInStream.TRIM_HORIZON,
-                        cleanupLeasesOfCompletedShards ,
-                        leaseManager,
-                        TASK_BACKOFF_TIME_MILLIS);
+        ShutdownTask task = new ShutdownTask(defaultShardInfo,
+                defaultRecordProcessor,
+                checkpointer,
+                ShutdownReason.TERMINATE,
+                kinesisProxy,
+                INITIAL_POSITION_TRIM_HORIZON,
+                cleanupLeasesOfCompletedShards,
+                leaseManager,
+                TASK_BACKOFF_TIME_MILLIS);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof KinesisClientLibIOException);

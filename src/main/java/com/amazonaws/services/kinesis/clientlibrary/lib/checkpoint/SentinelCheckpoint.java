@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -31,5 +31,9 @@ public enum SentinelCheckpoint {
     /**
      * We've completely processed all records in this shard.
      */
-    SHARD_END;
+    SHARD_END,
+    /**
+     * Start from the record at or after the specified server-side timestamp.
+     */
+    AT_TIMESTAMP
 }

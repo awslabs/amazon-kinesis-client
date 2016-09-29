@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ class ShardSyncTask implements ITask {
 
     private final IKinesisProxy kinesisProxy;
     private final ILeaseManager<KinesisClientLease> leaseManager;
-    private InitialPositionInStream initialPosition;
+    private InitialPositionInStreamExtended initialPosition;
     private final boolean cleanupLeasesUponShardCompletion;
     private final long shardSyncTaskIdleTimeMillis;
     private final TaskType taskType = TaskType.SHARDSYNC;
@@ -41,13 +41,13 @@ class ShardSyncTask implements ITask {
     /**
      * @param kinesisProxy Used to fetch information about the stream (e.g. shard list)
      * @param leaseManager Used to fetch and create leases
-     * @param initialPosition One of LATEST or TRIM_HORIZON. Amazon Kinesis Client Library will start processing records
-     *        from this point in the stream (when an application starts up for the first time) except for shards that
-     *        already have a checkpoint (and their descendant shards).
+     * @param initialPositionInStream One of LATEST, TRIM_HORIZON or AT_TIMESTAMP. Amazon Kinesis Client Library will
+     *        start processing records from this point in the stream (when an application starts up for the first time)
+     *        except for shards that already have a checkpoint (and their descendant shards).
      */
     ShardSyncTask(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStream initialPositionInStream,
+            InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesUponShardCompletion,
             long shardSyncTaskIdleTimeMillis) {
         this.kinesisProxy = kinesisProxy;

@@ -75,7 +75,7 @@ public class RecordProcessorCheckpointerTest {
      */
     @Test
     public final void testCheckpoint() throws Exception {
-        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
 
         // First call to checkpoint
         RecordProcessorCheckpointer processingCheckpointer =
@@ -98,7 +98,7 @@ public class RecordProcessorCheckpointerTest {
      */    
     @Test
     public final void testCheckpointRecord() throws Exception {
-        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         SequenceNumberValidator sequenceNumberValidator = 
                 new SequenceNumberValidator(null, shardId, false); 
     	RecordProcessorCheckpointer processingCheckpointer =
@@ -117,7 +117,7 @@ public class RecordProcessorCheckpointerTest {
      */
     @Test
     public final void testCheckpointSubRecord() throws Exception {
-        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         SequenceNumberValidator sequenceNumberValidator = 
                 new SequenceNumberValidator(null, shardId, false); 
     	RecordProcessorCheckpointer processingCheckpointer =
@@ -137,7 +137,7 @@ public class RecordProcessorCheckpointerTest {
      */
     @Test
     public final void testCheckpointSequenceNumber() throws Exception {
-        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         SequenceNumberValidator sequenceNumberValidator = 
                 new SequenceNumberValidator(null, shardId, false); 
     	RecordProcessorCheckpointer processingCheckpointer =
@@ -155,7 +155,7 @@ public class RecordProcessorCheckpointerTest {
      */
     @Test
     public final void testCheckpointExtendedSequenceNumber() throws Exception {
-        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         SequenceNumberValidator sequenceNumberValidator = 
                 new SequenceNumberValidator(null, shardId, false); 
     	RecordProcessorCheckpointer processingCheckpointer =
@@ -173,7 +173,7 @@ public class RecordProcessorCheckpointerTest {
      */
     @Test
     public final void testUpdate() throws Exception {
-        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
 
         RecordProcessorCheckpointer checkpointer = new RecordProcessorCheckpointer(shardInfo, checkpoint, null);
 
@@ -193,7 +193,7 @@ public class RecordProcessorCheckpointerTest {
      */
     @Test
     public final void testClientSpecifiedCheckpoint() throws Exception {
-        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
 
         SequenceNumberValidator validator = mock(SequenceNumberValidator.class);
         Mockito.doNothing().when(validator).validateSequenceNumber(anyString());
@@ -290,7 +290,7 @@ public class RecordProcessorCheckpointerTest {
     @SuppressWarnings("serial")
     @Test
     public final void testMixedCheckpointCalls() throws Exception {
-        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null);
+        ShardInfo shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
 
         SequenceNumberValidator validator = mock(SequenceNumberValidator.class);
         Mockito.doNothing().when(validator).validateSequenceNumber(anyString());

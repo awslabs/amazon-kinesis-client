@@ -6,7 +6,7 @@
   <artifactId>amazon-kinesis-client</artifactId>
   <packaging>jar</packaging>
   <name>Amazon Kinesis Client Library for Java</name>
-  <version>1.6.5</version>
+  <version>1.7.1-SNAPSHOT</version>
   <description>The Amazon Kinesis Client Library for Java enables Java developers to easily consume and process data
     from Amazon Kinesis.
   </description>
@@ -32,11 +32,6 @@
   </properties>
 
   <dependencies>
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-core</artifactId>
-      <version>${aws-java-sdk.version}</version>
-    </dependency>
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-java-sdk-dynamodb</artifactId>
@@ -98,7 +93,7 @@
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>DynamoDBLocal</artifactId>
-      <version>1.10.5.1</version>
+      <version>1.11.0.1</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

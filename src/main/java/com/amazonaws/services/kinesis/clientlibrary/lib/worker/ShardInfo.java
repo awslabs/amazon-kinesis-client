@@ -19,22 +19,39 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.apache.commons.lang.builder.EqualsBuilder;
+
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import org.apache.commons.lang.builder.HashCodeBuilder;
+
 /**
  * Used to pass shard related info among different classes and as a key to the map of shard consumers.
  */
 class ShardInfo {
 
+
     private final String shardId;
     private final String concurrencyToken;
     // Sorted list of parent shardIds.
     private final List<String> parentShardIds;
+    private final ExtendedSequenceNumber checkpoint;
 
     /**
-     * @param shardId Kinesis shardId
-     * @param concurrencyToken Used to differentiate between lost and reclaimed leases
-     * @param parentShardIds Parent shards of the shard identified by Kinesis shardId
+     * Creates a new ShardInfo object. The checkpoint is not part of the equality, but is used for debugging output.
+     * 
+     * @param shardId
+     *            Kinesis shardId
+     * @param concurrencyToken
+     *            Used to differentiate between lost and reclaimed leases
+     * @param parentShardIds
+     *            Parent shards of the shard identified by Kinesis shardId
+     * @param checkpoint
+     *            the latest checkpoint from lease
      */
-    public ShardInfo(String shardId, String concurrencyToken, Collection<String> parentShardIds) {
+    public ShardInfo(String shardId,
+            String concurrencyToken,
+            Collection<String> parentShardIds,
+            ExtendedSequenceNumber checkpoint) {
         this.shardId = shardId;
         this.concurrencyToken = concurrencyToken;
         this.parentShardIds = new LinkedList<String>();
@@ -44,6 +61,7 @@ class ShardInfo {
         // ShardInfo stores parent shard Ids in canonical order in the parentShardIds list.
         // This makes it easy to check for equality in ShardInfo.equals method.
         Collections.sort(this.parentShardIds);
+        this.checkpoint = checkpoint;
     }
 
     /**
@@ -68,23 +86,23 @@ class ShardInfo {
     }
 
     /**
-     * {@inheritDoc}
+     * @return completion status of the shard
      */
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((concurrencyToken == null) ? 0 : concurrencyToken.hashCode());
-        result = prime * result + ((parentShardIds == null) ? 0 : parentShardIds.hashCode());
-        result = prime * result + ((shardId == null) ? 0 : shardId.hashCode());
-        return result;
+    protected boolean isCompleted() {
+        return ExtendedSequenceNumber.SHARD_END.equals(checkpoint);
     }
 
     /**
      * {@inheritDoc}
      */
-    // CHECKSTYLE:OFF CyclomaticComplexity
-    // CHECKSTYLE:OFF NPathComplexity
+    @Override
+    public int hashCode() {
+        return new HashCodeBuilder().append(concurrencyToken).append(parentShardIds).append(shardId).toHashCode();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     /**
      * This method assumes parentShardIds is ordered. The Worker.cleanupShardConsumers() method relies on this method
      * returning true for ShardInfo objects which may have been instantiated with parentShardIds in a different order
@@ -105,37 +123,18 @@ class ShardInfo {
             return false;
         }
         ShardInfo other = (ShardInfo) obj;
-        if (concurrencyToken == null) {
-            if (other.concurrencyToken != null) {
-                return false;
-            }
-        } else if (!concurrencyToken.equals(other.concurrencyToken)) {
-            return false;
-        }
-        if (parentShardIds == null) {
-            if (other.parentShardIds != null) {
-                return false;
-            }
-        } else if (!parentShardIds.equals(other.parentShardIds)) {
-            return false;
-        }
-        if (shardId == null) {
-            if (other.shardId != null) {
-                return false;
-            }
-        } else if (!shardId.equals(other.shardId)) {
-            return false;
-        }
-        return true;
+        return new EqualsBuilder().append(concurrencyToken, other.concurrencyToken)
+                .append(parentShardIds, other.parentShardIds).append(shardId, other.shardId).isEquals();
+
     }
 
-    // CHECKSTYLE:ON CyclomaticComplexity
-    // CHECKSTYLE:ON NPathComplexity
 
     @Override
     public String toString() {
         return "ShardInfo [shardId=" + shardId + ", concurrencyToken=" + concurrencyToken + ", parentShardIds="
-                + parentShardIds + "]";
+                + parentShardIds + ", checkpoint=" + checkpoint + "]";
     }
+
+
 
 }

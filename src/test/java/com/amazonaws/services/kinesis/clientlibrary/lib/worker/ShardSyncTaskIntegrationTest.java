@@ -120,8 +120,11 @@ public class ShardSyncTaskIntegrationTest {
         }
         leaseManager.deleteAll();
         Set<String> shardIds = kinesisProxy.getAllShardIds();
-        ShardSyncTask syncTask =
-                new ShardSyncTask(kinesisProxy, leaseManager, InitialPositionInStream.LATEST, false, 0L);
+        ShardSyncTask syncTask = new ShardSyncTask(kinesisProxy,
+                leaseManager,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST),
+                false,
+                0L);
         syncTask.call();
         List<KinesisClientLease> leases = leaseManager.listLeases();
         Set<String> leaseKeys = new HashSet<String>();

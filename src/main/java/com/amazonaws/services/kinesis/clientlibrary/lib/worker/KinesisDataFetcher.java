@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.MetricsCollectingKinesisProxyDecorator;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
+import java.util.Date;
+
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
  */
@@ -41,8 +43,7 @@ class KinesisDataFetcher {
     /**
      *
      * @param kinesisProxy Kinesis proxy
-     * @param shardId shardId (we'll fetch data for this shard)
-     * @param checkpoint used to get current checkpoint from which to start fetching records
+     * @param shardInfo The shardInfo object.
      */
     public KinesisDataFetcher(IKinesisProxy kinesisProxy, ShardInfo shardInfo) {
         this.shardId = shardInfo.getShardId();
@@ -83,17 +84,18 @@ class KinesisDataFetcher {
     /**
      * Initializes this KinesisDataFetcher's iterator based on the checkpointed sequence number.
      * @param initialCheckpoint Current checkpoint sequence number for this shard.
-     *
+     * @param initialPositionInStream The initialPositionInStream.
      */
-    public void initialize(String initialCheckpoint) {
+    public void initialize(String initialCheckpoint, InitialPositionInStreamExtended initialPositionInStream) {
         LOG.info("Initializing shard " + shardId + " with " + initialCheckpoint);
-        advanceIteratorTo(initialCheckpoint);
+        advanceIteratorTo(initialCheckpoint, initialPositionInStream);
         isInitialized = true;
     }
-    
-    public void initialize(ExtendedSequenceNumber initialCheckpoint) {
+
+    public void initialize(ExtendedSequenceNumber initialCheckpoint,
+            InitialPositionInStreamExtended initialPositionInStream) {
         LOG.info("Initializing shard " + shardId + " with " + initialCheckpoint.getSequenceNumber());
-        advanceIteratorTo(initialCheckpoint.getSequenceNumber());
+        advanceIteratorTo(initialCheckpoint.getSequenceNumber(), initialPositionInStream);
         isInitialized = true;
     }
 
@@ -101,14 +103,17 @@ class KinesisDataFetcher {
      * Advances this KinesisDataFetcher's internal iterator to be at the passed-in sequence number.
      *
      * @param sequenceNumber advance the iterator to the record at this sequence number.
+     * @param initialPositionInStream The initialPositionInStream.
      */
-    void advanceIteratorTo(String sequenceNumber) {
+    void advanceIteratorTo(String sequenceNumber, InitialPositionInStreamExtended initialPositionInStream) {
         if (sequenceNumber == null) {
             throw new IllegalArgumentException("SequenceNumber should not be null: shardId " + shardId);
         } else if (sequenceNumber.equals(SentinelCheckpoint.LATEST.toString())) {
-            nextIterator = getIterator(ShardIteratorType.LATEST.toString(), null);
+            nextIterator = getIterator(ShardIteratorType.LATEST.toString());
         } else if (sequenceNumber.equals(SentinelCheckpoint.TRIM_HORIZON.toString())) {
-            nextIterator = getIterator(ShardIteratorType.TRIM_HORIZON.toString(), null);
+            nextIterator = getIterator(ShardIteratorType.TRIM_HORIZON.toString());
+        } else if (sequenceNumber.equals(SentinelCheckpoint.AT_TIMESTAMP.toString())) {
+            nextIterator = getIterator(initialPositionInStream.getTimestamp());
         } else if (sequenceNumber.equals(SentinelCheckpoint.SHARD_END.toString())) {
             nextIterator = null;
         } else {
@@ -120,8 +125,8 @@ class KinesisDataFetcher {
     }
 
     /**
-     * @param iteratorType
-     * @param sequenceNumber
+     * @param iteratorType The iteratorType - either AT_SEQUENCE_NUMBER or AFTER_SEQUENCE_NUMBER.
+     * @param sequenceNumber The sequenceNumber.
      *
      * @return iterator or null if we catch a ResourceNotFound exception
      */
@@ -133,6 +138,40 @@ class KinesisDataFetcher {
                     + " and sequence number " + sequenceNumber);
             }
             iterator = kinesisProxy.getIterator(shardId, iteratorType, sequenceNumber);
+        } catch (ResourceNotFoundException e) {
+            LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
+        }
+        return iterator;
+    }
+
+    /**
+     * @param iteratorType The iteratorType - either TRIM_HORIZON or LATEST.
+     * @return iterator or null if we catch a ResourceNotFound exception
+     */
+    private String getIterator(String iteratorType) {
+        String iterator = null;
+        try {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Calling getIterator for " + shardId + " and iterator type " + iteratorType);
+            }
+            iterator = kinesisProxy.getIterator(shardId, iteratorType);
+        } catch (ResourceNotFoundException e) {
+            LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
+        }
+        return iterator;
+    }
+
+    /**
+     * @param timestamp The timestamp.
+     * @return iterator or null if we catch a ResourceNotFound exception
+     */
+    private String getIterator(Date timestamp) {
+        String iterator = null;
+        try {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Calling getIterator for " + shardId + " and timestamp " + timestamp);
+            }
+            iterator = kinesisProxy.getIterator(shardId, timestamp);
         } catch (ResourceNotFoundException e) {
             LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
         }
