@@ -17,7 +17,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 /**
  * Enumerates types of tasks executed as part of processing a shard.
  */
-enum TaskType {
+public enum TaskType {
     /**
      * Polls and waits until parent shard(s) have been fully processed.
      */
@@ -35,7 +35,15 @@ enum TaskType {
      */
     SHUTDOWN,
     /**
+     * Graceful shutdown has been requested, and notification of the record processor will occur.
+     */
+    SHUTDOWN_NOTIFICATION,
+    /**
+     * Occurs once the shutdown has been completed
+     */
+    SHUTDOWN_COMPLETE,
+    /**
      * Sync leases/activities corresponding to Kinesis shards.
      */
-    SHARDSYNC;
+    SHARDSYNC
 }

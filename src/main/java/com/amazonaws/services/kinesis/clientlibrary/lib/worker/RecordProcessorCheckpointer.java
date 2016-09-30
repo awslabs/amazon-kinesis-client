@@ -69,7 +69,7 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
      */
     @Override
     public synchronized void checkpoint()
-        throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
         if (LOG.isDebugEnabled()) {
             LOG.debug("Checkpointing " + shardInfo.getShardId() + ", " + " token " + shardInfo.getConcurrencyToken()
                     + " at largest permitted value " + this.largestPermittedCheckpointValue);

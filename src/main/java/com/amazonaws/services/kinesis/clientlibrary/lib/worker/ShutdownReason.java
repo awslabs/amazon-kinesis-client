@@ -12,7 +12,12 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.types;
+package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+
+import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ConsumerState;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ShardConsumerState;
+
 
 /**
  * Reason the RecordProcessor is being shutdown.
@@ -28,7 +33,7 @@ public enum ShutdownReason {
      * Applications SHOULD NOT checkpoint their progress (as another record processor may have already started
      * processing data).
      */
-    ZOMBIE,
+    ZOMBIE(3, ShardConsumerState.SHUTTING_DOWN.getConsumerState()),
 
     /**
      * Terminate processing for this RecordProcessor (resharding use case).
@@ -36,5 +41,38 @@ public enum ShutdownReason {
      * Applications SHOULD checkpoint their progress to indicate that they have successfully processed all records
      * from this shard and processing of child shards can be started.
      */
-    TERMINATE
+    TERMINATE(2, ShardConsumerState.SHUTTING_DOWN.getConsumerState()),
+
+    /**
+     * Indicates that the entire application is being shutdown, and if desired the record processor will be given a
+     * final chance to checkpoint. This state will not trigger a direct call to
+     * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor#shutdown(ShutdownInput)}, but
+     * instead depend on a different interface for backward compatibility.
+     */
+    REQUESTED(1, ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState());
+
+    private final int rank;
+    private final ConsumerState shutdownState;
+
+    ShutdownReason(int rank, ConsumerState shutdownState) {
+        this.rank = rank;
+        this.shutdownState = shutdownState;
+    }
+
+    /**
+     * Indicates whether the given reason can override the current reason.
+     * 
+     * @param reason the reason to transition to
+     * @return true if the transition is allowed, false if it's not.
+     */
+    public boolean canTransitionTo(ShutdownReason reason) {
+        if (reason == null) {
+            return false;
+        }
+        return reason.rank > this.rank;
+    }
+
+    ConsumerState getShutdownState() {
+        return shutdownState;
+    }
 }

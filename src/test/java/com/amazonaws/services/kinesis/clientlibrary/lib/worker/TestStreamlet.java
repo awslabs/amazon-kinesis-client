@@ -18,8 +18,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -34,12 +36,11 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcess
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 
 /**
  * Streamlet that tracks records it's seen - useful for testing.
  */
-class TestStreamlet implements IRecordProcessor {
+class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
 
     private static final Log LOG = LogFactory.getLog(TestStreamlet.class);
 
@@ -55,6 +56,11 @@ class TestStreamlet implements IRecordProcessor {
     private ShutdownReason shutdownReason;
     private ShardSequenceVerifier shardSequenceVerifier;
     private long numProcessRecordsCallsWithEmptyRecordList;
+    private boolean shutdownNotificationCalled;
+
+    private final CountDownLatch initializeLatch = new CountDownLatch(1);
+    private final CountDownLatch notifyShutdownLatch = new CountDownLatch(1);
+    private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     public TestStreamlet() {
 
@@ -76,6 +82,7 @@ class TestStreamlet implements IRecordProcessor {
         if (shardSequenceVerifier != null) {
             shardSequenceVerifier.registerInitialization(shardId);
         }
+        initializeLatch.countDown();
     }
 
     @Override
@@ -125,6 +132,8 @@ class TestStreamlet implements IRecordProcessor {
                 throw new RuntimeException(e);
             }
         }
+
+        shutdownLatch.countDown();
     }
 
     /**
@@ -148,4 +157,25 @@ class TestStreamlet implements IRecordProcessor {
         return numProcessRecordsCallsWithEmptyRecordList;
     }
 
+    boolean isShutdownNotificationCalled() {
+        return shutdownNotificationCalled;
+    }
+
+    @Override
+    public void shutdownRequested(IRecordProcessorCheckpointer checkpointer) {
+        shutdownNotificationCalled = true;
+        notifyShutdownLatch.countDown();
+    }
+
+    public CountDownLatch getInitializeLatch() {
+        return initializeLatch;
+    }
+
+    public CountDownLatch getNotifyShutdownLatch() {
+        return notifyShutdownLatch;
+    }
+
+    public CountDownLatch getShutdownLatch() {
+        return shutdownLatch;
+    }
 }

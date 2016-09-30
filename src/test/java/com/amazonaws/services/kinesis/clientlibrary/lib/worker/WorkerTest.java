@@ -14,21 +14,16 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import static org.hamcrest.CoreMatchers.both;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
-import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.io.File;
 import java.lang.Thread.State;
@@ -42,21 +37,29 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.hamcrest.Condition;
+import org.hamcrest.Description;
+import org.hamcrest.Matcher;
+import org.hamcrest.TypeSafeDiagnosingMatcher;
+import org.hamcrest.TypeSafeMatcher;
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
@@ -78,8 +81,8 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseBuilder;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
@@ -90,6 +93,8 @@ import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
 import com.amazonaws.services.kinesis.model.Shard;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
  * Unit tests of Worker.
@@ -99,8 +104,8 @@ public class WorkerTest {
 
     private static final Log LOG = LogFactory.getLog(WorkerTest.class);
 
-    @Rule
-    public Timeout timeout = new Timeout((int)TimeUnit.SECONDS.toMillis(30));
+    // @Rule
+    // public Timeout timeout = new Timeout((int)TimeUnit.SECONDS.toMillis(30));
 
     private final NullMetricsFactory nullMetricsFactory = new NullMetricsFactory();
     private final long taskBackoffTimeMillis = 1L;
@@ -140,6 +145,10 @@ public class WorkerTest {
     private IRecordProcessor v2RecordProcessor;
     @Mock
     private ShardConsumer shardConsumer;
+    @Mock
+    private Future<TaskResult> taskFuture;
+    @Mock
+    private TaskResult taskResult;
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
     private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY = 
@@ -345,10 +354,10 @@ public class WorkerTest {
         worker.cleanupShardConsumers(assignedShards);
 
         // verify shard consumer not present in assignedShards is shut down
-        Assert.assertTrue(consumerOfDuplicateOfShardInfo1ButWithAnotherConcurrencyToken.isBeginShutdown());
+        Assert.assertTrue(consumerOfDuplicateOfShardInfo1ButWithAnotherConcurrencyToken.isShutdownRequested());
         // verify shard consumers present in assignedShards aren't shut down
-        Assert.assertFalse(consumerOfShardInfo1.isBeginShutdown());
-        Assert.assertFalse(consumerOfShardInfo2.isBeginShutdown());
+        Assert.assertFalse(consumerOfShardInfo1.isShutdownRequested());
+        Assert.assertFalse(consumerOfShardInfo2.isShutdownRequested());
     }
 
     @Test
@@ -687,6 +696,339 @@ public class WorkerTest {
         assertThat(recordProcessorInterrupted.get(), equalTo(true));
     }
 
+    @Test
+    public void testRequestShutdown() throws Exception {
+
+
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        StreamConfig streamConfig = mock(StreamConfig.class);
+        IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
+
+        ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
+                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
+                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+
+        final List<KinesisClientLease> leases = new ArrayList<>();
+        final List<ShardInfo> currentAssignments = new ArrayList<>();
+        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        leases.add(lease);
+        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
+                lease.getParentShardIds(), lease.getCheckpoint()));
+
+
+        when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
+            @Override
+            public List<KinesisClientLease> answer(InvocationOnMock invocation) throws Throwable {
+                return leases;
+            }
+        });
+        when(leaseCoordinator.getCurrentAssignments()).thenAnswer(new Answer<List<ShardInfo>>() {
+            @Override
+            public List<ShardInfo> answer(InvocationOnMock invocation) throws Throwable {
+                return currentAssignments;
+            }
+        });
+
+        IRecordProcessor processor = mock(IRecordProcessor.class);
+        when(recordProcessorFactory.createProcessor()).thenReturn(processor);
+
+
+        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
+                INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
+                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
+                taskBackoffTimeMillis, failoverTimeMillis, shardPrioritization);
+
+        when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
+                .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
+        when(taskFuture.isDone()).thenReturn(true);
+        when(taskFuture.get()).thenReturn(taskResult);
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
+                .and(TaskTypeMatcher.isOfType(TaskType.BLOCK_ON_PARENT_SHARDS))));
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(
+                both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.INITIALIZE))));
+
+        worker.requestShutdown();
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
+                .and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN_NOTIFICATION))));
+
+        worker.runProcessLoop();
+
+        verify(leaseCoordinator, atLeastOnce()).dropLease(eq(lease));
+        leases.clear();
+        currentAssignments.clear();
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(
+                both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN))));
+
+    }
+
+    @Test
+    public void testLeaseCancelledAfterShutdownRequest() throws Exception {
+
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        StreamConfig streamConfig = mock(StreamConfig.class);
+        IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
+
+        ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
+                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
+                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+
+        final List<KinesisClientLease> leases = new ArrayList<>();
+        final List<ShardInfo> currentAssignments = new ArrayList<>();
+        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        leases.add(lease);
+        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
+                lease.getParentShardIds(), lease.getCheckpoint()));
+
+        when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
+            @Override
+            public List<KinesisClientLease> answer(InvocationOnMock invocation) throws Throwable {
+                return leases;
+            }
+        });
+        when(leaseCoordinator.getCurrentAssignments()).thenAnswer(new Answer<List<ShardInfo>>() {
+            @Override
+            public List<ShardInfo> answer(InvocationOnMock invocation) throws Throwable {
+                return currentAssignments;
+            }
+        });
+
+        IRecordProcessor processor = mock(IRecordProcessor.class);
+        when(recordProcessorFactory.createProcessor()).thenReturn(processor);
+
+        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
+                INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
+                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
+                taskBackoffTimeMillis, failoverTimeMillis, shardPrioritization);
+
+        when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
+                .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
+        when(taskFuture.isDone()).thenReturn(true);
+        when(taskFuture.get()).thenReturn(taskResult);
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
+                .and(TaskTypeMatcher.isOfType(TaskType.BLOCK_ON_PARENT_SHARDS))));
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(
+                both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.INITIALIZE))));
+
+        worker.requestShutdown();
+        leases.clear();
+        currentAssignments.clear();
+        worker.runProcessLoop();
+
+        verify(executorService, never()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
+                .and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN_NOTIFICATION))));
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce())
+                .submit(argThat(ShutdownReasonMatcher.hasReason(equalTo(ShutdownReason.ZOMBIE))));
+        verify(executorService, atLeastOnce()).submit(argThat(
+                both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN))));
+
+    }
+
+    @Test
+    public void testEndOfShardAfterShutdownRequest() throws Exception {
+
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        StreamConfig streamConfig = mock(StreamConfig.class);
+        IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
+
+        ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
+                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
+                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+
+        final List<KinesisClientLease> leases = new ArrayList<>();
+        final List<ShardInfo> currentAssignments = new ArrayList<>();
+        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        leases.add(lease);
+        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
+                lease.getParentShardIds(), lease.getCheckpoint()));
+
+        when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
+            @Override
+            public List<KinesisClientLease> answer(InvocationOnMock invocation) throws Throwable {
+                return leases;
+            }
+        });
+        when(leaseCoordinator.getCurrentAssignments()).thenAnswer(new Answer<List<ShardInfo>>() {
+            @Override
+            public List<ShardInfo> answer(InvocationOnMock invocation) throws Throwable {
+                return currentAssignments;
+            }
+        });
+
+        IRecordProcessor processor = mock(IRecordProcessor.class);
+        when(recordProcessorFactory.createProcessor()).thenReturn(processor);
+
+        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
+                INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
+                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
+                taskBackoffTimeMillis, failoverTimeMillis, shardPrioritization);
+
+        when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
+                .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
+        when(taskFuture.isDone()).thenReturn(true);
+        when(taskFuture.get()).thenReturn(taskResult);
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
+                .and(TaskTypeMatcher.isOfType(TaskType.BLOCK_ON_PARENT_SHARDS))));
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(
+                both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.INITIALIZE))));
+        when(taskResult.isShardEndReached()).thenReturn(true);
+
+        worker.requestShutdown();
+        worker.runProcessLoop();
+
+        verify(executorService, never()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
+                .and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN_NOTIFICATION))));
+
+        verify(executorService).submit(argThat(ShutdownReasonMatcher.hasReason(equalTo(ShutdownReason.TERMINATE))));
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(
+                both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN))));
+
+    }
+
+    private static class ShutdownReasonMatcher extends TypeSafeDiagnosingMatcher<MetricsCollectingTaskDecorator> {
+
+        private final Matcher<ShutdownReason> matcher;
+
+        public ShutdownReasonMatcher(Matcher<ShutdownReason> matcher) {
+            this.matcher = matcher;
+        }
+
+        @Override
+        public void describeTo(Description description) {
+            description.appendText("hasShutdownReason(").appendDescriptionOf(matcher).appendText(")");
+        }
+
+        @Override
+        protected boolean matchesSafely(MetricsCollectingTaskDecorator item, Description mismatchDescription) {
+            return Condition.matched(item, mismatchDescription)
+                    .and(new Condition.Step<MetricsCollectingTaskDecorator, ShutdownTask>() {
+                        @Override
+                        public Condition<ShutdownTask> apply(MetricsCollectingTaskDecorator value,
+                                Description mismatch) {
+                            if (!(value.getOther() instanceof ShutdownTask)) {
+                                mismatch.appendText("Wrapped task isn't a shutdown task");
+                                return Condition.notMatched();
+                            }
+                            return Condition.matched((ShutdownTask) value.getOther(), mismatch);
+                        }
+                    }).and(new Condition.Step<ShutdownTask, ShutdownReason>() {
+                        @Override
+                        public Condition<ShutdownReason> apply(ShutdownTask value, Description mismatch) {
+                            return Condition.matched(value.getReason(), mismatch);
+                        }
+                    }).matching(matcher);
+        }
+
+        public static ShutdownReasonMatcher hasReason(Matcher<ShutdownReason> matcher) {
+            return new ShutdownReasonMatcher(matcher);
+        }
+    }
+
+    private static class ShutdownHandlingAnswer implements Answer<Future<TaskResult>> {
+
+        final Future<TaskResult> defaultFuture;
+
+        public ShutdownHandlingAnswer(Future<TaskResult> defaultFuture) {
+            this.defaultFuture = defaultFuture;
+        }
+
+        @Override
+        public Future<TaskResult> answer(InvocationOnMock invocation) throws Throwable {
+            ITask rootTask = (ITask) invocation.getArguments()[0];
+            if (rootTask instanceof MetricsCollectingTaskDecorator
+                    && ((MetricsCollectingTaskDecorator) rootTask).getOther() instanceof ShutdownNotificationTask) {
+                ShutdownNotificationTask task = (ShutdownNotificationTask) ((MetricsCollectingTaskDecorator) rootTask).getOther();
+                return Futures.immediateFuture(task.call());
+            }
+            return defaultFuture;
+        }
+    }
+
+    private static class TaskTypeMatcher extends TypeSafeMatcher<MetricsCollectingTaskDecorator> {
+
+        final Matcher<TaskType> expectedTaskType;
+
+        TaskTypeMatcher(TaskType expectedTaskType) {
+            this(equalTo(expectedTaskType));
+        }
+
+        TaskTypeMatcher(Matcher<TaskType> expectedTaskType) {
+            this.expectedTaskType = expectedTaskType;
+        }
+
+        @Override
+        protected boolean matchesSafely(MetricsCollectingTaskDecorator item) {
+            return expectedTaskType.matches(item.getTaskType());
+        }
+
+        @Override
+        public void describeTo(Description description) {
+            description.appendText("taskType matches");
+            expectedTaskType.describeTo(description);
+        }
+
+        static TaskTypeMatcher isOfType(TaskType taskType) {
+            return new TaskTypeMatcher(taskType);
+        }
+
+        static TaskTypeMatcher matchesType(Matcher<TaskType> matcher) {
+            return new TaskTypeMatcher(matcher);
+        }
+    }
+
+    private static class InnerTaskMatcher<T extends ITask> extends TypeSafeMatcher<MetricsCollectingTaskDecorator> {
+
+        final Matcher<T> matcher;
+
+        InnerTaskMatcher(Matcher<T> matcher) {
+            this.matcher = matcher;
+        }
+
+        @Override
+        protected boolean matchesSafely(MetricsCollectingTaskDecorator item) {
+            return matcher.matches(item.getOther());
+        }
+
+        @Override
+        public void describeTo(Description description) {
+            matcher.describeTo(description);
+        }
+
+        static <U extends ITask> InnerTaskMatcher<U> taskWith(Class<U> clazz, Matcher<U> matcher) {
+            return new InnerTaskMatcher<>(matcher);
+        }
+    }
     /**
      * Returns executor service that will be owned by the worker. This is useful to test the scenario
      * where worker shuts down the executor service also during shutdown flow.
@@ -694,7 +1036,8 @@ public class WorkerTest {
      * @return Executor service that will be owned by the worker.
      */
     private WorkerThreadPoolExecutor getWorkerThreadPoolExecutor() {
-        return new WorkerThreadPoolExecutor();
+        ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("RecordProcessor-%04d").build();
+        return new WorkerThreadPoolExecutor(threadFactory);
     }
 
     private List<Shard> createShardListWithOneShard() {

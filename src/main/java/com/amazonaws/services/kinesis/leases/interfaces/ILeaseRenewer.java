@@ -74,6 +74,13 @@ public interface ILeaseRenewer<T extends Lease> {
     public void clearCurrentlyHeldLeases();
 
     /**
+     * Stops the lease renewer from continunig to maintain the given lease.
+     * 
+     * @param lease the lease to drop.
+     */
+    void dropLease(T lease);
+
+    /**
      * Update application-specific fields in a currently held lease. Cannot be used to update internal fields such as
      * leaseCounter, leaseOwner, etc. Fails if we do not hold the lease, or if the concurrency token does not match
      * the concurrency token on the internal authoritative copy of the lease (ie, if we lost and re-acquired the lease).
