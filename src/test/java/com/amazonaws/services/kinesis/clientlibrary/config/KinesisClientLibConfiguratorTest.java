@@ -329,6 +329,29 @@ public class KinesisClientLibConfiguratorTest {
         }
     }
 
+    @Test
+    public void testWithDifferentAWSCredentialsForDynamoDBAndCloudWatch() {
+        String test = StringUtils.join(new String[] {
+                "streamName = a",
+                "applicationName = b",
+                "AWSCredentialsProvider = " + credentialName1,
+                "AWSCredentialsProviderDynamoDB = " + credentialName1,
+                "AWSCredentialsProviderCloudWatch = " + credentialName1,
+                "failoverTimeMillis = 100",
+                "shardSyncIntervalMillis = 500"
+        }, '\n');
+        InputStream input = new ByteArrayInputStream(test.getBytes());
+
+        // separate input stream with getConfiguration to explicitly catch exception from the getConfiguration statement
+        try {
+            KinesisClientLibConfiguration config = configurator.getConfiguration(input);
+            config.getKinesisCredentialsProvider().getCredentials();
+            fail("expect failure with wrong credentials provider");
+        } catch (Exception e) {
+            // succeed
+        }
+    }
+
     /**
      * This credentials provider will always succeed
      */
