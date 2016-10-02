@@ -130,7 +130,7 @@ public class KinesisClientLibConfigurator {
         // Decode the CloudWatch credentials provider if it exists.  If not use the Kinesis credentials provider.
         AWSCredentialsProvider providerCloudWatch;
         String propCredentialsProviderCloudWatchValue = properties.getProperty(PROP_CREDENTIALS_PROVIDER_CLOUDWATCH);
-        if (propCredentialsProviderDynamoDBValue == null) {
+        if (propCredentialsProviderCloudWatchValue == null) {
             providerCloudWatch = provider;
         } else {
             providerCloudWatch = awsCPPropGetter.decodeValue(propCredentialsProviderCloudWatchValue);
