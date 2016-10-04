@@ -15,59 +15,57 @@
 package com.amazonaws.services.kinesis.clientlibrary.config;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.util.Set;
-import java.io.File;
-import java.io.IOException;
-
-import org.apache.commons.lang.StringUtils;
 import org.junit.Test;
 
 import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSCredentialsProviderChain;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.kinesis.clientlibrary.config.AWSCredentialsProviderPropertyValueDecoder;
 
 public class AWSCredentialsProviderPropertyValueDecoderTest {
 
+    private static final String TEST_ACCESS_KEY_ID = "123";
+    private static final String TEST_SECRET_KEY = "456";
+
     private String credentialName1 =
-            "com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProvider";
+            "com.amazonaws.services.kinesis.clientlibrary.config.AWSCredentialsProviderPropertyValueDecoderTest$AlwaysSucceedCredentialsProvider";
     private String credentialName2 =
-            "com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfiguratorTest$AlwaysFailCredentialsProvider";
+            "com.amazonaws.services.kinesis.clientlibrary.config.AWSCredentialsProviderPropertyValueDecoderTest$ConstructorCredentialsProvider";
     private AWSCredentialsProviderPropertyValueDecoder decoder = new AWSCredentialsProviderPropertyValueDecoder();
 
     @Test
     public void testSingleProvider() {
         AWSCredentialsProvider provider = decoder.decodeValue(credentialName1);
         assertEquals(provider.getClass(), AWSCredentialsProviderChain.class);
+        assertEquals(provider.getCredentials().getAWSAccessKeyId(), TEST_ACCESS_KEY_ID);
+        assertEquals(provider.getCredentials().getAWSSecretKey(), TEST_SECRET_KEY);
     }
 
     @Test
     public void testTwoProviders() {
-        AWSCredentialsProvider provider = decoder.decodeValue(credentialName1 + "," + credentialName2);
+        AWSCredentialsProvider provider = decoder.decodeValue(credentialName1 + "," + credentialName1);
         assertEquals(provider.getClass(), AWSCredentialsProviderChain.class);
+        assertEquals(provider.getCredentials().getAWSAccessKeyId(), TEST_ACCESS_KEY_ID);
+        assertEquals(provider.getCredentials().getAWSSecretKey(), TEST_SECRET_KEY);
     }
 
     @Test
     public void testProfileProviderWithOneArg() {
-        AWSCredentialsProvider provider = decoder.decodeValue(ProfileCredentialsProvider.class.getName() + "|profileName");
+        AWSCredentialsProvider provider = decoder.decodeValue(credentialName2 + "|arg");
         assertEquals(provider.getClass(), AWSCredentialsProviderChain.class);
+        assertEquals(provider.getCredentials().getAWSAccessKeyId(), "arg");
+        assertEquals(provider.getCredentials().getAWSSecretKey(), "blank");
     }
 
     @Test
-    public void testProfileProviderWithTwoArgs() throws IOException {
-        File temp = File.createTempFile("test-profiles-file", ".tmp");
-        temp.deleteOnExit();
-        AWSCredentialsProvider provider = decoder.decodeValue(ProfileCredentialsProvider.class.getName() +
-            "|" + temp.getAbsolutePath() + "|profileName");
+    public void testProfileProviderWithTwoArgs() {
+        AWSCredentialsProvider provider = decoder.decodeValue(credentialName2 +
+            "|arg1|arg2");
         assertEquals(provider.getClass(), AWSCredentialsProviderChain.class);
+        assertEquals(provider.getCredentials().getAWSAccessKeyId(), "arg1");
+        assertEquals(provider.getCredentials().getAWSSecretKey(), "arg2");
     }
 
    /**
@@ -77,7 +75,7 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
 
         @Override
         public AWSCredentials getCredentials() {
-            return null;
+            return new BasicAWSCredentials(TEST_ACCESS_KEY_ID, TEST_SECRET_KEY);
         }
 
         @Override
@@ -87,13 +85,26 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
     }
 
     /**
-     * This credentials provider will always fail
+     * This credentials provider needs a constructor call to instantiate it
      */
-    public static class AlwaysFailCredentialsProvider implements AWSCredentialsProvider {
+    public static class ConstructorCredentialsProvider implements AWSCredentialsProvider {
+
+        private String arg1;
+        private String arg2;
+
+        public ConstructorCredentialsProvider(String arg1) {
+            this.arg1 = arg1;
+            this.arg2 = "blank";
+        }
+
+        public ConstructorCredentialsProvider(String arg1, String arg2) {
+            this.arg1 = arg1;
+            this.arg2 = arg2;
+        }
 
         @Override
         public AWSCredentials getCredentials() {
-            throw new IllegalArgumentException();
+            return new BasicAWSCredentials(arg1, arg2);
         }
 
         @Override
