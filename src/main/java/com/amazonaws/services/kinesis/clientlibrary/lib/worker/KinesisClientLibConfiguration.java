@@ -245,6 +245,74 @@ public class KinesisClientLibConfiguration {
      *        can assist with troubleshooting (e.g. distinguish requests made by separate applications).
      * @param streamName Name of the Kinesis stream
      * @param kinesisEndpoint Kinesis endpoint
+     * @param initialPositionInStream One of LATEST or TRIM_HORIZON. The KinesisClientLibrary will start fetching
+     *        records from that location in the stream when an application starts up for the first time and there
+     *        are no checkpoints. If there are checkpoints, then we start from the checkpoint position.
+     * @param kinesisCredentialsProvider Provides credentials used to access Kinesis
+     * @param dynamoDBCredentialsProvider Provides credentials used to access DynamoDB
+     * @param cloudWatchCredentialsProvider Provides credentials used to access CloudWatch
+     * @param failoverTimeMillis Lease duration (leases not renewed within this period will be claimed by others)
+     * @param workerId Used to distinguish different workers/processes of a Kinesis application
+     * @param maxRecords Max records to read per Kinesis getRecords() call
+     * @param idleTimeBetweenReadsInMillis Idle time between calls to fetch data from Kinesis
+     * @param callProcessRecordsEvenForEmptyRecordList Call the IRecordProcessor::processRecords() API even if
+     *        GetRecords returned an empty record list.
+     * @param parentShardPollIntervalMillis Wait for this long between polls to check if parent shards are done
+     * @param shardSyncIntervalMillis Time between tasks to sync leases and Kinesis shards
+     * @param cleanupTerminatedShardsBeforeExpiry Clean up shards we've finished processing (don't wait for expiration
+     *        in Kinesis)
+     * @param kinesisClientConfig Client Configuration used by Kinesis client
+     * @param dynamoDBClientConfig Client Configuration used by DynamoDB client
+     * @param cloudWatchClientConfig Client Configuration used by CloudWatch client
+     * @param taskBackoffTimeMillis Backoff period when tasks encounter an exception
+     * @param metricsBufferTimeMillis Metrics are buffered for at most this long before publishing to CloudWatch
+     * @param metricsMaxQueueSize Max number of metrics to buffer before publishing to CloudWatch
+     * @param validateSequenceNumberBeforeCheckpointing whether KCL should validate client provided sequence numbers
+     *        with a call to Amazon Kinesis before checkpointing for calls to
+     *        {@link RecordProcessorCheckpointer#checkpoint(String)}
+     * @param regionName The region name for the service
+     */
+    // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
+    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
+    public KinesisClientLibConfiguration(String applicationName,
+            String streamName,
+            String kinesisEndpoint,
+            InitialPositionInStream initialPositionInStream,
+            AWSCredentialsProvider kinesisCredentialsProvider,
+            AWSCredentialsProvider dynamoDBCredentialsProvider,
+            AWSCredentialsProvider cloudWatchCredentialsProvider,
+            long failoverTimeMillis,
+            String workerId,
+            int maxRecords,
+            long idleTimeBetweenReadsInMillis,
+            boolean callProcessRecordsEvenForEmptyRecordList,
+            long parentShardPollIntervalMillis,
+            long shardSyncIntervalMillis,
+            boolean cleanupTerminatedShardsBeforeExpiry,
+            ClientConfiguration kinesisClientConfig,
+            ClientConfiguration dynamoDBClientConfig,
+            ClientConfiguration cloudWatchClientConfig,
+            long taskBackoffTimeMillis,
+            long metricsBufferTimeMillis,
+            int metricsMaxQueueSize,
+            boolean validateSequenceNumberBeforeCheckpointing,
+            String regionName) {
+        this(applicationName, streamName, kinesisEndpoint, null, initialPositionInStream, kinesisCredentialsProvider,
+                dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, failoverTimeMillis, workerId,
+                maxRecords, idleTimeBetweenReadsInMillis,
+                callProcessRecordsEvenForEmptyRecordList, parentShardPollIntervalMillis,
+                shardSyncIntervalMillis, cleanupTerminatedShardsBeforeExpiry,
+                kinesisClientConfig, dynamoDBClientConfig, cloudWatchClientConfig,
+                taskBackoffTimeMillis, metricsBufferTimeMillis, metricsMaxQueueSize,
+                validateSequenceNumberBeforeCheckpointing, regionName);
+    }
+
+    /**
+     * @param applicationName Name of the Kinesis application
+     *        By default the application name is included in the user agent string used to make AWS requests. This
+     *        can assist with troubleshooting (e.g. distinguish requests made by separate applications).
+     * @param streamName Name of the Kinesis stream
+     * @param kinesisEndpoint Kinesis endpoint
      * @param dynamoDBEndpoint DynamoDB endpoint
      * @param initialPositionInStream One of LATEST or TRIM_HORIZON. The KinesisClientLibrary will start fetching
      *        records from that location in the stream when an application starts up for the first time and there
