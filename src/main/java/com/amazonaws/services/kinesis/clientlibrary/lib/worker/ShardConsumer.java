@@ -58,6 +58,7 @@ class ShardConsumer {
     private final long parentShardPollIntervalMillis;
     private final boolean cleanupLeasesOfCompletedShards;
     private final long taskBackoffTimeMillis;
+    private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
 
     private ITask currentTask;
     private long currentTaskSubmitTime;
@@ -96,7 +97,8 @@ class ShardConsumer {
             boolean cleanupLeasesOfCompletedShards,
             ExecutorService executorService,
             IMetricsFactory metricsFactory,
-            long backoffTimeMillis) {
+            long backoffTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
         this.streamConfig = streamConfig;
         this.recordProcessor = recordProcessor;
         this.executorService = executorService;
@@ -114,6 +116,7 @@ class ShardConsumer {
         this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.taskBackoffTimeMillis = backoffTimeMillis;
+        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
     }
 
     /**
@@ -262,7 +265,8 @@ class ShardConsumer {
                                 recordProcessor,
                                 recordProcessorCheckpointer,
                                 dataFetcher,
-                                taskBackoffTimeMillis);
+                                taskBackoffTimeMillis,
+                                skipShardSyncAtWorkerInitializationIfLeasesExist);
                 break;
             case SHUTTING_DOWN:
                 nextTask =

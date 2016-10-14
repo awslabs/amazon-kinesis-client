@@ -224,6 +224,7 @@ public class WorkerTest {
                         nullMetricsFactory,
                         taskBackoffTimeMillis,
                         failoverTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         shardPrioritization);
         ShardInfo shardInfo = new ShardInfo(dummyKinesisShardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         ShardConsumer consumer = worker.createOrGetShardConsumer(shardInfo, streamletFactory);
@@ -263,7 +264,7 @@ public class WorkerTest {
         Worker worker = new Worker(stageName, streamletFactory, streamConfig, INITIAL_POSITION_LATEST,
                 parentShardPollIntervalMillis, shardSyncIntervalMillis, cleanupLeasesUponShardCompletion, checkpoint,
                 leaseCoordinator, execService, nullMetricsFactory, taskBackoffTimeMillis, failoverTimeMillis,
-                shardPrioritization);
+                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, shardPrioritization);
 
         Worker workerSpy = spy(worker);
 
@@ -327,6 +328,7 @@ public class WorkerTest {
                         nullMetricsFactory,
                         taskBackoffTimeMillis,
                         failoverTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         shardPrioritization);
 
         ShardInfo shardInfo1 = new ShardInfo(dummyKinesisShardId, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
@@ -380,6 +382,7 @@ public class WorkerTest {
                         nullMetricsFactory,
                         taskBackoffTimeMillis,
                         failoverTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         shardPrioritization);
         worker.run();
         Assert.assertTrue(count > 0);
@@ -823,8 +826,9 @@ public class WorkerTest {
                         metricsFactory,
                         taskBackoffTimeMillis,
                         failoverTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         shardPrioritization);
-
+        
         WorkerThread workerThread = new WorkerThread(worker);
         workerThread.start();
         return workerThread;

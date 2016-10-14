@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -212,6 +212,14 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
     @Override
     public List<T> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         return list(null);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isLeaseTableEmpty() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        return list(1).isEmpty();
     }
 
     /**

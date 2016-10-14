@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -179,5 +179,16 @@ public interface ILeaseManager<T extends Lease> {
      */
     public boolean updateLease(T lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+
+    /**
+     * Check (synchronously) if there are any leases in the lease table.
+     * 
+     * @return true if there are no leases in the lease table
+     * 
+     * @throws DependencyException if DynamoDB scan fails in an unexpected way
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
+     */
+    public boolean isLeaseTableEmpty() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
 }
