@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.clientlibrary.config;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.lang.reflect.Constructor;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -30,6 +31,7 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
     private static final Log LOG = LogFactory.getLog(AWSCredentialsProviderPropertyValueDecoder.class);
     private static final String AUTH_PREFIX = "com.amazonaws.auth.";
     private static final String LIST_DELIMITER = ",";
+    private static final String ARG_DELIMITER = "|";
 
     /**
      * Constructor.
@@ -70,11 +72,25 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
     private static List<AWSCredentialsProvider> getValidCredentialsProviders(List<String> providerNames) {
         List<AWSCredentialsProvider> credentialsProviders = new ArrayList<AWSCredentialsProvider>();
         for (String providerName : providerNames) {
-            try {
-                Class<?> className = Class.forName(providerName);
-                credentialsProviders.add((AWSCredentialsProvider) className.newInstance());
-            } catch (Exception e) {
-                LOG.debug("Can't find any credentials provider matching " + providerName + ".");
+            if (providerName.contains(ARG_DELIMITER)){
+                String[] nameAndArgs = providerName.split("\\" + ARG_DELIMITER);
+                Class<?>[] argTypes = new Class<?>[nameAndArgs.length - 1];
+                Arrays.fill(argTypes, String.class);
+                try {
+                    Class<?> className = Class.forName(nameAndArgs[0]);
+                    Constructor<?> c = className.getConstructor(argTypes);
+                    credentialsProviders.add((AWSCredentialsProvider) c.newInstance(
+                            Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length)));
+                } catch (Exception ex) {
+                    LOG.debug("Can't find any credentials provider matching " + providerName + ".");
+                }
+            } else {
+                try {
+                    Class<?> className = Class.forName(providerName);
+                    credentialsProviders.add((AWSCredentialsProvider) className.newInstance());
+                } catch (Exception e) {
+                    LOG.debug("Can't find any credentials provider matching " + providerName + ".");
+                }
             }
         }
         return credentialsProviders;
