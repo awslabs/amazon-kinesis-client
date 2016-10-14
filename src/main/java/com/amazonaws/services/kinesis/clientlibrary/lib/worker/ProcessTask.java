@@ -73,7 +73,8 @@ class ProcessTask implements ITask {
             IRecordProcessor recordProcessor,
             RecordProcessorCheckpointer recordProcessorCheckpointer,
             KinesisDataFetcher dataFetcher,
-            long backoffTimeMillis) {
+            long backoffTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
         super();
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -82,13 +83,19 @@ class ProcessTask implements ITask {
         this.streamConfig = streamConfig;
         this.backoffTimeMillis = backoffTimeMillis;
         IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
-        if (kinesisProxy instanceof IKinesisProxyExtended) {
+        // If skipShardSyncAtWorkerInitializationIfLeasesExist is set, we will not get the shard for
+        // this ProcessTask. In this case, duplicate KPL user records in the event of resharding will
+        // not be dropped during deaggregation of Amazon Kinesis records. This is only applicable if
+        // KPL is used for ingestion and KPL's aggregation feature is used.
+        if (!skipShardSyncAtWorkerInitializationIfLeasesExist && kinesisProxy instanceof IKinesisProxyExtended) {
             this.shard = ((IKinesisProxyExtended) kinesisProxy).getShard(this.shardInfo.getShardId());
         } else {
+            this.shard = null;
+        }
+        if (this.shard == null && !skipShardSyncAtWorkerInitializationIfLeasesExist) {
             LOG.warn("Cannot get the shard for this ProcessTask, so duplicate KPL user records "
                     + "in the event of resharding will not be dropped during deaggregation of Amazon "
                     + "Kinesis records.");
-            this.shard = null;
         }
     }
 
