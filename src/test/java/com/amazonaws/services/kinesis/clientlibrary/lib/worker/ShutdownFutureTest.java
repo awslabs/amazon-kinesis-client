@@ -3,6 +3,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,7 +17,10 @@ import java.util.concurrent.TimeoutException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
+import org.mockito.stubbing.OngoingStubbing;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ShutdownFutureTest {
@@ -50,6 +54,10 @@ public class ShutdownFutureTest {
 
         mockNotificationComplete(false, true);
         mockShutdownComplete(true);
+
+        when(worker.getShardInfoShardConsumerMap()).thenReturn(shardInfoConsumerMap);
+        when(shardInfoConsumerMap.isEmpty()).thenReturn(false);
+        when(worker.isShutdownComplete()).thenReturn(false);
 
         when(notificationCompleteLatch.getCount()).thenReturn(1L);
         when(shutdownCompleteLatch.getCount()).thenReturn(1L);
@@ -135,8 +143,41 @@ public class ShutdownFutureTest {
 
         verify(shardInfoConsumerMap).isEmpty();
         verify(shardInfoConsumerMap).size();
+    }
 
+    @Test
+    public void testNotificationNotCompleteButShardConsumerEmpty() throws Exception {
+        ShutdownFuture future = create();
+        mockNotificationComplete(false);
+        mockShutdownComplete(false);
 
+        mockOutstanding(notificationCompleteLatch, 1L);
+        mockOutstanding(shutdownCompleteLatch, 1L);
+
+        when(worker.isShutdownComplete()).thenReturn(false);
+        mockShardInfoConsumerMap(0);
+
+        awaitFuture(future);
+        verify(worker, never()).shutdown();
+        verifyLatchAwait(notificationCompleteLatch);
+        verify(shutdownCompleteLatch, never()).await();
+
+        verify(worker, times(2)).isShutdownComplete();
+        verify(worker, times(2)).getShardInfoShardConsumerMap();
+
+        verify(shardInfoConsumerMap).isEmpty();
+        verify(shardInfoConsumerMap).size();
+    }
+
+    @Test(expected = TimeoutException.class)
+    public void testTimeExceededException() throws Exception {
+        ShutdownFuture future = create();
+        mockNotificationComplete(false);
+        mockOutstanding(notificationCompleteLatch, 1L);
+        when(worker.isShutdownComplete()).thenReturn(false);
+        mockShardInfoConsumerMap(1);
+
+        future.get(1, TimeUnit.NANOSECONDS);
     }
 
     private ShutdownFuture create() {
@@ -172,7 +213,7 @@ public class ShutdownFutureTest {
     }
 
     private void awaitFuture(ShutdownFuture future) throws Exception {
-        future.get(1, TimeUnit.MILLISECONDS);
+        future.get(1, TimeUnit.SECONDS);
     }
 
     private void mockNotificationComplete(Boolean initial, Boolean... states) throws Exception {

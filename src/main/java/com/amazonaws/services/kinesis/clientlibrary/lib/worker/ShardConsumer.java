@@ -15,8 +15,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 
-import java.util.Collections;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
@@ -39,11 +37,7 @@ import com.google.common.annotations.VisibleForTesting;
  */
 class ShardConsumer {
 
-
-
     private static final Log LOG = LogFactory.getLog(ShardConsumer.class);
-
-    private static final Set<ConsumerStates.ShardConsumerState> EMPTY_DISALLOWED_SET = Collections.emptySet();
 
     private final StreamConfig streamConfig;
     private final IRecordProcessor recordProcessor;

@@ -28,7 +28,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -43,6 +42,7 @@ import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxyFactory;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
@@ -490,9 +490,11 @@ public class Worker implements Runnable {
     }
 
     /**
-     * Requests shutdown of the worker, notifying record processors, that implement
-     * {@link IShutdownNotificationAware}, of the impending shutdown.
-     * This gives the record processor a final chance to checkpoint.
+     * Requests shutdown of the worker, notifying record processors, that implement {@link IShutdownNotificationAware},
+     * of the impending shutdown. This gives the record processor a final chance to checkpoint.
+     *
+     * <b>It's possible that a record processor won't be notify before being shutdown. This can occur if the lease is
+     * lost after requesting shutdown, but before the notification is dispatched.</b>
      *
      * <h2>Requested Shutdown Process</h2> When a shutdown process is requested it operates slightly differently to
      * allow the record processors a chance to checkpoint a final time.
@@ -567,6 +569,10 @@ public class Worker implements Runnable {
      * </ol>
      */
     public void shutdown() {
+        if (shutdown) {
+            LOG.warn("Shutdown requested a second time.");
+            return;
+        }
         LOG.info("Worker shutdown requested.");
 
         // Set shutdown flag, so Worker.run can start shutdown process.

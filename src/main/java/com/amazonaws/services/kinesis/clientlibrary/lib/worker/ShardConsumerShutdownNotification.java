@@ -47,6 +47,10 @@ class ShardConsumerShutdownNotification implements ShutdownNotification {
         if (notificationComplete) {
             return;
         }
+        //
+        // Once the notification has been completed, the lease needs to dropped to allow the worker to complete
+        // shutdown of the record processor.
+        //
         leaseCoordinator.dropLease(lease);
         notificationCompleteLatch.countDown();
         notificationComplete = true;
