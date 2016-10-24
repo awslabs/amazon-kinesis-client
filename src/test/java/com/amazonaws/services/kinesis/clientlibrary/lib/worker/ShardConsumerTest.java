@@ -127,7 +127,8 @@ public class ShardConsumerTest {
                         cleanupLeasesOfCompletedShards,
                         executorService,
                         metricsFactory,
-                        taskBackoffTimeMillis);
+                        taskBackoffTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // initialize
@@ -173,7 +174,8 @@ public class ShardConsumerTest {
                         cleanupLeasesOfCompletedShards,
                         spyExecutorService,
                         metricsFactory,
-                        taskBackoffTimeMillis);
+                        taskBackoffTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // initialize
@@ -213,7 +215,8 @@ public class ShardConsumerTest {
                         cleanupLeasesOfCompletedShards,
                         executorService,
                         metricsFactory,
-                        taskBackoffTimeMillis);
+                        taskBackoffTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
 
         when(leaseManager.getLease(anyString())).thenReturn(null);
         when(checkpoint.getCheckpoint(anyString())).thenReturn(new ExtendedSequenceNumber("123"));
@@ -300,7 +303,8 @@ public class ShardConsumerTest {
                         cleanupLeasesOfCompletedShards,
                         executorService,
                         metricsFactory,
-                        taskBackoffTimeMillis);
+                        taskBackoffTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
@@ -402,7 +406,8 @@ public class ShardConsumerTest {
                         cleanupLeasesOfCompletedShards,
                         executorService,
                         metricsFactory,
-                        taskBackoffTimeMillis);
+                        taskBackoffTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards

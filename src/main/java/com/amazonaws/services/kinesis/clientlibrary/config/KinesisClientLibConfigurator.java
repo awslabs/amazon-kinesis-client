@@ -50,7 +50,9 @@ public class KinesisClientLibConfigurator {
     // Required properties
     private static final String PROP_APP_NAME = "applicationName";
     private static final String PROP_STREAM_NAME = "streamName";
-    private static final String PROP_CREDENTIALS_PROVIDER = "AWSCredentialsProvider";
+    private static final String PROP_CREDENTIALS_PROVIDER_KINESIS = "AWSCredentialsProvider";
+    private static final String PROP_CREDENTIALS_PROVIDER_DYNAMODB = "AWSCredentialsProviderDynamoDB";
+    private static final String PROP_CREDENTIALS_PROVIDER_CLOUDWATCH = "AWSCredentialsProviderCloudWatch";
     private static final String PROP_WORKER_ID = "workerId";
 
     private Map<Class<?>, IPropertyValueDecoder<?>> classToDecoder;
@@ -107,13 +109,31 @@ public class KinesisClientLibConfigurator {
         String applicationName = stringValueDecoder.decodeValue(properties.getProperty(PROP_APP_NAME));
         String streamName = stringValueDecoder.decodeValue(properties.getProperty(PROP_STREAM_NAME));
         AWSCredentialsProvider provider =
-                awsCPPropGetter.decodeValue(properties.getProperty(PROP_CREDENTIALS_PROVIDER));
+                awsCPPropGetter.decodeValue(properties.getProperty(PROP_CREDENTIALS_PROVIDER_KINESIS));
 
         if (applicationName == null || applicationName.isEmpty()) {
             throw new IllegalArgumentException("Value of applicationName should be explicitly provided.");
         }
         if (streamName == null || streamName.isEmpty()) {
             throw new IllegalArgumentException("Value of streamName should be explicitly provided.");
+        }
+
+        // Decode the DynamoDB credentials provider if it exists.  If not use the Kinesis credentials provider.
+        AWSCredentialsProvider providerDynamoDB;
+        String propCredentialsProviderDynamoDBValue = properties.getProperty(PROP_CREDENTIALS_PROVIDER_DYNAMODB);
+        if (propCredentialsProviderDynamoDBValue == null) {
+            providerDynamoDB = provider;
+        } else {
+            providerDynamoDB = awsCPPropGetter.decodeValue(propCredentialsProviderDynamoDBValue);
+        }
+
+        // Decode the CloudWatch credentials provider if it exists.  If not use the Kinesis credentials provider.
+        AWSCredentialsProvider providerCloudWatch;
+        String propCredentialsProviderCloudWatchValue = properties.getProperty(PROP_CREDENTIALS_PROVIDER_CLOUDWATCH);
+        if (propCredentialsProviderCloudWatchValue == null) {
+            providerCloudWatch = provider;
+        } else {
+            providerCloudWatch = awsCPPropGetter.decodeValue(propCredentialsProviderCloudWatchValue);
         }
 
         // Allow customer not to provide workerId or to provide empty worker id.
@@ -125,13 +145,13 @@ public class KinesisClientLibConfigurator {
         }
 
         KinesisClientLibConfiguration config =
-                new KinesisClientLibConfiguration(applicationName, streamName, provider, workerId);
+                new KinesisClientLibConfiguration(applicationName, streamName, provider, providerDynamoDB, providerCloudWatch, workerId);
 
         Set<String> requiredNames =
                 new HashSet<String>(Arrays.asList(PROP_STREAM_NAME,
                         PROP_APP_NAME,
                         PROP_WORKER_ID,
-                        PROP_CREDENTIALS_PROVIDER));
+                        PROP_CREDENTIALS_PROVIDER_KINESIS));
 
         // Set all the variables that are not used for constructor.
         for (Object keyObject : properties.keySet()) {

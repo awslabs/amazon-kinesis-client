@@ -71,6 +71,7 @@ public class LeaseCoordinator<T extends Lease> {
     // Package level access for testing.
     static final int MAX_LEASE_RENEWAL_THREAD_COUNT = 20;
 
+
     private final ILeaseRenewer<T> leaseRenewer;
     private final ILeaseTaker<T> leaseTaker;
     private final long renewerIntervalMillis;

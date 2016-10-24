@@ -77,7 +77,7 @@ public class Worker implements Runnable {
     private final long idleTimeInMilliseconds;
     // Backoff time when polling to check if application has finished processing
     // parent shards
-    private final long parentShardPollIntervalMillis;
+    private final long parentShardPollIntervalMillis;    
     private final ExecutorService executorService;
     private final IMetricsFactory metricsFactory;
     // Backoff time when running tasks if they encounter exceptions
@@ -99,6 +99,8 @@ public class Worker implements Runnable {
     private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap =
             new ConcurrentHashMap<ShardInfo, ShardConsumer>();
     private final boolean cleanupLeasesUponShardCompletion;
+    
+    private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
 
     /**
      * Constructor.
@@ -216,7 +218,7 @@ public class Worker implements Runnable {
             ExecutorService execService) {
         this(
                 config.getApplicationName(),
-                new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),
+                new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),                
                 new StreamConfig(
                         new KinesisProxyFactory(config.getKinesisCredentialsProvider(), kinesisClient)
                             .getProxy(config.getStreamName()),
@@ -243,7 +245,9 @@ public class Worker implements Runnable {
                 metricsFactory,
                 config.getTaskBackoffTimeMillis(),
                 config.getFailoverTimeMillis(),
+                config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
                 config.getShardPrioritizationStrategy());
+
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
             Region region = RegionUtils.getRegion(config.getRegionName());
@@ -251,6 +255,11 @@ public class Worker implements Runnable {
             LOG.debug("The region of Amazon Kinesis client has been set to " + config.getRegionName());
             dynamoDBClient.setRegion(region);
             LOG.debug("The region of Amazon DynamoDB client has been set to " + config.getRegionName());
+        }
+        // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
+        if (config.getDynamoDBEndpoint() != null) {
+            dynamoDBClient.setEndpoint(config.getDynamoDBEndpoint());
+            LOG.debug("The endpoint of Amazon DynamoDB client has been set to " + config.getDynamoDBEndpoint());
         }
         // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
         if (config.getKinesisEndpoint() != null) {
@@ -300,6 +309,7 @@ public class Worker implements Runnable {
             IMetricsFactory metricsFactory,
             long taskBackoffTimeMillis,
             long failoverTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
             ShardPrioritization shardPrioritization) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
@@ -321,7 +331,8 @@ public class Worker implements Runnable {
                         metricsFactory,
                         executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
-        this.failoverTimeMillis = failoverTimeMillis;
+        this.failoverTimeMillis = failoverTimeMillis;        
+        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
         this.shardPrioritization = shardPrioritization;
     }
 
@@ -403,16 +414,22 @@ public class Worker implements Runnable {
                 LOG.info("Initializing LeaseCoordinator");
                 leaseCoordinator.initialize();
 
-                LOG.info("Syncing Kinesis shard info");
-                ShardSyncTask shardSyncTask =
-                        new ShardSyncTask(streamConfig.getStreamProxy(),
-                                leaseCoordinator.getLeaseManager(),
-                                initialPosition,
-                                cleanupLeasesUponShardCompletion,
-                                0L);
-                TaskResult result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
+                TaskResult result = null;
+                if (!skipShardSyncAtWorkerInitializationIfLeasesExist
+                        || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
+                    LOG.info("Syncing Kinesis shard info");
+                    ShardSyncTask shardSyncTask =
+                            new ShardSyncTask(streamConfig.getStreamProxy(),
+                                    leaseCoordinator.getLeaseManager(),
+                                    initialPosition,
+                                    cleanupLeasesUponShardCompletion,
+                                    0L);
+                    result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
+                } else {
+                    LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
+                }
 
-                if (result.getException() == null) {
+                if (result == null || result.getException() == null) {
                     if (!leaseCoordinator.isRunning()) {
                         LOG.info("Starting LeaseCoordinator");
                         leaseCoordinator.start();
@@ -654,7 +671,7 @@ public class Worker implements Runnable {
 
         return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor,
                 leaseCoordinator.getLeaseManager(), parentShardPollIntervalMillis, cleanupLeasesUponShardCompletion,
-                executorService, metricsFactory, taskBackoffTimeMillis);
+                executorService, metricsFactory, taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist);
 
     }
 
@@ -1079,7 +1096,9 @@ public class Worker implements Runnable {
                     metricsFactory,
                     config.getTaskBackoffTimeMillis(),
                     config.getFailoverTimeMillis(),
+                    config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
                     shardPrioritization);
+
         }
 
     }
