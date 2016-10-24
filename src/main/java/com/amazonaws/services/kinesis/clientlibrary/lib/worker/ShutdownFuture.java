@@ -105,10 +105,19 @@ class ShutdownFuture implements Future<Void> {
         }
     }
 
+    /**
+     * This checks to see if the worker has already hit it's shutdown target, while there is outstanding record
+     * processors. This maybe a little racy due to when the value of outstanding is retrieved. In general though the
+     * latch should be decremented before the shutdown completion.
+     *
+     * @param outstanding
+     *            the number of record processor still awaiting shutdown.
+     * @return the number of record processors awaiting shutdown, or 0 if the worker believes it's shutdown already.
+     */
     private long checkWorkerShutdownMiss(long outstanding) {
         if (isWorkerShutdownComplete()) {
             if (outstanding != 0) {
-                log.warn("Shutdown completed, but shutdownCompleteLatch still had outstanding " + outstanding
+                log.info("Shutdown completed, but shutdownCompleteLatch still had outstanding " + outstanding
                         + " with a current value of " + shutdownCompleteLatch.getCount() + ". shutdownComplete: "
                         + worker.isShutdownComplete() + " -- Consumer Map: "
                         + worker.getShardInfoShardConsumerMap().size());
