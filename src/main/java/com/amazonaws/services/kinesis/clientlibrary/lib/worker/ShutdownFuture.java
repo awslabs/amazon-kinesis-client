@@ -48,7 +48,7 @@ class ShutdownFuture implements Future<Void> {
     private long outstandingRecordProcessors(long timeout, TimeUnit unit)
             throws InterruptedException, ExecutionException, TimeoutException {
 
-        long startNanos = System.nanoTime();
+        final long startNanos = System.nanoTime();
 
         //
         // Awaiting for all ShardConsumer/RecordProcessors to be notified that a shutdown has been requested.
@@ -58,8 +58,9 @@ class ShutdownFuture implements Future<Void> {
         //
         if (!notificationCompleteLatch.await(timeout, unit)) {
             long awaitingNotification = notificationCompleteLatch.getCount();
-            log.info("Awaiting " + awaitingNotification + " record processors to complete shutdown notification");
             long awaitingFinalShutdown = shutdownCompleteLatch.getCount();
+            log.info("Awaiting " + awaitingNotification + " record processors to complete shutdown notification, and "
+                    + awaitingFinalShutdown + " awaiting final shutdown");
             if (awaitingFinalShutdown != 0) {
                 //
                 // The number of record processor awaiting final shutdown should be a superset of the those awaiting
