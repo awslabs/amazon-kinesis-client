@@ -15,9 +15,9 @@
 package com.amazonaws.services.kinesis.leases.impl;
 
 import java.util.Collection;
-
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
@@ -39,6 +39,16 @@ public class KinesisClientLease extends Lease {
         this.checkpoint = other.getCheckpoint();
         this.ownerSwitchesSinceCheckpoint = other.getOwnerSwitchesSinceCheckpoint();
         this.parentShardIds.addAll(other.getParentShardIds());
+    }
+
+    KinesisClientLease(String leaseKey, String leaseOwner, Long leaseCounter, UUID concurrencyToken,
+            Long lastCounterIncrementNanos, ExtendedSequenceNumber checkpoint, Long ownerSwitchesSinceCheckpoint,
+            Set<String> parentShardIds) {
+        super(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos);
+
+        this.checkpoint = checkpoint;
+        this.ownerSwitchesSinceCheckpoint = ownerSwitchesSinceCheckpoint;
+        this.parentShardIds.addAll(parentShardIds);
     }
 
     /**

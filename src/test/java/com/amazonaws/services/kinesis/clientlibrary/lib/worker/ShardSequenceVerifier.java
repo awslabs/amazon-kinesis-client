@@ -27,7 +27,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.model.Shard;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 
 /**
  * Helper class to verify shard lineage in unit tests that use TestStreamlet.

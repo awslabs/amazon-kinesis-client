@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -83,6 +84,7 @@ public class LeaseCoordinator<T extends Lease> {
     private ScheduledExecutorService leaseCoordinatorThreadPool;
     private final ExecutorService leaseRenewalThreadpool;
     private volatile boolean running = false;
+    private ScheduledFuture<?> takerFuture;
 
     /**
      * Constructor.
@@ -199,9 +201,15 @@ public class LeaseCoordinator<T extends Lease> {
         leaseCoordinatorThreadPool = Executors.newScheduledThreadPool(2, LEASE_COORDINATOR_THREAD_FACTORY);
 
         // Taker runs with fixed DELAY because we want it to run slower in the event of performance degredation.
-        leaseCoordinatorThreadPool.scheduleWithFixedDelay(new TakerRunnable(), 0L, takerIntervalMillis, TimeUnit.MILLISECONDS);
+        takerFuture = leaseCoordinatorThreadPool.scheduleWithFixedDelay(new TakerRunnable(),
+                0L,
+                takerIntervalMillis,
+                TimeUnit.MILLISECONDS);
         // Renewer runs at fixed INTERVAL because we want it to run at the same rate in the event of degredation.
-        leaseCoordinatorThreadPool.scheduleAtFixedRate(new RenewerRunnable(), 0L, renewerIntervalMillis, TimeUnit.MILLISECONDS);
+        leaseCoordinatorThreadPool.scheduleAtFixedRate(new RenewerRunnable(),
+                0L,
+                renewerIntervalMillis,
+                TimeUnit.MILLISECONDS);
         running = true;
     }
 
@@ -306,6 +314,27 @@ public class LeaseCoordinator<T extends Lease> {
         synchronized (shutdownLock) {
             leaseRenewer.clearCurrentlyHeldLeases();
             running = false;
+        }
+    }
+
+    /**
+     * Requests the cancellation of the lease taker.
+     */
+    public void stopLeaseTaker() {
+        takerFuture.cancel(false);
+
+    }
+
+    /**
+     * Requests that renewals for the given lease are stopped.
+     * 
+     * @param lease the lease to stop renewing.
+     */
+    public void dropLease(T lease) {
+        synchronized (shutdownLock) {
+            if (lease != null) {
+                leaseRenewer.dropLease(lease);
+            }
         }
     }
 

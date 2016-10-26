@@ -371,6 +371,15 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
 
     /**
      * {@inheritDoc}
+     * @param lease the lease to drop.
+     */
+    @Override
+    public void dropLease(T lease) {
+        ownedLeases.remove(lease.getLeaseKey());
+    }
+
+    /**
+     * {@inheritDoc}
      */
     @Override
     public void initialize() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
