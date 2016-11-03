@@ -29,6 +29,21 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
 ## Release Notes
+### Release 1.7.1 (November 03, 2016)
+* General
+  * Allow disabling shard synchronization at startup.
+    * Applications can disable shard synchronization at startup.  Disabling shard synchronization can application startup times for very large streams.
+    * [PR #102](https://github.com/awslabs/amazon-kinesis-client/pull/102)
+  * Applications can now request a graceful shutdown, and record processors that implement the IShutdownNotificationAware will be given a chance to checkpoint before being shutdown.
+    * This adds a [new interface](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/interfaces/v2/IShutdownNotificationAware.java), and a [new method on Worker](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/Worker.java#L539).
+    * [PR #109](https://github.com/awslabs/amazon-kinesis-client/pull/109)
+    * Solves [Issue #79](https://github.com/awslabs/amazon-kinesis-client/issues/79)
+* MultiLangDaemon
+  * Applications can now use credential provides that accept string parameters.
+    * [PR #99](https://github.com/awslabs/amazon-kinesis-client/pull/99)
+  * Applications can now use different credentials for each service.
+    * [PR #111](https://github.com/awslabs/amazon-kinesis-client/pull/111)
+
 ### Release 1.7.0 (August 22, 2016)
 * Add support for time based iterators ([See GetShardIterator Documentation](http://docs.aws.amazon.com/kinesis/latest/APIReference/API_GetShardIterator.html))
   * [PR #94](https://github.com/awslabs/amazon-kinesis-client/pull/94)
