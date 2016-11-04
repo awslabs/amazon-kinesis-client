@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
@@ -24,10 +25,10 @@ import org.apache.commons.logging.LogFactory;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Responsible for consuming data records of a (specified) shard.
@@ -35,13 +36,6 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
  * A new instance should be created if the primary responsibility is reassigned back to this process.
  */
 class ShardConsumer {
-
-    /**
-     * Enumerates processing states when working on a shard.
-     */
-    enum ShardConsumerState {
-        WAITING_ON_PARENT_SHARDS, INITIALIZING, PROCESSING, SHUTTING_DOWN, SHUTDOWN_COMPLETE;
-    }
 
     private static final Log LOG = LogFactory.getLog(ShardConsumer.class);
 
@@ -58,6 +52,7 @@ class ShardConsumer {
     private final long parentShardPollIntervalMillis;
     private final boolean cleanupLeasesOfCompletedShards;
     private final long taskBackoffTimeMillis;
+    private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
 
     private ITask currentTask;
     private long currentTaskSubmitTime;
@@ -67,13 +62,13 @@ class ShardConsumer {
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
      * much coordination/synchronization to handle concurrent reads/updates.
      */
-    private ShardConsumerState currentState = ShardConsumerState.WAITING_ON_PARENT_SHARDS;
+    private ConsumerStates.ConsumerState currentState = ConsumerStates.INITIAL_STATE;
     /*
      * Used to track if we lost the primary responsibility. Once set to true, we will start shutting down.
      * If we regain primary responsibility before shutdown is complete, Worker should create a new ShardConsumer object.
      */
-    private volatile boolean beginShutdown;
     private volatile ShutdownReason shutdownReason;
+    private volatile ShutdownNotification shutdownNotification;
 
     /**
      * @param shardInfo Shard information
@@ -96,7 +91,8 @@ class ShardConsumer {
             boolean cleanupLeasesOfCompletedShards,
             ExecutorService executorService,
             IMetricsFactory metricsFactory,
-            long backoffTimeMillis) {
+            long backoffTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
         this.streamConfig = streamConfig;
         this.recordProcessor = recordProcessor;
         this.executorService = executorService;
@@ -114,6 +110,7 @@ class ShardConsumer {
         this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.taskBackoffTimeMillis = backoffTimeMillis;
+        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
     }
 
     /**
@@ -126,41 +123,19 @@ class ShardConsumer {
         return checkAndSubmitNextTask();
     }
 
-    // CHECKSTYLE:OFF CyclomaticComplexity
+    private boolean readyForNextTask() {
+        return future == null || future.isCancelled() || future.isDone();
+    }
+
     private synchronized boolean checkAndSubmitNextTask() {
-        // Task completed successfully (without exceptions)
-        boolean taskCompletedSuccessfully = false;
         boolean submittedNewTask = false;
-        if ((future == null) || future.isCancelled() || future.isDone()) {
-            if ((future != null) && future.isDone()) {
-                try {
-                    TaskResult result = future.get();
-                    if (result.getException() == null) {
-                        taskCompletedSuccessfully = true;
-                        if (result.isShardEndReached()) {
-                            markForShutdown(ShutdownReason.TERMINATE);
-                        }
-                    } else {
-                        if (LOG.isDebugEnabled()) {
-                            Exception taskException = result.getException();
-                            if (taskException instanceof BlockedOnParentShardException) {
-                                // No need to log the stack trace for this exception (it is very specific).
-                                LOG.debug("Shard " + shardInfo.getShardId()
-                                        + " is blocked on completion of parent shard.");
-                            } else {
-                                LOG.debug("Caught exception running " + currentTask.getTaskType() + " task: ",
-                                        result.getException());
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    // Setting future to null so we don't misinterpret task completion status in case of exceptions
-                    future = null;
-                }
+        if (readyForNextTask()) {
+            TaskOutcome taskOutcome = TaskOutcome.NOT_COMPLETE;
+            if (future != null && future.isDone()) {
+                taskOutcome = determineTaskOutcome();
             }
-            updateState(taskCompletedSuccessfully);
+
+            updateState(taskOutcome);
             ITask nextTask = getNextTask();
             if (nextTask != null) {
                 currentTask = nextTask;
@@ -193,7 +168,56 @@ class ShardConsumer {
         return submittedNewTask;
     }
 
-    // CHECKSTYLE:ON CyclomaticComplexity
+    public boolean isSkipShardSyncAtWorkerInitializationIfLeasesExist() {
+        return skipShardSyncAtWorkerInitializationIfLeasesExist;
+    }
+
+    private enum TaskOutcome {
+        SUCCESSFUL, END_OF_SHARD, NOT_COMPLETE, FAILURE
+    }
+
+    private TaskOutcome determineTaskOutcome() {
+        try {
+            TaskResult result = future.get();
+            if (result.getException() == null) {
+                if (result.isShardEndReached()) {
+                    return TaskOutcome.END_OF_SHARD;
+                }
+                return TaskOutcome.SUCCESSFUL;
+            }
+            logTaskException(result);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            // Setting future to null so we don't misinterpret task completion status in case of exceptions
+            future = null;
+        }
+        return TaskOutcome.FAILURE;
+    }
+
+    private void logTaskException(TaskResult taskResult) {
+        if (LOG.isDebugEnabled()) {
+            Exception taskException = taskResult.getException();
+            if (taskException instanceof BlockedOnParentShardException) {
+                // No need to log the stack trace for this exception (it is very specific).
+                LOG.debug("Shard " + shardInfo.getShardId() + " is blocked on completion of parent shard.");
+            } else {
+                LOG.debug("Caught exception running " + currentTask.getTaskType() + " task: ",
+                        taskResult.getException());
+            }
+        }
+    }
+
+    /**
+     * Requests the shutdown of the this ShardConsumer. This should give the record processor a chance to checkpoint
+     * before being shutdown.
+     * 
+     * @param shutdownNotification used to signal that the record processor has been given the chance to shutdown.
+     */
+    void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
+        this.shutdownNotification = shutdownNotification;
+        markForShutdown(ShutdownReason.REQUESTED);
+    }
 
     /**
      * Shutdown this ShardConsumer (including invoking the RecordProcessor shutdown API).
@@ -202,17 +226,15 @@ class ShardConsumer {
      * @return true if shutdown is complete (false if shutdown is still in progress)
      */
     synchronized boolean beginShutdown() {
-        if (currentState != ShardConsumerState.SHUTDOWN_COMPLETE) {
-            markForShutdown(ShutdownReason.ZOMBIE);
-            checkAndSubmitNextTask();
-        }
+        markForShutdown(ShutdownReason.ZOMBIE);
+        checkAndSubmitNextTask();
+
         return isShutdown();
     }
 
     synchronized void markForShutdown(ShutdownReason reason) {
-        beginShutdown = true;
         // ShutdownReason.ZOMBIE takes precedence over TERMINATE (we won't be able to save checkpoint at end of shard)
-        if ((shutdownReason == null) || (shutdownReason == ShutdownReason.TERMINATE)) {
+        if (shutdownReason == null || shutdownReason.canTransitionTo(reason)) {
             shutdownReason = reason;
         }
     }
@@ -224,7 +246,7 @@ class ShardConsumer {
      * @return true if shutdown is complete
      */
     boolean isShutdown() {
-        return currentState == ShardConsumerState.SHUTDOWN_COMPLETE;
+        return currentState.isTerminal();
     }
 
     /**
@@ -240,47 +262,7 @@ class ShardConsumer {
      * @return Return next task to run
      */
     private ITask getNextTask() {
-        ITask nextTask = null;
-        switch (currentState) {
-            case WAITING_ON_PARENT_SHARDS:
-                nextTask = new BlockOnParentShardTask(shardInfo, leaseManager, parentShardPollIntervalMillis);
-                break;
-            case INITIALIZING:
-                nextTask =
-                        new InitializeTask(shardInfo,
-                                recordProcessor,
-                                checkpoint,
-                                recordProcessorCheckpointer,
-                                dataFetcher,
-                                taskBackoffTimeMillis,
-                                streamConfig);
-                break;
-            case PROCESSING:
-                nextTask =
-                        new ProcessTask(shardInfo,
-                                streamConfig,
-                                recordProcessor,
-                                recordProcessorCheckpointer,
-                                dataFetcher,
-                                taskBackoffTimeMillis);
-                break;
-            case SHUTTING_DOWN:
-                nextTask =
-                        new ShutdownTask(shardInfo,
-                                recordProcessor,
-                                recordProcessorCheckpointer,
-                                shutdownReason,
-                                streamConfig.getStreamProxy(),
-                                streamConfig.getInitialPositionInStream(),
-                                cleanupLeasesOfCompletedShards,
-                                leaseManager,
-                                taskBackoffTimeMillis);
-                break;
-            case SHUTDOWN_COMPLETE:
-                break;
-            default:
-                break;
-        }
+        ITask nextTask = currentState.createTask(this);
 
         if (nextTask == null) {
             return null;
@@ -293,71 +275,93 @@ class ShardConsumer {
      * Note: This is a private/internal method with package level access solely for testing purposes.
      * Update state based on information about: task success, current state, and shutdown info.
      * 
-     * @param taskCompletedSuccessfully Whether (current) task completed successfully.
+     * @param taskOutcome The outcome of the last task
      */
-    // CHECKSTYLE:OFF CyclomaticComplexity
-    void updateState(boolean taskCompletedSuccessfully) {
-        if (currentState == ShardConsumerState.SHUTDOWN_COMPLETE) {
-            // Shutdown was completed and there nothing we can do after that
-            return;
+    void updateState(TaskOutcome taskOutcome) {
+        if (taskOutcome == TaskOutcome.END_OF_SHARD) {
+            markForShutdown(ShutdownReason.TERMINATE);
         }
-        if ((currentTask == null) && beginShutdown) {
-            // Shard didn't start any tasks and can be shutdown fast
-            currentState = ShardConsumerState.SHUTDOWN_COMPLETE;
-            return;
+        if (isShutdownRequested()) {
+            currentState = currentState.shutdownTransition(shutdownReason);
+        } else if (taskOutcome == TaskOutcome.SUCCESSFUL) {
+            if (currentState.getTaskType() == currentTask.getTaskType()) {
+                currentState = currentState.successTransition();
+            } else {
+                LOG.error("Current State task type of '" + currentState.getTaskType()
+                        + "' doesn't match the current tasks type of '" + currentTask.getTaskType()
+                        + "'.  This shouldn't happen, and indicates a programming error. "
+                        + "Unable to safely transition to the next state.");
+            }
         }
-        if (beginShutdown && currentState != ShardConsumerState.SHUTTING_DOWN) {
-            // Shard received signal to start shutdown.
-            // Whatever task we were working on should be stopped and shutdown task should be executed
-            currentState = ShardConsumerState.SHUTTING_DOWN;
-            return;
-        }
-        switch (currentState) {
-            case WAITING_ON_PARENT_SHARDS:
-                if (taskCompletedSuccessfully && TaskType.BLOCK_ON_PARENT_SHARDS.equals(currentTask.getTaskType())) {
-                    currentState = ShardConsumerState.INITIALIZING;
-                }
-                break;
-            case INITIALIZING:
-                if (taskCompletedSuccessfully && TaskType.INITIALIZE.equals(currentTask.getTaskType())) {
-                    currentState = ShardConsumerState.PROCESSING;
-                }
-                break;
-            case PROCESSING:
-                if (taskCompletedSuccessfully && TaskType.PROCESS.equals(currentTask.getTaskType())) {
-                    currentState = ShardConsumerState.PROCESSING;
-                }
-                break;
-            case SHUTTING_DOWN:
-                if (currentTask == null
-                        || (taskCompletedSuccessfully && TaskType.SHUTDOWN.equals(currentTask.getTaskType()))) {
-                    currentState = ShardConsumerState.SHUTDOWN_COMPLETE;
-                }
-                break;
-            default:
-                LOG.error("Unexpected state: " + currentState);
-                break;
-        }
+        //
+        // Don't change state otherwise
+        //
+
     }
 
-    // CHECKSTYLE:ON CyclomaticComplexity
+    @VisibleForTesting
+    boolean isShutdownRequested() {
+        return shutdownReason != null;
+    }
 
     /**
      * Private/Internal method - has package level access solely for testing purposes.
      * 
      * @return the currentState
      */
-    ShardConsumerState getCurrentState() {
-        return currentState;
+    ConsumerStates.ShardConsumerState getCurrentState() {
+        return currentState.getState();
     }
 
-    /**
-     * Private/Internal method - has package level access solely for testing purposes.
-     * 
-     * @return the beginShutdown
-     */
-    boolean isBeginShutdown() {
-        return beginShutdown;
+    StreamConfig getStreamConfig() {
+        return streamConfig;
     }
 
+    IRecordProcessor getRecordProcessor() {
+        return recordProcessor;
+    }
+
+    RecordProcessorCheckpointer getRecordProcessorCheckpointer() {
+        return recordProcessorCheckpointer;
+    }
+
+    ExecutorService getExecutorService() {
+        return executorService;
+    }
+
+    ShardInfo getShardInfo() {
+        return shardInfo;
+    }
+
+    KinesisDataFetcher getDataFetcher() {
+        return dataFetcher;
+    }
+
+    ILeaseManager<KinesisClientLease> getLeaseManager() {
+        return leaseManager;
+    }
+
+    ICheckpoint getCheckpoint() {
+        return checkpoint;
+    }
+
+    long getParentShardPollIntervalMillis() {
+        return parentShardPollIntervalMillis;
+    }
+
+    boolean isCleanupLeasesOfCompletedShards() {
+        return cleanupLeasesOfCompletedShards;
+    }
+
+    long getTaskBackoffTimeMillis() {
+        return taskBackoffTimeMillis;
+    }
+
+    Future<TaskResult> getFuture() {
+        return future;
+    }
+
+    ShutdownNotification getShutdownNotification() {
+        return shutdownNotification;
+    }
 }

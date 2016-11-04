@@ -31,7 +31,6 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisC
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
@@ -82,7 +81,7 @@ public class ShutdownTaskTest {
     }
 
     /**
-     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownTask#call()}.
+     * Test method for {@link ShutdownTask#call()}.
      */
     @Test
     public final void testCallWhenApplicationDoesNotCheckpoint() {
@@ -106,7 +105,7 @@ public class ShutdownTaskTest {
     }
 
     /**
-     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownTask#call()}.
+     * Test method for {@link ShutdownTask#call()}.
      */
     @Test
     public final void testCallWhenSyncingShardsThrows() {
@@ -131,7 +130,7 @@ public class ShutdownTaskTest {
     }
 
     /**
-     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownTask#getTaskType()}.
+     * Test method for {@link ShutdownTask#getTaskType()}.
      */
     @Test
     public final void testGetTaskType() {

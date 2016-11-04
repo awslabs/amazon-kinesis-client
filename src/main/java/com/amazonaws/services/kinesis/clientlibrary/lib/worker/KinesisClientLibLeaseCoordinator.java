@@ -14,8 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -33,8 +34,8 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 
@@ -200,21 +201,27 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @return Current shard/lease assignments
      */
     public List<ShardInfo> getCurrentAssignments() {
-        List<ShardInfo> assignments = new LinkedList<ShardInfo>();
         Collection<KinesisClientLease> leases = getAssignments();
-        if ((leases != null) && (!leases.isEmpty())) {
-            for (KinesisClientLease lease : leases) {
-                Set<String> parentShardIds = lease.getParentShardIds();
-                ShardInfo assignment =
-                        new ShardInfo(
-                                lease.getLeaseKey(), 
-                                lease.getConcurrencyToken().toString(), 
-                                parentShardIds,
-                                lease.getCheckpoint());
-                assignments.add(assignment);
-            }
+        return convertLeasesToAssignments(leases);
+
+    }
+
+    public static List<ShardInfo> convertLeasesToAssignments(Collection<KinesisClientLease> leases) {
+        if (leases == null || leases.isEmpty()) {
+            return Collections.emptyList();
         }
+        List<ShardInfo> assignments = new ArrayList<>(leases.size());
+        for (KinesisClientLease lease : leases) {
+            assignments.add(convertLeaseToAssignment(lease));
+        }
+
         return assignments;
+    }
+
+    public static ShardInfo convertLeaseToAssignment(KinesisClientLease lease) {
+        Set<String> parentShardIds = lease.getParentShardIds();
+        return new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(), parentShardIds,
+                lease.getCheckpoint());
     }
 
     /**

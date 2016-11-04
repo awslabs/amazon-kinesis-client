@@ -14,13 +14,17 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -38,15 +42,18 @@ import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxyFactory;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownReason;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
  * Worker is the high level class that Kinesis applications use to start
@@ -70,7 +77,7 @@ public class Worker implements Runnable {
     private final long idleTimeInMilliseconds;
     // Backoff time when polling to check if application has finished processing
     // parent shards
-    private final long parentShardPollIntervalMillis;
+    private final long parentShardPollIntervalMillis;    
     private final ExecutorService executorService;
     private final IMetricsFactory metricsFactory;
     // Backoff time when running tasks if they encounter exceptions
@@ -85,12 +92,15 @@ public class Worker implements Runnable {
 
     private volatile boolean shutdown;
     private volatile long shutdownStartTimeMillis;
+    private volatile boolean shutdownComplete = false;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
     private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap =
             new ConcurrentHashMap<ShardInfo, ShardConsumer>();
     private final boolean cleanupLeasesUponShardCompletion;
+    
+    private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
 
     /**
      * Constructor.
@@ -208,7 +218,7 @@ public class Worker implements Runnable {
             ExecutorService execService) {
         this(
                 config.getApplicationName(),
-                new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),
+                new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),                
                 new StreamConfig(
                         new KinesisProxyFactory(config.getKinesisCredentialsProvider(), kinesisClient)
                             .getProxy(config.getStreamName()),
@@ -235,7 +245,9 @@ public class Worker implements Runnable {
                 metricsFactory,
                 config.getTaskBackoffTimeMillis(),
                 config.getFailoverTimeMillis(),
+                config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
                 config.getShardPrioritizationStrategy());
+
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
             Region region = RegionUtils.getRegion(config.getRegionName());
@@ -243,6 +255,11 @@ public class Worker implements Runnable {
             LOG.debug("The region of Amazon Kinesis client has been set to " + config.getRegionName());
             dynamoDBClient.setRegion(region);
             LOG.debug("The region of Amazon DynamoDB client has been set to " + config.getRegionName());
+        }
+        // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
+        if (config.getDynamoDBEndpoint() != null) {
+            dynamoDBClient.setEndpoint(config.getDynamoDBEndpoint());
+            LOG.debug("The endpoint of Amazon DynamoDB client has been set to " + config.getDynamoDBEndpoint());
         }
         // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
         if (config.getKinesisEndpoint() != null) {
@@ -292,6 +309,7 @@ public class Worker implements Runnable {
             IMetricsFactory metricsFactory,
             long taskBackoffTimeMillis,
             long failoverTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
             ShardPrioritization shardPrioritization) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
@@ -313,7 +331,8 @@ public class Worker implements Runnable {
                         metricsFactory,
                         executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
-        this.failoverTimeMillis = failoverTimeMillis;
+        this.failoverTimeMillis = failoverTimeMillis;        
+        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
         this.shardPrioritization = shardPrioritization;
     }
 
@@ -395,16 +414,22 @@ public class Worker implements Runnable {
                 LOG.info("Initializing LeaseCoordinator");
                 leaseCoordinator.initialize();
 
-                LOG.info("Syncing Kinesis shard info");
-                ShardSyncTask shardSyncTask =
-                        new ShardSyncTask(streamConfig.getStreamProxy(),
-                                leaseCoordinator.getLeaseManager(),
-                                initialPosition,
-                                cleanupLeasesUponShardCompletion,
-                                0L);
-                TaskResult result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
+                TaskResult result = null;
+                if (!skipShardSyncAtWorkerInitializationIfLeasesExist
+                        || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
+                    LOG.info("Syncing Kinesis shard info");
+                    ShardSyncTask shardSyncTask =
+                            new ShardSyncTask(streamConfig.getStreamProxy(),
+                                    leaseCoordinator.getLeaseManager(),
+                                    initialPosition,
+                                    cleanupLeasesUponShardCompletion,
+                                    0L);
+                    result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
+                } else {
+                    LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
+                }
 
-                if (result.getException() == null) {
+                if (result == null || result.getException() == null) {
                     if (!leaseCoordinator.isRunning()) {
                         LOG.info("Starting LeaseCoordinator");
                         leaseCoordinator.start();
@@ -482,11 +507,89 @@ public class Worker implements Runnable {
     }
 
     /**
-     * Signals worker to shutdown. Worker will try initiating shutdown of all record processors. Note that
-     * if executor services were passed to the worker by the user, worker will not attempt to shutdown
-     * those resources.
+     * Requests shutdown of the worker, notifying record processors, that implement {@link IShutdownNotificationAware},
+     * of the impending shutdown. This gives the record processor a final chance to checkpoint.
+     *
+     * <b>It's possible that a record processor won't be notify before being shutdown. This can occur if the lease is
+     * lost after requesting shutdown, but before the notification is dispatched.</b>
+     *
+     * <h2>Requested Shutdown Process</h2> When a shutdown process is requested it operates slightly differently to
+     * allow the record processors a chance to checkpoint a final time.
+     * <ol>
+     * <li>Call to request shutdown invoked.</li>
+     * <li>Worker stops attempting to acquire new leases</li>
+     * <li>Record Processor Shutdown Begins
+     * <ol>
+     * <li>Record processor is notified of the impending shutdown, and given a final chance to checkpoint</li>
+     * <li>The lease for the record processor is then dropped.</li>
+     * <li>The record processor enters into an idle state waiting for the worker to complete final termination</li>
+     * <li>The worker will detect a record processor that has lost it's lease, and will terminate the record processor
+     * with {@link ShutdownReason#ZOMBIE}</li>
+     * </ol>
+     * </li>
+     * <li>The worker will shutdown all record processors.</li>
+     * <li>Once all record processors have been terminated, the worker will terminate all owned resources.</li>
+     * <li>Once the worker shutdown is complete, the returned future is completed.</li>
+     * </ol>
+     *
+     *
+     *
+     * @return a Future that will be set once the shutdown is complete.
+     */
+    public Future<Void> requestShutdown() {
+
+        leaseCoordinator.stopLeaseTaker();
+        //
+        // Stop accepting new leases
+        //
+        Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
+        if (leases == null || leases.isEmpty()) {
+            //
+            // If there are no leases shutdown is already completed.
+            //
+            return Futures.immediateFuture(null);
+        }
+        CountDownLatch shutdownCompleteLatch = new CountDownLatch(leases.size());
+        CountDownLatch notificationCompleteLatch = new CountDownLatch(leases.size());
+        for (KinesisClientLease lease : leases) {
+            ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(leaseCoordinator, lease,
+                    notificationCompleteLatch, shutdownCompleteLatch);
+            ShardInfo shardInfo = KinesisClientLibLeaseCoordinator.convertLeaseToAssignment(lease);
+            shardInfoShardConsumerMap.get(shardInfo).notifyShutdownRequested(shutdownNotification);
+        }
+
+        return new ShutdownFuture(shutdownCompleteLatch, notificationCompleteLatch, this);
+
+    }
+
+    boolean isShutdownComplete() {
+        return shutdownComplete;
+    }
+
+    ConcurrentMap<ShardInfo, ShardConsumer> getShardInfoShardConsumerMap() {
+        return shardInfoShardConsumerMap;
+    }
+
+    /**
+     * Signals worker to shutdown. Worker will try initiating shutdown of all record processors. Note that if executor
+     * services were passed to the worker by the user, worker will not attempt to shutdown those resources.
+     *
+     * <h2>Shutdown Process</h2> When called this will start shutdown of the record processor, and eventually shutdown
+     * the worker itself.
+     * <ol>
+     * <li>Call to start shutdown invoked</li>
+     * <li>Lease coordinator told to stop taking leases, and to drop existing leases.</li>
+     * <li>Worker discovers record processors that no longer have leases.</li>
+     * <li>Worker triggers shutdown with state {@link ShutdownReason#ZOMBIE}.</li>
+     * <li>Once all record processors are shutdown, worker terminates owned resources.</li>
+     * <li>Shutdown complete.</li>
+     * </ol>
      */
     public void shutdown() {
+        if (shutdown) {
+            LOG.warn("Shutdown requested a second time.");
+            return;
+        }
         LOG.info("Worker shutdown requested.");
 
         // Set shutdown flag, so Worker.run can start shutdown process.
@@ -513,6 +616,7 @@ public class Worker implements Runnable {
         if (metricsFactory instanceof WorkerCWMetricsFactory) {
             ((CWMetricsFactory) metricsFactory).shutdown();
         }
+        shutdownComplete = true;
     }
 
     /**
@@ -567,7 +671,7 @@ public class Worker implements Runnable {
 
         return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor,
                 leaseCoordinator.getLeaseManager(), parentShardPollIntervalMillis, cleanupLeasesUponShardCompletion,
-                executorService, metricsFactory, taskBackoffTimeMillis);
+                executorService, metricsFactory, taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist);
 
     }
 
@@ -740,7 +844,8 @@ public class Worker implements Runnable {
      * @return Default executor service that should be used by the worker.
      */
     private static ExecutorService getExecutorService() {
-        return new WorkerThreadPoolExecutor();
+        ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("RecordProcessor-%04d").build();
+        return new WorkerThreadPoolExecutor(threadFactory);
     }
 
     /**
@@ -769,10 +874,10 @@ public class Worker implements Runnable {
     static class WorkerThreadPoolExecutor extends ThreadPoolExecutor {
         private static final long DEFAULT_KEEP_ALIVE_TIME = 60L;
 
-        WorkerThreadPoolExecutor() {
+        WorkerThreadPoolExecutor(ThreadFactory threadFactory) {
             // Defaults are based on Executors.newCachedThreadPool()
-            super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE_TIME, TimeUnit.SECONDS,
-                    new SynchronousQueue<Runnable>());
+            super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE_TIME, TimeUnit.SECONDS, new SynchronousQueue<Runnable>(),
+                    threadFactory);
         }
     }
 
@@ -991,7 +1096,9 @@ public class Worker implements Runnable {
                     metricsFactory,
                     config.getTaskBackoffTimeMillis(),
                     config.getFailoverTimeMillis(),
+                    config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
                     shardPrioritization);
+
         }
 
     }

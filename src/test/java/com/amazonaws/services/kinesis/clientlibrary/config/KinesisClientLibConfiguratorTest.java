@@ -40,6 +40,12 @@ public class KinesisClientLibConfiguratorTest {
             "com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProvider";
     private String credentialName2 =
             "com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfiguratorTest$AlwaysFailCredentialsProvider";
+    private String credentialNameKinesis =
+            "com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProviderKinesis";
+    private String credentialNameDynamoDB =
+            "com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProviderDynamoDB";
+    private String credentialNameCloudWatch =
+            "com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProviderCloudWatch";
     private KinesisClientLibConfigurator configurator = new KinesisClientLibConfigurator();
 
     @Test
@@ -329,6 +335,74 @@ public class KinesisClientLibConfiguratorTest {
         }
     }
 
+    @Test
+    public void testWithDifferentAWSCredentialsForDynamoDBAndCloudWatch() {
+        String test = StringUtils.join(new String[] {
+                "streamName = a",
+                "applicationName = b",
+                "AWSCredentialsProvider = " + credentialNameKinesis,
+                "AWSCredentialsProviderDynamoDB = " + credentialNameDynamoDB,
+                "AWSCredentialsProviderCloudWatch = " + credentialNameCloudWatch,
+                "failoverTimeMillis = 100",
+                "shardSyncIntervalMillis = 500"
+        }, '\n');
+        InputStream input = new ByteArrayInputStream(test.getBytes());
+
+        // separate input stream with getConfiguration to explicitly catch exception from the getConfiguration statement
+        KinesisClientLibConfiguration config = configurator.getConfiguration(input);
+        try {
+            config.getKinesisCredentialsProvider().getCredentials();
+        } catch (Exception e) {
+            fail("Kinesis credential providers should not fail.");
+        }
+        try {
+            config.getDynamoDBCredentialsProvider().getCredentials();
+        } catch (Exception e) {
+            fail("DynamoDB credential providers should not fail.");
+        }
+        try {
+            config.getCloudWatchCredentialsProvider().getCredentials();
+        } catch (Exception e) {
+            fail("CloudWatch credential providers should not fail.");
+        }
+    }
+
+    @Test
+    public void testWithDifferentAWSCredentialsForDynamoDBAndCloudWatchFailed() {
+        String test = StringUtils.join(new String[] {
+                "streamName = a",
+                "applicationName = b",
+                "AWSCredentialsProvider = " + credentialNameKinesis,
+                "AWSCredentialsProviderDynamoDB = " + credentialName1,
+                "AWSCredentialsProviderCloudWatch = " + credentialName1,
+                "failoverTimeMillis = 100",
+                "shardSyncIntervalMillis = 500"
+        }, '\n');
+        InputStream input = new ByteArrayInputStream(test.getBytes());
+
+        // separate input stream with getConfiguration to explicitly catch exception from the getConfiguration statement
+
+        // separate input stream with getConfiguration to explicitly catch exception from the getConfiguration statement
+        KinesisClientLibConfiguration config = configurator.getConfiguration(input);
+        try {
+            config.getKinesisCredentialsProvider().getCredentials();
+        } catch (Exception e) {
+            fail("Kinesis credential providers should not fail.");
+        }
+        try {
+            config.getDynamoDBCredentialsProvider().getCredentials();
+            fail("DynamoDB credential providers should fail.");
+        } catch (Exception e) {
+            // succeed
+        }
+        try {
+            config.getCloudWatchCredentialsProvider().getCredentials();
+            fail("CloudWatch credential providers should fail.");
+        } catch (Exception e) {
+            // succeed
+        }
+    }
+
     /**
      * This credentials provider will always succeed
      */
@@ -337,6 +411,84 @@ public class KinesisClientLibConfiguratorTest {
         @Override
         public AWSCredentials getCredentials() {
             return null;
+        }
+
+        @Override
+        public void refresh() {
+        }
+
+    }
+
+    /**
+     * This credentials provider will always succeed
+     */
+    public static class AlwaysSucceedCredentialsProviderKinesis implements AWSCredentialsProvider {
+
+        @Override
+        public AWSCredentials getCredentials() {
+            return new AWSCredentials() {
+                @Override
+                public String getAWSAccessKeyId() {
+                    return "";
+                }
+
+                @Override
+                public String getAWSSecretKey() {
+                    return "";
+                }
+            };
+        }
+
+        @Override
+        public void refresh() {
+        }
+
+    }
+
+    /**
+     * This credentials provider will always succeed
+     */
+    public static class AlwaysSucceedCredentialsProviderDynamoDB implements AWSCredentialsProvider {
+
+        @Override
+        public AWSCredentials getCredentials() {
+            return new AWSCredentials() {
+                @Override
+                public String getAWSAccessKeyId() {
+                    return "";
+                }
+
+                @Override
+                public String getAWSSecretKey() {
+                    return "";
+                }
+            };
+        }
+
+        @Override
+        public void refresh() {
+        }
+
+    }
+
+    /**
+     * This credentials provider will always succeed
+     */
+    public static class AlwaysSucceedCredentialsProviderCloudWatch implements AWSCredentialsProvider {
+
+        @Override
+        public AWSCredentials getCredentials() {
+            return new AWSCredentials() {
+                @Override
+                public String getAWSAccessKeyId() {
+                    return "";
+                }
+
+                @Override
+                public String getAWSSecretKey() {
+                    return "";
+                }
+            };
         }
 
         @Override

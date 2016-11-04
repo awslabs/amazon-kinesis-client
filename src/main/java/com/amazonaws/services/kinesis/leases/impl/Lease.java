@@ -63,11 +63,17 @@ public class Lease {
      * @param lease lease to copy
      */
     protected Lease(Lease lease) {
-        this.leaseKey = lease.getLeaseKey();
-        this.leaseOwner = lease.getLeaseOwner();
-        this.leaseCounter = lease.getLeaseCounter();
-        this.concurrencyToken = lease.getConcurrencyToken();
-        this.lastCounterIncrementNanos = lease.getLastCounterIncrementNanos();
+        this(lease.getLeaseKey(), lease.getLeaseOwner(), lease.getLeaseCounter(), lease.getConcurrencyToken(),
+                lease.getLastCounterIncrementNanos());
+    }
+
+    protected Lease(String leaseKey, String leaseOwner, Long leaseCounter, UUID concurrencyToken,
+            Long lastCounterIncrementNanos) {
+        this.leaseKey = leaseKey;
+        this.leaseOwner = leaseOwner;
+        this.leaseCounter = leaseCounter;
+        this.concurrencyToken = concurrencyToken;
+        this.lastCounterIncrementNanos = lastCounterIncrementNanos;
     }
 
     /**

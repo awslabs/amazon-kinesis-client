@@ -63,4 +63,12 @@ class MetricsCollectingTaskDecorator implements ITask {
         return other.getTaskType();
     }
 
+    @Override
+    public String toString() {
+        return this.getClass().getName() + "<" + other.getTaskType() + ">(" + other + ")";
+    }
+
+    ITask getOther() {
+        return other;
+    }
 }

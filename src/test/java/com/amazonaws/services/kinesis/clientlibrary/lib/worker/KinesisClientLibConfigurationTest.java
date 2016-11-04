@@ -64,6 +64,7 @@ public class KinesisClientLibConfigurationTest {
                 new KinesisClientLibConfiguration(TEST_STRING,
                         TEST_STRING,
                         TEST_STRING,
+                        TEST_STRING,
                         InitialPositionInStream.LATEST,
                         null,
                         null,
@@ -101,6 +102,7 @@ public class KinesisClientLibConfigurationTest {
                         new KinesisClientLibConfiguration(TEST_STRING,
                                 TEST_STRING,
                                 TEST_STRING,
+                                TEST_STRING,
                                 InitialPositionInStream.LATEST,
                                 null,
                                 null,
@@ -132,6 +134,7 @@ public class KinesisClientLibConfigurationTest {
             try {
                 config =
                         new KinesisClientLibConfiguration(TEST_STRING,
+                                TEST_STRING,
                                 TEST_STRING,
                                 TEST_STRING,
                                 InitialPositionInStream.LATEST,
@@ -209,7 +212,7 @@ public class KinesisClientLibConfigurationTest {
         AmazonDynamoDBClient dclient = Mockito.mock(AmazonDynamoDBClient.class);
         AmazonCloudWatchClient cclient = Mockito.mock(AmazonCloudWatchClient.class);
         Region region = RegionUtils.getRegion("us-west-2");
-        
+
         AWSCredentialsProvider credentialsProvider = Mockito.mock(AWSCredentialsProvider.class);
         KinesisClientLibConfiguration kclConfig =
                 new KinesisClientLibConfiguration("Test", "Test", credentialsProvider, "0")
@@ -262,7 +265,7 @@ public class KinesisClientLibConfigurationTest {
 
         Mockito.verify(kclConfig, Mockito.times(9)).getRegionName();
         Mockito.verify(kclConfig, Mockito.times(4)).getKinesisEndpoint();
-        
+
         kclConfig = Mockito.spy(
                 new KinesisClientLibConfiguration("Test", "Test", credentialsProvider, "0")
                         .withKinesisEndpoint("https://kinesis.eu-west-1.amazonaws.com"));
@@ -294,6 +297,7 @@ public class KinesisClientLibConfigurationTest {
         Mockito.mock(AWSCredentialsProvider.class);
         try {
             new KinesisClientLibConfiguration(TEST_STRING,
+                        TEST_STRING,
                         TEST_STRING,
                         TEST_STRING,
                         null,

@@ -212,4 +212,10 @@ class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease>
         leaseManager.deleteAll();
     }
 
+    @Override
+    public boolean isLeaseTableEmpty() throws DependencyException,
+        InvalidStateException, ProvisionedThroughputException {
+        return false;
+    }
+
 }

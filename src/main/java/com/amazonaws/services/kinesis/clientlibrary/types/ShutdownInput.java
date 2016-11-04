@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.types;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 
 /**
  * Container for the parameters to the IRecordProcessor's
