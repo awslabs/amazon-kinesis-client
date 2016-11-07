@@ -14,6 +14,15 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.argThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -24,11 +33,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
@@ -36,19 +49,26 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibD
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.multilang.messages.InitializeMessage;
+import com.amazonaws.services.kinesis.multilang.messages.Message;
 import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+@RunWith(MockitoJUnitRunner.class)
 public class StreamingRecordProcessorTest {
 
     private static final String shardId = "shard-123";
 
     private int systemExitCount = 0;
+
+    @Mock
+    private Future<Message> messageFuture;
 
     private IRecordProcessorCheckpointer unimplementedCheckpointer = new IRecordProcessorCheckpointer() {
 
@@ -129,11 +149,10 @@ public class StreamingRecordProcessorTest {
         Future<Boolean> trueFuture = Mockito.mock(Future.class);
         Mockito.doReturn(true).when(trueFuture).get();
 
-        Mockito.doReturn(trueFuture).when(messageWriter).writeInitializeMessage(Mockito.anyString());
-        Mockito.doReturn(trueFuture).when(messageWriter)
-                .writeCheckpointMessageWithError(Mockito.anyString(), Mockito.any(Throwable.class));
-        Mockito.doReturn(trueFuture).when(messageWriter).writeProcessRecordsMessage(Mockito.anyList());
-        Mockito.doReturn(trueFuture).when(messageWriter).writeShutdownMessage(Mockito.any(ShutdownReason.class));
+        when(messageWriter.writeInitializeMessage(any(InitializationInput.class))).thenReturn(trueFuture);
+        when(messageWriter.writeCheckpointMessageWithError(anyString(), anyLong(), any(Throwable.class))).thenReturn(trueFuture);
+        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(trueFuture);
+        when(messageWriter.writeShutdownMessage(any(ShutdownReason.class))).thenReturn(trueFuture);
     }
 
     private void phases(Answer<StatusMessage> answer) throws InterruptedException, ExecutionException {
@@ -145,16 +164,15 @@ public class StreamingRecordProcessorTest {
          * processRecords
          * shutdown
          */
-        Future<StatusMessage> future = Mockito.mock(Future.class);
-        Mockito.doAnswer(answer).when(future).get();
-        Mockito.doReturn(future).when(messageReader).getNextMessageFromSTDOUT();
+        when(messageFuture.get()).thenAnswer(answer);
+        when(messageReader.getNextMessageFromSTDOUT()).thenReturn(messageFuture);
 
         List<Record> testRecords = new ArrayList<Record>();
 
-        recordProcessor.initialize(shardId);
-        recordProcessor.processRecords(testRecords, unimplementedCheckpointer);
-        recordProcessor.processRecords(testRecords, unimplementedCheckpointer);
-        recordProcessor.shutdown(unimplementedCheckpointer, ShutdownReason.ZOMBIE);
+        recordProcessor.initialize(new InitializationInput().withShardId(shardId));
+        recordProcessor.processRecords(new ProcessRecordsInput().withRecords(testRecords).withCheckpointer(unimplementedCheckpointer));
+        recordProcessor.processRecords(new ProcessRecordsInput().withRecords(testRecords).withCheckpointer(unimplementedCheckpointer));
+        recordProcessor.shutdown(new ShutdownInput().withCheckpointer(unimplementedCheckpointer).withShutdownReason(ShutdownReason.ZOMBIE));
     }
 
     @Test
@@ -180,9 +198,10 @@ public class StreamingRecordProcessorTest {
 
         phases(answer);
 
-        Mockito.verify(messageWriter, Mockito.times(1)).writeInitializeMessage(shardId);
-        Mockito.verify(messageWriter, Mockito.times(2)).writeProcessRecordsMessage(Mockito.anyList());
-        Mockito.verify(messageWriter, Mockito.times(1)).writeShutdownMessage(ShutdownReason.ZOMBIE);
+        verify(messageWriter)
+                .writeInitializeMessage(argThat(Matchers.withInit(new InitializationInput().withShardId(shardId))));
+        verify(messageWriter, times(2)).writeProcessRecordsMessage(any(ProcessRecordsInput.class));
+        verify(messageWriter).writeShutdownMessage(ShutdownReason.ZOMBIE);
     }
 
     @Test
@@ -211,9 +230,10 @@ public class StreamingRecordProcessorTest {
 
         phases(answer);
 
-        Mockito.verify(messageWriter, Mockito.times(1)).writeInitializeMessage(shardId);
-        Mockito.verify(messageWriter, Mockito.times(2)).writeProcessRecordsMessage(Mockito.anyList());
-        Mockito.verify(messageWriter, Mockito.times(0)).writeShutdownMessage(ShutdownReason.ZOMBIE);
+        verify(messageWriter).writeInitializeMessage(argThat(Matchers.withInit(new InitializationInput()
+                .withShardId(shardId))));
+        verify(messageWriter, times(2)).writeProcessRecordsMessage(any(ProcessRecordsInput.class));
+        verify(messageWriter, never()).writeShutdownMessage(ShutdownReason.ZOMBIE);
         Assert.assertEquals(1, systemExitCount);
     }
 }

@@ -14,17 +14,14 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
-import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
-import com.amazonaws.services.kinesis.model.Record;
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
 import com.amazonaws.services.kinesis.multilang.messages.InitializeMessage;
 import com.amazonaws.services.kinesis.multilang.messages.Message;
@@ -32,28 +29,33 @@ import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
 
+import lombok.extern.apachecommons.CommonsLog;
+
 /**
  * An implementation of the multi language protocol.
  */
+@CommonsLog
 class MultiLangProtocol {
-
-    private static final Log LOG = LogFactory.getLog(MultiLangProtocol.class);
 
     private MessageReader messageReader;
     private MessageWriter messageWriter;
-    private String shardId;
+    private final InitializationInput initializationInput;
 
     /**
      * Constructor.
      * 
-     * @param messageReader A message reader.
-     * @param messageWriter A message writer.
-     * @param shardId The shard id this processor is associated with.
+     * @param messageReader
+     *            A message reader.
+     * @param messageWriter
+     *            A message writer.
+     * @param initializationInput
+     *            information about the shard this processor is starting to process
      */
-    MultiLangProtocol(MessageReader messageReader, MessageWriter messageWriter, String shardId) {
+    MultiLangProtocol(MessageReader messageReader, MessageWriter messageWriter,
+            InitializationInput initializationInput) {
         this.messageReader = messageReader;
         this.messageWriter = messageWriter;
-        this.shardId = shardId;
+        this.initializationInput = initializationInput;
     }
 
     /**
@@ -66,7 +68,7 @@ class MultiLangProtocol {
         /*
          * Call and response to child process.
          */
-        Future<Boolean> writeFuture = messageWriter.writeInitializeMessage(shardId);
+        Future<Boolean> writeFuture = messageWriter.writeInitializeMessage(initializationInput);
         return waitForStatusMessage(InitializeMessage.ACTION, null, writeFuture);
 
     }
@@ -75,13 +77,13 @@ class MultiLangProtocol {
      * Writes a {@link ProcessRecordsMessage} to the child process's STDIN and waits for the child process to respond
      * with a {@link StatusMessage} on its STDOUT.
      * 
-     * @param records The records to process.
-     * @param checkpointer A checkpointer.
+     * @param processRecordsInput
+     *            The records, and associated metadata, to process.
      * @return Whether or not this operation succeeded.
      */
-    boolean processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer) {
-        Future<Boolean> writeFuture = messageWriter.writeProcessRecordsMessage(records);
-        return waitForStatusMessage(ProcessRecordsMessage.ACTION, checkpointer, writeFuture);
+    boolean processRecords(ProcessRecordsInput processRecordsInput) {
+        Future<Boolean> writeFuture = messageWriter.writeProcessRecordsMessage(processRecordsInput);
+        return waitForStatusMessage(ProcessRecordsMessage.ACTION, processRecordsInput.getCheckpointer(), writeFuture);
     }
 
     /**
@@ -105,32 +107,41 @@ class MultiLangProtocol {
      * checkpointing itself was successful is not the concern of this method. This method simply cares whether it was
      * able to successfully communicate the results of its attempts to checkpoint.
      * 
-     * @param action What action is being waited on.
-     * @param checkpointer A checkpointer.
-     * @param writeFuture The writing task.
+     * @param action
+     *            What action is being waited on.
+     * @param checkpointer
+     *            the checkpointer from the process records, or shutdown request
+     * @param writeFuture
+     *            The writing task.
      * @return Whether or not this operation succeeded.
      */
-    private boolean waitForStatusMessage(String action,
-                                         IRecordProcessorCheckpointer checkpointer,
-                                         Future<Boolean> writeFuture) {
+    private boolean waitForStatusMessage(String action, IRecordProcessorCheckpointer checkpointer,
+            Future<Boolean> writeFuture) {
         boolean statusWasCorrect = waitForStatusMessage(action, checkpointer);
 
         // Examine whether or not we failed somewhere along the line.
         try {
-            boolean writerIsStillOpen = Boolean.valueOf(writeFuture.get());
+            boolean writerIsStillOpen = writeFuture.get();
             return statusWasCorrect && writerIsStillOpen;
         } catch (InterruptedException e) {
-            LOG.error(String.format("Interrupted while writing %s message for shard %s", action, shardId));
+            log.error(String.format("Interrupted while writing %s message for shard %s", action,
+                    initializationInput.getShardId()));
             return false;
         } catch (ExecutionException e) {
-            LOG.error(String.format("Failed to write %s message for shard %s", action, shardId), e);
+            log.error(
+                    String.format("Failed to write %s message for shard %s", action, initializationInput.getShardId()),
+                    e);
             return false;
         }
     }
 
     /**
-     * @param action What action is being waited on.
-     * @param checkpointer A checkpointer.
+     * Waits for status message and verifies it against the expectation
+     * 
+     * @param action
+     *            What action is being waited on.
+     * @param checkpointer
+     *            the original process records request
      * @return Whether or not this operation succeeded.
      */
     private boolean waitForStatusMessage(String action, IRecordProcessorCheckpointer checkpointer) {
@@ -141,8 +152,7 @@ class MultiLangProtocol {
                 Message message = future.get();
                 // Note that instanceof doubles as a check against a value being null
                 if (message instanceof CheckpointMessage) {
-                    boolean checkpointWriteSucceeded =
-                            Boolean.valueOf(checkpoint((CheckpointMessage) message, checkpointer).get());
+                    boolean checkpointWriteSucceeded = checkpoint((CheckpointMessage) message, checkpointer).get();
                     if (!checkpointWriteSucceeded) {
                         return false;
                     }
@@ -150,10 +160,12 @@ class MultiLangProtocol {
                     statusMessage = (StatusMessage) message;
                 }
             } catch (InterruptedException e) {
-                LOG.error(String.format("Interrupted while waiting for %s message for shard %s", action, shardId));
+                log.error(String.format("Interrupted while waiting for %s message for shard %s", action,
+                        initializationInput.getShardId()));
                 return false;
             } catch (ExecutionException e) {
-                LOG.error(String.format("Failed to get status message for %s action for shard %s", action, shardId), e);
+                log.error(String.format("Failed to get status message for %s action for shard %s", action,
+                        initializationInput.getShardId()), e);
                 return false;
             }
         }
@@ -168,8 +180,8 @@ class MultiLangProtocol {
      * @return Whether or not this operation succeeded.
      */
     private boolean validateStatusMessage(StatusMessage statusMessage, String action) {
-        LOG.info("Received response " + statusMessage + " from subprocess while waiting for " + action
-                + " while processing shard " + shardId);
+        log.info("Received response " + statusMessage + " from subprocess while waiting for " + action
+                + " while processing shard " + initializationInput.getShardId());
         return !(statusMessage == null || statusMessage.getResponseFor() == null || !statusMessage.getResponseFor()
                 .equals(action));
 
@@ -186,28 +198,38 @@ class MultiLangProtocol {
      * @return Whether or not this operation succeeded.
      */
     private Future<Boolean> checkpoint(CheckpointMessage checkpointMessage, IRecordProcessorCheckpointer checkpointer) {
-        String sequenceNumber = checkpointMessage.getCheckpoint();
+        String sequenceNumber = checkpointMessage.getSequenceNumber();
+        Long subSequenceNumber = checkpointMessage.getSubSequenceNumber();
         try {
             if (checkpointer != null) {
-                if (sequenceNumber == null) {
-                    LOG.info(String.format("Attempting to checkpoint for shard %s", shardId));
-                    checkpointer.checkpoint();
+                log.debug(logCheckpointMessage(sequenceNumber, subSequenceNumber));
+                if (sequenceNumber != null) {
+                    if (subSequenceNumber != null) {
+                        checkpointer.checkpoint(sequenceNumber, subSequenceNumber);
+                    } else {
+                        checkpointer.checkpoint(sequenceNumber);
+                    }
                 } else {
-                    LOG.info(String.format("Attempting to checkpoint at sequence number %s for shard %s",
-                            sequenceNumber, shardId));
-                    checkpointer.checkpoint(sequenceNumber);
+                    checkpointer.checkpoint();
                 }
-                return this.messageWriter.writeCheckpointMessageWithError(sequenceNumber, null);
+                return this.messageWriter.writeCheckpointMessageWithError(sequenceNumber, subSequenceNumber, null);
             } else {
                 String message =
                         String.format("Was asked to checkpoint at %s but no checkpointer was provided for shard %s",
-                                sequenceNumber, shardId);
-                LOG.error(message);
-                return this.messageWriter.writeCheckpointMessageWithError(sequenceNumber, new InvalidStateException(
+                                sequenceNumber, initializationInput.getShardId());
+                log.error(message);
+                return this.messageWriter.writeCheckpointMessageWithError(sequenceNumber, subSequenceNumber,
+                        new InvalidStateException(
                         message));
             }
         } catch (Throwable t) {
-            return this.messageWriter.writeCheckpointMessageWithError(sequenceNumber, t);
+            return this.messageWriter.writeCheckpointMessageWithError(sequenceNumber, subSequenceNumber, t);
         }
     }
+
+    private String logCheckpointMessage(String sequenceNumber, Long subSequenceNumber) {
+        return String.format("Attempting to checkpoint shard %s @ sequence number %s, and sub sequence number %s",
+                initializationInput.getShardId(), sequenceNumber, subSequenceNumber);
+    }
+
 }

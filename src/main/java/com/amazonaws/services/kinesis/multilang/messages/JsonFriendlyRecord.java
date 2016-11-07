@@ -14,19 +14,29 @@
  */
 package com.amazonaws.services.kinesis.multilang.messages;
 
-import com.amazonaws.services.kinesis.model.Record;
-
 import java.util.Date;
+
+import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
+import com.amazonaws.services.kinesis.model.Record;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * Class for encoding Record objects to json. Needed because Records have byte buffers for their data field which causes
  * problems for the json library we're using.
  */
+@Getter
+@Setter
 public class JsonFriendlyRecord {
     private byte[] data;
     private String partitionKey;
     private String sequenceNumber;
     private Date approximateArrivalTimestamp;
+    private Long subSequenceNumber;
+
+    public static String ACTION = "record";
 
     /**
      * Default Constructor.
@@ -40,109 +50,20 @@ public class JsonFriendlyRecord {
      * @param record The record that this message will represent.
      */
     public JsonFriendlyRecord(Record record) {
-        this.withData(record.getData() == null ? null : record.getData().array())
-                .withPartitionKey(record.getPartitionKey())
-                .withSequenceNumber(record.getSequenceNumber())
-                .withApproximateArrivalTimestamp(record.getApproximateArrivalTimestamp());
+        this.data = record.getData() == null ? null : record.getData().array();
+        this.partitionKey = record.getPartitionKey();
+        this.sequenceNumber = record.getSequenceNumber();
+        this.approximateArrivalTimestamp = record.getApproximateArrivalTimestamp();
+        if (record instanceof UserRecord) {
+            this.subSequenceNumber = ((UserRecord) record).getSubSequenceNumber();
+        } else {
+            this.subSequenceNumber = null;
+        }
     }
 
-    /**
-     * @return The data.
-     */
-    public byte[] getData() {
-        return data;
+    @JsonProperty
+    public String getAction() {
+        return ACTION;
     }
-
-    /**
-     * @return The partition key.
-     */
-    public String getPartitionKey() {
-        return partitionKey;
-    }
-
-    /**
-     * @return The sequence number.
-     */
-    public String getSequenceNumber() {
-        return sequenceNumber;
-    }
-
-    /**
-     * @return The approximate arrival timestamp.
-     */
-    public Date getApproximateArrivalTimestamp() {
-        return approximateArrivalTimestamp;
-    }
-
-    /**
-     * @param data The data.
-     */
-    public void setData(byte[] data) {
-        this.data = data;
-    }
-
-    /**
-     * @param partitionKey The partition key.
-     */
-    public void setPartitionKey(String partitionKey) {
-        this.partitionKey = partitionKey;
-    }
-
-    /**
-     * @param sequenceNumber The sequence number.
-     */
-    public void setSequenceNumber(String sequenceNumber) {
-        this.sequenceNumber = sequenceNumber;
-    }
-
-    /**
-     * @param approximateArrivalTimestamp The approximate arrival timestamp.
-     */
-    public void setApproximateArrivalTimestamp(Date approximateArrivalTimestamp) {
-        this.approximateArrivalTimestamp = approximateArrivalTimestamp;
-    }
-
-    /**
-     * @param data The data.
-     *
-     * @return this
-     */
-    public JsonFriendlyRecord withData(byte[] data) {
-        this.setData(data);
-        return this;
-    }
-
-    /**
-     * @param partitionKey The partition key.
-     *
-     * @return this
-     */
-    public JsonFriendlyRecord withPartitionKey(String partitionKey) {
-        this.setPartitionKey(partitionKey);
-        return this;
-    }
-
-    /**
-     * @param sequenceNumber The sequence number.
-     *
-     * @return this
-     */
-    public JsonFriendlyRecord withSequenceNumber(String sequenceNumber) {
-        this.setSequenceNumber(sequenceNumber);
-        return this;
-    }
-
-    /**
-     * @param approximateArrivalTimestamp The approximate arrival timestamp.
-     *
-     * @return this
-     */
-    public JsonFriendlyRecord withApproximateArrivalTimestamp(Date approximateArrivalTimestamp){
-        this.setApproximateArrivalTimestamp(approximateArrivalTimestamp);
-        return this;
-    }
-
-
-
 
 }

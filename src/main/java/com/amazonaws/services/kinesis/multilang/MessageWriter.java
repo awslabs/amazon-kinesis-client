@@ -18,7 +18,6 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -27,7 +26,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
-import com.amazonaws.services.kinesis.model.Record;
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
 import com.amazonaws.services.kinesis.multilang.messages.InitializeMessage;
 import com.amazonaws.services.kinesis.multilang.messages.Message;
@@ -119,19 +119,21 @@ class MessageWriter {
     /**
      * Writes an {@link InitializeMessage} to the subprocess.
      * 
-     * @param shardIdToWrite The shard id.
+     * @param initializationInput
+     *            contains information about the shard being initialized
      */
-    Future<Boolean> writeInitializeMessage(String shardIdToWrite) {
-        return writeMessage(new InitializeMessage(shardIdToWrite));
+    Future<Boolean> writeInitializeMessage(InitializationInput initializationInput) {
+        return writeMessage(new InitializeMessage(initializationInput));
     }
 
     /**
      * Writes a {@link ProcessRecordsMessage} message to the subprocess.
      * 
-     * @param records The records to be processed.
+     * @param processRecordsInput
+     *            the records, and associated metadata to be processed.
      */
-    Future<Boolean> writeProcessRecordsMessage(List<Record> records) {
-        return writeMessage(new ProcessRecordsMessage(records));
+    Future<Boolean> writeProcessRecordsMessage(ProcessRecordsInput processRecordsInput) {
+        return writeMessage(new ProcessRecordsMessage(processRecordsInput));
     }
 
     /**
@@ -146,11 +148,16 @@ class MessageWriter {
     /**
      * Writes a {@link CheckpointMessage} to the subprocess.
      * 
-     * @param sequenceNumber The sequence number that was checkpointed.
-     * @param throwable The exception that was thrown by a checkpoint attempt. Null if one didn't occur.
+     * @param sequenceNumber
+     *            The sequence number that was checkpointed.
+     * @param subSequenceNumber
+     *            the sub sequence number to checkpoint at.
+     * @param throwable
+     *            The exception that was thrown by a checkpoint attempt. Null if one didn't occur.
      */
-    Future<Boolean> writeCheckpointMessageWithError(String sequenceNumber, Throwable throwable) {
-        return writeMessage(new CheckpointMessage(sequenceNumber, throwable));
+    Future<Boolean> writeCheckpointMessageWithError(String sequenceNumber, Long subSequenceNumber,
+            Throwable throwable) {
+        return writeMessage(new CheckpointMessage(sequenceNumber, subSequenceNumber, throwable));
     }
 
     /**

@@ -14,9 +14,15 @@
  */
 package com.amazonaws.services.kinesis.multilang.messages;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import lombok.Getter;
+import lombok.Setter;
+
 /**
  * An initialize message is sent to the client's subprocess to indicate that it should perform its initialization steps.
  */
+@Getter
+@Setter
 public class InitializeMessage extends Message {
     /**
      * The name used for the action field in {@link Message}.
@@ -27,6 +33,8 @@ public class InitializeMessage extends Message {
      * The shard id that this processor is getting initialized for.
      */
     private String shardId;
+    private String sequenceNumber;
+    private Long subSequenceNumber;
 
     /**
      * Default constructor.
@@ -39,21 +47,16 @@ public class InitializeMessage extends Message {
      * 
      * @param shardId The shard id.
      */
-    public InitializeMessage(String shardId) {
-        this.setShardId(shardId);
+    public InitializeMessage(InitializationInput initializationInput) {
+        this.shardId = initializationInput.getShardId();
+        if (initializationInput.getExtendedSequenceNumber() != null) {
+            this.sequenceNumber = initializationInput.getExtendedSequenceNumber().getSequenceNumber();
+            this.subSequenceNumber = initializationInput.getExtendedSequenceNumber().getSubSequenceNumber();
+        } else {
+            this.sequenceNumber = null;
+            this.subSequenceNumber = null;
+        }
+
     }
 
-    /**
-     * @return The shard id.
-     */
-    public String getShardId() {
-        return shardId;
-    }
-
-    /**
-     * @param shardId The shard id.
-     */
-    public void setShardId(String shardId) {
-        this.shardId = shardId;
-    }
 }

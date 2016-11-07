@@ -24,6 +24,7 @@ import java.util.concurrent.Future;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
 
@@ -71,7 +72,13 @@ public class MultiLangDaemon implements Callable<Integer> {
     public MultiLangDaemon(KinesisClientLibConfiguration configuration,
             MultiLangRecordProcessorFactory recordProcessorFactory,
             ExecutorService workerThreadPool) {
-        this(new Worker(recordProcessorFactory, configuration, workerThreadPool));
+        this(buildWorker(recordProcessorFactory, configuration, workerThreadPool));
+    }
+
+    private static Worker buildWorker(IRecordProcessorFactory recordProcessorFactory,
+            KinesisClientLibConfiguration configuration, ExecutorService workerThreadPool) {
+        return new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(configuration)
+                .execService(workerThreadPool).build();
     }
 
     /**

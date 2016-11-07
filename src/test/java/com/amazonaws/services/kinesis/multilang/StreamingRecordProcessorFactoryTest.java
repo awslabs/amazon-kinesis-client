@@ -17,7 +17,7 @@ package com.amazonaws.services.kinesis.multilang;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 
 public class StreamingRecordProcessorFactoryTest {
 
