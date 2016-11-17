@@ -358,6 +358,7 @@ public class Worker implements Runnable {
         } catch (RuntimeException e1) {
             LOG.error("Unable to initialize after " + MAX_INITIALIZATION_ATTEMPTS + " attempts. Shutting down.", e1);
             shutdown();
+            throw e1;
         }
 
         while (!shouldShutdown()) {
