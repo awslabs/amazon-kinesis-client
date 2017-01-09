@@ -20,15 +20,14 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.apache.commons.lang.builder.EqualsBuilder;
+import org.apache.commons.lang.builder.HashCodeBuilder;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import org.apache.commons.lang.builder.HashCodeBuilder;
 
 /**
  * Used to pass shard related info among different classes and as a key to the map of shard consumers.
  */
-class ShardInfo {
-
+public class ShardInfo {
 
     private final String shardId;
     private final String concurrencyToken;
@@ -40,7 +39,7 @@ class ShardInfo {
      * Creates a new ShardInfo object. The checkpoint is not part of the equality, but is used for debugging output.
      * 
      * @param shardId
-     *            Kinesis shardId
+     *            Kinesis shardId that this will be about
      * @param concurrencyToken
      *            Used to differentiate between lost and reclaimed leases
      * @param parentShardIds
@@ -65,27 +64,35 @@ class ShardInfo {
     }
 
     /**
+     * The shardId that this ShardInfo contains data about
+     * 
      * @return the shardId
      */
-    protected String getShardId() {
+    public String getShardId() {
         return shardId;
     }
 
     /**
+     * Concurrency token for the lease that this shard is part of
+     *
      * @return the concurrencyToken
      */
-    protected String getConcurrencyToken() {
+    public String getConcurrencyToken() {
         return concurrencyToken;
     }
 
     /**
-     * @return the parentShardIds
+     * A list of shards that are parents of this shard. This may be empty if the shard has no parents.
+     * 
+     * @return a list of shardId's that are parents of this shard, or empty if the shard has no parents.
      */
     protected List<String> getParentShardIds() {
         return new LinkedList<String>(parentShardIds);
     }
 
     /**
+     * Whether the shard has been completely processed or not.
+     *
      * @return completion status of the shard
      */
     protected boolean isCompleted() {
@@ -100,9 +107,6 @@ class ShardInfo {
         return new HashCodeBuilder().append(concurrencyToken).append(parentShardIds).append(shardId).toHashCode();
     }
 
-    /**
-     * {@inheritDoc}
-     */
     /**
      * This method assumes parentShardIds is ordered. The Worker.cleanupShardConsumers() method relies on this method
      * returning true for ShardInfo objects which may have been instantiated with parentShardIds in a different order
