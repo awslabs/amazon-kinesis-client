@@ -355,7 +355,7 @@ class ConsumerStates {
         @Override
         public ITask createTask(ShardConsumer consumer) {
             return new ShutdownNotificationTask(consumer.getRecordProcessor(), consumer.getRecordProcessorCheckpointer(),
-                    consumer.getShutdownNotification());
+                    consumer.getShutdownNotification(), consumer.getShardInfo());
         }
 
         @Override
