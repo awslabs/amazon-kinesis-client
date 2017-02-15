@@ -19,11 +19,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
@@ -368,9 +366,6 @@ public class LeaseCoordinator<T extends Lease> {
      * @return Executor service that should be used for lease renewal.
      */
     private static ExecutorService getLeaseRenewalExecutorService(int maximumPoolSize) {
-        ThreadPoolExecutor exec = new ThreadPoolExecutor(maximumPoolSize, maximumPoolSize,
-                60L, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>(), LEASE_RENEWAL_THREAD_FACTORY);
-        exec.allowCoreThreadTimeOut(true);
-        return exec;
+        return Executors.newFixedThreadPool(maximumPoolSize, LEASE_RENEWAL_THREAD_FACTORY);
     }
 }
