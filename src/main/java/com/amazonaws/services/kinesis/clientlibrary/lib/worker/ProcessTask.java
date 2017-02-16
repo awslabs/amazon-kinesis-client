@@ -80,7 +80,8 @@ class ProcessTask implements ITask {
             RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
             long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist, new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES));
+                skipShardSyncAtWorkerInitializationIfLeasesExist,
+                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()));
     }
 
     /**
@@ -169,15 +170,7 @@ class ProcessTask implements ITask {
                 callProcessRecords(getRecordsResult, records);
             }
         } catch (ProvisionedThroughputExceededException pte) {
-            String message = "Shard '" + shardInfo.getShardId() + "' has been throttled "
-                    + throttlingReporter.getConsecutiveThrottles() + " consecutively";
-
             throttlingReporter.throttled();
-            if (throttlingReporter.shouldReportError()) {
-                LOG.error(message);
-            } else {
-                LOG.warn(message);
-            }
             exception = pte;
             backoff();
 

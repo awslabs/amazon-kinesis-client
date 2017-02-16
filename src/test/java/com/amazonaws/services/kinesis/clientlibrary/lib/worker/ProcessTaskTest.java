@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -106,7 +107,6 @@ public class ProcessTaskTest {
         TaskResult result = processTask.call();
         verify(throttlingReporter).throttled();
         verify(throttlingReporter, never()).success();
-        verify(throttlingReporter).shouldReportError();
         assertTrue("Result should contain ProvisionedThroughputExceededException",
                 result.getException() instanceof ProvisionedThroughputExceededException);
     }
@@ -307,8 +307,6 @@ public class ProcessTaskTest {
         processTask.call();
         verify(throttlingReporter).success();
         verify(throttlingReporter, never()).throttled();
-        verify(throttlingReporter, never()).shouldReportError();
-        verify(throttlingReporter, never()).getConsecutiveThrottles();
 
         ArgumentCaptor<ProcessRecordsInput> priCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
         verify(mockRecordProcessor).processRecords(priCaptor.capture());
