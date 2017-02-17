@@ -538,15 +538,18 @@ public class Worker implements Runnable {
      */
     public Future<Void> requestShutdown() {
 
+        //
+        // Stop accepting new leases.  Once we do this we can be sure that
+        // no more leases will be acquired.
+        //
         leaseCoordinator.stopLeaseTaker();
-        //
-        // Stop accepting new leases
-        //
+
         Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
         if (leases == null || leases.isEmpty()) {
             //
-            // If there are no leases shutdown is already completed.
+            // If there are no leases notification is already completed, but we still need to shutdown the worker.
             //
+            this.shutdown();
             return Futures.immediateFuture(null);
         }
         CountDownLatch shutdownCompleteLatch = new CountDownLatch(leases.size());
@@ -555,7 +558,18 @@ public class Worker implements Runnable {
             ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(leaseCoordinator, lease,
                     notificationCompleteLatch, shutdownCompleteLatch);
             ShardInfo shardInfo = KinesisClientLibLeaseCoordinator.convertLeaseToAssignment(lease);
-            shardInfoShardConsumerMap.get(shardInfo).notifyShutdownRequested(shutdownNotification);
+            ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
+            if (consumer != null) {
+                consumer.notifyShutdownRequested(shutdownNotification);
+            } else {
+                //
+                // There is a race condition between retrieving the current assignments, and creating the
+                // notification.  If the a lease is lost in between these two points, we explicitly decrement the
+                // notification latches to clear the shutdown.
+                //
+                notificationCompleteLatch.countDown();
+                shutdownCompleteLatch.countDown();
+            }
         }
 
         return new ShutdownFuture(shutdownCompleteLatch, notificationCompleteLatch, this);
@@ -622,9 +636,11 @@ public class Worker implements Runnable {
     /**
      * Returns whether worker can shutdown immediately. Note that this method is called from Worker's {{@link #run()}
      * method before every loop run, so method must do minimum amount of work to not impact shard processing timings.
+     * 
      * @return Whether worker should shutdown immediately.
      */
-    private boolean shouldShutdown() {
+    @VisibleForTesting
+    boolean shouldShutdown() {
         if (executorService.isShutdown()) {
             LOG.error("Worker executor service has been shutdown, so record processors cannot be shutdown.");
             return true;

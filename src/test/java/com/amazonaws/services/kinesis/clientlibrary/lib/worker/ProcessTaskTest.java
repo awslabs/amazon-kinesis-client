@@ -19,8 +19,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -72,6 +74,8 @@ public class ProcessTaskTest {
     private @Mock KinesisDataFetcher mockDataFetcher;
     private @Mock IRecordProcessor mockRecordProcessor;
     private @Mock RecordProcessorCheckpointer mockCheckpointer;
+    @Mock
+    private ThrottlingReporter throttlingReporter;
 
     private List<Record> processedRecords;
     private ExtendedSequenceNumber newLargestPermittedCheckpointValue;
@@ -90,7 +94,7 @@ public class ProcessTaskTest {
         final ShardInfo shardInfo = new ShardInfo(shardId, null, null, null);
         processTask = new ProcessTask(
                 shardInfo, config, mockRecordProcessor, mockCheckpointer, mockDataFetcher, taskBackoffTimeMillis,
-                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
+                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, throttlingReporter);
     }
 
     @Test
@@ -101,6 +105,8 @@ public class ProcessTaskTest {
                 .getRecords(maxRecords);
 
         TaskResult result = processTask.call();
+        verify(throttlingReporter).throttled();
+        verify(throttlingReporter, never()).success();
         assertTrue("Result should contain ProvisionedThroughputExceededException",
                 result.getException() instanceof ProvisionedThroughputExceededException);
     }
@@ -299,6 +305,8 @@ public class ProcessTaskTest {
         when(mockCheckpointer.getLastCheckpointValue()).thenReturn(lastCheckpointValue);
         when(mockCheckpointer.getLargestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
         processTask.call();
+        verify(throttlingReporter).success();
+        verify(throttlingReporter, never()).throttled();
 
         ArgumentCaptor<ProcessRecordsInput> priCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
         verify(mockRecordProcessor).processRecords(priCaptor.capture());
