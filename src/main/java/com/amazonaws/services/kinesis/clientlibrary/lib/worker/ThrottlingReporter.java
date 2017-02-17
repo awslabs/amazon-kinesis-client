@@ -3,6 +3,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.apachecommons.CommonsLog;
+import org.apache.commons.logging.Log;
 
 @RequiredArgsConstructor
 @CommonsLog
@@ -19,15 +20,19 @@ class ThrottlingReporter {
                 + consecutiveThrottles + " consecutively";
 
         if (consecutiveThrottles > maxConsecutiveWarnThrottles) {
-            log.error(message);
+            getLog().error(message);
         } else {
-            log.warn(message);
+            getLog().warn(message);
         }
 
     }
 
     void success() {
         consecutiveThrottles = 0;
+    }
+
+    protected Log getLog() {
+        return log;
     }
 
 }
