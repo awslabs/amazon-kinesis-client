@@ -1064,6 +1064,11 @@ public class Worker implements Runnable {
                 dynamoDBClient.setRegion(region);
                 LOG.debug("The region of Amazon DynamoDB client has been set to " + config.getRegionName());
             }
+            // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
+            if (config.getDynamoDBEndpoint() != null) {
+                dynamoDBClient.setEndpoint(config.getDynamoDBEndpoint());
+                LOG.debug("The endpoint of Amazon DynamoDB client has been set to " + config.getDynamoDBEndpoint());
+            }
             // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
             if (config.getKinesisEndpoint() != null) {
                 kinesisClient.setEndpoint(config.getKinesisEndpoint());
