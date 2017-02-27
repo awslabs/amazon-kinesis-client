@@ -29,6 +29,26 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
 ## Release Notes
+### Release 1.7.4 (February 27, 2017)
+* Fixed an issue building JavaDoc for Java 8.
+  * [Issue #18](https://github.com/awslabs/amazon-kinesis-client/issues/18)
+  * [PR #141](https://github.com/awslabs/amazon-kinesis-client/pull/141)
+* Reduce Throttling Messages to WARN, unless throttling occurs 6 times consecutively.
+  * [Issue #4](https://github.com/awslabs/amazon-kinesis-client/issues/4)
+  * [PR #140](https://github.com/awslabs/amazon-kinesis-client/pull/140)
+* Fixed two bugs occurring in requestShutdown.
+  * Fixed a bug that prevented the worker from shutting down, via requestShutdown, when no leases were held.
+    * [Issue #128](https://github.com/awslabs/amazon-kinesis-client/issues/128)
+  * Fixed a bug that could trigger a NullPointerException if leases changed during requestShutdown.
+    * [Issue #129](https://github.com/awslabs/amazon-kinesis-client/issues/129)
+  * [PR #139](https://github.com/awslabs/amazon-kinesis-client/pull/139)
+* Upgraded the AWS SDK Version to 1.11.91
+  * [PR #138](https://github.com/awslabs/amazon-kinesis-client/pull/138)
+* Use an executor returned from `ExecutorService.newFixedThreadPool` instead of constructing it by hand.
+  * [PR #135](https://github.com/awslabs/amazon-kinesis-client/pull/135)
+* Correctly initialize DynamoDB client, when endpoint is explicitly set.
+  * [PR #142](https://github.com/awslabs/amazon-kinesis-client/pull/142)
+
 ### Release 1.7.3 (January 9, 2017)
 * Upgrade to the newest AWS Java SDK.
   * [Amazon Kinesis Client Issue #27](https://github.com/awslabs/amazon-kinesis-client-python/issues/27)
