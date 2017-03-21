@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import lombok.Data;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -61,6 +62,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
     private AmazonKinesis client;
     private AWSCredentialsProvider credentialsProvider;
     private AtomicReference<List<Shard>> listOfShardsSinceLastGet = new AtomicReference<>();
+    private ShardIterationState shardIterationState = null;
 
     private final String streamName;
 
@@ -163,15 +165,18 @@ public class KinesisProxy implements IKinesisProxyExtended {
      */
     @Override
     public DescribeStreamResult getStreamInfo(String startShardId)
-        throws ResourceNotFoundException, LimitExceededException {
+            throws ResourceNotFoundException, LimitExceededException {
         final DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
         describeStreamRequest.setRequestCredentials(credentialsProvider.getCredentials());
         describeStreamRequest.setStreamName(streamName);
         describeStreamRequest.setExclusiveStartShardId(startShardId);
         DescribeStreamResult response = null;
+
+        LimitExceededException lastException = null;
+
         int remainingRetryTimes = this.maxDescribeStreamRetryAttempts;
         // Call DescribeStream, with backoff and retries (if we get LimitExceededException).
-        while ((remainingRetryTimes >= 0) && (response == null)) {
+        while (response == null) {
             try {
                 response = client.describeStream(describeStreamRequest);
             } catch (LimitExceededException le) {
@@ -182,8 +187,15 @@ public class KinesisProxy implements IKinesisProxyExtended {
                 } catch (InterruptedException ie) {
                     LOG.debug("Stream " + streamName + " : Sleep  was interrupted ", ie);
                 }
+                lastException = le;
             }
             remainingRetryTimes--;
+            if (remainingRetryTimes <= 0 && response == null) {
+                if (lastException != null) {
+                    throw lastException;
+                }
+                throw new IllegalStateException("Received null from DescribeStream call.");
+            }
         }
 
         if (StreamStatus.ACTIVE.toString().equals(response.getStreamDescription().getStreamStatus())
@@ -220,14 +232,15 @@ public class KinesisProxy implements IKinesisProxyExtended {
      * {@inheritDoc}
      */
     @Override
-    public List<Shard> getShardList() {
-        List<Shard> result = new ArrayList<Shard>();
+    public synchronized List<Shard> getShardList() {
 
-        DescribeStreamResult response = null;
-        String lastShardId = null;
+        DescribeStreamResult response;
+        if (shardIterationState == null) {
+            shardIterationState = new ShardIterationState();
+        }
 
         do {
-            response = getStreamInfo(lastShardId);
+            response = getStreamInfo(shardIterationState.getLastShardId());
 
             if (response == null) {
                 /*
@@ -236,13 +249,12 @@ public class KinesisProxy implements IKinesisProxyExtended {
                  */
                 return null;
             } else {
-                List<Shard> shards = response.getStreamDescription().getShards();
-                result.addAll(shards);
-                lastShardId = shards.get(shards.size() - 1).getShardId();
+                shardIterationState.update(response.getStreamDescription().getShards());
             }
         } while (response.getStreamDescription().isHasMoreShards());
-        this.listOfShardsSinceLastGet.set(result);
-        return result;
+        this.listOfShardsSinceLastGet.set(shardIterationState.getCollected());
+
+        return shardIterationState.getAndReset();
     }
 
     /**
@@ -342,6 +354,35 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
         final PutRecordResult response = client.putRecord(putRecordRequest);
         return response;
+    }
+
+    @Data
+    static class ShardIterationState {
+
+        private List<Shard> collected;
+        private String lastShardId;
+
+        public ShardIterationState() {
+            collected = new ArrayList<>();
+        }
+
+        public void update(List<Shard> shards) {
+            if (shards == null || shards.isEmpty()) {
+                return;
+            }
+            collected.addAll(shards);
+            Shard lastShard = shards.get(shards.size() - 1);
+            if (lastShardId == null || lastShardId.compareTo(lastShard.getShardId()) < 0) {
+                lastShardId = lastShard.getShardId();
+            }
+        }
+
+        public List<Shard> getAndReset() {
+            List<Shard> result = collected;
+            collected = new ArrayList<>();
+            lastShardId = null;
+            return result;
+        }
     }
 
 }
