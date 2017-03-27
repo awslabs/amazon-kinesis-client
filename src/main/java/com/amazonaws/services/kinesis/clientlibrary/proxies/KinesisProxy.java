@@ -252,9 +252,10 @@ public class KinesisProxy implements IKinesisProxyExtended {
                 shardIterationState.update(response.getStreamDescription().getShards());
             }
         } while (response.getStreamDescription().isHasMoreShards());
-        this.listOfShardsSinceLastGet.set(shardIterationState.getCollected());
+        this.listOfShardsSinceLastGet.set(shardIterationState.getShards());
 
-        return shardIterationState.getAndReset();
+        shardIterationState = new ShardIterationState();
+        return listOfShardsSinceLastGet.get();
     }
 
     /**
@@ -359,29 +360,22 @@ public class KinesisProxy implements IKinesisProxyExtended {
     @Data
     static class ShardIterationState {
 
-        private List<Shard> collected;
+        private List<Shard> shards;
         private String lastShardId;
 
         public ShardIterationState() {
-            collected = new ArrayList<>();
+            shards = new ArrayList<>();
         }
 
         public void update(List<Shard> shards) {
             if (shards == null || shards.isEmpty()) {
                 return;
             }
-            collected.addAll(shards);
+            this.shards.addAll(shards);
             Shard lastShard = shards.get(shards.size() - 1);
             if (lastShardId == null || lastShardId.compareTo(lastShard.getShardId()) < 0) {
                 lastShardId = lastShard.getShardId();
             }
-        }
-
-        public List<Shard> getAndReset() {
-            List<Shard> result = collected;
-            collected = new ArrayList<>();
-            lastShardId = null;
-            return result;
         }
     }
 
