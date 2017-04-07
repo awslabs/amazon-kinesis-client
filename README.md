@@ -33,7 +33,7 @@ To make it easier for developers to write record processors in other languages, 
 * Correctly handle throttling for DescribeStream, and save accumulated progress from individual calls.
   * [PR #152](https://github.com/awslabs/amazon-kinesis-client/pull/152)
 * Upgrade to version 1.11.115 of the AWS Java SDK
-  * [PR #]()
+  * [PR #155](https://github.com/awslabs/amazon-kinesis-client/pull/155)
   
 ### Release 1.7.4 (February 27, 2017)
 * Fixed an issue building JavaDoc for Java 8.
