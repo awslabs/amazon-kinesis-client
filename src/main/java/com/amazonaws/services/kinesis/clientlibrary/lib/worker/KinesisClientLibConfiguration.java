@@ -52,7 +52,8 @@ public class KinesisClientLibConfiguration {
     public static final int DEFAULT_MAX_RECORDS = 10000;
 
     /**
-     * Idle time between record reads in milliseconds.
+     * The default value for how long the {@link ShardConsumer} should sleep if no records are returned from the call to
+     * {@link com.amazonaws.services.kinesis.AmazonKinesis#getRecords(com.amazonaws.services.kinesis.model.GetRecordsRequest)}.
      */
     public static final long DEFAULT_IDLETIME_BETWEEN_READS_MILLIS = 1000L;
 
@@ -790,7 +791,24 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
-     * @param idleTimeBetweenReadsInMillis Idle time between calls to fetch data from Kinesis
+     * Controls how long the {@link ShardConsumer} will sleep if no records are returned from the call to
+     * {@link com.amazonaws.services.kinesis.AmazonKinesis#getRecords(com.amazonaws.services.kinesis.model.GetRecordsRequest)}.
+     *
+     * This sleep is only used when no records are returned. If records are returned the {@link ShardConsumer} will
+     * immediately retrieve the next set of records after the call to
+     * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor#processRecords(com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput)}
+     * has returned. Setting this value to high may result in the KCL being unable to catch up. If you are changing this
+     * value it's recommended that you enable {@link #withCallProcessRecordsEvenForEmptyRecordList(boolean)}, and
+     * monitor how far behind the records retrieved are by inspecting
+     * {@link com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput#getMillisBehindLatest()}, and the
+     * <a href=
+     * "http://docs.aws.amazon.com/streams/latest/dev/monitoring-with-cloudwatch.html#kinesis-metrics-stream">CloudWatch
+     * Metric: GetRecords.MillisBehindLatest</a>
+     *
+     * @param idleTimeBetweenReadsInMillis
+     *            how long to sleep calls to
+     *            {@link com.amazonaws.services.kinesis.AmazonKinesis#getRecords(com.amazonaws.services.kinesis.model.GetRecordsRequest)}
+     *            when no records are returned.
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withIdleTimeBetweenReadsInMillis(long idleTimeBetweenReadsInMillis) {
