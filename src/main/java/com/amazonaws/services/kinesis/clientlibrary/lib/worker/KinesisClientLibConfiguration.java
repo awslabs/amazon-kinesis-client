@@ -791,12 +791,12 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
-     * Controls how long the {@link ShardConsumer} will sleep if no records are returned from the call to
-     * {@link com.amazonaws.services.kinesis.AmazonKinesis#getRecords(com.amazonaws.services.kinesis.model.GetRecordsRequest)}.
+     * Controls how long the KCL will sleep if no records are returned from Kinesis
      *
-     * This sleep is only used when no records are returned. If records are returned the {@link ShardConsumer} will
+     * <p>
+     * This value is only used when no records are returned; if records are returned, the {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ProcessTask} will
      * immediately retrieve the next set of records after the call to
-     * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor#processRecords(com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput)}
+     * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor#processRecords(ProcessRecordsInput)}
      * has returned. Setting this value to high may result in the KCL being unable to catch up. If you are changing this
      * value it's recommended that you enable {@link #withCallProcessRecordsEvenForEmptyRecordList(boolean)}, and
      * monitor how far behind the records retrieved are by inspecting
@@ -804,11 +804,10 @@ public class KinesisClientLibConfiguration {
      * <a href=
      * "http://docs.aws.amazon.com/streams/latest/dev/monitoring-with-cloudwatch.html#kinesis-metrics-stream">CloudWatch
      * Metric: GetRecords.MillisBehindLatest</a>
+     * </p>
      *
      * @param idleTimeBetweenReadsInMillis
-     *            how long to sleep calls to
-     *            {@link com.amazonaws.services.kinesis.AmazonKinesis#getRecords(com.amazonaws.services.kinesis.model.GetRecordsRequest)}
-     *            when no records are returned.
+     *            how long to sleep between GetRecords calls when no records are returned.
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withIdleTimeBetweenReadsInMillis(long idleTimeBetweenReadsInMillis) {
