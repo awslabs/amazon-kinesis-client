@@ -45,10 +45,16 @@ public interface IRecordProcessor {
 
     /**
      * Invoked by the Amazon Kinesis Client Library to indicate it will no longer send data records to this
-     * RecordProcessor instance. 
+     * RecordProcessor instance.
      *
-     * @param shutdownInput Provides information and capabilities (eg checkpointing) related to shutdown of this record
-     *        processor.
+     * <h2><b>Warning</b></h2>
+     *
+     * When the value of {@link ShutdownInput#getShutdownReason()} is
+     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason#TERMINATE} it is required that you
+     * checkpoint. Failure to do so will result in an IllegalArgumentException, and the KCL no longer making progress.
+     *
+     * @param shutdownInput
+     *            Provides information and capabilities (eg checkpointing) related to shutdown of this record processor.
      */
     void shutdown(ShutdownInput shutdownInput);
 
