@@ -140,10 +140,26 @@ public class MultiLangDaemon implements Callable<Integer> {
         ExecutorService executorService = config.getExecutorService();
 
         // Daemon
-        MultiLangDaemon daemon = new MultiLangDaemon(
+        final MultiLangDaemon daemon = new MultiLangDaemon(
                 config.getKinesisClientLibConfiguration(),
                 config.getRecordProcessorFactory(),
                 executorService);
+
+        Runtime.getRuntime().addShutdownHook(new Thread()
+        {
+            @Override
+            public void run()
+            {
+                LOG.info("Process terminanted, will initiate shutdown.");
+                try {
+                    Future<Void> fut = daemon.worker.requestShutdown();
+                    fut.get();
+                    LOG.info("Process shutdown is complete.");
+                } catch (InterruptedException | ExecutionException e) {
+                    LOG.error("Encountered an error during shutdown.", e);
+                }
+            }
+        });
 
         Future<Integer> future = executorService.submit(daemon);
         try {
