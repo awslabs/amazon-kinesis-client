@@ -16,10 +16,13 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.io.IOException;
 import java.io.PrintStream;
+
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -145,17 +148,16 @@ public class MultiLangDaemon implements Callable<Integer> {
                 config.getRecordProcessorFactory(),
                 executorService);
 
-        Runtime.getRuntime().addShutdownHook(new Thread()
-        {
+        Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run()
             {
                 LOG.info("Process terminanted, will initiate shutdown.");
                 try {
                     Future<Void> fut = daemon.worker.requestShutdown();
-                    fut.get();
+                    fut.get(5000, TimeUnit.MILLISECONDS);
                     LOG.info("Process shutdown is complete.");
-                } catch (InterruptedException | ExecutionException e) {
+                } catch (InterruptedException | ExecutionException | TimeoutException e) {
                     LOG.error("Encountered an error during shutdown.", e);
                 }
             }
