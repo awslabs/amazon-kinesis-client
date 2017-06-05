@@ -148,16 +148,9 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
             LOG.info("Record processor was not initialized so no need to initiate a final checkpoint.");
             return;
         }
-        try {
-            LOG.info("Requesting a checkpoint on shutdown notification.");
-//            ProcessRecordsInput emptyInput = new ProcessRecordsInput();
-
-
-            checkpointer.checkpoint();
-        } catch (InvalidStateException e) {
-            LOG.error("Checkpoint triggered during shutdown encountered InvalidStateException: " + e, e);
-        } catch (ShutdownException e) {
-            LOG.error("Checkpoint triggered during shutdown encountered ShutdownException: " + e, e);
+        LOG.info("Requesting a checkpoint on shutdown notification.");
+        if (!protocol.shutdownRequested(checkpointer)) {
+            LOG.error("Child process failed to shutdown");
         }
     }
 
