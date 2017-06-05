@@ -150,7 +150,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
         }
         LOG.info("Requesting a checkpoint on shutdown notification.");
         if (!protocol.shutdownRequested(checkpointer)) {
-            LOG.error("Child process failed to shutdown");
+            LOG.error("Child process failed to complete shutdown notification.");
         }
     }
 
