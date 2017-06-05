@@ -27,6 +27,7 @@ import com.amazonaws.services.kinesis.multilang.messages.InitializeMessage;
 import com.amazonaws.services.kinesis.multilang.messages.Message;
 import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
+import com.amazonaws.services.kinesis.multilang.messages.ShutdownRequestedMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
 
 import lombok.extern.apachecommons.CommonsLog;
@@ -97,6 +98,18 @@ class MultiLangProtocol {
     boolean shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason) {
         Future<Boolean> writeFuture = messageWriter.writeShutdownMessage(reason);
         return waitForStatusMessage(ShutdownMessage.ACTION, checkpointer, writeFuture);
+    }
+
+    /**
+     * Writes a {@link ShutdownRequestedMessage} to the child process's STDIN and waits for the child process to respond with a
+     * {@link StatusMessage} on its STDOUT.
+     *
+     * @param checkpointer A checkpointer.
+     * @return Whether or not this operation succeeded.
+     */
+    boolean shutdownRequested(IRecordProcessorCheckpointer checkpointer) {
+        Future<Boolean> writeFuture = messageWriter.writeShutdownRequestedMessage();
+        return waitForStatusMessage(ShutdownRequestedMessage.ACTION, checkpointer, writeFuture);
     }
 
     /**

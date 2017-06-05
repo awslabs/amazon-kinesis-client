@@ -150,11 +150,14 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
         }
         try {
             LOG.info("Requesting a checkpoint on shutdown notification.");
+//            ProcessRecordsInput emptyInput = new ProcessRecordsInput();
+
+
             checkpointer.checkpoint();
         } catch (InvalidStateException e) {
-            LOG.error("Checkpoint triggered during shutdown encountered InvalidStateException: " + e.toString());
+            LOG.error("Checkpoint triggered during shutdown encountered InvalidStateException: " + e, e);
         } catch (ShutdownException e) {
-            LOG.error("Checkpoint triggered during shutdown encountered ShutdownException: " + e.toString());
+            LOG.error("Checkpoint triggered during shutdown encountered ShutdownException: " + e, e);
         }
     }
 
