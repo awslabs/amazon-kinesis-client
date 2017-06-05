@@ -172,6 +172,7 @@ public class StreamingRecordProcessorTest {
         recordProcessor.initialize(new InitializationInput().withShardId(shardId));
         recordProcessor.processRecords(new ProcessRecordsInput().withRecords(testRecords).withCheckpointer(unimplementedCheckpointer));
         recordProcessor.processRecords(new ProcessRecordsInput().withRecords(testRecords).withCheckpointer(unimplementedCheckpointer));
+        recordProcessor.shutdownRequested(Mockito.mock(IRecordProcessorCheckpointer.class));
         recordProcessor.shutdown(new ShutdownInput().withCheckpointer(unimplementedCheckpointer).withShutdownReason(ShutdownReason.ZOMBIE));
     }
 

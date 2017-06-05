@@ -20,6 +20,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -29,13 +33,14 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+
 /**
  * A record processor that manages creating a child process that implements the multi language protocol and connecting
  * that child process's input and outputs to a {@link MultiLangProtocol} object and calling the appropriate methods on
  * that object when its corresponding {@link #initialize}, {@link #processRecords}, and {@link #shutdown} methods are
  * called.
  */
-public class MultiLangRecordProcessor implements IRecordProcessor {
+public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNotificationAware {
 
     private static final Log LOG = LogFactory.getLog(MultiLangRecordProcessor.class);
     private static final int EXIT_VALUE = 1;
@@ -135,6 +140,27 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
             }
         }
     }
+
+    @Override
+    public void shutdownRequested(IRecordProcessorCheckpointer checkpointer) {
+        LOG.info("Shutdown is requested.");
+        if (!initialized) {
+            LOG.info("Record processor was not initialized so no need to initiate a final checkpoint.");
+            return;
+        }
+        try {
+            LOG.info("Requesting a checkpoint on shutdown notification.");
+//            ProcessRecordsInput emptyInput = new ProcessRecordsInput();
+
+
+            checkpointer.checkpoint();
+        } catch (InvalidStateException e) {
+            LOG.error("Checkpoint triggered during shutdown encountered InvalidStateException: " + e, e);
+        } catch (ShutdownException e) {
+            LOG.error("Checkpoint triggered during shutdown encountered ShutdownException: " + e, e);
+        }
+    }
+
 
     /**
      * Used to tell whether the processor has been shutdown already.
