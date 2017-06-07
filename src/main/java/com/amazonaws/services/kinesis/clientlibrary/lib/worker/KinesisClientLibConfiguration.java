@@ -56,7 +56,8 @@ public class KinesisClientLibConfiguration {
     public static final int DEFAULT_MAX_RECORDS = 10000;
 
     /**
-     * Idle time between record reads in milliseconds.
+     * The default value for how long the {@link ShardConsumer} should sleep if no records are returned from the call to
+     * {@link com.amazonaws.services.kinesis.AmazonKinesis#getRecords(com.amazonaws.services.kinesis.model.GetRecordsRequest)}.
      */
     public static final long DEFAULT_IDLETIME_BETWEEN_READS_MILLIS = 1000L;
 
@@ -802,7 +803,23 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
-     * @param idleTimeBetweenReadsInMillis Idle time between calls to fetch data from Kinesis
+     * Controls how long the KCL will sleep if no records are returned from Kinesis
+     *
+     * <p>
+     * This value is only used when no records are returned; if records are returned, the {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ProcessTask} will
+     * immediately retrieve the next set of records after the call to
+     * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor#processRecords(ProcessRecordsInput)}
+     * has returned. Setting this value to high may result in the KCL being unable to catch up. If you are changing this
+     * value it's recommended that you enable {@link #withCallProcessRecordsEvenForEmptyRecordList(boolean)}, and
+     * monitor how far behind the records retrieved are by inspecting
+     * {@link com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput#getMillisBehindLatest()}, and the
+     * <a href=
+     * "http://docs.aws.amazon.com/streams/latest/dev/monitoring-with-cloudwatch.html#kinesis-metrics-stream">CloudWatch
+     * Metric: GetRecords.MillisBehindLatest</a>
+     * </p>
+     *
+     * @param idleTimeBetweenReadsInMillis
+     *            how long to sleep between GetRecords calls when no records are returned.
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withIdleTimeBetweenReadsInMillis(long idleTimeBetweenReadsInMillis) {
