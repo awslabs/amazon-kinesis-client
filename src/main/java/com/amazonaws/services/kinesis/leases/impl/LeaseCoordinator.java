@@ -19,15 +19,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.kinesis.clientlibrary.utils.NamedThreadFactory;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
@@ -40,6 +42,7 @@ import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
  * LeaseCoordinator abstracts away LeaseTaker and LeaseRenewer from the application code that's using leasing. It owns
@@ -63,12 +66,10 @@ public class LeaseCoordinator<T extends Lease> {
     private static final int DEFAULT_MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
     private static final int DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
 
-    private static final ThreadFactory LEASE_COORDINATOR_THREAD_FACTORY = new NamedThreadFactory("LeaseCoordinator-");
-    private static final ThreadFactory LEASE_RENEWAL_THREAD_FACTORY = new NamedThreadFactory("LeaseRenewer-");
-
-    // Package level access for testing.
-    static final int MAX_LEASE_RENEWAL_THREAD_COUNT = 20;
-
+    private static final ThreadFactory LEASE_COORDINATOR_THREAD_FACTORY = new ThreadFactoryBuilder()
+            .setNameFormat("LeaseCoordinator-%04d").setDaemon(true).build();
+    private static final ThreadFactory LEASE_RENEWAL_THREAD_FACTORY = new ThreadFactoryBuilder()
+            .setNameFormat("LeaseRenewer-%04d").setDaemon(true).build();
 
     private final ILeaseRenewer<T> leaseRenewer;
     private final ILeaseTaker<T> leaseTaker;
@@ -114,7 +115,8 @@ public class LeaseCoordinator<T extends Lease> {
             long epsilonMillis,
             IMetricsFactory metricsFactory) {
         this(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis,
-                DEFAULT_MAX_LEASES_FOR_WORKER, DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME, metricsFactory);
+                DEFAULT_MAX_LEASES_FOR_WORKER, DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME,
+                KinesisClientLibConfiguration.DEFAULT_MAX_LEASE_RENEWAL_THREADS, metricsFactory);
     }
 
     /**
@@ -134,8 +136,9 @@ public class LeaseCoordinator<T extends Lease> {
             long epsilonMillis,
             int maxLeasesForWorker,
             int maxLeasesToStealAtOneTime,
+            int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
-        this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(MAX_LEASE_RENEWAL_THREAD_COUNT);
+        this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
         this.leaseTaker = new LeaseTaker<T>(leaseManager, workerIdentifier, leaseDurationMillis)
                 .withMaxLeasesForWorker(maxLeasesForWorker)
                 .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
@@ -366,6 +369,9 @@ public class LeaseCoordinator<T extends Lease> {
      * @return Executor service that should be used for lease renewal.
      */
     private static ExecutorService getLeaseRenewalExecutorService(int maximumPoolSize) {
-        return Executors.newFixedThreadPool(maximumPoolSize, LEASE_RENEWAL_THREAD_FACTORY);
+        int coreLeaseCount = Math.max(maximumPoolSize / 4, 2);
+
+        return new ThreadPoolExecutor(coreLeaseCount, maximumPoolSize, 60, TimeUnit.SECONDS,
+                new LinkedTransferQueue<Runnable>(), LEASE_RENEWAL_THREAD_FACTORY);
     }
 }
