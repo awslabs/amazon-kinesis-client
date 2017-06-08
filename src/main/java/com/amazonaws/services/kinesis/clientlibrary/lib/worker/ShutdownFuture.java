@@ -1,44 +1,48 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 /**
  * Used as a response from the {@link Worker#requestShutdown()} to allow callers to wait until shutdown is complete.
  */
-class ShutdownFuture implements Future<Void> {
+class ShutdownFuture {
 
     private static final Log log = LogFactory.getLog(ShutdownFuture.class);
 
     private final CountDownLatch shutdownCompleteLatch;
     private final CountDownLatch notificationCompleteLatch;
     private final Worker worker;
+    private final ExecutorService shutdownExecutor;
 
     ShutdownFuture(CountDownLatch shutdownCompleteLatch, CountDownLatch notificationCompleteLatch, Worker worker) {
+        this(shutdownCompleteLatch, notificationCompleteLatch, worker, makeExecutor());
+    }
+
+    ShutdownFuture(CountDownLatch shutdownCompleteLatch, CountDownLatch notificationCompleteLatch, Worker worker,
+            ExecutorService shutdownExecutor) {
         this.shutdownCompleteLatch = shutdownCompleteLatch;
         this.notificationCompleteLatch = notificationCompleteLatch;
         this.worker = worker;
+        this.shutdownExecutor = shutdownExecutor;
     }
 
-    @Override
-    public boolean cancel(boolean mayInterruptIfRunning) {
-        throw new UnsupportedOperationException("Cannot cancel a shutdown process");
-    }
-
-    @Override
-    public boolean isCancelled() {
-        return false;
-    }
-
-    @Override
-    public boolean isDone() {
-        return isWorkerShutdownComplete();
+    private static ExecutorService makeExecutor() {
+        ThreadFactory threadFactory = new ThreadFactoryBuilder().setDaemon(true).setNameFormat("RequestShutdown-%04d")
+                .build();
+        return Executors.newSingleThreadExecutor(threadFactory);
     }
 
     private boolean isWorkerShutdownComplete() {
@@ -128,28 +132,26 @@ class ShutdownFuture implements Future<Void> {
         return outstanding;
     }
 
-    @Override
-    public Void get() throws InterruptedException, ExecutionException {
-        boolean complete = false;
-        do {
-            try {
-                long outstanding = outstandingRecordProcessors(1, TimeUnit.SECONDS);
-                complete = outstanding == 0;
-                log.info("Awaiting " + outstanding + " consumer(s) to finish shutdown.");
-            } catch (TimeoutException te) {
-                log.info("Timeout while waiting for completion: " + te.getMessage());
-            }
-
-        } while(!complete);
-        return null;
+    Future<Void> startShutdown() {
+        return shutdownExecutor.submit(new ShutdownCallable());
     }
 
-    @Override
-    public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-        long outstanding = outstandingRecordProcessors(timeout, unit);
-        if (outstanding != 0) {
-            throw new TimeoutException("Awaiting " + outstanding + " record processors to shutdown.");
+    private class ShutdownCallable implements Callable<Void> {
+        @Override
+        public Void call() throws Exception {
+            boolean complete = false;
+            do {
+                try {
+                    long outstanding = outstandingRecordProcessors(1, TimeUnit.SECONDS);
+                    complete = outstanding == 0;
+                    log.info("Awaiting " + outstanding + " consumer(s) to finish shutdown.");
+                } catch (TimeoutException te) {
+                    log.info("Timeout while waiting for completion: " + te.getMessage());
+                }
+
+            } while (!complete);
+            return null;
         }
-        return null;
     }
+
 }

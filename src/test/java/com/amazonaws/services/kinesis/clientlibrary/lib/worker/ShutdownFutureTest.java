@@ -9,11 +9,18 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.MoreExecutors;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -33,24 +40,29 @@ public class ShutdownFutureTest {
     private Worker worker;
     @Mock
     private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoConsumerMap;
+    @Mock
+    private ExecutorService executorService;
 
     @Test
     public void testSimpleGetAlreadyCompleted() throws Exception {
-        ShutdownFuture future = new ShutdownFuture(shutdownCompleteLatch, notificationCompleteLatch, worker);
+
 
         mockNotificationComplete(true);
         mockShutdownComplete(true);
+
+        Future<Void> future = new ShutdownFuture(shutdownCompleteLatch, notificationCompleteLatch, worker, executorService).startShutdown();
 
         future.get();
 
         verify(notificationCompleteLatch).await(anyLong(), any(TimeUnit.class));
         verify(worker).shutdown();
         verify(shutdownCompleteLatch).await(anyLong(), any(TimeUnit.class));
+        verify(executorService.shutdownNow());
     }
 
     @Test
     public void testNotificationNotCompleted() throws Exception {
-        ShutdownFuture future = new ShutdownFuture(shutdownCompleteLatch, notificationCompleteLatch, worker);
+        ShutdownFuture future = new ShutdownFuture(shutdownCompleteLatch, notificationCompleteLatch, worker, executorService);
 
         mockNotificationComplete(false, true);
         mockShutdownComplete(true);
@@ -212,7 +224,7 @@ public class ShutdownFutureTest {
         assertThat("Expected a timeout exception to occur", gotTimeout);
     }
 
-    private void awaitFuture(ShutdownFuture future) throws Exception {
+    private void awaitFuture(Future<Void> future) throws Exception {
         future.get(1, TimeUnit.SECONDS);
     }
 
@@ -231,6 +243,16 @@ public class ShutdownFutureTest {
 
     private void mockOutstanding(CountDownLatch latch, Long remaining, Long ... additionalRemaining) throws Exception {
         when(latch.getCount()).thenReturn(remaining, additionalRemaining);
+    }
+
+    private void mockExecutor() {
+        when(executorService.submit(any(Callable.class))).thenAnswer(new Answer<Future<Void>>() {
+            @Override
+            public Future<Void> answer(InvocationOnMock invocation) throws Throwable {
+                Callable<Void> callable = (Callable<Void>)invocation.getArgumentAt(0, Callable.class);
+                return Futures.immediateFuture(callable.call());
+            }
+        })
     }
 
 }
