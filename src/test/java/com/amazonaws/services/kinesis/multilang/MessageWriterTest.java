@@ -114,6 +114,16 @@ public class MessageWriterTest {
     }
 
     @Test
+    public void writeShutdownRequestedMessageTest() throws IOException, InterruptedException, ExecutionException {
+        Future<Boolean> future = this.messageWriter.writeShutdownRequestedMessage();
+        future.get();
+
+        Mockito.verify(this.stream, Mockito.atLeastOnce()).write(Mockito.any(byte[].class), Mockito.anyInt(),
+                Mockito.anyInt());
+        Mockito.verify(this.stream, Mockito.atLeastOnce()).flush();
+    }
+
+    @Test
     public void streamIOExceptionTest() throws IOException, InterruptedException, ExecutionException {
         Mockito.doThrow(IOException.class).when(stream).flush();
         Future<Boolean> initializeTask = this.messageWriter.writeInitializeMessage(new InitializationInput().withShardId(shardId));

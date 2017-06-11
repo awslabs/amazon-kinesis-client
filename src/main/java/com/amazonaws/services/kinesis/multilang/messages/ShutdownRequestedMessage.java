@@ -7,7 +7,7 @@ public class ShutdownRequestedMessage extends Message {
     /**
      * The name used for the action field in {@link Message}.
      */
-    public static final String ACTION = "shutdownrequested";
+    public static final String ACTION = "shutdownRequested";
 
     /**
      * Convenience constructor.

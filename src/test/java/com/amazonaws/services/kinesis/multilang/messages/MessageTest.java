@@ -44,7 +44,7 @@ public class MessageTest {
                                 });
                             }
                         })), new ShutdownMessage(ShutdownReason.ZOMBIE), new StatusMessage("processRecords"),
-                        new InitializeMessage(), new ProcessRecordsMessage() };
+                        new InitializeMessage(), new ProcessRecordsMessage(), new ShutdownRequestedMessage() };
 
         for (int i = 0; i < messages.length; i++) {
             Assert.assertTrue("Each message should contain the action field", messages[i].toString().contains("action"));
