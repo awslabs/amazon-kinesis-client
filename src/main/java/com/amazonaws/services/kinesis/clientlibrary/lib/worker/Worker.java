@@ -22,6 +22,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -29,6 +30,7 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -540,6 +542,44 @@ public class Worker implements Runnable {
      */
     public Future<Void> requestShutdown() {
 
+        Future<Boolean> requestedShutdownFuture = requestCancellableShutdown();
+
+        return new Future<Void>() {
+
+            @Override
+            public boolean cancel(boolean mayInterruptIfRunning) {
+                return requestedShutdownFuture.cancel(mayInterruptIfRunning);
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return requestedShutdownFuture.isCancelled();
+            }
+
+            @Override
+            public boolean isDone() {
+                return requestedShutdownFuture.isDone();
+            }
+
+            @Override
+            public Void get() throws InterruptedException, ExecutionException {
+                requestedShutdownFuture.get();
+                return null;
+            }
+
+            @Override
+            public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+                requestedShutdownFuture.get(timeout, unit);
+                return null;
+            }
+        };
+    }
+
+    public Future<Boolean> requestCancellableShutdown() {
+        return RequestedShutdownCoordinator.startRequestedShutdown(requestShutdownCallable());
+    }
+
+    public Callable<Boolean> requestShutdownCallable() {
         //
         // Stop accepting new leases.  Once we do this we can be sure that
         // no more leases will be acquired.
@@ -552,7 +592,7 @@ public class Worker implements Runnable {
             // If there are no leases notification is already completed, but we still need to shutdown the worker.
             //
             this.shutdown();
-            return Futures.immediateFuture(null);
+            return () -> true;
         }
         CountDownLatch shutdownCompleteLatch = new CountDownLatch(leases.size());
         CountDownLatch notificationCompleteLatch = new CountDownLatch(leases.size());
@@ -573,8 +613,7 @@ public class Worker implements Runnable {
                 shutdownCompleteLatch.countDown();
             }
         }
-
-        return new ShutdownFuture(shutdownCompleteLatch, notificationCompleteLatch, this).startShutdown();
+        return RequestedShutdownCoordinator.createRequestedShutdownCallable(shutdownCompleteLatch, notificationCompleteLatch, this);
     }
 
     boolean isShutdownComplete() {
