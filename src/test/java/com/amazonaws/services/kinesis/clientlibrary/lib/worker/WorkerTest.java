@@ -762,7 +762,7 @@ public class WorkerTest {
         verify(executorService, atLeastOnce()).submit(argThat(
                 both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.INITIALIZE))));
 
-        worker.requestShutdown();
+        worker.createWorkerShutdownCallable().call();
         worker.runProcessLoop();
 
         verify(executorService, atLeastOnce()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
@@ -778,6 +778,146 @@ public class WorkerTest {
 
         verify(executorService, atLeastOnce()).submit(argThat(
                 both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN))));
+
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testShutdownCallableNotAllowedTwice() throws Exception {
+
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        StreamConfig streamConfig = mock(StreamConfig.class);
+        IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
+
+        ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
+                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
+                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+
+        final List<KinesisClientLease> leases = new ArrayList<>();
+        final List<ShardInfo> currentAssignments = new ArrayList<>();
+        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        leases.add(lease);
+        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
+                lease.getParentShardIds(), lease.getCheckpoint()));
+
+        when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
+            @Override
+            public List<KinesisClientLease> answer(InvocationOnMock invocation) throws Throwable {
+                return leases;
+            }
+        });
+        when(leaseCoordinator.getCurrentAssignments()).thenAnswer(new Answer<List<ShardInfo>>() {
+            @Override
+            public List<ShardInfo> answer(InvocationOnMock invocation) throws Throwable {
+                return currentAssignments;
+            }
+        });
+
+        IRecordProcessor processor = mock(IRecordProcessor.class);
+        when(recordProcessorFactory.createProcessor()).thenReturn(processor);
+
+        Worker worker = new InjectableWorker("testRequestShutdown", recordProcessorFactory, streamConfig,
+                INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
+                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
+                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
+            @Override
+            void postConstruct() {
+                this.gracefuleShutdownStarted = true;
+            }
+        };
+
+        when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
+                .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
+        when(taskFuture.isDone()).thenReturn(true);
+        when(taskFuture.get()).thenReturn(taskResult);
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
+                .and(TaskTypeMatcher.isOfType(TaskType.BLOCK_ON_PARENT_SHARDS))));
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(
+                both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.INITIALIZE))));
+
+        assertThat(worker.hasGracefulShutdownStarted(), equalTo(true));
+        worker.createWorkerShutdownCallable().call();
+
+    }
+
+    @Test
+    public void testGracefulShutdownSingleFuture() throws Exception {
+
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        StreamConfig streamConfig = mock(StreamConfig.class);
+        IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
+
+        ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
+                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
+                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+
+        final List<KinesisClientLease> leases = new ArrayList<>();
+        final List<ShardInfo> currentAssignments = new ArrayList<>();
+        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        leases.add(lease);
+        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
+                lease.getParentShardIds(), lease.getCheckpoint()));
+
+        when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
+            @Override
+            public List<KinesisClientLease> answer(InvocationOnMock invocation) throws Throwable {
+                return leases;
+            }
+        });
+        when(leaseCoordinator.getCurrentAssignments()).thenAnswer(new Answer<List<ShardInfo>>() {
+            @Override
+            public List<ShardInfo> answer(InvocationOnMock invocation) throws Throwable {
+                return currentAssignments;
+            }
+        });
+
+        IRecordProcessor processor = mock(IRecordProcessor.class);
+        when(recordProcessorFactory.createProcessor()).thenReturn(processor);
+
+        GracefulShutdownCoordinator coordinator = mock(GracefulShutdownCoordinator.class);
+        when(coordinator.createGracefulShutdownCallable(any(Callable.class))).thenReturn(() -> true);
+
+        Future<Boolean> gracefulShutdownFuture = mock(Future.class);
+
+        when(coordinator.startGracefulShutdown(any(Callable.class))).thenReturn(gracefulShutdownFuture);
+
+        Worker worker = new InjectableWorker("testRequestShutdown", recordProcessorFactory, streamConfig,
+                INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
+                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
+                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
+            @Override
+            void postConstruct() {
+                this.gracefulShutdownCoordinator = coordinator;
+            }
+        };
+
+        when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
+                .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
+        when(taskFuture.isDone()).thenReturn(true);
+        when(taskFuture.get()).thenReturn(taskResult);
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
+                .and(TaskTypeMatcher.isOfType(TaskType.BLOCK_ON_PARENT_SHARDS))));
+
+        worker.runProcessLoop();
+
+        verify(executorService, atLeastOnce()).submit(argThat(
+                both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.INITIALIZE))));
+
+        Future<Boolean> firstFuture = worker.startGracefulShutdown();
+        Future<Boolean> secondFuture = worker.startGracefulShutdown();
+
+        assertThat(firstFuture, equalTo(secondFuture));
+        verify(coordinator).startGracefulShutdown(any(Callable.class));
 
     }
 
@@ -830,7 +970,7 @@ public class WorkerTest {
         verify(executorService, never()).submit(argThat(
                 both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.INITIALIZE))));
 
-        worker.requestShutdown();
+        worker.createWorkerShutdownCallable().call();
         worker.runProcessLoop();
 
         verify(executorService, never()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
@@ -909,7 +1049,7 @@ public class WorkerTest {
                         .withField(InitializeTask.class, "shardInfo", equalTo(shardInfo2)))));
 
         worker.getShardInfoShardConsumerMap().remove(shardInfo2);
-        worker.requestShutdown();
+        worker.createWorkerShutdownCallable().call();
         leases.remove(1);
         currentAssignments.remove(1);
         worker.runProcessLoop();
@@ -1192,6 +1332,24 @@ public class WorkerTest {
         verify(executorService, atLeastOnce()).submit(argThat(
                 both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN))));
 
+    }
+
+    private abstract class InjectableWorker extends Worker {
+        InjectableWorker(String applicationName, IRecordProcessorFactory recordProcessorFactory,
+                StreamConfig streamConfig, InitialPositionInStreamExtended initialPositionInStream,
+                long parentShardPollIntervalMillis, long shardSyncIdleTimeMillis,
+                boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
+                KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
+                IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
+                boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
+            super(applicationName, recordProcessorFactory, streamConfig, initialPositionInStream,
+                    parentShardPollIntervalMillis, shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion,
+                    checkpoint, leaseCoordinator, execService, metricsFactory, taskBackoffTimeMillis,
+                    failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, shardPrioritization);
+            postConstruct();
+        }
+
+        abstract void postConstruct();
     }
 
     private KinesisClientLease makeLease(ExtendedSequenceNumber checkpoint, int shardId) {

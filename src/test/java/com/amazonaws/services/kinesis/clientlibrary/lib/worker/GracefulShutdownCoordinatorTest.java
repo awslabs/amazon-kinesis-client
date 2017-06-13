@@ -1,10 +1,12 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,13 +20,11 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
-import org.mockito.stubbing.Answer;
 import org.mockito.verification.VerificationMode;
 
 @RunWith(MockitoJUnitRunner.class)
-public class RequestedShutdownCoordinatorTest {
+public class GracefulShutdownCoordinatorTest {
 
     @Mock
     private CountDownLatch shutdownCompleteLatch;
@@ -32,6 +32,8 @@ public class RequestedShutdownCoordinatorTest {
     private CountDownLatch notificationCompleteLatch;
     @Mock
     private Worker worker;
+    @Mock
+    private Callable<GracefulShutdownContext> contextCallable;
     @Mock
     private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoConsumerMap;
 
@@ -262,9 +264,18 @@ public class RequestedShutdownCoordinatorTest {
         verify(worker).shutdown();
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void testWorkerShutdownCallableThrows() throws Exception {
+        Callable<Boolean> requestedShutdownCallable = new GracefulShutdownCoordinator().createGracefulShutdownCallable(contextCallable);
+        when(contextCallable.call()).thenThrow(new IllegalStateException("Bad Shutdown"));
+
+        requestedShutdownCallable.call();
+    }
+
     private void verifyLatchAwait(CountDownLatch latch) throws Exception {
         verifyLatchAwait(latch, times(1));
     }
+
     private void verifyLatchAwait(CountDownLatch latch, int times) throws Exception {
         verifyLatchAwait(latch, times(times));
     }
@@ -277,9 +288,11 @@ public class RequestedShutdownCoordinatorTest {
         when(latch.await(anyLong(), any(TimeUnit.class))).thenReturn(initial, remaining);
     }
 
-    private Callable<Boolean> buildRequestedShutdownCallable() {
-        return RequestedShutdownCoordinator.createRequestedShutdownCallable(shutdownCompleteLatch,
+    private Callable<Boolean> buildRequestedShutdownCallable() throws Exception {
+        GracefulShutdownContext context = new GracefulShutdownContext(shutdownCompleteLatch,
                 notificationCompleteLatch, worker);
+        when(contextCallable.call()).thenReturn(context);
+        return new GracefulShutdownCoordinator().createGracefulShutdownCallable(contextCallable);
     }
 
     private void mockShardInfoConsumerMap(Integer initialItemCount, Integer... additionalItemCounts) {

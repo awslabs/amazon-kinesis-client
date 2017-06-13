@@ -1,16 +1,9 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
- *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
- *
- * http://aws.amazon.com/asl/
- *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved. Licensed under the Amazon Software
+ * License (the "License"). You may not use this file except in compliance with the License. A copy of the License is
+ * located at http://aws.amazon.com/asl/ or in the "license" file accompanying this file. This file is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
@@ -24,7 +17,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
@@ -56,14 +48,12 @@ import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
- * Worker is the high level class that Kinesis applications use to start
- * processing data. It initializes and oversees different components (e.g.
- * syncing shard and lease information, tracking shard assignments, and
- * processing data from the shards).
+ * Worker is the high level class that Kinesis applications use to start processing data. It initializes and oversees
+ * different components (e.g. syncing shard and lease information, tracking shard assignments, and processing data from
+ * the shards).
  */
 public class Worker implements Runnable {
 
@@ -81,7 +71,7 @@ public class Worker implements Runnable {
     private final long idleTimeInMilliseconds;
     // Backoff time when polling to check if application has finished processing
     // parent shards
-    private final long parentShardPollIntervalMillis;    
+    private final long parentShardPollIntervalMillis;
     private final ExecutorService executorService;
     private final IMetricsFactory metricsFactory;
     // Backoff time when running tasks if they encounter exceptions
@@ -100,17 +90,27 @@ public class Worker implements Runnable {
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
-    private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap =
-            new ConcurrentHashMap<ShardInfo, ShardConsumer>();
+    private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap = new ConcurrentHashMap<ShardInfo, ShardConsumer>();
     private final boolean cleanupLeasesUponShardCompletion;
-    
+
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
+
+    /**
+     * Used to ensure that only one requestedShutdown is in progress at a time.
+     */
+    private Future<Boolean> gracefulShutdownFuture;
+    @VisibleForTesting
+    protected boolean gracefuleShutdownStarted = false;
+    @VisibleForTesting
+    protected GracefulShutdownCoordinator gracefulShutdownCoordinator = new GracefulShutdownCoordinator();
 
     /**
      * Constructor.
      *
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
@@ -121,136 +121,136 @@ public class Worker implements Runnable {
     /**
      * Constructor.
      *
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
-     * @param execService ExecutorService to use for processing records (support for multi-threaded
-     *        consumption)
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
+     * @param execService
+     *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
-            KinesisClientLibConfiguration config,
-            ExecutorService execService) {
-        this(recordProcessorFactory, config, new AmazonKinesisClient(config.getKinesisCredentialsProvider(),
-                config.getKinesisClientConfiguration()),
+            KinesisClientLibConfiguration config, ExecutorService execService) {
+        this(recordProcessorFactory, config,
+                new AmazonKinesisClient(config.getKinesisCredentialsProvider(), config.getKinesisClientConfiguration()),
                 new AmazonDynamoDBClient(config.getDynamoDBCredentialsProvider(),
                         config.getDynamoDBClientConfiguration()),
                 new AmazonCloudWatchClient(config.getCloudWatchCredentialsProvider(),
-                        config.getCloudWatchClientConfiguration()), execService);
+                        config.getCloudWatchClientConfiguration()),
+                execService);
     }
 
     /**
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
-     * @param metricsFactory Metrics factory used to emit metrics
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
+     * @param metricsFactory
+     *            Metrics factory used to emit metrics
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
-            KinesisClientLibConfiguration config,
-            IMetricsFactory metricsFactory) {
+            KinesisClientLibConfiguration config, IMetricsFactory metricsFactory) {
         this(recordProcessorFactory, config, metricsFactory, getExecutorService());
     }
 
     /**
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
-     * @param metricsFactory Metrics factory used to emit metrics
-     * @param execService ExecutorService to use for processing records (support for multi-threaded
-     *        consumption)
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
+     * @param metricsFactory
+     *            Metrics factory used to emit metrics
+     * @param execService
+     *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
-            KinesisClientLibConfiguration config,
-            IMetricsFactory metricsFactory,
-            ExecutorService execService) {
-        this(recordProcessorFactory, config, new AmazonKinesisClient(config.getKinesisCredentialsProvider(),
-                config.getKinesisClientConfiguration()),
+            KinesisClientLibConfiguration config, IMetricsFactory metricsFactory, ExecutorService execService) {
+        this(recordProcessorFactory, config,
+                new AmazonKinesisClient(config.getKinesisCredentialsProvider(), config.getKinesisClientConfiguration()),
                 new AmazonDynamoDBClient(config.getDynamoDBCredentialsProvider(),
-                        config.getDynamoDBClientConfiguration()), metricsFactory, execService);
+                        config.getDynamoDBClientConfiguration()),
+                metricsFactory, execService);
     }
 
     /**
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
-     * @param kinesisClient Kinesis Client used for fetching data
-     * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
-     * @param cloudWatchClient CloudWatch Client for publishing metrics
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
+     * @param kinesisClient
+     *            Kinesis Client used for fetching data
+     * @param dynamoDBClient
+     *            DynamoDB client used for checkpoints and tracking leases
+     * @param cloudWatchClient
+     *            CloudWatch Client for publishing metrics
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
-            KinesisClientLibConfiguration config,
-            AmazonKinesis kinesisClient,
-            AmazonDynamoDB dynamoDBClient,
+            KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
             AmazonCloudWatch cloudWatchClient) {
         this(recordProcessorFactory, config, kinesisClient, dynamoDBClient, cloudWatchClient, getExecutorService());
     }
 
     /**
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
-     * @param kinesisClient Kinesis Client used for fetching data
-     * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
-     * @param cloudWatchClient CloudWatch Client for publishing metrics
-     * @param execService ExecutorService to use for processing records (support for multi-threaded
-     *        consumption)
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
+     * @param kinesisClient
+     *            Kinesis Client used for fetching data
+     * @param dynamoDBClient
+     *            DynamoDB client used for checkpoints and tracking leases
+     * @param cloudWatchClient
+     *            CloudWatch Client for publishing metrics
+     * @param execService
+     *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
-            KinesisClientLibConfiguration config,
-            AmazonKinesis kinesisClient,
-            AmazonDynamoDB dynamoDBClient,
-            AmazonCloudWatch cloudWatchClient,
-            ExecutorService execService) {
-        this(recordProcessorFactory, config, kinesisClient, dynamoDBClient,
-                getMetricsFactory(cloudWatchClient, config), execService);
+            KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
+            AmazonCloudWatch cloudWatchClient, ExecutorService execService) {
+        this(recordProcessorFactory, config, kinesisClient, dynamoDBClient, getMetricsFactory(cloudWatchClient, config),
+                execService);
     }
 
     /**
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
-     * @param kinesisClient Kinesis Client used for fetching data
-     * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
-     * @param metricsFactory Metrics factory used to emit metrics
-     * @param execService ExecutorService to use for processing records (support for multi-threaded
-     *        consumption)
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
+     * @param kinesisClient
+     *            Kinesis Client used for fetching data
+     * @param dynamoDBClient
+     *            DynamoDB client used for checkpoints and tracking leases
+     * @param metricsFactory
+     *            Metrics factory used to emit metrics
+     * @param execService
+     *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
-            KinesisClientLibConfiguration config,
-            AmazonKinesis kinesisClient,
-            AmazonDynamoDB dynamoDBClient,
-            IMetricsFactory metricsFactory,
-            ExecutorService execService) {
-        this(
-                config.getApplicationName(),
-                new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),                
+            KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
+            IMetricsFactory metricsFactory, ExecutorService execService) {
+        this(config.getApplicationName(), new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),
                 new StreamConfig(
                         new KinesisProxyFactory(config.getKinesisCredentialsProvider(), kinesisClient)
-                            .getProxy(config.getStreamName()),
+                                .getProxy(config.getStreamName()),
                         config.getMaxRecords(), config.getIdleTimeBetweenReadsInMillis(),
                         config.shouldCallProcessRecordsEvenForEmptyRecordList(),
                         config.shouldValidateSequenceNumberBeforeCheckpointing(),
                         config.getInitialPositionInStreamExtended()),
-                config.getInitialPositionInStreamExtended(),
-                config.getParentShardPollIntervalMillis(),
-                config.getShardSyncIntervalMillis(),
-                config.shouldCleanupLeasesUponShardCompletion(),
-                null,
+                config.getInitialPositionInStreamExtended(), config.getParentShardPollIntervalMillis(),
+                config.getShardSyncIntervalMillis(), config.shouldCleanupLeasesUponShardCompletion(), null,
                 new KinesisClientLibLeaseCoordinator(
                         new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient),
-                        config.getWorkerIdentifier(),
-                        config.getFailoverTimeMillis(),
-                        config.getEpsilonMillis(),
-                        config.getMaxLeasesForWorker(),
-                        config.getMaxLeasesToStealAtOneTime(),
-                        metricsFactory)
-                    .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
-                    .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
-                execService,
-                metricsFactory,
-                config.getTaskBackoffTimeMillis(),
-                config.getFailoverTimeMillis(),
-                config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
-                config.getShardPrioritizationStrategy());
+                        config.getWorkerIdentifier(), config.getFailoverTimeMillis(), config.getEpsilonMillis(),
+                        config.getMaxLeasesForWorker(), config.getMaxLeasesToStealAtOneTime(), metricsFactory)
+                                .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
+                                .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
+                execService, metricsFactory, config.getTaskBackoffTimeMillis(), config.getFailoverTimeMillis(),
+                config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(), config.getShardPrioritizationStrategy());
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
@@ -273,48 +273,50 @@ public class Worker implements Runnable {
                         + ", and Amazon Kinesis endpoint as " + config.getKinesisEndpoint()
                         + ". Amazon Kinesis endpoint will overwrite region name.");
                 LOG.debug("The region of Amazon Kinesis client has been overwritten to " + config.getKinesisEndpoint());
-            } else  {
+            } else {
                 LOG.debug("The region of Amazon Kinesis client has been set to " + config.getKinesisEndpoint());
             }
         }
     }
 
     /**
-     * @param applicationName Name of the Kinesis application
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param streamConfig Stream configuration
-     * @param initialPositionInStream One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. The KinesisClientLibrary will start
-     *        fetching data from this location in the stream when an application starts up for the first time and
-     *        there are no checkpoints. If there are checkpoints, we start from the checkpoint position.
-     * @param parentShardPollIntervalMillis Wait for this long between polls to check if parent shards are done
-     * @param shardSyncIdleTimeMillis Time between tasks to sync leases and Kinesis shards
-     * @param cleanupLeasesUponShardCompletion Clean up shards we've finished processing (don't wait till they expire in
-     *        Kinesis)
-     * @param checkpoint Used to get/set checkpoints
-     * @param leaseCoordinator Lease coordinator (coordinates currently owned leases)
-     * @param execService ExecutorService to use for processing records (support for multi-threaded
-     *        consumption)
-     * @param metricsFactory Metrics factory used to emit metrics
-     * @param taskBackoffTimeMillis Backoff period when tasks encounter an exception
-     * @param shardPrioritization Provides prioritization logic to decide which available shards process first
+     * @param applicationName
+     *            Name of the Kinesis application
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param streamConfig
+     *            Stream configuration
+     * @param initialPositionInStream
+     *            One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. The KinesisClientLibrary will start fetching data from
+     *            this location in the stream when an application starts up for the first time and there are no
+     *            checkpoints. If there are checkpoints, we start from the checkpoint position.
+     * @param parentShardPollIntervalMillis
+     *            Wait for this long between polls to check if parent shards are done
+     * @param shardSyncIdleTimeMillis
+     *            Time between tasks to sync leases and Kinesis shards
+     * @param cleanupLeasesUponShardCompletion
+     *            Clean up shards we've finished processing (don't wait till they expire in Kinesis)
+     * @param checkpoint
+     *            Used to get/set checkpoints
+     * @param leaseCoordinator
+     *            Lease coordinator (coordinates currently owned leases)
+     * @param execService
+     *            ExecutorService to use for processing records (support for multi-threaded consumption)
+     * @param metricsFactory
+     *            Metrics factory used to emit metrics
+     * @param taskBackoffTimeMillis
+     *            Backoff period when tasks encounter an exception
+     * @param shardPrioritization
+     *            Provides prioritization logic to decide which available shards process first
      */
     // NOTE: This has package level access solely for testing
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
-    Worker(String applicationName,
-            IRecordProcessorFactory recordProcessorFactory,
-            StreamConfig streamConfig,
-            InitialPositionInStreamExtended initialPositionInStream,
-            long parentShardPollIntervalMillis,
-            long shardSyncIdleTimeMillis,
-            boolean cleanupLeasesUponShardCompletion,
-            ICheckpoint checkpoint,
-            KinesisClientLibLeaseCoordinator leaseCoordinator,
-            ExecutorService execService,
-            IMetricsFactory metricsFactory,
-            long taskBackoffTimeMillis,
-            long failoverTimeMillis,
-            boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-            ShardPrioritization shardPrioritization) {
+    Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, StreamConfig streamConfig,
+            InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
+            long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
+            KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
+            IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.streamConfig = streamConfig;
@@ -326,16 +328,11 @@ public class Worker implements Runnable {
         this.executorService = execService;
         this.leaseCoordinator = leaseCoordinator;
         this.metricsFactory = metricsFactory;
-        this.controlServer =
-                new ShardSyncTaskManager(streamConfig.getStreamProxy(),
-                        leaseCoordinator.getLeaseManager(),
-                        initialPositionInStream,
-                        cleanupLeasesUponShardCompletion,
-                        shardSyncIdleTimeMillis,
-                        metricsFactory,
-                        executorService);
+        this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
+                initialPositionInStream, cleanupLeasesUponShardCompletion, shardSyncIdleTimeMillis, metricsFactory,
+                executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
-        this.failoverTimeMillis = failoverTimeMillis;        
+        this.failoverTimeMillis = failoverTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
         this.shardPrioritization = shardPrioritization;
     }
@@ -348,8 +345,7 @@ public class Worker implements Runnable {
     }
 
     /**
-     * Start consuming data from the stream, and pass it to the application
-     * record processors.
+     * Start consuming data from the stream, and pass it to the application record processors.
      */
     public void run() {
         if (shutdown) {
@@ -422,12 +418,8 @@ public class Worker implements Runnable {
                 if (!skipShardSyncAtWorkerInitializationIfLeasesExist
                         || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
                     LOG.info("Syncing Kinesis shard info");
-                    ShardSyncTask shardSyncTask =
-                            new ShardSyncTask(streamConfig.getStreamProxy(),
-                                    leaseCoordinator.getLeaseManager(),
-                                    initialPosition,
-                                    cleanupLeasesUponShardCompletion,
-                                    0L);
+                    ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
+                            leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion, 0L);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
                     LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
@@ -464,14 +456,13 @@ public class Worker implements Runnable {
     }
 
     /**
-     * NOTE: This method is internal/private to the Worker class. It has package
-     * access solely for testing.
+     * NOTE: This method is internal/private to the Worker class. It has package access solely for testing.
      *
      * This method relies on ShardInfo.equals() method returning true for ShardInfo objects which may have been
      * instantiated with parentShardIds in a different order (and rest of the fields being the equal). For example
-     * shardInfo1.equals(shardInfo2) should return true with shardInfo1 and shardInfo2 defined as follows.
-     * ShardInfo shardInfo1 = new ShardInfo(shardId1, concurrencyToken1, Arrays.asList("parent1", "parent2"));
-     * ShardInfo shardInfo2 = new ShardInfo(shardId1, concurrencyToken1, Arrays.asList("parent2", "parent1"));
+     * shardInfo1.equals(shardInfo2) should return true with shardInfo1 and shardInfo2 defined as follows. ShardInfo
+     * shardInfo1 = new ShardInfo(shardId1, concurrencyToken1, Arrays.asList("parent1", "parent2")); ShardInfo
+     * shardInfo2 = new ShardInfo(shardId1, concurrencyToken1, Arrays.asList("parent2", "parent1"));
      */
     void cleanupShardConsumers(Set<ShardInfo> assignedShards) {
         for (ShardInfo shard : shardInfoShardConsumerMap.keySet()) {
@@ -511,38 +502,17 @@ public class Worker implements Runnable {
     }
 
     /**
-     * Requests shutdown of the worker, notifying record processors, that implement {@link IShutdownNotificationAware},
-     * of the impending shutdown. This gives the record processor a final chance to checkpoint.
-     *
-     * <b>It's possible that a record processor won't be notify before being shutdown. This can occur if the lease is
-     * lost after requesting shutdown, but before the notification is dispatched.</b>
-     *
-     * <h2>Requested Shutdown Process</h2> When a shutdown process is requested it operates slightly differently to
-     * allow the record processors a chance to checkpoint a final time.
-     * <ol>
-     * <li>Call to request shutdown invoked.</li>
-     * <li>Worker stops attempting to acquire new leases</li>
-     * <li>Record Processor Shutdown Begins
-     * <ol>
-     * <li>Record processor is notified of the impending shutdown, and given a final chance to checkpoint</li>
-     * <li>The lease for the record processor is then dropped.</li>
-     * <li>The record processor enters into an idle state waiting for the worker to complete final termination</li>
-     * <li>The worker will detect a record processor that has lost it's lease, and will terminate the record processor
-     * with {@link ShutdownReason#ZOMBIE}</li>
-     * </ol>
-     * </li>
-     * <li>The worker will shutdown all record processors.</li>
-     * <li>Once all record processors have been terminated, the worker will terminate all owned resources.</li>
-     * <li>Once the worker shutdown is complete, the returned future is completed.</li>
-     * </ol>
-     *
-     *
-     *
-     * @return a Future that will be set once the shutdown is complete.
+     * Starts the requestedShutdown process, and returns a future that can be used to track the process.
+     * 
+     * This is deprecated in favor of {@link #startGracefulShutdown()}, which returns a more complete future, and
+     * indicates the process behavior
+     * 
+     * @return a future that will be set once shutdown is completed.
      */
+    @Deprecated
     public Future<Void> requestShutdown() {
 
-        Future<Boolean> requestedShutdownFuture = requestCancellableShutdown();
+        Future<Boolean> requestedShutdownFuture = startGracefulShutdown();
 
         return new Future<Void>() {
 
@@ -568,52 +538,123 @@ public class Worker implements Runnable {
             }
 
             @Override
-            public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+            public Void get(long timeout, TimeUnit unit)
+                    throws InterruptedException, ExecutionException, TimeoutException {
                 requestedShutdownFuture.get(timeout, unit);
                 return null;
             }
         };
     }
 
-    public Future<Boolean> requestCancellableShutdown() {
-        return RequestedShutdownCoordinator.startRequestedShutdown(requestShutdownCallable());
-    }
-
-    public Callable<Boolean> requestShutdownCallable() {
-        //
-        // Stop accepting new leases.  Once we do this we can be sure that
-        // no more leases will be acquired.
-        //
-        leaseCoordinator.stopLeaseTaker();
-
-        Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
-        if (leases == null || leases.isEmpty()) {
-            //
-            // If there are no leases notification is already completed, but we still need to shutdown the worker.
-            //
-            this.shutdown();
-            return () -> true;
-        }
-        CountDownLatch shutdownCompleteLatch = new CountDownLatch(leases.size());
-        CountDownLatch notificationCompleteLatch = new CountDownLatch(leases.size());
-        for (KinesisClientLease lease : leases) {
-            ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(leaseCoordinator, lease,
-                    notificationCompleteLatch, shutdownCompleteLatch);
-            ShardInfo shardInfo = KinesisClientLibLeaseCoordinator.convertLeaseToAssignment(lease);
-            ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
-            if (consumer != null) {
-                consumer.notifyShutdownRequested(shutdownNotification);
-            } else {
-                //
-                // There is a race condition between retrieving the current assignments, and creating the
-                // notification.  If the a lease is lost in between these two points, we explicitly decrement the
-                // notification latches to clear the shutdown.
-                //
-                notificationCompleteLatch.countDown();
-                shutdownCompleteLatch.countDown();
+    /**
+     * Requests a graceful shutdown of the worker, notifying record processors, that implement
+     * {@link IShutdownNotificationAware}, of the impending shutdown. This gives the record processor a final chance to
+     * checkpoint.
+     * 
+     * This will only create a single shutdown future. Additional attempts to start a graceful shutdown will return the
+     * previous future.
+     *
+     * <b>It's possible that a record processor won't be notify before being shutdown. This can occur if the lease is
+     * lost after requesting shutdown, but before the notification is dispatched.</b>
+     *
+     * <h2>Requested Shutdown Process</h2> When a shutdown process is requested it operates slightly differently to
+     * allow the record processors a chance to checkpoint a final time.
+     * <ol>
+     * <li>Call to request shutdown invoked.</li>
+     * <li>Worker stops attempting to acquire new leases</li>
+     * <li>Record Processor Shutdown Begins
+     * <ol>
+     * <li>Record processor is notified of the impending shutdown, and given a final chance to checkpoint</li>
+     * <li>The lease for the record processor is then dropped.</li>
+     * <li>The record processor enters into an idle state waiting for the worker to complete final termination</li>
+     * <li>The worker will detect a record processor that has lost it's lease, and will terminate the record processor
+     * with {@link ShutdownReason#ZOMBIE}</li>
+     * </ol>
+     * </li>
+     * <li>The worker will shutdown all record processors.</li>
+     * <li>Once all record processors have been terminated, the worker will terminate all owned resources.</li>
+     * <li>Once the worker shutdown is complete, the returned future is completed.</li>
+     * </ol>
+     *
+     * @return a future that will be set once the shutdown has completed. True indicates that the graceful shutdown
+     *         completed successfully. A false value indicates that a non-exception case caused the shutdown process to
+     *         terminate early.
+     */
+    public Future<Boolean> startGracefulShutdown() {
+        synchronized (this) {
+            if (gracefulShutdownFuture == null) {
+                gracefulShutdownFuture = gracefulShutdownCoordinator
+                        .startGracefulShutdown(createGracefulShutdownCallable());
             }
         }
-        return RequestedShutdownCoordinator.createRequestedShutdownCallable(shutdownCompleteLatch, notificationCompleteLatch, this);
+        return gracefulShutdownFuture;
+    }
+
+    /**
+     * Creates a callable that will execute the graceful shutdown process. This callable can be used to execute graceful
+     * shutdowns in your own executor, or execute the shutdown synchronously.
+     *
+     * @return a callable that run the graceful shutdown process. This may return a callable that return true if the
+     *         graceful shutdown has already been completed.
+     * @throws IllegalStateException
+     *             thrown by the callable if another callable has already started the shutdown process.
+     */
+    public Callable<Boolean> createGracefulShutdownCallable() {
+        if (isShutdownComplete()) {
+            return () -> true;
+        }
+        Callable<GracefulShutdownContext> startShutdown = createWorkerShutdownCallable();
+        return gracefulShutdownCoordinator.createGracefulShutdownCallable(startShutdown);
+    }
+
+    public boolean hasGracefulShutdownStarted() {
+        return gracefuleShutdownStarted;
+    }
+
+    @VisibleForTesting
+    Callable<GracefulShutdownContext> createWorkerShutdownCallable() {
+        return () -> {
+            synchronized (this) {
+                if (this.gracefuleShutdownStarted) {
+                    throw new IllegalStateException("Requested shutdown has already been started");
+                }
+                this.gracefuleShutdownStarted = true;
+            }
+            //
+            // Stop accepting new leases. Once we do this we can be sure that
+            // no more leases will be acquired.
+            //
+            leaseCoordinator.stopLeaseTaker();
+
+            Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
+            if (leases == null || leases.isEmpty()) {
+                //
+                // If there are no leases notification is already completed, but we still need to shutdown the worker.
+                //
+                this.shutdown();
+                return GracefulShutdownContext.SHUTDOWN_ALREADY_COMPLETED;
+            }
+            CountDownLatch shutdownCompleteLatch = new CountDownLatch(leases.size());
+            CountDownLatch notificationCompleteLatch = new CountDownLatch(leases.size());
+            for (KinesisClientLease lease : leases) {
+                ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(leaseCoordinator,
+                        lease, notificationCompleteLatch, shutdownCompleteLatch);
+                ShardInfo shardInfo = KinesisClientLibLeaseCoordinator.convertLeaseToAssignment(lease);
+                ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
+                if (consumer != null) {
+                    consumer.notifyShutdownRequested(shutdownNotification);
+                } else {
+                    //
+                    // There is a race condition between retrieving the current assignments, and creating the
+                    // notification. If the a lease is lost in between these two points, we explicitly decrement the
+                    // notification latches to clear the shutdown.
+                    //
+                    notificationCompleteLatch.countDown();
+                    shutdownCompleteLatch.countDown();
+                }
+            }
+            return new GracefulShutdownContext(shutdownCompleteLatch, notificationCompleteLatch, this);
+        };
     }
 
     boolean isShutdownComplete() {
@@ -657,8 +698,8 @@ public class Worker implements Runnable {
     }
 
     /**
-     * Perform final shutdown related tasks for the worker including shutting down worker owned
-     * executor services, threads, etc.
+     * Perform final shutdown related tasks for the worker including shutting down worker owned executor services,
+     * threads, etc.
      */
     private void finalShutdown() {
         LOG.info("Starting worker's final shutdown.");
@@ -699,11 +740,12 @@ public class Worker implements Runnable {
     }
 
     /**
-     * NOTE: This method is internal/private to the Worker class. It has package
-     * access solely for testing.
+     * NOTE: This method is internal/private to the Worker class. It has package access solely for testing.
      *
-     * @param shardInfo Kinesis shard info
-     * @param factory RecordProcessor factory
+     * @param shardInfo
+     *            Kinesis shard info
+     * @param factory
+     *            RecordProcessor factory
      * @return ShardConsumer for the shard
      */
     ShardConsumer createOrGetShardConsumer(ShardInfo shardInfo, IRecordProcessorFactory factory) {
@@ -727,15 +769,15 @@ public class Worker implements Runnable {
 
         return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor,
                 leaseCoordinator.getLeaseManager(), parentShardPollIntervalMillis, cleanupLeasesUponShardCompletion,
-                executorService, metricsFactory, taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist);
+                executorService, metricsFactory, taskBackoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist);
 
     }
 
     /**
-     * Logger for suppressing too much INFO logging. To avoid too much logging
-     * information Worker will output logging at INFO level for a single pass
-     * through the main loop every minute. At DEBUG level it will output all
-     * INFO logs on every pass.
+     * Logger for suppressing too much INFO logging. To avoid too much logging information Worker will output logging at
+     * INFO level for a single pass through the main loop every minute. At DEBUG level it will output all INFO logs on
+     * every pass.
      */
     private static class WorkerLog {
 
@@ -791,90 +833,89 @@ public class Worker implements Runnable {
 
     // Backwards compatible constructors
     /**
-     * This constructor is for binary compatibility with code compiled against
-     * version of the KCL that only have constructors taking "Client" objects.
+     * This constructor is for binary compatibility with code compiled against version of the KCL that only have
+     * constructors taking "Client" objects.
      *
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
-     * @param kinesisClient Kinesis Client used for fetching data
-     * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
-     * @param cloudWatchClient CloudWatch Client for publishing metrics
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
+     * @param kinesisClient
+     *            Kinesis Client used for fetching data
+     * @param dynamoDBClient
+     *            DynamoDB client used for checkpoints and tracking leases
+     * @param cloudWatchClient
+     *            CloudWatch Client for publishing metrics
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
-            KinesisClientLibConfiguration config,
-            AmazonKinesisClient kinesisClient,
-            AmazonDynamoDBClient dynamoDBClient,
-            AmazonCloudWatchClient cloudWatchClient) {
-        this(recordProcessorFactory,
-                 config,
-                (AmazonKinesis) kinesisClient,
-                (AmazonDynamoDB) dynamoDBClient,
+            KinesisClientLibConfiguration config, AmazonKinesisClient kinesisClient,
+            AmazonDynamoDBClient dynamoDBClient, AmazonCloudWatchClient cloudWatchClient) {
+        this(recordProcessorFactory, config, (AmazonKinesis) kinesisClient, (AmazonDynamoDB) dynamoDBClient,
                 (AmazonCloudWatch) cloudWatchClient);
     }
 
     /**
-     * This constructor is for binary compatibility with code compiled against
-     * version of the KCL that only have constructors taking "Client" objects.
+     * This constructor is for binary compatibility with code compiled against version of the KCL that only have
+     * constructors taking "Client" objects.
      *
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
-     * @param kinesisClient Kinesis Client used for fetching data
-     * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
-     * @param cloudWatchClient CloudWatch Client for publishing metrics
-     * @param execService ExecutorService to use for processing records (support for multi-threaded
-     *        consumption)
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
+     * @param kinesisClient
+     *            Kinesis Client used for fetching data
+     * @param dynamoDBClient
+     *            DynamoDB client used for checkpoints and tracking leases
+     * @param cloudWatchClient
+     *            CloudWatch Client for publishing metrics
+     * @param execService
+     *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
-            KinesisClientLibConfiguration config,
-            AmazonKinesisClient kinesisClient,
-            AmazonDynamoDBClient dynamoDBClient,
-            AmazonCloudWatchClient cloudWatchClient,
-            ExecutorService execService) {
-        this(recordProcessorFactory,
-                 config,
-                 (AmazonKinesis) kinesisClient,
-                 (AmazonDynamoDB) dynamoDBClient,
-                 (AmazonCloudWatch) cloudWatchClient,
-                 execService);
+            KinesisClientLibConfiguration config, AmazonKinesisClient kinesisClient,
+            AmazonDynamoDBClient dynamoDBClient, AmazonCloudWatchClient cloudWatchClient, ExecutorService execService) {
+        this(recordProcessorFactory, config, (AmazonKinesis) kinesisClient, (AmazonDynamoDB) dynamoDBClient,
+                (AmazonCloudWatch) cloudWatchClient, execService);
     }
 
     /**
-     * This constructor is for binary compatibility with code compiled against
-     * version of the KCL that only have constructors taking "Client" objects.
+     * This constructor is for binary compatibility with code compiled against version of the KCL that only have
+     * constructors taking "Client" objects.
      *
-     * @param recordProcessorFactory Used to get record processor instances for processing data from shards
-     * @param config Kinesis Client Library configuration
-     * @param kinesisClient Kinesis Client used for fetching data
-     * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
-     * @param metricsFactory Metrics factory used to emit metrics
-     * @param execService ExecutorService to use for processing records (support for multi-threaded
-     *        consumption)
+     * @param recordProcessorFactory
+     *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Client Library configuration
+     * @param kinesisClient
+     *            Kinesis Client used for fetching data
+     * @param dynamoDBClient
+     *            DynamoDB client used for checkpoints and tracking leases
+     * @param metricsFactory
+     *            Metrics factory used to emit metrics
+     * @param execService
+     *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
-            KinesisClientLibConfiguration config,
-            AmazonKinesisClient kinesisClient,
-            AmazonDynamoDBClient dynamoDBClient,
-            IMetricsFactory metricsFactory,
-            ExecutorService execService) {
-        this(recordProcessorFactory,
-                 config,
-                (AmazonKinesis) kinesisClient,
-                (AmazonDynamoDB) dynamoDBClient,
-                 metricsFactory,
-                 execService);
+            KinesisClientLibConfiguration config, AmazonKinesisClient kinesisClient,
+            AmazonDynamoDBClient dynamoDBClient, IMetricsFactory metricsFactory, ExecutorService execService) {
+        this(recordProcessorFactory, config, (AmazonKinesis) kinesisClient, (AmazonDynamoDB) dynamoDBClient,
+                metricsFactory, execService);
     }
 
     /**
      * Given configuration, returns appropriate metrics factory.
-     * @param cloudWatchClient Amazon CloudWatch client
-     * @param config KinesisClientLibConfiguration
+     * 
+     * @param cloudWatchClient
+     *            Amazon CloudWatch client
+     * @param config
+     *            KinesisClientLibConfiguration
      * @return Returns metrics factory based on the config.
      */
-    private static IMetricsFactory getMetricsFactory(
-            AmazonCloudWatch cloudWatchClient, KinesisClientLibConfiguration config) {
+    private static IMetricsFactory getMetricsFactory(AmazonCloudWatch cloudWatchClient,
+            KinesisClientLibConfiguration config) {
         IMetricsFactory metricsFactory;
         if (config.getMetricsLevel() == MetricsLevel.NONE) {
             metricsFactory = new NullMetricsFactory();
@@ -884,12 +925,8 @@ public class Worker implements Runnable {
                 cloudWatchClient.setRegion(region);
                 LOG.debug("The region of Amazon CloudWatch client has been set to " + config.getRegionName());
             }
-            metricsFactory = new WorkerCWMetricsFactory(
-                    cloudWatchClient,
-                    config.getApplicationName(),
-                    config.getMetricsBufferTimeMillis(),
-                    config.getMetricsMaxQueueSize(),
-                    config.getMetricsLevel(),
+            metricsFactory = new WorkerCWMetricsFactory(cloudWatchClient, config.getApplicationName(),
+                    config.getMetricsBufferTimeMillis(), config.getMetricsMaxQueueSize(), config.getMetricsLevel(),
                     config.getMetricsEnabledDimensions());
         }
         return metricsFactory;
@@ -897,6 +934,7 @@ public class Worker implements Runnable {
 
     /**
      * Returns default executor service that should be used by the worker.
+     * 
      * @return Default executor service that should be used by the worker.
      */
     private static ExecutorService getExecutorService() {
@@ -905,26 +943,19 @@ public class Worker implements Runnable {
     }
 
     /**
-     * Extension to CWMetricsFactory, so worker can identify whether it owns the metrics factory instance
-     * or not.
+     * Extension to CWMetricsFactory, so worker can identify whether it owns the metrics factory instance or not.
      * Visible and non-final only for testing.
      */
     static class WorkerCWMetricsFactory extends CWMetricsFactory {
 
-        WorkerCWMetricsFactory(AmazonCloudWatch cloudWatchClient,
-                String namespace,
-                long bufferTimeMillis,
-                int maxQueueSize,
-                MetricsLevel metricsLevel,
-                Set<String> metricsEnabledDimensions) {
-            super(cloudWatchClient, namespace, bufferTimeMillis,
-                    maxQueueSize, metricsLevel, metricsEnabledDimensions);
+        WorkerCWMetricsFactory(AmazonCloudWatch cloudWatchClient, String namespace, long bufferTimeMillis,
+                int maxQueueSize, MetricsLevel metricsLevel, Set<String> metricsEnabledDimensions) {
+            super(cloudWatchClient, namespace, bufferTimeMillis, maxQueueSize, metricsLevel, metricsEnabledDimensions);
         }
     }
 
     /**
-     * Extension to ThreadPoolExecutor, so worker can identify whether it owns the executor service instance
-     * or not.
+     * Extension to ThreadPoolExecutor, so worker can identify whether it owns the executor service instance or not.
      * Visible and non-final only for testing.
      */
     static class WorkerThreadPoolExecutor extends ThreadPoolExecutor {
@@ -958,24 +989,25 @@ public class Worker implements Runnable {
         }
 
         /**
-         * Provide a V1
-         * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor IRecordProcessor}.
+         * Provide a V1 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor
+         * IRecordProcessor}.
          *
-         * @param recordProcessorFactory Used to get record processor instances for processing data from shards
+         * @param recordProcessorFactory
+         *            Used to get record processor instances for processing data from shards
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder recordProcessorFactory(
-                com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory
-                recordProcessorFactory) {
+                com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory) {
             this.recordProcessorFactory = new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory);
             return this;
         }
 
         /**
-         * Provide a V2
-         * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor IRecordProcessor}.
+         * Provide a V2 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor
+         * IRecordProcessor}.
          *
-         * @param recordProcessorFactory Used to get record processor instances for processing data from shards
+         * @param recordProcessorFactory
+         *            Used to get record processor instances for processing data from shards
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder recordProcessorFactory(IRecordProcessorFactory recordProcessorFactory) {
@@ -986,7 +1018,8 @@ public class Worker implements Runnable {
         /**
          * Set the Worker config.
          *
-         * @param config Kinesis Client Library configuration
+         * @param config
+         *            Kinesis Client Library configuration
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder config(KinesisClientLibConfiguration config) {
@@ -997,7 +1030,8 @@ public class Worker implements Runnable {
         /**
          * Set the Kinesis client.
          *
-         * @param kinesisClient Kinesis Client used for fetching data
+         * @param kinesisClient
+         *            Kinesis Client used for fetching data
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder kinesisClient(AmazonKinesis kinesisClient) {
@@ -1008,7 +1042,8 @@ public class Worker implements Runnable {
         /**
          * Set the DynamoDB client.
          *
-         * @param dynamoDBClient DynamoDB client used for checkpoints and tracking leases
+         * @param dynamoDBClient
+         *            DynamoDB client used for checkpoints and tracking leases
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder dynamoDBClient(AmazonDynamoDB dynamoDBClient) {
@@ -1019,7 +1054,8 @@ public class Worker implements Runnable {
         /**
          * Set the Cloudwatch client.
          *
-         * @param cloudWatchClient CloudWatch Client for publishing metrics
+         * @param cloudWatchClient
+         *            CloudWatch Client for publishing metrics
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder cloudWatchClient(AmazonCloudWatch cloudWatchClient) {
@@ -1030,7 +1066,8 @@ public class Worker implements Runnable {
         /**
          * Set the metrics factory.
          *
-         * @param metricsFactory Metrics factory used to emit metrics
+         * @param metricsFactory
+         *            Metrics factory used to emit metrics
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder metricsFactory(IMetricsFactory metricsFactory) {
@@ -1041,7 +1078,8 @@ public class Worker implements Runnable {
         /**
          * Set the executor service for processing records.
          *
-         * @param execService ExecutorService to use for processing records (support for multi-threaded consumption)
+         * @param execService
+         *            ExecutorService to use for processing records (support for multi-threaded consumption)
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder execService(ExecutorService execService) {
@@ -1075,8 +1113,7 @@ public class Worker implements Runnable {
                         "Kinesis Client Library configuration needs to be provided to build Worker");
             }
             if (recordProcessorFactory == null) {
-                throw new IllegalArgumentException(
-                        "A Record Processor Factory needs to be provided to build Worker");
+                throw new IllegalArgumentException("A Record Processor Factory needs to be provided to build Worker");
             }
 
             if (execService == null) {
@@ -1118,7 +1155,7 @@ public class Worker implements Runnable {
                             + ". Amazon Kinesis endpoint will overwrite region name.");
                     LOG.debug("The region of Amazon Kinesis client has been overwritten to "
                             + config.getKinesisEndpoint());
-                } else  {
+                } else {
                     LOG.debug("The region of Amazon Kinesis client has been set to " + config.getKinesisEndpoint());
                 }
             }
@@ -1129,36 +1166,23 @@ public class Worker implements Runnable {
                 shardPrioritization = new ParentsFirstShardPrioritization(1);
             }
 
-            return new Worker(config.getApplicationName(),
-                    recordProcessorFactory,
-                    new StreamConfig(new KinesisProxyFactory(config.getKinesisCredentialsProvider(),
-                            kinesisClient).getProxy(config.getStreamName()),
-                            config.getMaxRecords(),
-                            config.getIdleTimeBetweenReadsInMillis(),
-                            config.shouldCallProcessRecordsEvenForEmptyRecordList(),
-                            config.shouldValidateSequenceNumberBeforeCheckpointing(),
-                            config.getInitialPositionInStreamExtended()),
-                    config.getInitialPositionInStreamExtended(),
-                    config.getParentShardPollIntervalMillis(),
-                    config.getShardSyncIntervalMillis(),
-                    config.shouldCleanupLeasesUponShardCompletion(),
-                    null,
-                    new KinesisClientLibLeaseCoordinator(new KinesisClientLeaseManager(config.getTableName(),
-                            dynamoDBClient),
-                            config.getWorkerIdentifier(),
-                            config.getFailoverTimeMillis(),
-                            config.getEpsilonMillis(),
-                            config.getMaxLeasesForWorker(),
-                            config.getMaxLeasesToStealAtOneTime(),
-                            metricsFactory)
-                        .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
-                        .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
-                    execService,
-                    metricsFactory,
-                    config.getTaskBackoffTimeMillis(),
-                    config.getFailoverTimeMillis(),
-                    config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
-                    shardPrioritization);
+            return new Worker(config.getApplicationName(), recordProcessorFactory, new StreamConfig(
+                    new KinesisProxyFactory(config.getKinesisCredentialsProvider(), kinesisClient)
+                            .getProxy(config.getStreamName()),
+                    config.getMaxRecords(), config.getIdleTimeBetweenReadsInMillis(),
+                    config.shouldCallProcessRecordsEvenForEmptyRecordList(),
+                    config.shouldValidateSequenceNumberBeforeCheckpointing(),
+                    config.getInitialPositionInStreamExtended()), config.getInitialPositionInStreamExtended(),
+                    config.getParentShardPollIntervalMillis(), config.getShardSyncIntervalMillis(),
+                    config.shouldCleanupLeasesUponShardCompletion(), null,
+                    new KinesisClientLibLeaseCoordinator(
+                            new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient),
+                            config.getWorkerIdentifier(), config.getFailoverTimeMillis(), config.getEpsilonMillis(),
+                            config.getMaxLeasesForWorker(), config.getMaxLeasesToStealAtOneTime(), metricsFactory)
+                                    .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
+                                    .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
+                    execService, metricsFactory, config.getTaskBackoffTimeMillis(), config.getFailoverTimeMillis(),
+                    config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(), shardPrioritization);
 
         }
 

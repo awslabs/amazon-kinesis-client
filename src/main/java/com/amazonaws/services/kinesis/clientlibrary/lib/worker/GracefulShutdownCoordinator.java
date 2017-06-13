@@ -1,7 +1,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
@@ -9,9 +8,9 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-class RequestedShutdownCoordinator {
+class GracefulShutdownCoordinator {
 
-    static Future<Boolean> startRequestedShutdown(Callable<Boolean> shutdownCallable) {
+    Future<Boolean> startGracefulShutdown(Callable<Boolean> shutdownCallable) {
         FutureTask<Boolean> task = new FutureTask<>(shutdownCallable);
         Thread shutdownThread = new Thread(task, "RequestedShutdownThread");
         shutdownThread.start();
@@ -19,45 +18,39 @@ class RequestedShutdownCoordinator {
 
     }
 
-    static Callable<Boolean> createRequestedShutdownCallable(CountDownLatch shutdownCompleteLatch,
-            CountDownLatch notificationCompleteLatch, Worker worker) {
-        return new RequestedShutdownCallable(shutdownCompleteLatch, notificationCompleteLatch, worker);
+    Callable<Boolean> createGracefulShutdownCallable(Callable<GracefulShutdownContext> startWorkerShutdown) {
+        return new GracefulShutdownCallable(startWorkerShutdown);
     }
 
-    static class RequestedShutdownCallable implements Callable<Boolean> {
+    static class GracefulShutdownCallable implements Callable<Boolean> {
 
-        private static final Log log = LogFactory.getLog(RequestedShutdownCallable.class);
+        private static final Log log = LogFactory.getLog(GracefulShutdownCallable.class);
 
-        private final CountDownLatch shutdownCompleteLatch;
-        private final CountDownLatch notificationCompleteLatch;
-        private final Worker worker;
+        private final Callable<GracefulShutdownContext> startWorkerShutdown;
 
-        RequestedShutdownCallable(CountDownLatch shutdownCompleteLatch, CountDownLatch notificationCompleteLatch,
-                Worker worker) {
-            this.shutdownCompleteLatch = shutdownCompleteLatch;
-            this.notificationCompleteLatch = notificationCompleteLatch;
-            this.worker = worker;
+        GracefulShutdownCallable(Callable<GracefulShutdownContext> startWorkerShutdown) {
+            this.startWorkerShutdown = startWorkerShutdown;
         }
 
-        private boolean isWorkerShutdownComplete() {
-            return worker.isShutdownComplete() || worker.getShardInfoShardConsumerMap().isEmpty();
+        private boolean isWorkerShutdownComplete(GracefulShutdownContext context) {
+            return context.getWorker().isShutdownComplete() || context.getWorker().getShardInfoShardConsumerMap().isEmpty();
         }
 
-        private String awaitingLogMessage() {
-            long awaitingNotification = notificationCompleteLatch.getCount();
-            long awaitingFinalShutdown = shutdownCompleteLatch.getCount();
+        private String awaitingLogMessage(GracefulShutdownContext context) {
+            long awaitingNotification = context.getNotificationCompleteLatch().getCount();
+            long awaitingFinalShutdown = context.getShutdownCompleteLatch().getCount();
 
             return String.format(
                     "Waiting for %d record process to complete shutdown notification, and %d record processor to complete final shutdown ",
                     awaitingNotification, awaitingFinalShutdown);
         }
 
-        private String awaitingFinalShutdownMessage() {
-            long outstanding = shutdownCompleteLatch.getCount();
+        private String awaitingFinalShutdownMessage(GracefulShutdownContext context) {
+            long outstanding = context.getShutdownCompleteLatch().getCount();
             return String.format("Waiting for %d record processors to complete final shutdown", outstanding);
         }
 
-        private boolean waitForRecordProcessors() {
+        private boolean waitForRecordProcessors(GracefulShutdownContext context) {
 
             //
             // Awaiting for all ShardConsumer/RecordProcessors to be notified that a shutdown has been requested.
@@ -66,18 +59,18 @@ class RequestedShutdownCoordinator {
             // ShardConsumer would start the lease loss shutdown, and may never call the notification methods.
             //
             try {
-                while (!notificationCompleteLatch.await(1, TimeUnit.SECONDS)) {
+                while (!context.getNotificationCompleteLatch().await(1, TimeUnit.SECONDS)) {
                     if (Thread.interrupted()) {
                         throw new InterruptedException();
                     }
-                    log.info(awaitingLogMessage());
-                    if (workerShutdownWithRemaining(shutdownCompleteLatch.getCount())) {
+                    log.info(awaitingLogMessage(context));
+                    if (workerShutdownWithRemaining(context.getShutdownCompleteLatch().getCount(), context)) {
                         return false;
                     }
                 }
             } catch (InterruptedException ie) {
                 log.warn("Interrupted while waiting for notification complete, terminating shutdown.  "
-                        + awaitingLogMessage());
+                        + awaitingLogMessage(context));
                 return false;
             }
 
@@ -90,7 +83,7 @@ class RequestedShutdownCoordinator {
             // Once all record processors have been notified of the shutdown it is safe to allow the worker to
             // start its shutdown behavior. Once shutdown starts it will stop renewer, and drop any remaining leases.
             //
-            worker.shutdown();
+            context.getWorker().shutdown();
 
             if (Thread.interrupted()) {
                 log.warn("Interrupted after worker shutdown, terminating shutdown");
@@ -103,18 +96,18 @@ class RequestedShutdownCoordinator {
             // ShardConsumer is terminated.
             //
             try {
-                while (!shutdownCompleteLatch.await(1, TimeUnit.SECONDS)) {
+                while (!context.getShutdownCompleteLatch().await(1, TimeUnit.SECONDS)) {
                     if (Thread.interrupted()) {
                         throw new InterruptedException();
                     }
-                    log.info(awaitingFinalShutdownMessage());
-                    if (workerShutdownWithRemaining(shutdownCompleteLatch.getCount())) {
+                    log.info(awaitingFinalShutdownMessage(context));
+                    if (workerShutdownWithRemaining(context.getShutdownCompleteLatch().getCount(), context)) {
                         return false;
                     }
                 }
             } catch (InterruptedException ie) {
                 log.warn("Interrupted while waiting for shutdown completion, terminating shutdown. "
-                        + awaitingFinalShutdownMessage());
+                        + awaitingFinalShutdownMessage(context));
                 return false;
             }
             return true;
@@ -128,13 +121,13 @@ class RequestedShutdownCoordinator {
          * @param outstanding
          *            the number of record processor still awaiting shutdown.
          */
-        private boolean workerShutdownWithRemaining(long outstanding) {
-            if (isWorkerShutdownComplete()) {
+        private boolean workerShutdownWithRemaining(long outstanding, GracefulShutdownContext context) {
+            if (isWorkerShutdownComplete(context)) {
                 if (outstanding != 0) {
                     log.info("Shutdown completed, but shutdownCompleteLatch still had outstanding " + outstanding
-                            + " with a current value of " + shutdownCompleteLatch.getCount() + ". shutdownComplete: "
-                            + worker.isShutdownComplete() + " -- Consumer Map: "
-                            + worker.getShardInfoShardConsumerMap().size());
+                            + " with a current value of " + context.getShutdownCompleteLatch().getCount() + ". shutdownComplete: "
+                            + context.getWorker().isShutdownComplete() + " -- Consumer Map: "
+                            + context.getWorker().getShardInfoShardConsumerMap().size());
                     return true;
                 }
             }
@@ -143,7 +136,14 @@ class RequestedShutdownCoordinator {
 
         @Override
         public Boolean call() throws Exception {
-            return waitForRecordProcessors();
+            GracefulShutdownContext context;
+            try {
+                context = startWorkerShutdown.call();
+            } catch (Exception ex) {
+                log.warn("Caught exception while requesting initial worker shutdown.", ex);
+                throw ex;
+            }
+            return context.isShutdownAlreadyCompleted() || waitForRecordProcessors(context);
         }
     }
 }
