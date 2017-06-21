@@ -23,11 +23,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Abstract class for all messages that are sent to the client's process.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "action")
-@JsonSubTypes({ @Type(value = CheckpointMessage.class, name = CheckpointMessage.ACTION),
+@JsonSubTypes({ 
+        @Type(value = CheckpointMessage.class, name = CheckpointMessage.ACTION),
         @Type(value = InitializeMessage.class, name = InitializeMessage.ACTION),
         @Type(value = ProcessRecordsMessage.class, name = ProcessRecordsMessage.ACTION),
         @Type(value = ShutdownMessage.class, name = ShutdownMessage.ACTION),
-        @Type(value = StatusMessage.class, name = StatusMessage.ACTION), })
+        @Type(value = StatusMessage.class, name = StatusMessage.ACTION),
+        @Type(value = ShutdownRequestedMessage.class, name = ShutdownRequestedMessage.ACTION),
+})
 public abstract class Message {
 
     private ObjectMapper mapper = new ObjectMapper();;
