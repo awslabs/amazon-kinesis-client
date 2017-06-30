@@ -35,6 +35,7 @@ public class TestHarnessBuilder {
 
     private Map<String, KinesisClientLease> leases = new HashMap<String, KinesisClientLease>();
     private KinesisClientLeaseManager leaseManager;
+    private Map<String, KinesisClientLease> originalLeases = new HashMap<>();
 
     private Callable<Long> timeProvider = new Callable<Long>() {
 
@@ -54,6 +55,15 @@ public class TestHarnessBuilder {
     }
 
     public TestHarnessBuilder withLease(String shardId, String owner) {
+        KinesisClientLease lease = createLease(shardId, owner);
+        KinesisClientLease originalLease = createLease(shardId, owner);
+
+        leases.put(shardId, lease);
+        originalLeases.put(shardId, originalLease);
+        return this;
+    }
+
+    private KinesisClientLease createLease(String shardId, String owner) {
         KinesisClientLease lease = new KinesisClientLease();
         lease.setCheckpoint(new ExtendedSequenceNumber("checkpoint"));
         lease.setOwnerSwitchesSinceCheckpoint(0L);
@@ -62,8 +72,7 @@ public class TestHarnessBuilder {
         lease.setParentShardIds(Collections.singleton("parentShardId"));
         lease.setLeaseKey(shardId);
 
-        leases.put(shardId, lease);
-        return this;
+        return lease;
     }
 
     public Map<String, KinesisClientLease> build() throws LeasingException {
@@ -147,7 +156,7 @@ public class TestHarnessBuilder {
         Assert.assertEquals(renewedShardIds.length, heldLeases.size());
 
         for (String shardId : renewedShardIds) {
-            KinesisClientLease original = leases.get(shardId);
+            KinesisClientLease original = originalLeases.get(shardId);
             Assert.assertNotNull(original);
 
             KinesisClientLease actual = heldLeases.get(shardId);

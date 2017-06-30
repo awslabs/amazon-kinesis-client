@@ -110,7 +110,7 @@ public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
 
         leaseManager.renewLease(lease);
 
-        Assert.assertFalse(leaseManager.renewLease(leaseCopy));
+        Assert.assertTrue(leaseManager.renewLease(leaseCopy));
     }
 
     /**

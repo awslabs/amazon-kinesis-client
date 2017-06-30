@@ -14,17 +14,16 @@
  */
 package com.amazonaws.services.kinesis.leases.impl;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.Executors;
-
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.Executors;
 
 public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
 
@@ -59,7 +58,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         KinesisClientLease renewedLease = builder.renewMutateAssert(renewer, "1", "2").get("2");
 
         leaseManager.updateLease(renewedLease);
-        builder.renewMutateAssert(renewer, "1");
+        builder.renewMutateAssert(renewer, "1", "2");
     }
 
     @Test
@@ -108,11 +107,12 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
 
         leaseManager.updateLease(lease2); // lose lease 2
         // Do another renewal and make sure the copy doesn't change
-        builder.renewMutateAssert(renewer, "1");
+        builder.renewMutateAssert(renewer, "1", "2");
 
+        heldLeases = renewer.getCurrentlyHeldLeases();
         Assert.assertEquals(2, heldLeases.size());
-        Assert.assertEquals((Long) 1L, heldLeases.get("1").getLeaseCounter());
-        Assert.assertEquals((Long) 1L, heldLeases.get("2").getLeaseCounter());
+        Assert.assertEquals((Long) 2L, heldLeases.get("1").getLeaseCounter());
+        Assert.assertEquals((Long) 2L, heldLeases.get("2").getLeaseCounter());
     }
 
     @Test
@@ -177,10 +177,10 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
 
         // cause lease loss such that the renewer knows the lease has been lost when update is called
         leaseManager.renewLease(lease);
-        builder.renewMutateAssert(renewer);
+        builder.renewMutateAssert(renewer, "1");
 
         lease.setCheckpoint(new ExtendedSequenceNumber("new checkpoint"));
-        Assert.assertFalse(renewer.updateLease(lease, lease.getConcurrencyToken()));
+        Assert.assertTrue(renewer.updateLease(lease, lease.getConcurrencyToken()));
     }
 
     @Test
@@ -196,7 +196,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
 
         // cause lease loss such that the renewer knows the lease has been lost when update is called
         leaseManager.renewLease(lease);
-        builder.renewMutateAssert(renewer);
+        builder.renewMutateAssert(renewer, "1");
 
         // regain the lease
         builder.addLeasesToRenew(renewer, "1");
