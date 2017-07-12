@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.leases.impl;
 
 import java.util.logging.Logger;
 
+import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.Ignore;
@@ -71,4 +72,9 @@ public class LeaseIntegrationTest {
         }
     };
 
+    protected void loseLease(KinesisClientLease lease) throws LeasingException {
+        // Need to call update 2 times because 1st time would be considered to be spurious update for the lease.
+        leaseManager.updateLease(lease);
+        leaseManager.updateLease(lease);
+    }
 }

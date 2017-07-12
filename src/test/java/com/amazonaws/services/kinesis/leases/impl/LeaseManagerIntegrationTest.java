@@ -109,8 +109,9 @@ public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
         KinesisClientLease leaseCopy = leaseManager.getLease(lease.getLeaseKey());
 
         leaseManager.renewLease(lease);
+        leaseManager.renewLease(lease);
 
-        Assert.assertTrue(leaseManager.renewLease(leaseCopy));
+        Assert.assertFalse(leaseManager.renewLease(leaseCopy));
     }
 
     /**

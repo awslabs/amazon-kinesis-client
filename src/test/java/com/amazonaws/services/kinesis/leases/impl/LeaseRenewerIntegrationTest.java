@@ -57,8 +57,10 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         builder.addLeasesToRenew(renewer, "1", "2");
         KinesisClientLease renewedLease = builder.renewMutateAssert(renewer, "1", "2").get("2");
 
-        leaseManager.updateLease(renewedLease);
-        builder.renewMutateAssert(renewer, "1", "2");
+        // lose lease 2
+        loseLease(renewedLease);
+
+        builder.renewMutateAssert(renewer, "1");
     }
 
     @Test
@@ -95,9 +97,9 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
     public void testGetCurrentlyHeldLeases() throws LeasingException {
         TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
 
-        KinesisClientLease lease2 = builder.withLease("1", "foo").withLease("2", "foo").build().get("2");
+        builder.withLease("1", "foo").withLease("2", "foo").build();
         builder.addLeasesToRenew(renewer, "1", "2");
-        builder.renewMutateAssert(renewer, "1", "2");
+        KinesisClientLease lease2 =  builder.renewMutateAssert(renewer, "1", "2").get("2");
 
         // This should be a copy that doesn't get updated
         Map<String, KinesisClientLease> heldLeases = renewer.getCurrentlyHeldLeases();
@@ -105,14 +107,15 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         Assert.assertEquals((Long) 1L, heldLeases.get("1").getLeaseCounter());
         Assert.assertEquals((Long) 1L, heldLeases.get("2").getLeaseCounter());
 
-        leaseManager.updateLease(lease2); // lose lease 2
-        // Do another renewal and make sure the copy doesn't change
-        builder.renewMutateAssert(renewer, "1", "2");
+        // lose lease 2
+        loseLease(lease2);
 
-        heldLeases = renewer.getCurrentlyHeldLeases();
+        // Do another renewal and make sure the copy doesn't change
+        builder.renewMutateAssert(renewer, "1");
+
         Assert.assertEquals(2, heldLeases.size());
-        Assert.assertEquals((Long) 2L, heldLeases.get("1").getLeaseCounter());
-        Assert.assertEquals((Long) 2L, heldLeases.get("2").getLeaseCounter());
+        Assert.assertEquals((Long) 1L, heldLeases.get("1").getLeaseCounter());
+        Assert.assertEquals((Long) 1L, heldLeases.get("2").getLeaseCounter());
     }
 
     @Test
@@ -176,11 +179,11 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         KinesisClientLease lease = renewer.getCurrentlyHeldLease("1");
 
         // cause lease loss such that the renewer knows the lease has been lost when update is called
-        leaseManager.renewLease(lease);
-        builder.renewMutateAssert(renewer, "1");
+        loseLease(lease);
+        builder.renewMutateAssert(renewer);
 
         lease.setCheckpoint(new ExtendedSequenceNumber("new checkpoint"));
-        Assert.assertTrue(renewer.updateLease(lease, lease.getConcurrencyToken()));
+        Assert.assertFalse(renewer.updateLease(lease, lease.getConcurrencyToken()));
     }
 
     @Test
@@ -195,8 +198,8 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         KinesisClientLease lease = renewer.getCurrentlyHeldLease("1");
 
         // cause lease loss such that the renewer knows the lease has been lost when update is called
-        leaseManager.renewLease(lease);
-        builder.renewMutateAssert(renewer, "1");
+        loseLease(lease);
+        builder.renewMutateAssert(renewer);
 
         // regain the lease
         builder.addLeasesToRenew(renewer, "1");
