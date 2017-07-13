@@ -60,8 +60,8 @@ public interface ICheckpoint {
 
 
     /**
-     * Record intent to checkpoint for a shard. Upon failover, the pendingCheckpointValue and pendingCheckpointState
-     * will be passed to the new RecordProcessor's init() method.
+     * Record intent to checkpoint for a shard. Upon failover, the pendingCheckpointValue will be passed to the new
+     * RecordProcessor's initialize() method.
      *
      * @param shardId Checkpoint is specified for this shard.
      * @param pendingCheckpoint Value of the pending checkpoint (e.g. Kinesis sequence number and subsequence number)
