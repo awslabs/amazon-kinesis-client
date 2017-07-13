@@ -23,6 +23,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -37,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,11 +49,13 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.Checkpoint;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.InMemoryCheckpointImpl;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
@@ -108,6 +112,7 @@ public class ShardConsumerTest {
         ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null, ExtendedSequenceNumber.TRIM_HORIZON);
 
         when(checkpoint.getCheckpoint(anyString())).thenThrow(NullPointerException.class);
+        when(checkpoint.getCheckpointObject(anyString())).thenThrow(NullPointerException.class);
 
         when(leaseManager.getLease(anyString())).thenReturn(null);
         StreamConfig streamConfig =
@@ -156,6 +161,7 @@ public class ShardConsumerTest {
         ExecutorService spyExecutorService = spy(executorService);
 
         when(checkpoint.getCheckpoint(anyString())).thenThrow(NullPointerException.class);
+        when(checkpoint.getCheckpointObject(anyString())).thenThrow(NullPointerException.class);
         when(leaseManager.getLease(anyString())).thenReturn(null);
         StreamConfig streamConfig =
                 new StreamConfig(streamProxy,
@@ -219,7 +225,8 @@ public class ShardConsumerTest {
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
 
         when(leaseManager.getLease(anyString())).thenReturn(null);
-        when(checkpoint.getCheckpoint(anyString())).thenReturn(new ExtendedSequenceNumber("123"));
+        when(checkpoint.getCheckpointObject(anyString())).thenReturn(
+                new Checkpoint(new ExtendedSequenceNumber("123"), null));
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // submit BlockOnParentShardTask
@@ -445,6 +452,63 @@ public class ShardConsumerTest {
         verifyConsumedRecords(expectedRecords, processor.getProcessedRecords());
         assertEquals(4, processor.getProcessedRecords().size());
         file.delete();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public final void testConsumeShardInitializedWithPendingCheckpoint() throws Exception {
+        ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null, ExtendedSequenceNumber.TRIM_HORIZON);
+        StreamConfig streamConfig =
+                new StreamConfig(streamProxy,
+                        1,
+                        10,
+                        callProcessRecordsForEmptyRecordList,
+                        skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
+
+        ShardConsumer consumer =
+                new ShardConsumer(shardInfo,
+                        streamConfig,
+                        checkpoint,
+                        processor,
+                        null,
+                        parentShardPollIntervalMillis,
+                        cleanupLeasesOfCompletedShards,
+                        executorService,
+                        metricsFactory,
+                        taskBackoffTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
+
+        final ExtendedSequenceNumber checkpointSequenceNumber = new ExtendedSequenceNumber("123");
+        final ExtendedSequenceNumber pendingCheckpointSequenceNumber = new ExtendedSequenceNumber("999");
+        when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(checkpoint.getCheckpointObject(anyString())).thenReturn(
+                new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));
+
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        consumer.consumeShard(); // submit BlockOnParentShardTask
+        Thread.sleep(50L);
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        verify(processor, times(0)).initialize(any(InitializationInput.class));
+
+        consumer.consumeShard(); // submit InitializeTask
+        Thread.sleep(50L);
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        verify(processor, times(1)).initialize(argThat(new ArgumentMatcher<InitializationInput>() {
+            @Override
+            public boolean matches(Object argument) {
+                if (argument instanceof InitializationInput) {
+                    InitializationInput initializationInput = (InitializationInput) argument;
+                    return Objects.equals(checkpointSequenceNumber, initializationInput.getExtendedSequenceNumber())
+                            && Objects.equals(pendingCheckpointSequenceNumber,
+                            initializationInput.getPendingCheckpointSequenceNumber());
+                }
+                return false;
+            }
+        }));
+
+        consumer.consumeShard();
+        Thread.sleep(50L);
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
     }
 
     //@formatter:off (gets the formatting wrong)

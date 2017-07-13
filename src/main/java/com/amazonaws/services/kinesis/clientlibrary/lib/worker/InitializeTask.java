@@ -19,6 +19,7 @@ import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.Checkpoint;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
@@ -75,7 +76,8 @@ class InitializeTask implements ITask {
 
         try {
             LOG.debug("Initializing ShardId " + shardInfo.getShardId());
-            ExtendedSequenceNumber initialCheckpoint = checkpoint.getCheckpoint(shardInfo.getShardId());
+            Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.getShardId());
+            ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.getCheckpoint();
 
             dataFetcher.initialize(initialCheckpoint.getSequenceNumber(), streamConfig.getInitialPositionInStream());
             recordProcessorCheckpointer.setLargestPermittedCheckpointValue(initialCheckpoint);
@@ -84,7 +86,8 @@ class InitializeTask implements ITask {
             LOG.debug("Calling the record processor initialize().");
             final InitializationInput initializationInput = new InitializationInput()
                 .withShardId(shardInfo.getShardId())
-                .withExtendedSequenceNumber(initialCheckpoint);
+                .withExtendedSequenceNumber(initialCheckpoint)
+                .withPendingCheckpointSequenceNumber(initialCheckpointObject.getPendingCheckpoint());
             final long recordProcessorStartTimeMillis = System.currentTimeMillis();
             try {
                 recordProcessor.initialize(initializationInput);

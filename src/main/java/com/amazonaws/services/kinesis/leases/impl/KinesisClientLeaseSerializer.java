@@ -26,6 +26,7 @@ import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSerializer;
 import com.amazonaws.services.kinesis.leases.util.DynamoUtils;
+import com.google.common.base.Strings;
 
 /**
  * An implementation of ILeaseSerializer for KinesisClientLease objects.
@@ -35,6 +36,8 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
     private static final String OWNER_SWITCHES_KEY = "ownerSwitchesSinceCheckpoint";
     private static final String CHECKPOINT_SEQUENCE_NUMBER_KEY = "checkpoint";
     private static final String CHECKPOINT_SUBSEQUENCE_NUMBER_KEY = "checkpointSubSequenceNumber";
+    private static final String PENDING_CHECKPOINT_SEQUENCE_KEY = "pendingCheckpoint";
+    private static final String PENDING_CHECKPOINT_SUBSEQUENCE_KEY = "pendingCheckpointSubSequenceNumber";
     public final String PARENT_SHARD_ID_KEY = "parentShardId";
 
     private final LeaseSerializer baseSerializer = new LeaseSerializer(KinesisClientLease.class);
@@ -48,6 +51,11 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
         result.put(CHECKPOINT_SUBSEQUENCE_NUMBER_KEY, DynamoUtils.createAttributeValue(lease.getCheckpoint().getSubSequenceNumber()));
         if (lease.getParentShardIds() != null && !lease.getParentShardIds().isEmpty()) {
             result.put(PARENT_SHARD_ID_KEY, DynamoUtils.createAttributeValue(lease.getParentShardIds()));
+        }
+
+        if (lease.getPendingCheckpoint() != null && !lease.getPendingCheckpoint().getSequenceNumber().isEmpty()) {
+            result.put(PENDING_CHECKPOINT_SEQUENCE_KEY, DynamoUtils.createAttributeValue(lease.getPendingCheckpoint().getSequenceNumber()));
+            result.put(PENDING_CHECKPOINT_SUBSEQUENCE_KEY, DynamoUtils.createAttributeValue(lease.getPendingCheckpoint().getSubSequenceNumber()));
         }
 
         return result;
@@ -64,6 +72,14 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
                 DynamoUtils.safeGetLong(dynamoRecord, CHECKPOINT_SUBSEQUENCE_NUMBER_KEY))
         );
         result.setParentShardIds(DynamoUtils.safeGetSS(dynamoRecord, PARENT_SHARD_ID_KEY));
+
+        if (!Strings.isNullOrEmpty(DynamoUtils.safeGetString(dynamoRecord, PENDING_CHECKPOINT_SEQUENCE_KEY))) {
+            result.setPendingCheckpoint(
+                new ExtendedSequenceNumber(
+                    DynamoUtils.safeGetString(dynamoRecord, PENDING_CHECKPOINT_SEQUENCE_KEY),
+                    DynamoUtils.safeGetLong(dynamoRecord, PENDING_CHECKPOINT_SUBSEQUENCE_KEY))
+            );
+        }
 
         return result;
     }
@@ -127,6 +143,14 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
         result.put(OWNER_SWITCHES_KEY,
                 new AttributeValueUpdate(DynamoUtils.createAttributeValue(lease.getOwnerSwitchesSinceCheckpoint()),
                         AttributeAction.PUT));
+
+        if (lease.getPendingCheckpoint() != null && !lease.getPendingCheckpoint().getSequenceNumber().isEmpty()) {
+            result.put(PENDING_CHECKPOINT_SEQUENCE_KEY, new AttributeValueUpdate(DynamoUtils.createAttributeValue(lease.getPendingCheckpoint().getSequenceNumber()), AttributeAction.PUT));
+            result.put(PENDING_CHECKPOINT_SUBSEQUENCE_KEY, new AttributeValueUpdate(DynamoUtils.createAttributeValue(lease.getPendingCheckpoint().getSubSequenceNumber()), AttributeAction.PUT));
+        } else {
+            result.put(PENDING_CHECKPOINT_SEQUENCE_KEY, new AttributeValueUpdate().withAction(AttributeAction.DELETE));
+            result.put(PENDING_CHECKPOINT_SUBSEQUENCE_KEY, new AttributeValueUpdate().withAction(AttributeAction.DELETE));
+        }
 
         return result;
     }
