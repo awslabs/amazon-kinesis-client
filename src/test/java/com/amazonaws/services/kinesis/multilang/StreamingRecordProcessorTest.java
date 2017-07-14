@@ -33,6 +33,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import org.junit.Assert;
 import org.junit.Before;
@@ -108,6 +109,9 @@ public class StreamingRecordProcessorTest {
 
     private MultiLangRecordProcessor recordProcessor;
 
+    @Mock
+    private KinesisClientLibConfiguration configuration;
+
     @Before
     public void prepare() throws IOException, InterruptedException, ExecutionException {
         // Fake command
@@ -121,10 +125,11 @@ public class StreamingRecordProcessorTest {
         messageWriter = Mockito.mock(MessageWriter.class);
         messageReader = Mockito.mock(MessageReader.class);
         errorReader = Mockito.mock(DrainChildSTDERRTask.class);
+        when(configuration.isTimeoutEnabled()).thenReturn(false);
 
         recordProcessor =
                 new MultiLangRecordProcessor(new ProcessBuilder(), executor, new ObjectMapper(), messageWriter,
-                        messageReader, errorReader) {
+                        messageReader, errorReader, configuration) {
 
                     // Just don't do anything when we exit.
                     void exit() {
@@ -166,6 +171,7 @@ public class StreamingRecordProcessorTest {
          */
         when(messageFuture.get()).thenAnswer(answer);
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(messageFuture);
+        when(configuration.isTimeoutEnabled()).thenReturn(false);
 
         List<Record> testRecords = new ArrayList<Record>();
 

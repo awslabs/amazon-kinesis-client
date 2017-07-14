@@ -16,9 +16,12 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
@@ -41,6 +44,7 @@ class MultiLangProtocol {
     private MessageReader messageReader;
     private MessageWriter messageWriter;
     private final InitializationInput initializationInput;
+    private KinesisClientLibConfiguration configuration;
 
     /**
      * Constructor.
@@ -53,10 +57,11 @@ class MultiLangProtocol {
      *            information about the shard this processor is starting to process
      */
     MultiLangProtocol(MessageReader messageReader, MessageWriter messageWriter,
-            InitializationInput initializationInput) {
+            InitializationInput initializationInput, KinesisClientLibConfiguration configuration) {
         this.messageReader = messageReader;
         this.messageWriter = messageWriter;
         this.initializationInput = initializationInput;
+        this.configuration = configuration;
     }
 
     /**
@@ -162,7 +167,12 @@ class MultiLangProtocol {
         while (statusMessage == null) {
             Future<Message> future = this.messageReader.getNextMessageFromSTDOUT();
             try {
-                Message message = future.get();
+                Message message;
+                if (configuration.isTimeoutEnabled()) {
+                    message = future.get(configuration.getTimeoutInSeconds(), TimeUnit.SECONDS);
+                } else {
+                    message = future.get();
+                }
                 // Note that instanceof doubles as a check against a value being null
                 if (message instanceof CheckpointMessage) {
                     boolean checkpointWriteSucceeded = checkpoint((CheckpointMessage) message, checkpointer).get();
@@ -180,6 +190,12 @@ class MultiLangProtocol {
                 log.error(String.format("Failed to get status message for %s action for shard %s", action,
                         initializationInput.getShardId()), e);
                 return false;
+            } catch (TimeoutException e) {
+                log.error(String.format("Timedout to get status message for %s action for shard %s. Terminating...",
+                        action,
+                        initializationInput.getShardId()),
+                        e);
+                Runtime.getRuntime().halt(1);
             }
         }
         return this.validateStatusMessage(statusMessage, action);

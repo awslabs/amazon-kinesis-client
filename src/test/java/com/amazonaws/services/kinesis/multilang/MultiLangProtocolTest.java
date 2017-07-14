@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -62,6 +63,7 @@ public class MultiLangProtocolTest {
     private MessageReader messageReader;
     private String shardId;
     private IRecordProcessorCheckpointer checkpointer;
+    private KinesisClientLibConfiguration configuration;
 
 
 
@@ -70,7 +72,9 @@ public class MultiLangProtocolTest {
         this.shardId = "shard-id-123";
         messageWriter = Mockito.mock(MessageWriter.class);
         messageReader = Mockito.mock(MessageReader.class);
-        protocol = new MultiLangProtocol(messageReader, messageWriter, new InitializationInput().withShardId(shardId));
+        configuration = Mockito.mock(KinesisClientLibConfiguration.class);
+        protocol = new MultiLangProtocol(messageReader, messageWriter, new InitializationInput().withShardId(shardId),
+                configuration);
         checkpointer = Mockito.mock(IRecordProcessorCheckpointer.class);
     }
 

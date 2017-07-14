@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.util.concurrent.ExecutorService;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -39,12 +40,15 @@ public class MultiLangRecordProcessorFactory implements IRecordProcessorFactory 
 
     private final ExecutorService executorService;
 
+    private final KinesisClientLibConfiguration configuration;
+
     /**
      * @param command The command that will do processing for this factory's record processors.
      * @param executorService An executor service to use while processing inputs and outputs of the child process.
      */
-    public MultiLangRecordProcessorFactory(String command, ExecutorService executorService) {
-        this(command, executorService, new ObjectMapper());
+    public MultiLangRecordProcessorFactory(String command, ExecutorService executorService,
+                                           KinesisClientLibConfiguration configuration) {
+        this(command, executorService, new ObjectMapper(), configuration);
     }
 
     /**
@@ -52,11 +56,13 @@ public class MultiLangRecordProcessorFactory implements IRecordProcessorFactory 
      * @param executorService An executor service to use while processing inputs and outputs of the child process.
      * @param objectMapper An object mapper used to convert messages to json to be written to the child process
      */
-    public MultiLangRecordProcessorFactory(String command, ExecutorService executorService, ObjectMapper objectMapper) {
+    public MultiLangRecordProcessorFactory(String command, ExecutorService executorService, ObjectMapper objectMapper,
+                                           KinesisClientLibConfiguration configuration) {
         this.command = command;
         this.commandArray = command.split(COMMAND_DELIMETER_REGEX);
         this.executorService = executorService;
         this.objectMapper = objectMapper;
+        this.configuration = configuration;
     }
 
     @Override
@@ -65,7 +71,8 @@ public class MultiLangRecordProcessorFactory implements IRecordProcessorFactory 
         /*
          * Giving ProcessBuilder the command as an array of Strings allows users to specify command line arguments.
          */
-        return new MultiLangRecordProcessor(new ProcessBuilder(commandArray), executorService, this.objectMapper);
+        return new MultiLangRecordProcessor(new ProcessBuilder(commandArray), executorService, this.objectMapper,
+                this.configuration);
     }
 
     String[] getCommandArray() {

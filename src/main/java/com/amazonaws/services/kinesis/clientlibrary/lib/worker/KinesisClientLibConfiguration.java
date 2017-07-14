@@ -203,6 +203,8 @@ public class KinesisClientLibConfiguration {
     // This is useful for optimizing deployments to large fleets working on a stable stream.
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
+    private boolean timeoutEnabled;
+    private int timeoutInSeconds;
 
     /**
      * Constructor.
@@ -1074,5 +1076,33 @@ public class KinesisClientLibConfiguration {
         }
         this.shardPrioritization = shardPrioritization;
         return this;
+    }
+
+    /**
+     * @param timeoutEnabled Enable or disbale MultiLangProtocol to wait for the records to be processed
+     */
+    public void withTimeoutEnabled(final boolean timeoutEnabled) {
+        this.timeoutEnabled = timeoutEnabled;
+    }
+
+    /**
+     * @return If timeout is enabled for MultiLangProtocol to wait for records to be processed
+     */
+    public boolean isTimeoutEnabled() {
+        return timeoutEnabled;
+    }
+
+    /**
+     * @param timeoutInSeconds The timeout in seconds to wait for the MultiLangProtocol to wait for
+     */
+    public void withTimeoutInSeconds(final int timeoutInSeconds) {
+        this.timeoutInSeconds = timeoutInSeconds;
+    }
+
+    /**
+     * @return Time for MultiLangProtocol to wait to get response, before throwing an exception.
+     */
+    public int getTimeoutInSeconds() {
+        return timeoutInSeconds;
     }
 }
