@@ -23,7 +23,9 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
+import lombok.Getter;
 
 /**
  * Configuration for the Amazon Kinesis Client Library.
@@ -203,8 +205,10 @@ public class KinesisClientLibConfiguration {
     // This is useful for optimizing deployments to large fleets working on a stable stream.
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
-    private boolean timeoutEnabled;
-    private int timeoutInSeconds;
+    @Getter
+    private Optional<Boolean> timeoutEnabled = Optional.absent();
+    @Getter
+    private Optional<Integer> timeoutInSeconds = Optional.absent();
 
     /**
      * Constructor.
@@ -1082,27 +1086,14 @@ public class KinesisClientLibConfiguration {
      * @param timeoutEnabled Enable or disbale MultiLangProtocol to wait for the records to be processed
      */
     public void withTimeoutEnabled(final boolean timeoutEnabled) {
-        this.timeoutEnabled = timeoutEnabled;
-    }
-
-    /**
-     * @return If timeout is enabled for MultiLangProtocol to wait for records to be processed
-     */
-    public boolean isTimeoutEnabled() {
-        return timeoutEnabled;
+        this.timeoutEnabled = Optional.of(timeoutEnabled);
     }
 
     /**
      * @param timeoutInSeconds The timeout in seconds to wait for the MultiLangProtocol to wait for
      */
     public void withTimeoutInSeconds(final int timeoutInSeconds) {
-        this.timeoutInSeconds = timeoutInSeconds;
+        this.timeoutInSeconds = Optional.of(timeoutInSeconds);
     }
 
-    /**
-     * @return Time for MultiLangProtocol to wait to get response, before throwing an exception.
-     */
-    public int getTimeoutInSeconds() {
-        return timeoutInSeconds;
-    }
 }

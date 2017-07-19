@@ -14,14 +14,16 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
+@RunWith(MockitoJUnitRunner.class)
 public class StreamingRecordProcessorFactoryTest {
 
     @Mock

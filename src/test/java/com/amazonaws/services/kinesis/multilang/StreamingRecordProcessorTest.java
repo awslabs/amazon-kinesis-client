@@ -35,6 +35,7 @@ import java.util.concurrent.Future;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import com.google.common.base.Optional;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -125,7 +126,7 @@ public class StreamingRecordProcessorTest {
         messageWriter = Mockito.mock(MessageWriter.class);
         messageReader = Mockito.mock(MessageReader.class);
         errorReader = Mockito.mock(DrainChildSTDERRTask.class);
-        when(configuration.isTimeoutEnabled()).thenReturn(false);
+        when(configuration.getTimeoutEnabled()).thenReturn(Optional.of(false));
 
         recordProcessor =
                 new MultiLangRecordProcessor(new ProcessBuilder(), executor, new ObjectMapper(), messageWriter,
@@ -171,7 +172,7 @@ public class StreamingRecordProcessorTest {
          */
         when(messageFuture.get()).thenAnswer(answer);
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(messageFuture);
-        when(configuration.isTimeoutEnabled()).thenReturn(false);
+        when(configuration.getTimeoutEnabled()).thenReturn(Optional.of(false));
 
         List<Record> testRecords = new ArrayList<Record>();
 

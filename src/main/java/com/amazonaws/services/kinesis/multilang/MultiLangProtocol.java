@@ -162,14 +162,17 @@ class MultiLangProtocol {
      *            the original process records request
      * @return Whether or not this operation succeeded.
      */
-    private boolean waitForStatusMessage(String action, IRecordProcessorCheckpointer checkpointer) {
+    boolean waitForStatusMessage(String action, IRecordProcessorCheckpointer checkpointer) {
         StatusMessage statusMessage = null;
         while (statusMessage == null) {
             Future<Message> future = this.messageReader.getNextMessageFromSTDOUT();
             try {
                 Message message;
-                if (configuration.isTimeoutEnabled()) {
-                    message = future.get(configuration.getTimeoutInSeconds(), TimeUnit.SECONDS);
+                if (configuration.getTimeoutEnabled().isPresent() && configuration.getTimeoutEnabled().get()) {
+                    if (!configuration.getTimeoutInSeconds().isPresent()) {
+                        throw new IllegalArgumentException("timeoutInSeconds property should be set if timeoutEnabled is true");
+                    }
+                    message = future.get(configuration.getTimeoutInSeconds().get(), TimeUnit.SECONDS);
                 } else {
                     message = future.get();
                 }
@@ -195,10 +198,20 @@ class MultiLangProtocol {
                         action,
                         initializationInput.getShardId()),
                         e);
-                Runtime.getRuntime().halt(1);
+                haltJvm(1);
             }
         }
         return this.validateStatusMessage(statusMessage, action);
+    }
+
+    /**
+     * This method is used to halt the JVM. Use this method with utmost caution, since this method will kill the JVM
+     * without calling the Shutdown hooks.
+     *
+     * @param exitStatus The exit status with which the JVM is to be halted.
+     */
+    protected void haltJvm(int exitStatus) {
+        Runtime.getRuntime().halt(exitStatus);
     }
 
     /**
