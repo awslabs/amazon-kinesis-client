@@ -26,13 +26,16 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+
 import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
 import com.amazonaws.services.kinesis.multilang.messages.InitializeMessage;
 import com.amazonaws.services.kinesis.multilang.messages.Message;
 import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
+import com.amazonaws.services.kinesis.multilang.messages.ShutdownRequestedMessage;
+
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -143,6 +146,13 @@ class MessageWriter {
      */
     Future<Boolean> writeShutdownMessage(ShutdownReason reason) {
         return writeMessage(new ShutdownMessage(reason));
+    }
+
+    /**
+     * Writes a {@link ShutdownRequestedMessage} to the subprocess.
+     */
+    Future<Boolean> writeShutdownRequestedMessage() {
+        return writeMessage(new ShutdownRequestedMessage());
     }
 
     /**
