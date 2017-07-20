@@ -238,6 +238,7 @@ public class Worker implements Runnable {
                         config.getEpsilonMillis(),
                         config.getMaxLeasesForWorker(),
                         config.getMaxLeasesToStealAtOneTime(),
+                        config.getMaxLeaseRenewalThreads(),
                         metricsFactory)
                     .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
                     .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
@@ -1110,6 +1111,7 @@ public class Worker implements Runnable {
                             config.getEpsilonMillis(),
                             config.getMaxLeasesForWorker(),
                             config.getMaxLeasesToStealAtOneTime(),
+                            config.getMaxLeaseRenewalThreads(),
                             metricsFactory)
                         .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
                         .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
