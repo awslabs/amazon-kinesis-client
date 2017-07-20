@@ -114,6 +114,16 @@ public class MultiLangProtocolTest {
         assertThat(protocol.shutdown(null, ShutdownReason.ZOMBIE), equalTo(true));
     }
 
+    @Test
+    public void shutdownRequestedTest() {
+        when(messageWriter.writeShutdownRequestedMessage()).thenReturn(buildFuture(true));
+        when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(new StatusMessage("shutdownRequested"), Message.class));
+        Mockito.doReturn(buildFuture(true)).when(messageWriter)
+                .writeShutdownRequestedMessage();
+        Mockito.doReturn(buildFuture(new StatusMessage("shutdownRequested"))).when(messageReader).getNextMessageFromSTDOUT();
+        assertThat(protocol.shutdownRequested(null), equalTo(true));
+    }
+
     private Answer<Future<Message>> buildMessageAnswers(List<Message> messages) {
         return new Answer<Future<Message>>() {
 
