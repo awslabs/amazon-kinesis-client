@@ -14,20 +14,20 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.util.List;
+import lombok.Data;
 
-/**
- * Provides logic to prioritize or filter shards before their execution.
- */
-public interface ShardPrioritization {
+import java.util.concurrent.CountDownLatch;
 
-    /**
-     * Returns new list of shards ordered based on their priority.
-     * Resulted list may have fewer shards compared to original list
-     * 
-     * @param original
-     *            list of shards needed to be prioritized
-     * @return new list that contains only shards that should be processed
-     */
-    List<ShardInfo> prioritize(List<ShardInfo> original);
+@Data
+class GracefulShutdownContext {
+    private final CountDownLatch shutdownCompleteLatch;
+    private final CountDownLatch notificationCompleteLatch;
+    private final Worker worker;
+
+    static GracefulShutdownContext SHUTDOWN_ALREADY_COMPLETED = new GracefulShutdownContext(null, null, null);
+
+    boolean isShutdownAlreadyCompleted() {
+        return shutdownCompleteLatch == null && notificationCompleteLatch == null && worker == null;
+    }
+
 }
