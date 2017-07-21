@@ -99,9 +99,10 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
             long epsilonMillis,
             int maxLeasesForWorker,
             int maxLeasesToStealAtOneTime,
+            int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
         super(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
-                maxLeasesToStealAtOneTime, metricsFactory);
+                maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
         this.leaseManager = leaseManager;
     }
 

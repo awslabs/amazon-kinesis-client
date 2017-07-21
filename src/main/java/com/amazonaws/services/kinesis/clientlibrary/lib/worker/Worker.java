@@ -252,12 +252,21 @@ public class Worker implements Runnable {
                 config.getShardSyncIntervalMillis(), config.shouldCleanupLeasesUponShardCompletion(), null,
                 new KinesisClientLibLeaseCoordinator(
                         new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient),
-                        config.getWorkerIdentifier(), config.getFailoverTimeMillis(), config.getEpsilonMillis(),
-                        config.getMaxLeasesForWorker(), config.getMaxLeasesToStealAtOneTime(), metricsFactory)
-                                .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
-                                .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
-                execService, metricsFactory, config.getTaskBackoffTimeMillis(), config.getFailoverTimeMillis(),
-                config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(), config.getShardPrioritizationStrategy());
+                        config.getWorkerIdentifier(),
+                        config.getFailoverTimeMillis(),
+                        config.getEpsilonMillis(),
+                        config.getMaxLeasesForWorker(),
+                        config.getMaxLeasesToStealAtOneTime(),
+                        config.getMaxLeaseRenewalThreads(),
+                        metricsFactory)
+                    .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
+                    .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
+                execService,
+                metricsFactory,
+                config.getTaskBackoffTimeMillis(),
+                config.getFailoverTimeMillis(),
+                config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
+                config.getShardPrioritizationStrategy());
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
@@ -1173,23 +1182,38 @@ public class Worker implements Runnable {
                 shardPrioritization = new ParentsFirstShardPrioritization(1);
             }
 
-            return new Worker(config.getApplicationName(), recordProcessorFactory, new StreamConfig(
-                    new KinesisProxyFactory(config.getKinesisCredentialsProvider(), kinesisClient)
-                            .getProxy(config.getStreamName()),
-                    config.getMaxRecords(), config.getIdleTimeBetweenReadsInMillis(),
-                    config.shouldCallProcessRecordsEvenForEmptyRecordList(),
-                    config.shouldValidateSequenceNumberBeforeCheckpointing(),
-                    config.getInitialPositionInStreamExtended()), config.getInitialPositionInStreamExtended(),
-                    config.getParentShardPollIntervalMillis(), config.getShardSyncIntervalMillis(),
-                    config.shouldCleanupLeasesUponShardCompletion(), null,
-                    new KinesisClientLibLeaseCoordinator(
-                            new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient),
-                            config.getWorkerIdentifier(), config.getFailoverTimeMillis(), config.getEpsilonMillis(),
-                            config.getMaxLeasesForWorker(), config.getMaxLeasesToStealAtOneTime(), metricsFactory)
-                                    .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
-                                    .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
-                    execService, metricsFactory, config.getTaskBackoffTimeMillis(), config.getFailoverTimeMillis(),
-                    config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(), shardPrioritization);
+
+            return new Worker(config.getApplicationName(),
+                    recordProcessorFactory,
+                    new StreamConfig(new KinesisProxyFactory(config.getKinesisCredentialsProvider(),
+                            kinesisClient).getProxy(config.getStreamName()),
+                            config.getMaxRecords(),
+                            config.getIdleTimeBetweenReadsInMillis(),
+                            config.shouldCallProcessRecordsEvenForEmptyRecordList(),
+                            config.shouldValidateSequenceNumberBeforeCheckpointing(),
+                            config.getInitialPositionInStreamExtended()),
+                    config.getInitialPositionInStreamExtended(),
+                    config.getParentShardPollIntervalMillis(),
+                    config.getShardSyncIntervalMillis(),
+                    config.shouldCleanupLeasesUponShardCompletion(),
+                    null,
+                    new KinesisClientLibLeaseCoordinator(new KinesisClientLeaseManager(config.getTableName(),
+                            dynamoDBClient),
+                            config.getWorkerIdentifier(),
+                            config.getFailoverTimeMillis(),
+                            config.getEpsilonMillis(),
+                            config.getMaxLeasesForWorker(),
+                            config.getMaxLeasesToStealAtOneTime(),
+                            config.getMaxLeaseRenewalThreads(),
+                            metricsFactory)
+                        .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
+                        .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
+                    execService,
+                    metricsFactory,
+                    config.getTaskBackoffTimeMillis(),
+                    config.getFailoverTimeMillis(),
+                    config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
+                    shardPrioritization);
 
         }
 
