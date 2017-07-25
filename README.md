@@ -29,6 +29,17 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
 ## Release Notes
+### Release 1.8.0 (July 25, 2017)
+* Execute graceful shutdown on its own thread
+  * [PR #191](https://github.com/awslabs/amazon-kinesis-client/pull/191)
+  * [Issue #167](https://github.com/awslabs/amazon-kinesis-client/issues/167)
+* Added support for controlling the size of the lease renewer thread pool
+  * [PR #177](https://github.com/awslabs/amazon-kinesis-client/pull/177)
+  * [Issue #171](https://github.com/awslabs/amazon-kinesis-client/issues/171)
+* Require Java 8 and later
+  __Java 8 is now required for versions 1.8.0 of the amazon-kinesis-client and later.__
+  * [PR #176](https://github.com/awslabs/amazon-kinesis-client/issues/176)
+
 ### Release 1.7.6 (June 21, 2017)
 * Added support for graceful shutdown in MultiLang Clients
   * [PR #174](https://github.com/awslabs/amazon-kinesis-client/pull/174)
