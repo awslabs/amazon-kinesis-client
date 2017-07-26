@@ -47,9 +47,11 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.hamcrest.Description;
+import org.hamcrest.Matcher;
+import org.hamcrest.TypeSafeMatcher;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
@@ -224,9 +226,11 @@ public class ShardConsumerTest {
                         taskBackoffTimeMillis,
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST);
 
+        final ExtendedSequenceNumber checkpointSequenceNumber = new ExtendedSequenceNumber("123");
+        final ExtendedSequenceNumber pendingCheckpointSequenceNumber = null;
         when(leaseManager.getLease(anyString())).thenReturn(null);
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(
-                new Checkpoint(new ExtendedSequenceNumber("123"), null));
+                new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // submit BlockOnParentShardTask
@@ -240,7 +244,8 @@ public class ShardConsumerTest {
         consumer.consumeShard(); // submit InitializeTask
         Thread.sleep(50L);
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
-        verify(processor, times(1)).initialize(any(InitializationInput.class));
+        verify(processor, times(1)).initialize(argThat(
+                initializationInputMatcher(checkpointSequenceNumber, pendingCheckpointSequenceNumber)));
 
         try {
             // Checking the status of submitted InitializeTask from above should throw exception.
@@ -251,14 +256,17 @@ public class ShardConsumerTest {
         }
         Thread.sleep(50L);
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
-        verify(processor, times(1)).initialize(any(InitializationInput.class));
+        verify(processor, times(1)).initialize(argThat(
+                initializationInputMatcher(checkpointSequenceNumber, pendingCheckpointSequenceNumber)));
 
         doNothing().when(processor).initialize(any(InitializationInput.class));
 
         consumer.consumeShard(); // submit InitializeTask again.
         Thread.sleep(50L);
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
-        verify(processor, times(2)).initialize(any(InitializationInput.class));
+        verify(processor, times(2)).initialize(argThat(
+                initializationInputMatcher(checkpointSequenceNumber, pendingCheckpointSequenceNumber)));
+        verify(processor, times(2)).initialize(any(InitializationInput.class)); // no other calls with different args
 
         // Checking the status of submitted InitializeTask from above should pass.
         consumer.consumeShard();
@@ -493,18 +501,9 @@ public class ShardConsumerTest {
         consumer.consumeShard(); // submit InitializeTask
         Thread.sleep(50L);
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
-        verify(processor, times(1)).initialize(argThat(new ArgumentMatcher<InitializationInput>() {
-            @Override
-            public boolean matches(Object argument) {
-                if (argument instanceof InitializationInput) {
-                    InitializationInput initializationInput = (InitializationInput) argument;
-                    return Objects.equals(checkpointSequenceNumber, initializationInput.getExtendedSequenceNumber())
-                            && Objects.equals(pendingCheckpointSequenceNumber,
-                            initializationInput.getPendingCheckpointSequenceNumber());
-                }
-                return false;
-            }
-        }));
+        verify(processor, times(1)).initialize(argThat(
+                initializationInputMatcher(checkpointSequenceNumber, pendingCheckpointSequenceNumber)));
+        verify(processor, times(1)).initialize(any(InitializationInput.class)); // no other calls with different args
 
         consumer.consumeShard();
         Thread.sleep(50L);
@@ -532,5 +531,22 @@ public class ShardConsumerTest {
             userRecords.add(new UserRecord(record));
         }
         return userRecords;
+    }
+
+    Matcher<InitializationInput> initializationInputMatcher(final ExtendedSequenceNumber checkpoint,
+                                                            final ExtendedSequenceNumber pendingCheckpoint) {
+        return new TypeSafeMatcher<InitializationInput>() {
+            @Override
+            protected boolean matchesSafely(InitializationInput item) {
+                return Objects.equals(checkpoint, item.getExtendedSequenceNumber())
+                        && Objects.equals(pendingCheckpoint, item.getPendingCheckpointSequenceNumber());
+            }
+
+            @Override
+            public void describeTo(Description description) {
+                description.appendText(String.format("Checkpoint should be %s and pending checkpoint should be %s",
+                        checkpoint, pendingCheckpoint));
+            }
+        };
     }
 }

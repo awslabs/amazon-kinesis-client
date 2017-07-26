@@ -168,7 +168,7 @@ public class RecordProcessorCheckpointerTest {
         ExtendedSequenceNumber sequenceNumber1 = new ExtendedSequenceNumber("5001");
         processingCheckpointer.setLargestPermittedCheckpointValue(sequenceNumber1);
         IPreparedCheckpointer preparedCheckpoint = processingCheckpointer.prepareCheckpoint();
-        Assert.assertEquals(sequenceNumber1, preparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(sequenceNumber1, preparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(sequenceNumber1, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         // Advance checkpoint
@@ -176,7 +176,7 @@ public class RecordProcessorCheckpointerTest {
 
         processingCheckpointer.setLargestPermittedCheckpointValue(sequenceNumber2);
         preparedCheckpoint = processingCheckpointer.prepareCheckpoint();
-        Assert.assertEquals(sequenceNumber2, preparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(sequenceNumber2, preparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(sequenceNumber2, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         // Checkpoint using preparedCheckpoint
@@ -201,7 +201,7 @@ public class RecordProcessorCheckpointerTest {
         IPreparedCheckpointer preparedCheckpoint = processingCheckpointer.prepareCheckpoint(record);
         Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpoint(shardId));
         Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-        Assert.assertEquals(extendedSequenceNumber, preparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(extendedSequenceNumber, preparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         // Checkpoint using preparedCheckpoint
@@ -227,7 +227,7 @@ public class RecordProcessorCheckpointerTest {
         IPreparedCheckpointer preparedCheckpoint = processingCheckpointer.prepareCheckpoint(subRecord);
         Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpoint(shardId));
         Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-        Assert.assertEquals(extendedSequenceNumber, preparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(extendedSequenceNumber, preparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         // Checkpoint using preparedCheckpoint
@@ -251,7 +251,7 @@ public class RecordProcessorCheckpointerTest {
         IPreparedCheckpointer preparedCheckpoint = processingCheckpointer.prepareCheckpoint("5035");
         Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpoint(shardId));
         Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-        Assert.assertEquals(extendedSequenceNumber, preparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(extendedSequenceNumber, preparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         // Checkpoint using preparedCheckpoint
@@ -275,7 +275,7 @@ public class RecordProcessorCheckpointerTest {
         IPreparedCheckpointer preparedCheckpoint = processingCheckpointer.prepareCheckpoint("5040", 0);
         Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpoint(shardId));
         Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-        Assert.assertEquals(extendedSequenceNumber, preparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(extendedSequenceNumber, preparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         // Checkpoint using preparedCheckpoint
@@ -297,12 +297,12 @@ public class RecordProcessorCheckpointerTest {
 
         ExtendedSequenceNumber sn1 = new ExtendedSequenceNumber("6010");
         IPreparedCheckpointer firstPreparedCheckpoint = processingCheckpointer.prepareCheckpoint("6010", 0);
-        Assert.assertEquals(sn1, firstPreparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(sn1, firstPreparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(sn1, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         ExtendedSequenceNumber sn2 = new ExtendedSequenceNumber("6020");
         IPreparedCheckpointer secondPreparedCheckpoint = processingCheckpointer.prepareCheckpoint("6020", 0);
-        Assert.assertEquals(sn2, secondPreparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(sn2, secondPreparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(sn2, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         // checkpoint in order
@@ -329,12 +329,12 @@ public class RecordProcessorCheckpointerTest {
 
         ExtendedSequenceNumber sn1 = new ExtendedSequenceNumber("7010");
         IPreparedCheckpointer firstPreparedCheckpoint = processingCheckpointer.prepareCheckpoint("7010", 0);
-        Assert.assertEquals(sn1, firstPreparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(sn1, firstPreparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(sn1, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         ExtendedSequenceNumber sn2 = new ExtendedSequenceNumber("7020");
         IPreparedCheckpointer secondPreparedCheckpoint = processingCheckpointer.prepareCheckpoint("7020", 0);
-        Assert.assertEquals(sn2, secondPreparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(sn2, secondPreparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(sn2, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
 
         // checkpoint out of order
@@ -503,7 +503,7 @@ public class RecordProcessorCheckpointerTest {
         IPreparedCheckpointer doesNothingPreparedCheckpoint =
                 processingCheckpointer.prepareCheckpoint(firstSequenceNumber.getSequenceNumber(), firstSequenceNumber.getSubSequenceNumber());
         Assert.assertTrue(doesNothingPreparedCheckpoint instanceof DoesNothingPreparedCheckpointer);
-        Assert.assertEquals(firstSequenceNumber, doesNothingPreparedCheckpoint.getSNOfPendingCheckpoint());
+        Assert.assertEquals(firstSequenceNumber, doesNothingPreparedCheckpoint.getPendingCheckpoint());
         Assert.assertEquals(firstSequenceNumber, checkpoint.getCheckpoint(shardId));
         Assert.assertEquals(firstSequenceNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
         Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
@@ -751,8 +751,8 @@ public class RecordProcessorCheckpointerTest {
                     case PREPARE_THEN_CHECKPOINTER:
                         preparedCheckpoint = processingCheckpointer.prepareCheckpoint();
                         processingCheckpointer.checkpoint(
-                                preparedCheckpoint.getSNOfPendingCheckpoint().getSequenceNumber(),
-                                preparedCheckpoint.getSNOfPendingCheckpoint().getSubSequenceNumber());
+                                preparedCheckpoint.getPendingCheckpoint().getSequenceNumber(),
+                                preparedCheckpoint.getPendingCheckpoint().getSubSequenceNumber());
                 }
                 break;
             case WITH_SEQUENCE_NUMBER:
@@ -766,8 +766,8 @@ public class RecordProcessorCheckpointerTest {
                     case PREPARE_THEN_CHECKPOINTER:
                         preparedCheckpoint = processingCheckpointer.prepareCheckpoint(entry.getKey());
                         processingCheckpointer.checkpoint(
-                                preparedCheckpoint.getSNOfPendingCheckpoint().getSequenceNumber(),
-                                preparedCheckpoint.getSNOfPendingCheckpoint().getSubSequenceNumber());
+                                preparedCheckpoint.getPendingCheckpoint().getSequenceNumber(),
+                                preparedCheckpoint.getPendingCheckpoint().getSubSequenceNumber());
                 }
                 break;
             }

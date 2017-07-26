@@ -34,7 +34,7 @@ public class DoesNothingPreparedCheckpointer implements IPreparedCheckpointer {
      * {@inheritDoc}
      */
     @Override
-    public ExtendedSequenceNumber getSNOfPendingCheckpoint() {
+    public ExtendedSequenceNumber getPendingCheckpoint() {
         return sequenceNumber;
     }
 

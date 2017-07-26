@@ -10,13 +10,13 @@ import org.mockito.Mockito;
 public class PreparedCheckpointerTest {
 
     /**
-     * This test verifies the relationship between the constructor and getSNOfPendingCheckpoint.
+     * This test verifies the relationship between the constructor and getPendingCheckpoint.
      */
     @Test
     public void testGetSequenceNumber() {
         ExtendedSequenceNumber sn = new ExtendedSequenceNumber("sn");
         IPreparedCheckpointer checkpointer = new PreparedCheckpointer(sn, null);
-        Assert.assertEquals(sn, checkpointer.getSNOfPendingCheckpoint());
+        Assert.assertEquals(sn, checkpointer.getPendingCheckpoint());
     }
 
     /**
@@ -42,7 +42,7 @@ public class PreparedCheckpointerTest {
     public void testDoesNothingPreparedCheckpoint() throws Exception {
         ExtendedSequenceNumber sn = new ExtendedSequenceNumber("sn");
         IPreparedCheckpointer checkpointer = new DoesNothingPreparedCheckpointer(sn);
-        Assert.assertEquals(sn, checkpointer.getSNOfPendingCheckpoint());
+        Assert.assertEquals(sn, checkpointer.getPendingCheckpoint());
         // nothing happens here
         checkpointer.checkpoint();
     }

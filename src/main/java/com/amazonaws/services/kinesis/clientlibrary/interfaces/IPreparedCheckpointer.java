@@ -16,7 +16,7 @@ public interface IPreparedCheckpointer {
     /**
      * @return sequence number of pending checkpoint
      */
-    ExtendedSequenceNumber getSNOfPendingCheckpoint();
+    ExtendedSequenceNumber getPendingCheckpoint();
 
     /**
      * This method will record a pending checkpoint.

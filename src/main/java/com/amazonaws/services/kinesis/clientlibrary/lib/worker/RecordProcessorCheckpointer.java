@@ -324,7 +324,6 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
      * @throws InvalidStateException
      * @throws ThrottlingException
      * @throws ShutdownException
-     * @formatteR:off
      */
     private IPreparedCheckpointer doPrepareCheckpoint(ExtendedSequenceNumber extendedSequenceNumber)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {

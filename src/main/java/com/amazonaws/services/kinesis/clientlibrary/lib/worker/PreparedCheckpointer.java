@@ -15,17 +15,18 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
  */
 public class PreparedCheckpointer implements IPreparedCheckpointer {
 
-    private final ExtendedSequenceNumber snToCheckpoint;
+    private final ExtendedSequenceNumber pendingCheckpointSequenceNumber;
     private final IRecordProcessorCheckpointer checkpointer;
 
     /**
      * Constructor.
      *
-     * @param snToCheckpoint sequence number to checkpoint at
+     * @param pendingCheckpointSequenceNumber sequence number to checkpoint at
      * @param checkpointer checkpointer to use
      */
-    public PreparedCheckpointer(ExtendedSequenceNumber snToCheckpoint, IRecordProcessorCheckpointer checkpointer) {
-        this.snToCheckpoint = snToCheckpoint;
+    public PreparedCheckpointer(ExtendedSequenceNumber pendingCheckpointSequenceNumber,
+                                IRecordProcessorCheckpointer checkpointer) {
+        this.pendingCheckpointSequenceNumber = pendingCheckpointSequenceNumber;
         this.checkpointer = checkpointer;
     }
 
@@ -33,8 +34,8 @@ public class PreparedCheckpointer implements IPreparedCheckpointer {
      * {@inheritDoc}
      */
     @Override
-    public ExtendedSequenceNumber getSNOfPendingCheckpoint() {
-        return snToCheckpoint;
+    public ExtendedSequenceNumber getPendingCheckpoint() {
+        return pendingCheckpointSequenceNumber;
     }
 
     /**
@@ -44,6 +45,7 @@ public class PreparedCheckpointer implements IPreparedCheckpointer {
     public void checkpoint()
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
             IllegalArgumentException {
-        checkpointer.checkpoint(snToCheckpoint.getSequenceNumber(), snToCheckpoint.getSubSequenceNumber());
+        checkpointer.checkpoint(pendingCheckpointSequenceNumber.getSequenceNumber(),
+                pendingCheckpointSequenceNumber.getSubSequenceNumber());
     }
 }
