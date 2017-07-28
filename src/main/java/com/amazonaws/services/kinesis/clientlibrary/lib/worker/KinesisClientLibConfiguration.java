@@ -17,6 +17,8 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import java.util.Date;
 import java.util.Set;
 
+import org.apache.commons.lang.Validate;
+
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.RegionUtils;
@@ -25,6 +27,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
+
 import lombok.Getter;
 
 /**
@@ -123,7 +126,7 @@ public class KinesisClientLibConfiguration {
     /**
      * User agent set when Amazon Kinesis Client Library makes AWS requests.
      */
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.7.6";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.8.0";
 
     /**
      * KCL will validate client provided sequence numbers with a call to Amazon Kinesis before checkpointing for calls
@@ -157,10 +160,10 @@ public class KinesisClientLibConfiguration {
      */
     public static final int DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10;
 
-    /*
-     * The Worker will skip shard sync during initialization if there are one or more leases in the lease table.
-     * This assumes that the shards and leases are in-sync.
-     * This enables customers to choose faster startup times (e.g. during incremental deployments of an application).
+    /**
+     * The Worker will skip shard sync during initialization if there are one or more leases in the lease table. This
+     * assumes that the shards and leases are in-sync. This enables customers to choose faster startup times (e.g.
+     * during incremental deployments of an application).
      */
     public static final boolean DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST = false;
 
@@ -168,6 +171,11 @@ public class KinesisClientLibConfiguration {
      * Default Shard prioritization strategy.
      */
     public static final ShardPrioritization DEFAULT_SHARD_PRIORITIZATION = new NoOpShardPrioritization();
+
+    /**
+     * The size of the thread pool to create for the lease renewer to use.
+     */
+    public static final int DEFAULT_MAX_LEASE_RENEWAL_THREADS = 20;
 
     private String applicationName;
     private String tableName;
@@ -205,10 +213,14 @@ public class KinesisClientLibConfiguration {
     // This is useful for optimizing deployments to large fleets working on a stable stream.
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
+
     @Getter
     private Optional<Boolean> timeoutEnabled = Optional.absent();
     @Getter
     private Optional<Integer> timeoutInSeconds = Optional.absent();
+
+    @Getter
+    private int maxLeaseRenewalThreads = DEFAULT_MAX_LEASE_RENEWAL_THREADS;
 
     /**
      * Constructor.
@@ -1079,6 +1091,25 @@ public class KinesisClientLibConfiguration {
             throw new IllegalArgumentException("shardPrioritization cannot be null");
         }
         this.shardPrioritization = shardPrioritization;
+        return this;
+    }
+
+    /**
+     * Sets the size of the thread pool that will be used to renew leases.
+     *
+     * Setting this to low may starve the lease renewal process, and cause the worker to lose leases at a higher rate.
+     *
+     * @param maxLeaseRenewalThreads
+     *            the maximum size of the lease renewal thread pool
+     * @throws IllegalArgumentException
+     *             if maxLeaseRenewalThreads is <= 0
+     * @return this configuration object
+     */
+    public KinesisClientLibConfiguration withMaxLeaseRenewalThreads(int maxLeaseRenewalThreads) {
+        Validate.isTrue(maxLeaseRenewalThreads > 2,
+                "The maximum number of lease renewal threads must be greater than or equal to 2.");
+        this.maxLeaseRenewalThreads = maxLeaseRenewalThreads;
+
         return this;
     }
 
