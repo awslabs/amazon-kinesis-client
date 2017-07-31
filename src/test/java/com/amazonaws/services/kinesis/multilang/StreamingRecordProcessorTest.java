@@ -126,7 +126,7 @@ public class StreamingRecordProcessorTest {
         messageWriter = Mockito.mock(MessageWriter.class);
         messageReader = Mockito.mock(MessageReader.class);
         errorReader = Mockito.mock(DrainChildSTDERRTask.class);
-        when(configuration.getTimeoutEnabled()).thenReturn(Optional.of(false));
+        when(configuration.getTimeoutInSeconds()).thenReturn(Optional.absent());
 
         recordProcessor =
                 new MultiLangRecordProcessor(new ProcessBuilder(), executor, new ObjectMapper(), messageWriter,
@@ -172,7 +172,6 @@ public class StreamingRecordProcessorTest {
          */
         when(messageFuture.get()).thenAnswer(answer);
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(messageFuture);
-        when(configuration.getTimeoutEnabled()).thenReturn(Optional.of(false));
 
         List<Record> testRecords = new ArrayList<Record>();
 

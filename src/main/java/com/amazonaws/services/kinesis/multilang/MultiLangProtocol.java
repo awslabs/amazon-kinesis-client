@@ -168,10 +168,7 @@ class MultiLangProtocol {
             Future<Message> future = this.messageReader.getNextMessageFromSTDOUT();
             try {
                 Message message;
-                if (configuration.getTimeoutEnabled().isPresent() && configuration.getTimeoutEnabled().get()) {
-                    if (!configuration.getTimeoutInSeconds().isPresent()) {
-                        throw new IllegalArgumentException("timeoutInSeconds property should be set if timeoutEnabled is true");
-                    }
+                if (configuration.getTimeoutInSeconds().isPresent() && configuration.getTimeoutInSeconds().get() > 0) {
                     message = future.get(configuration.getTimeoutInSeconds().get(), TimeUnit.SECONDS);
                 } else {
                     message = future.get();

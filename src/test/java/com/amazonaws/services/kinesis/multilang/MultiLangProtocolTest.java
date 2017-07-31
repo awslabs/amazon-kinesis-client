@@ -14,21 +14,30 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.argThat;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.model.Record;
+import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
+import com.amazonaws.services.kinesis.multilang.messages.Message;
+import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
+import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
+import com.google.common.base.Optional;
+import com.google.common.util.concurrent.SettableFuture;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,39 +48,33 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import com.google.common.base.Optional;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.argThat;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
-
-import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
-import com.amazonaws.services.kinesis.multilang.messages.Message;
-import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
-import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
-import com.google.common.util.concurrent.SettableFuture;
-
+@RunWith(MockitoJUnitRunner.class)
 public class MultiLangProtocolTest {
 
     private static final List<Record> EMPTY_RECORD_LIST = Collections.emptyList();
-    private MultiLangProtocolForTests protocol;
+    @Mock
+    private MultiLangProtocol protocol;
+    @Mock
     private MessageWriter messageWriter;
+    @Mock
     private MessageReader messageReader;
     private String shardId;
+    @Mock
     private IRecordProcessorCheckpointer checkpointer;
+    @Mock
     private KinesisClientLibConfiguration configuration;
 
 
@@ -79,14 +82,10 @@ public class MultiLangProtocolTest {
     @Before
     public void setup() {
         this.shardId = "shard-id-123";
-        messageWriter = Mockito.mock(MessageWriter.class);
-        messageReader = Mockito.mock(MessageReader.class);
-        configuration = Mockito.mock(KinesisClientLibConfiguration.class);
-        protocol = new MultiLangProtocolForTests(messageReader, messageWriter, new InitializationInput().withShardId(shardId),
-                configuration);
-        checkpointer = Mockito.mock(IRecordProcessorCheckpointer.class);
+        protocol = new MultiLangProtocolForTesting(messageReader, messageWriter,
+         new InitializationInput().withShardId(shardId), configuration);
 
-        when(configuration.getTimeoutEnabled()).thenReturn(Optional.<Boolean>absent());
+        when(configuration.getTimeoutInSeconds()).thenReturn(Optional.absent());
     }
 
     private <T> Future<T> buildFuture(T value) {
@@ -199,28 +198,17 @@ public class MultiLangProtocolTest {
         assertThat(protocol.processRecords(new ProcessRecordsInput().withRecords(EMPTY_RECORD_LIST).withCheckpointer(checkpointer)), equalTo(false));
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test(expected = NullPointerException.class)
     public void waitForStatusMessageTimeoutTest() throws InterruptedException, TimeoutException, ExecutionException {
         when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
         Future<Message> future = Mockito.mock(Future.class);
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(future);
-        when(configuration.getTimeoutEnabled()).thenReturn(Optional.of(true));
         when(configuration.getTimeoutInSeconds()).thenReturn(Optional.of(5));
         when(future.get(anyInt(), eq(TimeUnit.SECONDS))).thenThrow(TimeoutException.class);
-        protocol = new MultiLangProtocolForTests(messageReader,
+        protocol = new MultiLangProtocolForTesting(messageReader,
                 messageWriter,
                 new InitializationInput().withShardId(shardId),
                 configuration);
-
-        protocol.processRecords(new ProcessRecordsInput().withRecords(EMPTY_RECORD_LIST));
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void waitForStatusMessageTimeoutErrorTest() {
-        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
-        when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(new StatusMessage("processRecords"), Message.class));
-        when(configuration.getTimeoutEnabled()).thenReturn(Optional.of(true));
-        when(configuration.getTimeoutInSeconds()).thenReturn(Optional.<Integer>absent());
 
         protocol.processRecords(new ProcessRecordsInput().withRecords(EMPTY_RECORD_LIST));
     }
@@ -229,9 +217,30 @@ public class MultiLangProtocolTest {
     public void waitForStatusMessageSuccessTest() {
         when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(new StatusMessage("processRecords"), Message.class));
-        when(configuration.getTimeoutEnabled()).thenReturn(Optional.of(true));
         when(configuration.getTimeoutInSeconds()).thenReturn(Optional.of(5));
 
         assertTrue(protocol.processRecords(new ProcessRecordsInput().withRecords(EMPTY_RECORD_LIST)));
+    }
+
+    private class MultiLangProtocolForTesting extends MultiLangProtocol {
+        /**
+         * Constructor.
+         *
+         * @param messageReader       A message reader.
+         * @param messageWriter       A message writer.
+         * @param initializationInput
+         * @param configuration
+         */
+        MultiLangProtocolForTesting(final MessageReader messageReader,
+                                  final MessageWriter messageWriter,
+                                  final InitializationInput initializationInput,
+                                  final KinesisClientLibConfiguration configuration) {
+            super(messageReader, messageWriter, initializationInput, configuration);
+        }
+
+        @Override
+        protected void haltJvm(final int exitStatus) {
+            throw new NullPointerException();
+        }
     }
 }

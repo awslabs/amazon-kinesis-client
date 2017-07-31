@@ -215,8 +215,6 @@ public class KinesisClientLibConfiguration {
     private ShardPrioritization shardPrioritization;
 
     @Getter
-    private Optional<Boolean> timeoutEnabled = Optional.absent();
-    @Getter
     private Optional<Integer> timeoutInSeconds = Optional.absent();
 
     @Getter
@@ -1111,13 +1109,6 @@ public class KinesisClientLibConfiguration {
         this.maxLeaseRenewalThreads = maxLeaseRenewalThreads;
 
         return this;
-    }
-
-    /**
-     * @param timeoutEnabled Enable or disbale MultiLangProtocol to wait for the records to be processed
-     */
-    public void withTimeoutEnabled(final boolean timeoutEnabled) {
-        this.timeoutEnabled = Optional.of(timeoutEnabled);
     }
 
     /**
