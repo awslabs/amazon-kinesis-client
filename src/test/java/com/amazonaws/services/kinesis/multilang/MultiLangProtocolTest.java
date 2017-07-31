@@ -28,7 +28,6 @@ import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
 import com.amazonaws.services.kinesis.multilang.messages.Message;
 import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
-import com.google.common.base.Optional;
 import com.google.common.util.concurrent.SettableFuture;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -85,7 +85,7 @@ public class MultiLangProtocolTest {
         protocol = new MultiLangProtocolForTesting(messageReader, messageWriter,
          new InitializationInput().withShardId(shardId), configuration);
 
-        when(configuration.getTimeoutInSeconds()).thenReturn(Optional.absent());
+        when(configuration.getTimeoutInSeconds()).thenReturn(Optional.empty());
     }
 
     private <T> Future<T> buildFuture(T value) {
@@ -179,7 +179,10 @@ public class MultiLangProtocolTest {
                 this.add(new StatusMessage("processRecords"));
             }
         }));
-        assertThat(protocol.processRecords(new ProcessRecordsInput().withRecords(EMPTY_RECORD_LIST).withCheckpointer(checkpointer)), equalTo(true));
+
+        boolean result = protocol.processRecords(new ProcessRecordsInput().withRecords(EMPTY_RECORD_LIST).withCheckpointer(checkpointer));
+
+        assertThat(result, equalTo(true));
 
         verify(checkpointer, timeout(1)).checkpoint();
         verify(checkpointer, timeout(1)).checkpoint("123", 0L);

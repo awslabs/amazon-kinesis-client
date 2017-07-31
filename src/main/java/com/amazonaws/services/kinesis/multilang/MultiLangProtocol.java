@@ -14,11 +14,6 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
@@ -32,8 +27,13 @@ import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownRequestedMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
-
 import lombok.extern.apachecommons.CommonsLog;
+
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * An implementation of the multi language protocol.
@@ -48,7 +48,7 @@ class MultiLangProtocol {
 
     /**
      * Constructor.
-     * 
+     *
      * @param messageReader
      *            A message reader.
      * @param messageWriter
@@ -67,7 +67,7 @@ class MultiLangProtocol {
     /**
      * Writes an {@link InitializeMessage} to the child process's STDIN and waits for the child process to respond with
      * a {@link StatusMessage} on its STDOUT.
-     * 
+     *
      * @return Whether or not this operation succeeded.
      */
     boolean initialize() {
@@ -82,7 +82,7 @@ class MultiLangProtocol {
     /**
      * Writes a {@link ProcessRecordsMessage} to the child process's STDIN and waits for the child process to respond
      * with a {@link StatusMessage} on its STDOUT.
-     * 
+     *
      * @param processRecordsInput
      *            The records, and associated metadata, to process.
      * @return Whether or not this operation succeeded.
@@ -95,7 +95,7 @@ class MultiLangProtocol {
     /**
      * Writes a {@link ShutdownMessage} to the child process's STDIN and waits for the child process to respond with a
      * {@link StatusMessage} on its STDOUT.
-     * 
+     *
      * @param checkpointer A checkpointer.
      * @param reason Why this processor is being shutdown.
      * @return Whether or not this operation succeeded.
@@ -124,7 +124,7 @@ class MultiLangProtocol {
      * all communications with the child process regarding checkpointing were successful. Note that whether or not the
      * checkpointing itself was successful is not the concern of this method. This method simply cares whether it was
      * able to successfully communicate the results of its attempts to checkpoint.
-     * 
+     *
      * @param action
      *            What action is being waited on.
      * @param checkpointer
@@ -155,7 +155,7 @@ class MultiLangProtocol {
 
     /**
      * Waits for status message and verifies it against the expectation
-     * 
+     *
      * @param action
      *            What action is being waited on.
      * @param checkpointer
@@ -166,39 +166,70 @@ class MultiLangProtocol {
         StatusMessage statusMessage = null;
         while (statusMessage == null) {
             Future<Message> future = this.messageReader.getNextMessageFromSTDOUT();
-            try {
-                Message message;
-                if (configuration.getTimeoutInSeconds().isPresent() && configuration.getTimeoutInSeconds().get() > 0) {
-                    message = future.get(configuration.getTimeoutInSeconds().get(), TimeUnit.SECONDS);
-                } else {
-                    message = future.get();
-                }
-                // Note that instanceof doubles as a check against a value being null
-                if (message instanceof CheckpointMessage) {
-                    boolean checkpointWriteSucceeded = checkpoint((CheckpointMessage) message, checkpointer).get();
-                    if (!checkpointWriteSucceeded) {
-                        return false;
-                    }
-                } else if (message instanceof StatusMessage) {
-                    statusMessage = (StatusMessage) message;
-                }
-            } catch (InterruptedException e) {
-                log.error(String.format("Interrupted while waiting for %s message for shard %s", action,
-                        initializationInput.getShardId()));
+            Optional<Message> message = configuration.getTimeoutInSeconds().map(second ->
+                    futureMethod(() -> future.get(second, TimeUnit.SECONDS), action)).orElse(futureMethod(future::get, action));
+
+            if (!message.isPresent()) {
                 return false;
-            } catch (ExecutionException e) {
-                log.error(String.format("Failed to get status message for %s action for shard %s", action,
-                        initializationInput.getShardId()), e);
-                return false;
-            } catch (TimeoutException e) {
-                log.error(String.format("Timedout to get status message for %s action for shard %s. Terminating...",
-                        action,
-                        initializationInput.getShardId()),
-                        e);
-                haltJvm(1);
             }
+
+            Optional<Boolean> booleanStatusMessage = message.flatMap(m -> {
+                if (m instanceof CheckpointMessage) {
+                    return Optional.of(futureMethod(() -> checkpoint((CheckpointMessage) m, checkpointer).get()));
+                }
+                return Optional.empty();
+            });
+
+            Message m = message.get();
+
+            if (booleanStatusMessage.isPresent() && !booleanStatusMessage.get()) {
+                return false;
+            } else if (!booleanStatusMessage.isPresent() && m instanceof StatusMessage) {
+                statusMessage = (StatusMessage) m;
+            }
+            // Note that instanceof doubles as a check against a value being null
         }
         return this.validateStatusMessage(statusMessage, action);
+    }
+
+    private interface FutureMethod {
+        Message get() throws InterruptedException, TimeoutException, ExecutionException;
+    }
+
+    private Optional<Message> futureMethod(FutureMethod fm, String action) {
+        try {
+            return Optional.of(fm.get());
+        } catch (InterruptedException e) {
+            log.error(String.format("Interrupted while waiting for %s message for shard %s", action,
+                    initializationInput.getShardId()), e);
+        } catch (ExecutionException e) {
+            log.error(String.format("Failed to get status message for %s action for shard %s", action,
+                    initializationInput.getShardId()), e);
+        } catch (TimeoutException e) {
+            log.error(String.format("Timedout to get status message for %s action for shard %s. Terminating...",
+                    action,
+                    initializationInput.getShardId()),
+                    e);
+            haltJvm(1);
+        }
+        return Optional.empty();
+    }
+
+    private interface CheckpointFutureMethod {
+        Boolean get() throws InterruptedException, ExecutionException;
+    }
+
+    private Boolean futureMethod(CheckpointFutureMethod cfm) {
+        try {
+            return cfm.get();
+        } catch (InterruptedException e) {
+            log.error(String.format("Interrupted while waiting for Checkpointing message for shard %s",
+             initializationInput.getShardId()), e);
+        } catch (ExecutionException e) {
+            log.error(String.format("Failed to get status message for Checkpointing action for shard %s",
+             initializationInput.getShardId()), e);
+        }
+        return false;
     }
 
     /**
@@ -213,7 +244,7 @@ class MultiLangProtocol {
 
     /**
      * Utility for confirming that the status message is for the provided action.
-     * 
+     *
      * @param statusMessage The status of the child process.
      * @param action The action that was being waited on.
      * @return Whether or not this operation succeeded.
@@ -231,7 +262,7 @@ class MultiLangProtocol {
      * provided {@link CheckpointMessage}. If no sequence number is provided, i.e. the sequence number is null, then
      * this method will call {@link IRecordProcessorCheckpointer#checkpoint()}. The method returns a future representing
      * the attempt to write the result of this checkpoint attempt to the child process.
-     * 
+     *
      * @param checkpointMessage A checkpoint message.
      * @param checkpointer A checkpointer.
      * @return Whether or not this operation succeeded.

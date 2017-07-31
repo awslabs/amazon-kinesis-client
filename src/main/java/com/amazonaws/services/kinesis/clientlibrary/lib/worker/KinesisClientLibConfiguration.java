@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.Date;
+import java.util.Optional;
 import java.util.Set;
 
 import org.apache.commons.lang.Validate;
@@ -25,7 +26,6 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 
 import lombok.Getter;
@@ -215,7 +215,7 @@ public class KinesisClientLibConfiguration {
     private ShardPrioritization shardPrioritization;
 
     @Getter
-    private Optional<Integer> timeoutInSeconds = Optional.absent();
+    private Optional<Integer> timeoutInSeconds = Optional.empty();
 
     @Getter
     private int maxLeaseRenewalThreads = DEFAULT_MAX_LEASE_RENEWAL_THREADS;
