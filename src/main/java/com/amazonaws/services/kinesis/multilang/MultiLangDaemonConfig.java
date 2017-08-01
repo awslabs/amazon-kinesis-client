@@ -100,7 +100,7 @@ public class MultiLangDaemonConfig {
 
         kinesisClientLibConfig = configurator.getConfiguration(properties);
         executorService = buildExecutorService(properties);
-        recordProcessorFactory = new MultiLangRecordProcessorFactory(executableName, executorService);
+        recordProcessorFactory = new MultiLangRecordProcessorFactory(executableName, executorService, kinesisClientLibConfig);
 
         LOG.info("Running " + kinesisClientLibConfig.getApplicationName() + " to process stream "
                 + kinesisClientLibConfig.getStreamName() + " with executable " + executableName);

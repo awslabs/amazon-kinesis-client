@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.Date;
+import java.util.Optional;
 import java.util.Set;
 
 import org.apache.commons.lang.Validate;
@@ -212,6 +213,9 @@ public class KinesisClientLibConfiguration {
     // This is useful for optimizing deployments to large fleets working on a stable stream.
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
+
+    @Getter
+    private Optional<Integer> timeoutInSeconds = Optional.empty();
 
     @Getter
     private int maxLeaseRenewalThreads = DEFAULT_MAX_LEASE_RENEWAL_THREADS;
@@ -1092,7 +1096,7 @@ public class KinesisClientLibConfiguration {
      * Sets the size of the thread pool that will be used to renew leases.
      *
      * Setting this to low may starve the lease renewal process, and cause the worker to lose leases at a higher rate.
-     * 
+     *
      * @param maxLeaseRenewalThreads
      *            the maximum size of the lease renewal thread pool
      * @throws IllegalArgumentException
@@ -1106,4 +1110,12 @@ public class KinesisClientLibConfiguration {
 
         return this;
     }
+
+    /**
+     * @param timeoutInSeconds The timeout in seconds to wait for the MultiLangProtocol to wait for
+     */
+    public void withTimeoutInSeconds(final int timeoutInSeconds) {
+        this.timeoutInSeconds = Optional.of(timeoutInSeconds);
+    }
+
 }
