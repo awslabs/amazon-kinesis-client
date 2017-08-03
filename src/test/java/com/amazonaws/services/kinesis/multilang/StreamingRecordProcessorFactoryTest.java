@@ -14,16 +14,24 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
+@RunWith(MockitoJUnitRunner.class)
 public class StreamingRecordProcessorFactoryTest {
+
+    @Mock
+    private KinesisClientLibConfiguration configuration;
 
     @Test
     public void createProcessorTest() {
-        MultiLangRecordProcessorFactory factory = new MultiLangRecordProcessorFactory("somecommand", null);
+        MultiLangRecordProcessorFactory factory = new MultiLangRecordProcessorFactory("somecommand", null, configuration);
         IRecordProcessor processor = factory.createProcessor();
 
         Assert.assertEquals("Should have constructed a StreamingRecordProcessor", MultiLangRecordProcessor.class,

@@ -24,6 +24,7 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateExcep
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -65,6 +66,8 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
 
     private MultiLangProtocol protocol;
 
+    private KinesisClientLibConfiguration configuration;
+
     @Override
     public void initialize(InitializationInput initializationInput) {
         try {
@@ -87,7 +90,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
             // Submit the error reader for execution
             stderrReadTask = executorService.submit(readSTDERRTask);
 
-            protocol = new MultiLangProtocol(messageReader, messageWriter, initializationInput);
+            protocol = new MultiLangProtocol(messageReader, messageWriter, initializationInput, configuration);
             if (!protocol.initialize()) {
                 throw new RuntimeException("Failed to initialize child process");
             }
@@ -173,9 +176,9 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
      *            An obejct mapper.
      */
     MultiLangRecordProcessor(ProcessBuilder processBuilder, ExecutorService executorService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, KinesisClientLibConfiguration configuration) {
         this(processBuilder, executorService, objectMapper, new MessageWriter(), new MessageReader(),
-                new DrainChildSTDERRTask());
+                new DrainChildSTDERRTask(), configuration);
     }
 
     /**
@@ -195,13 +198,16 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
      *            Error reader to read from child process's stderr
      */
     MultiLangRecordProcessor(ProcessBuilder processBuilder, ExecutorService executorService, ObjectMapper objectMapper,
-            MessageWriter messageWriter, MessageReader messageReader, DrainChildSTDERRTask readSTDERRTask) {
+                             MessageWriter messageWriter, MessageReader messageReader, DrainChildSTDERRTask readSTDERRTask,
+                             KinesisClientLibConfiguration configuration) {
         this.executorService = executorService;
         this.processBuilder = processBuilder;
         this.objectMapper = objectMapper;
         this.messageWriter = messageWriter;
         this.messageReader = messageReader;
         this.readSTDERRTask = readSTDERRTask;
+        this.configuration = configuration;
+
 
         this.state = ProcessState.ACTIVE;
     }
