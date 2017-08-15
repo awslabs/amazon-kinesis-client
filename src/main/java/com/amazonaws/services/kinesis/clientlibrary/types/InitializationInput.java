@@ -23,6 +23,7 @@ public class InitializationInput {
 
     private String shardId;
     private ExtendedSequenceNumber extendedSequenceNumber;
+    private ExtendedSequenceNumber pendingCheckpointSequenceNumber;
 
     /**
      * Default constructor.
@@ -69,6 +70,28 @@ public class InitializationInput {
      */
     public InitializationInput withExtendedSequenceNumber(ExtendedSequenceNumber extendedSequenceNumber) {
         this.extendedSequenceNumber = extendedSequenceNumber;
+        return this;
+    }
+
+    /**
+     * Get pending checkpoint {@link ExtendedSequenceNumber}.
+     *
+     * @return The {@link ExtendedSequenceNumber} in the shard for which a checkpoint is pending
+     */
+    public ExtendedSequenceNumber getPendingCheckpointSequenceNumber() {
+        return pendingCheckpointSequenceNumber;
+    }
+
+    /**
+     * Set pending checkpoint {@link ExtendedSequenceNumber}.
+     *
+     * @param pendingCheckpointSequenceNumber The {@link ExtendedSequenceNumber} in the shard for which a checkpoint
+     *                                        is pending
+     * @return A reference to this updated object so that method calls can be chained together.
+     */
+    public InitializationInput withPendingCheckpointSequenceNumber(
+            ExtendedSequenceNumber pendingCheckpointSequenceNumber) {
+        this.pendingCheckpointSequenceNumber = pendingCheckpointSequenceNumber;
         return this;
     }
 }

@@ -18,6 +18,7 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateExcep
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.IPreparedCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
@@ -97,6 +98,34 @@ public class StreamingRecordProcessorTest {
                 throws KinesisClientLibDependencyException,
                 InvalidStateException, ThrottlingException, ShutdownException,
                 IllegalArgumentException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public IPreparedCheckpointer prepareCheckpoint()
+                throws KinesisClientLibDependencyException,
+                InvalidStateException, ThrottlingException, ShutdownException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public IPreparedCheckpointer prepareCheckpoint(Record record)
+                throws KinesisClientLibDependencyException,
+                InvalidStateException, ThrottlingException, ShutdownException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public IPreparedCheckpointer prepareCheckpoint(String sequenceNumber)
+                throws KinesisClientLibDependencyException,
+                InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public IPreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber)
+                throws KinesisClientLibDependencyException,
+                InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
             throw new UnsupportedOperationException();
         }
     };

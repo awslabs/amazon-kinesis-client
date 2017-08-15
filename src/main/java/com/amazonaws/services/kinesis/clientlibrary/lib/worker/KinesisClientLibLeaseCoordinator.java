@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -30,6 +31,7 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
+import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.Checkpoint;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
@@ -157,6 +159,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
         }
 
         lease.setCheckpoint(checkpoint);
+        lease.setPendingCheckpoint(null);
         lease.setOwnerSwitchesSinceCheckpoint(0L);
 
         return updateLease(lease, concurrencyToken);
@@ -191,6 +194,75 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
     public ExtendedSequenceNumber getCheckpoint(String shardId) throws KinesisClientLibException {
         try {
             return leaseManager.getLease(shardId).getCheckpoint();
+        } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
+            String message = "Unable to fetch checkpoint for shardId " + shardId;
+            LOG.error(message, e);
+            throw new KinesisClientLibIOException(message, e);
+        }
+    }
+
+    /**
+     * Records pending checkpoint for a shard. Does not modify checkpoint or ownerSwitchesSinceCheckpoint.
+     *
+     * @param shardId shardId to update the checkpoint for
+     * @param pendingCheckpoint pending checkpoint value to set, not null
+     * @param concurrencyToken obtained by calling Lease.getConcurrencyToken for a currently held lease
+     *
+     * @return true if setting the pending checkpoint succeeded, false otherwise
+     *
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
+     */
+    boolean prepareCheckpoint(String shardId, ExtendedSequenceNumber pendingCheckpoint, UUID concurrencyToken)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        KinesisClientLease lease = getCurrentlyHeldLease(shardId);
+        if (lease == null) {
+            LOG.info(String.format(
+                    "Worker %s could not prepare checkpoint for shard %s because it does not hold the lease",
+                    getWorkerIdentifier(),
+                    shardId));
+            return false;
+        }
+
+        lease.setPendingCheckpoint(Objects.requireNonNull(pendingCheckpoint, "pendingCheckpoint should not be null"));
+        return updateLease(lease, concurrencyToken);
+    }
+
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void prepareCheckpoint(String shardId,
+                                  ExtendedSequenceNumber pendingCheckpointValue,
+                                  String concurrencyToken) throws KinesisClientLibException {
+        try {
+            boolean wasSuccessful =
+                    prepareCheckpoint(shardId, pendingCheckpointValue, UUID.fromString(concurrencyToken));
+            if (!wasSuccessful) {
+                throw new ShutdownException(
+                        "Can't prepare checkpoint - instance doesn't hold the lease for this shard");
+            }
+        } catch (ProvisionedThroughputException e) {
+            throw new ThrottlingException("Got throttled while preparing checkpoint.", e);
+        } catch (InvalidStateException e) {
+            String message = "Unable to prepare checkpoint for shardId " + shardId;
+            LOG.error(message, e);
+            throw new com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException(message, e);
+        } catch (DependencyException e) {
+            throw new KinesisClientLibDependencyException("Unable to prepare checkpoint for shardId " + shardId, e);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Checkpoint getCheckpointObject(String shardId) throws KinesisClientLibException {
+        try {
+            KinesisClientLease lease = leaseManager.getLease(shardId);
+            return new Checkpoint(lease.getCheckpoint(), lease.getPendingCheckpoint());
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
             String message = "Unable to fetch checkpoint for shardId " + shardId;
             LOG.error(message, e);

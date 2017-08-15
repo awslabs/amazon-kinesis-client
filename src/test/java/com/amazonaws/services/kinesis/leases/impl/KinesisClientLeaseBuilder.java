@@ -27,6 +27,7 @@ public class KinesisClientLeaseBuilder {
     private UUID concurrencyToken;
     private Long lastCounterIncrementNanos;
     private ExtendedSequenceNumber checkpoint;
+    private ExtendedSequenceNumber pendingCheckpoint;
     private Long ownerSwitchesSinceCheckpoint = 0L;
     private Set<String> parentShardIds  = new HashSet<>();
 
@@ -60,6 +61,11 @@ public class KinesisClientLeaseBuilder {
         return this;
     }
 
+    public KinesisClientLeaseBuilder withPendingCheckpoint(ExtendedSequenceNumber pendingCheckpoint) {
+        this.pendingCheckpoint = pendingCheckpoint;
+        return this;
+    }
+
     public KinesisClientLeaseBuilder withOwnerSwitchesSinceCheckpoint(Long ownerSwitchesSinceCheckpoint) {
         this.ownerSwitchesSinceCheckpoint = ownerSwitchesSinceCheckpoint;
         return this;
@@ -72,6 +78,6 @@ public class KinesisClientLeaseBuilder {
 
     public KinesisClientLease build() {
         return new KinesisClientLease(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos,
-                checkpoint, ownerSwitchesSinceCheckpoint, parentShardIds);
+                checkpoint, pendingCheckpoint, ownerSwitchesSinceCheckpoint, parentShardIds);
     }
 }
