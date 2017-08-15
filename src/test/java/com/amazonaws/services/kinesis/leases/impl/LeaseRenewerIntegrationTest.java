@@ -58,7 +58,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         KinesisClientLease renewedLease = builder.renewMutateAssert(renewer, "1", "2").get("2");
 
         // lose lease 2
-        loseLease(renewedLease);
+        leaseManager.takeLease(renewedLease, "bar");
 
         builder.renewMutateAssert(renewer, "1");
     }
@@ -108,7 +108,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         Assert.assertEquals((Long) 1L, heldLeases.get("2").getLeaseCounter());
 
         // lose lease 2
-        loseLease(lease2);
+        leaseManager.takeLease(lease2, "bar");
 
         // Do another renewal and make sure the copy doesn't change
         builder.renewMutateAssert(renewer, "1");
@@ -179,7 +179,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         KinesisClientLease lease = renewer.getCurrentlyHeldLease("1");
 
         // cause lease loss such that the renewer knows the lease has been lost when update is called
-        loseLease(lease);
+        leaseManager.takeLease(lease, "bar");
         builder.renewMutateAssert(renewer);
 
         lease.setCheckpoint(new ExtendedSequenceNumber("new checkpoint"));
@@ -198,7 +198,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         KinesisClientLease lease = renewer.getCurrentlyHeldLease("1");
 
         // cause lease loss such that the renewer knows the lease has been lost when update is called
-        loseLease(lease);
+        leaseManager.takeLease(lease, "bar");
         builder.renewMutateAssert(renewer);
 
         // regain the lease

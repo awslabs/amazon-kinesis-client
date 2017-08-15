@@ -72,9 +72,4 @@ public class LeaseIntegrationTest {
         }
     };
 
-    protected void loseLease(KinesisClientLease lease) throws LeasingException {
-        // Need to call update 2 times because 1st time would be considered to be spurious update for the lease.
-        leaseManager.updateLease(lease);
-        leaseManager.updateLease(lease);
-    }
 }
