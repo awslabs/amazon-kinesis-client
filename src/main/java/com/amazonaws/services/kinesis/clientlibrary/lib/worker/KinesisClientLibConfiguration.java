@@ -173,6 +173,11 @@ public class KinesisClientLibConfiguration {
     public static final ShardPrioritization DEFAULT_SHARD_PRIORITIZATION = new NoOpShardPrioritization();
 
     /**
+     * The amount of milliseconds to wait before graceful shutdown forcefully terminates.
+     */
+    public static final long DEFAULT_SHUTDOWN_GRACE_MILLIS = 5000L;
+
+    /**
      * The size of the thread pool to create for the lease renewer to use.
      */
     public static final int DEFAULT_MAX_LEASE_RENEWAL_THREADS = 20;
@@ -213,6 +218,7 @@ public class KinesisClientLibConfiguration {
     // This is useful for optimizing deployments to large fleets working on a stable stream.
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
+    private long shutdownGraceMillis;
 
     @Getter
     private Optional<Integer> timeoutInSeconds = Optional.empty();
@@ -262,7 +268,8 @@ public class KinesisClientLibConfiguration {
                 DEFAULT_SHARD_SYNC_INTERVAL_MILLIS, DEFAULT_CLEANUP_LEASES_UPON_SHARDS_COMPLETION,
                 new ClientConfiguration(), new ClientConfiguration(), new ClientConfiguration(),
                 DEFAULT_TASK_BACKOFF_TIME_MILLIS, DEFAULT_METRICS_BUFFER_TIME_MILLIS, DEFAULT_METRICS_MAX_QUEUE_SIZE,
-                DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING, null);
+                DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING, null,
+                DEFAULT_SHUTDOWN_GRACE_MILLIS);
     }
 
     /**
@@ -297,6 +304,7 @@ public class KinesisClientLibConfiguration {
      *        with a call to Amazon Kinesis before checkpointing for calls to
      *        {@link RecordProcessorCheckpointer#checkpoint(String)}
      * @param regionName The region name for the service
+     * @param shutdownGraceMillis The number of milliseconds before graceful shutdown terminates forcefully
      */
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
@@ -322,7 +330,8 @@ public class KinesisClientLibConfiguration {
             long metricsBufferTimeMillis,
             int metricsMaxQueueSize,
             boolean validateSequenceNumberBeforeCheckpointing,
-            String regionName) {
+            String regionName,
+            long shutdownGraceMillis) {
         this(applicationName, streamName, kinesisEndpoint, null, initialPositionInStream, kinesisCredentialsProvider,
                 dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, failoverTimeMillis, workerId,
                 maxRecords, idleTimeBetweenReadsInMillis,
@@ -330,7 +339,7 @@ public class KinesisClientLibConfiguration {
                 shardSyncIntervalMillis, cleanupTerminatedShardsBeforeExpiry,
                 kinesisClientConfig, dynamoDBClientConfig, cloudWatchClientConfig,
                 taskBackoffTimeMillis, metricsBufferTimeMillis, metricsMaxQueueSize,
-                validateSequenceNumberBeforeCheckpointing, regionName);
+             validateSequenceNumberBeforeCheckpointing, regionName, shutdownGraceMillis);
     }
 
     /**
@@ -392,7 +401,8 @@ public class KinesisClientLibConfiguration {
             long metricsBufferTimeMillis,
             int metricsMaxQueueSize,
             boolean validateSequenceNumberBeforeCheckpointing,
-            String regionName) {
+            String regionName,
+            long shutdownGraceMillis) {
         // Check following values are greater than zero
         checkIsValuePositive("FailoverTimeMillis", failoverTimeMillis);
         checkIsValuePositive("IdleTimeBetweenReadsInMillis", idleTimeBetweenReadsInMillis);
@@ -402,6 +412,7 @@ public class KinesisClientLibConfiguration {
         checkIsValuePositive("TaskBackoffTimeMillis", taskBackoffTimeMillis);
         checkIsValuePositive("MetricsBufferTimeMills", metricsBufferTimeMillis);
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
+        checkIsValuePositive("ShutdownGraceMillis", shutdownGraceMillis);
         checkIsRegionNameValid(regionName);
         this.applicationName = applicationName;
         this.tableName = applicationName;
@@ -438,6 +449,7 @@ public class KinesisClientLibConfiguration {
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
+        this.shutdownGraceMillis = shutdownGraceMillis;
     }
 
     // Check if value is positive, otherwise throw an exception
@@ -725,6 +737,14 @@ public class KinesisClientLibConfiguration {
         return shardPrioritization;
     }
 
+    /**
+     * @return Graceful shutdown timeout
+     */
+    public long getShutdownGraceMillis() {
+        return shutdownGraceMillis;
+    }
+
+    /*
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 190 LINES
     /**
      * @param tableName name of the lease table in DynamoDB
@@ -1118,4 +1138,13 @@ public class KinesisClientLibConfiguration {
         this.timeoutInSeconds = Optional.of(timeoutInSeconds);
     }
 
+    /**
+     * @param shutdownGraceMillis Time before gracefully shutdown forcefully terminates
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withShutdownGraceMillis(long shutdownGraceMillis) {
+        checkIsValuePositive("ShutdownGraceMillis", shutdownGraceMillis);
+        this.shutdownGraceMillis = shutdownGraceMillis;
+        return this;
+    }
 }
