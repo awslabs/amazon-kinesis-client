@@ -218,6 +218,12 @@ public class KinesisClientLibConfiguration {
     private Optional<Integer> timeoutInSeconds = Optional.empty();
 
     @Getter
+    private Optional<Integer> retryGetRecordsInSeconds = Optional.empty();
+
+    @Getter
+    private Optional<Integer> maxGetRecordsThreadPool = Optional.empty();
+
+    @Getter
     private int maxLeaseRenewalThreads = DEFAULT_MAX_LEASE_RENEWAL_THREADS;
 
     /**
@@ -1108,6 +1114,27 @@ public class KinesisClientLibConfiguration {
                 "The maximum number of lease renewal threads must be greater than or equal to 2.");
         this.maxLeaseRenewalThreads = maxLeaseRenewalThreads;
 
+        return this;
+    }
+
+
+    /**
+     * @param retryGetRecordsInSeconds the time in secods to wait before the worker retries to get a record.
+     * @return this configuration object.
+     */
+    public KinesisClientLibConfiguration withRetryGetRecordsInSeconds(final int retryGetRecordsInSeconds) {
+        checkIsValuePositive("retryGetRecordsInSeconds", retryGetRecordsInSeconds);
+        this.retryGetRecordsInSeconds = Optional.of(retryGetRecordsInSeconds);
+        return this;
+    }
+
+    /**
+     *@param maxGetRecordsThreadPool the max number of threads in the getRecords thread pool.
+     *@return this configuration object
+     */
+    public KinesisClientLibConfiguration withMaxGetRecordsThreadPool(final int maxGetRecordsThreadPool) {
+        checkIsValuePositive("maxGetRecordsThreadPool", maxGetRecordsThreadPool);
+        this.maxGetRecordsThreadPool = Optional.of(maxGetRecordsThreadPool);
         return this;
     }
 
