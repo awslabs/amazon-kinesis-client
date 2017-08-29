@@ -62,6 +62,8 @@ class ProcessTask implements ITask {
     private final Shard shard;
     private final ThrottlingReporter throttlingReporter;
 
+    private final GetRecordsExecutor getRecordsExecutor;
+
     /**
      * @param shardInfo
      *            contains information about the shard
@@ -81,7 +83,7 @@ class ProcessTask implements ITask {
             long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()));
+                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()), new DefaultGetRecordsExecutor(dataFetcher));
     }
 
     /**
@@ -103,7 +105,7 @@ class ProcessTask implements ITask {
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
             RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
             long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-            ThrottlingReporter throttlingReporter) {
+            ThrottlingReporter throttlingReporter, GetRecordsExecutor getRecordsExecutor) {
         super();
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -113,6 +115,7 @@ class ProcessTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
         this.throttlingReporter = throttlingReporter;
         IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
+        this.getRecordsExecutor = getRecordsExecutor;
         // If skipShardSyncAtWorkerInitializationIfLeasesExist is set, we will not get the shard for
         // this ProcessTask. In this case, duplicate KPL user records in the event of resharding will
         // not be dropped during deaggregation of Amazon Kinesis records. This is only applicable if
@@ -368,7 +371,7 @@ class ProcessTask implements ITask {
      * @return list of data records from Kinesis
      */
     private GetRecordsResult getRecordsResultAndRecordMillisBehindLatest() {
-        final GetRecordsResult getRecordsResult = dataFetcher.getRecords(streamConfig.getMaxRecords());
+        final GetRecordsResult getRecordsResult = getRecordsExecutor.getRecords(streamConfig.getMaxRecords());
 
         if (getRecordsResult == null) {
             // Stream no longer exists

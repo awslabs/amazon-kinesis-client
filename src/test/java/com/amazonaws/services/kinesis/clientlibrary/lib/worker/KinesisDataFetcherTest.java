@@ -117,6 +117,7 @@ public class KinesisDataFetcherTest {
         ICheckpoint checkpoint = mock(ICheckpoint.class);
 
         KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
+        GetRecordsExecutor getRecordsExecutor = new DefaultGetRecordsExecutor(fetcher);
 
         String iteratorA = "foo";
         String iteratorB = "bar";
@@ -138,10 +139,10 @@ public class KinesisDataFetcherTest {
         fetcher.initialize(seqA, null);
 
         fetcher.advanceIteratorTo(seqA, null);
-        Assert.assertEquals(recordsA, fetcher.getRecords(MAX_RECORDS).getRecords());
+        Assert.assertEquals(recordsA, getRecordsExecutor.getRecords(MAX_RECORDS).getRecords());
 
         fetcher.advanceIteratorTo(seqB, null);
-        Assert.assertEquals(recordsB, fetcher.getRecords(MAX_RECORDS).getRecords());
+        Assert.assertEquals(recordsB, getRecordsExecutor.getRecords(MAX_RECORDS).getRecords());
     }
 
     @Test
@@ -181,8 +182,9 @@ public class KinesisDataFetcherTest {
         // Create data fectcher and initialize it with latest type checkpoint
         KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO);
         dataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
+        GetRecordsExecutor getRecordsExecutor = new DefaultGetRecordsExecutor(dataFetcher);
         // Call getRecords of dataFetcher which will throw an exception
-        dataFetcher.getRecords(maxRecords);
+        getRecordsExecutor.getRecords(maxRecords);
 
         // Test shard has reached the end
         Assert.assertTrue("Shard should reach the end", dataFetcher.isShardEndReached());
@@ -206,8 +208,9 @@ public class KinesisDataFetcherTest {
         when(checkpoint.getCheckpoint(SHARD_ID)).thenReturn(new ExtendedSequenceNumber(seqNo));
 
         KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
+        GetRecordsExecutor getRecordsExecutor = new DefaultGetRecordsExecutor(fetcher);
         fetcher.initialize(seqNo, initialPositionInStream);
-        List<Record> actualRecords = fetcher.getRecords(MAX_RECORDS).getRecords();
+        List<Record> actualRecords = getRecordsExecutor.getRecords(MAX_RECORDS).getRecords();
 
         Assert.assertEquals(expectedRecords, actualRecords);
     }
