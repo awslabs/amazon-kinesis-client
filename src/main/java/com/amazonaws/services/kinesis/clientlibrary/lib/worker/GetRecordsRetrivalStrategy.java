@@ -5,6 +5,6 @@ import com.amazonaws.services.kinesis.model.GetRecordsResult;
 /**
  *
  */
-public interface GetRecordsExecutor {
+public interface GetRecordsRetrivalStrategy {
     GetRecordsResult getRecords(int maxRecords);
 }

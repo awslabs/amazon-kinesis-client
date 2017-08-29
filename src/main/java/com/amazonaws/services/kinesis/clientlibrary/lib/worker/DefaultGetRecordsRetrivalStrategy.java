@@ -8,7 +8,7 @@ import lombok.NonNull;
  *
  */
 @Data
-public class DefaultGetRecordsExecutor implements GetRecordsExecutor {
+public class DefaultGetRecordsRetrivalStrategy implements GetRecordsRetrivalStrategy {
     @NonNull
     private final KinesisDataFetcher dataFetcher;
 
