@@ -117,7 +117,7 @@ public class KinesisDataFetcherTest {
         ICheckpoint checkpoint = mock(ICheckpoint.class);
 
         KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
-        GetRecordsRetrivalStrategy getRecordsRetrivalStrategy = new DefaultGetRecordsRetrivalStrategy(fetcher);
+        GetRecordsRetrivalStrategy getRecordsRetrivalStrategy = new SynchronousGetRecordsRetrivalStrategy(fetcher);
 
         String iteratorA = "foo";
         String iteratorB = "bar";
@@ -182,7 +182,7 @@ public class KinesisDataFetcherTest {
         // Create data fectcher and initialize it with latest type checkpoint
         KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO);
         dataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
-        GetRecordsRetrivalStrategy getRecordsRetrivalStrategy = new DefaultGetRecordsRetrivalStrategy(dataFetcher);
+        GetRecordsRetrivalStrategy getRecordsRetrivalStrategy = new SynchronousGetRecordsRetrivalStrategy(dataFetcher);
         // Call getRecords of dataFetcher which will throw an exception
         getRecordsRetrivalStrategy.getRecords(maxRecords);
 
@@ -208,7 +208,7 @@ public class KinesisDataFetcherTest {
         when(checkpoint.getCheckpoint(SHARD_ID)).thenReturn(new ExtendedSequenceNumber(seqNo));
 
         KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
-        GetRecordsRetrivalStrategy getRecordsRetrivalStrategy = new DefaultGetRecordsRetrivalStrategy(fetcher);
+        GetRecordsRetrivalStrategy getRecordsRetrivalStrategy = new SynchronousGetRecordsRetrivalStrategy(fetcher);
         fetcher.initialize(seqNo, initialPositionInStream);
         List<Record> actualRecords = getRecordsRetrivalStrategy.getRecords(MAX_RECORDS).getRecords();
 

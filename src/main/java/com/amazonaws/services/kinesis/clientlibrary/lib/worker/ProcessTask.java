@@ -83,7 +83,7 @@ class ProcessTask implements ITask {
             long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()), new DefaultGetRecordsRetrivalStrategy(dataFetcher));
+                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()), new SynchronousGetRecordsRetrivalStrategy(dataFetcher));
     }
 
     /**
