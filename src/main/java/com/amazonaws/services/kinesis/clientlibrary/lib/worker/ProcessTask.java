@@ -18,6 +18,7 @@ import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Optional;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -84,6 +85,34 @@ class ProcessTask implements ITask {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
                 new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()), new SynchronousGetRecordsRetrivalStrategy(dataFetcher));
+    }
+
+    /**
+     * @param shardInfo
+     *            contains information about the shard
+     * @param streamConfig
+     *            Stream configuration
+     * @param recordProcessor
+     *            Record processor used to process the data records for the shard
+     * @param recordProcessorCheckpointer
+     *            Passed to the RecordProcessor so it can checkpoint progress
+     * @param dataFetcher
+     *            Kinesis data fetcher (used to fetch records from Kinesis)
+     * @param backoffTimeMillis
+     *            backoff time when catching exceptions
+     * @param retryGetRecordsInSeconds
+     *            time in seconds to wait before the worker retries to get a record.
+     * @param maxGetRecordsThreadPool
+     *            max number of threads in the getRecords thread pool.
+     */
+    public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
+                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
+                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                       int retryGetRecordsInSeconds, int maxGetRecordsThreadPool) {
+        this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist,
+                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()),
+                new AsynchronousGetRecordsRetrivalStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool));
     }
 
     /**

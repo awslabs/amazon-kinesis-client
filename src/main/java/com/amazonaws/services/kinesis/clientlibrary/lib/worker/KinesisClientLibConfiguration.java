@@ -1119,7 +1119,7 @@ public class KinesisClientLibConfiguration {
 
 
     /**
-     * @param retryGetRecordsInSeconds the time in secods to wait before the worker retries to get a record.
+     * @param retryGetRecordsInSeconds the time in seconds to wait before the worker retries to get a record.
      * @return this configuration object.
      */
     public KinesisClientLibConfiguration withRetryGetRecordsInSeconds(final int retryGetRecordsInSeconds) {
