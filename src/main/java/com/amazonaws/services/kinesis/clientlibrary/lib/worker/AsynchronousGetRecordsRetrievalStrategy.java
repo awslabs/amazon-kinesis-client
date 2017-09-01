@@ -2,7 +2,6 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
@@ -16,7 +15,6 @@ import java.util.concurrent.TimeUnit;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import lombok.Getter;
 import lombok.NonNull;
 import lombok.extern.apachecommons.CommonsLog;
 
@@ -24,58 +22,53 @@ import lombok.extern.apachecommons.CommonsLog;
  *
  */
 @CommonsLog
-public class AsynchronousGetRecordsRetrivalStrategy implements GetRecordsRetrivalStrategy {
+public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrievalStrategy {
     private static final int TIME_TO_KEEP_ALIVE = 5;
     private static final int CORE_THREAD_POOL_COUNT = 1;
 
     private final KinesisDataFetcher dataFetcher;
     private final ExecutorService executorService;
     private final int retryGetRecordsInSeconds;
-    @Getter
-    private final CompletionService<GetRecordsResult> completionService;
+    private final String shardId;
+    final CompletionService<GetRecordsResult> completionService;
 
-    public AsynchronousGetRecordsRetrivalStrategy(@NonNull final KinesisDataFetcher dataFetcher,
-                                                  final int retryGetRecordsInSeconds,
-                                                  final int maxGetRecordsThreadPool) {
-        this (dataFetcher,
-                new ThreadPoolExecutor(
-                        CORE_THREAD_POOL_COUNT,
-                        maxGetRecordsThreadPool,
-                        TIME_TO_KEEP_ALIVE,
-                        TimeUnit.SECONDS,
-                        new LinkedBlockingQueue<>(1),
-                        new ThreadFactoryBuilder().setDaemon(true).setNameFormat("getrecords-worker-%d").build(),
-                        new ThreadPoolExecutor.AbortPolicy()),
-                retryGetRecordsInSeconds);
+    public AsynchronousGetRecordsRetrievalStrategy(@NonNull final KinesisDataFetcher dataFetcher,
+            final int retryGetRecordsInSeconds, final int maxGetRecordsThreadPool, String shardId) {
+        this(dataFetcher, buildExector(maxGetRecordsThreadPool, shardId), retryGetRecordsInSeconds, shardId);
     }
 
-    public AsynchronousGetRecordsRetrivalStrategy(final KinesisDataFetcher dataFetcher,
-                                                  final ExecutorService executorService,
-                                                  final int retryGetRecordsInSeconds) {
+    public AsynchronousGetRecordsRetrievalStrategy(final KinesisDataFetcher dataFetcher,
+            final ExecutorService executorService, final int retryGetRecordsInSeconds, String shardId) {
+        this(dataFetcher, executorService, retryGetRecordsInSeconds, new ExecutorCompletionService<>(executorService),
+                shardId);
+    }
+
+    AsynchronousGetRecordsRetrievalStrategy(KinesisDataFetcher dataFetcher, ExecutorService executorService,
+            int retryGetRecordsInSeconds, CompletionService<GetRecordsResult> completionService, String shardId) {
         this.dataFetcher = dataFetcher;
         this.executorService = executorService;
         this.retryGetRecordsInSeconds = retryGetRecordsInSeconds;
-        this.completionService = new ExecutorCompletionService<>(executorService);
+        this.completionService = completionService;
+        this.shardId = shardId;
     }
 
     @Override
     public GetRecordsResult getRecords(final int maxRecords) {
+        if (executorService.isShutdown()) {
+            throw new IllegalStateException("Strategy has been shutdown");
+        }
         GetRecordsResult result = null;
         Set<Future<GetRecordsResult>> futures = new HashSet<>();
         while (true) {
             try {
-                futures.add(completionService.submit(new Callable<GetRecordsResult>() {
-                    @Override
-                    public GetRecordsResult call() throws Exception {
-                        return dataFetcher.getRecords(maxRecords);
-                    }
-                }));
+                futures.add(completionService.submit(() -> dataFetcher.getRecords(maxRecords)));
             } catch (RejectedExecutionException e) {
                 log.warn("Out of resources, unable to start additional requests.");
             }
 
             try {
-                Future<GetRecordsResult> resultFuture = completionService.poll(retryGetRecordsInSeconds, TimeUnit.SECONDS);
+                Future<GetRecordsResult> resultFuture = completionService.poll(retryGetRecordsInSeconds,
+                        TimeUnit.SECONDS);
                 if (resultFuture != null) {
                     result = resultFuture.get();
                     break;
@@ -97,7 +90,21 @@ public class AsynchronousGetRecordsRetrivalStrategy implements GetRecordsRetriva
         return result;
     }
 
+    @Override
     public void shutdown() {
         executorService.shutdownNow();
+    }
+
+    @Override
+    public boolean isShutdown() {
+        return executorService.isShutdown();
+    }
+
+    private static ExecutorService buildExector(int maxGetRecordsThreadPool, String shardId) {
+        String threadNameFormat = "get-records-worker-" + shardId + "-%d";
+        return new ThreadPoolExecutor(CORE_THREAD_POOL_COUNT, maxGetRecordsThreadPool, TIME_TO_KEEP_ALIVE,
+                TimeUnit.SECONDS, new LinkedBlockingQueue<>(1),
+                new ThreadFactoryBuilder().setDaemon(true).setNameFormat(threadNameFormat).build(),
+                new ThreadPoolExecutor.AbortPolicy());
     }
 }

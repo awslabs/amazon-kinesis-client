@@ -1,17 +1,27 @@
+/*
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
+ *
+ *  http://aws.amazon.com/asl/
+ *
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
+ */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyObject;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.mockito.Mock;
 
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
@@ -22,23 +32,19 @@ import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.runners.MockitoJUnitRunner;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
-import com.amazonaws.services.kinesis.model.GetRecordsResult;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
+public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
 
-/**
- *
- */
-@RunWith(MockitoJUnitRunner.class)
-public class AsynchronousGetRecordsRetrivalStrategyTest {
     private static final int CORE_POOL_SIZE = 1;
     private static final int MAX_POOL_SIZE = 2;
     private static final int TIME_TO_LIVE = 5;
@@ -51,7 +57,7 @@ public class AsynchronousGetRecordsRetrivalStrategyTest {
     @Mock
     private ShardInfo mockShardInfo;
 
-    private AsynchronousGetRecordsRetrivalStrategy getRecordsRetrivalStrategy;
+    private AsynchronousGetRecordsRetrievalStrategy getRecordsRetrivalStrategy;
     private KinesisDataFetcher dataFetcher;
     private GetRecordsResult result;
     private ExecutorService executorService;
@@ -71,8 +77,8 @@ public class AsynchronousGetRecordsRetrivalStrategyTest {
                 new LinkedBlockingQueue<>(1),
                 new ThreadFactoryBuilder().setDaemon(true).setNameFormat("getrecords-worker-%d").build(),
                 rejectedExecutionHandler));
-        getRecordsRetrivalStrategy = new AsynchronousGetRecordsRetrivalStrategy(dataFetcher, executorService, RETRY_GET_RECORDS_IN_SECONDS);
-        completionService = spy(getRecordsRetrivalStrategy.getCompletionService());
+        getRecordsRetrivalStrategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, executorService, RETRY_GET_RECORDS_IN_SECONDS, "shardId-0001");
+        completionService = spy(getRecordsRetrivalStrategy.completionService);
         result = null;
     }
 
@@ -97,18 +103,19 @@ public class AsynchronousGetRecordsRetrivalStrategyTest {
         getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
         assertNull(getRecordsResult);
     }
-    
-    /*@Test
+
+    @Test
+    @Ignore
     public void testInterrupted() throws InterruptedException, ExecutionException {
+
         Future<GetRecordsResult> mockFuture = mock(Future.class);
-        System.out.println(completionService);
         when(completionService.submit(any())).thenReturn(mockFuture);
         when(completionService.poll()).thenReturn(mockFuture);
         doThrow(InterruptedException.class).when(mockFuture).get();
         GetRecordsResult getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
         verify(mockFuture).get();
         assertNull(getRecordsResult);
-    }*/
+    }
 
     private int getLeastNumberOfCalls() {
         int leastNumberOfCalls = 0;
@@ -142,4 +149,5 @@ public class AsynchronousGetRecordsRetrivalStrategyTest {
             return result;
         }
     }
+
 }

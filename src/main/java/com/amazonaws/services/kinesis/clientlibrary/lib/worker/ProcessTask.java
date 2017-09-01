@@ -62,7 +62,7 @@ class ProcessTask implements ITask {
     private final Shard shard;
     private final ThrottlingReporter throttlingReporter;
 
-    private final GetRecordsRetrivalStrategy getRecordsRetrivalStrategy;
+    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
     /**
      * @param shardInfo
@@ -83,7 +83,7 @@ class ProcessTask implements ITask {
             long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()), new SynchronousGetRecordsRetrivalStrategy(dataFetcher));
+                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()), new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
     }
 
     /**
@@ -105,7 +105,7 @@ class ProcessTask implements ITask {
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
             RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
             long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-            ThrottlingReporter throttlingReporter, GetRecordsRetrivalStrategy getRecordsRetrivalStrategy) {
+            ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         super();
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -115,7 +115,7 @@ class ProcessTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
         this.throttlingReporter = throttlingReporter;
         IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
-        this.getRecordsRetrivalStrategy = getRecordsRetrivalStrategy;
+        this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         // If skipShardSyncAtWorkerInitializationIfLeasesExist is set, we will not get the shard for
         // this ProcessTask. In this case, duplicate KPL user records in the event of resharding will
         // not be dropped during deaggregation of Amazon Kinesis records. This is only applicable if
@@ -371,7 +371,7 @@ class ProcessTask implements ITask {
      * @return list of data records from Kinesis
      */
     private GetRecordsResult getRecordsResultAndRecordMillisBehindLatest() {
-        final GetRecordsResult getRecordsResult = getRecordsRetrivalStrategy.getRecords(streamConfig.getMaxRecords());
+        final GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(streamConfig.getMaxRecords());
 
         if (getRecordsResult == null) {
             // Stream no longer exists

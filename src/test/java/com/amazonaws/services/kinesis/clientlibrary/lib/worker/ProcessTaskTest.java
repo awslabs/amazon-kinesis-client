@@ -77,7 +77,7 @@ public class ProcessTaskTest {
     @Mock
     private ThrottlingReporter throttlingReporter;
     @Mock
-    private GetRecordsRetrivalStrategy mockGetRecordsRetrivalStrategy;
+    private GetRecordsRetrievalStrategy mockGetRecordsRetrievalStrategy;
 
     private List<Record> processedRecords;
     private ExtendedSequenceNumber newLargestPermittedCheckpointValue;
@@ -96,20 +96,20 @@ public class ProcessTaskTest {
         final ShardInfo shardInfo = new ShardInfo(shardId, null, null, null);
         processTask = new ProcessTask(
                 shardInfo, config, mockRecordProcessor, mockCheckpointer, mockDataFetcher, taskBackoffTimeMillis,
-                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, throttlingReporter, mockGetRecordsRetrivalStrategy);
+                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, throttlingReporter, mockGetRecordsRetrievalStrategy);
     }
 
     @Test
     public void testProcessTaskWithProvisionedThroughputExceededException() {
         // Set data fetcher to throw exception
         doReturn(false).when(mockDataFetcher).isShardEndReached();
-        doThrow(new ProvisionedThroughputExceededException("Test Exception")).when(mockGetRecordsRetrivalStrategy)
+        doThrow(new ProvisionedThroughputExceededException("Test Exception")).when(mockGetRecordsRetrievalStrategy)
                 .getRecords(maxRecords);
 
         TaskResult result = processTask.call();
         verify(throttlingReporter).throttled();
         verify(throttlingReporter, never()).success();
-        verify(mockGetRecordsRetrivalStrategy).getRecords(eq(maxRecords));
+        verify(mockGetRecordsRetrievalStrategy).getRecords(eq(maxRecords));
         assertTrue("Result should contain ProvisionedThroughputExceededException",
                 result.getException() instanceof ProvisionedThroughputExceededException);
     }
@@ -117,10 +117,10 @@ public class ProcessTaskTest {
     @Test
     public void testProcessTaskWithNonExistentStream() {
         // Data fetcher returns a null Result when the stream does not exist
-        doReturn(null).when(mockGetRecordsRetrivalStrategy).getRecords(maxRecords);
+        doReturn(null).when(mockGetRecordsRetrievalStrategy).getRecords(maxRecords);
 
         TaskResult result = processTask.call();
-        verify(mockGetRecordsRetrivalStrategy).getRecords(eq(maxRecords));
+        verify(mockGetRecordsRetrievalStrategy).getRecords(eq(maxRecords));
         assertNull("Task should not throw an exception", result.getException());
     }
 
@@ -304,14 +304,14 @@ public class ProcessTaskTest {
     private void testWithRecords(List<Record> records,
             ExtendedSequenceNumber lastCheckpointValue,
             ExtendedSequenceNumber largestPermittedCheckpointValue) {
-        when(mockGetRecordsRetrivalStrategy.getRecords(anyInt())).thenReturn(
+        when(mockGetRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(
                 new GetRecordsResult().withRecords(records));
         when(mockCheckpointer.getLastCheckpointValue()).thenReturn(lastCheckpointValue);
         when(mockCheckpointer.getLargestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
         processTask.call();
         verify(throttlingReporter).success();
         verify(throttlingReporter, never()).throttled();
-        verify(mockGetRecordsRetrivalStrategy).getRecords(anyInt());
+        verify(mockGetRecordsRetrievalStrategy).getRecords(anyInt());
         ArgumentCaptor<ProcessRecordsInput> priCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
         verify(mockRecordProcessor).processRecords(priCaptor.capture());
         processedRecords = priCaptor.getValue().getRecords();
