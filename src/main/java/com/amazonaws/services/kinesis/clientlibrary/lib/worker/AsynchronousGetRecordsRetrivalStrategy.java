@@ -87,7 +87,13 @@ public class AsynchronousGetRecordsRetrivalStrategy implements GetRecordsRetriva
                 break;
             }
         }
-        futures.stream().peek(f -> f.cancel(true)).filter(Future::isCancelled).forEach(f -> completionService.poll());
+        futures.stream().peek(f -> f.cancel(true)).filter(Future::isCancelled).forEach(f -> {
+            try {
+                completionService.take();
+            } catch (InterruptedException e) {
+                log.error("Exception thrown while trying to empty the threadpool.");
+            }
+        });
         return result;
     }
 
