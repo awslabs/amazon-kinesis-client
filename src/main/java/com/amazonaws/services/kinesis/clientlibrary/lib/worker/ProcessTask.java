@@ -65,6 +65,17 @@ class ProcessTask implements ITask {
 
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
+    private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
+                                                                  Optional<Integer> retryGetRecordsInSeconds,
+                                                                  Optional<Integer> maxGetRecordsThreadPool,
+                                                                  ShardInfo shardInfo) {
+        Optional<GetRecordsRetrievalStrategy> getRecordsRetrievalStrategy = retryGetRecordsInSeconds.flatMap(retry ->
+                maxGetRecordsThreadPool.map(max ->
+                        new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, retry, max, shardInfo.getShardId())));
+
+        return getRecordsRetrievalStrategy.orElse(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
+    }
+
     /**
      * @param shardInfo
      *            contains information about the shard
@@ -80,11 +91,10 @@ class ProcessTask implements ITask {
      *            backoff time when catching exceptions
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-            RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
-            long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
+                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
+                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()), new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
+                skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty());
     }
 
     /**
@@ -108,11 +118,11 @@ class ProcessTask implements ITask {
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
                        RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
                        long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       int retryGetRecordsInSeconds, int maxGetRecordsThreadPool) {
+                       Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
                 new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()),
-                new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, shardInfo.getShardId()));
+                makeStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, shardInfo));
     }
 
     /**

@@ -99,26 +99,9 @@ class ShardConsumer {
             IMetricsFactory metricsFactory,
             long backoffTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
-        this.streamConfig = streamConfig;
-        this.recordProcessor = recordProcessor;
-        this.executorService = executorService;
-        this.shardInfo = shardInfo;
-        this.checkpoint = checkpoint;
-        this.recordProcessorCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo,
-                        checkpoint,
-                        new SequenceNumberValidator(streamConfig.getStreamProxy(),
-                                shardInfo.getShardId(),
-                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()));
-        this.dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
-        this.leaseManager = leaseManager;
-        this.metricsFactory = metricsFactory;
-        this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
-        this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
-        this.taskBackoffTimeMillis = backoffTimeMillis;
-        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
-        this.retryGetRecordsInSeconds = Optional.empty();
-        this.maxGetRecordsThreadPool = Optional.empty();
+        this(shardInfo, streamConfig, checkpoint,recordProcessor, leaseManager, parentShardPollIntervalMillis,
+                cleanupLeasesOfCompletedShards, executorService, metricsFactory, backoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty());
     }
 
     /**

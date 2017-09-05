@@ -339,26 +339,10 @@ public class Worker implements Runnable {
             KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
             IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
-        this.applicationName = applicationName;
-        this.recordProcessorFactory = recordProcessorFactory;
-        this.streamConfig = streamConfig;
-        this.initialPosition = initialPositionInStream;
-        this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
-        this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
-        this.checkpointTracker = checkpoint != null ? checkpoint : leaseCoordinator;
-        this.idleTimeInMilliseconds = streamConfig.getIdleTimeInMilliseconds();
-        this.executorService = execService;
-        this.leaseCoordinator = leaseCoordinator;
-        this.metricsFactory = metricsFactory;
-        this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
-                initialPositionInStream, cleanupLeasesUponShardCompletion, shardSyncIdleTimeMillis, metricsFactory,
-                executorService);
-        this.taskBackoffTimeMillis = taskBackoffTimeMillis;
-        this.failoverTimeMillis = failoverTimeMillis;
-        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
-        this.shardPrioritization = shardPrioritization;
-        this.retryGetRecordsInSeconds = Optional.empty();
-        this.maxGetRecordsThreadPool = Optional.empty();
+        this(applicationName, recordProcessorFactory, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
+                shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
+                metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
+                shardPrioritization, Optional.empty(), Optional.empty());
     }
 
 
