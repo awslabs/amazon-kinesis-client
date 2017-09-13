@@ -2,6 +2,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
@@ -12,6 +13,8 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingScope;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -59,9 +62,10 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
         }
         GetRecordsResult result = null;
         Set<Future<GetRecordsResult>> futures = new HashSet<>();
+        Callable<GetRecordsResult> retrieverCall = createRetrieverCallable(maxRecords);
         while (true) {
             try {
-                futures.add(completionService.submit(() -> dataFetcher.getRecords(maxRecords)));
+                futures.add(completionService.submit(retrieverCall));
             } catch (RejectedExecutionException e) {
                 log.warn("Out of resources, unable to start additional requests.");
             }
@@ -88,6 +92,18 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
             }
         });
         return result;
+    }
+
+    private Callable<GetRecordsResult> createRetrieverCallable(int maxRecords) {
+        ThreadSafeMetricsDelegatingScope metricsScope = new ThreadSafeMetricsDelegatingScope(MetricsHelper.getMetricsScope());
+        return () -> {
+            try {
+                MetricsHelper.setMetricsScope(metricsScope);
+                return dataFetcher.getRecords(maxRecords);
+            } finally {
+                MetricsHelper.unsetMetricsScope();
+            }
+        };
     }
 
     @Override

@@ -168,7 +168,7 @@ public class ConsumerStatesTest {
         assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
         assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
         assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
-        assertThat(task, procTask(GetRecordsRetrievalStrategy.class, "getRecordsRetrivalStrategy", instanceOf(SynchronousGetRecordsRetrievalStrategy.class) ));
+        assertThat(task, procTask(GetRecordsRetrievalStrategy.class, "getRecordsRetrievalStrategy", instanceOf(SynchronousGetRecordsRetrievalStrategy.class) ));
 
         assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
 
@@ -199,7 +199,7 @@ public class ConsumerStatesTest {
         assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
         assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
         assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
-        assertThat(task, procTask(GetRecordsRetrievalStrategy.class, "getRecordsRetrivalStrategy", instanceOf(AsynchronousGetRecordsRetrievalStrategy.class) ));
+        assertThat(task, procTask(GetRecordsRetrievalStrategy.class, "getRecordsRetrievalStrategy", instanceOf(AsynchronousGetRecordsRetrievalStrategy.class) ));
 
         assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
 
