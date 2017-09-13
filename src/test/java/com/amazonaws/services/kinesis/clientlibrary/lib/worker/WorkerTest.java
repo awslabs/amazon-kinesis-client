@@ -119,6 +119,7 @@ public class WorkerTest {
     private final long parentShardPollIntervalMillis = 5L;
     private final long shardSyncIntervalMillis = 5L;
     private final boolean cleanupLeasesUponShardCompletion = true;
+    private final boolean ignoreUnexpectedChildShards = false;
     // We don't want any of these tests to run checkpoint validation
     private final boolean skipCheckpointValidationValue = false;
     private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
@@ -156,7 +157,7 @@ public class WorkerTest {
     private TaskResult taskResult;
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
-    private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY = 
+    private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY =
             new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory() {
 
         @Override
@@ -189,8 +190,8 @@ public class WorkerTest {
             };
         }
     };
-    
-    private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 = 
+
+    private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 =
             new V1ToV2RecordProcessorFactoryAdapter(SAMPLE_RECORD_PROCESSOR_FACTORY);
 
 
@@ -232,6 +233,7 @@ public class WorkerTest {
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
+                        ignoreUnexpectedChildShards,
                         checkpoint,
                         leaseCoordinator,
                         execService,
@@ -276,8 +278,9 @@ public class WorkerTest {
                 .thenReturn(secondCheckpoint);
 
         Worker worker = new Worker(stageName, streamletFactory, streamConfig, INITIAL_POSITION_LATEST,
-                parentShardPollIntervalMillis, shardSyncIntervalMillis, cleanupLeasesUponShardCompletion, checkpoint,
-                leaseCoordinator, execService, nullMetricsFactory, taskBackoffTimeMillis, failoverTimeMillis,
+                parentShardPollIntervalMillis, shardSyncIntervalMillis, cleanupLeasesUponShardCompletion,
+                ignoreUnexpectedChildShards, checkpoint, leaseCoordinator, execService, nullMetricsFactory,
+                taskBackoffTimeMillis, failoverTimeMillis,
                 KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, shardPrioritization);
 
         Worker workerSpy = spy(worker);
@@ -336,6 +339,7 @@ public class WorkerTest {
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
+                        ignoreUnexpectedChildShards,
                         checkpoint,
                         leaseCoordinator,
                         execService,
@@ -390,6 +394,7 @@ public class WorkerTest {
                         shardPollInterval,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
+                        ignoreUnexpectedChildShards,
                         leaseCoordinator,
                         leaseCoordinator,
                         execService,
@@ -603,7 +608,7 @@ public class WorkerTest {
      * This test is testing the {@link Worker}'s shutdown behavior and by extension the behavior of
      * {@link ThreadPoolExecutor#shutdownNow()}. It depends on the thread pool sending an interrupt to the pool threads.
      * This behavior makes the test a bit racy, since we need to ensure a specific order of events.
-     * 
+     *
      * @throws Exception
      */
     @Test
@@ -744,8 +749,9 @@ public class WorkerTest {
 
         Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
-                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
-                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
+                cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, leaseCoordinator, leaseCoordinator,
+                executorService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, false,
+                shardPrioritization);
 
         when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
                 .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
@@ -818,8 +824,8 @@ public class WorkerTest {
 
         Worker worker = new InjectableWorker("testRequestShutdown", recordProcessorFactory, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
-                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
-                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
+                cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, leaseCoordinator, leaseCoordinator,
+                executorService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
             @Override
             void postConstruct() {
                 this.gracefuleShutdownStarted = true;
@@ -890,8 +896,8 @@ public class WorkerTest {
 
         Worker worker = new InjectableWorker("testRequestShutdown", recordProcessorFactory, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
-                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
-                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
+                cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, leaseCoordinator, leaseCoordinator,
+                executorService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
             @Override
             void postConstruct() {
                 this.gracefulShutdownCoordinator = coordinator;
@@ -952,8 +958,9 @@ public class WorkerTest {
 
         Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
-                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
-                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
+                cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, leaseCoordinator, leaseCoordinator,
+                executorService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, false,
+                shardPrioritization);
 
         when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
                 .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
@@ -1022,8 +1029,9 @@ public class WorkerTest {
 
         Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
-                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
-                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
+                cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, leaseCoordinator, leaseCoordinator,
+                executorService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, false,
+                shardPrioritization);
 
         when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
                 .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
@@ -1123,8 +1131,9 @@ public class WorkerTest {
 
         Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
-                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
-                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
+                cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, leaseCoordinator, leaseCoordinator,
+                executorService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, false,
+                shardPrioritization);
 
         when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
                 .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
@@ -1228,8 +1237,9 @@ public class WorkerTest {
 
         Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
-                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
-                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
+                cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, leaseCoordinator, leaseCoordinator,
+                executorService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, false,
+                shardPrioritization);
 
         when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
                 .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
@@ -1300,8 +1310,9 @@ public class WorkerTest {
 
         Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
-                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
-                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
+                cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, leaseCoordinator, leaseCoordinator,
+                executorService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, false,
+                shardPrioritization);
 
         when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
                 .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
@@ -1338,14 +1349,15 @@ public class WorkerTest {
         InjectableWorker(String applicationName, IRecordProcessorFactory recordProcessorFactory,
                 StreamConfig streamConfig, InitialPositionInStreamExtended initialPositionInStream,
                 long parentShardPollIntervalMillis, long shardSyncIdleTimeMillis,
-                boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
+                boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards, ICheckpoint checkpoint,
                 KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
                 IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
                 boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
             super(applicationName, recordProcessorFactory, streamConfig, initialPositionInStream,
                     parentShardPollIntervalMillis, shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion,
-                    checkpoint, leaseCoordinator, execService, metricsFactory, taskBackoffTimeMillis,
-                    failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, shardPrioritization);
+                    ignoreUnexpectedChildShards, checkpoint, leaseCoordinator, execService, metricsFactory,
+                    taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
+                    shardPrioritization);
             postConstruct();
         }
 
@@ -1657,6 +1669,7 @@ public class WorkerTest {
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
+                        ignoreUnexpectedChildShards,
                         leaseCoordinator,
                         leaseCoordinator,
                         executorService,
@@ -1665,7 +1678,7 @@ public class WorkerTest {
                         failoverTimeMillis,
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         shardPrioritization);
-        
+
         WorkerThread workerThread = new WorkerThread(worker);
         workerThread.start();
         return workerThread;

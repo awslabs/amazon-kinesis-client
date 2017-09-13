@@ -44,6 +44,7 @@ class ShutdownTask implements ITask {
     private final ILeaseManager<KinesisClientLease> leaseManager;
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
+    private final boolean ignoreUnexpectedChildShards;
     private final TaskType taskType = TaskType.SHUTDOWN;
     private final long backoffTimeMillis;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
@@ -59,8 +60,9 @@ class ShutdownTask implements ITask {
                  IKinesisProxy kinesisProxy,
                  InitialPositionInStreamExtended initialPositionInStream,
                  boolean cleanupLeasesOfCompletedShards,
+                 boolean ignoreUnexpectedChildShards,
                  ILeaseManager<KinesisClientLease> leaseManager,
-                 long backoffTimeMillis, 
+                 long backoffTimeMillis,
                  GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -69,6 +71,7 @@ class ShutdownTask implements ITask {
         this.kinesisProxy = kinesisProxy;
         this.initialPositionInStream = initialPositionInStream;
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
+        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.leaseManager = leaseManager;
         this.backoffTimeMillis = backoffTimeMillis;
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
@@ -77,7 +80,7 @@ class ShutdownTask implements ITask {
     /*
      * Invokes RecordProcessor shutdown() API.
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
     @Override
@@ -127,7 +130,8 @@ class ShutdownTask implements ITask {
                 ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                         leaseManager,
                         initialPositionInStream,
-                        cleanupLeasesOfCompletedShards);
+                        cleanupLeasesOfCompletedShards,
+                        ignoreUnexpectedChildShards);
                 LOG.debug("Finished checking for child shards of shard " + shardInfo.getShardId());
             }
 
@@ -152,7 +156,7 @@ class ShutdownTask implements ITask {
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#getTaskType()
      */
     @Override

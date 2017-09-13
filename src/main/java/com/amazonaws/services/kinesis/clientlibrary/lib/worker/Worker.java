@@ -103,6 +103,7 @@ public class Worker implements Runnable {
     // info, value is ShardConsumer.
     private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap = new ConcurrentHashMap<ShardInfo, ShardConsumer>();
     private final boolean cleanupLeasesUponShardCompletion;
+    private final boolean ignoreUnexpectedChildShards;
 
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
 
@@ -253,7 +254,8 @@ public class Worker implements Runnable {
                         config.shouldValidateSequenceNumberBeforeCheckpointing(),
                         config.getInitialPositionInStreamExtended()),
                 config.getInitialPositionInStreamExtended(), config.getParentShardPollIntervalMillis(),
-                config.getShardSyncIntervalMillis(), config.shouldCleanupLeasesUponShardCompletion(), null,
+                config.getShardSyncIntervalMillis(), config.shouldCleanupLeasesUponShardCompletion(),
+                config.shouldIgnoreUnexpectedChildShards(), null,
                 new KinesisClientLibLeaseCoordinator(
                         new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient),
                         config.getWorkerIdentifier(),
@@ -318,6 +320,8 @@ public class Worker implements Runnable {
      *            Time between tasks to sync leases and Kinesis shards
      * @param cleanupLeasesUponShardCompletion
      *            Clean up shards we've finished processing (don't wait till they expire in Kinesis)
+     * @param ignoreUnexpectedChildShards
+     *            Ignore child shards with open parents
      * @param checkpoint
      *            Used to get/set checkpoints
      * @param leaseCoordinator
@@ -335,14 +339,14 @@ public class Worker implements Runnable {
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, StreamConfig streamConfig,
             InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
-            long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
-            KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
+            long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards,
+            ICheckpoint checkpoint, KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
             IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
         this(applicationName, recordProcessorFactory, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
-                shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
-                metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
-                shardPrioritization, Optional.empty(), Optional.empty());
+                shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, checkpoint,
+                leaseCoordinator, execService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist, shardPrioritization, Optional.empty(), Optional.empty());
     }
 
 
@@ -363,6 +367,8 @@ public class Worker implements Runnable {
      *            Time between tasks to sync leases and Kinesis shards
      * @param cleanupLeasesUponShardCompletion
      *            Clean up shards we've finished processing (don't wait till they expire in Kinesis)
+     * @param ignoreUnexpectedChildShards
+     *            Ignore child shards with open parents
      * @param checkpoint
      *            Used to get/set checkpoints
      * @param leaseCoordinator
@@ -384,8 +390,8 @@ public class Worker implements Runnable {
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, StreamConfig streamConfig,
            InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
-           long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
-           KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
+           long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards,
+           ICheckpoint checkpoint, KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
            IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
            boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
            Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool) {
@@ -395,14 +401,15 @@ public class Worker implements Runnable {
         this.initialPosition = initialPositionInStream;
         this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
         this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.checkpointTracker = checkpoint != null ? checkpoint : leaseCoordinator;
         this.idleTimeInMilliseconds = streamConfig.getIdleTimeInMilliseconds();
         this.executorService = execService;
         this.leaseCoordinator = leaseCoordinator;
         this.metricsFactory = metricsFactory;
         this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
-                initialPositionInStream, cleanupLeasesUponShardCompletion, shardSyncIdleTimeMillis, metricsFactory,
-                executorService);
+                initialPositionInStream, cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, shardSyncIdleTimeMillis,
+                metricsFactory, executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.failoverTimeMillis = failoverTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -494,7 +501,8 @@ public class Worker implements Runnable {
                         || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
                     LOG.info("Syncing Kinesis shard info");
                     ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
-                            leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion, 0L);
+                            leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
+                            ignoreUnexpectedChildShards, 0L);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
                     LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
@@ -792,7 +800,7 @@ public class Worker implements Runnable {
     /**
      * Returns whether worker can shutdown immediately. Note that this method is called from Worker's {{@link #run()}
      * method before every loop run, so method must do minimum amount of work to not impact shard processing timings.
-     * 
+     *
      * @return Whether worker should shutdown immediately.
      */
     @VisibleForTesting
@@ -844,7 +852,7 @@ public class Worker implements Runnable {
 
         return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor,
                 leaseCoordinator.getLeaseManager(), parentShardPollIntervalMillis, cleanupLeasesUponShardCompletion,
-                executorService, metricsFactory, taskBackoffTimeMillis,
+                ignoreUnexpectedChildShards, executorService, metricsFactory, taskBackoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist, retryGetRecordsInSeconds, maxGetRecordsThreadPool);
 
     }
@@ -1164,10 +1172,10 @@ public class Worker implements Runnable {
 
         /**
          * Provides logic how to prioritize shard processing.
-         * 
+         *
          * @param shardPrioritization
          *            shardPrioritization is responsible to order shards before processing
-         * 
+         *
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder shardPrioritization(ShardPrioritization shardPrioritization) {
@@ -1255,6 +1263,7 @@ public class Worker implements Runnable {
                     config.getParentShardPollIntervalMillis(),
                     config.getShardSyncIntervalMillis(),
                     config.shouldCleanupLeasesUponShardCompletion(),
+                    config.shouldIgnoreUnexpectedChildShards(),
                     null,
                     new KinesisClientLibLeaseCoordinator(new KinesisClientLeaseManager(config.getTableName(),
                             dynamoDBClient),

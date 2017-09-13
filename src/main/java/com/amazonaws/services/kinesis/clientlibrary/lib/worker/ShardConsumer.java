@@ -53,6 +53,7 @@ class ShardConsumer {
     // Backoff time when polling to check if application has finished processing parent shards
     private final long parentShardPollIntervalMillis;
     private final boolean cleanupLeasesOfCompletedShards;
+    private final boolean ignoreUnexpectedChildShards;
     private final long taskBackoffTimeMillis;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
 
@@ -97,7 +98,7 @@ class ShardConsumer {
      * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
      * @param backoffTimeMillis backoff interval when we encounter exceptions
      */
-    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
+    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 11 LINES
     ShardConsumer(ShardInfo shardInfo,
             StreamConfig streamConfig,
             ICheckpoint checkpoint,
@@ -105,12 +106,13 @@ class ShardConsumer {
             ILeaseManager<KinesisClientLease> leaseManager,
             long parentShardPollIntervalMillis,
             boolean cleanupLeasesOfCompletedShards,
+            boolean ignoreUnexpectedChildShards,
             ExecutorService executorService,
             IMetricsFactory metricsFactory,
             long backoffTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
         this(shardInfo, streamConfig, checkpoint,recordProcessor, leaseManager, parentShardPollIntervalMillis,
-                cleanupLeasesOfCompletedShards, executorService, metricsFactory, backoffTimeMillis,
+                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, executorService, metricsFactory, backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty());
     }
 
@@ -135,6 +137,7 @@ class ShardConsumer {
                   ILeaseManager<KinesisClientLease> leaseManager,
                   long parentShardPollIntervalMillis,
                   boolean cleanupLeasesOfCompletedShards,
+                  boolean ignoreUnexpectedChildShards,
                   ExecutorService executorService,
                   IMetricsFactory metricsFactory,
                   long backoffTimeMillis,
@@ -157,6 +160,7 @@ class ShardConsumer {
         this.metricsFactory = metricsFactory;
         this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
+        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.taskBackoffTimeMillis = backoffTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
         this.getRecordsRetrievalStrategy = makeStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, shardInfo);
@@ -165,7 +169,7 @@ class ShardConsumer {
     /**
      * No-op if current task is pending, otherwise submits next task for this shard.
      * This method should NOT be called if the ShardConsumer is already in SHUTDOWN_COMPLETED state.
-     * 
+     *
      * @return true if a new process task was submitted, false otherwise
      */
     synchronized boolean consumeShard() {
@@ -260,7 +264,7 @@ class ShardConsumer {
     /**
      * Requests the shutdown of the this ShardConsumer. This should give the record processor a chance to checkpoint
      * before being shutdown.
-     * 
+     *
      * @param shutdownNotification used to signal that the record processor has been given the chance to shutdown.
      */
     void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
@@ -271,7 +275,7 @@ class ShardConsumer {
     /**
      * Shutdown this ShardConsumer (including invoking the RecordProcessor shutdown API).
      * This is called by Worker when it loses responsibility for a shard.
-     * 
+     *
      * @return true if shutdown is complete (false if shutdown is still in progress)
      */
     synchronized boolean beginShutdown() {
@@ -291,7 +295,7 @@ class ShardConsumer {
     /**
      * Used (by Worker) to check if this ShardConsumer instance has been shutdown
      * RecordProcessor shutdown() has been invoked, as appropriate.
-     * 
+     *
      * @return true if shutdown is complete
      */
     boolean isShutdown() {
@@ -307,7 +311,7 @@ class ShardConsumer {
 
     /**
      * Figure out next task to run based on current state, task, and shutdown context.
-     * 
+     *
      * @return Return next task to run
      */
     private ITask getNextTask() {
@@ -323,7 +327,7 @@ class ShardConsumer {
     /**
      * Note: This is a private/internal method with package level access solely for testing purposes.
      * Update state based on information about: task success, current state, and shutdown info.
-     * 
+     *
      * @param taskOutcome The outcome of the last task
      */
     void updateState(TaskOutcome taskOutcome) {
@@ -355,7 +359,7 @@ class ShardConsumer {
 
     /**
      * Private/Internal method - has package level access solely for testing purposes.
-     * 
+     *
      * @return the currentState
      */
     ConsumerStates.ShardConsumerState getCurrentState() {
@@ -400,6 +404,10 @@ class ShardConsumer {
 
     boolean isCleanupLeasesOfCompletedShards() {
         return cleanupLeasesOfCompletedShards;
+    }
+
+    boolean isIgnoreUnexpectedChildShards() {
+        return ignoreUnexpectedChildShards;
     }
 
     long getTaskBackoffTimeMillis() {

@@ -44,17 +44,19 @@ class ShardSyncTaskManager {
     private final ExecutorService executorService;
     private final InitialPositionInStreamExtended initialPositionInStream;
     private boolean cleanupLeasesUponShardCompletion;
+    private boolean ignoreUnexpectedChildShards;
     private final long shardSyncIdleTimeMillis;
 
 
     /**
      * Constructor.
-     * 
+     *
      * @param kinesisProxy Proxy used to fetch streamInfo (shards)
      * @param leaseManager Lease manager (used to list and create leases for shards)
      * @param initialPositionInStream Initial position in stream
      * @param cleanupLeasesUponShardCompletion Clean up leases for shards that we've finished processing (don't wait
      *        until they expire)
+     * @param ignoreUnexpectedChildShards Ignore child shards with open parents
      * @param shardSyncIdleTimeMillis Time between tasks to sync leases and Kinesis shards
      * @param metricsFactory Metrics factory
      * @param executorService ExecutorService to execute the shard sync tasks
@@ -63,6 +65,7 @@ class ShardSyncTaskManager {
             final ILeaseManager<KinesisClientLease> leaseManager,
             final InitialPositionInStreamExtended initialPositionInStream,
             final boolean cleanupLeasesUponShardCompletion,
+            final boolean ignoreUnexpectedChildShards,
             final long shardSyncIdleTimeMillis,
             final IMetricsFactory metricsFactory,
             ExecutorService executorService) {
@@ -70,6 +73,7 @@ class ShardSyncTaskManager {
         this.leaseManager = leaseManager;
         this.metricsFactory = metricsFactory;
         this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
         this.initialPositionInStream = initialPositionInStream;
@@ -99,6 +103,7 @@ class ShardSyncTaskManager {
                             leaseManager,
                             initialPositionInStream,
                             cleanupLeasesUponShardCompletion,
+                            ignoreUnexpectedChildShards,
                             shardSyncIdleTimeMillis), metricsFactory);
             future = executorService.submit(currentTask);
             submittedNewTask = true;

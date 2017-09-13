@@ -105,7 +105,7 @@ public class ShardSyncTaskIntegrationTest {
 
     /**
      * Test method for call().
-     * 
+     *
      * @throws CapacityExceededException
      * @throws DependencyException
      * @throws InvalidStateException
@@ -123,7 +123,7 @@ public class ShardSyncTaskIntegrationTest {
         ShardSyncTask syncTask = new ShardSyncTask(kinesisProxy,
                 leaseManager,
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST),
-                false,
+                false, false,
                 0L);
         syncTask.call();
         List<KinesisClientLease> leases = leaseManager.listLeases();
