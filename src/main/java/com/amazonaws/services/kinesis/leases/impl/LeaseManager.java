@@ -564,6 +564,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
     protected DependencyException convertAndRethrowExceptions(String operation, String leaseKey, AmazonClientException e)
         throws ProvisionedThroughputException, InvalidStateException {
         if (e instanceof ProvisionedThroughputExceededException) {
+            LOG.warn("Provisioned Throughput on the lease table has been exceeded. It's recommended that you increase the IOPs on the table. Failure to increase the IOPs may cause the application to not make progress.");
             throw new ProvisionedThroughputException(e);
         } else if (e instanceof ResourceNotFoundException) {
             // @formatter:on
