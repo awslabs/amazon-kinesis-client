@@ -7,19 +7,12 @@ import com.amazonaws.services.kinesis.model.GetRecordsResult;
  */
 public interface GetRecordsCache {
     /**
-     * This method dispatches the next call to getRecords from Kinesis.
-     */
-    void dispatchNextCall();
-
-    /**
      * This method returns the next set of records from the Cache if present, or blocks the request till it gets the
      * next set of records back from Kinesis.
      * 
      * @return The next set of records.
      */
     GetRecordsResult getNextResult();
-    
-    void addGetRecordsResultToCache(GetRecordsResult getRecordsResult);
     
     void shutdown();
 }
