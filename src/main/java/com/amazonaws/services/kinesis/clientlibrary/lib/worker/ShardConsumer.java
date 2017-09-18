@@ -15,10 +15,12 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
+import lombok.Getter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -53,6 +55,10 @@ class ShardConsumer {
     private final boolean cleanupLeasesOfCompletedShards;
     private final long taskBackoffTimeMillis;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
+    @Getter
+    private final Optional<Integer> retryGetRecordsInSeconds;
+    @Getter
+    private final Optional<Integer> maxGetRecordsThreadPool;
 
     private ITask currentTask;
     private long currentTaskSubmitTime;
@@ -93,6 +99,38 @@ class ShardConsumer {
             IMetricsFactory metricsFactory,
             long backoffTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
+        this(shardInfo, streamConfig, checkpoint,recordProcessor, leaseManager, parentShardPollIntervalMillis,
+                cleanupLeasesOfCompletedShards, executorService, metricsFactory, backoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty());
+    }
+
+    /**
+     * @param shardInfo Shard information
+     * @param streamConfig Stream configuration to use
+     * @param checkpoint Checkpoint tracker
+     * @param recordProcessor Record processor used to process the data records for the shard
+     * @param leaseManager Used to create leases for new shards
+     * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
+     * @param executorService ExecutorService used to execute process tasks for this shard
+     * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
+     * @param backoffTimeMillis backoff interval when we encounter exceptions
+     * @param retryGetRecordsInSeconds time in seconds to wait before the worker retries to get a record.
+     * @param maxGetRecordsThreadPool max number of threads in the getRecords thread pool.
+     */
+    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
+    ShardConsumer(ShardInfo shardInfo,
+                  StreamConfig streamConfig,
+                  ICheckpoint checkpoint,
+                  IRecordProcessor recordProcessor,
+                  ILeaseManager<KinesisClientLease> leaseManager,
+                  long parentShardPollIntervalMillis,
+                  boolean cleanupLeasesOfCompletedShards,
+                  ExecutorService executorService,
+                  IMetricsFactory metricsFactory,
+                  long backoffTimeMillis,
+                  boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                  Optional<Integer> retryGetRecordsInSeconds,
+                  Optional<Integer> maxGetRecordsThreadPool) {
         this.streamConfig = streamConfig;
         this.recordProcessor = recordProcessor;
         this.executorService = executorService;
@@ -111,6 +149,8 @@ class ShardConsumer {
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.taskBackoffTimeMillis = backoffTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
+        this.retryGetRecordsInSeconds = retryGetRecordsInSeconds;
+        this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
     }
 
     /**
