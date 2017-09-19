@@ -14,18 +14,19 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.util.Collections;
+import java.util.Date;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.kinesis.model.GetRecordsResult;
-import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
-import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.MetricsCollectingKinesisProxyDecorator;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-
-import java.util.Date;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
+import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
+import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
@@ -76,6 +77,10 @@ class KinesisDataFetcher {
             }
         } else {
             isShardEndReached = true;
+        }
+        
+        if (response == null) {
+            response = new GetRecordsResult().withRecords(Collections.emptyList());
         }
 
         return response;

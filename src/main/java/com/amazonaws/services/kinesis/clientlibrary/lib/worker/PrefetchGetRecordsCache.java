@@ -1,8 +1,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.util.Collections;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
@@ -16,11 +14,10 @@ import lombok.extern.apachecommons.CommonsLog;
  * number of GetRecordsResult that the cache can store, maxByteSize i.e. the byte size of the records stored in the
  * cache and maxRecordsCount i.e. the max number of records that should be present in the cache across multiple
  * GetRecordsResult object. If no data is available in the cache, the call from the record processor is blocked till
- * records are retrieved from Kinesis. If prefetching is not enabled, the cache is not used and every single call to the
- * GetRecordsRetrievalStrategy is a blocking call.
+ * records are retrieved from Kinesis.
  */
 @CommonsLog
-public class PrefetchGetRecordsCache extends GetRecordsCache {
+public class PrefetchGetRecordsCache implements GetRecordsCache {
     private LinkedBlockingQueue<GetRecordsResult> getRecordsResultQueue;
     private int maxSize;
     private int maxByteSize;
@@ -102,8 +99,7 @@ public class PrefetchGetRecordsCache extends GetRecordsCache {
             while (true) {
                 if (currentSizeInBytes < maxByteSize && currentRecordsCount < maxRecordsCount) {
                     try {
-                        GetRecordsResult getRecordsResult = validateGetRecordsResult(
-                                getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall));
+                        GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
                         getRecordsResultQueue.put(getRecordsResult);
                         if (getRecordsResultQueue.contains(getRecordsResult)) {
                             updateBytes(getRecordsResult, true);

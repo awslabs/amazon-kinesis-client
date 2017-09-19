@@ -1,13 +1,15 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
+
 import lombok.extern.apachecommons.CommonsLog;
 
 /**
- *
+ * This is the BlockingGetRecordsCache class. This class blocks any calls to the getRecords on the
+ * GetRecordsRetrievalStrategy class.
  */
 @CommonsLog
-public class BlockingGetRecordsCache extends GetRecordsCache {
+public class BlockingGetRecordsCache implements GetRecordsCache {
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
@@ -18,7 +20,7 @@ public class BlockingGetRecordsCache extends GetRecordsCache {
     
     @Override
     public GetRecordsResult getNextResult() {
-        return validateGetRecordsResult(getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall));
+        return getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
     }
 
     @Override
