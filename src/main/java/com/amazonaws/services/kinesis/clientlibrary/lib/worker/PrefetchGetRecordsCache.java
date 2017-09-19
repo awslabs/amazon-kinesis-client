@@ -20,38 +20,35 @@ import lombok.extern.apachecommons.CommonsLog;
  * GetRecordsRetrievalStrategy is a blocking call.
  */
 @CommonsLog
-public class DefaultGetRecordsCache implements GetRecordsCache {
+public class PrefetchGetRecordsCache extends GetRecordsCache {
     private LinkedBlockingQueue<GetRecordsResult> getRecordsResultQueue;
     private int maxSize;
     private int maxByteSize;
     private int maxRecordsCount;
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
-    private final ExecutorService executorService = Executors.newFixedThreadPool(1);
+    private final ExecutorService executorService;
     
     private volatile int currentSizeInBytes = 0;
     private volatile int currentRecordsCount = 0;
-    private DataFetchingStrategy dataFetchingStrategy;
     
     private boolean started = false;
 
-    public DefaultGetRecordsCache(final int maxSize, final int maxByteSize, final int maxRecordsCount,
-                                  final int maxRecordsPerCall, @NonNull final DataFetchingStrategy dataFetchingStrategy,
-                                  @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+    public PrefetchGetRecordsCache(final int maxSize, final int maxByteSize, final int maxRecordsCount,
+                                   final int maxRecordsPerCall, @NonNull final DataFetchingStrategy dataFetchingStrategy,
+                                   @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+                                   @NonNull final ExecutorService executorService) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
-        this.dataFetchingStrategy = dataFetchingStrategy;
-
-        if (this.dataFetchingStrategy.equals(DataFetchingStrategy.PREFETCH_CACHED)) {
-            this.maxSize = maxSize;
-            this.maxByteSize = maxByteSize;
-            this.maxRecordsCount = maxRecordsCount;
-            this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxSize);
-        }
+        this.maxSize = maxSize;
+        this.maxByteSize = maxByteSize;
+        this.maxRecordsCount = maxRecordsCount;
+        this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxSize);
+        this.executorService = executorService;
     }
     
     private void start() {
-        if (dataFetchingStrategy.equals(DataFetchingStrategy.PREFETCH_CACHED)) {
+        if (!started) {
             log.info("Starting prefetching thread.");
             executorService.execute(new DefaultGetRecordsCacheDaemon());
         }
@@ -64,16 +61,12 @@ public class DefaultGetRecordsCache implements GetRecordsCache {
             start();
         }
         GetRecordsResult result = null;
-        if (dataFetchingStrategy.equals(DataFetchingStrategy.PREFETCH_CACHED)) {
-            try {
-                result = getRecordsResultQueue.take();
-                updateBytes(result, false);
-                updateRecordsCount(result, false);
-            } catch (InterruptedException e) {
-                log.error("Interrupted while getting records from the cache", e);
-            }
-        } else {
-            result = validateGetRecordsResult(getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall));
+        try {
+            result = getRecordsResultQueue.take();
+            updateBytes(result, false);
+            updateRecordsCount(result, false);
+        } catch (InterruptedException e) {
+            log.error("Interrupted while getting records from the cache", e);
         }
         return result;
     }
@@ -101,13 +94,6 @@ public class DefaultGetRecordsCache implements GetRecordsCache {
         } else {
             currentRecordsCount -= newSize;
         }
-    }
-    
-    private GetRecordsResult validateGetRecordsResult(final GetRecordsResult getRecordsResult) {
-        if (getRecordsResult == null) {
-            return new GetRecordsResult().withRecords(Collections.emptyList());
-        }
-        return getRecordsResult;
     }
     
     private class DefaultGetRecordsCacheDaemon implements Runnable {
