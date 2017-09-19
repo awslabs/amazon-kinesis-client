@@ -148,13 +148,14 @@ public class MultiLangDaemon implements Callable<Integer> {
                 config.getRecordProcessorFactory(),
                 executorService);
 
+        final long shutdownGraceMillis = config.getKinesisClientLibConfiguration().getShutdownGraceMillis();
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
                 LOG.info("Process terminanted, will initiate shutdown.");
                 try {
                     Future<Void> fut = daemon.worker.requestShutdown();
-                    fut.get(5000, TimeUnit.MILLISECONDS);
+                    fut.get(shutdownGraceMillis, TimeUnit.MILLISECONDS);
                     LOG.info("Process shutdown is complete.");
                 } catch (InterruptedException | ExecutionException | TimeoutException e) {
                     LOG.error("Encountered an error during shutdown.", e);

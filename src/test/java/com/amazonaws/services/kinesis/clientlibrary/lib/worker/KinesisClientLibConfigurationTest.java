@@ -84,7 +84,8 @@ public class KinesisClientLibConfigurationTest {
                         TEST_VALUE_LONG,
                         TEST_VALUE_INT,
                         skipCheckpointValidationValue,
-                        null);
+                        null,
+                        TEST_VALUE_LONG);
     }
 
     @Test
@@ -94,7 +95,7 @@ public class KinesisClientLibConfigurationTest {
         // Try each argument at one time.
         KinesisClientLibConfiguration config = null;
         long[] longValues =
-        { TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG };
+        { TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG };
         for (int i = 0; i < PARAMETER_COUNT; i++) {
             longValues[i] = INVALID_LONG;
             try {
@@ -122,7 +123,8 @@ public class KinesisClientLibConfigurationTest {
                                 longValues[5],
                                 TEST_VALUE_INT,
                                 skipCheckpointValidationValue,
-                                null);
+                                null,
+                                longValues[6]);
             } catch (IllegalArgumentException e) {
                 System.out.println(e.getMessage());
             }
@@ -156,7 +158,8 @@ public class KinesisClientLibConfigurationTest {
                                 TEST_VALUE_LONG,
                                 intValues[1],
                                 skipCheckpointValidationValue,
-                                null);
+                                null,
+                                TEST_VALUE_LONG);
             } catch (IllegalArgumentException e) {
                 System.out.println(e.getMessage());
             }
@@ -319,7 +322,8 @@ public class KinesisClientLibConfigurationTest {
                         TEST_VALUE_LONG,
                         1,
                         skipCheckpointValidationValue,
-                        "abcd");
+                        "abcd",
+                        TEST_VALUE_LONG);
             Assert.fail("No expected Exception is thrown.");
         } catch(IllegalArgumentException e) {
             System.out.println(e.getMessage());
