@@ -2,6 +2,8 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
+import java.util.Collections;
+
 /**
  * This class is used as a cache for Prefetching data from Kinesis.
  */
