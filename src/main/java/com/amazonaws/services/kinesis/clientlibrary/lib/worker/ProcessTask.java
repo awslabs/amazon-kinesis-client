@@ -15,7 +15,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.math.BigInteger;
-import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Optional;
@@ -55,6 +54,7 @@ class ProcessTask implements ITask {
 
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
+    private final GetRecordsCache recordsFetcher;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final KinesisDataFetcher dataFetcher;
     private final TaskType taskType = TaskType.PROCESS;
@@ -62,8 +62,6 @@ class ProcessTask implements ITask {
     private final long backoffTimeMillis;
     private final Shard shard;
     private final ThrottlingReporter throttlingReporter;
-
-    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
     private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
                                                                   Optional<Integer> retryGetRecordsInSeconds,
@@ -119,8 +117,38 @@ class ProcessTask implements ITask {
                        RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
                        long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
                        Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool) {
-        this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist,
+        this(shardInfo, streamConfig, recordProcessor, new SimpleRecordsFetcherFactory(streamConfig.getMaxRecords()),
+                recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist, retryGetRecordsInSeconds, maxGetRecordsThreadPool);
+    }
+
+    /**
+     * @param shardInfo
+     *            contains information about the shard
+     * @param streamConfig
+     *            Stream configuration
+     * @param recordProcessor
+     *            Record processor used to process the data records for the shard
+     * @param recordsFetcherFactory
+     *            Record processor factory to create recordFetcher object
+     * @param recordProcessorCheckpointer
+     *            Passed to the RecordProcessor so it can checkpoint progress
+     * @param dataFetcher
+     *            Kinesis data fetcher (used to fetch records from Kinesis)
+     * @param backoffTimeMillis
+     *            backoff time when catching exceptions
+     * @param retryGetRecordsInSeconds
+     *            time in seconds to wait before the worker retries to get a record.
+     * @param maxGetRecordsThreadPool
+     *            max number of threads in the getRecords thread pool.
+     */
+    public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
+                       RecordsFetcherFactory recordsFetcherFactory, RecordProcessorCheckpointer recordProcessorCheckpointer,
+                       KinesisDataFetcher dataFetcher, long backoffTimeMillis,
+                       boolean skipShardSyncAtWorkerInitializationIfLeasesExist, Optional<Integer> retryGetRecordsInSeconds,
+                       Optional<Integer> maxGetRecordsThreadPool) {
+        this(shardInfo, streamConfig, recordProcessor, recordsFetcherFactory, recordProcessorCheckpointer, dataFetcher,
+                backoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
                 new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()),
                 makeStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, shardInfo));
     }
@@ -142,9 +170,36 @@ class ProcessTask implements ITask {
      *            determines how throttling events should be reported in the log.
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-            RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
-            long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-            ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
+                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                       ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+        this(shardInfo, streamConfig, recordProcessor, new SimpleRecordsFetcherFactory(streamConfig.getMaxRecords()),
+             recordProcessorCheckpointer, dataFetcher, backoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
+             throttlingReporter, getRecordsRetrievalStrategy);
+    }
+
+    /**
+     * @param shardInfo
+     *            contains information about the shard
+     * @param streamConfig
+     *            Stream configuration
+     * @param recordProcessor
+     *            Record processor used to process the data records for the shard
+     * @param recordsFetcherFactory
+     *            RecordFetcher factory used to create recordFetcher object
+     * @param recordProcessorCheckpointer
+     *            Passed to the RecordProcessor so it can checkpoint progress
+     * @param dataFetcher
+     *            Kinesis data fetcher (used to fetch records from Kinesis)
+     * @param backoffTimeMillis
+     *            backoff time when catching exceptions
+     * @param throttlingReporter
+     *            determines how throttling events should be reported in the log.
+     */
+    public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
+                       RecordsFetcherFactory recordsFetcherFactory, RecordProcessorCheckpointer recordProcessorCheckpointer,
+                       KinesisDataFetcher dataFetcher, long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                       ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         super();
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -154,7 +209,7 @@ class ProcessTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
         this.throttlingReporter = throttlingReporter;
         IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
-        this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
+        this.recordsFetcher = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy);
         // If skipShardSyncAtWorkerInitializationIfLeasesExist is set, we will not get the shard for
         // this ProcessTask. In this case, duplicate KPL user records in the event of resharding will
         // not be dropped during deaggregation of Amazon Kinesis records. This is only applicable if
@@ -410,12 +465,7 @@ class ProcessTask implements ITask {
      * @return list of data records from Kinesis
      */
     private GetRecordsResult getRecordsResultAndRecordMillisBehindLatest() {
-        final GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(streamConfig.getMaxRecords());
-
-        if (getRecordsResult == null) {
-            // Stream no longer exists
-            return new GetRecordsResult().withRecords(Collections.<Record>emptyList());
-        }
+        final GetRecordsResult getRecordsResult = recordsFetcher.getNextResult();
 
         if (getRecordsResult.getMillisBehindLatest() != null) {
             MetricsHelper.getMetricsScope().addData(MILLIS_BEHIND_LATEST_METRIC,
