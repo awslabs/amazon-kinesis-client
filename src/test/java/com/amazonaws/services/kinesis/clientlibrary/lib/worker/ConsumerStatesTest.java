@@ -57,8 +57,6 @@ public class ConsumerStatesTest {
     @Mock
     private IRecordProcessor recordProcessor;
     @Mock
-    private RecordsFetcherFactory recordsFetcherFactory;
-    @Mock
     private RecordProcessorCheckpointer recordProcessorCheckpointer;
     @Mock
     private ExecutorService executorService;
@@ -78,10 +76,6 @@ public class ConsumerStatesTest {
     private IKinesisProxy kinesisProxy;
     @Mock
     private InitialPositionInStreamExtended initialPositionInStream;
-    @Mock
-    private SynchronousGetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
-    @Mock
-    private GetRecordsCache recordsFetcher;
 
     private long parentShardPollIntervalMillis = 0xCAFE;
     private boolean cleanupLeasesOfCompletedShards = true;
@@ -92,7 +86,6 @@ public class ConsumerStatesTest {
     public void setup() {
         when(consumer.getStreamConfig()).thenReturn(streamConfig);
         when(consumer.getRecordProcessor()).thenReturn(recordProcessor);
-        when(consumer.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
         when(consumer.getRecordProcessorCheckpointer()).thenReturn(recordProcessorCheckpointer);
         when(consumer.getExecutorService()).thenReturn(executorService);
         when(consumer.getShardInfo()).thenReturn(shardInfo);
@@ -158,6 +151,68 @@ public class ConsumerStatesTest {
 
         assertThat(state.getState(), equalTo(ShardConsumerState.INITIALIZING));
         assertThat(state.getTaskType(), equalTo(TaskType.INITIALIZE));
+    }
+
+    @Test
+    public void processingStateTestSynchronous() {
+        when(consumer.getMaxGetRecordsThreadPool()).thenReturn(Optional.empty());
+        when(consumer.getRetryGetRecordsInSeconds()).thenReturn(Optional.empty());
+
+        ConsumerState state = ShardConsumerState.PROCESSING.getConsumerState();
+        ITask task = state.createTask(consumer);
+
+        assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
+        assertThat(task, procTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, procTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
+                equalTo(recordProcessorCheckpointer)));
+        assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
+        assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
+        assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
+        assertThat(task, procTask(GetRecordsRetrievalStrategy.class, "getRecordsRetrievalStrategy", instanceOf(SynchronousGetRecordsRetrievalStrategy.class) ));
+
+        assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
+
+        assertThat(state.shutdownTransition(ShutdownReason.ZOMBIE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.TERMINATE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.REQUESTED),
+                equalTo(ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState()));
+
+        assertThat(state.getState(), equalTo(ShardConsumerState.PROCESSING));
+        assertThat(state.getTaskType(), equalTo(TaskType.PROCESS));
+
+    }
+
+    @Test
+    public void processingStateTestAsynchronous() {
+        when(consumer.getMaxGetRecordsThreadPool()).thenReturn(Optional.of(1));
+        when(consumer.getRetryGetRecordsInSeconds()).thenReturn(Optional.of(2));
+
+        ConsumerState state = ShardConsumerState.PROCESSING.getConsumerState();
+        ITask task = state.createTask(consumer);
+
+        assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
+        assertThat(task, procTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, procTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
+                equalTo(recordProcessorCheckpointer)));
+        assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
+        assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
+        assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
+        assertThat(task, procTask(GetRecordsRetrievalStrategy.class, "getRecordsRetrievalStrategy", instanceOf(AsynchronousGetRecordsRetrievalStrategy.class) ));
+
+        assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
+
+        assertThat(state.shutdownTransition(ShutdownReason.ZOMBIE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.TERMINATE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.REQUESTED),
+                equalTo(ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState()));
+
+        assertThat(state.getState(), equalTo(ShardConsumerState.PROCESSING));
+        assertThat(state.getTaskType(), equalTo(TaskType.PROCESS));
+
     }
 
     @Test
@@ -266,7 +321,7 @@ public class ConsumerStatesTest {
     }
 
     static <ValueType> ReflectionPropertyMatcher<ShutdownTask, ValueType> shutdownTask(Class<ValueType> valueTypeClass,
-            String propertyName, Matcher<ValueType> matcher) {
+                                                                                       String propertyName, Matcher<ValueType> matcher) {
         return taskWith(ShutdownTask.class, valueTypeClass, propertyName, matcher);
     }
 
@@ -276,17 +331,17 @@ public class ConsumerStatesTest {
     }
 
     static <ValueType> ReflectionPropertyMatcher<ProcessTask, ValueType> procTask(Class<ValueType> valueTypeClass,
-            String propertyName, Matcher<ValueType> matcher) {
+                                                                                  String propertyName, Matcher<ValueType> matcher) {
         return taskWith(ProcessTask.class, valueTypeClass, propertyName, matcher);
     }
 
     static <ValueType> ReflectionPropertyMatcher<InitializeTask, ValueType> initTask(Class<ValueType> valueTypeClass,
-            String propertyName, Matcher<ValueType> matcher) {
+                                                                                     String propertyName, Matcher<ValueType> matcher) {
         return taskWith(InitializeTask.class, valueTypeClass, propertyName, matcher);
     }
 
     static <TaskType, ValueType> ReflectionPropertyMatcher<TaskType, ValueType> taskWith(Class<TaskType> taskTypeClass,
-            Class<ValueType> valueTypeClass, String propertyName, Matcher<ValueType> matcher) {
+                                                                                         Class<ValueType> valueTypeClass, String propertyName, Matcher<ValueType> matcher) {
         return new ReflectionPropertyMatcher<>(taskTypeClass, valueTypeClass, matcher, propertyName);
     }
 
@@ -299,7 +354,7 @@ public class ConsumerStatesTest {
         private final Field matchingField;
 
         private ReflectionPropertyMatcher(Class<TaskType> taskTypeClass, Class<ValueType> valueTypeClass,
-                Matcher<ValueType> matcher, String propertyName) {
+                                          Matcher<ValueType> matcher, String propertyName) {
             this.taskTypeClass = taskTypeClass;
             this.valueTypeClazz = valueTypeClass;
             this.matcher = matcher;
