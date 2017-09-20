@@ -519,7 +519,7 @@ public class Worker implements Runnable {
             boolean foundCompletedShard = false;
             Set<ShardInfo> assignedShards = new HashSet<>();
             for (ShardInfo shardInfo : getShardInfoForAssignments()) {
-                ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory, recordsFetcherFactory);
+                ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
                 if (shardConsumer.isShutdown() && shardConsumer.getShutdownReason().equals(ShutdownReason.TERMINATE)) {
                     foundCompletedShard = true;
                 } else {
@@ -891,11 +891,9 @@ public class Worker implements Runnable {
      *            Kinesis shard info
      * @param processorFactory
      *            RecordProcessor factory
-     * @param fetcherFactory
-     *            RecordFetcher factory
      * @return ShardConsumer for the shard
      */
-    ShardConsumer createOrGetShardConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory, RecordsFetcherFactory fetcherFactory) {
+    ShardConsumer createOrGetShardConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
         ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
         // Instantiate a new consumer if we don't have one, or the one we
         // had was from an earlier
@@ -904,17 +902,17 @@ public class Worker implements Runnable {
         // completely processed (shutdown reason terminate).
         if ((consumer == null)
                 || (consumer.isShutdown() && consumer.getShutdownReason().equals(ShutdownReason.ZOMBIE))) {
-            consumer = buildConsumer(shardInfo, processorFactory, fetcherFactory);
+            consumer = buildConsumer(shardInfo, processorFactory);
             shardInfoShardConsumerMap.put(shardInfo, consumer);
             wlog.infoForce("Created new shardConsumer for : " + shardInfo);
         }
         return consumer;
     }
 
-    protected ShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory, RecordsFetcherFactory fetcherFactory) {
+    protected ShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
         IRecordProcessor recordProcessor = processorFactory.createProcessor();
 
-        return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor, fetcherFactory,
+        return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor, recordsFetcherFactory,
                 leaseCoordinator.getLeaseManager(), parentShardPollIntervalMillis, cleanupLeasesUponShardCompletion,
                 executorService, metricsFactory, taskBackoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist, retryGetRecordsInSeconds, maxGetRecordsThreadPool);
