@@ -40,6 +40,7 @@ To make it easier for developers to write record processors in other languages, 
 * Notification when the lease table is throttled  
   When writes, or reads, to the lease table are throttled a warning will be emitted.  If you're seeing this warning you should increase the IOPs for your lease table to prevent processing delays.
   * [PR #212](https://github.com/awslabs/amazon-kinesis-client/pulls/212)
+* Support configuring the graceful shutdown timeout for MultiLang Clients
 
 ### Release 1.8.1 (August 2, 2017)
 * Support timeouts for calls to the MultiLang Daemon
