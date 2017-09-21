@@ -51,11 +51,11 @@ public class BlockingGetRecordsCacheTest {
 
     @Before
     public void setup() {
-        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_COUNT))).thenReturn(getRecordsResult);
-        when(getRecordsResult.getRecords()).thenReturn(records);
-
         records = new ArrayList<>();
         blockingGetRecordsCache = new BlockingGetRecordsCache(MAX_RECORDS_PER_COUNT, getRecordsRetrievalStrategy);
+
+        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_COUNT))).thenReturn(getRecordsResult);
+        when(getRecordsResult.getRecords()).thenReturn(records);
     }
 
     @Test

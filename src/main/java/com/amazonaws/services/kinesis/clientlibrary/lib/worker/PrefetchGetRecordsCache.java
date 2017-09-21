@@ -137,7 +137,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
             return result.getRecords().stream().mapToLong(record -> record.getData().array().length).sum();
         }
         
-        public boolean shouldGetNewRecords() {
+        public synchronized boolean shouldGetNewRecords() {
             return size < maxRecordsCount && byteSize < maxByteSize;
         }
     }
