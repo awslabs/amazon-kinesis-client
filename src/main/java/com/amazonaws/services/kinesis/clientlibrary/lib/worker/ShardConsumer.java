@@ -43,7 +43,6 @@ class ShardConsumer {
 
     private final StreamConfig streamConfig;
     private final IRecordProcessor recordProcessor;
-    @Getter
     private final KinesisClientLibConfiguration config;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ExecutorService executorService;
@@ -65,6 +64,19 @@ class ShardConsumer {
     private ITask currentTask;
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
+    @Getter
+    private final GetRecordsCache getRecordsCache;
+
+    private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
+                                                                  Optional<Integer> retryGetRecordsInSeconds,
+                                                                  Optional<Integer> maxGetRecordsThreadPool,
+                                                                  ShardInfo shardInfo) {
+        Optional<GetRecordsRetrievalStrategy> getRecordsRetrievalStrategy = retryGetRecordsInSeconds.flatMap(retry ->
+                maxGetRecordsThreadPool.map(max ->
+                        new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, retry, max, shardInfo.getShardId())));
+
+        return getRecordsRetrievalStrategy.orElse(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
+    }
 
     /*
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
@@ -158,6 +170,9 @@ class ShardConsumer {
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
         this.retryGetRecordsInSeconds = retryGetRecordsInSeconds;
         this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
+        this.getRecordsCache = config.getRecordsFetcherFactory().createRecordsFetcher(
+                makeStrategy(this.dataFetcher, this.retryGetRecordsInSeconds,
+                this.maxGetRecordsThreadPool, this.shardInfo));
     }
 
     /**

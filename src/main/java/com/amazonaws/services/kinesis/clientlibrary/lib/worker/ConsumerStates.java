@@ -308,10 +308,10 @@ class ConsumerStates {
         @Override
         public ITask createTask(ShardConsumer consumer) {
             return new ProcessTask(consumer.getShardInfo(), consumer.getStreamConfig(), consumer.getRecordProcessor(),
-                    consumer.getConfig().getRecordsFetcherFactory(), consumer.getRecordProcessorCheckpointer(),
+                    consumer.getRecordProcessorCheckpointer(),
                     consumer.getDataFetcher(), consumer.getTaskBackoffTimeMillis(),
-                    consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist(), consumer.getRetryGetRecordsInSeconds(),
-                    consumer.getMaxGetRecordsThreadPool());
+                    consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist(),
+                    consumer.getGetRecordsCache());
         }
 
         @Override
