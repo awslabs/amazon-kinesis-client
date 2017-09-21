@@ -36,7 +36,9 @@ public class BlockingGetRecordsCache implements GetRecordsCache {
 
     @Override
     public void start() {
-        // Do nothing, this behavior is not supported by this cache.
+        //
+        // Nothing to do here
+        //
     }
 
     @Override
@@ -50,6 +52,8 @@ public class BlockingGetRecordsCache implements GetRecordsCache {
 
     @Override
     public void shutdown() {
+        //
         // Nothing to do here.
+        //
     }
 }

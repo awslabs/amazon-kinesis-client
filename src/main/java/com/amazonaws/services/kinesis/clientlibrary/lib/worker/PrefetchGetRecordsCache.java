@@ -116,15 +116,15 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     }
 
     private class PrefetchCounters {
-        private volatile long size = 0;
-        private volatile long byteSize = 0;
+        private long size = 0;
+        private long byteSize = 0;
 
-        public void added(final ProcessRecordsInput result) {
+        public synchronized void added(final ProcessRecordsInput result) {
             size += getSize(result);
             byteSize += getByteSize(result);
         }
 
-        public void removed(final ProcessRecordsInput result) {
+        public synchronized void removed(final ProcessRecordsInput result) {
             size -= getSize(result);
             byteSize -= getByteSize(result);
         }

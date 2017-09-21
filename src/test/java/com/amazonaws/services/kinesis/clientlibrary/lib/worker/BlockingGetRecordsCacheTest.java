@@ -21,6 +21,7 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Before;
@@ -44,9 +45,8 @@ public class BlockingGetRecordsCacheTest {
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     @Mock
     private GetRecordsResult getRecordsResult;
-    @Mock
-    private List<Record> records;
-
+    
+    private List<Record> records = new ArrayList<>();
     private BlockingGetRecordsCache blockingGetRecordsCache;
 
     @Before
@@ -58,12 +58,25 @@ public class BlockingGetRecordsCacheTest {
     }
 
     @Test
-    public void testGetNextRecords() {
+    public void testGetNextRecordsWithNoRecords() {
         ProcessRecordsInput result = blockingGetRecordsCache.getNextResult();
 
         assertEquals(result.getRecords(), records);
         assertNull(result.getCacheEntryTime());
         assertNull(result.getCacheExitTime());
         assertEquals(result.getTimeSpentInCache(), Duration.ZERO);
+    }
+    
+    @Test
+    public void testGetNextRecordsWithRecords() {
+        Record record = new Record();
+        records.add(record);
+        records.add(record);
+        records.add(record);
+        records.add(record);
+        
+        ProcessRecordsInput result = blockingGetRecordsCache.getNextResult();
+        
+        assertEquals(result.getRecords(), records);
     }
 }
