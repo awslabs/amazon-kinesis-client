@@ -1294,6 +1294,12 @@ public class KinesisClientLibConfiguration {
         return this;
     }
 
+    public KinesisClientLibConfiguration withMaxRecordsCount(final int maxRecordsCount) {
+        checkIsValuePositive("maxRecordsCount", maxRecordsCount);
+        recordsFetcherFactory.setMaxRecordsCount(maxRecordsCount);
+        return this;
+    }
+
     /**
      * @param timeoutInSeconds The timeout in seconds to wait for the MultiLangProtocol to wait for
      */

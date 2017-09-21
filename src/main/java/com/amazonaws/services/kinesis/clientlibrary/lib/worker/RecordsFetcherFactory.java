@@ -32,6 +32,8 @@ public interface RecordsFetcherFactory {
 
     void setMaxByteSize(int maxByteSize);
 
+    void setMaxRecordsCount(int maxRecordsCount);
+
     void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy);
 
 }

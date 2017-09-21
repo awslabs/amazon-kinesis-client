@@ -14,7 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import lombok.Setter;
 import lombok.extern.apachecommons.CommonsLog;
 
 import java.util.concurrent.Executors;
@@ -48,14 +47,22 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
         }
     }
 
+    @Override
     public void setMaxSize(int maxSize){
         this.maxSize = maxSize;
     }
 
+    @Override
     public void setMaxByteSize(int maxByteSize){
         this.maxByteSize = maxByteSize;
     }
 
+    @Override
+    public void setMaxRecordsCount(int maxRecordsCount) {
+        this.maxRecordsCount = maxRecordsCount;
+    }
+
+    @Override
     public void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy){
         this.dataFetchingStrategy = dataFetchingStrategy;
     }
