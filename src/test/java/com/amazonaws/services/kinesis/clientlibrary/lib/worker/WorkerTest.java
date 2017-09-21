@@ -133,6 +133,8 @@ public class WorkerTest {
     @Mock
     private KinesisClientLibLeaseCoordinator leaseCoordinator;
     @Mock
+    private KinesisClientLibConfiguration config;
+    @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
     @Mock
     private com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory v1RecordProcessorFactory;
@@ -210,6 +212,8 @@ public class WorkerTest {
     public final void testCreateOrGetShardConsumer() {
         final String stageName = "testStageName";
         IRecordProcessorFactory streamletFactory = SAMPLE_RECORD_PROCESSOR_FACTORY_V2;
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration(stageName, null, null, null);
         IKinesisProxy proxy = null;
         ICheckpoint checkpoint = null;
         int maxRecords = 1;
@@ -228,7 +232,9 @@ public class WorkerTest {
 
         Worker worker =
                 new Worker(stageName,
-                        streamletFactory, streamConfig, INITIAL_POSITION_LATEST,
+                        streamletFactory,
+                        clientConfig,
+                        streamConfig, INITIAL_POSITION_LATEST,
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
@@ -257,6 +263,8 @@ public class WorkerTest {
     public void testWorkerLoopWithCheckpoint() {
         final String stageName = "testStageName";
         IRecordProcessorFactory streamletFactory = SAMPLE_RECORD_PROCESSOR_FACTORY_V2;
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration(stageName, null, null, null);
         IKinesisProxy proxy = null;
         ICheckpoint checkpoint = null;
         int maxRecords = 1;
@@ -275,7 +283,7 @@ public class WorkerTest {
         when(leaseCoordinator.getCurrentAssignments()).thenReturn(initialState).thenReturn(firstCheckpoint)
                 .thenReturn(secondCheckpoint);
 
-        Worker worker = new Worker(stageName, streamletFactory, streamConfig, INITIAL_POSITION_LATEST,
+        Worker worker = new Worker(stageName, streamletFactory, config, streamConfig, INITIAL_POSITION_LATEST,
                 parentShardPollIntervalMillis, shardSyncIntervalMillis, cleanupLeasesUponShardCompletion, checkpoint,
                 leaseCoordinator, execService, nullMetricsFactory, taskBackoffTimeMillis, failoverTimeMillis,
                 KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, shardPrioritization);
@@ -314,6 +322,8 @@ public class WorkerTest {
     public final void testCleanupShardConsumers() {
         final String stageName = "testStageName";
         IRecordProcessorFactory streamletFactory = SAMPLE_RECORD_PROCESSOR_FACTORY_V2;
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration(stageName, null, null, null);
         IKinesisProxy proxy = null;
         ICheckpoint checkpoint = null;
         int maxRecords = 1;
@@ -332,7 +342,9 @@ public class WorkerTest {
 
         Worker worker =
                 new Worker(stageName,
-                        streamletFactory, streamConfig, INITIAL_POSITION_LATEST,
+                        streamletFactory,
+                        clientConfig,
+                        streamConfig, INITIAL_POSITION_LATEST,
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
@@ -371,6 +383,8 @@ public class WorkerTest {
     public final void testInitializationFailureWithRetries() {
         String stageName = "testInitializationWorker";
         IRecordProcessorFactory recordProcessorFactory = new TestStreamletFactory(null, null);
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration(stageName, null, null, null);
         int count = 0;
         when(proxy.getShardList()).thenThrow(new RuntimeException(Integer.toString(count++)));
         int maxRecords = 2;
@@ -386,6 +400,7 @@ public class WorkerTest {
         Worker worker =
                 new Worker(stageName,
                         recordProcessorFactory,
+                        clientConfig,
                         streamConfig, INITIAL_POSITION_TRIM_HORIZON,
                         shardPollInterval,
                         shardSyncIntervalMillis,
@@ -709,6 +724,8 @@ public class WorkerTest {
 
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration("app", null, null, null);
         StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
@@ -742,7 +759,7 @@ public class WorkerTest {
         when(recordProcessorFactory.createProcessor()).thenReturn(processor);
 
 
-        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
+        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, config, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
                 taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
@@ -785,6 +802,8 @@ public class WorkerTest {
     public void testShutdownCallableNotAllowedTwice() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration("app", null, null, null);
         StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
@@ -816,7 +835,7 @@ public class WorkerTest {
         IRecordProcessor processor = mock(IRecordProcessor.class);
         when(recordProcessorFactory.createProcessor()).thenReturn(processor);
 
-        Worker worker = new InjectableWorker("testRequestShutdown", recordProcessorFactory, streamConfig,
+        Worker worker = new InjectableWorker("testRequestShutdown", recordProcessorFactory, config, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
                 taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
@@ -850,6 +869,8 @@ public class WorkerTest {
     public void testGracefulShutdownSingleFuture() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration("app", null, null, null);
         StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
@@ -888,7 +909,7 @@ public class WorkerTest {
 
         when(coordinator.startGracefulShutdown(any(Callable.class))).thenReturn(gracefulShutdownFuture);
 
-        Worker worker = new InjectableWorker("testRequestShutdown", recordProcessorFactory, streamConfig,
+        Worker worker = new InjectableWorker("testRequestShutdown", recordProcessorFactory, config, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
                 taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
@@ -926,6 +947,8 @@ public class WorkerTest {
 
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration("app", null, null, null);
         StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
@@ -950,7 +973,7 @@ public class WorkerTest {
         when(recordProcessorFactory.createProcessor()).thenReturn(processor);
 
 
-        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
+        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, clientConfig, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
                 taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
@@ -988,6 +1011,8 @@ public class WorkerTest {
     public void testRequestShutdownWithLostLease() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration("app", null, null, null);
         StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
@@ -1020,7 +1045,7 @@ public class WorkerTest {
         IRecordProcessor processor = mock(IRecordProcessor.class);
         when(recordProcessorFactory.createProcessor()).thenReturn(processor);
 
-        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
+        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, clientConfig, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
                 taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
@@ -1089,6 +1114,8 @@ public class WorkerTest {
     public void testRequestShutdownWithAllLeasesLost() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration("app", null, null, null);
         StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
@@ -1121,7 +1148,7 @@ public class WorkerTest {
         IRecordProcessor processor = mock(IRecordProcessor.class);
         when(recordProcessorFactory.createProcessor()).thenReturn(processor);
 
-        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
+        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, clientConfig, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
                 taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
@@ -1195,6 +1222,8 @@ public class WorkerTest {
     public void testLeaseCancelledAfterShutdownRequest() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration("app", null, null, null);
         StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
@@ -1226,7 +1255,7 @@ public class WorkerTest {
         IRecordProcessor processor = mock(IRecordProcessor.class);
         when(recordProcessorFactory.createProcessor()).thenReturn(processor);
 
-        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
+        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, clientConfig, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
                 taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
@@ -1267,6 +1296,8 @@ public class WorkerTest {
     public void testEndOfShardAfterShutdownRequest() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        final KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration("app", null, null, null);
         StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
@@ -1298,7 +1329,7 @@ public class WorkerTest {
         IRecordProcessor processor = mock(IRecordProcessor.class);
         when(recordProcessorFactory.createProcessor()).thenReturn(processor);
 
-        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, streamConfig,
+        Worker worker = new Worker("testRequestShutdown", recordProcessorFactory, clientConfig, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
                 taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization);
@@ -1336,13 +1367,14 @@ public class WorkerTest {
 
     private abstract class InjectableWorker extends Worker {
         InjectableWorker(String applicationName, IRecordProcessorFactory recordProcessorFactory,
-                StreamConfig streamConfig, InitialPositionInStreamExtended initialPositionInStream,
+                KinesisClientLibConfiguration config, StreamConfig streamConfig,
+                InitialPositionInStreamExtended initialPositionInStream,
                 long parentShardPollIntervalMillis, long shardSyncIdleTimeMillis,
                 boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
                 KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
                 IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
                 boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
-            super(applicationName, recordProcessorFactory, streamConfig, initialPositionInStream,
+            super(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream,
                     parentShardPollIntervalMillis, shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion,
                     checkpoint, leaseCoordinator, execService, metricsFactory, taskBackoffTimeMillis,
                     failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, shardPrioritization);
@@ -1649,10 +1681,12 @@ public class WorkerTest {
                 idleTimeInMilliseconds,
                 callProcessRecordsForEmptyRecordList,
                 skipCheckpointValidationValue, InitialPositionInStreamExtended.newInitialPositionAtTimestamp(timestamp));
-
+        KinesisClientLibConfiguration clientConfig =
+                new KinesisClientLibConfiguration("app", null, null, null);
         Worker worker =
                 new Worker(stageName,
                         recordProcessorFactory,
+                        clientConfig,
                         streamConfig, INITIAL_POSITION_TRIM_HORIZON,
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,

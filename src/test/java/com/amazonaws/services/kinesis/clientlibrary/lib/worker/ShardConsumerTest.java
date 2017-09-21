@@ -35,6 +35,7 @@ import static org.mockito.Mockito.when;
 import java.io.File;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.ListIterator;
@@ -45,6 +46,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Description;
@@ -97,6 +99,10 @@ public class ShardConsumerTest {
     @Mock
     private IRecordProcessor processor;
     @Mock
+    private KinesisClientLibConfiguration config;
+    @Mock
+    private RecordsFetcherFactory recordsFetcherFactory;
+    @Mock
     private IKinesisProxy streamProxy;
     @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
@@ -104,7 +110,6 @@ public class ShardConsumerTest {
     private ICheckpoint checkpoint;
     @Mock
     private ShutdownNotification shutdownNotification;
-
     /**
      * Test method to verify consumer stays in INITIALIZING state when InitializationTask fails.
      */
@@ -129,6 +134,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
+                        config,
                         null,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
@@ -177,6 +183,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
+                        config,
                         null,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
@@ -205,6 +212,7 @@ public class ShardConsumerTest {
     @SuppressWarnings("unchecked")
     @Test
     public final void testRecordProcessorThrowable() throws Exception {
+        when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
         ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null, ExtendedSequenceNumber.TRIM_HORIZON);
         StreamConfig streamConfig =
                 new StreamConfig(streamProxy,
@@ -218,6 +226,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
+                        config,
                         null,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
@@ -297,7 +306,7 @@ public class ShardConsumerTest {
         ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
         checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.TRIM_HORIZON, testConcurrencyToken);
         when(leaseManager.getLease(anyString())).thenReturn(null);
-
+        when(config.getRecordsFetcherFactory()).thenReturn(new SimpleRecordsFetcherFactory(maxRecords));
         TestStreamlet processor = new TestStreamlet();
 
         StreamConfig streamConfig =
@@ -313,6 +322,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
+                        config,
                         leaseManager,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
@@ -399,7 +409,7 @@ public class ShardConsumerTest {
         ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
         checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.AT_TIMESTAMP, testConcurrencyToken);
         when(leaseManager.getLease(anyString())).thenReturn(null);
-
+        when(config.getRecordsFetcherFactory()).thenReturn(new SimpleRecordsFetcherFactory(2));
         TestStreamlet processor = new TestStreamlet();
 
         StreamConfig streamConfig =
@@ -416,6 +426,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
+                        config,
                         leaseManager,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
@@ -478,6 +489,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
+                        config,
                         null,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
@@ -489,6 +501,7 @@ public class ShardConsumerTest {
         final ExtendedSequenceNumber checkpointSequenceNumber = new ExtendedSequenceNumber("123");
         final ExtendedSequenceNumber pendingCheckpointSequenceNumber = new ExtendedSequenceNumber("999");
         when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(config.getRecordsFetcherFactory()).thenReturn(new SimpleRecordsFetcherFactory(2));
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(
                 new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));
 

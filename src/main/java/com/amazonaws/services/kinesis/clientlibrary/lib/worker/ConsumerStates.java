@@ -14,8 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.util.Optional;
-
 /**
  * Top level container for all the possible states a {@link ShardConsumer} can be in. The logic for creation of tasks,
  * and state transitions is contained within the {@link ConsumerState} objects.
@@ -310,9 +308,10 @@ class ConsumerStates {
         @Override
         public ITask createTask(ShardConsumer consumer) {
             return new ProcessTask(consumer.getShardInfo(), consumer.getStreamConfig(), consumer.getRecordProcessor(),
-                    consumer.getRecordProcessorCheckpointer(), consumer.getDataFetcher(),
-                    consumer.getTaskBackoffTimeMillis(), consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist(),
-                    consumer.getRetryGetRecordsInSeconds(), consumer.getMaxGetRecordsThreadPool());
+                    consumer.getConfig().getRecordsFetcherFactory(), consumer.getRecordProcessorCheckpointer(),
+                    consumer.getDataFetcher(), consumer.getTaskBackoffTimeMillis(),
+                    consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist(), consumer.getRetryGetRecordsInSeconds(),
+                    consumer.getMaxGetRecordsThreadPool());
         }
 
         @Override
