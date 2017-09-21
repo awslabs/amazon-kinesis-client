@@ -29,6 +29,21 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
 ## Release Notes
+### Release 1.8.2 (September 20, 2017)
+* Add support for two phase checkpoints  
+  Applications can now set a pending checkpoint, before completing the checkpoint operation. Once the application has completed its checkpoint steps, the final checkpoint will clear the pending checkpoint.  
+  Should the checkpoint fail the attempted sequence number is provided in the [`InitializationInput#getPendingCheckpointSequenceNumber`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/types/InitializationInput.java#L81) otherwise the value will be null.
+  * [PR #188](https://github.com/awslabs/amazon-kinesis-client/pull/188)
+* Support timeouts, and retry for GetRecords calls.  
+  Applications can now set timeouts for GetRecord calls to Kinesis.  As part of setting the timeout, the application must also provide a thread pool size for concurrent requests.
+  * [PR #214](https://github.com/awslabs/amazon-kinesis-client/pulls/214)
+* Notification when the lease table is throttled  
+  When writes, or reads, to the lease table are throttled a warning will be emitted.  If you're seeing this warning you should increase the IOPs for your lease table to prevent processing delays.
+  * [PR #212](https://github.com/awslabs/amazon-kinesis-client/pulls/212)
+* Support configuring the graceful shutdown timeout for MultiLang Clients  
+  This adds support for setting the timeout that the Java process will wait for the MutliLang client to complete graceful shutdown.  The timeout can be configured by adding `shutdownGraceMillis` to the properties file set to the number of milliseconds to wait.
+  * [PR #204](https://github.com/awslabs/amazon-kinesis-client/pull/204)
+
 ### Release 1.8.1 (August 2, 2017)
 * Support timeouts for calls to the MultiLang Daemon
   This adds support for setting a timeout when dispatching records to the client record processor. If the record processor doesn't respond within the timeout the parent Java process will be terminated. This is a temporary fix to handle cases where the KCL becomes blocked while waiting for a client record processor.
