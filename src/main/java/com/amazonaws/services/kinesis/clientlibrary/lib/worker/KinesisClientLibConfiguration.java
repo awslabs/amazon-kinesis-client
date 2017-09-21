@@ -569,7 +569,7 @@ public class KinesisClientLibConfiguration {
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = recordsFetcherFactory;
         this.shutdownGraceMillis = shutdownGraceMillis;
-
+        this.shutdownGraceMillis = shutdownGraceMillis;
     }
 
     // Check if value is positive, otherwise throw an exception
