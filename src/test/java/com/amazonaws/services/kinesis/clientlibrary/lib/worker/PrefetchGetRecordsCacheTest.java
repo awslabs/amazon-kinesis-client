@@ -98,6 +98,7 @@ public class PrefetchGetRecordsCacheTest {
         records.add(record);
         records.add(record);
 
+        getRecordsCache.start();
         ProcessRecordsInput result = getRecordsCache.getNextResult();
 
         assertEquals(result.getRecords(), records);
@@ -158,6 +159,7 @@ public class PrefetchGetRecordsCacheTest {
 
         IntStream.range(0, recordsSize).forEach(i -> records.add(record));
 
+        getRecordsCache.start();
         ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult();
 
         verify(executorService).execute(any());
@@ -173,6 +175,12 @@ public class PrefetchGetRecordsCacheTest {
         assertNotEquals(processRecordsInput2.getTimeSpentInCache(), Duration.ZERO);
 
         assertTrue(spyQueue.size() <= MAX_SIZE);
+    }
+    
+    @Test(expected = IllegalStateException.class)
+    public void testGetNextRecordsWithoutStarting() {
+        verify(executorService, times(0)).execute(any());
+        getRecordsCache.getNextResult();
     }
 
     @After

@@ -29,7 +29,6 @@ import lombok.Getter;
  * ProcessRecordsInput processRecordsInput) processRecords} method.
  */
 public class ProcessRecordsInput {
-
     @Getter
     private Instant cacheEntryTime;
     @Getter

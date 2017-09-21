@@ -1,3 +1,18 @@
+/*
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
+ *
+ *  http://aws.amazon.com/asl/
+ *
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
+ */
+
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.time.Instant;
@@ -46,7 +61,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         this.executorService = executorService;
     }
 
-    void start() {
+    @Override
+    public void start() {
         if (!started) {
             log.info("Starting prefetching thread.");
             executorService.execute(new DefaultGetRecordsCacheDaemon());
@@ -57,12 +73,11 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     @Override
     public ProcessRecordsInput getNextResult() {
         if (!started) {
-            start();
+            throw new IllegalStateException("Threadpool in the cache was not started, make sure to call start on the cache");
         }
         ProcessRecordsInput result = null;
         try {
-            result = getRecordsResultQueue.take();
-            result.withCacheExitTime(Instant.now());
+            result = getRecordsResultQueue.take().withCacheExitTime(Instant.now());
             prefetchCounters.removed(result);
         } catch (InterruptedException e) {
             log.error("Interrupted while getting records from the cache", e);
@@ -83,7 +98,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                     log.warn("Prefetch thread was interrupted.");
                     break;
                 }
-                if (prefetchCounters.byteSize < maxByteSize && prefetchCounters.size < maxRecordsCount) {
+                if (prefetchCounters.shouldGetNewRecords()) {
                     try {
                         GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
                         ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
@@ -93,7 +108,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                         getRecordsResultQueue.put(processRecordsInput);
                         prefetchCounters.added(processRecordsInput);
                     } catch (InterruptedException e) {
-                        log.error("Interrupted while adding records to the cache", e);
+                        log.info("Thread was interrupted, indicating shutdown was called on the cache", e);
                     }
                 }
             }
@@ -120,6 +135,10 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
 
         private long getByteSize(final ProcessRecordsInput result) {
             return result.getRecords().stream().mapToLong(record -> record.getData().array().length).sum();
+        }
+        
+        public boolean shouldGetNewRecords() {
+            return size < maxRecordsCount && byteSize < maxByteSize;
         }
     }
 
