@@ -1,8 +1,25 @@
+/*
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
+ *
+ *  http://aws.amazon.com/asl/
+ *
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
+ */
+
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
 import lombok.NonNull;
@@ -18,20 +35,20 @@ import lombok.extern.apachecommons.CommonsLog;
  */
 @CommonsLog
 public class PrefetchGetRecordsCache implements GetRecordsCache {
-    private LinkedBlockingQueue<GetRecordsResult> getRecordsResultQueue;
+    LinkedBlockingQueue<ProcessRecordsInput> getRecordsResultQueue;
     private int maxSize;
     private int maxByteSize;
     private int maxRecordsCount;
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final ExecutorService executorService;
-    
+
     private PrefetchCounters prefetchCounters;
-    
+
     private boolean started = false;
 
     public PrefetchGetRecordsCache(final int maxSize, final int maxByteSize, final int maxRecordsCount,
-                                   final int maxRecordsPerCall, @NonNull final DataFetchingStrategy dataFetchingStrategy,
+                                   final int maxRecordsPerCall,
                                    @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
                                    @NonNull final ExecutorService executorService) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
@@ -40,11 +57,12 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         this.maxByteSize = maxByteSize;
         this.maxRecordsCount = maxRecordsCount;
         this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxSize);
-        prefetchCounters = new PrefetchCounters();
+        this.prefetchCounters = new PrefetchCounters();
         this.executorService = executorService;
     }
-    
-    private void start() {
+
+    @Override
+    public void start() {
         if (!started) {
             log.info("Starting prefetching thread.");
             executorService.execute(new DefaultGetRecordsCacheDaemon());
@@ -53,13 +71,13 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     }
 
     @Override
-    public GetRecordsResult getNextResult() {
+    public ProcessRecordsInput getNextResult() {
         if (!started) {
-            start();
+            throw new IllegalStateException("Threadpool in the cache was not started, make sure to call start on the cache");
         }
-        GetRecordsResult result = null;
+        ProcessRecordsInput result = null;
         try {
-            result = getRecordsResultQueue.take();
+            result = getRecordsResultQueue.take().withCacheExitTime(Instant.now());
             prefetchCounters.removed(result);
         } catch (InterruptedException e) {
             log.error("Interrupted while getting records from the cache", e);
@@ -69,47 +87,59 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
 
     @Override
     public void shutdown() {
-        executorService.shutdown();
+        executorService.shutdownNow();
     }
-    
+
     private class DefaultGetRecordsCacheDaemon implements Runnable {
         @Override
         public void run() {
             while (true) {
-                if (prefetchCounters.byteSize < maxByteSize && prefetchCounters.size < maxRecordsCount) {
+                if (Thread.interrupted()) {
+                    log.warn("Prefetch thread was interrupted.");
+                    break;
+                }
+                if (prefetchCounters.shouldGetNewRecords()) {
                     try {
                         GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
-                        getRecordsResultQueue.put(getRecordsResult);
-                        prefetchCounters.added(getRecordsResult);
+                        ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
+                                .withRecords(getRecordsResult.getRecords())
+                                .withMillisBehindLatest(getRecordsResult.getMillisBehindLatest())
+                                .withCacheEntryTime(Instant.now());
+                        getRecordsResultQueue.put(processRecordsInput);
+                        prefetchCounters.added(processRecordsInput);
                     } catch (InterruptedException e) {
-                        log.error("Interrupted while adding records to the cache", e);
+                        log.info("Thread was interrupted, indicating shutdown was called on the cache", e);
                     }
                 }
             }
         }
     }
-    
+
     private class PrefetchCounters {
-        private volatile long size = 0;
-        private volatile long byteSize = 0;
-        
-        public void added(final GetRecordsResult result) {
+        private long size = 0;
+        private long byteSize = 0;
+
+        public synchronized void added(final ProcessRecordsInput result) {
             size += getSize(result);
             byteSize += getByteSize(result);
         }
-        
-        public void removed(final GetRecordsResult result) {
+
+        public synchronized void removed(final ProcessRecordsInput result) {
             size -= getSize(result);
             byteSize -= getByteSize(result);
         }
-        
-        private long getSize(final GetRecordsResult result) {
+
+        private long getSize(final ProcessRecordsInput result) {
             return result.getRecords().size();
         }
-        
-        private long getByteSize(final GetRecordsResult result) {
+
+        private long getByteSize(final ProcessRecordsInput result) {
             return result.getRecords().stream().mapToLong(record -> record.getData().array().length).sum();
         }
+        
+        public synchronized boolean shouldGetNewRecords() {
+            return size < maxRecordsCount && byteSize < maxByteSize;
+        }
     }
-    
+
 }
