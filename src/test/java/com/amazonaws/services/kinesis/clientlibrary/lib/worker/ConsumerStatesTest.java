@@ -20,6 +20,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -57,6 +58,8 @@ public class ConsumerStatesTest {
     @Mock
     private IRecordProcessor recordProcessor;
     @Mock
+    private KinesisClientLibConfiguration config;
+    @Mock
     private RecordProcessorCheckpointer recordProcessorCheckpointer;
     @Mock
     private ExecutorService executorService;
@@ -76,6 +79,10 @@ public class ConsumerStatesTest {
     private IKinesisProxy kinesisProxy;
     @Mock
     private InitialPositionInStreamExtended initialPositionInStream;
+    @Mock
+    private RecordsFetcherFactory recordsFetcherFactory;
+    @Mock
+    private GetRecordsCache recordsFetcher;
 
     private long parentShardPollIntervalMillis = 0xCAFE;
     private boolean cleanupLeasesOfCompletedShards = true;
@@ -98,7 +105,8 @@ public class ConsumerStatesTest {
         when(consumer.isCleanupLeasesOfCompletedShards()).thenReturn(cleanupLeasesOfCompletedShards);
         when(consumer.getTaskBackoffTimeMillis()).thenReturn(taskBackoffTimeMillis);
         when(consumer.getShutdownReason()).thenReturn(reason);
-
+        when(consumer.getConfig()).thenReturn(config);
+        when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
     }
 
     private static final Class<ILeaseManager<KinesisClientLease>> LEASE_MANAGER_CLASS = (Class<ILeaseManager<KinesisClientLease>>) (Class<?>) ILeaseManager.class;
@@ -213,6 +221,37 @@ public class ConsumerStatesTest {
         assertThat(state.getState(), equalTo(ShardConsumerState.PROCESSING));
         assertThat(state.getTaskType(), equalTo(TaskType.PROCESS));
 
+    }
+
+    @Test
+    public void processingStateRecordsFetcher() {
+        when(consumer.getMaxGetRecordsThreadPool()).thenReturn(Optional.of(1));
+        when(consumer.getRetryGetRecordsInSeconds()).thenReturn(Optional.of(2));
+        when(recordsFetcherFactory.createRecordsFetcher((any()))).thenReturn(recordsFetcher);
+
+        ConsumerState state = ShardConsumerState.PROCESSING.getConsumerState();
+        ITask task = state.createTask(consumer);
+
+        assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
+        assertThat(task, procTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, procTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
+                equalTo(recordProcessorCheckpointer)));
+        assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
+        assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
+        assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
+        assertThat(task, procTask(GetRecordsCache.class, "recordsFetcher", equalTo(recordsFetcher)));
+
+        assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
+
+        assertThat(state.shutdownTransition(ShutdownReason.ZOMBIE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.TERMINATE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.REQUESTED),
+                equalTo(ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState()));
+
+        assertThat(state.getState(), equalTo(ShardConsumerState.PROCESSING));
+        assertThat(state.getTaskType(), equalTo(TaskType.PROCESS));
     }
 
     @Test

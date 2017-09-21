@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Optional;
 
+import com.sun.org.apache.regexp.internal.RE;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -62,6 +63,7 @@ class ProcessTask implements ITask {
     private final long backoffTimeMillis;
     private final Shard shard;
     private final ThrottlingReporter throttlingReporter;
+    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
     private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
                                                                   Optional<Integer> retryGetRecordsInSeconds,
@@ -81,6 +83,8 @@ class ProcessTask implements ITask {
      *            Stream configuration
      * @param recordProcessor
      *            Record processor used to process the data records for the shard
+     * @param recordsFetcherFactory
+     *            Record processor factory to create recordFetcher object
      * @param recordProcessorCheckpointer
      *            Passed to the RecordProcessor so it can checkpoint progress
      * @param dataFetcher
@@ -89,37 +93,11 @@ class ProcessTask implements ITask {
      *            backoff time when catching exceptions
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
+                       RecordsFetcherFactory recordsFetcherFactory,
                        RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
                        long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
-        this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty());
-    }
-
-    /**
-     * @param shardInfo
-     *            contains information about the shard
-     * @param streamConfig
-     *            Stream configuration
-     * @param recordProcessor
-     *            Record processor used to process the data records for the shard
-     * @param recordProcessorCheckpointer
-     *            Passed to the RecordProcessor so it can checkpoint progress
-     * @param dataFetcher
-     *            Kinesis data fetcher (used to fetch records from Kinesis)
-     * @param backoffTimeMillis
-     *            backoff time when catching exceptions
-     * @param retryGetRecordsInSeconds
-     *            time in seconds to wait before the worker retries to get a record.
-     * @param maxGetRecordsThreadPool
-     *            max number of threads in the getRecords thread pool.
-     */
-    public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
-                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool) {
-        this(shardInfo, streamConfig, recordProcessor, new SimpleRecordsFetcherFactory(streamConfig.getMaxRecords()),
-                recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist, retryGetRecordsInSeconds, maxGetRecordsThreadPool);
+        this(shardInfo, streamConfig, recordProcessor, recordsFetcherFactory, recordProcessorCheckpointer, dataFetcher,
+                backoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty());
     }
 
     /**
@@ -160,31 +138,6 @@ class ProcessTask implements ITask {
      *            Stream configuration
      * @param recordProcessor
      *            Record processor used to process the data records for the shard
-     * @param recordProcessorCheckpointer
-     *            Passed to the RecordProcessor so it can checkpoint progress
-     * @param dataFetcher
-     *            Kinesis data fetcher (used to fetch records from Kinesis)
-     * @param backoffTimeMillis
-     *            backoff time when catching exceptions
-     * @param throttlingReporter
-     *            determines how throttling events should be reported in the log.
-     */
-    public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
-                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
-        this(shardInfo, streamConfig, recordProcessor, new SimpleRecordsFetcherFactory(streamConfig.getMaxRecords()),
-             recordProcessorCheckpointer, dataFetcher, backoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
-             throttlingReporter, getRecordsRetrievalStrategy);
-    }
-
-    /**
-     * @param shardInfo
-     *            contains information about the shard
-     * @param streamConfig
-     *            Stream configuration
-     * @param recordProcessor
-     *            Record processor used to process the data records for the shard
      * @param recordsFetcherFactory
      *            RecordFetcher factory used to create recordFetcher object
      * @param recordProcessorCheckpointer
@@ -209,6 +162,7 @@ class ProcessTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
         this.throttlingReporter = throttlingReporter;
         IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
+        this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.recordsFetcher = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy);
         // If skipShardSyncAtWorkerInitializationIfLeasesExist is set, we will not get the shard for
         // this ProcessTask. In this case, duplicate KPL user records in the event of resharding will

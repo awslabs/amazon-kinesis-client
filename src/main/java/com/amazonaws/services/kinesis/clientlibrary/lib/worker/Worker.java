@@ -73,7 +73,7 @@ public class Worker implements Runnable {
 
     private final String applicationName;
     private final IRecordProcessorFactory recordProcessorFactory;
-    private final RecordsFetcherFactory recordsFetcherFactory;
+    private final KinesisClientLibConfiguration config;
     private final StreamConfig streamConfig;
     private final InitialPositionInStreamExtended initialPosition;
     private final ICheckpoint checkpointTracker;
@@ -246,7 +246,7 @@ public class Worker implements Runnable {
             KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
             IMetricsFactory metricsFactory, ExecutorService execService) {
         this(config.getApplicationName(), new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),
-                config.getRecordsFetcherFactory(),
+                config,
                 new StreamConfig(
                         new KinesisProxyFactory(config.getKinesisCredentialsProvider(), kinesisClient)
                                 .getProxy(config.getStreamName()),
@@ -308,6 +308,8 @@ public class Worker implements Runnable {
      *            Name of the Kinesis application
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
+     * @paran config
+     *            Kinesis Library configuration
      * @param streamConfig
      *            Stream configuration
      * @param initialPositionInStream
@@ -335,24 +337,25 @@ public class Worker implements Runnable {
      */
     // NOTE: This has package level access solely for testing
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
-    Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, StreamConfig streamConfig,
-            InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
+    Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, KinesisClientLibConfiguration config,
+           StreamConfig streamConfig, InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
             long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
             KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
             IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
-        this(applicationName, recordProcessorFactory, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
+        this(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
                 shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
                 metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
                 shardPrioritization, Optional.empty(), Optional.empty());
     }
 
-
     /**
      * @param applicationName
      *            Name of the Kinesis application
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
+     * @param config
+     *            Kinesis Library Configuration
      * @param streamConfig
      *            Stream configuration
      * @param initialPositionInStream
@@ -384,7 +387,7 @@ public class Worker implements Runnable {
      */
     // NOTE: This has package level access solely for testing
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
-    Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, StreamConfig streamConfig,
+    Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, KinesisClientLibConfiguration config, StreamConfig streamConfig,
            InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
            long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
            KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
@@ -393,75 +396,7 @@ public class Worker implements Runnable {
            Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
-        this.recordsFetcherFactory = new SimpleRecordsFetcherFactory(streamConfig.getMaxRecords());
-        this.streamConfig = streamConfig;
-        this.initialPosition = initialPositionInStream;
-        this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
-        this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
-        this.checkpointTracker = checkpoint != null ? checkpoint : leaseCoordinator;
-        this.idleTimeInMilliseconds = streamConfig.getIdleTimeInMilliseconds();
-        this.executorService = execService;
-        this.leaseCoordinator = leaseCoordinator;
-        this.metricsFactory = metricsFactory;
-        this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
-                initialPositionInStream, cleanupLeasesUponShardCompletion, shardSyncIdleTimeMillis, metricsFactory,
-                executorService);
-        this.taskBackoffTimeMillis = taskBackoffTimeMillis;
-        this.failoverTimeMillis = failoverTimeMillis;
-        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
-        this.shardPrioritization = shardPrioritization;
-        this.retryGetRecordsInSeconds = retryGetRecordsInSeconds;
-        this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
-    }
-
-    /**
-     * @param applicationName
-     *            Name of the Kinesis application
-     * @param recordProcessorFactory
-     *            Used to get record processor instances for processing data from shards
-     * @param recordsFetcherFactory
-     *            Used to get record fetcher instances for fetching record from shards
-     * @param streamConfig
-     *            Stream configuration
-     * @param initialPositionInStream
-     *            One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. The KinesisClientLibrary will start fetching data from
-     *            this location in the stream when an application starts up for the first time and there are no
-     *            checkpoints. If there are checkpoints, we start from the checkpoint position.
-     * @param parentShardPollIntervalMillis
-     *            Wait for this long between polls to check if parent shards are done
-     * @param shardSyncIdleTimeMillis
-     *            Time between tasks to sync leases and Kinesis shards
-     * @param cleanupLeasesUponShardCompletion
-     *            Clean up shards we've finished processing (don't wait till they expire in Kinesis)
-     * @param checkpoint
-     *            Used to get/set checkpoints
-     * @param leaseCoordinator
-     *            Lease coordinator (coordinates currently owned leases)
-     * @param execService
-     *            ExecutorService to use for processing records (support for multi-threaded consumption)
-     * @param metricsFactory
-     *            Metrics factory used to emit metrics
-     * @param taskBackoffTimeMillis
-     *            Backoff period when tasks encounter an exception
-     * @param shardPrioritization
-     *            Provides prioritization logic to decide which available shards process first
-     * @param retryGetRecordsInSeconds
-     *            Time in seconds to wait before the worker retries to get a record.
-     * @param maxGetRecordsThreadPool
-     *            Max number of threads in the getRecords thread pool.
-     */
-    // NOTE: This has package level access solely for testing
-    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
-    Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, RecordsFetcherFactory recordsFetcherFactory, StreamConfig streamConfig,
-           InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
-           long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
-           KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
-           IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
-           boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
-           Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool) {
-        this.applicationName = applicationName;
-        this.recordProcessorFactory = recordProcessorFactory;
-        this.recordsFetcherFactory = recordsFetcherFactory;
+        this.config = config;
         this.streamConfig = streamConfig;
         this.initialPosition = initialPositionInStream;
         this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
@@ -912,7 +847,7 @@ public class Worker implements Runnable {
     protected ShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
         IRecordProcessor recordProcessor = processorFactory.createProcessor();
 
-        return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor, recordsFetcherFactory,
+        return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor, config,
                 leaseCoordinator.getLeaseManager(), parentShardPollIntervalMillis, cleanupLeasesUponShardCompletion,
                 executorService, metricsFactory, taskBackoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist, retryGetRecordsInSeconds, maxGetRecordsThreadPool);
@@ -1315,7 +1250,7 @@ public class Worker implements Runnable {
 
             return new Worker(config.getApplicationName(),
                     recordProcessorFactory,
-                    config.getRecordsFetcherFactory(),
+                    config,
                     new StreamConfig(new KinesisProxyFactory(config.getKinesisCredentialsProvider(),
                             kinesisClient).getProxy(config.getStreamName()),
                             config.getMaxRecords(),
