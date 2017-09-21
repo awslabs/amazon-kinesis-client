@@ -46,7 +46,7 @@ public class BlockingGetRecordsCacheTest {
     @Mock
     private GetRecordsResult getRecordsResult;
     
-    private List<Record> records = new ArrayList<>();
+    private List<Record> records;
     private BlockingGetRecordsCache blockingGetRecordsCache;
 
     @Before
@@ -54,6 +54,7 @@ public class BlockingGetRecordsCacheTest {
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_COUNT))).thenReturn(getRecordsResult);
         when(getRecordsResult.getRecords()).thenReturn(records);
 
+        records = new ArrayList<>();
         blockingGetRecordsCache = new BlockingGetRecordsCache(MAX_RECORDS_PER_COUNT, getRecordsRetrievalStrategy);
     }
 
