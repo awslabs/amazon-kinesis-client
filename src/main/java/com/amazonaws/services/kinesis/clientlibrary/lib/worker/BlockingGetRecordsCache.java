@@ -1,5 +1,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
 import lombok.extern.apachecommons.CommonsLog;
@@ -17,10 +18,14 @@ public class BlockingGetRecordsCache implements GetRecordsCache {
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
     }
-    
+
     @Override
-    public GetRecordsResult getNextResult() {
-        return getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
+    public ProcessRecordsInput getNextResult() {
+        GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
+        ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
+                .withRecords(getRecordsResult.getRecords())
+                .withMillisBehindLatest(getRecordsResult.getMillisBehindLatest());
+        return processRecordsInput;
     }
 
     @Override

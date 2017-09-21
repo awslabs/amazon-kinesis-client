@@ -27,10 +27,6 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.model.GetRecordsResult;
-import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
-import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
@@ -39,6 +35,10 @@ import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
+import com.amazonaws.services.kinesis.model.Record;
+import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
+import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
 /**
  * Unit tests for KinesisDataFetcher.
@@ -188,6 +188,23 @@ public class KinesisDataFetcherTest {
 
         // Test shard has reached the end
         Assert.assertTrue("Shard should reach the end", dataFetcher.isShardEndReached());
+    }
+    
+    @Test
+    public void testNonNullGetRecords() {
+        String nextIterator = "TestIterator";
+        int maxRecords = 100;
+        
+        KinesisProxy mockProxy = mock(KinesisProxy.class);
+        doThrow(new ResourceNotFoundException("Test Exception")).when(mockProxy).get(nextIterator, maxRecords);
+
+        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO);
+        dataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
+        
+        GetRecordsResult getRecordsResult = dataFetcher.getRecords(maxRecords);
+        
+        Assert.assertNotNull(getRecordsResult);
+        Assert.assertTrue(getRecordsResult.getRecords().isEmpty());
     }
 
     private void testInitializeAndFetch(String iteratorType,

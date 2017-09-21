@@ -1,8 +1,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.model.GetRecordsResult;
-
-import java.util.Collections;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 
 /**
  * This class is used as a cache for Prefetching data from Kinesis.
@@ -14,7 +12,7 @@ public interface GetRecordsCache {
      * 
      * @return The next set of records.
      */
-    GetRecordsResult getNextResult();
+    ProcessRecordsInput getNextResult();
     
     void shutdown();
 }
