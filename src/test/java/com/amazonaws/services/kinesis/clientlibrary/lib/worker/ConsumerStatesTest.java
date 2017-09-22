@@ -17,17 +17,14 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ConsumerState;
 import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ShardConsumerState;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
-import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
@@ -80,9 +77,7 @@ public class ConsumerStatesTest {
     @Mock
     private InitialPositionInStreamExtended initialPositionInStream;
     @Mock
-    private RecordsFetcherFactory recordsFetcherFactory;
-    @Mock
-    private GetRecordsCache recordsFetcher;
+    private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
     private long parentShardPollIntervalMillis = 0xCAFE;
     private boolean cleanupLeasesOfCompletedShards = true;
@@ -105,8 +100,7 @@ public class ConsumerStatesTest {
         when(consumer.isCleanupLeasesOfCompletedShards()).thenReturn(cleanupLeasesOfCompletedShards);
         when(consumer.getTaskBackoffTimeMillis()).thenReturn(taskBackoffTimeMillis);
         when(consumer.getShutdownReason()).thenReturn(reason);
-        when(consumer.getConfig()).thenReturn(config);
-        when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
+        when(consumer.getGetRecordsRetrievalStrategy()).thenReturn(getRecordsRetrievalStrategy);
     }
 
     private static final Class<ILeaseManager<KinesisClientLease>> LEASE_MANAGER_CLASS = (Class<ILeaseManager<KinesisClientLease>>) (Class<?>) ILeaseManager.class;
@@ -163,9 +157,6 @@ public class ConsumerStatesTest {
 
     @Test
     public void processingStateTestSynchronous() {
-        when(consumer.getMaxGetRecordsThreadPool()).thenReturn(Optional.empty());
-        when(consumer.getRetryGetRecordsInSeconds()).thenReturn(Optional.empty());
-
         ConsumerState state = ShardConsumerState.PROCESSING.getConsumerState();
         ITask task = state.createTask(consumer);
 
@@ -176,7 +167,6 @@ public class ConsumerStatesTest {
         assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
         assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
         assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
-        assertThat(task, procTask(GetRecordsRetrievalStrategy.class, "getRecordsRetrievalStrategy", instanceOf(SynchronousGetRecordsRetrievalStrategy.class) ));
 
         assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
 
@@ -194,9 +184,6 @@ public class ConsumerStatesTest {
 
     @Test
     public void processingStateTestAsynchronous() {
-        when(consumer.getMaxGetRecordsThreadPool()).thenReturn(Optional.of(1));
-        when(consumer.getRetryGetRecordsInSeconds()).thenReturn(Optional.of(2));
-
         ConsumerState state = ShardConsumerState.PROCESSING.getConsumerState();
         ITask task = state.createTask(consumer);
 
@@ -207,7 +194,6 @@ public class ConsumerStatesTest {
         assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
         assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
         assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
-        assertThat(task, procTask(GetRecordsRetrievalStrategy.class, "getRecordsRetrievalStrategy", instanceOf(AsynchronousGetRecordsRetrievalStrategy.class) ));
 
         assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
 
@@ -225,9 +211,6 @@ public class ConsumerStatesTest {
 
     @Test
     public void processingStateRecordsFetcher() {
-        when(consumer.getMaxGetRecordsThreadPool()).thenReturn(Optional.of(1));
-        when(consumer.getRetryGetRecordsInSeconds()).thenReturn(Optional.of(2));
-        when(recordsFetcherFactory.createRecordsFetcher((any()))).thenReturn(recordsFetcher);
 
         ConsumerState state = ShardConsumerState.PROCESSING.getConsumerState();
         ITask task = state.createTask(consumer);
@@ -239,7 +222,6 @@ public class ConsumerStatesTest {
         assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
         assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
         assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
-        assertThat(task, procTask(GetRecordsCache.class, "recordsFetcher", equalTo(recordsFetcher)));
 
         assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
 

@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.math.BigInteger;
+import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Optional;
@@ -33,6 +34,7 @@ import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.Shard;
@@ -53,7 +55,6 @@ class ProcessTask implements ITask {
 
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
-    private final GetRecordsCache getRecordsCache;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final KinesisDataFetcher dataFetcher;
     private final TaskType taskType = TaskType.PROCESS;
@@ -62,16 +63,7 @@ class ProcessTask implements ITask {
     private final Shard shard;
     private final ThrottlingReporter throttlingReporter;
 
-    private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
-                                                                  Optional<Integer> retryGetRecordsInSeconds,
-                                                                  Optional<Integer> maxGetRecordsThreadPool,
-                                                                  ShardInfo shardInfo) {
-        Optional<GetRecordsRetrievalStrategy> getRecordsRetrievalStrategy = retryGetRecordsInSeconds.flatMap(retry ->
-                maxGetRecordsThreadPool.map(max ->
-                        new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, retry, max, shardInfo.getShardId())));
-
-        return getRecordsRetrievalStrategy.orElse(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
-    }
+    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
     /**
      * @param shardInfo
@@ -86,17 +78,17 @@ class ProcessTask implements ITask {
      *            Kinesis data fetcher (used to fetch records from Kinesis)
      * @param backoffTimeMillis
      *            backoff time when catching exceptions
-     * @param getRecordsCache
-     *            Record processor factory to create recordFetcher object
+     * @param getRecordsRetrievalStrategy
+     *            The retrieval strategy for fetching records from kinesis
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-                       RecordProcessorCheckpointer recordProcessorCheckpointer,
-                       KinesisDataFetcher dataFetcher, long backoffTimeMillis,
-                       boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       GetRecordsCache getRecordsCache) {
-        this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher,
-                backoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()), getRecordsCache);
+                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
+                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                       GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+        this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist,
+                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()),
+                getRecordsRetrievalStrategy);
     }
 
     /**
@@ -106,8 +98,6 @@ class ProcessTask implements ITask {
      *            Stream configuration
      * @param recordProcessor
      *            Record processor used to process the data records for the shard
-     * @param getRecordsCache
-     *            RecordFetcher factory used to create recordFetcher object
      * @param recordProcessorCheckpointer
      *            Passed to the RecordProcessor so it can checkpoint progress
      * @param dataFetcher
@@ -118,9 +108,9 @@ class ProcessTask implements ITask {
      *            determines how throttling events should be reported in the log.
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-                       RecordProcessorCheckpointer recordProcessorCheckpointer,
-                       KinesisDataFetcher dataFetcher, long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       ThrottlingReporter throttlingReporter, GetRecordsCache getRecordsCache) {
+                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
+                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                       ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         super();
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -130,7 +120,7 @@ class ProcessTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
         this.throttlingReporter = throttlingReporter;
         IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
-        this.getRecordsCache = getRecordsCache;
+        this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         // If skipShardSyncAtWorkerInitializationIfLeasesExist is set, we will not get the shard for
         // this ProcessTask. In this case, duplicate KPL user records in the event of resharding will
         // not be dropped during deaggregation of Amazon Kinesis records. This is only applicable if
@@ -168,10 +158,10 @@ class ProcessTask implements ITask {
                 return new TaskResult(null, true);
             }
 
-            final ProcessRecordsInput processRecordsInput = getRecordsResult();
+            final GetRecordsResult getRecordsResult = getRecordsResult();
             throttlingReporter.success();
-            List<Record> records = processRecordsInput.getRecords();
-            
+            List<Record> records = getRecordsResult.getRecords();
+
             if (!records.isEmpty()) {
                 scope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.Count, MetricsLevel.SUMMARY);
             } else {
@@ -185,7 +175,7 @@ class ProcessTask implements ITask {
                             recordProcessorCheckpointer.getLargestPermittedCheckpointValue()));
 
             if (shouldCallProcessRecords(records)) {
-                callProcessRecords(processRecordsInput);
+                callProcessRecords(getRecordsResult, records);
             }
         } catch (ProvisionedThroughputExceededException pte) {
             throttlingReporter.throttled();
@@ -215,15 +205,18 @@ class ProcessTask implements ITask {
 
     /**
      * Dispatches a batch of records to the record processor, and handles any fallout from that.
-     * 
-     * @param processRecordsInput
-     *            the ProcessRecordsInput result of the last call to Kinesis
+     *
+     * @param getRecordsResult
+     *            the result of the last call to Kinesis
+     * @param records
+     *            the records to be dispatched. It's possible the records have been adjusted by KPL deaggregation.
      */
-    private void callProcessRecords(ProcessRecordsInput processRecordsInput) {
-        List<Record> records = processRecordsInput.getRecords();
+    private void callProcessRecords(GetRecordsResult getRecordsResult, List<Record> records) {
         LOG.debug("Calling application processRecords() with " + records.size() + " records from "
                 + shardInfo.getShardId());
-        processRecordsInput.withCheckpointer(recordProcessorCheckpointer);
+        final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput().withRecords(records)
+                .withCheckpointer(recordProcessorCheckpointer)
+                .withMillisBehindLatest(getRecordsResult.getMillisBehindLatest());
 
         final long recordProcessorStartTimeMillis = System.currentTimeMillis();
         try {
@@ -240,7 +233,7 @@ class ProcessTask implements ITask {
 
     /**
      * Whether we should call process records or not
-     * 
+     *
      * @param records
      *            the records returned from the call to Kinesis, and/or deaggregation
      * @return true if the set of records should be dispatched to the record process, false if they should not.
@@ -251,7 +244,7 @@ class ProcessTask implements ITask {
 
     /**
      * Determines whether to deaggregate the given records, and if they are KPL records dispatches them to deaggregation
-     * 
+     *
      * @param records
      *            the records to deaggregate is deaggregation is required.
      * @return returns either the deaggregated records, or the original records
@@ -274,7 +267,7 @@ class ProcessTask implements ITask {
 
     /**
      * Emits metrics, and sleeps if there are no records available
-     * 
+     *
      * @param startTimeMillis
      *            the time when the task started
      */
@@ -311,8 +304,8 @@ class ProcessTask implements ITask {
      * @return the largest extended sequence number among the retained records
      */
     private ExtendedSequenceNumber filterAndGetMaxExtendedSequenceNumber(IMetricsScope scope, List<Record> records,
-            final ExtendedSequenceNumber lastCheckpointValue,
-            final ExtendedSequenceNumber lastLargestPermittedCheckpointValue) {
+                                                                         final ExtendedSequenceNumber lastCheckpointValue,
+                                                                         final ExtendedSequenceNumber lastLargestPermittedCheckpointValue) {
         ExtendedSequenceNumber largestExtendedSequenceNumber = lastLargestPermittedCheckpointValue;
         ListIterator<Record> recordIterator = records.listIterator();
         while (recordIterator.hasNext()) {
@@ -346,7 +339,7 @@ class ProcessTask implements ITask {
      *
      * @return list of data records from Kinesis
      */
-    private ProcessRecordsInput getRecordsResult() {
+    private GetRecordsResult getRecordsResult() {
         try {
             return getRecordsResultAndRecordMillisBehindLatest();
         } catch (ExpiredIteratorException e) {
@@ -382,17 +375,22 @@ class ProcessTask implements ITask {
      *
      * @return list of data records from Kinesis
      */
-    private ProcessRecordsInput getRecordsResultAndRecordMillisBehindLatest() {
-        final ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult();
+    private GetRecordsResult getRecordsResultAndRecordMillisBehindLatest() {
+        final GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(streamConfig.getMaxRecords());
 
-        if (processRecordsInput.getMillisBehindLatest() != null) {
+        if (getRecordsResult == null) {
+            // Stream no longer exists
+            return new GetRecordsResult().withRecords(Collections.<Record>emptyList());
+        }
+
+        if (getRecordsResult.getMillisBehindLatest() != null) {
             MetricsHelper.getMetricsScope().addData(MILLIS_BEHIND_LATEST_METRIC,
-                    processRecordsInput.getMillisBehindLatest(),
+                    getRecordsResult.getMillisBehindLatest(),
                     StandardUnit.Milliseconds,
                     MetricsLevel.SUMMARY);
         }
 
-        return processRecordsInput;
+        return getRecordsResult;
     }
 
 }

@@ -56,16 +56,13 @@ class ShardConsumer {
     private final boolean cleanupLeasesOfCompletedShards;
     private final long taskBackoffTimeMillis;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
-    @Getter
-    private final Optional<Integer> retryGetRecordsInSeconds;
-    @Getter
-    private final Optional<Integer> maxGetRecordsThreadPool;
 
     private ITask currentTask;
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
     @Getter
-    private final GetRecordsCache getRecordsCache;
+    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+
 
     private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
                                                                   Optional<Integer> retryGetRecordsInSeconds,
@@ -168,11 +165,7 @@ class ShardConsumer {
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.taskBackoffTimeMillis = backoffTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
-        this.retryGetRecordsInSeconds = retryGetRecordsInSeconds;
-        this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
-        this.getRecordsCache = config.getRecordsFetcherFactory().createRecordsFetcher(
-                makeStrategy(this.dataFetcher, this.retryGetRecordsInSeconds,
-                this.maxGetRecordsThreadPool, this.shardInfo));
+        this.getRecordsRetrievalStrategy = makeStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, shardInfo);
     }
 
     /**
