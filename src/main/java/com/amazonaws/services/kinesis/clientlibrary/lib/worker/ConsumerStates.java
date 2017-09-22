@@ -312,7 +312,7 @@ class ConsumerStates {
             return new ProcessTask(consumer.getShardInfo(), consumer.getStreamConfig(), consumer.getRecordProcessor(),
                     consumer.getRecordProcessorCheckpointer(), consumer.getDataFetcher(),
                     consumer.getTaskBackoffTimeMillis(), consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist(),
-                    consumer.getRetryGetRecordsInSeconds(), consumer.getMaxGetRecordsThreadPool());
+                    consumer.getGetRecordsRetrievalStrategy());
         }
 
         @Override
@@ -516,7 +516,8 @@ class ConsumerStates {
                     consumer.getStreamConfig().getStreamProxy(),
                     consumer.getStreamConfig().getInitialPositionInStream(),
                     consumer.isCleanupLeasesOfCompletedShards(), consumer.getLeaseManager(),
-                    consumer.getTaskBackoffTimeMillis());
+                    consumer.getTaskBackoffTimeMillis(),
+                    consumer.getGetRecordsRetrievalStrategy());
         }
 
         @Override
