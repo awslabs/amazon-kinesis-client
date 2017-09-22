@@ -36,10 +36,10 @@ To make it easier for developers to write record processors in other languages, 
   * [PR #188](https://github.com/awslabs/amazon-kinesis-client/pull/188)
 * Support timeouts, and retry for GetRecords calls.  
   Applications can now set timeouts for GetRecord calls to Kinesis.  As part of setting the timeout, the application must also provide a thread pool size for concurrent requests.
-  * [PR #214](https://github.com/awslabs/amazon-kinesis-client/pulls/214)
+  * [PR #214](https://github.com/awslabs/amazon-kinesis-client/pull/214)
 * Notification when the lease table is throttled  
   When writes, or reads, to the lease table are throttled a warning will be emitted.  If you're seeing this warning you should increase the IOPs for your lease table to prevent processing delays.
-  * [PR #212](https://github.com/awslabs/amazon-kinesis-client/pulls/212)
+  * [PR #212](https://github.com/awslabs/amazon-kinesis-client/pull/212)
 * Support configuring the graceful shutdown timeout for MultiLang Clients  
   This adds support for setting the timeout that the Java process will wait for the MutliLang client to complete graceful shutdown.  The timeout can be configured by adding `shutdownGraceMillis` to the properties file set to the number of milliseconds to wait.
   * [PR #204](https://github.com/awslabs/amazon-kinesis-client/pull/204)

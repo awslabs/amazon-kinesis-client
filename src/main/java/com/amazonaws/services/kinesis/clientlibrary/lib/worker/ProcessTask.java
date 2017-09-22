@@ -65,17 +65,6 @@ class ProcessTask implements ITask {
 
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
-    private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
-                                                                  Optional<Integer> retryGetRecordsInSeconds,
-                                                                  Optional<Integer> maxGetRecordsThreadPool,
-                                                                  ShardInfo shardInfo) {
-        Optional<GetRecordsRetrievalStrategy> getRecordsRetrievalStrategy = retryGetRecordsInSeconds.flatMap(retry ->
-                maxGetRecordsThreadPool.map(max ->
-                        new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, retry, max, shardInfo.getShardId())));
-
-        return getRecordsRetrievalStrategy.orElse(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
-    }
-
     /**
      * @param shardInfo
      *            contains information about the shard
@@ -89,40 +78,17 @@ class ProcessTask implements ITask {
      *            Kinesis data fetcher (used to fetch records from Kinesis)
      * @param backoffTimeMillis
      *            backoff time when catching exceptions
-     */
-    public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
-                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
-        this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty());
-    }
-
-    /**
-     * @param shardInfo
-     *            contains information about the shard
-     * @param streamConfig
-     *            Stream configuration
-     * @param recordProcessor
-     *            Record processor used to process the data records for the shard
-     * @param recordProcessorCheckpointer
-     *            Passed to the RecordProcessor so it can checkpoint progress
-     * @param dataFetcher
-     *            Kinesis data fetcher (used to fetch records from Kinesis)
-     * @param backoffTimeMillis
-     *            backoff time when catching exceptions
-     * @param retryGetRecordsInSeconds
-     *            time in seconds to wait before the worker retries to get a record.
-     * @param maxGetRecordsThreadPool
-     *            max number of threads in the getRecords thread pool.
+     * @param getRecordsRetrievalStrategy
+     *            The retrieval strategy for fetching records from kinesis
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
                        RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
                        long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool) {
+                       GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
                 new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()),
-                makeStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, shardInfo));
+                getRecordsRetrievalStrategy);
     }
 
     /**

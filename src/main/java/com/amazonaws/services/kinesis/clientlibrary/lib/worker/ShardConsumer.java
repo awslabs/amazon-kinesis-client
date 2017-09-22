@@ -55,14 +55,24 @@ class ShardConsumer {
     private final boolean cleanupLeasesOfCompletedShards;
     private final long taskBackoffTimeMillis;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
-    @Getter
-    private final Optional<Integer> retryGetRecordsInSeconds;
-    @Getter
-    private final Optional<Integer> maxGetRecordsThreadPool;
 
     private ITask currentTask;
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
+    
+    @Getter
+    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+
+    private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
+                                                                  Optional<Integer> retryGetRecordsInSeconds,
+                                                                  Optional<Integer> maxGetRecordsThreadPool,
+                                                                  ShardInfo shardInfo) {
+        Optional<GetRecordsRetrievalStrategy> getRecordsRetrievalStrategy = retryGetRecordsInSeconds.flatMap(retry ->
+                maxGetRecordsThreadPool.map(max ->
+                        new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, retry, max, shardInfo.getShardId())));
+
+        return getRecordsRetrievalStrategy.orElse(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
+    }
 
     /*
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
@@ -149,8 +159,7 @@ class ShardConsumer {
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.taskBackoffTimeMillis = backoffTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
-        this.retryGetRecordsInSeconds = retryGetRecordsInSeconds;
-        this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
+        this.getRecordsRetrievalStrategy = makeStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, shardInfo);
     }
 
     /**
