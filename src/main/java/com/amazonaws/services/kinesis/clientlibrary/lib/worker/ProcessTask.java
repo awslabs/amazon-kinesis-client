@@ -108,9 +108,9 @@ class ProcessTask implements ITask {
      *            determines how throttling events should be reported in the log.
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-            RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
-            long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-            ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
+                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                       ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         super();
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -161,7 +161,7 @@ class ProcessTask implements ITask {
             final GetRecordsResult getRecordsResult = getRecordsResult();
             throttlingReporter.success();
             List<Record> records = getRecordsResult.getRecords();
-            
+
             if (!records.isEmpty()) {
                 scope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.Count, MetricsLevel.SUMMARY);
             } else {
@@ -205,7 +205,7 @@ class ProcessTask implements ITask {
 
     /**
      * Dispatches a batch of records to the record processor, and handles any fallout from that.
-     * 
+     *
      * @param getRecordsResult
      *            the result of the last call to Kinesis
      * @param records
@@ -233,7 +233,7 @@ class ProcessTask implements ITask {
 
     /**
      * Whether we should call process records or not
-     * 
+     *
      * @param records
      *            the records returned from the call to Kinesis, and/or deaggregation
      * @return true if the set of records should be dispatched to the record process, false if they should not.
@@ -244,7 +244,7 @@ class ProcessTask implements ITask {
 
     /**
      * Determines whether to deaggregate the given records, and if they are KPL records dispatches them to deaggregation
-     * 
+     *
      * @param records
      *            the records to deaggregate is deaggregation is required.
      * @return returns either the deaggregated records, or the original records
@@ -267,7 +267,7 @@ class ProcessTask implements ITask {
 
     /**
      * Emits metrics, and sleeps if there are no records available
-     * 
+     *
      * @param startTimeMillis
      *            the time when the task started
      */
@@ -304,8 +304,8 @@ class ProcessTask implements ITask {
      * @return the largest extended sequence number among the retained records
      */
     private ExtendedSequenceNumber filterAndGetMaxExtendedSequenceNumber(IMetricsScope scope, List<Record> records,
-            final ExtendedSequenceNumber lastCheckpointValue,
-            final ExtendedSequenceNumber lastLargestPermittedCheckpointValue) {
+                                                                         final ExtendedSequenceNumber lastCheckpointValue,
+                                                                         final ExtendedSequenceNumber lastLargestPermittedCheckpointValue) {
         ExtendedSequenceNumber largestExtendedSequenceNumber = lastLargestPermittedCheckpointValue;
         ListIterator<Record> recordIterator = records.listIterator();
         while (recordIterator.hasNext()) {
