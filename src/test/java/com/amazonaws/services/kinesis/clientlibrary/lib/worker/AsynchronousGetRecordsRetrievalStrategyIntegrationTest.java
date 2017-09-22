@@ -27,12 +27,14 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -59,6 +61,10 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
 
     @Mock
     private ShardInfo mockShardInfo;
+    @Mock
+    private Supplier<CompletionService<GetRecordsResult>> completionServiceSupplier;
+
+    private CompletionService<GetRecordsResult> completionService;
 
     private AsynchronousGetRecordsRetrievalStrategy getRecordsRetrivalStrategy;
     private KinesisDataFetcher dataFetcher;
@@ -66,7 +72,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     private ExecutorService executorService;
     private RejectedExecutionHandler rejectedExecutionHandler;
     private int numberOfRecords = 10;
-    private CompletionService<GetRecordsResult> completionService;
+
 
     @Before
     public void setup() {
@@ -80,8 +86,9 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
                 new LinkedBlockingQueue<>(1),
                 new ThreadFactoryBuilder().setDaemon(true).setNameFormat("getrecords-worker-%d").build(),
                 rejectedExecutionHandler));
-        getRecordsRetrivalStrategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, executorService, RETRY_GET_RECORDS_IN_SECONDS, "shardId-0001");
-        completionService = spy(getRecordsRetrivalStrategy.completionService);
+        completionService = spy(new ExecutorCompletionService<GetRecordsResult>(executorService));
+        when(completionServiceSupplier.get()).thenReturn(completionService);
+        getRecordsRetrivalStrategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, executorService, RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, "shardId-0001");
         result = null;
     }
 
@@ -97,12 +104,16 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     public void multiRequestTest() {
         result = mock(GetRecordsResult.class);
 
+        ExecutorCompletionService<GetRecordsResult> completionService1 = spy(new ExecutorCompletionService<GetRecordsResult>(executorService));
+        when(completionServiceSupplier.get()).thenReturn(completionService1);
         GetRecordsResult getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
         verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords(numberOfRecords);
         verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
         assertEquals(result, getRecordsResult);
 
         result = null;
+        ExecutorCompletionService<GetRecordsResult> completionService2 = spy(new ExecutorCompletionService<GetRecordsResult>(executorService));
+        when(completionServiceSupplier.get()).thenReturn(completionService2);
         getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
         assertNull(getRecordsResult);
     }
