@@ -1,16 +1,16 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
@@ -46,20 +46,22 @@ class ShutdownTask implements ITask {
     private final boolean cleanupLeasesOfCompletedShards;
     private final TaskType taskType = TaskType.SHUTDOWN;
     private final long backoffTimeMillis;
+    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
     /**
      * Constructor.
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     ShutdownTask(ShardInfo shardInfo,
-            IRecordProcessor recordProcessor,
-            RecordProcessorCheckpointer recordProcessorCheckpointer,
-            ShutdownReason reason,
-            IKinesisProxy kinesisProxy,
-            InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            long backoffTimeMillis) {
+                 IRecordProcessor recordProcessor,
+                 RecordProcessorCheckpointer recordProcessorCheckpointer,
+                 ShutdownReason reason,
+                 IKinesisProxy kinesisProxy,
+                 InitialPositionInStreamExtended initialPositionInStream,
+                 boolean cleanupLeasesOfCompletedShards,
+                 ILeaseManager<KinesisClientLease> leaseManager,
+                 long backoffTimeMillis, 
+                 GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -69,6 +71,7 @@ class ShutdownTask implements ITask {
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.leaseManager = leaseManager;
         this.backoffTimeMillis = backoffTimeMillis;
+        this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
     }
 
     /*
@@ -79,7 +82,7 @@ class ShutdownTask implements ITask {
      */
     @Override
     public TaskResult call() {
-        Exception exception = null;
+        Exception exception;
         boolean applicationException = false;
 
         try {
@@ -107,6 +110,8 @@ class ShutdownTask implements ITask {
                                 + shardInfo.getShardId());
                     }
                 }
+                LOG.debug("Shutting down retrieval strategy.");
+                getRecordsRetrievalStrategy.shutdown();
                 LOG.debug("Record processor completed shutdown() for shard " + shardInfo.getShardId());
             } catch (Exception e) {
                 applicationException = true;
