@@ -1290,7 +1290,13 @@ public class KinesisClientLibConfiguration {
     }
 
     public KinesisClientLibConfiguration withDataFetchingStrategy(String dataFetchingStrategy) {
-        recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.valueOf(dataFetchingStrategy));
+        switch (dataFetchingStrategy.toUpperCase()) {
+            case "PREFETCH_CACHED":
+                recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.PREFETCH_CACHED);
+                break;
+            default:
+                recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.DEFAULT);
+        }
         return this;
     }
 
