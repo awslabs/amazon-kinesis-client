@@ -18,8 +18,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -49,7 +48,6 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.clientlibrary.types.Messages.AggregatedRecord;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
-import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.Record;
 import com.google.protobuf.ByteString;
@@ -77,7 +75,7 @@ public class ProcessTaskTest {
     @Mock
     private ThrottlingReporter throttlingReporter;
     @Mock
-    private GetRecordsRetrievalStrategy mockGetRecordsRetrievalStrategy;
+    private GetRecordsCache getRecordsCache;
 
     private List<Record> processedRecords;
     private ExtendedSequenceNumber newLargestPermittedCheckpointValue;
@@ -95,32 +93,39 @@ public class ProcessTaskTest {
                         INITIAL_POSITION_LATEST);
         final ShardInfo shardInfo = new ShardInfo(shardId, null, null, null);
         processTask = new ProcessTask(
-                shardInfo, config, mockRecordProcessor, mockCheckpointer, mockDataFetcher, taskBackoffTimeMillis,
-                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, throttlingReporter, mockGetRecordsRetrievalStrategy);
+                shardInfo,
+                config,
+                mockRecordProcessor,
+                mockCheckpointer,
+                mockDataFetcher,
+                taskBackoffTimeMillis,
+                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
+                throttlingReporter,
+                getRecordsCache);
     }
 
     @Test
     public void testProcessTaskWithProvisionedThroughputExceededException() {
         // Set data fetcher to throw exception
         doReturn(false).when(mockDataFetcher).isShardEndReached();
-        doThrow(new ProvisionedThroughputExceededException("Test Exception")).when(mockGetRecordsRetrievalStrategy)
-                .getRecords(maxRecords);
+        doThrow(new ProvisionedThroughputExceededException("Test Exception")).when(getRecordsCache)
+                .getNextResult();
 
         TaskResult result = processTask.call();
         verify(throttlingReporter).throttled();
         verify(throttlingReporter, never()).success();
-        verify(mockGetRecordsRetrievalStrategy).getRecords(eq(maxRecords));
+        verify(getRecordsCache).getNextResult();
         assertTrue("Result should contain ProvisionedThroughputExceededException",
                 result.getException() instanceof ProvisionedThroughputExceededException);
     }
 
     @Test
     public void testProcessTaskWithNonExistentStream() {
-        // Data fetcher returns a null Result when the stream does not exist
-        doReturn(null).when(mockGetRecordsRetrievalStrategy).getRecords(maxRecords);
+        // Data fetcher returns a null Result ` the stream does not exist
+        doReturn(new ProcessRecordsInput().withRecords(Collections.emptyList()).withMillisBehindLatest((long) 0)).when(getRecordsCache).getNextResult();
 
         TaskResult result = processTask.call();
-        verify(mockGetRecordsRetrievalStrategy).getRecords(eq(maxRecords));
+        verify(getRecordsCache).getNextResult();
         assertNull("Task should not throw an exception", result.getException());
     }
 
@@ -304,14 +309,13 @@ public class ProcessTaskTest {
     private void testWithRecords(List<Record> records,
             ExtendedSequenceNumber lastCheckpointValue,
             ExtendedSequenceNumber largestPermittedCheckpointValue) {
-        when(mockGetRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(
-                new GetRecordsResult().withRecords(records));
+        when(getRecordsCache.getNextResult()).thenReturn(new ProcessRecordsInput().withRecords(records).withMillisBehindLatest((long) 1000 * 50));
         when(mockCheckpointer.getLastCheckpointValue()).thenReturn(lastCheckpointValue);
         when(mockCheckpointer.getLargestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
         processTask.call();
         verify(throttlingReporter).success();
         verify(throttlingReporter, never()).throttled();
-        verify(mockGetRecordsRetrievalStrategy).getRecords(anyInt());
+        verify(getRecordsCache).getNextResult();
         ArgumentCaptor<ProcessRecordsInput> priCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
         verify(mockRecordProcessor).processRecords(priCaptor.capture());
         processedRecords = priCaptor.getValue().getRecords();

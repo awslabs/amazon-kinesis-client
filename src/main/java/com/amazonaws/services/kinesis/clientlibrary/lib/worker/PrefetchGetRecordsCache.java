@@ -63,6 +63,10 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
 
     @Override
     public void start() {
+        if (executorService.isShutdown()) {
+            throw new IllegalStateException("ExecutorService has been shutdown.");
+        }
+        
         if (!started) {
             log.info("Starting prefetching thread.");
             executorService.execute(new DefaultGetRecordsCacheDaemon());
@@ -72,8 +76,12 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
 
     @Override
     public ProcessRecordsInput getNextResult() {
+        if (executorService.isShutdown()) {
+            throw new IllegalStateException("Shutdown has been called on the cache, can't accept new requests.");
+        }
+        
         if (!started) {
-            throw new IllegalStateException("Threadpool in the cache was not started, make sure to call start on the cache");
+            throw new IllegalStateException("Cache has not been initialized, make sure to call start.");
         }
         ProcessRecordsInput result = null;
         try {
@@ -86,8 +94,15 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     }
 
     @Override
+    public GetRecordsRetrievalStrategy getGetRecordsRetrievalStrategy() {
+        return getRecordsRetrievalStrategy;
+    }
+
+    @Override
     public void shutdown() {
+        getRecordsRetrievalStrategy.shutdown();
         executorService.shutdownNow();
+        started = false;
     }
 
     private class DefaultGetRecordsCacheDaemon implements Runnable {

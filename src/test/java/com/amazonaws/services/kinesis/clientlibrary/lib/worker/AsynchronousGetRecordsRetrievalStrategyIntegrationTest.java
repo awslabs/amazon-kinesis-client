@@ -110,7 +110,6 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     @Test
     @Ignore
     public void testInterrupted() throws InterruptedException, ExecutionException {
-
         Future<GetRecordsResult> mockFuture = mock(Future.class);
         when(completionService.submit(any())).thenReturn(mockFuture);
         when(completionService.poll()).thenReturn(mockFuture);
