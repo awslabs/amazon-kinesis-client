@@ -85,6 +85,7 @@ public class KinesisClientLibConfigurationTest {
                         TEST_VALUE_INT,
                         skipCheckpointValidationValue,
                         null,
+                        TEST_VALUE_LONG,
                         TEST_VALUE_LONG);
     }
 
@@ -95,7 +96,8 @@ public class KinesisClientLibConfigurationTest {
         // Try each argument at one time.
         KinesisClientLibConfiguration config = null;
         long[] longValues =
-        { TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG };
+                { TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG,
+                        TEST_VALUE_LONG, TEST_VALUE_LONG };
         for (int i = 0; i < PARAMETER_COUNT; i++) {
             longValues[i] = INVALID_LONG;
             try {
@@ -124,7 +126,8 @@ public class KinesisClientLibConfigurationTest {
                                 TEST_VALUE_INT,
                                 skipCheckpointValidationValue,
                                 null,
-                                longValues[6]);
+                                longValues[6],
+                                longValues[7]);
             } catch (IllegalArgumentException e) {
                 System.out.println(e.getMessage());
             }
@@ -159,6 +162,7 @@ public class KinesisClientLibConfigurationTest {
                                 intValues[1],
                                 skipCheckpointValidationValue,
                                 null,
+                                TEST_VALUE_LONG,
                                 TEST_VALUE_LONG);
             } catch (IllegalArgumentException e) {
                 System.out.println(e.getMessage());
@@ -300,30 +304,31 @@ public class KinesisClientLibConfigurationTest {
         Mockito.mock(AWSCredentialsProvider.class);
         try {
             new KinesisClientLibConfiguration(TEST_STRING,
-                        TEST_STRING,
-                        TEST_STRING,
-                        TEST_STRING,
-                        null,
-                        null,
-                        null,
-                        null,
-                        TEST_VALUE_LONG,
-                        TEST_STRING,
-                        3,
-                        TEST_VALUE_LONG,
-                        false,
-                        TEST_VALUE_LONG,
-                        TEST_VALUE_LONG,
-                        true,
-                        new ClientConfiguration(),
-                        new ClientConfiguration(),
-                        new ClientConfiguration(),
-                        TEST_VALUE_LONG,
-                        TEST_VALUE_LONG,
-                        1,
-                        skipCheckpointValidationValue,
-                        "abcd",
-                        TEST_VALUE_LONG);
+                    TEST_STRING,
+                    TEST_STRING,
+                    TEST_STRING,
+                    null,
+                    null,
+                    null,
+                    null,
+                    TEST_VALUE_LONG,
+                    TEST_STRING,
+                    3,
+                    TEST_VALUE_LONG,
+                    false,
+                    TEST_VALUE_LONG,
+                    TEST_VALUE_LONG,
+                    true,
+                    new ClientConfiguration(),
+                    new ClientConfiguration(),
+                    new ClientConfiguration(),
+                    TEST_VALUE_LONG,
+                    TEST_VALUE_LONG,
+                    1,
+                    skipCheckpointValidationValue,
+                    "abcd",
+                    TEST_VALUE_LONG,
+                    TEST_VALUE_LONG);
             Assert.fail("No expected Exception is thrown.");
         } catch(IllegalArgumentException e) {
             System.out.println(e.getMessage());

@@ -39,10 +39,14 @@ import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
 /**
  * Unit tests for KinesisDataFetcher.
  */
+@RunWith(MockitoJUnitRunner.class)
 public class KinesisDataFetcherTest {
 
     private static final int MAX_RECORDS = 1;
@@ -55,6 +59,9 @@ public class KinesisDataFetcherTest {
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
     private static final InitialPositionInStreamExtended INITIAL_POSITION_AT_TIMESTAMP =
             InitialPositionInStreamExtended.newInitialPositionAtTimestamp(new Date(1000));
+    
+    @Mock
+    private KinesisClientLibConfiguration configuration;
 
     /**
      * @throws java.lang.Exception
@@ -115,8 +122,9 @@ public class KinesisDataFetcherTest {
     public void testadvanceIteratorTo() throws KinesisClientLibException {
         IKinesisProxy kinesis = mock(IKinesisProxy.class);
         ICheckpoint checkpoint = mock(ICheckpoint.class);
+        when(configuration.getIdleMillisBetweenCalls()).thenReturn(500L);
 
-        KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
+        KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO, configuration);
         GetRecordsRetrievalStrategy getRecordsRetrievalStrategy = new SynchronousGetRecordsRetrievalStrategy(fetcher);
 
         String iteratorA = "foo";
@@ -148,8 +156,9 @@ public class KinesisDataFetcherTest {
     @Test
     public void testadvanceIteratorToTrimHorizonLatestAndAtTimestamp() {
         IKinesisProxy kinesis = mock(IKinesisProxy.class);
+        when(configuration.getIdleMillisBetweenCalls()).thenReturn(500L);
 
-        KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
+        KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO, configuration);
 
         String iteratorHorizon = "horizon";
         when(kinesis.getIterator(SHARD_ID, ShardIteratorType.TRIM_HORIZON.toString())).thenReturn(iteratorHorizon);
@@ -178,9 +187,10 @@ public class KinesisDataFetcherTest {
         KinesisProxy mockProxy = mock(KinesisProxy.class);
         doReturn(nextIterator).when(mockProxy).getIterator(SHARD_ID, ShardIteratorType.LATEST.toString());
         doThrow(new ResourceNotFoundException("Test Exception")).when(mockProxy).get(nextIterator, maxRecords);
+        when(configuration.getIdleMillisBetweenCalls()).thenReturn(500L);
 
         // Create data fectcher and initialize it with latest type checkpoint
-        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO);
+        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO, configuration);
         dataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
         GetRecordsRetrievalStrategy getRecordsRetrievalStrategy = new SynchronousGetRecordsRetrievalStrategy(dataFetcher);
         // Call getRecords of dataFetcher which will throw an exception
@@ -197,8 +207,9 @@ public class KinesisDataFetcherTest {
         
         KinesisProxy mockProxy = mock(KinesisProxy.class);
         doThrow(new ResourceNotFoundException("Test Exception")).when(mockProxy).get(nextIterator, maxRecords);
+        when(configuration.getIdleMillisBetweenCalls()).thenReturn(500L);
 
-        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO);
+        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO, configuration);
         dataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
         
         GetRecordsResult getRecordsResult = dataFetcher.getRecords(maxRecords);
@@ -223,8 +234,9 @@ public class KinesisDataFetcherTest {
 
         ICheckpoint checkpoint = mock(ICheckpoint.class);
         when(checkpoint.getCheckpoint(SHARD_ID)).thenReturn(new ExtendedSequenceNumber(seqNo));
+        when(configuration.getIdleMillisBetweenCalls()).thenReturn(500L);
 
-        KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
+        KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO, configuration);
         GetRecordsRetrievalStrategy getRecordsRetrievalStrategy = new SynchronousGetRecordsRetrievalStrategy(fetcher);
         fetcher.initialize(seqNo, initialPositionInStream);
         List<Record> actualRecords = getRecordsRetrievalStrategy.getRecords(MAX_RECORDS).getRecords();

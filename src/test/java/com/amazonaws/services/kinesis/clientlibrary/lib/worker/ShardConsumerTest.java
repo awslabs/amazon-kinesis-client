@@ -122,6 +122,7 @@ public class ShardConsumerTest {
         
         recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory(maxRecords));
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
+        when(config.getIdleMillisBetweenCalls()).thenReturn(0l);
     }
     
     /**
@@ -339,7 +340,7 @@ public class ShardConsumerTest {
                 )
         );
 
-        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
+        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo, config);
 
         getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords, new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
         when(recordsFetcherFactory.createRecordsFetcher(any())).thenReturn(getRecordsCache);
@@ -467,7 +468,7 @@ public class ShardConsumerTest {
                 )
         );
 
-        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
+        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo, config);
         
         getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords, new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
         when(recordsFetcherFactory.createRecordsFetcher(any())).thenReturn(getRecordsCache);

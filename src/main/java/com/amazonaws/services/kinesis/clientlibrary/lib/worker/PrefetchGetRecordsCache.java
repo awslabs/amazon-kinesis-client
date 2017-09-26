@@ -123,7 +123,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                         getRecordsResultQueue.put(processRecordsInput);
                         prefetchCounters.added(processRecordsInput);
                     } catch (InterruptedException e) {
-                        log.info("Thread was interrupted, indicating shutdown was called on the cache", e);
+                        log.info("Thread was interrupted, indicating shutdown was called on the cache");
                     }
                 }
             }

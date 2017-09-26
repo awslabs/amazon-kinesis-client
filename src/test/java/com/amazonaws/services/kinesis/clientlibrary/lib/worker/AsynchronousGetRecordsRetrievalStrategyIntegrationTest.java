@@ -63,6 +63,9 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     private ShardInfo mockShardInfo;
     @Mock
     private Supplier<CompletionService<GetRecordsResult>> completionServiceSupplier;
+    
+    @Mock
+    private KinesisClientLibConfiguration configuration;
 
     private CompletionService<GetRecordsResult> completionService;
 
@@ -88,8 +91,10 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
                 rejectedExecutionHandler));
         completionService = spy(new ExecutorCompletionService<GetRecordsResult>(executorService));
         when(completionServiceSupplier.get()).thenReturn(completionService);
-        getRecordsRetrivalStrategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, executorService, RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, "shardId-0001");
+        getRecordsRetrivalStrategy = new AsynchronousGetRecordsRetrievalStrategy(
+                dataFetcher, executorService, RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, "shardId-0001");
         result = null;
+        when(configuration.getIdleMillisBetweenCalls()).thenReturn(500L);
     }
 
     @Test
@@ -149,7 +154,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
 
     private class KinesisDataFetcherForTests extends KinesisDataFetcher {
         public KinesisDataFetcherForTests(final IKinesisProxy kinesisProxy, final ShardInfo shardInfo) {
-            super(kinesisProxy, shardInfo);
+            super(kinesisProxy, shardInfo, configuration);
         }
 
         @Override

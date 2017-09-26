@@ -112,9 +112,20 @@ class ShardConsumer {
                   long backoffTimeMillis,
                   boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
                   KinesisClientLibConfiguration config) {
-        this(shardInfo, streamConfig, checkpoint,recordProcessor, leaseManager,
-                parentShardPollIntervalMillis, cleanupLeasesOfCompletedShards, executorService, metricsFactory,
-                backoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty(), config);
+        this(shardInfo,
+                streamConfig,
+                checkpoint,
+                recordProcessor,
+                leaseManager,
+                parentShardPollIntervalMillis,
+                cleanupLeasesOfCompletedShards,
+                executorService,
+                metricsFactory,
+                backoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist,
+                Optional.empty(),
+                Optional.empty(),
+                config);
     }
 
     /**
@@ -166,7 +177,7 @@ class ShardConsumer {
                 metricsFactory,
                 backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo),
+                new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo, config),
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
                 config
