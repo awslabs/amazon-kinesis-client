@@ -49,7 +49,7 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
     private final ExecutorService executorService;
     private final int retryGetRecordsInSeconds;
     private final String shardId;
-    final Supplier<CompletionService<GetRecordsResult>> completionServiceSupplier;
+    final Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
 
     public AsynchronousGetRecordsRetrievalStrategy(@NonNull final KinesisDataFetcher dataFetcher,
             final int retryGetRecordsInSeconds, final int maxGetRecordsThreadPool, String shardId) {
@@ -63,7 +63,7 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
     }
 
     AsynchronousGetRecordsRetrievalStrategy(KinesisDataFetcher dataFetcher, ExecutorService executorService,
-            int retryGetRecordsInSeconds, Supplier<CompletionService<GetRecordsResult>> completionServiceSupplier,
+            int retryGetRecordsInSeconds, Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier,
             String shardId) {
         this.dataFetcher = dataFetcher;
         this.executorService = executorService;
@@ -78,9 +78,9 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
             throw new IllegalStateException("Strategy has been shutdown");
         }
         GetRecordsResult result = null;
-        CompletionService<GetRecordsResult> completionService = completionServiceSupplier.get();
-        Set<Future<GetRecordsResult>> futures = new HashSet<>();
-        Callable<GetRecordsResult> retrieverCall = createRetrieverCallable(maxRecords);
+        CompletionService<DataFetcherResult> completionService = completionServiceSupplier.get();
+        Set<Future<DataFetcherResult>> futures = new HashSet<>();
+        Callable<DataFetcherResult> retrieverCall = createRetrieverCallable(maxRecords);
         while (true) {
             try {
                 futures.add(completionService.submit(retrieverCall));
@@ -89,10 +89,15 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
             }
 
             try {
-                Future<GetRecordsResult> resultFuture = completionService.poll(retryGetRecordsInSeconds,
+                Future<DataFetcherResult> resultFuture = completionService.poll(retryGetRecordsInSeconds,
                         TimeUnit.SECONDS);
                 if (resultFuture != null) {
-                    result = resultFuture.get();
+                    //
+                    // Fix to ensure that we only let the shard iterator advance when we intend to return the result
+                    // to the caller.  This ensures that the shard iterator is consistently advance in step with
+                    // what the caller sees.
+                    //
+                    result = resultFuture.get().accept();
                     break;
                 }
             } catch (ExecutionException e) {
@@ -106,7 +111,7 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
         return result;
     }
 
-    private Callable<GetRecordsResult> createRetrieverCallable(int maxRecords) {
+    private Callable<DataFetcherResult> createRetrieverCallable(int maxRecords) {
         ThreadSafeMetricsDelegatingScope metricsScope = new ThreadSafeMetricsDelegatingScope(MetricsHelper.getMetricsScope());
         return () -> {
             try {
