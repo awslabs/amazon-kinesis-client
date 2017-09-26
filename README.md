@@ -31,7 +31,7 @@ To make it easier for developers to write record processors in other languages, 
 ## Release Notes
 ### Release 1.8.5 (September 26, 2017)
 * Only advance the shard iterator for the accepted response.  
-  This ensures that the shard iterator is only advanced when the response is accepted.  This fixes a race condition where additional request created by the asynchronous retriever could overwrite the shard iterator of the accepted response.
+  When using the asynchronous retriever multiple requests can be created.  As the requests can finish at different times it's possible for them to also have different next shard iterator.  The KinesisDataFetcher will now only use the next shard iterator of the request that is accepted by the caller.  Requests are accepted by calling `DataFetcherResult#accept()`, which both retrievers now call.
   * [PR #230](https://github.com/awslabs/amazon-kinesis-client/pull/230)
 
 ### Release 1.8.4 (September 22, 2017)
