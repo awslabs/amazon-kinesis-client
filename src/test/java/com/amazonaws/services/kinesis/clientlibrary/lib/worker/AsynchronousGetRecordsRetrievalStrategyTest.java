@@ -53,19 +53,23 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
     @Mock
     private ExecutorService executorService;
     @Mock
-    private Supplier<CompletionService<GetRecordsResult>> completionServiceSupplier;
+    private Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
     @Mock
-    private CompletionService<GetRecordsResult> completionService;
+    private CompletionService<DataFetcherResult> completionService;
     @Mock
-    private Future<GetRecordsResult> successfulFuture;
+    private Future<DataFetcherResult> successfulFuture;
     @Mock
-    private Future<GetRecordsResult> blockedFuture;
+    private Future<DataFetcherResult> blockedFuture;
+    @Mock
+    private DataFetcherResult dataFetcherResult;
     @Mock
     private GetRecordsResult expectedResults;
 
     @Before
     public void before() {
         when(completionServiceSupplier.get()).thenReturn(completionService);
+        when(dataFetcherResult.getResult()).thenReturn(expectedResults);
+        when(dataFetcherResult.accept()).thenReturn(expectedResults);
     }
 
     @Test
@@ -76,7 +80,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(executorService.isShutdown()).thenReturn(false);
         when(completionService.submit(any())).thenReturn(successfulFuture);
         when(completionService.poll(anyLong(), any())).thenReturn(successfulFuture);
-        when(successfulFuture.get()).thenReturn(expectedResults);
+        when(successfulFuture.get()).thenReturn(dataFetcherResult);
 
         GetRecordsResult result = strategy.getRecords(10);
 
@@ -97,7 +101,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(executorService.isShutdown()).thenReturn(false);
         when(completionService.submit(any())).thenReturn(blockedFuture).thenReturn(successfulFuture);
         when(completionService.poll(anyLong(), any())).thenReturn(null).thenReturn(successfulFuture);
-        when(successfulFuture.get()).thenReturn(expectedResults);
+        when(successfulFuture.get()).thenReturn(dataFetcherResult);
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
         when(successfulFuture.isCancelled()).thenReturn(false);
@@ -133,7 +137,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(executorService.isShutdown()).thenReturn(false);
         when(completionService.submit(any())).thenReturn(blockedFuture).thenThrow(new RejectedExecutionException("Rejected!")).thenReturn(successfulFuture);
         when(completionService.poll(anyLong(), any())).thenReturn(null).thenReturn(null).thenReturn(successfulFuture);
-        when(successfulFuture.get()).thenReturn(expectedResults);
+        when(successfulFuture.get()).thenReturn(dataFetcherResult);
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
         when(successfulFuture.isCancelled()).thenReturn(false);
