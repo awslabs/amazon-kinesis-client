@@ -189,7 +189,7 @@ class KinesisDataFetcher {
         return iterator;
     }
     
-    private void sleepBeforeNextCall() {
+    protected void sleepBeforeNextCall() {
         if (lastResponseTime != null) {
             long timeDiff = Duration.between(lastResponseTime, Instant.now()).abs().toMillis();
             if (timeDiff < idleMillisBetweenCalls) {

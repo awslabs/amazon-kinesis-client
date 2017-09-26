@@ -79,7 +79,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
 
     @Before
     public void setup() {
-        dataFetcher = spy(new KinesisDataFetcherForTests(mockKinesisProxy, mockShardInfo));
+        dataFetcher = spy(new KinesisDataFetcherForTests(mockKinesisProxy, mockShardInfo, configuration));
         rejectedExecutionHandler = spy(new ThreadPoolExecutor.AbortPolicy());
         executorService = spy(new ThreadPoolExecutor(
                 CORE_POOL_SIZE,
@@ -153,7 +153,8 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     }
 
     private class KinesisDataFetcherForTests extends KinesisDataFetcher {
-        public KinesisDataFetcherForTests(final IKinesisProxy kinesisProxy, final ShardInfo shardInfo) {
+        public KinesisDataFetcherForTests(final IKinesisProxy kinesisProxy, final ShardInfo shardInfo,
+                                          final KinesisClientLibConfiguration configuration) {
             super(kinesisProxy, shardInfo, configuration);
         }
 
