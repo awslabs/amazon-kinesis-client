@@ -21,7 +21,7 @@ import lombok.extern.apachecommons.CommonsLog;
 @CommonsLog
 public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private final int maxRecords;
-    private int maxSize = 10;
+    private int maxSize = 3;
     private int maxByteSize = 15 * 1024 * 1024;
     private int maxRecordsCount = 30000;
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
