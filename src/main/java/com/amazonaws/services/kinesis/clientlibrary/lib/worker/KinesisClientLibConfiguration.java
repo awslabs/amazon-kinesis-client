@@ -1,16 +1,16 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
@@ -182,11 +182,6 @@ public class KinesisClientLibConfiguration {
      */
     public static final int DEFAULT_MAX_LEASE_RENEWAL_THREADS = 20;
 
-    /**
-     * The amount of time to sleep in between 2 get calls from the data fetcher.
-     */
-    public static final long DEFAULT_IDLE_MILLIS_BETWEEN_CALLS = 1500L;
-
     private String applicationName;
     private String tableName;
     private String streamName;
@@ -239,9 +234,6 @@ public class KinesisClientLibConfiguration {
 
     @Getter
     private RecordsFetcherFactory recordsFetcherFactory;
-    
-    @Getter
-    private long idleMillisBetweenCalls;
 
     /**
      * Constructor.
@@ -302,8 +294,7 @@ public class KinesisClientLibConfiguration {
                 DEFAULT_METRICS_MAX_QUEUE_SIZE,
                 DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING,
                 null,
-                DEFAULT_SHUTDOWN_GRACE_MILLIS,
-                DEFAULT_IDLE_MILLIS_BETWEEN_CALLS);
+                DEFAULT_SHUTDOWN_GRACE_MILLIS);
     }
 
     /**
@@ -365,8 +356,7 @@ public class KinesisClientLibConfiguration {
                                          int metricsMaxQueueSize,
                                          boolean validateSequenceNumberBeforeCheckpointing,
                                          String regionName,
-                                         long shutdownGraceMillis,
-                                         long idleMillisBetweenCalls) {
+                                         long shutdownGraceMillis) {
         this(applicationName, streamName, kinesisEndpoint, null, initialPositionInStream, kinesisCredentialsProvider,
                 dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, failoverTimeMillis, workerId,
                 maxRecords, idleTimeBetweenReadsInMillis,
@@ -374,7 +364,7 @@ public class KinesisClientLibConfiguration {
                 shardSyncIntervalMillis, cleanupTerminatedShardsBeforeExpiry,
                 kinesisClientConfig, dynamoDBClientConfig, cloudWatchClientConfig,
                 taskBackoffTimeMillis, metricsBufferTimeMillis, metricsMaxQueueSize,
-                validateSequenceNumberBeforeCheckpointing, regionName, shutdownGraceMillis, idleMillisBetweenCalls);
+                validateSequenceNumberBeforeCheckpointing, regionName, shutdownGraceMillis);
     }
 
     /**
@@ -437,8 +427,7 @@ public class KinesisClientLibConfiguration {
                                          int metricsMaxQueueSize,
                                          boolean validateSequenceNumberBeforeCheckpointing,
                                          String regionName,
-                                         long shutdownGraceMillis,
-                                         long idleMillisBetweenCalls) {
+                                         long shutdownGraceMillis) {
         // Check following values are greater than zero
         checkIsValuePositive("FailoverTimeMillis", failoverTimeMillis);
         checkIsValuePositive("IdleTimeBetweenReadsInMillis", idleTimeBetweenReadsInMillis);
@@ -449,7 +438,6 @@ public class KinesisClientLibConfiguration {
         checkIsValuePositive("MetricsBufferTimeMills", metricsBufferTimeMillis);
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
         checkIsValuePositive("ShutdownGraceMillis", shutdownGraceMillis);
-        checkIsValuePositive("IdleMillisBetweenCalls", idleMillisBetweenCalls);
         checkIsRegionNameValid(regionName);
         this.applicationName = applicationName;
         this.tableName = applicationName;
@@ -487,7 +475,6 @@ public class KinesisClientLibConfiguration {
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = new SimpleRecordsFetcherFactory(this.maxRecords);
-        this.idleMillisBetweenCalls = idleMillisBetweenCalls;
     }
 
     /**
@@ -597,7 +584,6 @@ public class KinesisClientLibConfiguration {
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = recordsFetcherFactory;
-        this.shutdownGraceMillis = shutdownGraceMillis;
         this.shutdownGraceMillis = shutdownGraceMillis;
     }
 
@@ -1308,30 +1294,24 @@ public class KinesisClientLibConfiguration {
      */
     public KinesisClientLibConfiguration withMaxCacheSize(final int maxCacheSize) {
         checkIsValuePositive("maxCacheSize", maxCacheSize);
-        recordsFetcherFactory.setMaxSize(maxCacheSize);
+        this.recordsFetcherFactory.setMaxSize(maxCacheSize);
         return this;
     }
 
     public KinesisClientLibConfiguration withMaxCacheByteSize(final int maxCacheByteSize) {
         checkIsValuePositive("maxCacheByteSize", maxCacheByteSize);
-        recordsFetcherFactory.setMaxByteSize(maxCacheByteSize);
+        this.recordsFetcherFactory.setMaxByteSize(maxCacheByteSize);
         return this;
     }
 
     public KinesisClientLibConfiguration withDataFetchingStrategy(String dataFetchingStrategy) {
-        switch (dataFetchingStrategy.toUpperCase()) {
-            case "PREFETCH_CACHED":
-                recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.PREFETCH_CACHED);
-                break;
-            default:
-                recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.DEFAULT);
-        }
+        this.recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.valueOf(dataFetchingStrategy.toUpperCase()));
         return this;
     }
 
     public KinesisClientLibConfiguration withMaxRecordsCount(final int maxRecordsCount) {
         checkIsValuePositive("maxRecordsCount", maxRecordsCount);
-        recordsFetcherFactory.setMaxRecordsCount(maxRecordsCount);
+        this.recordsFetcherFactory.setMaxRecordsCount(maxRecordsCount);
         return this;
     }
 
@@ -1358,7 +1338,7 @@ public class KinesisClientLibConfiguration {
      */
     public KinesisClientLibConfiguration withIdleMillisBetweenCalls(long idleMillisBetweenCalls) {
         checkIsValuePositive("IdleMillisBetweenCalls", idleMillisBetweenCalls);
-        this.idleMillisBetweenCalls = idleMillisBetweenCalls;
+        this.recordsFetcherFactory.setIdleMillisBetweenCalls(idleMillisBetweenCalls);
         return this;
     }
 }

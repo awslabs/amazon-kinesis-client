@@ -40,6 +40,7 @@ import com.amazonaws.services.kinesis.model.Record;
 @RunWith(MockitoJUnitRunner.class)
 public class BlockingGetRecordsCacheTest {
     private static final int MAX_RECORDS_PER_COUNT = 10_000;
+    private static final long IDLE_MILLIS_BETWEEN_CALLS = 500L;
 
     @Mock
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
@@ -52,7 +53,7 @@ public class BlockingGetRecordsCacheTest {
     @Before
     public void setup() {
         records = new ArrayList<>();
-        blockingGetRecordsCache = new BlockingGetRecordsCache(MAX_RECORDS_PER_COUNT, getRecordsRetrievalStrategy);
+        blockingGetRecordsCache = new BlockingGetRecordsCache(MAX_RECORDS_PER_COUNT, getRecordsRetrievalStrategy, IDLE_MILLIS_BETWEEN_CALLS);
 
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_COUNT))).thenReturn(getRecordsResult);
         when(getRecordsResult.getRecords()).thenReturn(records);

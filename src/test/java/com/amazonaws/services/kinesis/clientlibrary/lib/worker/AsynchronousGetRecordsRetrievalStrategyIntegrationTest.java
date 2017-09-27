@@ -14,29 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
-import com.amazonaws.services.kinesis.model.GetRecordsResult;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import java.util.concurrent.CompletionService;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionHandler;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
-
-
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
@@ -49,6 +26,29 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionHandler;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+
+import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 @RunWith(MockitoJUnitRunner.class)
 public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
@@ -63,8 +63,6 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     private IKinesisProxy mockKinesisProxy;
     @Mock
     private ShardInfo mockShardInfo;
-    @Mock
-    private KinesisClientLibConfiguration configuration;
     @Mock
     private Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
     @Mock
@@ -83,7 +81,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
 
     @Before
     public void setup() {
-        dataFetcher = spy(new KinesisDataFetcherForTests(mockKinesisProxy, mockShardInfo, configuration));
+        dataFetcher = spy(new KinesisDataFetcherForTests(mockKinesisProxy, mockShardInfo));
         rejectedExecutionHandler = spy(new ThreadPoolExecutor.AbortPolicy());
         executorService = spy(new ThreadPoolExecutor(
                 CORE_POOL_SIZE,
@@ -154,9 +152,8 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     }
 
     private class KinesisDataFetcherForTests extends KinesisDataFetcher {
-        public KinesisDataFetcherForTests(final IKinesisProxy kinesisProxy, final ShardInfo shardInfo,
-                                          final KinesisClientLibConfiguration configuration) {
-            super(kinesisProxy, shardInfo, configuration);
+        public KinesisDataFetcherForTests(final IKinesisProxy kinesisProxy, final ShardInfo shardInfo) {
+            super(kinesisProxy, shardInfo);
         }
 
         @Override

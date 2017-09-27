@@ -24,6 +24,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private int maxSize = 3;
     private int maxByteSize = 8 * 1024 * 1024;
     private int maxRecordsCount = 30000;
+    private long idleMillisBetweenCalls = 1500L;
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
 
     public SimpleRecordsFetcherFactory(int maxRecords) {
@@ -33,10 +34,10 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     @Override
     public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
-            return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy);
+            return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy, idleMillisBetweenCalls);
         } else {
             return new PrefetchGetRecordsCache(maxSize, maxByteSize, maxRecordsCount, maxRecords,
-                    getRecordsRetrievalStrategy, Executors.newFixedThreadPool(1));
+                    getRecordsRetrievalStrategy, Executors.newFixedThreadPool(1), idleMillisBetweenCalls);
         }
     }
 
@@ -58,5 +59,10 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     @Override
     public void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy){
         this.dataFetchingStrategy = dataFetchingStrategy;
+    }
+
+    @Override
+    public void setIdleMillisBetweenCalls(final long idleMillisBetweenCalls) {
+        this.idleMillisBetweenCalls = idleMillisBetweenCalls;
     }
 }
