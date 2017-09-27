@@ -67,26 +67,24 @@ class KinesisDataFetcher {
         if (!isInitialized) {
             throw new IllegalArgumentException("KinesisDataFetcher.getRecords called before initialization.");
         }
-
-        DataFetcherResult response;
+        
         if (nextIterator != null) {
             try {
-                response = new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
+                return new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
-                response = TERMINAL_RESULT;
+                return TERMINAL_RESULT;
             }
         } else {
-            response = TERMINAL_RESULT;
+            return TERMINAL_RESULT;
         }
-
-        return response;
     }
 
     final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
         @Override
         public GetRecordsResult getResult() {
-            return null;
+            return new GetRecordsResult().withMillisBehindLatest(null).withRecords(Collections.emptyList())
+                    .withNextShardIterator(null);
         }
 
         @Override
