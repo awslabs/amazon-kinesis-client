@@ -847,10 +847,20 @@ public class Worker implements Runnable {
     protected ShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
         IRecordProcessor recordProcessor = processorFactory.createProcessor();
 
-        return new ShardConsumer(shardInfo, streamConfig, checkpointTracker, recordProcessor, config,
-                leaseCoordinator.getLeaseManager(), parentShardPollIntervalMillis, cleanupLeasesUponShardCompletion,
-                executorService, metricsFactory, taskBackoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist, retryGetRecordsInSeconds, maxGetRecordsThreadPool);
+        return new ShardConsumer(shardInfo,
+                streamConfig,
+                checkpointTracker,
+                recordProcessor,
+                leaseCoordinator.getLeaseManager(),
+                parentShardPollIntervalMillis,
+                cleanupLeasesUponShardCompletion,
+                executorService,
+                metricsFactory,
+                taskBackoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist,
+                retryGetRecordsInSeconds,
+                maxGetRecordsThreadPool,
+                config);
 
     }
 

@@ -182,6 +182,12 @@ public class PrefetchGetRecordsCacheTest {
         verify(executorService, times(0)).execute(any());
         getRecordsCache.getNextResult();
     }
+    
+    @Test(expected = IllegalStateException.class)
+    public void testCallAfterShutdown() {
+        when(executorService.isShutdown()).thenReturn(true);
+        getRecordsCache.getNextResult();
+    }
 
     @After
     public void shutdown() {

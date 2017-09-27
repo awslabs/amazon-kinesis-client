@@ -77,7 +77,7 @@ public class ConsumerStatesTest {
     @Mock
     private InitialPositionInStreamExtended initialPositionInStream;
     @Mock
-    private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+    private GetRecordsCache getRecordsCache;
 
     private long parentShardPollIntervalMillis = 0xCAFE;
     private boolean cleanupLeasesOfCompletedShards = true;
@@ -100,7 +100,7 @@ public class ConsumerStatesTest {
         when(consumer.isCleanupLeasesOfCompletedShards()).thenReturn(cleanupLeasesOfCompletedShards);
         when(consumer.getTaskBackoffTimeMillis()).thenReturn(taskBackoffTimeMillis);
         when(consumer.getShutdownReason()).thenReturn(reason);
-        when(consumer.getGetRecordsRetrievalStrategy()).thenReturn(getRecordsRetrievalStrategy);
+        when(consumer.getGetRecordsCache()).thenReturn(getRecordsCache);
     }
 
     private static final Class<ILeaseManager<KinesisClientLease>> LEASE_MANAGER_CLASS = (Class<ILeaseManager<KinesisClientLease>>) (Class<?>) ILeaseManager.class;

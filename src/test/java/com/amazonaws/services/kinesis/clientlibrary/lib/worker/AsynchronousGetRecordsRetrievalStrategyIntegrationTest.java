@@ -27,14 +27,19 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
-import static org.junit.Assert.assertEquals;
+
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -56,21 +61,29 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
 
     @Mock
     private IKinesisProxy mockKinesisProxy;
-
     @Mock
     private ShardInfo mockShardInfo;
+    @Mock
+    private KinesisClientLibConfiguration configuration;
+    @Mock
+    private Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
+    @Mock
+    private DataFetcherResult result;
+    @Mock
+    private GetRecordsResult recordsResult;
+
+    private CompletionService<DataFetcherResult> completionService;
 
     private AsynchronousGetRecordsRetrievalStrategy getRecordsRetrivalStrategy;
     private KinesisDataFetcher dataFetcher;
-    private GetRecordsResult result;
     private ExecutorService executorService;
     private RejectedExecutionHandler rejectedExecutionHandler;
     private int numberOfRecords = 10;
-    private CompletionService<GetRecordsResult> completionService;
+
 
     @Before
     public void setup() {
-        dataFetcher = spy(new KinesisDataFetcherForTests(mockKinesisProxy, mockShardInfo));
+        dataFetcher = spy(new KinesisDataFetcherForTests(mockKinesisProxy, mockShardInfo, configuration));
         rejectedExecutionHandler = spy(new ThreadPoolExecutor.AbortPolicy());
         executorService = spy(new ThreadPoolExecutor(
                 CORE_POOL_SIZE,
@@ -80,13 +93,15 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
                 new LinkedBlockingQueue<>(1),
                 new ThreadFactoryBuilder().setDaemon(true).setNameFormat("getrecords-worker-%d").build(),
                 rejectedExecutionHandler));
-        getRecordsRetrivalStrategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, executorService, RETRY_GET_RECORDS_IN_SECONDS, "shardId-0001");
-        completionService = spy(getRecordsRetrivalStrategy.completionService);
-        result = null;
+        completionService = spy(new ExecutorCompletionService<DataFetcherResult>(executorService));
+        when(completionServiceSupplier.get()).thenReturn(completionService);
+        getRecordsRetrivalStrategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, executorService, RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, "shardId-0001");
+        when(result.accept()).thenReturn(recordsResult);
     }
 
     @Test
     public void oneRequestMultithreadTest() {
+        when(result.accept()).thenReturn(null);
         GetRecordsResult getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
         verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords(eq(numberOfRecords));
         verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
@@ -95,23 +110,24 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
 
     @Test
     public void multiRequestTest() {
-        result = mock(GetRecordsResult.class);
-
+        ExecutorCompletionService<DataFetcherResult> completionService1 = spy(new ExecutorCompletionService<DataFetcherResult>(executorService));
+        when(completionServiceSupplier.get()).thenReturn(completionService1);
         GetRecordsResult getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
         verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords(numberOfRecords);
         verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
-        assertEquals(result, getRecordsResult);
+        assertThat(getRecordsResult, equalTo(recordsResult));
 
-        result = null;
+        when(result.accept()).thenReturn(null);
+        ExecutorCompletionService<DataFetcherResult> completionService2 = spy(new ExecutorCompletionService<DataFetcherResult>(executorService));
+        when(completionServiceSupplier.get()).thenReturn(completionService2);
         getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
-        assertNull(getRecordsResult);
+        assertThat(getRecordsResult, nullValue(GetRecordsResult.class));
     }
 
     @Test
     @Ignore
     public void testInterrupted() throws InterruptedException, ExecutionException {
-
-        Future<GetRecordsResult> mockFuture = mock(Future.class);
+        Future<DataFetcherResult> mockFuture = mock(Future.class);
         when(completionService.submit(any())).thenReturn(mockFuture);
         when(completionService.poll()).thenReturn(mockFuture);
         doThrow(InterruptedException.class).when(mockFuture).get();
@@ -138,12 +154,13 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     }
 
     private class KinesisDataFetcherForTests extends KinesisDataFetcher {
-        public KinesisDataFetcherForTests(final IKinesisProxy kinesisProxy, final ShardInfo shardInfo) {
-            super(kinesisProxy, shardInfo);
+        public KinesisDataFetcherForTests(final IKinesisProxy kinesisProxy, final ShardInfo shardInfo,
+                                          final KinesisClientLibConfiguration configuration) {
+            super(kinesisProxy, shardInfo, configuration);
         }
 
         @Override
-        public GetRecordsResult getRecords(final int maxRecords) {
+        public DataFetcherResult getRecords(final int maxRecords) {
             try {
                 Thread.sleep(SLEEP_GET_RECORDS_IN_SECONDS * 1000);
             } catch (InterruptedException e) {

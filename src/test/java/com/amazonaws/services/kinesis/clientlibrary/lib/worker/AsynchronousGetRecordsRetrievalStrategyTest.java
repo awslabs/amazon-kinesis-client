@@ -30,7 +30,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -51,23 +53,34 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
     @Mock
     private ExecutorService executorService;
     @Mock
-    private CompletionService<GetRecordsResult> completionService;
+    private Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
     @Mock
-    private Future<GetRecordsResult> successfulFuture;
+    private CompletionService<DataFetcherResult> completionService;
     @Mock
-    private Future<GetRecordsResult> blockedFuture;
+    private Future<DataFetcherResult> successfulFuture;
+    @Mock
+    private Future<DataFetcherResult> blockedFuture;
+    @Mock
+    private DataFetcherResult dataFetcherResult;
     @Mock
     private GetRecordsResult expectedResults;
+
+    @Before
+    public void before() {
+        when(completionServiceSupplier.get()).thenReturn(completionService);
+        when(dataFetcherResult.getResult()).thenReturn(expectedResults);
+        when(dataFetcherResult.accept()).thenReturn(expectedResults);
+    }
 
     @Test
     public void testSingleSuccessfulRequestFuture() throws Exception {
         AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
-                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionService, SHARD_ID);
+                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
         when(executorService.isShutdown()).thenReturn(false);
         when(completionService.submit(any())).thenReturn(successfulFuture);
         when(completionService.poll(anyLong(), any())).thenReturn(successfulFuture);
-        when(successfulFuture.get()).thenReturn(expectedResults);
+        when(successfulFuture.get()).thenReturn(dataFetcherResult);
 
         GetRecordsResult result = strategy.getRecords(10);
 
@@ -76,8 +89,6 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         verify(completionService).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
         verify(successfulFuture).get();
         verify(successfulFuture).cancel(eq(true));
-        verify(successfulFuture).isCancelled();
-        verify(completionService, never()).take();
 
         assertThat(result, equalTo(expectedResults));
     }
@@ -85,12 +96,12 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
     @Test
     public void testBlockedAndSuccessfulFuture() throws Exception {
         AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
-                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionService, SHARD_ID);
+                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
         when(executorService.isShutdown()).thenReturn(false);
         when(completionService.submit(any())).thenReturn(blockedFuture).thenReturn(successfulFuture);
         when(completionService.poll(anyLong(), any())).thenReturn(null).thenReturn(successfulFuture);
-        when(successfulFuture.get()).thenReturn(expectedResults);
+        when(successfulFuture.get()).thenReturn(dataFetcherResult);
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
         when(successfulFuture.isCancelled()).thenReturn(false);
@@ -104,9 +115,6 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         verify(blockedFuture, never()).get();
         verify(successfulFuture).cancel(eq(true));
         verify(blockedFuture).cancel(eq(true));
-        verify(successfulFuture).isCancelled();
-        verify(blockedFuture).isCancelled();
-        verify(completionService).take();
 
         assertThat(actualResults, equalTo(expectedResults));
     }
@@ -114,7 +122,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
     @Test(expected = IllegalStateException.class)
     public void testStrategyIsShutdown() throws Exception {
         AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
-                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionService, SHARD_ID);
+                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
         when(executorService.isShutdown()).thenReturn(true);
 
@@ -124,12 +132,12 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
     @Test
     public void testPoolOutOfResources() throws Exception {
         AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
-                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionService, SHARD_ID);
+                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
         when(executorService.isShutdown()).thenReturn(false);
         when(completionService.submit(any())).thenReturn(blockedFuture).thenThrow(new RejectedExecutionException("Rejected!")).thenReturn(successfulFuture);
         when(completionService.poll(anyLong(), any())).thenReturn(null).thenReturn(null).thenReturn(successfulFuture);
-        when(successfulFuture.get()).thenReturn(expectedResults);
+        when(successfulFuture.get()).thenReturn(dataFetcherResult);
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
         when(successfulFuture.isCancelled()).thenReturn(false);
@@ -141,9 +149,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         verify(completionService, times(3)).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
         verify(successfulFuture).cancel(eq(true));
         verify(blockedFuture).cancel(eq(true));
-        verify(successfulFuture).isCancelled();
-        verify(blockedFuture).isCancelled();
-        verify(completionService).take();
+
 
         assertThat(actualResult, equalTo(expectedResults));
     }

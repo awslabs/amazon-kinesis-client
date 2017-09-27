@@ -1,19 +1,20 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 
@@ -28,6 +29,8 @@ import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
+import lombok.Data;
+
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
  */
@@ -40,16 +43,18 @@ class KinesisDataFetcher {
     private final String shardId;
     private boolean isShardEndReached;
     private boolean isInitialized;
+    private Instant lastResponseTime;
+    private long idleMillisBetweenCalls;
 
     /**
      *
      * @param kinesisProxy Kinesis proxy
      * @param shardInfo The shardInfo object.
      */
-    public KinesisDataFetcher(IKinesisProxy kinesisProxy, ShardInfo shardInfo) {
+    public KinesisDataFetcher(IKinesisProxy kinesisProxy, ShardInfo shardInfo, KinesisClientLibConfiguration configuration) {
         this.shardId = shardInfo.getShardId();
-        this.kinesisProxy =
-                new MetricsCollectingKinesisProxyDecorator("KinesisDataFetcher", kinesisProxy, this.shardId);
+        this.kinesisProxy = new MetricsCollectingKinesisProxyDecorator("KinesisDataFetcher", kinesisProxy, this.shardId);
+        this.idleMillisBetweenCalls = configuration.getIdleMillisBetweenCalls();
     }
 
     /**
@@ -58,32 +63,65 @@ class KinesisDataFetcher {
      * @param maxRecords Max records to fetch
      * @return list of records of up to maxRecords size
      */
-    public GetRecordsResult getRecords(int maxRecords) {
+    public DataFetcherResult getRecords(int maxRecords) {
         if (!isInitialized) {
             throw new IllegalArgumentException("KinesisDataFetcher.getRecords called before initialization.");
         }
-
-        GetRecordsResult response = null;
+        
         if (nextIterator != null) {
             try {
-                response = kinesisProxy.get(nextIterator, maxRecords);
-                nextIterator = response.getNextShardIterator();
+                return new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
-                nextIterator = null;
+                return TERMINAL_RESULT;
             }
+        } else {
+            return TERMINAL_RESULT;
+        }
+    }
+
+    final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
+        @Override
+        public GetRecordsResult getResult() {
+            return new GetRecordsResult().withMillisBehindLatest(null).withRecords(Collections.emptyList())
+                    .withNextShardIterator(null);
+        }
+
+        @Override
+        public GetRecordsResult accept() {
+            isShardEndReached = true;
+            return getResult();
+        }
+
+        @Override
+        public boolean isShardEnd() {
+            return isShardEndReached;
+        }
+    };
+
+    @Data
+    class AdvancingResult implements DataFetcherResult {
+
+        final GetRecordsResult result;
+
+        @Override
+        public GetRecordsResult getResult() {
+            return result;
+        }
+
+        @Override
+        public GetRecordsResult accept() {
+            nextIterator = result.getNextShardIterator();
             if (nextIterator == null) {
                 isShardEndReached = true;
             }
-        } else {
-            isShardEndReached = true;
-        }
-        
-        if (response == null) {
-            response = new GetRecordsResult().withRecords(Collections.emptyList());
+            return getResult();
         }
 
-        return response;
+        @Override
+        public boolean isShardEnd() {
+            return isShardEndReached;
+        }
     }
 
     /**
