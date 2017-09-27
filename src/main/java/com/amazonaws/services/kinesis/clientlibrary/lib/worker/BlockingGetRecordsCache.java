@@ -51,9 +51,12 @@ public class BlockingGetRecordsCache implements GetRecordsCache {
     }
 
     @Override
+    public GetRecordsRetrievalStrategy getGetRecordsRetrievalStrategy() {
+        return getRecordsRetrievalStrategy;
+    }
+
+    @Override
     public void shutdown() {
-        //
-        // Nothing to do here.
-        //
+        getRecordsRetrievalStrategy.shutdown();
     }
 }

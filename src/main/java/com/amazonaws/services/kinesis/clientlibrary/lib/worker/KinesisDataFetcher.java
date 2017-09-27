@@ -1,19 +1,21 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 
@@ -40,16 +42,18 @@ class KinesisDataFetcher {
     private final String shardId;
     private boolean isShardEndReached;
     private boolean isInitialized;
+    private Instant lastResponseTime;
+    private long idleMillisBetweenCalls;
 
     /**
      *
      * @param kinesisProxy Kinesis proxy
      * @param shardInfo The shardInfo object.
      */
-    public KinesisDataFetcher(IKinesisProxy kinesisProxy, ShardInfo shardInfo) {
+    public KinesisDataFetcher(IKinesisProxy kinesisProxy, ShardInfo shardInfo, KinesisClientLibConfiguration configuration) {
         this.shardId = shardInfo.getShardId();
-        this.kinesisProxy =
-                new MetricsCollectingKinesisProxyDecorator("KinesisDataFetcher", kinesisProxy, this.shardId);
+        this.kinesisProxy = new MetricsCollectingKinesisProxyDecorator("KinesisDataFetcher", kinesisProxy, this.shardId);
+        this.idleMillisBetweenCalls = configuration.getIdleMillisBetweenCalls();
     }
 
     /**
@@ -66,7 +70,9 @@ class KinesisDataFetcher {
         GetRecordsResult response = null;
         if (nextIterator != null) {
             try {
+                sleepBeforeNextCall();
                 response = kinesisProxy.get(nextIterator, maxRecords);
+                lastResponseTime = Instant.now();
                 nextIterator = response.getNextShardIterator();
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
@@ -181,6 +187,19 @@ class KinesisDataFetcher {
             LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
         }
         return iterator;
+    }
+    
+    protected void sleepBeforeNextCall() {
+        if (lastResponseTime != null) {
+            long timeDiff = Duration.between(lastResponseTime, Instant.now()).abs().toMillis();
+            if (timeDiff < idleMillisBetweenCalls) {
+                try {
+                    Thread.sleep(idleMillisBetweenCalls - timeDiff);
+                } catch (InterruptedException e) {
+                    LOG.info("Thread interrupted, shutdown possibly called.");
+                }
+            }
+        }
     }
 
     /**

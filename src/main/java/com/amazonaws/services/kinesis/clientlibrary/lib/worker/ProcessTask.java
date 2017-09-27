@@ -18,7 +18,6 @@ import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Optional;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -63,7 +62,7 @@ class ProcessTask implements ITask {
     private final Shard shard;
     private final ThrottlingReporter throttlingReporter;
 
-    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+    private final GetRecordsCache getRecordsCache;
 
     /**
      * @param shardInfo
@@ -78,17 +77,17 @@ class ProcessTask implements ITask {
      *            Kinesis data fetcher (used to fetch records from Kinesis)
      * @param backoffTimeMillis
      *            backoff time when catching exceptions
-     * @param getRecordsRetrievalStrategy
+     * @param getRecordsCache
      *            The retrieval strategy for fetching records from kinesis
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
                        RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
                        long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+                       GetRecordsCache getRecordsCache) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
                 new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()),
-                getRecordsRetrievalStrategy);
+                getRecordsCache);
     }
 
     /**
@@ -110,7 +109,7 @@ class ProcessTask implements ITask {
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
                        RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
                        long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+                       ThrottlingReporter throttlingReporter, GetRecordsCache getRecordsCache) {
         super();
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -120,7 +119,7 @@ class ProcessTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
         this.throttlingReporter = throttlingReporter;
         IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
-        this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
+        this.getRecordsCache = getRecordsCache;
         // If skipShardSyncAtWorkerInitializationIfLeasesExist is set, we will not get the shard for
         // this ProcessTask. In this case, duplicate KPL user records in the event of resharding will
         // not be dropped during deaggregation of Amazon Kinesis records. This is only applicable if
@@ -158,9 +157,9 @@ class ProcessTask implements ITask {
                 return new TaskResult(null, true);
             }
 
-            final GetRecordsResult getRecordsResult = getRecordsResult();
+            final ProcessRecordsInput processRecordsInput = getRecordsResult();
             throttlingReporter.success();
-            List<Record> records = getRecordsResult.getRecords();
+            List<Record> records = processRecordsInput.getRecords();
 
             if (!records.isEmpty()) {
                 scope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.Count, MetricsLevel.SUMMARY);
@@ -175,7 +174,7 @@ class ProcessTask implements ITask {
                             recordProcessorCheckpointer.getLargestPermittedCheckpointValue()));
 
             if (shouldCallProcessRecords(records)) {
-                callProcessRecords(getRecordsResult, records);
+                callProcessRecords(processRecordsInput, records);
             }
         } catch (ProvisionedThroughputExceededException pte) {
             throttlingReporter.throttled();
@@ -206,17 +205,17 @@ class ProcessTask implements ITask {
     /**
      * Dispatches a batch of records to the record processor, and handles any fallout from that.
      *
-     * @param getRecordsResult
+     * @param input
      *            the result of the last call to Kinesis
      * @param records
      *            the records to be dispatched. It's possible the records have been adjusted by KPL deaggregation.
      */
-    private void callProcessRecords(GetRecordsResult getRecordsResult, List<Record> records) {
+    private void callProcessRecords(ProcessRecordsInput input, List<Record> records) {
         LOG.debug("Calling application processRecords() with " + records.size() + " records from "
                 + shardInfo.getShardId());
         final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput().withRecords(records)
                 .withCheckpointer(recordProcessorCheckpointer)
-                .withMillisBehindLatest(getRecordsResult.getMillisBehindLatest());
+                .withMillisBehindLatest(input.getMillisBehindLatest());
 
         final long recordProcessorStartTimeMillis = System.currentTimeMillis();
         try {
@@ -339,7 +338,7 @@ class ProcessTask implements ITask {
      *
      * @return list of data records from Kinesis
      */
-    private GetRecordsResult getRecordsResult() {
+    private ProcessRecordsInput getRecordsResult() {
         try {
             return getRecordsResultAndRecordMillisBehindLatest();
         } catch (ExpiredIteratorException e) {
@@ -375,22 +374,17 @@ class ProcessTask implements ITask {
      *
      * @return list of data records from Kinesis
      */
-    private GetRecordsResult getRecordsResultAndRecordMillisBehindLatest() {
-        final GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(streamConfig.getMaxRecords());
+    private ProcessRecordsInput getRecordsResultAndRecordMillisBehindLatest() {
+        final ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult();
 
-        if (getRecordsResult == null) {
-            // Stream no longer exists
-            return new GetRecordsResult().withRecords(Collections.<Record>emptyList());
-        }
-
-        if (getRecordsResult.getMillisBehindLatest() != null) {
+        if (processRecordsInput.getMillisBehindLatest() != null) {
             MetricsHelper.getMetricsScope().addData(MILLIS_BEHIND_LATEST_METRIC,
-                    getRecordsResult.getMillisBehindLatest(),
+                    processRecordsInput.getMillisBehindLatest(),
                     StandardUnit.Milliseconds,
                     MetricsLevel.SUMMARY);
         }
 
-        return getRecordsResult;
+        return processRecordsInput;
     }
 
 }

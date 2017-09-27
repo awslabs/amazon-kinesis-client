@@ -126,7 +126,7 @@ public class KinesisClientLibConfiguration {
     /**
      * User agent set when Amazon Kinesis Client Library makes AWS requests.
      */
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.8.3";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.8.4";
 
     /**
      * KCL will validate client provided sequence numbers with a call to Amazon Kinesis before checkpointing for calls
@@ -182,6 +182,11 @@ public class KinesisClientLibConfiguration {
      */
     public static final int DEFAULT_MAX_LEASE_RENEWAL_THREADS = 20;
 
+    /**
+     * The amount of time to sleep in between 2 get calls from the data fetcher.
+     */
+    public static final long DEFAULT_IDLE_MILLIS_BETWEEN_CALLS = 1500L;
+
     private String applicationName;
     private String tableName;
     private String streamName;
@@ -234,6 +239,9 @@ public class KinesisClientLibConfiguration {
 
     @Getter
     private RecordsFetcherFactory recordsFetcherFactory;
+    
+    @Getter
+    private long idleMillisBetweenCalls;
 
     /**
      * Constructor.
@@ -270,15 +278,32 @@ public class KinesisClientLibConfiguration {
             AWSCredentialsProvider dynamoDBCredentialsProvider,
             AWSCredentialsProvider cloudWatchCredentialsProvider,
             String workerId) {
-        this(applicationName, streamName, null, null, DEFAULT_INITIAL_POSITION_IN_STREAM, kinesisCredentialsProvider,
-                dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, DEFAULT_FAILOVER_TIME_MILLIS, workerId,
-                DEFAULT_MAX_RECORDS, DEFAULT_IDLETIME_BETWEEN_READS_MILLIS,
-                DEFAULT_DONT_CALL_PROCESS_RECORDS_FOR_EMPTY_RECORD_LIST, DEFAULT_PARENT_SHARD_POLL_INTERVAL_MILLIS,
-                DEFAULT_SHARD_SYNC_INTERVAL_MILLIS, DEFAULT_CLEANUP_LEASES_UPON_SHARDS_COMPLETION,
-                new ClientConfiguration(), new ClientConfiguration(), new ClientConfiguration(),
-                DEFAULT_TASK_BACKOFF_TIME_MILLIS, DEFAULT_METRICS_BUFFER_TIME_MILLIS, DEFAULT_METRICS_MAX_QUEUE_SIZE,
-                DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING, null,
-                DEFAULT_SHUTDOWN_GRACE_MILLIS);
+        this(applicationName,
+                streamName,
+                null,
+                null,
+                DEFAULT_INITIAL_POSITION_IN_STREAM,
+                kinesisCredentialsProvider,
+                dynamoDBCredentialsProvider,
+                cloudWatchCredentialsProvider,
+                DEFAULT_FAILOVER_TIME_MILLIS,
+                workerId,
+                DEFAULT_MAX_RECORDS,
+                DEFAULT_IDLETIME_BETWEEN_READS_MILLIS,
+                DEFAULT_DONT_CALL_PROCESS_RECORDS_FOR_EMPTY_RECORD_LIST,
+                DEFAULT_PARENT_SHARD_POLL_INTERVAL_MILLIS,
+                DEFAULT_SHARD_SYNC_INTERVAL_MILLIS,
+                DEFAULT_CLEANUP_LEASES_UPON_SHARDS_COMPLETION,
+                new ClientConfiguration(),
+                new ClientConfiguration(),
+                new ClientConfiguration(),
+                DEFAULT_TASK_BACKOFF_TIME_MILLIS,
+                DEFAULT_METRICS_BUFFER_TIME_MILLIS,
+                DEFAULT_METRICS_MAX_QUEUE_SIZE,
+                DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING,
+                null,
+                DEFAULT_SHUTDOWN_GRACE_MILLIS,
+                DEFAULT_IDLE_MILLIS_BETWEEN_CALLS);
     }
 
     /**
@@ -318,29 +343,30 @@ public class KinesisClientLibConfiguration {
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
     public KinesisClientLibConfiguration(String applicationName,
-            String streamName,
-            String kinesisEndpoint,
-            InitialPositionInStream initialPositionInStream,
-            AWSCredentialsProvider kinesisCredentialsProvider,
-            AWSCredentialsProvider dynamoDBCredentialsProvider,
-            AWSCredentialsProvider cloudWatchCredentialsProvider,
-            long failoverTimeMillis,
-            String workerId,
-            int maxRecords,
-            long idleTimeBetweenReadsInMillis,
-            boolean callProcessRecordsEvenForEmptyRecordList,
-            long parentShardPollIntervalMillis,
-            long shardSyncIntervalMillis,
-            boolean cleanupTerminatedShardsBeforeExpiry,
-            ClientConfiguration kinesisClientConfig,
-            ClientConfiguration dynamoDBClientConfig,
-            ClientConfiguration cloudWatchClientConfig,
-            long taskBackoffTimeMillis,
-            long metricsBufferTimeMillis,
-            int metricsMaxQueueSize,
-            boolean validateSequenceNumberBeforeCheckpointing,
-            String regionName,
-            long shutdownGraceMillis) {
+                                         String streamName,
+                                         String kinesisEndpoint,
+                                         InitialPositionInStream initialPositionInStream,
+                                         AWSCredentialsProvider kinesisCredentialsProvider,
+                                         AWSCredentialsProvider dynamoDBCredentialsProvider,
+                                         AWSCredentialsProvider cloudWatchCredentialsProvider,
+                                         long failoverTimeMillis,
+                                         String workerId,
+                                         int maxRecords,
+                                         long idleTimeBetweenReadsInMillis,
+                                         boolean callProcessRecordsEvenForEmptyRecordList,
+                                         long parentShardPollIntervalMillis,
+                                         long shardSyncIntervalMillis,
+                                         boolean cleanupTerminatedShardsBeforeExpiry,
+                                         ClientConfiguration kinesisClientConfig,
+                                         ClientConfiguration dynamoDBClientConfig,
+                                         ClientConfiguration cloudWatchClientConfig,
+                                         long taskBackoffTimeMillis,
+                                         long metricsBufferTimeMillis,
+                                         int metricsMaxQueueSize,
+                                         boolean validateSequenceNumberBeforeCheckpointing,
+                                         String regionName,
+                                         long shutdownGraceMillis,
+                                         long idleMillisBetweenCalls) {
         this(applicationName, streamName, kinesisEndpoint, null, initialPositionInStream, kinesisCredentialsProvider,
                 dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, failoverTimeMillis, workerId,
                 maxRecords, idleTimeBetweenReadsInMillis,
@@ -348,7 +374,7 @@ public class KinesisClientLibConfiguration {
                 shardSyncIntervalMillis, cleanupTerminatedShardsBeforeExpiry,
                 kinesisClientConfig, dynamoDBClientConfig, cloudWatchClientConfig,
                 taskBackoffTimeMillis, metricsBufferTimeMillis, metricsMaxQueueSize,
-             validateSequenceNumberBeforeCheckpointing, regionName, shutdownGraceMillis);
+                validateSequenceNumberBeforeCheckpointing, regionName, shutdownGraceMillis, idleMillisBetweenCalls);
     }
 
     /**
@@ -388,30 +414,31 @@ public class KinesisClientLibConfiguration {
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
     public KinesisClientLibConfiguration(String applicationName,
-            String streamName,
-            String kinesisEndpoint,
-            String dynamoDBEndpoint,
-            InitialPositionInStream initialPositionInStream,
-            AWSCredentialsProvider kinesisCredentialsProvider,
-            AWSCredentialsProvider dynamoDBCredentialsProvider,
-            AWSCredentialsProvider cloudWatchCredentialsProvider,
-            long failoverTimeMillis,
-            String workerId,
-            int maxRecords,
-            long idleTimeBetweenReadsInMillis,
-            boolean callProcessRecordsEvenForEmptyRecordList,
-            long parentShardPollIntervalMillis,
-            long shardSyncIntervalMillis,
-            boolean cleanupTerminatedShardsBeforeExpiry,
-            ClientConfiguration kinesisClientConfig,
-            ClientConfiguration dynamoDBClientConfig,
-            ClientConfiguration cloudWatchClientConfig,
-            long taskBackoffTimeMillis,
-            long metricsBufferTimeMillis,
-            int metricsMaxQueueSize,
-            boolean validateSequenceNumberBeforeCheckpointing,
-            String regionName,
-            long shutdownGraceMillis) {
+                                         String streamName,
+                                         String kinesisEndpoint,
+                                         String dynamoDBEndpoint,
+                                         InitialPositionInStream initialPositionInStream,
+                                         AWSCredentialsProvider kinesisCredentialsProvider,
+                                         AWSCredentialsProvider dynamoDBCredentialsProvider,
+                                         AWSCredentialsProvider cloudWatchCredentialsProvider,
+                                         long failoverTimeMillis,
+                                         String workerId,
+                                         int maxRecords,
+                                         long idleTimeBetweenReadsInMillis,
+                                         boolean callProcessRecordsEvenForEmptyRecordList,
+                                         long parentShardPollIntervalMillis,
+                                         long shardSyncIntervalMillis,
+                                         boolean cleanupTerminatedShardsBeforeExpiry,
+                                         ClientConfiguration kinesisClientConfig,
+                                         ClientConfiguration dynamoDBClientConfig,
+                                         ClientConfiguration cloudWatchClientConfig,
+                                         long taskBackoffTimeMillis,
+                                         long metricsBufferTimeMillis,
+                                         int metricsMaxQueueSize,
+                                         boolean validateSequenceNumberBeforeCheckpointing,
+                                         String regionName,
+                                         long shutdownGraceMillis,
+                                         long idleMillisBetweenCalls) {
         // Check following values are greater than zero
         checkIsValuePositive("FailoverTimeMillis", failoverTimeMillis);
         checkIsValuePositive("IdleTimeBetweenReadsInMillis", idleTimeBetweenReadsInMillis);
@@ -422,6 +449,7 @@ public class KinesisClientLibConfiguration {
         checkIsValuePositive("MetricsBufferTimeMills", metricsBufferTimeMillis);
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
         checkIsValuePositive("ShutdownGraceMillis", shutdownGraceMillis);
+        checkIsValuePositive("IdleMillisBetweenCalls", idleMillisBetweenCalls);
         checkIsRegionNameValid(regionName);
         this.applicationName = applicationName;
         this.tableName = applicationName;
@@ -459,6 +487,7 @@ public class KinesisClientLibConfiguration {
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = new SimpleRecordsFetcherFactory(this.maxRecords);
+        this.idleMillisBetweenCalls = idleMillisBetweenCalls;
     }
 
     /**
@@ -1290,7 +1319,13 @@ public class KinesisClientLibConfiguration {
     }
 
     public KinesisClientLibConfiguration withDataFetchingStrategy(String dataFetchingStrategy) {
-        recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.valueOf(dataFetchingStrategy));
+        switch (dataFetchingStrategy.toUpperCase()) {
+            case "PREFETCH_CACHED":
+                recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.PREFETCH_CACHED);
+                break;
+            default:
+                recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.DEFAULT);
+        }
         return this;
     }
 
@@ -1314,6 +1349,16 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withShutdownGraceMillis(long shutdownGraceMillis) {
         checkIsValuePositive("ShutdownGraceMillis", shutdownGraceMillis);
         this.shutdownGraceMillis = shutdownGraceMillis;
+        return this;
+    }
+
+    /** 
+     * @param idleMillisBetweenCalls Idle time between 2 getcalls from the data fetcher.
+     * @return
+     */
+    public KinesisClientLibConfiguration withIdleMillisBetweenCalls(long idleMillisBetweenCalls) {
+        checkIsValuePositive("IdleMillisBetweenCalls", idleMillisBetweenCalls);
+        this.idleMillisBetweenCalls = idleMillisBetweenCalls;
         return this;
     }
 }

@@ -33,6 +33,8 @@ public interface GetRecordsCache {
      * @return The next set of records.
      */
     ProcessRecordsInput getNextResult();
+    
+    GetRecordsRetrievalStrategy getGetRecordsRetrievalStrategy();
 
     /**
      * This method calls the shutdown behavior on the cache, if available.
