@@ -14,9 +14,20 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
@@ -26,6 +37,9 @@ import java.util.List;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
@@ -39,15 +53,17 @@ import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
 
 /**
  * Unit tests for KinesisDataFetcher.
  */
 @RunWith(MockitoJUnitRunner.class)
 public class KinesisDataFetcherTest {
+
+    @Mock
+    private KinesisProxy kinesisProxy;
+    @Mock
+    private KinesisClientLibConfiguration configuration;
 
     private static final int MAX_RECORDS = 1;
     private static final String SHARD_ID = "shardId-1";
@@ -59,9 +75,6 @@ public class KinesisDataFetcherTest {
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
     private static final InitialPositionInStreamExtended INITIAL_POSITION_AT_TIMESTAMP =
             InitialPositionInStreamExtended.newInitialPositionAtTimestamp(new Date(1000));
-    
-    @Mock
-    private KinesisClientLibConfiguration configuration;
 
     /**
      * @throws java.lang.Exception
@@ -212,10 +225,86 @@ public class KinesisDataFetcherTest {
         KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO, configuration);
         dataFetcher.initialize(SentinelCheckpoint.LATEST.toString(), INITIAL_POSITION_LATEST);
         
-        GetRecordsResult getRecordsResult = dataFetcher.getRecords(maxRecords);
+        DataFetcherResult dataFetcherResult = dataFetcher.getRecords(maxRecords);
         
-        Assert.assertNotNull(getRecordsResult);
-        Assert.assertTrue(getRecordsResult.getRecords().isEmpty());
+        assertThat(dataFetcherResult, notNullValue());
+    }
+
+    @Test
+    public void testFetcherDoesNotAdvanceWithoutAccept() {
+        final String INITIAL_ITERATOR = "InitialIterator";
+        final String NEXT_ITERATOR_ONE = "NextIteratorOne";
+        final String NEXT_ITERATOR_TWO = "NextIteratorTwo";
+        when(kinesisProxy.getIterator(anyString(), anyString())).thenReturn(INITIAL_ITERATOR);
+        GetRecordsResult iteratorOneResults = mock(GetRecordsResult.class);
+        when(iteratorOneResults.getNextShardIterator()).thenReturn(NEXT_ITERATOR_ONE);
+        when(kinesisProxy.get(eq(INITIAL_ITERATOR), anyInt())).thenReturn(iteratorOneResults);
+
+        GetRecordsResult iteratorTwoResults = mock(GetRecordsResult.class);
+        when(kinesisProxy.get(eq(NEXT_ITERATOR_ONE), anyInt())).thenReturn(iteratorTwoResults);
+        when(iteratorTwoResults.getNextShardIterator()).thenReturn(NEXT_ITERATOR_TWO);
+
+        GetRecordsResult finalResult = mock(GetRecordsResult.class);
+        when(kinesisProxy.get(eq(NEXT_ITERATOR_TWO), anyInt())).thenReturn(finalResult);
+        when(finalResult.getNextShardIterator()).thenReturn(null);
+
+        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(kinesisProxy, SHARD_INFO, configuration);
+        dataFetcher.initialize("TRIM_HORIZON",
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON));
+
+        assertNoAdvance(dataFetcher, iteratorOneResults, INITIAL_ITERATOR);
+        assertAdvanced(dataFetcher, iteratorOneResults, INITIAL_ITERATOR, NEXT_ITERATOR_ONE);
+
+        assertNoAdvance(dataFetcher, iteratorTwoResults, NEXT_ITERATOR_ONE);
+        assertAdvanced(dataFetcher, iteratorTwoResults, NEXT_ITERATOR_ONE, NEXT_ITERATOR_TWO);
+
+        assertNoAdvance(dataFetcher, finalResult, NEXT_ITERATOR_TWO);
+        assertAdvanced(dataFetcher, finalResult, NEXT_ITERATOR_TWO, null);
+
+        verify(kinesisProxy, times(2)).get(eq(INITIAL_ITERATOR), anyInt());
+        verify(kinesisProxy, times(2)).get(eq(NEXT_ITERATOR_ONE), anyInt());
+        verify(kinesisProxy, times(2)).get(eq(NEXT_ITERATOR_TWO), anyInt());
+
+        reset(kinesisProxy);
+
+        DataFetcherResult terminal = dataFetcher.getRecords(100);
+        assertThat(terminal.isShardEnd(), equalTo(true));
+        assertThat(terminal.getResult(), nullValue());
+        assertThat(terminal, equalTo(dataFetcher.TERMINAL_RESULT));
+
+        verify(kinesisProxy, never()).get(anyString(), anyInt());
+    }
+
+    private DataFetcherResult assertAdvanced(KinesisDataFetcher dataFetcher, GetRecordsResult expectedResult,
+            String previousValue, String nextValue) {
+        DataFetcherResult acceptResult = dataFetcher.getRecords(100);
+        assertThat(acceptResult.getResult(), equalTo(expectedResult));
+
+        assertThat(dataFetcher.getNextIterator(), equalTo(previousValue));
+        assertThat(dataFetcher.isShardEndReached(), equalTo(false));
+
+        assertThat(acceptResult.accept(), equalTo(expectedResult));
+        assertThat(dataFetcher.getNextIterator(), equalTo(nextValue));
+        if (nextValue == null) {
+            assertThat(dataFetcher.isShardEndReached(), equalTo(true));
+        }
+
+        verify(kinesisProxy, times(2)).get(eq(previousValue), anyInt());
+
+        return acceptResult;
+    }
+
+    private DataFetcherResult assertNoAdvance(KinesisDataFetcher dataFetcher, GetRecordsResult expectedResult,
+            String previousValue) {
+        assertThat(dataFetcher.getNextIterator(), equalTo(previousValue));
+        DataFetcherResult noAcceptResult = dataFetcher.getRecords(100);
+        assertThat(noAcceptResult.getResult(), equalTo(expectedResult));
+
+        assertThat(dataFetcher.getNextIterator(), equalTo(previousValue));
+
+        verify(kinesisProxy).get(eq(previousValue), anyInt());
+
+        return noAcceptResult;
     }
 
     private void testInitializeAndFetch(String iteratorType,
