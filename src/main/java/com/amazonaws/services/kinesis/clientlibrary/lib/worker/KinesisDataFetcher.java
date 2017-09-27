@@ -14,7 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
@@ -29,6 +28,8 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
+
+import lombok.Data;
 
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
@@ -62,34 +63,65 @@ class KinesisDataFetcher {
      * @param maxRecords Max records to fetch
      * @return list of records of up to maxRecords size
      */
-    public GetRecordsResult getRecords(int maxRecords) {
+    public DataFetcherResult getRecords(int maxRecords) {
         if (!isInitialized) {
             throw new IllegalArgumentException("KinesisDataFetcher.getRecords called before initialization.");
         }
-
-        GetRecordsResult response = null;
+        
         if (nextIterator != null) {
             try {
-                sleepBeforeNextCall();
-                response = kinesisProxy.get(nextIterator, maxRecords);
-                lastResponseTime = Instant.now();
-                nextIterator = response.getNextShardIterator();
+                return new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
-                nextIterator = null;
+                return TERMINAL_RESULT;
             }
+        } else {
+            return TERMINAL_RESULT;
+        }
+    }
+
+    final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
+        @Override
+        public GetRecordsResult getResult() {
+            return new GetRecordsResult().withMillisBehindLatest(null).withRecords(Collections.emptyList())
+                    .withNextShardIterator(null);
+        }
+
+        @Override
+        public GetRecordsResult accept() {
+            isShardEndReached = true;
+            return getResult();
+        }
+
+        @Override
+        public boolean isShardEnd() {
+            return isShardEndReached;
+        }
+    };
+
+    @Data
+    class AdvancingResult implements DataFetcherResult {
+
+        final GetRecordsResult result;
+
+        @Override
+        public GetRecordsResult getResult() {
+            return result;
+        }
+
+        @Override
+        public GetRecordsResult accept() {
+            nextIterator = result.getNextShardIterator();
             if (nextIterator == null) {
                 isShardEndReached = true;
             }
-        } else {
-            isShardEndReached = true;
-        }
-        
-        if (response == null) {
-            response = new GetRecordsResult().withRecords(Collections.emptyList());
+            return getResult();
         }
 
-        return response;
+        @Override
+        public boolean isShardEnd() {
+            return isShardEndReached;
+        }
     }
 
     /**
@@ -187,19 +219,6 @@ class KinesisDataFetcher {
             LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
         }
         return iterator;
-    }
-    
-    protected void sleepBeforeNextCall() {
-        if (lastResponseTime != null) {
-            long timeDiff = Duration.between(lastResponseTime, Instant.now()).abs().toMillis();
-            if (timeDiff < idleMillisBetweenCalls) {
-                try {
-                    Thread.sleep(idleMillisBetweenCalls - timeDiff);
-                } catch (InterruptedException e) {
-                    LOG.info("Thread interrupted, shutdown possibly called.");
-                }
-            }
-        }
     }
 
     /**

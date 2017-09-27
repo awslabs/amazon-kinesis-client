@@ -181,14 +181,15 @@ public class PrefetchGetRecordsCacheIntegrationTest {
         }
 
         @Override
-        public GetRecordsResult getRecords(final int maxRecords) {
+        public DataFetcherResult getRecords(final int maxRecords) {
+
+
+
             GetRecordsResult getRecordsResult = new GetRecordsResult();
             getRecordsResult.setRecords(new ArrayList<>(records));
             getRecordsResult.setMillisBehindLatest(1000L);
 
-            sleepBeforeNextCall();
-            
-            return getRecordsResult;
+            return new AdvancingResult(getRecordsResult);
         }
     }
 }
