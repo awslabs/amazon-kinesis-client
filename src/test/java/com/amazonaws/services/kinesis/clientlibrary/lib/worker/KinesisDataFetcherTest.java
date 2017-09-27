@@ -18,6 +18,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.collection.IsEmptyCollection.empty;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
@@ -34,6 +35,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+import org.hamcrest.CoreMatchers;
+import org.hamcrest.Matcher;
+import org.hamcrest.Matchers;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -269,7 +273,11 @@ public class KinesisDataFetcherTest {
 
         DataFetcherResult terminal = dataFetcher.getRecords(100);
         assertThat(terminal.isShardEnd(), equalTo(true));
-        assertThat(terminal.getResult(), nullValue());
+        assertThat(terminal.getResult(), notNullValue());
+        GetRecordsResult terminalResult = terminal.getResult();
+        assertThat(terminalResult.getRecords(), notNullValue());
+        assertThat(terminalResult.getRecords(), empty());
+        assertThat(terminalResult.getNextShardIterator(), nullValue());
         assertThat(terminal, equalTo(dataFetcher.TERMINAL_RESULT));
 
         verify(kinesisProxy, never()).get(anyString(), anyInt());
