@@ -115,6 +115,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
             while (true) {
                 if (Thread.currentThread().isInterrupted()) {
                     log.warn("Prefetch thread was interrupted.");
+                    callShutdownOnStrategy();
                     break;
                 }
                 if (prefetchCounters.shouldGetNewRecords()) {
@@ -129,12 +130,18 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                         getRecordsResultQueue.put(processRecordsInput);
                         prefetchCounters.added(processRecordsInput);
                     } catch (InterruptedException e) {
-                        log.info("Thread was interrupted, indicating shutdown was called on the cache. Calling shutdown on the GetRecordsRetrievalStrategy.");
-                        getRecordsRetrievalStrategy.shutdown();
+                        log.info("Thread was interrupted, indicating shutdown was called on the cache.");
+                        callShutdownOnStrategy();
                     } catch (Error e) {
                         log.error("Error was thrown while getting records, please check for the error", e);
                     }
                 }
+            }
+        }
+        
+        private void callShutdownOnStrategy() {
+            if (!getRecordsRetrievalStrategy.isShutdown()) {
+                getRecordsRetrievalStrategy.shutdown();
             }
         }
         
