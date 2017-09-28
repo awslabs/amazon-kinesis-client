@@ -14,6 +14,8 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+
 /**
  * The Amazon Kinesis Client Library will use this to instantiate a record fetcher per shard.
  * Clients may choose to create separate instantiations, or re-use instantiations.
@@ -35,5 +37,7 @@ public interface RecordsFetcherFactory {
     void setMaxRecordsCount(int maxRecordsCount);
 
     void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy);
+
+    void setMetricsFactory(IMetricsFactory metricsFactory);
 
 }

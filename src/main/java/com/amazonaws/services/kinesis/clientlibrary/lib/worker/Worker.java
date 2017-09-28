@@ -415,6 +415,7 @@ public class Worker implements Runnable {
         this.shardPrioritization = shardPrioritization;
         this.retryGetRecordsInSeconds = retryGetRecordsInSeconds;
         this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
+        this.config.getRecordsFetcherFactory().setMetricsFactory(metricsFactory);
     }
 
     /**

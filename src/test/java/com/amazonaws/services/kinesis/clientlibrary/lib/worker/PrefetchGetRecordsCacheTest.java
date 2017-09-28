@@ -36,6 +36,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.IntStream;
 
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -79,7 +80,8 @@ public class PrefetchGetRecordsCacheTest {
                 MAX_RECORDS_COUNT,
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy,
-                executorService);
+                executorService,
+                new NullMetricsFactory());
         spyQueue = spy(getRecordsCache.getRecordsResultQueue);
         records = spy(new ArrayList<>());
 

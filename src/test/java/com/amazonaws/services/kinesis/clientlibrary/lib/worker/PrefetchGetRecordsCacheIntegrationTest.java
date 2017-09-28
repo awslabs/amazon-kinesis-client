@@ -34,6 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import com.amazonaws.services.kinesis.model.Record;
 import org.junit.After;
 import org.junit.Before;
@@ -85,7 +86,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 MAX_RECORDS_COUNT,
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy,
-                executorService);
+                executorService,
+                new NullMetricsFactory());
     }
     
     @Test
@@ -128,7 +130,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 MAX_RECORDS_COUNT,
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy2,
-                executorService2
+                executorService2,
+                new NullMetricsFactory()
         );
         
         getRecordsCache.start();

@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.concurrent.Executors;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import lombok.extern.apachecommons.CommonsLog;
 
 @CommonsLog
@@ -25,6 +26,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private int maxByteSize = 8 * 1024 * 1024;
     private int maxRecordsCount = 30000;
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
+    private IMetricsFactory metricsFactory;
 
     public SimpleRecordsFetcherFactory(int maxRecords) {
         this.maxRecords = maxRecords;
@@ -36,7 +38,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
             return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy);
         } else {
             return new PrefetchGetRecordsCache(maxSize, maxByteSize, maxRecordsCount, maxRecords,
-                    getRecordsRetrievalStrategy, Executors.newFixedThreadPool(1));
+                    getRecordsRetrievalStrategy, Executors.newFixedThreadPool(1), metricsFactory);
         }
     }
 
@@ -58,5 +60,10 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     @Override
     public void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy){
         this.dataFetchingStrategy = dataFetchingStrategy;
+    }
+
+    @Override
+    public void setMetricsFactory(IMetricsFactory metricsFactory) {
+        this.metricsFactory = metricsFactory;
     }
 }

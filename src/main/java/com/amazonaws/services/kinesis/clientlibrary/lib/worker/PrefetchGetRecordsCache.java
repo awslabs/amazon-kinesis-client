@@ -20,6 +20,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
 import lombok.NonNull;
@@ -42,6 +45,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final ExecutorService executorService;
+    private final IMetricsFactory metricsFactory;
 
     private PrefetchCounters prefetchCounters;
 
@@ -50,7 +54,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     public PrefetchGetRecordsCache(final int maxSize, final int maxByteSize, final int maxRecordsCount,
                                    final int maxRecordsPerCall,
                                    @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
-                                   @NonNull final ExecutorService executorService) {
+                                   @NonNull final ExecutorService executorService,
+                                   @NonNull final IMetricsFactory metricsFactory) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.maxSize = maxSize;
@@ -59,6 +64,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxSize);
         this.prefetchCounters = new PrefetchCounters();
         this.executorService = executorService;
+        this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
     }
 
     @Override
@@ -115,6 +121,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                 }
                 if (prefetchCounters.shouldGetNewRecords()) {
                     try {
+                        MetricsHelper.startScope(metricsFactory, "Prefetcheing");
                         GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
                         ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
                                 .withRecords(getRecordsResult.getRecords())

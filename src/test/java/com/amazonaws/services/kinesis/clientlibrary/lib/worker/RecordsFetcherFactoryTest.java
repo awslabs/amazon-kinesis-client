@@ -1,5 +1,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -23,6 +24,7 @@ public class RecordsFetcherFactoryTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         recordsFetcherFactory = new SimpleRecordsFetcherFactory(1);
+        recordsFetcherFactory.setMetricsFactory(new NullMetricsFactory());
     }
 
     @Test
