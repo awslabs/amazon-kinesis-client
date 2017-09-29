@@ -119,9 +119,9 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                     log.warn("Prefetch thread was interrupted.");
                     break;
                 }
+                MetricsHelper.startScope(metricsFactory, "ProcessTask");
                 if (prefetchCounters.shouldGetNewRecords()) {
                     try {
-                        MetricsHelper.startScope(metricsFactory, "Prefetcheing");
                         GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
                         ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
                                 .withRecords(getRecordsResult.getRecords())
@@ -131,6 +131,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                         prefetchCounters.added(processRecordsInput);
                     } catch (InterruptedException e) {
                         log.info("Thread was interrupted, indicating shutdown was called on the cache");
+                    } finally {
+                        MetricsHelper.endScope();
                     }
                 }
             }
