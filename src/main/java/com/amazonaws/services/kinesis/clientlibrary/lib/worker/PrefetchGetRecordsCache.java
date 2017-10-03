@@ -110,9 +110,11 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     }
 
     private class DefaultGetRecordsCacheDaemon implements Runnable {
+        private volatile boolean isShutdown = false;
+        
         @Override
         public void run() {
-            while (true) {
+            while (!isShutdown) {
                 if (Thread.currentThread().isInterrupted()) {
                     log.warn("Prefetch thread was interrupted.");
                     callShutdownOnStrategy();
@@ -132,7 +134,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                     } catch (InterruptedException e) {
                         log.info("Thread was interrupted, indicating shutdown was called on the cache.");
                         callShutdownOnStrategy();
-                    } catch (Error e) {
+                    } catch (Throwable e) {
                         log.error("Error was thrown while getting records, please check for the error", e);
                     }
                 }
@@ -143,6 +145,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
             if (!getRecordsRetrievalStrategy.isShutdown()) {
                 getRecordsRetrievalStrategy.shutdown();
             }
+            isShutdown = true;
         }
         
         private void sleepBeforeNextCall() throws InterruptedException {

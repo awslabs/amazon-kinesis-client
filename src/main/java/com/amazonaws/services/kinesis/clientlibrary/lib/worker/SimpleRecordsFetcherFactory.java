@@ -16,6 +16,8 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.concurrent.Executors;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import lombok.extern.apachecommons.CommonsLog;
 
 @CommonsLog
@@ -37,7 +39,12 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
             return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy, idleMillisBetweenCalls);
         } else {
             return new PrefetchGetRecordsCache(maxSize, maxByteSize, maxRecordsCount, maxRecords,
-                    getRecordsRetrievalStrategy, Executors.newFixedThreadPool(1), idleMillisBetweenCalls);
+                    getRecordsRetrievalStrategy,
+                    Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
+                            .setDaemon(true)
+                            .setNameFormat("prefetch-get-records-cache-%d")
+                            .build()),
+                    idleMillisBetweenCalls);
         }
     }
 
