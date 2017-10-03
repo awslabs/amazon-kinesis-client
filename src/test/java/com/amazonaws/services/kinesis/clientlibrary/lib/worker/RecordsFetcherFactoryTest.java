@@ -1,6 +1,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -20,23 +21,25 @@ public class RecordsFetcherFactoryTest {
     @Mock
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
+    @Mock
+    private IMetricsFactory metricsFactory;
+
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         recordsFetcherFactory = new SimpleRecordsFetcherFactory(1);
-        recordsFetcherFactory.setMetricsFactory(new NullMetricsFactory());
     }
 
     @Test
     public void createDefaultRecordsFetcherTest() {
-        GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy);
+        GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, metricsFactory);
         assertThat(recordsCache, instanceOf(BlockingGetRecordsCache.class));
     }
 
     @Test
     public void createPrefetchRecordsFetcherTest() {
         recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.PREFETCH_CACHED);
-        GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy);
+        GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, metricsFactory);
         assertThat(recordsCache, instanceOf(PrefetchGetRecordsCache.class));
     }
 

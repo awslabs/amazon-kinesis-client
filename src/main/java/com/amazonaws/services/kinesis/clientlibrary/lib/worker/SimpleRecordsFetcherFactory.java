@@ -34,7 +34,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     }
 
     @Override
-    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, IMetricsFactory metricsFactory) {
         if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
             return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy, idleMillisBetweenCalls);
         } else {
@@ -61,10 +61,6 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     @Override
     public void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy){
         this.dataFetchingStrategy = dataFetchingStrategy;
-    }
-
-    public void setMetricsFactory(IMetricsFactory metricsFactory) {
-        this.metricsFactory = metricsFactory;
     }
 
     public void setIdleMillisBetweenCalls(final long idleMillisBetweenCalls) {

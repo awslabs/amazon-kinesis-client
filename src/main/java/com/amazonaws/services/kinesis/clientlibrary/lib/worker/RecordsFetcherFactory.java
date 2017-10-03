@@ -28,7 +28,7 @@ public interface RecordsFetcherFactory {
      *
      * @return Returns a record fetcher object
      */
-    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy);
+    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, IMetricsFactory metricsFactory);
 
     void setMaxSize(int maxSize);
 
@@ -39,7 +39,5 @@ public interface RecordsFetcherFactory {
     void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy);
     
     void setIdleMillisBetweenCalls(long idleMillisBetweenCalls);
-
-    void setMetricsFactory(IMetricsFactory metricsFactory);
 
 }
