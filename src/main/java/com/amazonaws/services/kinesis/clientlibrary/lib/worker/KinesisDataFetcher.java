@@ -14,7 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 
@@ -43,18 +42,15 @@ class KinesisDataFetcher {
     private final String shardId;
     private boolean isShardEndReached;
     private boolean isInitialized;
-    private Instant lastResponseTime;
-    private long idleMillisBetweenCalls;
 
     /**
      *
      * @param kinesisProxy Kinesis proxy
      * @param shardInfo The shardInfo object.
      */
-    public KinesisDataFetcher(IKinesisProxy kinesisProxy, ShardInfo shardInfo, KinesisClientLibConfiguration configuration) {
+    public KinesisDataFetcher(IKinesisProxy kinesisProxy, ShardInfo shardInfo) {
         this.shardId = shardInfo.getShardId();
         this.kinesisProxy = new MetricsCollectingKinesisProxyDecorator("KinesisDataFetcher", kinesisProxy, this.shardId);
-        this.idleMillisBetweenCalls = configuration.getIdleMillisBetweenCalls();
     }
 
     /**

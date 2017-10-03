@@ -22,7 +22,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.atLeastOnce;
@@ -36,7 +35,6 @@ import static org.mockito.Mockito.when;
 import java.io.File;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.ListIterator;
@@ -48,7 +46,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Description;
@@ -122,7 +119,6 @@ public class ShardConsumerTest {
         
         recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory(maxRecords));
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
-        when(config.getIdleMillisBetweenCalls()).thenReturn(0l);
     }
     
     /**
@@ -340,9 +336,11 @@ public class ShardConsumerTest {
                 )
         );
 
-        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo, config);
+        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
 
-        getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords, new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
+        getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords,
+                new SynchronousGetRecordsRetrievalStrategy(dataFetcher),
+                0L));
         when(recordsFetcherFactory.createRecordsFetcher(any())).thenReturn(getRecordsCache);
         
         ShardConsumer consumer =
@@ -468,9 +466,11 @@ public class ShardConsumerTest {
                 )
         );
 
-        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo, config);
+        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
         
-        getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords, new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
+        getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords,
+                new SynchronousGetRecordsRetrievalStrategy(dataFetcher),
+                0L));
         when(recordsFetcherFactory.createRecordsFetcher(any())).thenReturn(getRecordsCache);
 
         ShardConsumer consumer =

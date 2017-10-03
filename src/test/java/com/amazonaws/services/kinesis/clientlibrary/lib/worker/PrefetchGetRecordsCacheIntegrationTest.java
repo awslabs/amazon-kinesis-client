@@ -19,7 +19,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -28,13 +27,10 @@ import static org.mockito.Mockito.when;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.model.Record;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,12 +39,17 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
+import com.amazonaws.services.kinesis.model.Record;
+
+import lombok.extern.apachecommons.CommonsLog;
 
 /**
- *
+ * These are the integration tests for the PrefetchGetRecordsCache class. 
  */
 @RunWith(MockitoJUnitRunner.class)
+@CommonsLog
 public class PrefetchGetRecordsCacheIntegrationTest {
     private static final int MAX_SIZE = 3;
     private static final int MAX_BYTE_SIZE = 5 * 1024 * 1024;
@@ -68,15 +69,10 @@ public class PrefetchGetRecordsCacheIntegrationTest {
     @Mock
     private ShardInfo shardInfo;
     
-    @Mock
-    private KinesisClientLibConfiguration configuration;
-    
     @Before
     public void setup() {
-        when(configuration.getIdleMillisBetweenCalls()).thenReturn(IDLE_MILLIS_BETWEEN_CALLS);
-        
         records = new ArrayList<>();
-        dataFetcher = new KinesisDataFetcherForTest(proxy, shardInfo, configuration);
+        dataFetcher = new KinesisDataFetcherForTest(proxy, shardInfo);
         getRecordsRetrievalStrategy = spy(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
         executorService = spy(Executors.newFixedThreadPool(1));
         
@@ -85,7 +81,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 MAX_RECORDS_COUNT,
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy,
-                executorService);
+                executorService,
+                IDLE_MILLIS_BETWEEN_CALLS);
     }
     
     @Test
@@ -120,7 +117,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
     @Test
     public void testDifferentShardCaches() {
         ExecutorService executorService2 = spy(Executors.newFixedThreadPool(1));
-        KinesisDataFetcher kinesisDataFetcher = spy(new KinesisDataFetcherForTest(proxy, shardInfo, configuration));
+        KinesisDataFetcher kinesisDataFetcher = spy(new KinesisDataFetcherForTest(proxy, shardInfo));
         GetRecordsRetrievalStrategy getRecordsRetrievalStrategy2 = spy(new AsynchronousGetRecordsRetrievalStrategy(kinesisDataFetcher, 5 , 5, "Test-shard"));
         GetRecordsCache getRecordsCache2 = new PrefetchGetRecordsCache(
                 MAX_SIZE,
@@ -128,8 +125,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 MAX_RECORDS_COUNT,
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy2,
-                executorService2
-        );
+                executorService2,
+                IDLE_MILLIS_BETWEEN_CALLS);
         
         getRecordsCache.start();
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
@@ -156,6 +153,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
         assertEquals(p2.getRecords().size(), records.size());
 
         getRecordsCache2.shutdown();
+        sleep(100L);
         verify(executorService2).shutdownNow();
         verify(getRecordsRetrievalStrategy2).shutdown();
     }
@@ -163,6 +161,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
     @After
     public void shutdown() {
         getRecordsCache.shutdown();
+        sleep(100L);
         verify(executorService).shutdownNow();
         verify(getRecordsRetrievalStrategy).shutdown();
     }
@@ -175,16 +174,12 @@ public class PrefetchGetRecordsCacheIntegrationTest {
     
     private class KinesisDataFetcherForTest extends KinesisDataFetcher {
         public KinesisDataFetcherForTest(final IKinesisProxy kinesisProxy,
-                                         final ShardInfo shardInfo,
-                                         final KinesisClientLibConfiguration configuration) {
-            super(kinesisProxy, shardInfo, configuration);
+                                         final ShardInfo shardInfo) {
+            super(kinesisProxy, shardInfo);
         }
 
         @Override
         public DataFetcherResult getRecords(final int maxRecords) {
-
-
-
             GetRecordsResult getRecordsResult = new GetRecordsResult();
             getRecordsResult.setRecords(new ArrayList<>(records));
             getRecordsResult.setMillisBehindLatest(1000L);

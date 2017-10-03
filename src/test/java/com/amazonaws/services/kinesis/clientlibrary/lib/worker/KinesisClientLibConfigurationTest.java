@@ -19,7 +19,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import junit.framework.Assert;
+import java.util.Date;
 
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -35,7 +35,7 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
 
-import java.util.Date;
+import junit.framework.Assert;
 
 public class KinesisClientLibConfigurationTest {
     private static final long INVALID_LONG = 0L;
@@ -85,7 +85,6 @@ public class KinesisClientLibConfigurationTest {
                         TEST_VALUE_INT,
                         skipCheckpointValidationValue,
                         null,
-                        TEST_VALUE_LONG,
                         TEST_VALUE_LONG);
     }
 
@@ -97,7 +96,7 @@ public class KinesisClientLibConfigurationTest {
         KinesisClientLibConfiguration config = null;
         long[] longValues =
                 { TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG,
-                        TEST_VALUE_LONG, TEST_VALUE_LONG };
+                        TEST_VALUE_LONG };
         for (int i = 0; i < PARAMETER_COUNT; i++) {
             longValues[i] = INVALID_LONG;
             try {
@@ -126,8 +125,7 @@ public class KinesisClientLibConfigurationTest {
                                 TEST_VALUE_INT,
                                 skipCheckpointValidationValue,
                                 null,
-                                longValues[6],
-                                longValues[7]);
+                                longValues[6]);
             } catch (IllegalArgumentException e) {
                 System.out.println(e.getMessage());
             }
@@ -162,7 +160,6 @@ public class KinesisClientLibConfigurationTest {
                                 intValues[1],
                                 skipCheckpointValidationValue,
                                 null,
-                                TEST_VALUE_LONG,
                                 TEST_VALUE_LONG);
             } catch (IllegalArgumentException e) {
                 System.out.println(e.getMessage());
@@ -327,7 +324,6 @@ public class KinesisClientLibConfigurationTest {
                     1,
                     skipCheckpointValidationValue,
                     "abcd",
-                    TEST_VALUE_LONG,
                     TEST_VALUE_LONG);
             Assert.fail("No expected Exception is thrown.");
         } catch(IllegalArgumentException e) {
