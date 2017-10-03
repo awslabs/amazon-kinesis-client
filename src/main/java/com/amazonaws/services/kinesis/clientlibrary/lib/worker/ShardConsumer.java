@@ -20,7 +20,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
-import lombok.Getter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -31,6 +30,8 @@ import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.google.common.annotations.VisibleForTesting;
+
+import lombok.Getter;
 
 /**
  * Responsible for consuming data records of a (specified) shard.
@@ -177,7 +178,7 @@ class ShardConsumer {
                 metricsFactory,
                 backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo, config),
+                new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo),
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
                 config

@@ -15,6 +15,7 @@
 
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -46,6 +47,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final ExecutorService executorService;
     private final IMetricsFactory metricsFactory;
+    private final long idleMillisBetweenCalls;
+    private Instant lastSuccessfulCall;
 
     private PrefetchCounters prefetchCounters;
 
@@ -55,7 +58,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                                    final int maxRecordsPerCall,
                                    @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
                                    @NonNull final ExecutorService executorService,
-                                   @NonNull final IMetricsFactory metricsFactory) {
+                                   @NonNull final IMetricsFactory metricsFactory,
+                                   long idleMillisBetweenCalls) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.maxSize = maxSize;
@@ -65,6 +69,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         this.prefetchCounters = new PrefetchCounters();
         this.executorService = executorService;
         this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
+        this.idleMillisBetweenCalls = idleMillisBetweenCalls;
     }
 
     @Override
@@ -106,7 +111,6 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
 
     @Override
     public void shutdown() {
-        getRecordsRetrievalStrategy.shutdown();
         executorService.shutdownNow();
         started = false;
     }
@@ -115,26 +119,48 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         @Override
         public void run() {
             while (true) {
-                if (Thread.interrupted()) {
+                if (Thread.currentThread().isInterrupted()) {
                     log.warn("Prefetch thread was interrupted.");
+                    callShutdownOnStrategy();
                     break;
                 }
                 MetricsHelper.startScope(metricsFactory, "ProcessTask");
                 if (prefetchCounters.shouldGetNewRecords()) {
                     try {
+                        sleepBeforeNextCall();
                         GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
+                        lastSuccessfulCall = Instant.now();
                         ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
                                 .withRecords(getRecordsResult.getRecords())
                                 .withMillisBehindLatest(getRecordsResult.getMillisBehindLatest())
-                                .withCacheEntryTime(Instant.now());
+                                .withCacheEntryTime(lastSuccessfulCall);
                         getRecordsResultQueue.put(processRecordsInput);
                         prefetchCounters.added(processRecordsInput);
                     } catch (InterruptedException e) {
                         log.info("Thread was interrupted, indicating shutdown was called on the cache");
+                        callShutdownOnStrategy();
+                    } catch (Error e) {
+                        log.error("Error was thrown while getting records, please check for the error", e);
                     } finally {
                         MetricsHelper.endScope();
                     }
                 }
+            }
+        }
+        
+        private void callShutdownOnStrategy() {
+            if (!getRecordsRetrievalStrategy.isShutdown()) {
+                getRecordsRetrievalStrategy.shutdown();
+            }
+        }
+        
+        private void sleepBeforeNextCall() throws InterruptedException {
+            if (lastSuccessfulCall == null) {
+                return;
+            }
+            long timeSinceLastCall = Duration.between(lastSuccessfulCall, Instant.now()).abs().toMillis();
+            if (timeSinceLastCall < idleMillisBetweenCalls) {
+                Thread.sleep(idleMillisBetweenCalls - timeSinceLastCall);
             }
         }
     }

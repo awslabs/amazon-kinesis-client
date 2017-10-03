@@ -58,6 +58,7 @@ public class PrefetchGetRecordsCacheTest {
     private static final int MAX_RECORDS_PER_CALL = 10000;
     private static final int MAX_SIZE = 5;
     private static final int MAX_RECORDS_COUNT = 15000;
+    private static final long IDLE_MILLIS_BETWEEN_CALLS = 0L;
 
     @Mock
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
@@ -81,7 +82,11 @@ public class PrefetchGetRecordsCacheTest {
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy,
                 executorService,
+<<<<<<< HEAD
                 new NullMetricsFactory());
+=======
+                IDLE_MILLIS_BETWEEN_CALLS);
+>>>>>>> upstream/prefetch
         spyQueue = spy(getRecordsCache.getRecordsResultQueue);
         records = spy(new ArrayList<>());
 

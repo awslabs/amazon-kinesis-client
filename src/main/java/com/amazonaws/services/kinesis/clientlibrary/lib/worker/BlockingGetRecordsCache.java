@@ -15,6 +15,9 @@
 
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.time.Duration;
+import java.time.Instant;
+
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
@@ -28,10 +31,15 @@ import lombok.extern.apachecommons.CommonsLog;
 public class BlockingGetRecordsCache implements GetRecordsCache {
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+    private final long idleMillisBetweenCalls;
+    private Instant lastSuccessfulCall;
 
-    public BlockingGetRecordsCache(final int maxRecordsPerCall, final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+    public BlockingGetRecordsCache(final int maxRecordsPerCall,
+                                   final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+                                   final long idleMillisBetweenCalls) {
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
+        this.idleMillisBetweenCalls = idleMillisBetweenCalls;
     }
 
     @Override
@@ -43,11 +51,31 @@ public class BlockingGetRecordsCache implements GetRecordsCache {
 
     @Override
     public ProcessRecordsInput getNextResult() {
+        sleepBeforeNextCall();
         GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
+        lastSuccessfulCall = Instant.now();
         ProcessRecordsInput processRecordsInput = new ProcessRecordsInput()
                 .withRecords(getRecordsResult.getRecords())
                 .withMillisBehindLatest(getRecordsResult.getMillisBehindLatest());
         return processRecordsInput;
+    }
+    
+    private void sleepBeforeNextCall() {
+        if (!Thread.interrupted()) {
+            if (lastSuccessfulCall == null) {
+                return;
+            }
+            long timeSinceLastCall = Duration.between(lastSuccessfulCall, Instant.now()).abs().toMillis();
+            if (timeSinceLastCall < idleMillisBetweenCalls) {
+                try {
+                    Thread.sleep(idleMillisBetweenCalls - timeSinceLastCall);
+                } catch (InterruptedException e) {
+                    log.info("Thread was interrupted, indicating that shutdown was called.");
+                }
+            }
+        } else {
+            log.info("Thread has been interrupted, indicating that it is in the shutdown phase.");
+        }
     }
 
     @Override

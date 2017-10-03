@@ -37,6 +37,8 @@ public interface RecordsFetcherFactory {
     void setMaxRecordsCount(int maxRecordsCount);
 
     void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy);
+    
+    void setIdleMillisBetweenCalls(long idleMillisBetweenCalls);
 
     void setMetricsFactory(IMetricsFactory metricsFactory);
 
