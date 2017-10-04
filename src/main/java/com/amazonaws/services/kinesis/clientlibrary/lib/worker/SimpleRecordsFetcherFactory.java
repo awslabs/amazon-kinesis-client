@@ -42,7 +42,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
                     getRecordsRetrievalStrategy,
                     Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
                             .setDaemon(true)
-                            .setNameFormat("prefetch-get-records-cache-" + shardId + "-%d")
+                            .setNameFormat("prefetch-cache-" + shardId + "-%04d")
                             .build()),
                     idleMillisBetweenCalls);
         }
