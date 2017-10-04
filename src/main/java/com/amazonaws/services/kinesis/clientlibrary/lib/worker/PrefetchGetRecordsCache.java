@@ -29,16 +29,16 @@ import lombok.extern.apachecommons.CommonsLog;
 
 /**
  * This is the prefetch caching class, this class spins up a thread if prefetching is enabled. That thread fetches the
- * next set of records and stores it in the cache. The size of the cache is limited by setting maxSize i.e. the maximum
- * number of GetRecordsResult that the cache can store, maxByteSize i.e. the byte size of the records stored in the
- * cache and maxRecordsCount i.e. the max number of records that should be present in the cache across multiple
- * GetRecordsResult object. If no data is available in the cache, the call from the record processor is blocked till
- * records are retrieved from Kinesis.
+ * next set of records and stores it in the cache. The size of the cache is limited by setting
+ * maxPendingProcessRecordsInput i.e. the maximum number of GetRecordsResult that the cache can store, maxByteSize
+ * i.e. the byte size of the records stored in the cache and maxRecordsCount i.e. the max number of records that should
+ * be present in the cache across multiple GetRecordsResult object. If no data is available in the cache, the call from
+ * the record processor is blocked till records are retrieved from Kinesis.
  */
 @CommonsLog
 public class PrefetchGetRecordsCache implements GetRecordsCache {
     LinkedBlockingQueue<ProcessRecordsInput> getRecordsResultQueue;
-    private int maxSize;
+    private int maxPendingProcessRecordsInput;
     private int maxByteSize;
     private int maxRecordsCount;
     private final int maxRecordsPerCall;
@@ -58,7 +58,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
      * 
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.PrefetchGetRecordsCache
      * 
-     * @param maxSize Max size of the queue in the cache
+     * @param maxPendingProcessRecordsInput Max number of ProcessRecordsInput that can be held in the cache before
+     *                                     blocking
      * @param maxByteSize Max byte size of the queue before blocking next get records call
      * @param maxRecordsCount Max number of records in the queue across all ProcessRecordInput objects
      * @param maxRecordsPerCall Max records to be returned per call
@@ -66,17 +67,17 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
      * @param executorService Executor service for the cache
      * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
      */
-    public PrefetchGetRecordsCache(final int maxSize, final int maxByteSize, final int maxRecordsCount,
+    public PrefetchGetRecordsCache(final int maxPendingProcessRecordsInput, final int maxByteSize, final int maxRecordsCount,
                                    final int maxRecordsPerCall,
                                    @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
                                    @NonNull final ExecutorService executorService,
                                    long idleMillisBetweenCalls) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
-        this.maxSize = maxSize;
+        this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
         this.maxByteSize = maxByteSize;
         this.maxRecordsCount = maxRecordsCount;
-        this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxSize);
+        this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxPendingProcessRecordsInput);
         this.prefetchCounters = new PrefetchCounters();
         this.executorService = executorService;
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;

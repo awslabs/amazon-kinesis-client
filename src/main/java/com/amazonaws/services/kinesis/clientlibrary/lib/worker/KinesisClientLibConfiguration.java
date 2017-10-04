@@ -1289,12 +1289,13 @@ public class KinesisClientLibConfiguration {
 
     /**
      *
-     * @param maxCacheSize the max number of records stored in the getRecordsCache
+     * @param maxPendingProcessRecordsInput The max number of ProcessRecordsInput that can be stored in the cache before
+     *                                      blocking
      * @return this configuration object
      */
-    public KinesisClientLibConfiguration withMaxCacheSize(final int maxCacheSize) {
-        checkIsValuePositive("maxCacheSize", maxCacheSize);
-        this.recordsFetcherFactory.setMaxSize(maxCacheSize);
+    public KinesisClientLibConfiguration withMaxPendingProcessRecordsInput(final int maxPendingProcessRecordsInput) {
+        checkIsValuePositive("maxPendingProcessRecordsInput", maxPendingProcessRecordsInput);
+        this.recordsFetcherFactory.setMaxPendingProcessRecordsInput(maxPendingProcessRecordsInput);
         return this;
     }
 

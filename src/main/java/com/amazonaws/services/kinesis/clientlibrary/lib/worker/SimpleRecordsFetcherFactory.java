@@ -23,7 +23,7 @@ import lombok.extern.apachecommons.CommonsLog;
 @CommonsLog
 public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private final int maxRecords;
-    private int maxSize = 3;
+    private int maxPendingProcessRecordsInput = 3;
     private int maxByteSize = 8 * 1024 * 1024;
     private int maxRecordsCount = 30000;
     private long idleMillisBetweenCalls = 1500L;
@@ -38,7 +38,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
         if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
             return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy, idleMillisBetweenCalls);
         } else {
-            return new PrefetchGetRecordsCache(maxSize, maxByteSize, maxRecordsCount, maxRecords,
+            return new PrefetchGetRecordsCache(maxPendingProcessRecordsInput, maxByteSize, maxRecordsCount, maxRecords,
                     getRecordsRetrievalStrategy,
                     Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
                             .setDaemon(true)
@@ -49,8 +49,8 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     }
 
     @Override
-    public void setMaxSize(int maxSize){
-        this.maxSize = maxSize;
+    public void setMaxPendingProcessRecordsInput(int maxPendingProcessRecordsInput){
+        this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
     }
 
     @Override
