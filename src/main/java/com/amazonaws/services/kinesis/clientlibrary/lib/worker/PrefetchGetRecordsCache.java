@@ -50,6 +50,17 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
 
     private boolean started = false;
 
+    /**
+     * Constructor
+     * 
+     * @param maxSize Max size of the queue in the cache
+     * @param maxByteSize Max byte size of the queue before blocking next get records call
+     * @param maxRecordsCount Max number of records in the queue across all ProcessRecordInput objects
+     * @param maxRecordsPerCall Max records to be returned per call
+     * @param getRecordsRetrievalStrategy Retrieval strategy for the get records call
+     * @param executorService Executor service for the cache
+     * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
+     */
     public PrefetchGetRecordsCache(final int maxSize, final int maxByteSize, final int maxRecordsCount,
                                    final int maxRecordsPerCall,
                                    @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,

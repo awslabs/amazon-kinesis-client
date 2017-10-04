@@ -34,7 +34,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     }
 
     @Override
-    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId) {
         if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
             return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy, idleMillisBetweenCalls);
         } else {
@@ -42,7 +42,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
                     getRecordsRetrievalStrategy,
                     Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
                             .setDaemon(true)
-                            .setNameFormat("prefetch-get-records-cache-%d")
+                            .setNameFormat("prefetch-get-records-cache-" + shardId + "-%d")
                             .build()),
                     idleMillisBetweenCalls);
         }

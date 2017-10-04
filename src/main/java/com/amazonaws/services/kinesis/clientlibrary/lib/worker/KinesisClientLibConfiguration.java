@@ -1298,17 +1298,30 @@ public class KinesisClientLibConfiguration {
         return this;
     }
 
+    /**
+     * @param maxCacheByteSize Max byte size for the cache at any given point of time. After this threshold is crossed
+     *                         the KinesisDataFetcher will be blocked until the cache has more space available.
+     * @return KinesisClientLibConfiguration
+     */
     public KinesisClientLibConfiguration withMaxCacheByteSize(final int maxCacheByteSize) {
         checkIsValuePositive("maxCacheByteSize", maxCacheByteSize);
         this.recordsFetcherFactory.setMaxByteSize(maxCacheByteSize);
         return this;
     }
 
+    /**
+     * @param dataFetchingStrategy The strategy for fetching data from kinesis.
+     * @return KinesisClientLibConfiguration
+     */
     public KinesisClientLibConfiguration withDataFetchingStrategy(String dataFetchingStrategy) {
         this.recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.valueOf(dataFetchingStrategy.toUpperCase()));
         return this;
     }
 
+    /**
+     * @param maxRecordsCount The maximum number of records in the cache, accross all ProcessRecordInput objects
+     * @return KinesisClientLibConfiguration
+     */
     public KinesisClientLibConfiguration withMaxRecordsCount(final int maxRecordsCount) {
         checkIsValuePositive("maxRecordsCount", maxRecordsCount);
         this.recordsFetcherFactory.setMaxRecordsCount(maxRecordsCount);
@@ -1334,7 +1347,7 @@ public class KinesisClientLibConfiguration {
 
     /** 
      * @param idleMillisBetweenCalls Idle time between 2 getcalls from the data fetcher.
-     * @return
+     * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withIdleMillisBetweenCalls(long idleMillisBetweenCalls) {
         checkIsValuePositive("IdleMillisBetweenCalls", idleMillisBetweenCalls);

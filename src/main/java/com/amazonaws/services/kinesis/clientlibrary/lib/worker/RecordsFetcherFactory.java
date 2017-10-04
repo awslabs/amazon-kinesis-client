@@ -24,18 +24,48 @@ public interface RecordsFetcherFactory {
     /**
      * Returns a records fetcher processor to be used for processing data records for a (assigned) shard.
      *
-     * @return Returns a record fetcher object
+     * @param getRecordsRetrievalStrategy GetRecordsRetrievalStrategy to be used with the GetRecordsCache
+     * @param shardId ShardId of the shard for which the GetRecordsCache is to be returned
+     *                
+     * @return Returns a GetRecordsCache object
      */
-    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy);
+    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId);
 
+    /**
+     * This method sets the maximum number of ProcessRecordsInput objects the GetRecordsCache can hold at any give time.
+     * 
+     * @param maxSize Max size for the cache.
+     */
     void setMaxSize(int maxSize);
 
+    /**
+     * This method sets the max byte size for the GetRecordsCache. This is the sum of all the records bytes present in
+     * the cache at a given point of time.
+     * 
+     * @param maxByteSize Maximum byte size for the cache.
+     */
     void setMaxByteSize(int maxByteSize);
 
+    /**
+     * This method sets the max number of records for the GetRecordsCache. This is the sum of all the records present
+     * across all the ProcessRecordsInput in the cache at a given point of time.
+     * 
+     * @param maxRecordsCount Maximum number of records in the cache.
+     */
     void setMaxRecordsCount(int maxRecordsCount);
 
+    /**
+     * This method sets the dataFetchingStrategy to determine the type of GetRecordsCache to be used.
+     * 
+     * @param dataFetchingStrategy Fetching strategy to be used
+     */
     void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy);
-    
+
+    /**
+     * This method sets the maximum idle time between two get calls.
+     * 
+     * @param idleMillisBetweenCalls Sleep millis between calls.
+     */
     void setIdleMillisBetweenCalls(long idleMillisBetweenCalls);
 
 }
