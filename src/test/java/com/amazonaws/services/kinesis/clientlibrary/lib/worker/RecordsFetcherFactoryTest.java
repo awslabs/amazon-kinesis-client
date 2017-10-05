@@ -1,19 +1,15 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-public class RecordsFetcherFactoryTest {
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
+public class RecordsFetcherFactoryTest {
+    private String shardId = "TestShard";
     private RecordsFetcherFactory recordsFetcherFactory;
 
     @Mock
@@ -27,14 +23,14 @@ public class RecordsFetcherFactoryTest {
 
     @Test
     public void createDefaultRecordsFetcherTest() {
-        GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy);
+        GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId);
         assertThat(recordsCache, instanceOf(BlockingGetRecordsCache.class));
     }
 
     @Test
     public void createPrefetchRecordsFetcherTest() {
         recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.PREFETCH_CACHED);
-        GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy);
+        GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId);
         assertThat(recordsCache, instanceOf(PrefetchGetRecordsCache.class));
     }
 

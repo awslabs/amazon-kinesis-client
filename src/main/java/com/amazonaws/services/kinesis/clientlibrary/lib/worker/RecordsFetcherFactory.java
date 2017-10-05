@@ -15,27 +15,57 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 /**
- * The Amazon Kinesis Client Library will use this to instantiate a record fetcher per shard.
- * Clients may choose to create separate instantiations, or re-use instantiations.
+ * This factory is used to create the records fetcher to retrieve data from Kinesis for a given shard.
  */
-
 public interface RecordsFetcherFactory {
+    /**
+     * Returns a GetRecordsCache to be used for retrieving records for a given shard.
+     *
+     * @param getRecordsRetrievalStrategy GetRecordsRetrievalStrategy to be used with the GetRecordsCache
+     * @param shardId ShardId of the shard that the fetcher will retrieve records for
+     *                
+     * @return GetRecordsCache used to get records from Kinesis.
+     */
+    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId);
 
     /**
-     * Returns a records fetcher processor to be used for processing data records for a (assigned) shard.
-     *
-     * @return Returns a record fetcher object
+     * Sets the maximum number of ProcessRecordsInput objects the GetRecordsCache can hold, before further requests are
+     * blocked.
+     * 
+     * @param maxPendingProcessRecordsInput The maximum number of ProcessRecordsInput objects that the cache will accept
+     *                                     before blocking.
      */
-    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy);
+    void setMaxPendingProcessRecordsInput(int maxPendingProcessRecordsInput);
 
-    void setMaxSize(int maxSize);
-
+    /**
+     * Sets the max byte size for the GetRecordsCache, before further requests are blocked. The byte size of the cache
+     * is the sum of byte size of all the ProcessRecordsInput objects in the cache at any point of time.
+     * 
+     * @param maxByteSize The maximum byte size for the cache before blocking.
+     */
     void setMaxByteSize(int maxByteSize);
 
+    /**
+     * Sets the max number of records for the GetRecordsCache can hold, before further requests are blocked. The records
+     * count is the sum of all records present in across all the ProcessRecordsInput objects in the cache at any point
+     * of time.
+     * 
+     * @param maxRecordsCount The mximum number of records in the cache before blocking.
+     */
     void setMaxRecordsCount(int maxRecordsCount);
 
+    /**
+     * Sets the dataFetchingStrategy to determine the type of GetRecordsCache to be used.
+     * 
+     * @param dataFetchingStrategy Fetching strategy to be used
+     */
     void setDataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy);
-    
+
+    /**
+     * Sets the maximum idle time between two get calls.
+     * 
+     * @param idleMillisBetweenCalls Sleep millis between calls.
+     */
     void setIdleMillisBetweenCalls(long idleMillisBetweenCalls);
 
 }
