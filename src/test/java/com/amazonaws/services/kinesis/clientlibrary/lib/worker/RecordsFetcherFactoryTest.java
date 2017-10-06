@@ -13,6 +13,7 @@ import org.mockito.MockitoAnnotations;
 public class RecordsFetcherFactoryTest {
     private String shardId = "TestShard";
     private RecordsFetcherFactory recordsFetcherFactory;
+    private String operation = "ProcessTask";
 
     @Mock
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
@@ -29,7 +30,7 @@ public class RecordsFetcherFactoryTest {
     @Test
     public void createDefaultRecordsFetcherTest() {
         GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId,
-                metricsFactory);
+                metricsFactory, operation);
         assertThat(recordsCache, instanceOf(BlockingGetRecordsCache.class));
     }
 
@@ -37,7 +38,7 @@ public class RecordsFetcherFactoryTest {
     public void createPrefetchRecordsFetcherTest() {
         recordsFetcherFactory.setDataFetchingStrategy(DataFetchingStrategy.PREFETCH_CACHED);
         GetRecordsCache recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId,
-                metricsFactory);
+                metricsFactory, operation);
         assertThat(recordsCache, instanceOf(PrefetchGetRecordsCache.class));
     }
 

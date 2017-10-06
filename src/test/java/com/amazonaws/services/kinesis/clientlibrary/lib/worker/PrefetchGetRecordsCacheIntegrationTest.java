@@ -66,6 +66,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
     private KinesisDataFetcher dataFetcher;
     private ExecutorService executorService;
     private List<Record> records;
+    private String operation = "ProcessTask";
     
     @Mock
     private IKinesisProxy proxy;
@@ -87,7 +88,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 getRecordsRetrievalStrategy,
                 executorService,
                 IDLE_MILLIS_BETWEEN_CALLS,
-                new NullMetricsFactory());
+                new NullMetricsFactory(),
+                operation);
     }
     
     @Test
@@ -132,7 +134,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 getRecordsRetrievalStrategy2,
                 executorService2,
                 IDLE_MILLIS_BETWEEN_CALLS,
-                new NullMetricsFactory());
+                new NullMetricsFactory(),
+                operation);
         
         getRecordsCache.start();
         sleep(IDLE_MILLIS_BETWEEN_CALLS);

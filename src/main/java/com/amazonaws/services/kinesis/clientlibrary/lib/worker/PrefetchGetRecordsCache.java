@@ -78,7 +78,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                                    @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
                                    @NonNull final ExecutorService executorService,
                                    long idleMillisBetweenCalls,
-                                   @NonNull final IMetricsFactory metricsFactory) {
+                                   @NonNull final IMetricsFactory metricsFactory,
+                                   @NonNull String operation) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
@@ -90,6 +91,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
         this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
+        this.operation = operation;
     }
 
     @Override
@@ -129,10 +131,6 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         return getRecordsRetrievalStrategy;
     }
 
-    @Override
-    public void setMetricOperation(String operation) {
-        this.operation = operation;
-    }
     @Override
     public void shutdown() {
         defaultGetRecordsCacheDaemon.isShutdown = true;

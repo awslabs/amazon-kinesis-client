@@ -83,7 +83,6 @@ class InitializeTask implements ITask {
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.getCheckpoint();
 
             dataFetcher.initialize(initialCheckpoint.getSequenceNumber(), streamConfig.getInitialPositionInStream());
-            getRecordsCache.setMetricOperation("InitializeTask");
             getRecordsCache.start();
             recordProcessorCheckpointer.setLargestPermittedCheckpointValue(initialCheckpoint);
             recordProcessorCheckpointer.setInitialCheckpointValue(initialCheckpoint);

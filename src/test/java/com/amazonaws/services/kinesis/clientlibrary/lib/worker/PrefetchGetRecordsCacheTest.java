@@ -71,6 +71,7 @@ public class PrefetchGetRecordsCacheTest {
     private ExecutorService executorService;
     private LinkedBlockingQueue<ProcessRecordsInput> spyQueue;
     private PrefetchGetRecordsCache getRecordsCache;
+    private String operation = "ProcessTask";
 
     @Before
     public void setup() {
@@ -83,7 +84,8 @@ public class PrefetchGetRecordsCacheTest {
                 getRecordsRetrievalStrategy,
                 executorService,
                 IDLE_MILLIS_BETWEEN_CALLS,
-                new NullMetricsFactory());
+                new NullMetricsFactory(),
+                operation);
         spyQueue = spy(getRecordsCache.getRecordsResultQueue);
         records = spy(new ArrayList<>());
 

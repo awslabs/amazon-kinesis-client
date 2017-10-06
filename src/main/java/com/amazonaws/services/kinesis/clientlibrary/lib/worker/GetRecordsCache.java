@@ -41,6 +41,4 @@ public interface GetRecordsCache {
      * This method calls the shutdown behavior on the cache, if available.
      */
     void shutdown();
-
-    void setMetricOperation(String operation);
 }

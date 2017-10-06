@@ -235,7 +235,7 @@ class ShardConsumer {
         this.dataFetcher = kinesisDataFetcher;
         this.getRecordsCache = config.getRecordsFetcherFactory().createRecordsFetcher(
                 makeStrategy(this.dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, this.shardInfo),
-                this.getShardInfo().getShardId(), metricsFactory);
+                this.getShardInfo().getShardId(), metricsFactory, "ProcessTask");
     }
 
     /**

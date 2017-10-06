@@ -25,10 +25,12 @@ public interface RecordsFetcherFactory {
      *
      * @param getRecordsRetrievalStrategy GetRecordsRetrievalStrategy to be used with the GetRecordsCache
      * @param shardId ShardId of the shard that the fetcher will retrieve records for
+     * @param metricsFactory MetricsFactory used to create metricScope
+     * @param operation operation used to set metricScope
      *                
      * @return GetRecordsCache used to get records from Kinesis.
      */
-    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId, IMetricsFactory metricsFactory);
+    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId, IMetricsFactory metricsFactory, String operation);
 
     /**
      * Sets the maximum number of ProcessRecordsInput objects the GetRecordsCache can hold, before further requests are
