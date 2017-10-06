@@ -50,6 +50,11 @@ public class BlockingGetRecordsCache implements GetRecordsCache {
     }
 
     @Override
+    public void setMetricOperation(String operation){
+
+    }
+
+    @Override
     public ProcessRecordsInput getNextResult() {
         sleepBeforeNextCall();
         GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);

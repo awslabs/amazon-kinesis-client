@@ -16,6 +16,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 
 /**
  * This class is used as a cache for Prefetching data from Kinesis.
@@ -40,4 +41,6 @@ public interface GetRecordsCache {
      * This method calls the shutdown behavior on the cache, if available.
      */
     void shutdown();
+
+    void setMetricOperation(String operation);
 }

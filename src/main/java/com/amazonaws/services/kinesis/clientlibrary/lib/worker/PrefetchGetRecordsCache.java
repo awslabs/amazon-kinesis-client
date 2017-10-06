@@ -25,6 +25,7 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
 import lombok.NonNull;
@@ -55,6 +56,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     private PrefetchCounters prefetchCounters;
 
     private boolean started = false;
+
+    private String operation;
 
     /**
      * Constructor for the PrefetchGetRecordsCache. This cache prefetches records from Kinesis and stores them in a
@@ -128,6 +131,10 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     }
 
     @Override
+    public void setMetricOperation(String operation) {
+        this.operation = operation;
+    }
+    @Override
     public void shutdown() {
         defaultGetRecordsCacheDaemon.isShutdown = true;
         executorService.shutdownNow();
@@ -144,7 +151,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                     log.warn("Prefetch thread was interrupted.");
                     break;
                 }
-                MetricsHelper.startScope(metricsFactory, "ProcessTask");
+                MetricsHelper.startScope(metricsFactory, operation);
                 if (prefetchCounters.shouldGetNewRecords()) {
                     try {
                         sleepBeforeNextCall();

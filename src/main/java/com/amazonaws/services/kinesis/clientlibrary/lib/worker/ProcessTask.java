@@ -148,7 +148,8 @@ class ProcessTask implements ITask {
         scope.addDimension(MetricsHelper.SHARD_ID_DIMENSION_NAME, shardInfo.getShardId());
         scope.addData(RECORDS_PROCESSED_METRIC, 0, StandardUnit.Count, MetricsLevel.SUMMARY);
         scope.addData(DATA_BYTES_PROCESSED_METRIC, 0, StandardUnit.Bytes, MetricsLevel.SUMMARY);
-
+        getRecordsCache.setMetricOperation(this.getClass().getSimpleName());
+        System.out.println(this.getClass().getSimpleName());
         Exception exception = null;
 
         try {
