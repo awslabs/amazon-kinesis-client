@@ -21,6 +21,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
@@ -620,7 +621,7 @@ public class WorkerTest {
         RecordsFetcherFactory recordsFetcherFactory = mock(RecordsFetcherFactory.class);
         GetRecordsCache getRecordsCache = mock(GetRecordsCache.class);
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
-        when(recordsFetcherFactory.createRecordsFetcher(any(), any())).thenReturn(getRecordsCache);
+        when(recordsFetcherFactory.createRecordsFetcher(any(), anyString(),any())).thenReturn(getRecordsCache);
         when(getRecordsCache.getNextResult()).thenReturn(new ProcessRecordsInput().withRecords(Collections.emptyList()).withMillisBehindLatest(0L));
 
         WorkerThread workerThread = runWorker(shardList,

@@ -86,8 +86,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy,
                 executorService,
-                new NullMetricsFactory(),
-                IDLE_MILLIS_BETWEEN_CALLS);
+                IDLE_MILLIS_BETWEEN_CALLS,
+                new NullMetricsFactory());
     }
     
     @Test
@@ -131,8 +131,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy2,
                 executorService2,
-                new NullMetricsFactory(),
-                IDLE_MILLIS_BETWEEN_CALLS);
+                IDLE_MILLIS_BETWEEN_CALLS,
+                new NullMetricsFactory());
         
         getRecordsCache.start();
         sleep(IDLE_MILLIS_BETWEEN_CALLS);

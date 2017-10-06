@@ -82,8 +82,8 @@ public class PrefetchGetRecordsCacheTest {
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy,
                 executorService,
-                new NullMetricsFactory(),
-                IDLE_MILLIS_BETWEEN_CALLS);
+                IDLE_MILLIS_BETWEEN_CALLS,
+                new NullMetricsFactory());
         spyQueue = spy(getRecordsCache.getRecordsResultQueue);
         records = spy(new ArrayList<>());
 

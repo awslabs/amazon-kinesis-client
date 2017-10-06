@@ -17,12 +17,13 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import java.util.concurrent.Executors;
 
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.apachecommons.CommonsLog;
 
 @CommonsLog
 public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private final int maxRecords;
-    private int maxSize = 3;
+    private int maxPendingProcessRecordsInput = 3;
     private int maxByteSize = 8 * 1024 * 1024;
     private int maxRecordsCount = 30000;
     private long idleMillisBetweenCalls = 1500L;
@@ -34,18 +35,23 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     }
 
     @Override
-    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, IMetricsFactory metricsFactory) {
+    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId, IMetricsFactory metricsFactory) {
         if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
             return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy, idleMillisBetweenCalls);
         } else {
-            return new PrefetchGetRecordsCache(maxSize, maxByteSize, maxRecordsCount, maxRecords,
-                    getRecordsRetrievalStrategy, Executors.newFixedThreadPool(1), metricsFactory, idleMillisBetweenCalls);
+            return new PrefetchGetRecordsCache(maxPendingProcessRecordsInput, maxByteSize, maxRecordsCount, maxRecords,
+                    getRecordsRetrievalStrategy,
+                    Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
+                            .setDaemon(true)
+                            .setNameFormat("prefetch-cache-" + shardId + "-%04d")
+                            .build()),
+                    idleMillisBetweenCalls, metricsFactory);
         }
     }
 
     @Override
-    public void setMaxSize(int maxSize){
-        this.maxSize = maxSize;
+    public void setMaxPendingProcessRecordsInput(int maxPendingProcessRecordsInput){
+        this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
     }
 
     @Override

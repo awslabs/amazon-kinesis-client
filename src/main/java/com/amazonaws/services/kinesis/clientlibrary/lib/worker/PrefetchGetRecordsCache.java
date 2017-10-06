@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import com.amazonaws.SdkClientException;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingFactory;
@@ -30,17 +31,17 @@ import lombok.NonNull;
 import lombok.extern.apachecommons.CommonsLog;
 
 /**
- * This is the default caching class, this class spins up a thread if prefetching is enabled. That thread fetches the
- * next set of records and stores it in the cache. The size of the cache is limited by setting maxSize i.e. the maximum
- * number of GetRecordsResult that the cache can store, maxByteSize i.e. the byte size of the records stored in the
- * cache and maxRecordsCount i.e. the max number of records that should be present in the cache across multiple
- * GetRecordsResult object. If no data is available in the cache, the call from the record processor is blocked till
- * records are retrieved from Kinesis.
+ * This is the prefetch caching class, this class spins up a thread if prefetching is enabled. That thread fetches the
+ * next set of records and stores it in the cache. The size of the cache is limited by setting
+ * maxPendingProcessRecordsInput i.e. the maximum number of GetRecordsResult that the cache can store, maxByteSize
+ * i.e. the byte size of the records stored in the cache and maxRecordsCount i.e. the max number of records that should
+ * be present in the cache across multiple GetRecordsResult object. If no data is available in the cache, the call from
+ * the record processor is blocked till records are retrieved from Kinesis.
  */
 @CommonsLog
 public class PrefetchGetRecordsCache implements GetRecordsCache {
     LinkedBlockingQueue<ProcessRecordsInput> getRecordsResultQueue;
-    private int maxSize;
+    private int maxPendingProcessRecordsInput;
     private int maxByteSize;
     private int maxRecordsCount;
     private final int maxRecordsPerCall;
@@ -49,27 +50,44 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     private final IMetricsFactory metricsFactory;
     private final long idleMillisBetweenCalls;
     private Instant lastSuccessfulCall;
+    private final DefaultGetRecordsCacheDaemon defaultGetRecordsCacheDaemon;
 
     private PrefetchCounters prefetchCounters;
 
     private boolean started = false;
 
-    public PrefetchGetRecordsCache(final int maxSize, final int maxByteSize, final int maxRecordsCount,
+    /**
+     * Constructor for the PrefetchGetRecordsCache. This cache prefetches records from Kinesis and stores them in a
+     * LinkedBlockingQueue.
+     * 
+     * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.PrefetchGetRecordsCache
+     * 
+     * @param maxPendingProcessRecordsInput Max number of ProcessRecordsInput that can be held in the cache before
+     *                                     blocking
+     * @param maxByteSize Max byte size of the queue before blocking next get records call
+     * @param maxRecordsCount Max number of records in the queue across all ProcessRecordInput objects
+     * @param maxRecordsPerCall Max records to be returned per call
+     * @param getRecordsRetrievalStrategy Retrieval strategy for the get records call
+     * @param executorService Executor service for the cache
+     * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
+     */
+    public PrefetchGetRecordsCache(final int maxPendingProcessRecordsInput, final int maxByteSize, final int maxRecordsCount,
                                    final int maxRecordsPerCall,
                                    @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
                                    @NonNull final ExecutorService executorService,
-                                   @NonNull final IMetricsFactory metricsFactory,
-                                   long idleMillisBetweenCalls) {
+                                   long idleMillisBetweenCalls,
+                                   @NonNull final IMetricsFactory metricsFactory) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
-        this.maxSize = maxSize;
+        this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
         this.maxByteSize = maxByteSize;
         this.maxRecordsCount = maxRecordsCount;
-        this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxSize);
+        this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxPendingProcessRecordsInput);
         this.prefetchCounters = new PrefetchCounters();
         this.executorService = executorService;
         this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
+        this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
     }
 
     @Override
@@ -80,7 +98,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         
         if (!started) {
             log.info("Starting prefetching thread.");
-            executorService.execute(new DefaultGetRecordsCacheDaemon());
+            executorService.execute(defaultGetRecordsCacheDaemon);
         }
         started = true;
     }
@@ -111,17 +129,19 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
 
     @Override
     public void shutdown() {
+        defaultGetRecordsCacheDaemon.isShutdown = true;
         executorService.shutdownNow();
         started = false;
     }
 
     private class DefaultGetRecordsCacheDaemon implements Runnable {
+        volatile boolean isShutdown = false;
+        
         @Override
         public void run() {
-            while (true) {
+            while (!isShutdown) {
                 if (Thread.currentThread().isInterrupted()) {
                     log.warn("Prefetch thread was interrupted.");
-                    callShutdownOnStrategy();
                     break;
                 }
                 MetricsHelper.startScope(metricsFactory, "ProcessTask");
@@ -137,15 +157,20 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                         getRecordsResultQueue.put(processRecordsInput);
                         prefetchCounters.added(processRecordsInput);
                     } catch (InterruptedException e) {
-                        log.info("Thread was interrupted, indicating shutdown was called on the cache");
-                        callShutdownOnStrategy();
-                    } catch (Error e) {
-                        log.error("Error was thrown while getting records, please check for the error", e);
+                        log.info("Thread was interrupted, indicating shutdown was called on the cache.");
+                    } catch (SdkClientException e) {
+                        log.error("Exception thrown while fetching records from Kinesis", e);
+                    } catch (Throwable e) {
+                        log.error("Unexpected exception was thrown. This could probably be an issue or a bug." +
+                                " Please search for the exception/error online to check what is going on. If the " +
+                                "issue persists or is a recurring problem, feel free to open an issue on, " +
+                                "https://github.com/awslabs/amazon-kinesis-client.", e);
                     } finally {
                         MetricsHelper.endScope();
                     }
                 }
             }
+            callShutdownOnStrategy();
         }
         
         private void callShutdownOnStrategy() {
