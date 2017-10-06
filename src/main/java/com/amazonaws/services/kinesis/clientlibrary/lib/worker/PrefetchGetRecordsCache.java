@@ -29,6 +29,7 @@ import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
 import lombok.NonNull;
 import lombok.extern.apachecommons.CommonsLog;
+import org.apache.commons.lang.Validate;
 
 /**
  * This is the prefetch caching class, this class spins up a thread if prefetching is enabled. That thread fetches the
@@ -91,6 +92,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
         this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
+        Validate.notEmpty(operation, "Operation cannot be empty");
         this.operation = operation;
     }
 

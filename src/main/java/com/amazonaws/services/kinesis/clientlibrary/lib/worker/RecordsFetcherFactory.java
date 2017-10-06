@@ -26,7 +26,7 @@ public interface RecordsFetcherFactory {
      * @param getRecordsRetrievalStrategy GetRecordsRetrievalStrategy to be used with the GetRecordsCache
      * @param shardId ShardId of the shard that the fetcher will retrieve records for
      * @param metricsFactory MetricsFactory used to create metricScope
-     * @param operation operation used to set metricScope
+     * @param operation operation name used to emit metrics
      *                
      * @return GetRecordsCache used to get records from Kinesis.
      */
