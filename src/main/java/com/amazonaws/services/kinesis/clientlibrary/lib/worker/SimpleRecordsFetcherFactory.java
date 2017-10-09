@@ -45,7 +45,9 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
                             .setDaemon(true)
                             .setNameFormat("prefetch-cache-" + shardId + "-%04d")
                             .build()),
-                    idleMillisBetweenCalls, metricsFactory, "processTask");
+                            idleMillisBetweenCalls,
+                    metricsFactory,
+                    "ProcessTask");
         }
     }
 
