@@ -22,10 +22,14 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
 import lombok.NonNull;
 import lombok.extern.apachecommons.CommonsLog;
+import org.apache.commons.lang.Validate;
 
 /**
  * This is the prefetch caching class, this class spins up a thread if prefetching is enabled. That thread fetches the
@@ -44,13 +48,13 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final ExecutorService executorService;
+    private final IMetricsFactory metricsFactory;
     private final long idleMillisBetweenCalls;
     private Instant lastSuccessfulCall;
     private final DefaultGetRecordsCacheDaemon defaultGetRecordsCacheDaemon;
-
     private PrefetchCounters prefetchCounters;
-
     private boolean started = false;
+    private final String operation;
 
     /**
      * Constructor for the PrefetchGetRecordsCache. This cache prefetches records from Kinesis and stores them in a
@@ -71,7 +75,9 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                                    final int maxRecordsPerCall,
                                    @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
                                    @NonNull final ExecutorService executorService,
-                                   long idleMillisBetweenCalls) {
+                                   long idleMillisBetweenCalls,
+                                   @NonNull final IMetricsFactory metricsFactory,
+                                   @NonNull String operation) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
@@ -80,8 +86,11 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxPendingProcessRecordsInput);
         this.prefetchCounters = new PrefetchCounters();
         this.executorService = executorService;
+        this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
         this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
+        Validate.notEmpty(operation, "Operation cannot be empty");
+        this.operation = operation;
     }
 
     @Override
@@ -138,6 +147,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                     log.warn("Prefetch thread was interrupted.");
                     break;
                 }
+                MetricsHelper.startScope(metricsFactory, operation);
                 if (prefetchCounters.shouldGetNewRecords()) {
                     try {
                         sleepBeforeNextCall();
@@ -158,6 +168,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                                 " Please search for the exception/error online to check what is going on. If the " +
                                 "issue persists or is a recurring problem, feel free to open an issue on, " +
                                 "https://github.com/awslabs/amazon-kinesis-client.", e);
+                    } finally {
+                        MetricsHelper.endScope();
                     }
                 }
             }

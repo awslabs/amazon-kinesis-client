@@ -14,6 +14,8 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+
 /**
  * This factory is used to create the records fetcher to retrieve data from Kinesis for a given shard.
  */
@@ -23,10 +25,11 @@ public interface RecordsFetcherFactory {
      *
      * @param getRecordsRetrievalStrategy GetRecordsRetrievalStrategy to be used with the GetRecordsCache
      * @param shardId ShardId of the shard that the fetcher will retrieve records for
+     * @param metricsFactory MetricsFactory used to create metricScope
      *                
      * @return GetRecordsCache used to get records from Kinesis.
      */
-    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId);
+    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId, IMetricsFactory metricsFactory);
 
     /**
      * Sets the maximum number of ProcessRecordsInput objects the GetRecordsCache can hold, before further requests are

@@ -31,6 +31,10 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import com.amazonaws.services.kinesis.model.Record;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -62,6 +66,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
     private KinesisDataFetcher dataFetcher;
     private ExecutorService executorService;
     private List<Record> records;
+    private String operation = "ProcessTask";
     
     @Mock
     private IKinesisProxy proxy;
@@ -82,7 +87,9 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy,
                 executorService,
-                IDLE_MILLIS_BETWEEN_CALLS);
+                IDLE_MILLIS_BETWEEN_CALLS,
+                new NullMetricsFactory(),
+                operation);
     }
     
     @Test
@@ -126,7 +133,9 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 MAX_RECORDS_PER_CALL,
                 getRecordsRetrievalStrategy2,
                 executorService2,
-                IDLE_MILLIS_BETWEEN_CALLS);
+                IDLE_MILLIS_BETWEEN_CALLS,
+                new NullMetricsFactory(),
+                operation);
         
         getRecordsCache.start();
         sleep(IDLE_MILLIS_BETWEEN_CALLS);

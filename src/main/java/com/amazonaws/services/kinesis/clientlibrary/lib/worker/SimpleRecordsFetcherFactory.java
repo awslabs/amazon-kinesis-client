@@ -16,8 +16,8 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.concurrent.Executors;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import lombok.extern.apachecommons.CommonsLog;
 
 @CommonsLog
@@ -28,13 +28,14 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private int maxRecordsCount = 30000;
     private long idleMillisBetweenCalls = 1500L;
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
+    private IMetricsFactory metricsFactory;
 
     public SimpleRecordsFetcherFactory(int maxRecords) {
         this.maxRecords = maxRecords;
     }
 
     @Override
-    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId) {
+    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId, IMetricsFactory metricsFactory) {
         if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
             return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy, idleMillisBetweenCalls);
         } else {
@@ -44,7 +45,9 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
                             .setDaemon(true)
                             .setNameFormat("prefetch-cache-" + shardId + "-%04d")
                             .build()),
-                    idleMillisBetweenCalls);
+                            idleMillisBetweenCalls,
+                    metricsFactory,
+                    "ProcessTask");
         }
     }
 
@@ -68,7 +71,6 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
         this.dataFetchingStrategy = dataFetchingStrategy;
     }
 
-    @Override
     public void setIdleMillisBetweenCalls(final long idleMillisBetweenCalls) {
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
     }
