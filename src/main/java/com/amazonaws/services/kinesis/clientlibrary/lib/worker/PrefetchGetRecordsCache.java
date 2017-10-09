@@ -52,12 +52,9 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     private final long idleMillisBetweenCalls;
     private Instant lastSuccessfulCall;
     private final DefaultGetRecordsCacheDaemon defaultGetRecordsCacheDaemon;
-
     private PrefetchCounters prefetchCounters;
-
     private boolean started = false;
-
-    private String operation;
+    private final String operation;
 
     /**
      * Constructor for the PrefetchGetRecordsCache. This cache prefetches records from Kinesis and stores them in a
