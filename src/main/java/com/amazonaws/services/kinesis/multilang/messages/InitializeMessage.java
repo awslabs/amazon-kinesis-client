@@ -45,7 +45,7 @@ public class InitializeMessage extends Message {
     /**
      * Convenience constructor.
      * 
-     * @param shardId The shard id.
+     * @param initializationInput The shard id and extended sequence number.
      */
     public InitializeMessage(InitializationInput initializationInput) {
         this.shardId = initializationInput.getShardId();

@@ -41,8 +41,10 @@ public interface IRecordProcessor {
      * 
      * @param records Data records to be processed
      * @param checkpointer RecordProcessor should use this instance to checkpoint their progress.
+     * @param millisBehindLatest indicates how many milliseconds the underlying iterator is behind from the latest record
+     *        in the shard.
      */
-    void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer);
+    void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer, Long millisBehindLatest);
 
     /**
      * Invoked by the Amazon Kinesis Client Library to indicate it will no longer send data records to this

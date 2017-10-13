@@ -39,8 +39,8 @@ class V1ToV2RecordProcessorAdapter implements IRecordProcessor {
 
     @Override
     public void processRecords(ProcessRecordsInput processRecordsInput) {
-        recordProcessor.processRecords(processRecordsInput.getRecords(), processRecordsInput.getCheckpointer());
-        
+        recordProcessor.processRecords(processRecordsInput.getRecords(), processRecordsInput.getCheckpointer(),
+            processRecordsInput.getMillisBehindLatest());
     }
 
     @Override
