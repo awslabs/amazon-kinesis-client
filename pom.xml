@@ -6,7 +6,7 @@
   <artifactId>amazon-kinesis-client</artifactId>
   <packaging>jar</packaging>
   <name>Amazon Kinesis Client Library for Java</name>
-  <version>1.8.2-SNAPSHOT</version>
+  <version>1.8.5</version>
   <description>The Amazon Kinesis Client Library for Java enables Java developers to easily consume and process data
     from Amazon Kinesis.
   </description>
@@ -25,7 +25,7 @@
   </licenses>
 
   <properties>
-    <aws-java-sdk.version>1.11.171</aws-java-sdk.version>
+    <aws-java-sdk.version>1.11.198</aws-java-sdk.version>
     <sqlite4java.version>1.0.392</sqlite4java.version>
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>

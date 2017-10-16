@@ -74,6 +74,8 @@ public class ConsumerStatesTest {
     private IKinesisProxy kinesisProxy;
     @Mock
     private InitialPositionInStreamExtended initialPositionInStream;
+    @Mock
+    private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
     private long parentShardPollIntervalMillis = 0xCAFE;
     private boolean cleanupLeasesOfCompletedShards = true;
@@ -96,7 +98,7 @@ public class ConsumerStatesTest {
         when(consumer.isCleanupLeasesOfCompletedShards()).thenReturn(cleanupLeasesOfCompletedShards);
         when(consumer.getTaskBackoffTimeMillis()).thenReturn(taskBackoffTimeMillis);
         when(consumer.getShutdownReason()).thenReturn(reason);
-
+        when(consumer.getGetRecordsRetrievalStrategy()).thenReturn(getRecordsRetrievalStrategy);
     }
 
     private static final Class<ILeaseManager<KinesisClientLease>> LEASE_MANAGER_CLASS = (Class<ILeaseManager<KinesisClientLease>>) (Class<?>) ILeaseManager.class;
@@ -152,7 +154,34 @@ public class ConsumerStatesTest {
     }
 
     @Test
-    public void processingStateTest() {
+    public void processingStateTestSynchronous() {
+        ConsumerState state = ShardConsumerState.PROCESSING.getConsumerState();
+        ITask task = state.createTask(consumer);
+
+        assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
+        assertThat(task, procTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, procTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
+                equalTo(recordProcessorCheckpointer)));
+        assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
+        assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
+        assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
+
+        assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
+
+        assertThat(state.shutdownTransition(ShutdownReason.ZOMBIE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.TERMINATE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.REQUESTED),
+                equalTo(ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState()));
+
+        assertThat(state.getState(), equalTo(ShardConsumerState.PROCESSING));
+        assertThat(state.getTaskType(), equalTo(TaskType.PROCESS));
+
+    }
+
+    @Test
+    public void processingStateTestAsynchronous() {
         ConsumerState state = ShardConsumerState.PROCESSING.getConsumerState();
         ITask task = state.createTask(consumer);
 

@@ -1,16 +1,16 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.clientlibrary.config;
 
@@ -22,6 +22,7 @@ import static org.junit.Assert.fail;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.Optional;
 import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
@@ -60,6 +61,8 @@ public class KinesisClientLibConfiguratorTest {
         assertEquals(config.getApplicationName(), "b");
         assertEquals(config.getStreamName(), "a");
         assertEquals(config.getWorkerIdentifier(), "123");
+        assertEquals(config.getMaxGetRecordsThreadPool(), Optional.empty());
+        assertEquals(config.getRetryGetRecordsInSeconds(), Optional.empty());
     }
 
     @Test
@@ -107,7 +110,9 @@ public class KinesisClientLibConfiguratorTest {
                         "workerId = w123",
                         "maxRecords = 10",
                         "metricsMaxQueueSize = 20",
-                        "applicationName = kinesis"
+                        "applicationName = kinesis",
+                        "retryGetRecordsInSeconds = 2",
+                        "maxGetRecordsThreadPool = 1"
                 }, '\n'));
 
         assertEquals(config.getApplicationName(), "kinesis");
@@ -115,6 +120,8 @@ public class KinesisClientLibConfiguratorTest {
         assertEquals(config.getWorkerIdentifier(), "w123");
         assertEquals(config.getMaxRecords(), 10);
         assertEquals(config.getMetricsMaxQueueSize(), 20);
+        assertEquals(config.getRetryGetRecordsInSeconds(), Optional.of(2));
+        assertEquals(config.getMaxGetRecordsThreadPool(), Optional.of(1));
     }
 
     @Test
@@ -200,6 +207,42 @@ public class KinesisClientLibConfiguratorTest {
         assertEquals(config.getStreamName(), "a");
         assertEquals(config.getWorkerIdentifier(), "123");
         assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.TRIM_HORIZON);
+    }
+
+    @Test
+    public void testEmptyOptionalVariables() {
+        KinesisClientLibConfiguration config =
+                getConfiguration(StringUtils.join(new String[] {
+                        "streamName = a",
+                        "applicationName = b",
+                        "AWSCredentialsProvider = ABCD," + credentialName1,
+                        "workerId = 123",
+                        "initialPositionInStream = TriM_Horizon",
+                        "maxGetRecordsThreadPool = 1"
+                }, '\n'));
+        assertEquals(config.getMaxGetRecordsThreadPool(), Optional.of(1));
+        assertEquals(config.getRetryGetRecordsInSeconds(), Optional.empty());
+    }
+
+    @Test
+    public void testWithZeroValue() {
+        String test = StringUtils.join(new String[]{
+                        "streamName = a",
+                        "applicationName = b",
+                        "AWSCredentialsProvider = ABCD," + credentialName1,
+                        "workerId = 123",
+                        "initialPositionInStream = TriM_Horizon",
+                        "maxGetRecordsThreadPool = 0",
+                        "retryGetRecordsInSeconds = 0"
+                }, '\n');
+        InputStream input = new ByteArrayInputStream(test.getBytes());
+
+        try {
+            configurator.getConfiguration(input);
+        } catch (Exception e) {
+            fail("Don't expect to fail on invalid variable value");
+
+        }
     }
 
     @Test

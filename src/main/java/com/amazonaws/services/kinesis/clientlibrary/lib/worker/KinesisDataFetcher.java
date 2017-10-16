@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import lombok.Data;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -26,6 +27,7 @@ import com.amazonaws.services.kinesis.clientlibrary.proxies.MetricsCollectingKin
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
 import java.util.Date;
+import java.util.function.Consumer;
 
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
@@ -57,28 +59,67 @@ class KinesisDataFetcher {
      * @param maxRecords Max records to fetch
      * @return list of records of up to maxRecords size
      */
-    public GetRecordsResult getRecords(int maxRecords) {
+    public DataFetcherResult getRecords(int maxRecords) {
         if (!isInitialized) {
             throw new IllegalArgumentException("KinesisDataFetcher.getRecords called before initialization.");
         }
 
-        GetRecordsResult response = null;
+        DataFetcherResult response;
         if (nextIterator != null) {
             try {
-                response = kinesisProxy.get(nextIterator, maxRecords);
-                nextIterator = response.getNextShardIterator();
+                response = new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
-                nextIterator = null;
-            }
-            if (nextIterator == null) {
-                isShardEndReached = true;
+                response = TERMINAL_RESULT;
             }
         } else {
-            isShardEndReached = true;
+            response = TERMINAL_RESULT;
         }
 
         return response;
+    }
+
+    final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
+        @Override
+        public GetRecordsResult getResult() {
+            return null;
+        }
+
+        @Override
+        public GetRecordsResult accept() {
+            isShardEndReached = true;
+            return getResult();
+        }
+
+        @Override
+        public boolean isShardEnd() {
+            return isShardEndReached;
+        }
+    };
+
+    @Data
+    private class AdvancingResult implements DataFetcherResult {
+
+        final GetRecordsResult result;
+
+        @Override
+        public GetRecordsResult getResult() {
+            return result;
+        }
+
+        @Override
+        public GetRecordsResult accept() {
+            nextIterator = result.getNextShardIterator();
+            if (nextIterator == null) {
+                isShardEndReached = true;
+            }
+            return getResult();
+        }
+
+        @Override
+        public boolean isShardEnd() {
+            return isShardEndReached;
+        }
     }
 
     /**

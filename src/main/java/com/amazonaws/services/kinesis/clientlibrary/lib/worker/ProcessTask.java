@@ -1,16 +1,16 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
@@ -18,6 +18,7 @@ import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Optional;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -62,6 +63,8 @@ class ProcessTask implements ITask {
     private final Shard shard;
     private final ThrottlingReporter throttlingReporter;
 
+    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+
     /**
      * @param shardInfo
      *            contains information about the shard
@@ -75,13 +78,17 @@ class ProcessTask implements ITask {
      *            Kinesis data fetcher (used to fetch records from Kinesis)
      * @param backoffTimeMillis
      *            backoff time when catching exceptions
+     * @param getRecordsRetrievalStrategy
+     *            The retrieval strategy for fetching records from kinesis
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-            RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
-            long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
+                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
+                       long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                       GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()));
+                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()),
+                getRecordsRetrievalStrategy);
     }
 
     /**
@@ -103,7 +110,7 @@ class ProcessTask implements ITask {
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
             RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
             long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-            ThrottlingReporter throttlingReporter) {
+            ThrottlingReporter throttlingReporter, GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         super();
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -113,6 +120,7 @@ class ProcessTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
         this.throttlingReporter = throttlingReporter;
         IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
+        this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         // If skipShardSyncAtWorkerInitializationIfLeasesExist is set, we will not get the shard for
         // this ProcessTask. In this case, duplicate KPL user records in the event of resharding will
         // not be dropped during deaggregation of Amazon Kinesis records. This is only applicable if
@@ -368,7 +376,7 @@ class ProcessTask implements ITask {
      * @return list of data records from Kinesis
      */
     private GetRecordsResult getRecordsResultAndRecordMillisBehindLatest() {
-        final GetRecordsResult getRecordsResult = dataFetcher.getRecords(streamConfig.getMaxRecords());
+        final GetRecordsResult getRecordsResult = getRecordsRetrievalStrategy.getRecords(streamConfig.getMaxRecords());
 
         if (getRecordsResult == null) {
             // Stream no longer exists

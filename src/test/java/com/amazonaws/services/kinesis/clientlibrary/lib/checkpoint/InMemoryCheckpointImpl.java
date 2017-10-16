@@ -33,6 +33,7 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
 
     private Map<String, ExtendedSequenceNumber> checkpoints = new HashMap<>();
     private Map<String, ExtendedSequenceNumber> flushpoints = new HashMap<>();
+    private Map<String, ExtendedSequenceNumber> pendingCheckpoints = new HashMap<>();
     private final String startingSequenceNumber;
 
     /**
@@ -95,6 +96,7 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
         throws KinesisClientLibException {
         checkpoints.put(shardId, checkpointValue);
         flushpoints.put(shardId, checkpointValue);
+        pendingCheckpoints.remove(shardId);
 
         if (LOG.isDebugEnabled()) {
             LOG.debug("shardId: " + shardId + " checkpoint: " + checkpointValue);
@@ -110,6 +112,22 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
         ExtendedSequenceNumber checkpoint = flushpoints.get(shardId);
         LOG.debug("getCheckpoint shardId: " + shardId + " checkpoint: " + checkpoint);
         return checkpoint;
+    }
+
+    @Override
+    public void prepareCheckpoint(String shardId, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
+            throws KinesisClientLibException {
+        pendingCheckpoints.put(shardId, pendingCheckpoint);
+    }
+
+    @Override
+    public Checkpoint getCheckpointObject(String shardId) throws KinesisClientLibException {
+        ExtendedSequenceNumber checkpoint = flushpoints.get(shardId);
+        ExtendedSequenceNumber pendingCheckpoint = pendingCheckpoints.get(shardId);
+
+        Checkpoint checkpointObj = new Checkpoint(checkpoint, pendingCheckpoint);
+        LOG.debug("getCheckpointObject shardId: " + shardId + ", " + checkpointObj);
+        return checkpointObj;
     }
 
     /** Check that string is neither null nor empty.

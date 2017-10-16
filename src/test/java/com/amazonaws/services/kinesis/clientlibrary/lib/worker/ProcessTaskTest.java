@@ -1,16 +1,16 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
@@ -19,7 +19,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -76,6 +76,8 @@ public class ProcessTaskTest {
     private @Mock RecordProcessorCheckpointer mockCheckpointer;
     @Mock
     private ThrottlingReporter throttlingReporter;
+    @Mock
+    private GetRecordsRetrievalStrategy mockGetRecordsRetrievalStrategy;
 
     private List<Record> processedRecords;
     private ExtendedSequenceNumber newLargestPermittedCheckpointValue;
@@ -94,19 +96,20 @@ public class ProcessTaskTest {
         final ShardInfo shardInfo = new ShardInfo(shardId, null, null, null);
         processTask = new ProcessTask(
                 shardInfo, config, mockRecordProcessor, mockCheckpointer, mockDataFetcher, taskBackoffTimeMillis,
-                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, throttlingReporter);
+                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, throttlingReporter, mockGetRecordsRetrievalStrategy);
     }
 
     @Test
     public void testProcessTaskWithProvisionedThroughputExceededException() {
         // Set data fetcher to throw exception
         doReturn(false).when(mockDataFetcher).isShardEndReached();
-        doThrow(new ProvisionedThroughputExceededException("Test Exception")).when(mockDataFetcher)
+        doThrow(new ProvisionedThroughputExceededException("Test Exception")).when(mockGetRecordsRetrievalStrategy)
                 .getRecords(maxRecords);
 
         TaskResult result = processTask.call();
         verify(throttlingReporter).throttled();
         verify(throttlingReporter, never()).success();
+        verify(mockGetRecordsRetrievalStrategy).getRecords(eq(maxRecords));
         assertTrue("Result should contain ProvisionedThroughputExceededException",
                 result.getException() instanceof ProvisionedThroughputExceededException);
     }
@@ -114,9 +117,10 @@ public class ProcessTaskTest {
     @Test
     public void testProcessTaskWithNonExistentStream() {
         // Data fetcher returns a null Result when the stream does not exist
-        doReturn(null).when(mockDataFetcher).getRecords(maxRecords);
+        doReturn(null).when(mockGetRecordsRetrievalStrategy).getRecords(maxRecords);
 
         TaskResult result = processTask.call();
+        verify(mockGetRecordsRetrievalStrategy).getRecords(eq(maxRecords));
         assertNull("Task should not throw an exception", result.getException());
     }
 
@@ -300,14 +304,14 @@ public class ProcessTaskTest {
     private void testWithRecords(List<Record> records,
             ExtendedSequenceNumber lastCheckpointValue,
             ExtendedSequenceNumber largestPermittedCheckpointValue) {
-        when(mockDataFetcher.getRecords(anyInt())).thenReturn(
+        when(mockGetRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(
                 new GetRecordsResult().withRecords(records));
         when(mockCheckpointer.getLastCheckpointValue()).thenReturn(lastCheckpointValue);
         when(mockCheckpointer.getLargestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
         processTask.call();
         verify(throttlingReporter).success();
         verify(throttlingReporter, never()).throttled();
-
+        verify(mockGetRecordsRetrievalStrategy).getRecords(anyInt());
         ArgumentCaptor<ProcessRecordsInput> priCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
         verify(mockRecordProcessor).processRecords(priCaptor.capture());
         processedRecords = priCaptor.getValue().getRecords();

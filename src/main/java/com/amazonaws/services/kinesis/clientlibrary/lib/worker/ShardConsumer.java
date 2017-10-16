@@ -1,24 +1,26 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
+import lombok.Getter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -57,6 +59,20 @@ class ShardConsumer {
     private ITask currentTask;
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
+    
+    @Getter
+    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+
+    private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
+                                                                  Optional<Integer> retryGetRecordsInSeconds,
+                                                                  Optional<Integer> maxGetRecordsThreadPool,
+                                                                  ShardInfo shardInfo) {
+        Optional<GetRecordsRetrievalStrategy> getRecordsRetrievalStrategy = retryGetRecordsInSeconds.flatMap(retry ->
+                maxGetRecordsThreadPool.map(max ->
+                        new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, retry, max, shardInfo.getShardId())));
+
+        return getRecordsRetrievalStrategy.orElse(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
+    }
 
     /*
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
@@ -93,6 +109,38 @@ class ShardConsumer {
             IMetricsFactory metricsFactory,
             long backoffTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
+        this(shardInfo, streamConfig, checkpoint,recordProcessor, leaseManager, parentShardPollIntervalMillis,
+                cleanupLeasesOfCompletedShards, executorService, metricsFactory, backoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty());
+    }
+
+    /**
+     * @param shardInfo Shard information
+     * @param streamConfig Stream configuration to use
+     * @param checkpoint Checkpoint tracker
+     * @param recordProcessor Record processor used to process the data records for the shard
+     * @param leaseManager Used to create leases for new shards
+     * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
+     * @param executorService ExecutorService used to execute process tasks for this shard
+     * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
+     * @param backoffTimeMillis backoff interval when we encounter exceptions
+     * @param retryGetRecordsInSeconds time in seconds to wait before the worker retries to get a record.
+     * @param maxGetRecordsThreadPool max number of threads in the getRecords thread pool.
+     */
+    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
+    ShardConsumer(ShardInfo shardInfo,
+                  StreamConfig streamConfig,
+                  ICheckpoint checkpoint,
+                  IRecordProcessor recordProcessor,
+                  ILeaseManager<KinesisClientLease> leaseManager,
+                  long parentShardPollIntervalMillis,
+                  boolean cleanupLeasesOfCompletedShards,
+                  ExecutorService executorService,
+                  IMetricsFactory metricsFactory,
+                  long backoffTimeMillis,
+                  boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                  Optional<Integer> retryGetRecordsInSeconds,
+                  Optional<Integer> maxGetRecordsThreadPool) {
         this.streamConfig = streamConfig;
         this.recordProcessor = recordProcessor;
         this.executorService = executorService;
@@ -111,6 +159,7 @@ class ShardConsumer {
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.taskBackoffTimeMillis = backoffTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
+        this.getRecordsRetrievalStrategy = makeStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, shardInfo);
     }
 
     /**
