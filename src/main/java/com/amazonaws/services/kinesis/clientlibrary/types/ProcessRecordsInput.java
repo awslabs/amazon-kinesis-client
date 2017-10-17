@@ -14,9 +14,14 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.types;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.model.Record;
+
+import lombok.Getter;
 
 /**
  * Container for the parameters to the IRecordProcessor's
@@ -24,7 +29,10 @@ import com.amazonaws.services.kinesis.model.Record;
  * ProcessRecordsInput processRecordsInput) processRecords} method.
  */
 public class ProcessRecordsInput {
-
+    @Getter
+    private Instant cacheEntryTime;
+    @Getter
+    private Instant cacheExitTime;
     private List<Record> records;
     private IRecordProcessorCheckpointer checkpointer;
     private Long millisBehindLatest;
@@ -95,5 +103,22 @@ public class ProcessRecordsInput {
     public ProcessRecordsInput withMillisBehindLatest(Long millisBehindLatest) {
         this.millisBehindLatest = millisBehindLatest;
         return this;
+    }
+    
+    public ProcessRecordsInput withCacheEntryTime(Instant cacheEntryTime) {
+        this.cacheEntryTime = cacheEntryTime;
+        return this;
+    }
+    
+    public ProcessRecordsInput withCacheExitTime(Instant cacheExitTime) {
+        this.cacheExitTime = cacheExitTime;
+        return this;
+    }
+    
+    public Duration getTimeSpentInCache() {
+        if (cacheEntryTime == null || cacheExitTime == null) {
+            return Duration.ZERO;
+        }
+        return Duration.between(cacheEntryTime, cacheExitTime);
     }
 }
