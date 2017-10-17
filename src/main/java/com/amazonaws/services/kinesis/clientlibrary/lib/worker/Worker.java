@@ -99,6 +99,8 @@ public class Worker implements Runnable {
     private volatile long shutdownStartTimeMillis;
     private volatile boolean shutdownComplete = false;
 
+    private volatile boolean initialized = false;
+
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
     private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap = new ConcurrentHashMap<ShardInfo, ShardConsumer>();
@@ -528,6 +530,7 @@ public class Worker implements Runnable {
         if (!isDone) {
             throw new RuntimeException(lastException);
         }
+        initialized = true;
     }
 
     /**
@@ -682,6 +685,10 @@ public class Worker implements Runnable {
         return gracefulShutdownCoordinator.createGracefulShutdownCallable(startShutdown);
     }
 
+    public boolean isInitialized() {
+        return initialized;
+    }
+
     public boolean hasGracefulShutdownStarted() {
         return gracefuleShutdownStarted;
     }
@@ -786,6 +793,7 @@ public class Worker implements Runnable {
         if (metricsFactory instanceof WorkerCWMetricsFactory) {
             ((CWMetricsFactory) metricsFactory).shutdown();
         }
+        initialized = false;
         shutdownComplete = true;
     }
 
