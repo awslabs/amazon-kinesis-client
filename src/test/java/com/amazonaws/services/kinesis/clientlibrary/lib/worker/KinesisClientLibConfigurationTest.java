@@ -19,7 +19,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import junit.framework.Assert;
+import java.util.Date;
 
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -35,7 +35,7 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
 
-import java.util.Date;
+import junit.framework.Assert;
 
 public class KinesisClientLibConfigurationTest {
     private static final long INVALID_LONG = 0L;
@@ -95,7 +95,8 @@ public class KinesisClientLibConfigurationTest {
         // Try each argument at one time.
         KinesisClientLibConfiguration config = null;
         long[] longValues =
-        { TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG };
+                { TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG,
+                        TEST_VALUE_LONG };
         for (int i = 0; i < PARAMETER_COUNT; i++) {
             longValues[i] = INVALID_LONG;
             try {
@@ -300,30 +301,30 @@ public class KinesisClientLibConfigurationTest {
         Mockito.mock(AWSCredentialsProvider.class);
         try {
             new KinesisClientLibConfiguration(TEST_STRING,
-                        TEST_STRING,
-                        TEST_STRING,
-                        TEST_STRING,
-                        null,
-                        null,
-                        null,
-                        null,
-                        TEST_VALUE_LONG,
-                        TEST_STRING,
-                        3,
-                        TEST_VALUE_LONG,
-                        false,
-                        TEST_VALUE_LONG,
-                        TEST_VALUE_LONG,
-                        true,
-                        new ClientConfiguration(),
-                        new ClientConfiguration(),
-                        new ClientConfiguration(),
-                        TEST_VALUE_LONG,
-                        TEST_VALUE_LONG,
-                        1,
-                        skipCheckpointValidationValue,
-                        "abcd",
-                        TEST_VALUE_LONG);
+                    TEST_STRING,
+                    TEST_STRING,
+                    TEST_STRING,
+                    null,
+                    null,
+                    null,
+                    null,
+                    TEST_VALUE_LONG,
+                    TEST_STRING,
+                    3,
+                    TEST_VALUE_LONG,
+                    false,
+                    TEST_VALUE_LONG,
+                    TEST_VALUE_LONG,
+                    true,
+                    new ClientConfiguration(),
+                    new ClientConfiguration(),
+                    new ClientConfiguration(),
+                    TEST_VALUE_LONG,
+                    TEST_VALUE_LONG,
+                    1,
+                    skipCheckpointValidationValue,
+                    "abcd",
+                    TEST_VALUE_LONG);
             Assert.fail("No expected Exception is thrown.");
         } catch(IllegalArgumentException e) {
             System.out.println(e.getMessage());

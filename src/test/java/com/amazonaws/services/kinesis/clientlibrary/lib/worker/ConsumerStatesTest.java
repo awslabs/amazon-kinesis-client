@@ -55,6 +55,8 @@ public class ConsumerStatesTest {
     @Mock
     private IRecordProcessor recordProcessor;
     @Mock
+    private KinesisClientLibConfiguration config;
+    @Mock
     private RecordProcessorCheckpointer recordProcessorCheckpointer;
     @Mock
     private ExecutorService executorService;
@@ -75,7 +77,7 @@ public class ConsumerStatesTest {
     @Mock
     private InitialPositionInStreamExtended initialPositionInStream;
     @Mock
-    private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+    private GetRecordsCache getRecordsCache;
 
     private long parentShardPollIntervalMillis = 0xCAFE;
     private boolean cleanupLeasesOfCompletedShards = true;
@@ -98,7 +100,7 @@ public class ConsumerStatesTest {
         when(consumer.isCleanupLeasesOfCompletedShards()).thenReturn(cleanupLeasesOfCompletedShards);
         when(consumer.getTaskBackoffTimeMillis()).thenReturn(taskBackoffTimeMillis);
         when(consumer.getShutdownReason()).thenReturn(reason);
-        when(consumer.getGetRecordsRetrievalStrategy()).thenReturn(getRecordsRetrievalStrategy);
+        when(consumer.getGetRecordsCache()).thenReturn(getRecordsCache);
     }
 
     private static final Class<ILeaseManager<KinesisClientLease>> LEASE_MANAGER_CLASS = (Class<ILeaseManager<KinesisClientLease>>) (Class<?>) ILeaseManager.class;
@@ -208,6 +210,33 @@ public class ConsumerStatesTest {
     }
 
     @Test
+    public void processingStateRecordsFetcher() {
+
+        ConsumerState state = ShardConsumerState.PROCESSING.getConsumerState();
+        ITask task = state.createTask(consumer);
+
+        assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
+        assertThat(task, procTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, procTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
+                equalTo(recordProcessorCheckpointer)));
+        assertThat(task, procTask(KinesisDataFetcher.class, "dataFetcher", equalTo(dataFetcher)));
+        assertThat(task, procTask(StreamConfig.class, "streamConfig", equalTo(streamConfig)));
+        assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
+
+        assertThat(state.successTransition(), equalTo(ShardConsumerState.PROCESSING.getConsumerState()));
+
+        assertThat(state.shutdownTransition(ShutdownReason.ZOMBIE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.TERMINATE),
+                equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
+        assertThat(state.shutdownTransition(ShutdownReason.REQUESTED),
+                equalTo(ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState()));
+
+        assertThat(state.getState(), equalTo(ShardConsumerState.PROCESSING));
+        assertThat(state.getTaskType(), equalTo(TaskType.PROCESS));
+    }
+
+    @Test
     public void shutdownRequestState() {
         ConsumerState state = ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState();
 
@@ -313,7 +342,7 @@ public class ConsumerStatesTest {
     }
 
     static <ValueType> ReflectionPropertyMatcher<ShutdownTask, ValueType> shutdownTask(Class<ValueType> valueTypeClass,
-            String propertyName, Matcher<ValueType> matcher) {
+                                                                                       String propertyName, Matcher<ValueType> matcher) {
         return taskWith(ShutdownTask.class, valueTypeClass, propertyName, matcher);
     }
 
@@ -323,17 +352,17 @@ public class ConsumerStatesTest {
     }
 
     static <ValueType> ReflectionPropertyMatcher<ProcessTask, ValueType> procTask(Class<ValueType> valueTypeClass,
-            String propertyName, Matcher<ValueType> matcher) {
+                                                                                  String propertyName, Matcher<ValueType> matcher) {
         return taskWith(ProcessTask.class, valueTypeClass, propertyName, matcher);
     }
 
     static <ValueType> ReflectionPropertyMatcher<InitializeTask, ValueType> initTask(Class<ValueType> valueTypeClass,
-            String propertyName, Matcher<ValueType> matcher) {
+                                                                                     String propertyName, Matcher<ValueType> matcher) {
         return taskWith(InitializeTask.class, valueTypeClass, propertyName, matcher);
     }
 
     static <TaskType, ValueType> ReflectionPropertyMatcher<TaskType, ValueType> taskWith(Class<TaskType> taskTypeClass,
-            Class<ValueType> valueTypeClass, String propertyName, Matcher<ValueType> matcher) {
+                                                                                         Class<ValueType> valueTypeClass, String propertyName, Matcher<ValueType> matcher) {
         return new ReflectionPropertyMatcher<>(taskTypeClass, valueTypeClass, matcher, propertyName);
     }
 
@@ -346,7 +375,7 @@ public class ConsumerStatesTest {
         private final Field matchingField;
 
         private ReflectionPropertyMatcher(Class<TaskType> taskTypeClass, Class<ValueType> valueTypeClass,
-                Matcher<ValueType> matcher, String propertyName) {
+                                          Matcher<ValueType> matcher, String propertyName) {
             this.taskTypeClass = taskTypeClass;
             this.valueTypeClazz = valueTypeClass;
             this.matcher = matcher;

@@ -1,33 +1,34 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import lombok.Data;
+import java.util.Collections;
+import java.util.Date;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.kinesis.model.GetRecordsResult;
-import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
-import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.MetricsCollectingKinesisProxyDecorator;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
+import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
+import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
-import java.util.Date;
-import java.util.function.Consumer;
+import lombok.Data;
 
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
@@ -49,8 +50,7 @@ class KinesisDataFetcher {
      */
     public KinesisDataFetcher(IKinesisProxy kinesisProxy, ShardInfo shardInfo) {
         this.shardId = shardInfo.getShardId();
-        this.kinesisProxy =
-                new MetricsCollectingKinesisProxyDecorator("KinesisDataFetcher", kinesisProxy, this.shardId);
+        this.kinesisProxy = new MetricsCollectingKinesisProxyDecorator("KinesisDataFetcher", kinesisProxy, this.shardId);
     }
 
     /**
@@ -63,26 +63,24 @@ class KinesisDataFetcher {
         if (!isInitialized) {
             throw new IllegalArgumentException("KinesisDataFetcher.getRecords called before initialization.");
         }
-
-        DataFetcherResult response;
+        
         if (nextIterator != null) {
             try {
-                response = new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
+                return new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
-                response = TERMINAL_RESULT;
+                return TERMINAL_RESULT;
             }
         } else {
-            response = TERMINAL_RESULT;
+            return TERMINAL_RESULT;
         }
-
-        return response;
     }
 
     final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
         @Override
         public GetRecordsResult getResult() {
-            return null;
+            return new GetRecordsResult().withMillisBehindLatest(null).withRecords(Collections.emptyList())
+                    .withNextShardIterator(null);
         }
 
         @Override
@@ -98,7 +96,7 @@ class KinesisDataFetcher {
     };
 
     @Data
-    private class AdvancingResult implements DataFetcherResult {
+    class AdvancingResult implements DataFetcherResult {
 
         final GetRecordsResult result;
 
