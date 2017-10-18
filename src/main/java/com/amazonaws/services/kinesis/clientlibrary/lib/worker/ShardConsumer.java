@@ -406,7 +406,7 @@ class ShardConsumer {
         if (taskOutcome == TaskOutcome.END_OF_SHARD) {
             markForShutdown(ShutdownReason.TERMINATE);
         }
-        if (isShutdownRequested()) {
+        if (isShutdownRequested() && taskOutcome != TaskOutcome.FAILURE) {
             currentState = currentState.shutdownTransition(shutdownReason);
         } else if (taskOutcome == TaskOutcome.SUCCESSFUL) {
             if (currentState.getTaskType() == currentTask.getTaskType()) {
