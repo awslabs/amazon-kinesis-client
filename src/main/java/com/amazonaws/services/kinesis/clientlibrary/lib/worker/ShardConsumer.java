@@ -20,7 +20,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
-import lombok.Getter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -31,6 +30,8 @@ import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.google.common.annotations.VisibleForTesting;
+
+import lombok.Getter;
 
 /**
  * Responsible for consuming data records of a (specified) shard.
@@ -43,6 +44,7 @@ class ShardConsumer {
 
     private final StreamConfig streamConfig;
     private final IRecordProcessor recordProcessor;
+    private final KinesisClientLibConfiguration config;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ExecutorService executorService;
     private final ShardInfo shardInfo;
@@ -61,7 +63,7 @@ class ShardConsumer {
     private Future<TaskResult> future;
     
     @Getter
-    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+    private final GetRecordsCache getRecordsCache;
 
     private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
                                                                   Optional<Integer> retryGetRecordsInSeconds,
@@ -91,6 +93,7 @@ class ShardConsumer {
      * @param streamConfig Stream configuration to use
      * @param checkpoint Checkpoint tracker
      * @param recordProcessor Record processor used to process the data records for the shard
+     * @param config Kinesis library configuration
      * @param leaseManager Used to create leases for new shards
      * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
      * @param executorService ExecutorService used to execute process tasks for this shard
@@ -99,19 +102,31 @@ class ShardConsumer {
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     ShardConsumer(ShardInfo shardInfo,
-            StreamConfig streamConfig,
-            ICheckpoint checkpoint,
-            IRecordProcessor recordProcessor,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            long parentShardPollIntervalMillis,
-            boolean cleanupLeasesOfCompletedShards,
-            ExecutorService executorService,
-            IMetricsFactory metricsFactory,
-            long backoffTimeMillis,
-            boolean skipShardSyncAtWorkerInitializationIfLeasesExist) {
-        this(shardInfo, streamConfig, checkpoint,recordProcessor, leaseManager, parentShardPollIntervalMillis,
-                cleanupLeasesOfCompletedShards, executorService, metricsFactory, backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist, Optional.empty(), Optional.empty());
+                  StreamConfig streamConfig,
+                  ICheckpoint checkpoint,
+                  IRecordProcessor recordProcessor,
+                  ILeaseManager<KinesisClientLease> leaseManager,
+                  long parentShardPollIntervalMillis,
+                  boolean cleanupLeasesOfCompletedShards,
+                  ExecutorService executorService,
+                  IMetricsFactory metricsFactory,
+                  long backoffTimeMillis,
+                  boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                  KinesisClientLibConfiguration config) {
+        this(shardInfo,
+                streamConfig,
+                checkpoint,
+                recordProcessor,
+                leaseManager,
+                parentShardPollIntervalMillis,
+                cleanupLeasesOfCompletedShards,
+                executorService,
+                metricsFactory,
+                backoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist,
+                Optional.empty(),
+                Optional.empty(),
+                config);
     }
 
     /**
@@ -126,6 +141,7 @@ class ShardConsumer {
      * @param backoffTimeMillis backoff interval when we encounter exceptions
      * @param retryGetRecordsInSeconds time in seconds to wait before the worker retries to get a record.
      * @param maxGetRecordsThreadPool max number of threads in the getRecords thread pool.
+     * @param config Kinesis library configuration
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     ShardConsumer(ShardInfo shardInfo,
@@ -140,26 +156,86 @@ class ShardConsumer {
                   long backoffTimeMillis,
                   boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
                   Optional<Integer> retryGetRecordsInSeconds,
-                  Optional<Integer> maxGetRecordsThreadPool) {
-        this.streamConfig = streamConfig;
-        this.recordProcessor = recordProcessor;
-        this.executorService = executorService;
-        this.shardInfo = shardInfo;
-        this.checkpoint = checkpoint;
-        this.recordProcessorCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo,
+                  Optional<Integer> maxGetRecordsThreadPool,
+                  KinesisClientLibConfiguration config) {
+        
+        this(
+                shardInfo,
+                streamConfig,
+                checkpoint,
+                recordProcessor,
+                new RecordProcessorCheckpointer(
+                        shardInfo,
                         checkpoint,
-                        new SequenceNumberValidator(streamConfig.getStreamProxy(),
+                        new SequenceNumberValidator(
+                                streamConfig.getStreamProxy(),
                                 shardInfo.getShardId(),
-                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()));
-        this.dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
+                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing())),
+                leaseManager,
+                parentShardPollIntervalMillis,
+                cleanupLeasesOfCompletedShards,
+                executorService,
+                metricsFactory,
+                backoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist,
+                new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo),
+                retryGetRecordsInSeconds,
+                maxGetRecordsThreadPool,
+                config
+        );
+    }
+
+    /**
+     * @param shardInfo Shard information
+     * @param streamConfig Stream Config to use
+     * @param checkpoint Checkpoint tracker
+     * @param recordProcessor Record processor used to process the data records for the shard
+     * @param recordProcessorCheckpointer RecordProcessorCheckpointer to use to checkpoint progress
+     * @param leaseManager Used to create leases for new shards
+     * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
+     * @param cleanupLeasesOfCompletedShards  clean up the leases of completed shards
+     * @param executorService ExecutorService used to execute process tasks for this shard
+     * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
+     * @param backoffTimeMillis backoff interval when we encounter exceptions
+     * @param skipShardSyncAtWorkerInitializationIfLeasesExist Skip sync at init if lease exists
+     * @param kinesisDataFetcher KinesisDataFetcher to fetch data from Kinesis streams.
+     * @param retryGetRecordsInSeconds time in seconds to wait before the worker retries to get a record
+     * @param maxGetRecordsThreadPool max number of threads in the getRecords thread pool
+     * @param config Kinesis library configuration
+     */
+    ShardConsumer(ShardInfo shardInfo,
+                  StreamConfig streamConfig,
+                  ICheckpoint checkpoint,
+                  IRecordProcessor recordProcessor,
+                  RecordProcessorCheckpointer recordProcessorCheckpointer,
+                  ILeaseManager<KinesisClientLease> leaseManager,
+                  long parentShardPollIntervalMillis,
+                  boolean cleanupLeasesOfCompletedShards,
+                  ExecutorService executorService,
+                  IMetricsFactory metricsFactory,
+                  long backoffTimeMillis,
+                  boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                  KinesisDataFetcher kinesisDataFetcher,
+                  Optional<Integer> retryGetRecordsInSeconds,
+                  Optional<Integer> maxGetRecordsThreadPool,
+                  KinesisClientLibConfiguration config) {
+        this.shardInfo = shardInfo;
+        this.streamConfig = streamConfig;
+        this.checkpoint = checkpoint;
+        this.recordProcessor = recordProcessor;
+        this.recordProcessorCheckpointer = recordProcessorCheckpointer;
         this.leaseManager = leaseManager;
-        this.metricsFactory = metricsFactory;
         this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
+        this.executorService = executorService;
+        this.metricsFactory = metricsFactory;
         this.taskBackoffTimeMillis = backoffTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
-        this.getRecordsRetrievalStrategy = makeStrategy(dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, shardInfo);
+        this.config = config;
+        this.dataFetcher = kinesisDataFetcher;
+        this.getRecordsCache = config.getRecordsFetcherFactory().createRecordsFetcher(
+                makeStrategy(this.dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, this.shardInfo),
+                this.getShardInfo().getShardId(), this.metricsFactory);
     }
 
     /**
