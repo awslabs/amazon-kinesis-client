@@ -27,6 +27,7 @@ import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -43,6 +44,7 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -119,6 +121,7 @@ public class ShardConsumerTest {
         
         recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory(maxRecords));
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
+        when(config.getLogWarningForTaskAfterMillis()).thenReturn(Optional.empty());
     }
     
     /**
@@ -646,6 +649,52 @@ public class ShardConsumerTest {
 
         assertEquals(shardConsumer.getGetRecordsCache().getGetRecordsRetrievalStrategy().getClass(),
                 AsynchronousGetRecordsRetrievalStrategy.class);
+    }
+    
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testLongRunningTasks() throws InterruptedException {
+        final long sleepTime = 1000L;
+        ExecutorService mockExecutorService = mock(ExecutorService.class);
+        Future<TaskResult> mockFuture = mock(Future.class);
+        
+        when(mockExecutorService.submit(any(ITask.class))).thenReturn(mockFuture);
+        when(mockFuture.isDone()).thenReturn(false);
+        when(mockFuture.isCancelled()).thenReturn(false);
+        when(config.getLogWarningForTaskAfterMillis()).thenReturn(Optional.of(sleepTime));
+        
+        ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null, ExtendedSequenceNumber.LATEST);
+        StreamConfig streamConfig = new StreamConfig(
+                streamProxy,
+                1,
+                10,
+                callProcessRecordsForEmptyRecordList,
+                skipCheckpointValidationValue,
+                INITIAL_POSITION_LATEST);
+        
+        ShardConsumer shardConsumer = new ShardConsumer(
+                shardInfo,
+                streamConfig,
+                checkpoint,
+                processor,
+                null,
+                parentShardPollIntervalMillis,
+                cleanupLeasesOfCompletedShards,
+                mockExecutorService,
+                metricsFactory,
+                taskBackoffTimeMillis,
+                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
+                config);
+        
+        shardConsumer.consumeShard();
+
+        Thread.sleep(sleepTime);
+        
+        shardConsumer.consumeShard();
+        
+        verify(config).getLogWarningForTaskAfterMillis();
+        verify(mockFuture).isDone();
+        verify(mockFuture).isCancelled();
     }
 
     //@formatter:off (gets the formatting wrong)

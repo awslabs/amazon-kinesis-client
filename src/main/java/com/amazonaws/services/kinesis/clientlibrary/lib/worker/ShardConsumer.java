@@ -283,11 +283,17 @@ class ShardConsumer {
                 }
             }
         } else {
+            final long timeElapsed = System.currentTimeMillis() - currentTaskSubmitTime;
+            final String commonMessage = String.format("Previous %s task still pending for shard %s since %d ms ago. ",
+                    currentTask.getTaskType(), shardInfo.getShardId(), timeElapsed);
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Previous " + currentTask.getTaskType() + " task still pending for shard "
-                        + shardInfo.getShardId() + " since " + (System.currentTimeMillis() - currentTaskSubmitTime)
-                        + " ms ago" + ".  Not submitting new task.");
+                LOG.debug(commonMessage + "Not submitting new task.");
             }
+            config.getLogWarningForTaskAfterMillis().ifPresent(value -> {
+                if (timeElapsed > value) {
+                    LOG.warn(commonMessage);
+                }
+            });
         }
 
         return submittedNewTask;
