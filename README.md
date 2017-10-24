@@ -29,6 +29,11 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
 ## Release Notes
+### Release 1.8.7
+* Don't add a delay for synchronous requests to Kinesis  
+  Removes a delay that had been added for synchronous `GetRecords` calls to Kinesis. 
+  * [PR #256](https://github.com/awslabs/amazon-kinesis-client/pull/256)
+
 ### Release 1.8.6
 * Add prefetching of records from Kinesis  
   Prefetching will retrieve and queue additional records from Kinesis while the application is processing existing records.  
