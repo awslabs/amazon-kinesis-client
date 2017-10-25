@@ -28,7 +28,6 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private int maxRecordsCount = 30000;
     private long idleMillisBetweenCalls = 1500L;
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
-    private IMetricsFactory metricsFactory;
 
     public SimpleRecordsFetcherFactory(int maxRecords) {
         this.maxRecords = maxRecords;
@@ -37,7 +36,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     @Override
     public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId, IMetricsFactory metricsFactory) {
         if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
-            return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy, idleMillisBetweenCalls);
+            return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy);
         } else {
             return new PrefetchGetRecordsCache(maxPendingProcessRecordsInput, maxByteSize, maxRecordsCount, maxRecords,
                     getRecordsRetrievalStrategy,
