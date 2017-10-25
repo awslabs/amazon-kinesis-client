@@ -234,6 +234,9 @@ public class KinesisClientLibConfiguration {
 
     @Getter
     private RecordsFetcherFactory recordsFetcherFactory;
+    
+    @Getter
+    private Optional<Long> logWarningForTaskAfterMillis = Optional.empty();
 
     /**
      * Constructor.
@@ -1353,6 +1356,17 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withIdleMillisBetweenCalls(long idleMillisBetweenCalls) {
         checkIsValuePositive("IdleMillisBetweenCalls", idleMillisBetweenCalls);
         this.recordsFetcherFactory.setIdleMillisBetweenCalls(idleMillisBetweenCalls);
+        return this;
+    }
+
+    /**
+     * @param logWarningForTaskAfterMillis Logs warn message if as task is held in  a task for more than the set
+     *                                          time.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withLogWarningForTaskAfterMillis(long logWarningForTaskAfterMillis) {
+        checkIsValuePositive("LogProcessTaskStatusAfterInMillis", logWarningForTaskAfterMillis);
+        this.logWarningForTaskAfterMillis = Optional.of(logWarningForTaskAfterMillis);
         return this;
     }
 }
