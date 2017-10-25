@@ -196,7 +196,8 @@ public class WorkerTest {
                 }
 
                 @Override
-                public void processRecords(List<Record> dataRecords, IRecordProcessorCheckpointer checkpointer) {
+                public void processRecords(List<Record> dataRecords, IRecordProcessorCheckpointer checkpointer,
+                    Long millisBehindLatest) {
                     try {
                         checkpointer.checkpoint();
                     } catch (KinesisClientLibNonRetryableException e) {
