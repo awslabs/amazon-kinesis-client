@@ -1,7 +1,5 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
-
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -10,13 +8,14 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+
 public class RecordsFetcherFactoryTest {
     private String shardId = "TestShard";
     private RecordsFetcherFactory recordsFetcherFactory;
 
     @Mock
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
-
     @Mock
     private IMetricsFactory metricsFactory;
 

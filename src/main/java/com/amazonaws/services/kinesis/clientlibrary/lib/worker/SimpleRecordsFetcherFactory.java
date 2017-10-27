@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import lombok.extern.apachecommons.CommonsLog;
 
 @CommonsLog
@@ -34,7 +35,8 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     }
 
     @Override
-    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId, IMetricsFactory metricsFactory) {
+    public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId,
+                                                IMetricsFactory metricsFactory) {
         if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
             return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy);
         } else {
@@ -46,7 +48,8 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
                             .build()),
                             idleMillisBetweenCalls,
                     metricsFactory,
-                    "ProcessTask");
+                    "ProcessTask",
+                    shardId);
         }
     }
 

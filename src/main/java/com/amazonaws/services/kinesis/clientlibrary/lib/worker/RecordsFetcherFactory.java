@@ -29,7 +29,8 @@ public interface RecordsFetcherFactory {
      *                
      * @return GetRecordsCache used to get records from Kinesis.
      */
-    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId, IMetricsFactory metricsFactory);
+    GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId,
+                                         IMetricsFactory metricsFactory);
 
     /**
      * Sets the maximum number of ProcessRecordsInput objects the GetRecordsCache can hold, before further requests are

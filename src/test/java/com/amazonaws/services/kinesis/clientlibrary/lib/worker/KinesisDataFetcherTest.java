@@ -32,6 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -272,6 +273,45 @@ public class KinesisDataFetcherTest {
         assertThat(terminal, equalTo(dataFetcher.TERMINAL_RESULT));
 
         verify(kinesisProxy, never()).get(anyString(), anyInt());
+    }
+    
+    @Test
+    public void testRestartIterator() {
+        GetRecordsResult getRecordsResult = mock(GetRecordsResult.class);
+        GetRecordsResult restartGetRecordsResult = new GetRecordsResult();
+        Record record = mock(Record.class);
+        final String initialIterator = "InitialIterator";
+        final String nextShardIterator = "NextShardIterator";
+        final String restartShardIterator = "RestartIterator";
+        final String sequenceNumber = "SequenceNumber";
+        final String iteratorType = "AT_SEQUENCE_NUMBER";
+        KinesisProxy kinesisProxy = mock(KinesisProxy.class);
+        KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesisProxy, SHARD_INFO);
+        
+        when(kinesisProxy.getIterator(eq(SHARD_ID), eq(InitialPositionInStream.LATEST.toString()))).thenReturn(initialIterator);
+        when(kinesisProxy.get(eq(initialIterator), eq(10))).thenReturn(getRecordsResult);
+        when(getRecordsResult.getRecords()).thenReturn(Collections.singletonList(record));
+        when(getRecordsResult.getNextShardIterator()).thenReturn(nextShardIterator);
+        when(record.getSequenceNumber()).thenReturn(sequenceNumber);
+
+        fetcher.initialize(InitialPositionInStream.LATEST.toString(), INITIAL_POSITION_LATEST);
+        verify(kinesisProxy).getIterator(eq(SHARD_ID), eq(InitialPositionInStream.LATEST.toString()));
+        Assert.assertEquals(getRecordsResult, fetcher.getRecords(10).accept());
+        verify(kinesisProxy).get(eq(initialIterator), eq(10));
+
+        when(kinesisProxy.getIterator(eq(SHARD_ID), eq(iteratorType), eq(sequenceNumber))).thenReturn(restartShardIterator);
+        when(kinesisProxy.get(eq(restartShardIterator), eq(10))).thenReturn(restartGetRecordsResult);
+
+        fetcher.restartIterator();
+        Assert.assertEquals(restartGetRecordsResult, fetcher.getRecords(10).accept());
+        verify(kinesisProxy).getIterator(eq(SHARD_ID), eq(iteratorType), eq(sequenceNumber));
+        verify(kinesisProxy).get(eq(restartShardIterator), eq(10));
+    }
+    
+    @Test (expected = IllegalStateException.class)
+    public void testRestartIteratorNotInitialized() {
+        KinesisDataFetcher dataFetcher = new KinesisDataFetcher(kinesisProxy, SHARD_INFO);
+        dataFetcher.restartIterator();
     }
 
     private DataFetcherResult assertAdvanced(KinesisDataFetcher dataFetcher, GetRecordsResult expectedResult,

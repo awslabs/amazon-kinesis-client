@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import java.util.Collections;
 import java.util.Date;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -27,6 +28,8 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
+import com.amazonaws.util.CollectionUtils;
+import com.google.common.collect.Iterables;
 
 import lombok.Data;
 
@@ -42,6 +45,8 @@ class KinesisDataFetcher {
     private final String shardId;
     private boolean isShardEndReached;
     private boolean isInitialized;
+    private String lastKnownSequenceNumber;
+    private InitialPositionInStreamExtended initialPositionInStream;
 
     /**
      *
@@ -108,6 +113,9 @@ class KinesisDataFetcher {
         @Override
         public GetRecordsResult accept() {
             nextIterator = result.getNextShardIterator();
+            if (!CollectionUtils.isNullOrEmpty(result.getRecords())) {
+                lastKnownSequenceNumber = Iterables.getLast(result.getRecords()).getSequenceNumber();
+            }
             if (nextIterator == null) {
                 isShardEndReached = true;
             }
@@ -161,6 +169,8 @@ class KinesisDataFetcher {
         if (nextIterator == null) {
             isShardEndReached = true;
         }
+        this.lastKnownSequenceNumber = sequenceNumber;
+        this.initialPositionInStream = initialPositionInStream;
     }
 
     /**
@@ -215,6 +225,17 @@ class KinesisDataFetcher {
             LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
         }
         return iterator;
+    }
+
+    /**
+     * Gets a new iterator from the last known sequence number i.e. the sequence number of the last record from the last
+     * getRecords call.
+     */
+    public void restartIterator() {
+        if (StringUtils.isEmpty(lastKnownSequenceNumber) || initialPositionInStream == null) {
+            throw new IllegalStateException("Make sure to initialize the KinesisDataFetcher before restarting the iterator.");
+        }
+        advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream);
     }
 
     /**
