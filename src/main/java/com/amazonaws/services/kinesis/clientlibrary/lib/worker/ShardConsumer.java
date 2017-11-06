@@ -169,7 +169,7 @@ class ShardConsumer {
     /**
      * No-op if current task is pending, otherwise submits next task for this shard.
      * This method should NOT be called if the ShardConsumer is already in SHUTDOWN_COMPLETED state.
-     *
+     * 
      * @return true if a new process task was submitted, false otherwise
      */
     synchronized boolean consumeShard() {
@@ -264,7 +264,7 @@ class ShardConsumer {
     /**
      * Requests the shutdown of the this ShardConsumer. This should give the record processor a chance to checkpoint
      * before being shutdown.
-     *
+     * 
      * @param shutdownNotification used to signal that the record processor has been given the chance to shutdown.
      */
     void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
@@ -275,7 +275,7 @@ class ShardConsumer {
     /**
      * Shutdown this ShardConsumer (including invoking the RecordProcessor shutdown API).
      * This is called by Worker when it loses responsibility for a shard.
-     *
+     * 
      * @return true if shutdown is complete (false if shutdown is still in progress)
      */
     synchronized boolean beginShutdown() {
@@ -295,7 +295,7 @@ class ShardConsumer {
     /**
      * Used (by Worker) to check if this ShardConsumer instance has been shutdown
      * RecordProcessor shutdown() has been invoked, as appropriate.
-     *
+     * 
      * @return true if shutdown is complete
      */
     boolean isShutdown() {
@@ -311,7 +311,7 @@ class ShardConsumer {
 
     /**
      * Figure out next task to run based on current state, task, and shutdown context.
-     *
+     * 
      * @return Return next task to run
      */
     private ITask getNextTask() {
@@ -327,7 +327,7 @@ class ShardConsumer {
     /**
      * Note: This is a private/internal method with package level access solely for testing purposes.
      * Update state based on information about: task success, current state, and shutdown info.
-     *
+     * 
      * @param taskOutcome The outcome of the last task
      */
     void updateState(TaskOutcome taskOutcome) {
@@ -359,7 +359,7 @@ class ShardConsumer {
 
     /**
      * Private/Internal method - has package level access solely for testing purposes.
-     *
+     * 
      * @return the currentState
      */
     ConsumerStates.ShardConsumerState getCurrentState() {

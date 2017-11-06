@@ -105,7 +105,7 @@ public class ShardSyncTaskIntegrationTest {
 
     /**
      * Test method for call().
-     *
+     * 
      * @throws CapacityExceededException
      * @throws DependencyException
      * @throws InvalidStateException

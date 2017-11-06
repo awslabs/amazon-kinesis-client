@@ -157,7 +157,7 @@ public class WorkerTest {
     private TaskResult taskResult;
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
-    private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY =
+    private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY = 
             new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory() {
 
         @Override
@@ -190,8 +190,8 @@ public class WorkerTest {
             };
         }
     };
-
-    private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 =
+    
+    private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 = 
             new V1ToV2RecordProcessorFactoryAdapter(SAMPLE_RECORD_PROCESSOR_FACTORY);
 
 
@@ -608,7 +608,7 @@ public class WorkerTest {
      * This test is testing the {@link Worker}'s shutdown behavior and by extension the behavior of
      * {@link ThreadPoolExecutor#shutdownNow()}. It depends on the thread pool sending an interrupt to the pool threads.
      * This behavior makes the test a bit racy, since we need to ensure a specific order of events.
-     *
+     * 
      * @throws Exception
      */
     @Test
@@ -1678,7 +1678,7 @@ public class WorkerTest {
                         failoverTimeMillis,
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         shardPrioritization);
-
+        
         WorkerThread workerThread = new WorkerThread(worker);
         workerThread.start();
         return workerThread;

@@ -62,7 +62,7 @@ class ShutdownTask implements ITask {
                  boolean cleanupLeasesOfCompletedShards,
                  boolean ignoreUnexpectedChildShards,
                  ILeaseManager<KinesisClientLease> leaseManager,
-                 long backoffTimeMillis,
+                 long backoffTimeMillis, 
                  GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
@@ -80,7 +80,7 @@ class ShutdownTask implements ITask {
     /*
      * Invokes RecordProcessor shutdown() API.
      * (non-Javadoc)
-     *
+     * 
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
     @Override
@@ -156,7 +156,7 @@ class ShutdownTask implements ITask {
 
     /*
      * (non-Javadoc)
-     *
+     * 
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#getTaskType()
      */
     @Override

@@ -50,7 +50,7 @@ class ShardSyncTaskManager {
 
     /**
      * Constructor.
-     *
+     * 
      * @param kinesisProxy Proxy used to fetch streamInfo (shards)
      * @param leaseManager Lease manager (used to list and create leases for shards)
      * @param initialPositionInStream Initial position in stream

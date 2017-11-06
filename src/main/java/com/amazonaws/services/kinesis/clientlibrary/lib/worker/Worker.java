@@ -800,7 +800,7 @@ public class Worker implements Runnable {
     /**
      * Returns whether worker can shutdown immediately. Note that this method is called from Worker's {{@link #run()}
      * method before every loop run, so method must do minimum amount of work to not impact shard processing timings.
-     *
+     * 
      * @return Whether worker should shutdown immediately.
      */
     @VisibleForTesting
@@ -1172,10 +1172,10 @@ public class Worker implements Runnable {
 
         /**
          * Provides logic how to prioritize shard processing.
-         *
+         * 
          * @param shardPrioritization
          *            shardPrioritization is responsible to order shards before processing
-         *
+         * 
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder shardPrioritization(ShardPrioritization shardPrioritization) {
