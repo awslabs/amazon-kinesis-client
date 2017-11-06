@@ -47,7 +47,7 @@ class ShutdownTask implements ITask {
     private final boolean ignoreUnexpectedChildShards;
     private final TaskType taskType = TaskType.SHUTDOWN;
     private final long backoffTimeMillis;
-    private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+    private final GetRecordsCache getRecordsCache;
 
     /**
      * Constructor.
@@ -63,7 +63,7 @@ class ShutdownTask implements ITask {
                  boolean ignoreUnexpectedChildShards,
                  ILeaseManager<KinesisClientLease> leaseManager,
                  long backoffTimeMillis, 
-                 GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+                 GetRecordsCache getRecordsCache) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -74,7 +74,7 @@ class ShutdownTask implements ITask {
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.leaseManager = leaseManager;
         this.backoffTimeMillis = backoffTimeMillis;
-        this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
+        this.getRecordsCache = getRecordsCache;
     }
 
     /*
@@ -114,7 +114,7 @@ class ShutdownTask implements ITask {
                     }
                 }
                 LOG.debug("Shutting down retrieval strategy.");
-                getRecordsRetrievalStrategy.shutdown();
+                getRecordsCache.shutdown();
                 LOG.debug("Record processor completed shutdown() for shard " + shardInfo.getShardId());
             } catch (Exception e) {
                 applicationException = true;

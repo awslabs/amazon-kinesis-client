@@ -1,16 +1,16 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
  */
 package com.amazonaws.services.kinesis.leases.impl;
 
@@ -35,6 +35,7 @@ public class TestHarnessBuilder {
 
     private Map<String, KinesisClientLease> leases = new HashMap<String, KinesisClientLease>();
     private KinesisClientLeaseManager leaseManager;
+    private Map<String, KinesisClientLease> originalLeases = new HashMap<>();
 
     private Callable<Long> timeProvider = new Callable<Long>() {
 
@@ -54,6 +55,15 @@ public class TestHarnessBuilder {
     }
 
     public TestHarnessBuilder withLease(String shardId, String owner) {
+        KinesisClientLease lease = createLease(shardId, owner);
+        KinesisClientLease originalLease = createLease(shardId, owner);
+
+        leases.put(shardId, lease);
+        originalLeases.put(shardId, originalLease);
+        return this;
+    }
+
+    private KinesisClientLease createLease(String shardId, String owner) {
         KinesisClientLease lease = new KinesisClientLease();
         lease.setCheckpoint(new ExtendedSequenceNumber("checkpoint"));
         lease.setOwnerSwitchesSinceCheckpoint(0L);
@@ -62,8 +72,7 @@ public class TestHarnessBuilder {
         lease.setParentShardIds(Collections.singleton("parentShardId"));
         lease.setLeaseKey(shardId);
 
-        leases.put(shardId, lease);
-        return this;
+        return lease;
     }
 
     public Map<String, KinesisClientLease> build() throws LeasingException {
@@ -147,7 +156,7 @@ public class TestHarnessBuilder {
         Assert.assertEquals(renewedShardIds.length, heldLeases.size());
 
         for (String shardId : renewedShardIds) {
-            KinesisClientLease original = leases.get(shardId);
+            KinesisClientLease original = originalLeases.get(shardId);
             Assert.assertNotNull(original);
 
             KinesisClientLease actual = heldLeases.get(shardId);

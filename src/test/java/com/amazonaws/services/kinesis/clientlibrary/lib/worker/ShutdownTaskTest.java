@@ -59,7 +59,7 @@ public class ShutdownTaskTest {
     IRecordProcessor defaultRecordProcessor = new TestStreamlet();
     
     @Mock
-    private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+    private GetRecordsCache getRecordsCache;
 
     /**
      * @throws java.lang.Exception
@@ -80,7 +80,7 @@ public class ShutdownTaskTest {
      */
     @Before
     public void setUp() throws Exception {
-        doNothing().when(getRecordsRetrievalStrategy).shutdown();
+        doNothing().when(getRecordsCache).shutdown();
     }
 
     /**
@@ -111,7 +111,7 @@ public class ShutdownTaskTest {
                 ignoreUnexpectedChildShards,
                 leaseManager,
                 TASK_BACKOFF_TIME_MILLIS,
-                getRecordsRetrievalStrategy);
+                getRecordsCache);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
@@ -139,11 +139,11 @@ public class ShutdownTaskTest {
                 ignoreUnexpectedChildShards,
                 leaseManager,
                 TASK_BACKOFF_TIME_MILLIS,
-                getRecordsRetrievalStrategy);
+                getRecordsCache);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof KinesisClientLibIOException);
-        verify(getRecordsRetrievalStrategy).shutdown();
+        verify(getRecordsCache).shutdown();
     }
 
     /**
@@ -151,7 +151,7 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testGetTaskType() {
-        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsRetrievalStrategy);
+        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache);
         Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
     }
 

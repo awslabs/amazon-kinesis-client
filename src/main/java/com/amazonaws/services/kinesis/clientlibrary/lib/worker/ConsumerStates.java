@@ -14,8 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.util.Optional;
-
 /**
  * Top level container for all the possible states a {@link ShardConsumer} can be in. The logic for creation of tasks,
  * and state transitions is contained within the {@link ConsumerState} objects.
@@ -253,9 +251,14 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new InitializeTask(consumer.getShardInfo(), consumer.getRecordProcessor(), consumer.getCheckpoint(),
-                    consumer.getRecordProcessorCheckpointer(), consumer.getDataFetcher(),
-                    consumer.getTaskBackoffTimeMillis(), consumer.getStreamConfig());
+            return new InitializeTask(consumer.getShardInfo(),
+                    consumer.getRecordProcessor(),
+                    consumer.getCheckpoint(),
+                    consumer.getRecordProcessorCheckpointer(),
+                    consumer.getDataFetcher(),
+                    consumer.getTaskBackoffTimeMillis(),
+                    consumer.getStreamConfig(),
+                    consumer.getGetRecordsCache());
         }
 
         @Override
@@ -309,10 +312,14 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new ProcessTask(consumer.getShardInfo(), consumer.getStreamConfig(), consumer.getRecordProcessor(),
-                    consumer.getRecordProcessorCheckpointer(), consumer.getDataFetcher(),
-                    consumer.getTaskBackoffTimeMillis(), consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist(),
-                    consumer.getGetRecordsRetrievalStrategy());
+            return new ProcessTask(consumer.getShardInfo(),
+                    consumer.getStreamConfig(),
+                    consumer.getRecordProcessor(),
+                    consumer.getRecordProcessorCheckpointer(),
+                    consumer.getDataFetcher(),
+                    consumer.getTaskBackoffTimeMillis(),
+                    consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist(),
+                    consumer.getGetRecordsCache());
         }
 
         @Override
@@ -371,8 +378,10 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new ShutdownNotificationTask(consumer.getRecordProcessor(), consumer.getRecordProcessorCheckpointer(),
-                    consumer.getShutdownNotification(), consumer.getShardInfo());
+            return new ShutdownNotificationTask(consumer.getRecordProcessor(),
+                    consumer.getRecordProcessorCheckpointer(),
+                    consumer.getShutdownNotification(),
+                    consumer.getShardInfo());
         }
 
         @Override
@@ -511,15 +520,17 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new ShutdownTask(consumer.getShardInfo(), consumer.getRecordProcessor(),
-                    consumer.getRecordProcessorCheckpointer(), consumer.getShutdownReason(),
+            return new ShutdownTask(consumer.getShardInfo(),
+                    consumer.getRecordProcessor(),
+                    consumer.getRecordProcessorCheckpointer(),
+                    consumer.getShutdownReason(),
                     consumer.getStreamConfig().getStreamProxy(),
                     consumer.getStreamConfig().getInitialPositionInStream(),
                     consumer.isCleanupLeasesOfCompletedShards(),
                     consumer.isIgnoreUnexpectedChildShards(),
                     consumer.getLeaseManager(),
                     consumer.getTaskBackoffTimeMillis(),
-                    consumer.getGetRecordsRetrievalStrategy());
+                    consumer.getGetRecordsCache());
         }
 
         @Override
