@@ -123,7 +123,8 @@ public class ShardSyncTaskIntegrationTest {
         ShardSyncTask syncTask = new ShardSyncTask(kinesisProxy,
                 leaseManager,
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST),
-                false, false,
+                false,
+                false,
                 0L);
         syncTask.call();
         List<KinesisClientLease> leases = leaseManager.listLeases();

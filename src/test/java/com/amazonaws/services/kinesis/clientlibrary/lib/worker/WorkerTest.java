@@ -130,7 +130,6 @@ public class WorkerTest {
     private final long parentShardPollIntervalMillis = 5L;
     private final long shardSyncIntervalMillis = 5L;
     private final boolean cleanupLeasesUponShardCompletion = true;
-    private final boolean ignoreUnexpectedChildShards = false;
     // We don't want any of these tests to run checkpoint validation
     private final boolean skipCheckpointValidationValue = false;
     private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
@@ -256,7 +255,6 @@ public class WorkerTest {
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
-                        ignoreUnexpectedChildShards,
                         checkpoint,
                         leaseCoordinator,
                         execService,
@@ -308,7 +306,6 @@ public class WorkerTest {
                 parentShardPollIntervalMillis,
                 shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
                 checkpoint,
                 leaseCoordinator,
                 execService,
@@ -377,7 +374,6 @@ public class WorkerTest {
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
-                        ignoreUnexpectedChildShards,
                         checkpoint,
                         leaseCoordinator,
                         execService,
@@ -434,7 +430,6 @@ public class WorkerTest {
                         shardPollInterval,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
-                        ignoreUnexpectedChildShards,
                         leaseCoordinator,
                         leaseCoordinator,
                         execService,
@@ -808,7 +803,6 @@ public class WorkerTest {
                 parentShardPollIntervalMillis,
                 shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
                 leaseCoordinator,
                 leaseCoordinator,
                 executorService,
@@ -889,8 +883,8 @@ public class WorkerTest {
 
         Worker worker = new InjectableWorker("testRequestShutdown", recordProcessorFactory, config, streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON, parentShardPollIntervalMillis, shardSyncIntervalMillis,
-                cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, leaseCoordinator, leaseCoordinator,
-                executorService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
+                cleanupLeasesUponShardCompletion, leaseCoordinator, leaseCoordinator, executorService, metricsFactory,
+                taskBackoffTimeMillis, failoverTimeMillis, false, shardPrioritization) {
             @Override
             void postConstruct() {
                 this.gracefuleShutdownStarted = true;
@@ -967,7 +961,6 @@ public class WorkerTest {
                 parentShardPollIntervalMillis,
                 shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
                 leaseCoordinator,
                 leaseCoordinator,
                 executorService,
@@ -1042,7 +1035,6 @@ public class WorkerTest {
                 parentShardPollIntervalMillis,
                 shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
                 leaseCoordinator,
                 leaseCoordinator,
                 executorService,
@@ -1125,7 +1117,6 @@ public class WorkerTest {
                 parentShardPollIntervalMillis,
                 shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
                 leaseCoordinator,
                 leaseCoordinator,
                 executorService,
@@ -1239,7 +1230,6 @@ public class WorkerTest {
                 parentShardPollIntervalMillis,
                 shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
                 leaseCoordinator,
                 leaseCoordinator,
                 executorService,
@@ -1357,7 +1347,6 @@ public class WorkerTest {
                 parentShardPollIntervalMillis,
                 shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
                 leaseCoordinator,
                 leaseCoordinator,
                 executorService,
@@ -1442,7 +1431,6 @@ public class WorkerTest {
                 parentShardPollIntervalMillis, 
                 shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
                 leaseCoordinator,
                 leaseCoordinator,
                 executorService,
@@ -1488,7 +1476,7 @@ public class WorkerTest {
                 KinesisClientLibConfiguration config, StreamConfig streamConfig,
                 InitialPositionInStreamExtended initialPositionInStream,
                 long parentShardPollIntervalMillis, long shardSyncIdleTimeMillis,
-                boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards, ICheckpoint checkpoint,
+                boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
                 KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
                 IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
                 boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
@@ -1500,7 +1488,6 @@ public class WorkerTest {
                     parentShardPollIntervalMillis,
                     shardSyncIdleTimeMillis,
                     cleanupLeasesUponShardCompletion,
-                    ignoreUnexpectedChildShards,
                     checkpoint,
                     leaseCoordinator,
                     execService,
@@ -1823,7 +1810,6 @@ public class WorkerTest {
                         parentShardPollIntervalMillis,
                         shardSyncIntervalMillis,
                         cleanupLeasesUponShardCompletion,
-                        ignoreUnexpectedChildShards,
                         leaseCoordinator,
                         leaseCoordinator,
                         executorService,
