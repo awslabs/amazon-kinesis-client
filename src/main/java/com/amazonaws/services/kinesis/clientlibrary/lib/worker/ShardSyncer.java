@@ -60,9 +60,11 @@ class ShardSyncer {
     static synchronized void bootstrapShardLeases(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards)
+            boolean cleanupLeasesOfCompletedShards,
+            boolean ignoreUnexpectedChildShards)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, false);
+        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
+                        ignoreUnexpectedChildShards);
     }
 
     /**
