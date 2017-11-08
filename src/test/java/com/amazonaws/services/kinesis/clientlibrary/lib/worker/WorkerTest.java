@@ -21,6 +21,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
@@ -172,7 +173,7 @@ public class WorkerTest {
     @Before
     public void setup() {
         config = spy(new KinesisClientLibConfiguration("app", null, null, null));
-        recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory(500));
+        recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory());
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
     }
 
@@ -505,7 +506,7 @@ public class WorkerTest {
         lease.setCheckpoint(new ExtendedSequenceNumber("2"));
         initialLeases.add(lease);
         boolean callProcessRecordsForEmptyRecordList = true;
-        RecordsFetcherFactory recordsFetcherFactory = new SimpleRecordsFetcherFactory(500);
+        RecordsFetcherFactory recordsFetcherFactory = new SimpleRecordsFetcherFactory();
         recordsFetcherFactory.setIdleMillisBetweenCalls(0L);
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
         runAndTestWorker(shardList, threadPoolSize, initialLeases, callProcessRecordsForEmptyRecordList, numberOfRecordsPerShard, config);
@@ -622,7 +623,7 @@ public class WorkerTest {
         GetRecordsCache getRecordsCache = mock(GetRecordsCache.class);
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
         when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),
-                any(IMetricsFactory.class)))
+                any(IMetricsFactory.class), anyInt()))
                 .thenReturn(getRecordsCache);
         when(getRecordsCache.getNextResult()).thenReturn(new ProcessRecordsInput().withRecords(Collections.emptyList()).withMillisBehindLatest(0L));
 
