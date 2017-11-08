@@ -20,6 +20,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -31,19 +33,19 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
-import com.amazonaws.services.kinesis.model.Record;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
 
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 
@@ -70,14 +72,13 @@ public class PrefetchGetRecordsCacheIntegrationTest {
     
     @Mock
     private IKinesisProxy proxy;
-    
     @Mock
     private ShardInfo shardInfo;
     
     @Before
     public void setup() {
         records = new ArrayList<>();
-        dataFetcher = new KinesisDataFetcherForTest(proxy, shardInfo);
+        dataFetcher = spy(new KinesisDataFetcherForTest(proxy, shardInfo));
         getRecordsRetrievalStrategy = spy(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
         executorService = spy(Executors.newFixedThreadPool(1));
         
@@ -89,7 +90,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 executorService,
                 IDLE_MILLIS_BETWEEN_CALLS,
                 new NullMetricsFactory(),
-                operation);
+                operation,
+                "test-shard");
     }
     
     @Test
@@ -135,7 +137,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 executorService2,
                 IDLE_MILLIS_BETWEEN_CALLS,
                 new NullMetricsFactory(),
-                operation);
+                operation,
+                "test-shard-2");
         
         getRecordsCache.start();
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
@@ -165,6 +168,26 @@ public class PrefetchGetRecordsCacheIntegrationTest {
         sleep(100L);
         verify(executorService2).shutdownNow();
         verify(getRecordsRetrievalStrategy2).shutdown();
+    }
+    
+    @Test
+    public void testExpiredIteratorException() {
+        when(dataFetcher.getRecords(eq(MAX_RECORDS_PER_CALL))).thenAnswer(new Answer<DataFetcherResult>() {
+            @Override
+            public DataFetcherResult answer(final InvocationOnMock invocationOnMock) throws Throwable {
+                throw new ExpiredIteratorException("ExpiredIterator");
+            }
+        }).thenCallRealMethod();
+        doNothing().when(dataFetcher).restartIterator();
+        
+        getRecordsCache.start();
+        sleep(IDLE_MILLIS_BETWEEN_CALLS);
+
+        ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult();
+        
+        assertNotNull(processRecordsInput);
+        assertTrue(processRecordsInput.getRecords().isEmpty());
+        verify(dataFetcher).restartIterator();
     }
     
     @After

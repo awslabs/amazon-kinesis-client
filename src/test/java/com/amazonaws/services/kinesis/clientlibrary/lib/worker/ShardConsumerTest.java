@@ -343,7 +343,9 @@ public class ShardConsumerTest {
 
         getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords,
                 new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
-        when(recordsFetcherFactory.createRecordsFetcher(any(), anyString(),any())).thenReturn(getRecordsCache);
+        when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),
+                any(IMetricsFactory.class)))
+                .thenReturn(getRecordsCache);
         
         ShardConsumer consumer =
                 new ShardConsumer(shardInfo,
@@ -472,7 +474,9 @@ public class ShardConsumerTest {
         
         getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords,
                 new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
-        when(recordsFetcherFactory.createRecordsFetcher(any(), anyString(),any())).thenReturn(getRecordsCache);
+        when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),
+                any(IMetricsFactory.class)))
+                .thenReturn(getRecordsCache);
 
         ShardConsumer consumer =
                 new ShardConsumer(shardInfo,

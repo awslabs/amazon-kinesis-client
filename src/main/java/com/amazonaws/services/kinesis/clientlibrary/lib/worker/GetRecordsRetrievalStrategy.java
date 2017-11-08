@@ -44,4 +44,11 @@ public interface GetRecordsRetrievalStrategy {
      * @return true if the strategy has been shutdown, false otherwise.
      */
     boolean isShutdown();
+
+    /**
+     * Returns the KinesisDataFetcher used to getRecords from Kinesis.
+     * 
+     * @return KinesisDataFetcher
+     */
+    KinesisDataFetcher getDataFetcher();
 }
