@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.atLeastOnce;
@@ -97,7 +98,6 @@ public class ShardConsumerTest {
     // Use Executors.newFixedThreadPool since it returns ThreadPoolExecutor, which is
     // ... a non-final public class, and so can be mocked and spied.
     private final ExecutorService executorService = Executors.newFixedThreadPool(1);
-    private final int maxRecords = 500;
     private RecordsFetcherFactory recordsFetcherFactory;
     
     private GetRecordsCache getRecordsCache;
@@ -119,7 +119,7 @@ public class ShardConsumerTest {
     public void setup() {
         getRecordsCache = null;
         
-        recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory(maxRecords));
+        recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory());
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
         when(config.getLogWarningForTaskAfterMillis()).thenReturn(Optional.empty());
     }
@@ -344,7 +344,7 @@ public class ShardConsumerTest {
         getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords,
                 new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
         when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),
-                any(IMetricsFactory.class)))
+                any(IMetricsFactory.class), anyInt()))
                 .thenReturn(getRecordsCache);
         
         ShardConsumer consumer =
@@ -475,7 +475,7 @@ public class ShardConsumerTest {
         getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords,
                 new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
         when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),
-                any(IMetricsFactory.class)))
+                any(IMetricsFactory.class), anyInt()))
                 .thenReturn(getRecordsCache);
 
         ShardConsumer consumer =
@@ -571,7 +571,7 @@ public class ShardConsumerTest {
         final ExtendedSequenceNumber checkpointSequenceNumber = new ExtendedSequenceNumber("123");
         final ExtendedSequenceNumber pendingCheckpointSequenceNumber = new ExtendedSequenceNumber("999");
         when(leaseManager.getLease(anyString())).thenReturn(null);
-        when(config.getRecordsFetcherFactory()).thenReturn(new SimpleRecordsFetcherFactory(2));
+        when(config.getRecordsFetcherFactory()).thenReturn(new SimpleRecordsFetcherFactory());
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(
                 new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));
 
