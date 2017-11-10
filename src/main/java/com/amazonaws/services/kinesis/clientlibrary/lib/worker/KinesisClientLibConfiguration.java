@@ -477,7 +477,7 @@ public class KinesisClientLibConfiguration {
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
-        this.recordsFetcherFactory = new SimpleRecordsFetcherFactory(this.maxRecords);
+        this.recordsFetcherFactory = new SimpleRecordsFetcherFactory();
     }
 
     /**

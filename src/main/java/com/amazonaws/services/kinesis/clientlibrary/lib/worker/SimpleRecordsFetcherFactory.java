@@ -23,20 +23,15 @@ import lombok.extern.apachecommons.CommonsLog;
 
 @CommonsLog
 public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
-    private final int maxRecords;
     private int maxPendingProcessRecordsInput = 3;
     private int maxByteSize = 8 * 1024 * 1024;
     private int maxRecordsCount = 30000;
     private long idleMillisBetweenCalls = 1500L;
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
-
-    public SimpleRecordsFetcherFactory(int maxRecords) {
-        this.maxRecords = maxRecords;
-    }
-
+    
     @Override
     public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId,
-                                                IMetricsFactory metricsFactory) {
+                                                IMetricsFactory metricsFactory, int maxRecords) {
         if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
             return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy);
         } else {
