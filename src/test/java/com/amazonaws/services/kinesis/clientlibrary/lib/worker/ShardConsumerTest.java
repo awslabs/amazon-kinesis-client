@@ -483,7 +483,7 @@ public class ShardConsumerTest {
         getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords,
                 new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
         when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),
-                any(IMetricsFactory.class)))
+                any(IMetricsFactory.class), anyInt()))
                 .thenReturn(getRecordsCache);
 
         RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
@@ -527,7 +527,7 @@ public class ShardConsumerTest {
         for (int i = 0; i < numRecs;) {
             boolean newTaskSubmitted = consumer.consumeShard();
             if (newTaskSubmitted) {
-                LOG.info("New processing task was submitted, call # " + i);
+                LOG.debug("New processing task was submitted, call # " + i);
                 assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
                 // CHECKSTYLE:IGNORE ModifiedControlVariable FOR NEXT 1 LINES
                 i += maxRecords;
