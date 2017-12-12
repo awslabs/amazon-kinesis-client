@@ -28,6 +28,7 @@ import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.commons.lang.StringUtils;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
@@ -167,10 +168,7 @@ class ShardSyncer {
     private static void assertAllParentShardsAreClosed(Set<String> inconsistentShardIds)
         throws KinesisClientLibIOException {
         if (!inconsistentShardIds.isEmpty()) {
-            String ids = "";
-            for (String id : inconsistentShardIds) {
-                ids += " " + id;
-            }
+            String ids = StringUtils.join(inconsistentShardIds, ' ');
             throw new KinesisClientLibIOException(String.format("%d open child shards (%s) are inconsistent. "
                                                                 + "This can happen due to a race condition between describeStream and a reshard operation.",
                                                                 inconsistentShardIds.size(), ids));
