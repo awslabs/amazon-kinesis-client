@@ -171,8 +171,9 @@ class ShardSyncer {
             for (String id : inconsistentShardIds) {
                 ids += " " + id;
             }
-            throw new KinesisClientLibIOException(String.valueOf(inconsistentShardIds.size()) + " open child shards (" + ids + ") are inconsistent."
-                                                  + "This can happen due to a race condition between describeStream and a reshard operation.");
+            throw new KinesisClientLibIOException(String.format("%d open child shards (%s) are inconsistent. "
+                                                                + "This can happen due to a race condition between describeStream and a reshard operation.",
+                                                                inconsistentShardIds.size(), ids));
         }
     }
 
