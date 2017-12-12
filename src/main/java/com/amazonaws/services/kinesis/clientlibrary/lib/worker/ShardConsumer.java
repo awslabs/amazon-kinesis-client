@@ -235,7 +235,7 @@ class ShardConsumer {
         this.dataFetcher = kinesisDataFetcher;
         this.getRecordsCache = config.getRecordsFetcherFactory().createRecordsFetcher(
                 makeStrategy(this.dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, this.shardInfo),
-                this.getShardInfo().getShardId(), this.metricsFactory);
+                this.getShardInfo().getShardId(), this.metricsFactory, this.config.getMaxRecords());
     }
 
     /**
@@ -412,7 +412,7 @@ class ShardConsumer {
         if (taskOutcome == TaskOutcome.END_OF_SHARD) {
             markForShutdown(ShutdownReason.TERMINATE);
         }
-        if (isShutdownRequested()) {
+        if (isShutdownRequested() && taskOutcome != TaskOutcome.FAILURE) {
             currentState = currentState.shutdownTransition(shutdownReason);
         } else if (taskOutcome == TaskOutcome.SUCCESSFUL) {
             if (currentState.getTaskType() == currentTask.getTaskType()) {

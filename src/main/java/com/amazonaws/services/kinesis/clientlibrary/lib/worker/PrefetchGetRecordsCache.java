@@ -23,10 +23,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.commons.lang.Validate;
 
 import com.amazonaws.SdkClientException;
+import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
 import lombok.NonNull;
@@ -42,6 +45,7 @@ import lombok.extern.apachecommons.CommonsLog;
  */
 @CommonsLog
 public class PrefetchGetRecordsCache implements GetRecordsCache {
+    private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     LinkedBlockingQueue<ProcessRecordsInput> getRecordsResultQueue;
     private int maxPendingProcessRecordsInput;
     private int maxByteSize;
@@ -56,6 +60,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     private PrefetchCounters prefetchCounters;
     private boolean started = false;
     private final String operation;
+    private final KinesisDataFetcher dataFetcher;
+    private final String shardId;
 
     /**
      * Constructor for the PrefetchGetRecordsCache. This cache prefetches records from Kinesis and stores them in a
@@ -76,9 +82,10 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                                    final int maxRecordsPerCall,
                                    @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
                                    @NonNull final ExecutorService executorService,
-                                   long idleMillisBetweenCalls,
+                                   final long idleMillisBetweenCalls,
                                    @NonNull final IMetricsFactory metricsFactory,
-                                   @NonNull String operation) {
+                                   @NonNull final String operation,
+                                   @NonNull final String shardId) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
@@ -92,6 +99,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
         Validate.notEmpty(operation, "Operation cannot be empty");
         this.operation = operation;
+        this.dataFetcher = this.getRecordsRetrievalStrategy.getDataFetcher();
+        this.shardId = shardId;
     }
 
     @Override
@@ -162,6 +171,14 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                         prefetchCounters.added(processRecordsInput);
                     } catch (InterruptedException e) {
                         log.info("Thread was interrupted, indicating shutdown was called on the cache.");
+                    } catch (ExpiredIteratorException e) {
+                        log.info(String.format("ShardId %s: getRecords threw ExpiredIteratorException - restarting"
+                                + " after greatest seqNum passed to customer", shardId), e);
+                        
+                        MetricsHelper.getMetricsScope().addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.Count,
+                                MetricsLevel.SUMMARY);
+                        
+                        dataFetcher.restartIterator();
                     } catch (SdkClientException e) {
                         log.error("Exception thrown while fetching records from Kinesis", e);
                     } catch (Throwable e) {

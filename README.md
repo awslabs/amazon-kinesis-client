@@ -15,7 +15,7 @@ The **Amazon Kinesis Client Library for Java** (Amazon KCL) enables Java develop
 
 1. **Sign up for AWS** &mdash; Before you begin, you need an AWS account. For more information about creating an AWS account and retrieving your AWS credentials, see [AWS Account and Credentials][docs-signup] in the AWS SDK for Java Developer Guide.
 1. **Sign up for Amazon Kinesis** &mdash; Go to the Amazon Kinesis console to sign up for the service and create an Amazon Kinesis stream. For more information, see [Create an Amazon Kinesis Stream][kinesis-guide-create] in the Amazon Kinesis Developer Guide.
-1. **Minimum requirements** &mdash; To use the Amazon Kinesis Client Library, you'll need **Java 1.7+**. For more information about Amazon Kinesis Client Library requirements, see [Before You Begin][kinesis-guide-begin] in the Amazon Kinesis Developer Guide.
+1. **Minimum requirements** &mdash; To use the Amazon Kinesis Client Library, you'll need **Java 1.8+**. For more information about Amazon Kinesis Client Library requirements, see [Before You Begin][kinesis-guide-begin] in the Amazon Kinesis Developer Guide.
 1. **Using the Amazon Kinesis Client Library** &mdash; The best way to get familiar with the Amazon Kinesis Client Library is to read [Developing Record Consumer Applications][kinesis-guide-applications] in the Amazon Kinesis Developer Guide.
 
 ## Building from Source
@@ -29,6 +29,26 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
 ## Release Notes
+### Release 1.8.8
+* Fixed issues with leases losses due to `ExpiredIteratorException` in `PrefetchGetRecordsCache` and `AsynchronousFetchingStrategy`.  
+  PrefetchGetRecordsCache will request for a new iterator and start fetching data again.  
+  * [PR#263](https://github.com/awslabs/amazon-kinesis-client/pull/263)
+* Added warning message for long running tasks.  
+  Logging long running tasks can be enabled by setting the following configuration property:
+  
+  | Name | Default | Description |
+  | ---- | ------- | ----------- |
+  | [`logWarningForTaskAfterMillis`](https://github.com/awslabs/amazon-kinesis-client/blob/3de901ea9327370ed732af86c4d4999c8d99541c/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1367) | Not set | Milliseconds after which the logger will log a warning message for the long running task |
+  
+  * [PR#259](https://github.com/awslabs/amazon-kinesis-client/pull/259)
+* Handling spurious lease renewal failures gracefully.  
+  Added better handling of DynamoDB failures when updating leases.  These failures would occur when a request to DynamoDB appeared to fail, but was actually successful.  
+  * [PR#247](https://github.com/awslabs/amazon-kinesis-client/pull/247)
+* ShutdownTask gets retried if the previous attempt on the ShutdownTask fails.
+  * [PR#267](https://github.com/awslabs/amazon-kinesis-client/pull/267)
+* Fix for using maxRecords from `KinesisClientLibConfiguration` in `GetRecordsCache` for fetching records.
+  * [PR#264](https://github.com/awslabs/amazon-kinesis-client/pull/264)
+
 ### Release 1.8.7
 * Don't add a delay for synchronous requests to Kinesis  
   Removes a delay that had been added for synchronous `GetRecords` calls to Kinesis. 

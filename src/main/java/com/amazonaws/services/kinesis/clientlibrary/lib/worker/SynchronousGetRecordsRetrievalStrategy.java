@@ -42,4 +42,9 @@ public class SynchronousGetRecordsRetrievalStrategy implements GetRecordsRetriev
     public boolean isShutdown() {
         return false;
     }
+    
+    @Override
+    public KinesisDataFetcher getDataFetcher() {
+        return dataFetcher;
+    }
 }

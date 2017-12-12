@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -36,7 +37,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.IntStream;
 
-import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -45,6 +45,8 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 
@@ -66,6 +68,8 @@ public class PrefetchGetRecordsCacheTest {
     private GetRecordsResult getRecordsResult;
     @Mock
     private Record record;
+    @Mock
+    private KinesisDataFetcher dataFetcher;
 
     private List<Record> records;
     private ExecutorService executorService;
@@ -75,6 +79,8 @@ public class PrefetchGetRecordsCacheTest {
 
     @Before
     public void setup() {
+        when(getRecordsRetrievalStrategy.getDataFetcher()).thenReturn(dataFetcher);
+        
         executorService = spy(Executors.newFixedThreadPool(1));
         getRecordsCache = new PrefetchGetRecordsCache(
                 MAX_SIZE,
@@ -85,7 +91,8 @@ public class PrefetchGetRecordsCacheTest {
                 executorService,
                 IDLE_MILLIS_BETWEEN_CALLS,
                 new NullMetricsFactory(),
-                operation);
+                operation,
+                "shardId");
         spyQueue = spy(getRecordsCache.getRecordsResultQueue);
         records = spy(new ArrayList<>());
 
@@ -193,6 +200,20 @@ public class PrefetchGetRecordsCacheTest {
     public void testCallAfterShutdown() {
         when(executorService.isShutdown()).thenReturn(true);
         getRecordsCache.getNextResult();
+    }
+    
+    @Test
+    public void testExpiredIteratorException() {
+        getRecordsCache.start();
+        
+        when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL)).thenThrow(ExpiredIteratorException.class).thenReturn(getRecordsResult);
+        doNothing().when(dataFetcher).restartIterator();
+        
+        getRecordsCache.getNextResult();
+        
+        sleep(1000);
+        
+        verify(dataFetcher).restartIterator();
     }
 
     @After

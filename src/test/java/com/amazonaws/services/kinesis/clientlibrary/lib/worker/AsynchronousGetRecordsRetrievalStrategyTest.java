@@ -20,20 +20,25 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
@@ -152,6 +157,28 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
 
 
         assertThat(actualResult, equalTo(expectedResults));
+    }
+    
+    @Test (expected = ExpiredIteratorException.class)
+    public void testExpiredIteratorExceptionCase() throws Exception {
+        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
+                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
+        Future<DataFetcherResult> successfulFuture2 = mock(Future.class);
+
+        when(executorService.isShutdown()).thenReturn(false);
+        when(completionService.submit(any())).thenReturn(successfulFuture, successfulFuture2);
+        when(completionService.poll(anyLong(), any())).thenReturn(null).thenReturn(successfulFuture);
+        when(successfulFuture.get()).thenThrow(new ExecutionException(new ExpiredIteratorException("ExpiredException")));
+        
+        try {
+            strategy.getRecords(10);
+        } finally {
+            verify(executorService).isShutdown();
+            verify(completionService, times(2)).submit(any());
+            verify(completionService, times(2)).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
+            verify(successfulFuture).cancel(eq(true));
+            verify(successfulFuture2).cancel(eq(true));
+        }
     }
 
 }

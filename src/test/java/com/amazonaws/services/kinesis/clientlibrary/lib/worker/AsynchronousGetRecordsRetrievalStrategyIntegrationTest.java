@@ -38,17 +38,21 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.mockito.stubbing.Answer;
 
 @RunWith(MockitoJUnitRunner.class)
 public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
@@ -133,6 +137,24 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
         verify(mockFuture).get();
         assertNull(getRecordsResult);
     }
+    
+    @Test (expected = ExpiredIteratorException.class)
+    public void testExpiredIteratorExcpetion() throws InterruptedException {
+        when(dataFetcher.getRecords(eq(numberOfRecords))).thenAnswer(new Answer<DataFetcherResult>() {
+            @Override
+            public DataFetcherResult answer(final InvocationOnMock invocationOnMock) throws Throwable {
+                Thread.sleep(SLEEP_GET_RECORDS_IN_SECONDS * 1000);
+                throw new ExpiredIteratorException("ExpiredIterator");
+            }
+        });
+        
+        try {
+            getRecordsRetrivalStrategy.getRecords(numberOfRecords);
+        } finally {
+            verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords(eq(numberOfRecords));
+            verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
+        }
+    }
 
     private int getLeastNumberOfCalls() {
         int leastNumberOfCalls = 0;
@@ -163,6 +185,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
             } catch (InterruptedException e) {
                 // Do nothing
             }
+            
             return result;
         }
     }

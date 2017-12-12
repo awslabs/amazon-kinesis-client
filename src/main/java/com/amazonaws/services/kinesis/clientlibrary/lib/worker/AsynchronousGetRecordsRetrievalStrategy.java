@@ -16,7 +16,6 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
@@ -31,6 +30,7 @@ import java.util.function.Supplier;
 
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingScope;
+import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -81,33 +81,39 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
         CompletionService<DataFetcherResult> completionService = completionServiceSupplier.get();
         Set<Future<DataFetcherResult>> futures = new HashSet<>();
         Callable<DataFetcherResult> retrieverCall = createRetrieverCallable(maxRecords);
-        while (true) {
-            try {
-                futures.add(completionService.submit(retrieverCall));
-            } catch (RejectedExecutionException e) {
-                log.warn("Out of resources, unable to start additional requests.");
-            }
+        try {
+            while (true) {
+                try {
+                    futures.add(completionService.submit(retrieverCall));
+                } catch (RejectedExecutionException e) {
+                    log.warn("Out of resources, unable to start additional requests.");
+                }
 
-            try {
-                Future<DataFetcherResult> resultFuture = completionService.poll(retryGetRecordsInSeconds,
-                        TimeUnit.SECONDS);
-                if (resultFuture != null) {
-                    //
-                    // Fix to ensure that we only let the shard iterator advance when we intend to return the result
-                    // to the caller.  This ensures that the shard iterator is consistently advance in step with
-                    // what the caller sees.
-                    //
-                    result = resultFuture.get().accept();
+                try {
+                    Future<DataFetcherResult> resultFuture = completionService.poll(retryGetRecordsInSeconds,
+                            TimeUnit.SECONDS);
+                    if (resultFuture != null) {
+                        //
+                        // Fix to ensure that we only let the shard iterator advance when we intend to return the result
+                        // to the caller.  This ensures that the shard iterator is consistently advance in step with
+                        // what the caller sees.
+                        //
+                        result = resultFuture.get().accept();
+                        break;
+                    }
+                } catch (ExecutionException e) {
+                    if (e.getCause() instanceof ExpiredIteratorException) {
+                        throw (ExpiredIteratorException) e.getCause();
+                    }
+                    log.error("ExecutionException thrown while trying to get records", e);
+                } catch (InterruptedException e) {
+                    log.error("Thread was interrupted", e);
                     break;
                 }
-            } catch (ExecutionException e) {
-                log.error("ExecutionException thrown while trying to get records", e);
-            } catch (InterruptedException e) {
-                log.error("Thread was interrupted", e);
-                break;
             }
+        } finally {
+            futures.forEach(f -> f.cancel(true));
         }
-        futures.forEach(f -> f.cancel(true));
         return result;
     }
 
@@ -139,5 +145,10 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
                 TimeUnit.SECONDS, new LinkedBlockingQueue<>(1),
                 new ThreadFactoryBuilder().setDaemon(true).setNameFormat(threadNameFormat).build(),
                 new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    @Override
+    public KinesisDataFetcher getDataFetcher() {
+        return dataFetcher;
     }
 }
