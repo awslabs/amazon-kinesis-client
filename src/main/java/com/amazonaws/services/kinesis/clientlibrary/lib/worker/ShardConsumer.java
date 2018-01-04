@@ -484,6 +484,10 @@ class ShardConsumer {
         return cleanupLeasesOfCompletedShards;
     }
 
+    boolean isIgnoreUnexpectedChildShards() {
+        return config.shouldIgnoreUnexpectedChildShards();
+    }
+
     long getTaskBackoffTimeMillis() {
         return taskBackoffTimeMillis;
     }

@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 import java.util.Date;
@@ -406,5 +407,15 @@ public class KinesisClientLibConfigurationTest {
         } catch (Exception e) {
             fail("Should not have thrown");
         }
+    }
+
+    @Test
+    public void testKCLConfigurationWithIgnoreUnexpectedChildShards() {
+        KinesisClientLibConfiguration config =
+                new KinesisClientLibConfiguration("TestApplication", "TestStream", null, "TestWorker");
+        // By default, unexpected child shards should not be ignored.
+        assertFalse(config.shouldIgnoreUnexpectedChildShards());
+        config = config.withIgnoreUnexpectedChildShards(true);
+        assertTrue(config.shouldIgnoreUnexpectedChildShards());
     }
 }

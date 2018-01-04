@@ -407,8 +407,8 @@ public class Worker implements Runnable {
         this.leaseCoordinator = leaseCoordinator;
         this.metricsFactory = metricsFactory;
         this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
-                initialPositionInStream, cleanupLeasesUponShardCompletion, shardSyncIdleTimeMillis, metricsFactory,
-                executorService);
+                initialPositionInStream, cleanupLeasesUponShardCompletion, config.shouldIgnoreUnexpectedChildShards(),
+                shardSyncIdleTimeMillis, metricsFactory, executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.failoverTimeMillis = failoverTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -499,7 +499,8 @@ public class Worker implements Runnable {
                         || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
                     LOG.info("Syncing Kinesis shard info");
                     ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
-                            leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion, 0L);
+                            leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
+                            config.shouldIgnoreUnexpectedChildShards(), 0L);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
                     LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
