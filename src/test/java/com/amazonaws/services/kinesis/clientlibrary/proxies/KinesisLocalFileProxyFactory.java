@@ -61,4 +61,8 @@ public class KinesisLocalFileProxyFactory implements IKinesisProxyFactory {
         return testKinesisProxy;
     }
 
+    @Override
+    public IKinesisProxy getProxy() {
+        return testKinesisProxy;
+    }
 }
