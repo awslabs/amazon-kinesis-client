@@ -284,7 +284,7 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
             checkpointToRecord = ExtendedSequenceNumber.SHARD_END;
         }
         // Don't checkpoint a value we already successfully checkpointed
-        if (extendedSequenceNumber != null && !extendedSequenceNumber.equals(lastCheckpointValue)) {
+        if (checkpointToRecord != null && !checkpointToRecord.equals(lastCheckpointValue)) {
             try {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("Setting " + shardInfo.getShardId() + ", token " + shardInfo.getConcurrencyToken()
