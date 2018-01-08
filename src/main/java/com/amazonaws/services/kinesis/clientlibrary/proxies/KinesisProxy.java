@@ -82,6 +82,15 @@ public class KinesisProxy implements IKinesisProxyExtended {
     private final int maxListShardsRetryAttempts;
     private boolean isKinesisClient = true;
 
+    /**
+     * @deprecated We expect the client to be passed to the proxy, and the proxy will not require to create it.
+     * 
+     * @param credentialProvider
+     * @param endpoint
+     * @param serviceName
+     * @param regionId
+     * @return
+     */
     @Deprecated
     private static AmazonKinesisClient buildClientSettingEndpoint(AWSCredentialsProvider credentialProvider,
                                                                   String endpoint,
@@ -95,11 +104,10 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
     /**
      * Public constructor.
-     * <p>
-     * Note: Deprecating constructor, this constructor doesn't use AWS best practices, moving forward please use
+     * 
+     * @deprecated Deprecating constructor, this constructor doesn't use AWS best practices, moving forward please use
      * {@link #KinesisProxy(KinesisClientLibConfiguration, AmazonKinesis)} or
      * {@link #KinesisProxy(String, AmazonKinesis, long, int, long, int)} to create the object.
-     * </p>
      * 
      * @param streamName Data records will be fetched from this stream
      * @param credentialProvider Provides credentials for signing Kinesis requests
@@ -115,11 +123,10 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
     /**
      * Public constructor.
-     * <p>
-     * Note: Deprecating constructor, this constructor doesn't use AWS best practices, moving forward please use
+     * 
+     * @deprecated Deprecating constructor, this constructor doesn't use AWS best practices, moving forward please use
      * {@link #KinesisProxy(KinesisClientLibConfiguration, AmazonKinesis)} or
      * {@link #KinesisProxy(String, AmazonKinesis, long, int, long, int)} to create the object.
-     * </p>
      * 
      * @param streamName Data records will be fetched from this stream
      * @param credentialProvider Provides credentials for signing Kinesis requests
@@ -151,11 +158,10 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
     /**
      * Public constructor.
-     * <p>
-     * Note: Deprecating constructor, this constructor doesn't use AWS best practices, moving forward please use
+     * 
+     * @deprecated Deprecating constructor, this constructor doesn't use AWS best practices, moving forward please use
      * {@link #KinesisProxy(KinesisClientLibConfiguration, AmazonKinesis)} or
      * {@link #KinesisProxy(String, AmazonKinesis, long, int, long, int)} to create the object.
-     * </p>
      * 
      * @param streamName Data records will be fetched from this stream
      * @param credentialProvider Provides credentials for signing Kinesis requests
@@ -236,6 +242,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
      * {@inheritDoc}
      */
     @Override
+    @Deprecated
     public DescribeStreamResult getStreamInfo(String startShardId)
             throws ResourceNotFoundException, LimitExceededException {
         LOG.info("Using DescribeStream calls to get shards list");

@@ -20,9 +20,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibC
 /** 
  * Interface for a KinesisProxyFactory.
  *
- * <p>
- *     Note: Deprecating since KinesisProxy is just created once, there is no use of a factory.
- * </p>
+ * @deprecated Deprecating since KinesisProxy is just created once, there is no use of a factory.
+ * 
  */
 @Deprecated
 public interface IKinesisProxyFactory {
@@ -32,7 +31,6 @@ public interface IKinesisProxyFactory {
      * @param streamName Stream from which data is consumed.
      * @return IKinesisProxy object.
      */
-    @Deprecated
     IKinesisProxy getProxy(String streamName);
 
 }

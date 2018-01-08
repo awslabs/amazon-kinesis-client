@@ -50,6 +50,9 @@ public interface IKinesisProxy {
      * being deprecated. This method uses DescribeStream call, which is throttled at 10 calls per account by default.
      * If possible try to use ListShards call available in the client, or use the getShardList to get shard info.
      * 
+     * @deprecated This method uses DescribeStream calls, which is throttled at account level. The proxy will internally
+     * use ListShards for KinesisStreams to get the information about the shards for a given stream.
+     * 
      * @param startShardId exclusive start shardId - used when paginating the list of shards.
      * @return DescribeStreamOutput object containing a description of the stream.
      * @throws ResourceNotFoundException The Kinesis stream was not found

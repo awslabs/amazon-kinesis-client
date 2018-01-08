@@ -22,6 +22,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibC
 
 /**
  * Factory used for instantiating KinesisProxy objects (to fetch data from Kinesis).
+ * 
+ * @deprecated Will be removed since proxy is created only once, we don't need a factory.
  */
 @Deprecated
 public class KinesisProxyFactory implements IKinesisProxyFactory {
@@ -36,19 +38,13 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
     private final int maxDescribeStreamRetryAttempts;
     private final long listShardsBackoffTimeInMillis;
     private final int maxListShardsRetryAttempts;
-    private KinesisClientLibConfiguration configuration;
 
     /**
      * Constructor for creating a KinesisProxy factory, using the specified credentials provider and endpoint.
-     * <p>
-     *     Note: Deprecating, moving forward please use
-     *     {@link #KinesisProxyFactory(AWSCredentialsProvider, AmazonKinesis)}, it uses AWS best practices.
-     * </p>
      *
      * @param credentialProvider credentials provider used to sign requests
      * @param endpoint Amazon Kinesis endpoint to use
      */
-    @Deprecated
     public KinesisProxyFactory(AWSCredentialsProvider credentialProvider, String endpoint) {
         this(credentialProvider, new ClientConfiguration(), endpoint, defaultServiceName, defaultRegionId,
                 DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS, DEFAULT_DESCRIBE_STREAM_RETRY_TIMES,
@@ -58,16 +54,11 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
 
     /**
      * Constructor for KinesisProxy factory using the client configuration to use when interacting with Kinesis.
-     * <p>
-     *     Note: Deprecating, moving forward please use
-     *     {@link #KinesisProxyFactory(AWSCredentialsProvider, AmazonKinesis)}, it uses AWS best practices.
-     * </p>
      * 
      * @param credentialProvider credentials provider used to sign requests
      * @param clientConfig Client Configuration used when instantiating an AmazonKinesisClient
      * @param endpoint Amazon Kinesis endpoint to use
      */
-    @Deprecated
     public KinesisProxyFactory(AWSCredentialsProvider credentialProvider,
             ClientConfiguration clientConfig,
             String endpoint) {
@@ -79,15 +70,10 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
 
     /**
      * This constructor may be used to specify the AmazonKinesisClient to use.
-     * <p>
-     *     Note: Deprecating, moving forward please use
-     *     {@link #KinesisProxyFactory(AWSCredentialsProvider, AmazonKinesis)}, it uses AWS best practices.
-     * </p>
      * 
      * @param credentialProvider credentials provider used to sign requests
      * @param client AmazonKinesisClient used to fetch data from Kinesis
      */
-    @Deprecated
     public KinesisProxyFactory(AWSCredentialsProvider credentialProvider, AmazonKinesis client) {
         this(credentialProvider, client, DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS, DEFAULT_DESCRIBE_STREAM_RETRY_TIMES,
                 KinesisClientLibConfiguration.DEFAULT_LIST_SHARDS_BACKOFF_TIME_IN_MILLIS,
@@ -96,10 +82,6 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
 
     /**
      * Used internally and for development/testing.
-     * <p>
-     *     Note: Deprecating, moving forward please use
-     *     {@link #KinesisProxyFactory(AWSCredentialsProvider, AmazonKinesis)}, it uses AWS best practices.
-     * </p>
      * 
      * @param credentialProvider credentials provider used to sign requests
      * @param clientConfig Client Configuration used when instantiating an AmazonKinesisClient
@@ -109,7 +91,6 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
      * @param describeStreamBackoffTimeInMillis backoff time for describing stream in millis
      * @param maxDescribeStreamRetryAttempts Number of retry attempts for DescribeStream calls
      */
-    @Deprecated
     KinesisProxyFactory(AWSCredentialsProvider credentialProvider,
             ClientConfiguration clientConfig,
             String endpoint,
@@ -129,19 +110,6 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
                 listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts);
         
-    }
-
-    /**
-     * Creating KinesisProxyFactory using Config and Client objects, that will be used by the proxy.
-     * 
-     * @param configuration Config that will be used to create the Proxy
-     * @param client Client that will be used by the Proxy
-     */
-    public KinesisProxyFactory(final KinesisClientLibConfiguration configuration, final AmazonKinesis client) {
-        this(configuration.getKinesisCredentialsProvider(), client, DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS,
-                DEFAULT_DESCRIBE_STREAM_RETRY_TIMES, configuration.getListShardsBackoffTimeInMillis(),
-                configuration.getMaxListShardsRetryAttempts());
-        this.configuration = configuration;
     }
 
     /**
