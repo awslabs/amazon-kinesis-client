@@ -23,6 +23,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibC
 /**
  * Factory used for instantiating KinesisProxy objects (to fetch data from Kinesis).
  */
+@Deprecated
 public class KinesisProxyFactory implements IKinesisProxyFactory {
 
     private final AWSCredentialsProvider credentialProvider;
@@ -178,18 +179,6 @@ public class KinesisProxyFactory implements IKinesisProxyFactory {
                 maxDescribeStreamRetryAttempts,
                 listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public IKinesisProxy getProxy() {
-        if (configuration == null) {
-            throw new IllegalArgumentException("KinesisClientLibConfiguration not set, please make sure to use"
-                    + " KinesisProxyFactory(KinesisClientLibConfiguration, AmazonKinesis) constructor.");
-        }
-        return new KinesisProxy(configuration, kinesisClient);
     }
 
     private static AmazonKinesisClient buildClientSettingEndpoint(AWSCredentialsProvider credentialProvider,

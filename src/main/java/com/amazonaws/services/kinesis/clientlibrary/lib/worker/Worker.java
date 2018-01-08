@@ -47,7 +47,7 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxyFactory;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
@@ -248,7 +248,7 @@ public class Worker implements Runnable {
         this(config.getApplicationName(), new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),
                 config,
                 new StreamConfig(
-                        new KinesisProxyFactory(config, kinesisClient).getProxy(),
+                        new KinesisProxy(config, kinesisClient),
                         config.getMaxRecords(), config.getIdleTimeBetweenReadsInMillis(),
                         config.shouldCallProcessRecordsEvenForEmptyRecordList(),
                         config.shouldValidateSequenceNumberBeforeCheckpointing(),
@@ -1260,7 +1260,7 @@ public class Worker implements Runnable {
             return new Worker(config.getApplicationName(),
                     recordProcessorFactory,
                     config,
-                    new StreamConfig(new KinesisProxyFactory(config, kinesisClient).getProxy(),
+                    new StreamConfig(new KinesisProxy(config, kinesisClient),
                             config.getMaxRecords(),
                             config.getIdleTimeBetweenReadsInMillis(),
                             config.shouldCallProcessRecordsEvenForEmptyRecordList(),
