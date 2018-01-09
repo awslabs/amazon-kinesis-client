@@ -997,6 +997,11 @@ public class Worker implements Runnable {
                 metricsFactory, execService);
     }
 
+    @VisibleForTesting
+    StreamConfig getStreamConfig() {
+        return streamConfig;
+    }
+
     /**
      * Given configuration, returns appropriate metrics factory.
      * 

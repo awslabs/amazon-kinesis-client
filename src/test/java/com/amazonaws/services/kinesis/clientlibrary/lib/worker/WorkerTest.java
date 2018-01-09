@@ -90,6 +90,7 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcess
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerCWMetricsFactory;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerThreadPoolExecutor;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.util.KinesisLocalFileDataCreator;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
@@ -1472,6 +1473,31 @@ public class WorkerTest {
         verify(executorService, atLeastOnce()).submit(argThat(
                 both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN))));
 
+    }
+
+    @Test
+    public void testBuilderWithDefaultKinesisProxy() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        Worker worker = new Worker.Builder()
+            .recordProcessorFactory(recordProcessorFactory)
+            .config(config)
+            .build();
+        Assert.assertNotNull(worker.getStreamConfig().getStreamProxy());
+        Assert.assertTrue(worker.getStreamConfig().getStreamProxy() instanceof KinesisProxy);
+    }
+
+    @Test
+    public void testBuilderWhenKinesisProxyIsSet() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        // Create an instance of KinesisLocalFileProxy for injection and validation
+        IKinesisProxy kinesisProxy = mock(KinesisLocalFileProxy.class);
+        Worker worker = new Worker.Builder()
+            .recordProcessorFactory(recordProcessorFactory)
+            .config(config)
+            .kinesisProxy(kinesisProxy)
+            .build();
+        Assert.assertNotNull(worker.getStreamConfig().getStreamProxy());
+        Assert.assertTrue(worker.getStreamConfig().getStreamProxy() instanceof KinesisLocalFileProxy);
     }
 
     private abstract class InjectableWorker extends Worker {
