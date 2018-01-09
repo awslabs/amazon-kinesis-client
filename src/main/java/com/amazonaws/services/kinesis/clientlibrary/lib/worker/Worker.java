@@ -35,7 +35,6 @@ import java.util.concurrent.TimeoutException;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import lombok.Getter;
 
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
@@ -1064,7 +1063,6 @@ public class Worker implements Runnable {
     /**
      * Builder to construct a Worker instance.
      */
-    @Getter
     public static class Builder {
 
         private IRecordProcessorFactory recordProcessorFactory;
@@ -1269,7 +1267,7 @@ public class Worker implements Runnable {
                 }
             }
             if (metricsFactory == null) {
-                metricsFactory = Worker.getMetricsFactory(cloudWatchClient, config);
+                metricsFactory = getMetricsFactory(cloudWatchClient, config);
             }
             if (shardPrioritization == null) {
                 shardPrioritization = new ParentsFirstShardPrioritization(1);
