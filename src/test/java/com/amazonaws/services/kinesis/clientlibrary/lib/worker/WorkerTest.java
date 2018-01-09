@@ -19,6 +19,8 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
@@ -41,6 +43,7 @@ import java.io.File;
 import java.lang.Thread.State;
 import java.lang.reflect.Field;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -63,6 +66,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
+import com.amazonaws.services.kinesis.model.DescribeStreamResult;
+import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
+import com.amazonaws.services.kinesis.model.InvalidArgumentException;
+import com.amazonaws.services.kinesis.model.PutRecordResult;
+import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Condition;
@@ -1472,6 +1482,70 @@ public class WorkerTest {
         verify(executorService, atLeastOnce()).submit(argThat(
                 both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN))));
 
+    }
+
+    @Test
+    public void testBuilderWithDefaultKinesisProxy() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+
+        Worker.Builder builder = new Worker.Builder()
+            .recordProcessorFactory(recordProcessorFactory)
+            .config(config);
+        builder.build();
+        assertNotNull(builder.getKinesisProxy());
+        assertTrue(builder.getKinesisProxy() instanceof KinesisProxy);
+    }
+
+    @Test
+    public void testBuilderWhenKinesisProxyIsSet() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        IKinesisProxy kinesisProxy = new MockKinesisProxy();
+        Worker.Builder builder = new Worker.Builder()
+            .recordProcessorFactory(recordProcessorFactory)
+            .kinesisProxy(kinesisProxy)
+            .config(config);
+        builder.build();
+        assertNotNull(builder.getKinesisProxy());
+        assertTrue(builder.getKinesisProxy() instanceof MockKinesisProxy);
+    }
+
+    private class MockKinesisProxy implements IKinesisProxy {
+        @Override public GetRecordsResult get(String shardIterator, int maxRecords)
+            throws ResourceNotFoundException, InvalidArgumentException, ExpiredIteratorException {
+            return null;
+        }
+
+        @Override public DescribeStreamResult getStreamInfo(String startShardId) throws ResourceNotFoundException {
+            return null;
+        }
+
+        @Override public Set<String> getAllShardIds() throws ResourceNotFoundException {
+            return null;
+        }
+
+        @Override public List<Shard> getShardList() throws ResourceNotFoundException {
+            return null;
+        }
+
+        @Override public String getIterator(String shardId, String iteratorEnum, String sequenceNumber)
+            throws ResourceNotFoundException, InvalidArgumentException {
+            return null;
+        }
+
+        @Override public String getIterator(String shardId, String iteratorEnum)
+            throws ResourceNotFoundException, InvalidArgumentException {
+            return null;
+        }
+
+        @Override public String getIterator(String shardId, Date timestamp)
+            throws ResourceNotFoundException, InvalidArgumentException {
+            return null;
+        }
+
+        @Override public PutRecordResult put(String sequenceNumberForOrdering, String explicitHashKey,
+            String partitionKey, ByteBuffer data) throws ResourceNotFoundException, InvalidArgumentException {
+            return null;
+        }
     }
 
     private abstract class InjectableWorker extends Worker {
