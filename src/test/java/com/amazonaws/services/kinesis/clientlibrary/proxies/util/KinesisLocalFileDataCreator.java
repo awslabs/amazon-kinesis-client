@@ -119,7 +119,9 @@ public class KinesisLocalFileDataCreator {
                         maxSequenceNumber = new BigInteger(endingSequenceNumber);
                     }
                     if (maxSequenceNumber.compareTo(sequenceNumber) != 1) {
-                        throw new IllegalArgumentException("Not enough space in shard");
+                        throw new IllegalArgumentException("Not enough space in shard. maxSequenceNumber: "
+                            + maxSequenceNumber.toString() + ", sequenceNumber: " + sequenceNumber.toString()
+                        + ", sequenceNumberIncrement: " + sequenceNumberIncrement.toString());
                     }
                     String partitionKey =
                             PARTITION_KEY_PREFIX + shard.getShardId() + generateRandomString(PARTITION_KEY_LENGTH);
