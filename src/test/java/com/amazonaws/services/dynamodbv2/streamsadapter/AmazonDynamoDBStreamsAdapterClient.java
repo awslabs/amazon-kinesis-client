@@ -19,8 +19,8 @@ import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 
 /**
- *
+ * This class is only used for testing purposes, to make sure that the correct calls are made while using DynamoDB
+ * streams.
  */
 public class AmazonDynamoDBStreamsAdapterClient extends AmazonKinesisClient {
-    // This class is used for testing purposes.
 }

@@ -46,12 +46,13 @@ public interface IKinesisProxy {
         throws ResourceNotFoundException, InvalidArgumentException, ExpiredIteratorException;
 
     /**
-     * Fetch information about stream. Useful for fetching the list of shards in a stream. Going forward this method is
-     * being deprecated. This method uses DescribeStream call, which is throttled at 10 calls per account by default.
-     * If possible try to use ListShards call available in the client, or use the getShardList to get shard info.
+     * Fetch information about stream. Useful for fetching the list of shards in a stream.
      * 
-     * @deprecated This method uses DescribeStream calls, which is throttled at account level. The proxy will internally
-     * use ListShards for KinesisStreams to get the information about the shards for a given stream.
+     * @deprecated  Going forward this method is
+     * being deprecated. This method uses DescribeStream call, which is throttled at 10 calls per account by default.
+     * If possible try to use ListShards call available in the client, or use the getShardList or getAllShards to get
+     * shard info. To make DescribeStream calls, use the AmazonKinesis client directly instead of using KinesisProxy.
+     * This method will be removed in the next major/minor release.
      * 
      * @param startShardId exclusive start shardId - used when paginating the list of shards.
      * @return DescribeStreamOutput object containing a description of the stream.

@@ -23,7 +23,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibC
 /**
  * Factory used for instantiating KinesisProxy objects (to fetch data from Kinesis).
  * 
- * @deprecated Will be removed since proxy is created only once, we don't need a factory.
+ * @deprecated Will be removed since proxy is created only once, we don't need a factory. There is no replacement for
+ * this class. Will be removed in the next major/minor release.
  */
 @Deprecated
 public class KinesisProxyFactory implements IKinesisProxyFactory {

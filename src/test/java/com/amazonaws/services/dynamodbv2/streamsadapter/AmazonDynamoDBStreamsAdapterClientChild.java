@@ -16,8 +16,8 @@
 package com.amazonaws.services.dynamodbv2.streamsadapter;
 
 /**
- *
+ * This class is only used for testing purposes, to make sure that the correct calls are made while using DynamoDB
+ * streams.
  */
 public class AmazonDynamoDBStreamsAdapterClientChild extends AmazonDynamoDBStreamsAdapterClient {
-    // Used only for testing
 }
