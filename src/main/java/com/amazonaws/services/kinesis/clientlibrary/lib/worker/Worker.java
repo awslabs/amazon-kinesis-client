@@ -1203,7 +1203,7 @@ public class Worker implements Runnable {
          * Set KinesisProxy for the worker.
          *
          * @param kinesisProxy
-         *            KinesisProxy uses the AmazonKinesis client to get data from Kinesis or DynamoDBStreams
+         *            Sets an implementation of IKinesisProxy.
          *
          * @return A reference to this updated object so that method calls can be chained together.
          */
