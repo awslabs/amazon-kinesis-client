@@ -72,11 +72,20 @@ public class MetricsHelper {
      * @param scope
      */
     public static void setMetricsScope(IMetricsScope scope) {
-        if (currentScope.get() != null) {
+        if (isMetricsScopePresent()) {
             throw new RuntimeException(String.format(
                     "Metrics scope is already set for the current thread %s", Thread.currentThread().getName()));
         }
         currentScope.set(scope);
+    }
+
+    /**
+     * Checks if current metricsscope is present or not.
+     * 
+     * @return true if metrics scope is present, else returns false
+     */
+    public static boolean isMetricsScopePresent() {
+        return currentScope.get() != null;
     }
 
     /**
