@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map.Entry;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -804,12 +805,20 @@ public class RecordProcessorCheckpointerTest {
         // First call to checkpoint
         RecordProcessorCheckpointer processingCheckpointer =
                 new RecordProcessorCheckpointer(shardInfo, checkpoint, null, metricsFactory);
+        IMetricsScope scope = null;
+        if (MetricsHelper.isMetricsScopePresent()) {
+            scope = MetricsHelper.getMetricsScope();
+            MetricsHelper.unsetMetricsScope();
+        }
         ExtendedSequenceNumber sequenceNumber = new ExtendedSequenceNumber("5019");
         processingCheckpointer.setLargestPermittedCheckpointValue(sequenceNumber);
         processingCheckpointer.checkpoint();
         Assert.assertEquals(sequenceNumber, checkpoint.getCheckpoint(shardId));
         verify(metricsFactory).createMetrics();
         Assert.assertFalse(MetricsHelper.isMetricsScopePresent());
+        if (scope != null) {
+            MetricsHelper.setMetricsScope(scope);
+        }
     }
 
     @Test
@@ -817,15 +826,20 @@ public class RecordProcessorCheckpointerTest {
         // First call to checkpoint
         RecordProcessorCheckpointer processingCheckpointer =
                 new RecordProcessorCheckpointer(shardInfo, checkpoint, null, metricsFactory);
-        NullMetricsScope scope = new NullMetricsScope();
-        MetricsHelper.setMetricsScope(scope);
+        boolean shouldUnset = false;
+        if (!MetricsHelper.isMetricsScopePresent()) {
+            shouldUnset = true;
+            MetricsHelper.setMetricsScope(new NullMetricsScope());
+        }
         ExtendedSequenceNumber sequenceNumber = new ExtendedSequenceNumber("5019");
         processingCheckpointer.setLargestPermittedCheckpointValue(sequenceNumber);
         processingCheckpointer.checkpoint();
         Assert.assertEquals(sequenceNumber, checkpoint.getCheckpoint(shardId));
         verify(metricsFactory, never()).createMetrics();
         Assert.assertTrue(MetricsHelper.isMetricsScopePresent());
-        assertEquals(scope, MetricsHelper.getMetricsScope());
-        MetricsHelper.unsetMetricsScope();
+        assertEquals(NullMetricsScope.class, MetricsHelper.getMetricsScope().getClass());
+        if (shouldUnset) {
+            MetricsHelper.unsetMetricsScope();
+        }
     }
 }
