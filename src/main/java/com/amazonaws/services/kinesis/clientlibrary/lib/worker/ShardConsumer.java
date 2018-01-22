@@ -170,7 +170,8 @@ class ShardConsumer {
                         new SequenceNumberValidator(
                                 streamConfig.getStreamProxy(),
                                 shardInfo.getShardId(),
-                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing())),
+                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
+                        metricsFactory),
                 leaseManager,
                 parentShardPollIntervalMillis,
                 cleanupLeasesOfCompletedShards,
