@@ -1,22 +1,27 @@
 /*
- * Copyright 2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.clientlibrary.types;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.model.Record;
+
+import lombok.Getter;
 
 /**
  * Container for the parameters to the IRecordProcessor's
@@ -24,7 +29,10 @@ import com.amazonaws.services.kinesis.model.Record;
  * ProcessRecordsInput processRecordsInput) processRecords} method.
  */
 public class ProcessRecordsInput {
-
+    @Getter
+    private Instant cacheEntryTime;
+    @Getter
+    private Instant cacheExitTime;
     private List<Record> records;
     private IRecordProcessorCheckpointer checkpointer;
     private Long millisBehindLatest;
@@ -95,5 +103,22 @@ public class ProcessRecordsInput {
     public ProcessRecordsInput withMillisBehindLatest(Long millisBehindLatest) {
         this.millisBehindLatest = millisBehindLatest;
         return this;
+    }
+    
+    public ProcessRecordsInput withCacheEntryTime(Instant cacheEntryTime) {
+        this.cacheEntryTime = cacheEntryTime;
+        return this;
+    }
+    
+    public ProcessRecordsInput withCacheExitTime(Instant cacheExitTime) {
+        this.cacheExitTime = cacheExitTime;
+        return this;
+    }
+    
+    public Duration getTimeSpentInCache() {
+        if (cacheEntryTime == null || cacheExitTime == null) {
+            return Duration.ZERO;
+        }
+        return Duration.between(cacheEntryTime, cacheExitTime);
     }
 }

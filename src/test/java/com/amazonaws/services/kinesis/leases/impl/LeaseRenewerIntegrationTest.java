@@ -1,30 +1,29 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
  */
 package com.amazonaws.services.kinesis.leases.impl;
-
-import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.Executors;
-
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.Executors;
 
 public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
 
@@ -58,7 +57,9 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         builder.addLeasesToRenew(renewer, "1", "2");
         KinesisClientLease renewedLease = builder.renewMutateAssert(renewer, "1", "2").get("2");
 
-        leaseManager.updateLease(renewedLease);
+        // lose lease 2
+        leaseManager.takeLease(renewedLease, "bar");
+
         builder.renewMutateAssert(renewer, "1");
     }
 
@@ -96,9 +97,9 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
     public void testGetCurrentlyHeldLeases() throws LeasingException {
         TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
 
-        KinesisClientLease lease2 = builder.withLease("1", "foo").withLease("2", "foo").build().get("2");
+        builder.withLease("1", "foo").withLease("2", "foo").build();
         builder.addLeasesToRenew(renewer, "1", "2");
-        builder.renewMutateAssert(renewer, "1", "2");
+        KinesisClientLease lease2 =  builder.renewMutateAssert(renewer, "1", "2").get("2");
 
         // This should be a copy that doesn't get updated
         Map<String, KinesisClientLease> heldLeases = renewer.getCurrentlyHeldLeases();
@@ -106,7 +107,9 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         Assert.assertEquals((Long) 1L, heldLeases.get("1").getLeaseCounter());
         Assert.assertEquals((Long) 1L, heldLeases.get("2").getLeaseCounter());
 
-        leaseManager.updateLease(lease2); // lose lease 2
+        // lose lease 2
+        leaseManager.takeLease(lease2, "bar");
+
         // Do another renewal and make sure the copy doesn't change
         builder.renewMutateAssert(renewer, "1");
 
@@ -176,7 +179,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         KinesisClientLease lease = renewer.getCurrentlyHeldLease("1");
 
         // cause lease loss such that the renewer knows the lease has been lost when update is called
-        leaseManager.renewLease(lease);
+        leaseManager.takeLease(lease, "bar");
         builder.renewMutateAssert(renewer);
 
         lease.setCheckpoint(new ExtendedSequenceNumber("new checkpoint"));
@@ -195,7 +198,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         KinesisClientLease lease = renewer.getCurrentlyHeldLease("1");
 
         // cause lease loss such that the renewer knows the lease has been lost when update is called
-        leaseManager.renewLease(lease);
+        leaseManager.takeLease(lease, "bar");
         builder.renewMutateAssert(renewer);
 
         // regain the lease

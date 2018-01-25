@@ -1,20 +1,22 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.HashSet;
@@ -34,10 +36,14 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
 /**
  *
  */
+@RunWith(MockitoJUnitRunner.class)
 public class ShutdownTaskTest {
     private static final long TASK_BACKOFF_TIME_MILLIS = 1L;
     private static final InitialPositionInStreamExtended INITIAL_POSITION_TRIM_HORIZON =
@@ -51,6 +57,9 @@ public class ShutdownTaskTest {
             defaultParentShardIds,
             ExtendedSequenceNumber.LATEST);
     IRecordProcessor defaultRecordProcessor = new TestStreamlet();
+    
+    @Mock
+    private GetRecordsCache getRecordsCache;
 
     /**
      * @throws java.lang.Exception
@@ -71,6 +80,7 @@ public class ShutdownTaskTest {
      */
     @Before
     public void setUp() throws Exception {
+        doNothing().when(getRecordsCache).shutdown();
     }
 
     /**
@@ -90,6 +100,7 @@ public class ShutdownTaskTest {
         IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         boolean cleanupLeasesOfCompletedShards = false;
+        boolean ignoreUnexpectedChildShards = false;
         ShutdownTask task = new ShutdownTask(defaultShardInfo,
                 defaultRecordProcessor,
                 checkpointer,
@@ -97,8 +108,10 @@ public class ShutdownTaskTest {
                 kinesisProxy,
                 INITIAL_POSITION_TRIM_HORIZON,
                 cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards,
                 leaseManager,
-                TASK_BACKOFF_TIME_MILLIS);
+                TASK_BACKOFF_TIME_MILLIS,
+                getRecordsCache);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
@@ -115,6 +128,7 @@ public class ShutdownTaskTest {
         when(kinesisProxy.getShardList()).thenReturn(null);
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         boolean cleanupLeasesOfCompletedShards = false;
+        boolean ignoreUnexpectedChildShards = false;
         ShutdownTask task = new ShutdownTask(defaultShardInfo,
                 defaultRecordProcessor,
                 checkpointer,
@@ -122,11 +136,14 @@ public class ShutdownTaskTest {
                 kinesisProxy,
                 INITIAL_POSITION_TRIM_HORIZON,
                 cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards,
                 leaseManager,
-                TASK_BACKOFF_TIME_MILLIS);
+                TASK_BACKOFF_TIME_MILLIS,
+                getRecordsCache);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof KinesisClientLibIOException);
+        verify(getRecordsCache).shutdown();
     }
 
     /**
@@ -134,7 +151,7 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testGetTaskType() {
-        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, null, 0);
+        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache);
         Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
     }
 

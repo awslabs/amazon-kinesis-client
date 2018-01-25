@@ -15,7 +15,7 @@ The **Amazon Kinesis Client Library for Java** (Amazon KCL) enables Java develop
 
 1. **Sign up for AWS** &mdash; Before you begin, you need an AWS account. For more information about creating an AWS account and retrieving your AWS credentials, see [AWS Account and Credentials][docs-signup] in the AWS SDK for Java Developer Guide.
 1. **Sign up for Amazon Kinesis** &mdash; Go to the Amazon Kinesis console to sign up for the service and create an Amazon Kinesis stream. For more information, see [Create an Amazon Kinesis Stream][kinesis-guide-create] in the Amazon Kinesis Developer Guide.
-1. **Minimum requirements** &mdash; To use the Amazon Kinesis Client Library, you'll need **Java 1.7+**. For more information about Amazon Kinesis Client Library requirements, see [Before You Begin][kinesis-guide-begin] in the Amazon Kinesis Developer Guide.
+1. **Minimum requirements** &mdash; To use the Amazon Kinesis Client Library, you'll need **Java 1.8+**. For more information about Amazon Kinesis Client Library requirements, see [Before You Begin][kinesis-guide-begin] in the Amazon Kinesis Developer Guide.
 1. **Using the Amazon Kinesis Client Library** &mdash; The best way to get familiar with the Amazon Kinesis Client Library is to read [Developing Record Consumer Applications][kinesis-guide-applications] in the Amazon Kinesis Developer Guide.
 
 ## Building from Source
@@ -29,6 +29,89 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
 ## Release Notes
+
+### Release 1.8.9
+* Allow disabling check for the case where a child shard has an open parent shard.  
+  There is a race condition where it's possible for the a parent shard to appear open, while having child shards. This check can now be disabled by setting [`ignoreUnexpectedChildShards`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1037) to true.
+  * [PR #240](https://github.com/awslabs/amazon-kinesis-client/pull/240)
+  * [Issue #210](https://github.com/awslabs/amazon-kinesis-client/issues/210)
+* Upgraded the AWS SDK for Java to 1.11.261
+  * [PR #281](https://github.com/awslabs/amazon-kinesis-client/pull/281)
+
+### Release 1.8.8
+* Fixed issues with leases losses due to `ExpiredIteratorException` in `PrefetchGetRecordsCache` and `AsynchronousFetchingStrategy`.  
+  PrefetchGetRecordsCache will request for a new iterator and start fetching data again.  
+  * [PR#263](https://github.com/awslabs/amazon-kinesis-client/pull/263)
+* Added warning message for long running tasks.  
+  Logging long running tasks can be enabled by setting the following configuration property:
+  
+  | Name | Default | Description |
+  | ---- | ------- | ----------- |
+  | [`logWarningForTaskAfterMillis`](https://github.com/awslabs/amazon-kinesis-client/blob/3de901ea9327370ed732af86c4d4999c8d99541c/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1367) | Not set | Milliseconds after which the logger will log a warning message for the long running task |
+  
+  * [PR#259](https://github.com/awslabs/amazon-kinesis-client/pull/259)
+* Handling spurious lease renewal failures gracefully.  
+  Added better handling of DynamoDB failures when updating leases.  These failures would occur when a request to DynamoDB appeared to fail, but was actually successful.  
+  * [PR#247](https://github.com/awslabs/amazon-kinesis-client/pull/247)
+* ShutdownTask gets retried if the previous attempt on the ShutdownTask fails.
+  * [PR#267](https://github.com/awslabs/amazon-kinesis-client/pull/267)
+* Fix for using maxRecords from `KinesisClientLibConfiguration` in `GetRecordsCache` for fetching records.
+  * [PR#264](https://github.com/awslabs/amazon-kinesis-client/pull/264)
+
+### Release 1.8.7
+* Don't add a delay for synchronous requests to Kinesis  
+  Removes a delay that had been added for synchronous `GetRecords` calls to Kinesis. 
+  * [PR #256](https://github.com/awslabs/amazon-kinesis-client/pull/256)
+
+### Release 1.8.6
+* Add prefetching of records from Kinesis  
+  Prefetching will retrieve and queue additional records from Kinesis while the application is processing existing records.  
+  Prefetching can be enabled by setting [`dataFetchingStrategy`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1317) to `PREFETCH_CACHED`. Once enabled an additional fetching thread will be started to retrieve records from Kinesis. Retrieved records will be held in a queue until the application is ready to process them.  
+  Pre-fetching supports the following configuration values:  
+  
+  | Name | Default | Description |
+  | ---- | ------- | ----------- |
+  | [`dataFetchingStrategy`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1317) | `DEFAULT` | Which data fetching strategy to use |
+  | [`maxPendingProcessRecordsInput`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1296) | 3 | The maximum number of process records input that can be queued |
+  | [`maxCacheByteSize`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1307) | 8 MiB | The maximum number of bytes that can be queued |
+  | [`maxRecordsCount`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1326) | 30,000 | The maximum number of records that can be queued |
+  | [`idleMillisBetweenCalls`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1353) | 1,500 ms | The amount of time to wait between calls to Kinesis |
+  
+  * [PR #246](https://github.com/awslabs/amazon-kinesis-client/pull/246)
+
+### Release 1.8.5 (September 26, 2017)
+* Only advance the shard iterator for the accepted response.  
+  This fixes a race condition in the `KinesisDataFetcher` when it's being used to make asynchronous requests.  The shard iterator is now only advanced when the retriever calls `DataFetcherResult#accept()`.
+  * [PR #230](https://github.com/awslabs/amazon-kinesis-client/pull/230)
+  * [Issue #231](https://github.com/awslabs/amazon-kinesis-client/issues/231)
+
+### Release 1.8.4 (September 22, 2017)
+* Create a new completion service for each request.  
+  This ensures that canceled tasks are discarded.  This will prevent a cancellation exception causing issues processing records.
+  * [PR #227](https://github.com/awslabs/amazon-kinesis-client/pull/227)
+  * [Issue #226](https://github.com/awslabs/amazon-kinesis-client/issues/226)
+
+### Release 1.8.3 (September 22, 2017)
+* Call shutdown on the retriever when the record processor is being shutdown  
+  This fixes a bug that could leak threads if using the [`AsynchronousGetRecordsRetrievalStrategy`](https://github.com/awslabs/amazon-kinesis-client/blob/9a82b6bd05b3c9c5f8581af007141fa6d5f0fc4e/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/AsynchronousGetRecordsRetrievalStrategy.java#L42) is being used.  
+  The asynchronous retriever is only used when [`KinesisClientLibConfiguration#retryGetRecordsInSeconds`](https://github.com/awslabs/amazon-kinesis-client/blob/01d2688bc6e68fd3fe5cb698cb65299d67ac930d/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L227), and [`KinesisClientLibConfiguration#maxGetRecordsThreadPool`](https://github.com/awslabs/amazon-kinesis-client/blob/01d2688bc6e68fd3fe5cb698cb65299d67ac930d/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L230) are set.
+  * [PR #222](https://github.com/awslabs/amazon-kinesis-client/pull/222)
+
+### Release 1.8.2 (September 20, 2017)
+* Add support for two phase checkpoints  
+  Applications can now set a pending checkpoint, before completing the checkpoint operation. Once the application has completed its checkpoint steps, the final checkpoint will clear the pending checkpoint.  
+  Should the checkpoint fail the attempted sequence number is provided in the [`InitializationInput#getPendingCheckpointSequenceNumber`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/types/InitializationInput.java#L81) otherwise the value will be null.
+  * [PR #188](https://github.com/awslabs/amazon-kinesis-client/pull/188)
+* Support timeouts, and retry for GetRecords calls.  
+  Applications can now set timeouts for GetRecord calls to Kinesis.  As part of setting the timeout, the application must also provide a thread pool size for concurrent requests.
+  * [PR #214](https://github.com/awslabs/amazon-kinesis-client/pull/214)
+* Notification when the lease table is throttled  
+  When writes, or reads, to the lease table are throttled a warning will be emitted.  If you're seeing this warning you should increase the IOPs for your lease table to prevent processing delays.
+  * [PR #212](https://github.com/awslabs/amazon-kinesis-client/pull/212)
+* Support configuring the graceful shutdown timeout for MultiLang Clients  
+  This adds support for setting the timeout that the Java process will wait for the MutliLang client to complete graceful shutdown.  The timeout can be configured by adding `shutdownGraceMillis` to the properties file set to the number of milliseconds to wait.
+  * [PR #204](https://github.com/awslabs/amazon-kinesis-client/pull/204)
+
 ### Release 1.8.1 (August 2, 2017)
 * Support timeouts for calls to the MultiLang Daemon
   This adds support for setting a timeout when dispatching records to the client record processor. If the record processor doesn't respond within the timeout the parent Java process will be terminated. This is a temporary fix to handle cases where the KCL becomes blocked while waiting for a client record processor.
