@@ -170,7 +170,8 @@ class ShardConsumer {
                         new SequenceNumberValidator(
                                 streamConfig.getStreamProxy(),
                                 shardInfo.getShardId(),
-                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing())),
+                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
+                        metricsFactory),
                 leaseManager,
                 parentShardPollIntervalMillis,
                 cleanupLeasesOfCompletedShards,
@@ -482,6 +483,10 @@ class ShardConsumer {
 
     boolean isCleanupLeasesOfCompletedShards() {
         return cleanupLeasesOfCompletedShards;
+    }
+
+    boolean isIgnoreUnexpectedChildShards() {
+        return config.shouldIgnoreUnexpectedChildShards();
     }
 
     long getTaskBackoffTimeMillis() {

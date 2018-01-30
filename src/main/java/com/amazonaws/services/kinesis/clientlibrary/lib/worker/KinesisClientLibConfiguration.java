@@ -126,7 +126,7 @@ public class KinesisClientLibConfiguration {
     /**
      * User agent set when Amazon Kinesis Client Library makes AWS requests.
      */
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.8.8";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.8.10";
 
     /**
      * KCL will validate client provided sequence numbers with a call to Amazon Kinesis before checkpointing for calls
@@ -210,6 +210,7 @@ public class KinesisClientLibConfiguration {
     private boolean callProcessRecordsEvenForEmptyRecordList;
     private long parentShardPollIntervalMillis;
     private boolean cleanupLeasesUponShardCompletion;
+    private boolean ignoreUnexpectedChildShards;
     private ClientConfiguration kinesisClientConfig;
     private ClientConfiguration dynamoDBClientConfig;
     private ClientConfiguration cloudWatchClientConfig;
@@ -819,6 +820,13 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
+     * @return true if we should ignore child shards which have open parents
+     */
+    public boolean shouldIgnoreUnexpectedChildShards() {
+        return ignoreUnexpectedChildShards;
+    }
+
+    /**
      * @return true if KCL should validate client provided sequence numbers with a call to Amazon Kinesis before
      *         checkpointing for calls to {@link RecordProcessorCheckpointer#checkpoint(String)}
      */
@@ -1035,6 +1043,16 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withCleanupLeasesUponShardCompletion(
             boolean cleanupLeasesUponShardCompletion) {
         this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        return this;
+    }
+
+    /**
+     * @param ignoreUnexpectedChildShards Ignore child shards with open parents.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withIgnoreUnexpectedChildShards(
+            boolean ignoreUnexpectedChildShards) {
+        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         return this;
     }
 

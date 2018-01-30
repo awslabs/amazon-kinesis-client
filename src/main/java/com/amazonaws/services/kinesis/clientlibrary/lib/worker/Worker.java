@@ -32,6 +32,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -406,8 +407,8 @@ public class Worker implements Runnable {
         this.leaseCoordinator = leaseCoordinator;
         this.metricsFactory = metricsFactory;
         this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
-                initialPositionInStream, cleanupLeasesUponShardCompletion, shardSyncIdleTimeMillis, metricsFactory,
-                executorService);
+                initialPositionInStream, cleanupLeasesUponShardCompletion, config.shouldIgnoreUnexpectedChildShards(),
+                shardSyncIdleTimeMillis, metricsFactory, executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.failoverTimeMillis = failoverTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -498,7 +499,8 @@ public class Worker implements Runnable {
                         || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
                     LOG.info("Syncing Kinesis shard info");
                     ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
-                            leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion, 0L);
+                            leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
+                            config.shouldIgnoreUnexpectedChildShards(), 0L);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
                     LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
@@ -994,6 +996,11 @@ public class Worker implements Runnable {
                 metricsFactory, execService);
     }
 
+    @VisibleForTesting
+    StreamConfig getStreamConfig() {
+        return streamConfig;
+    }
+
     /**
      * Given configuration, returns appropriate metrics factory.
      * 
@@ -1071,6 +1078,7 @@ public class Worker implements Runnable {
         private IMetricsFactory metricsFactory;
         private ExecutorService execService;
         private ShardPrioritization shardPrioritization;
+        private IKinesisProxy kinesisProxy;
 
         /**
          * Default constructor.
@@ -1191,6 +1199,19 @@ public class Worker implements Runnable {
         }
 
         /**
+         * Set KinesisProxy for the worker.
+         *
+         * @param kinesisProxy
+         *            Sets an implementation of IKinesisProxy.
+         *
+         * @return A reference to this updated object so that method calls can be chained together.
+         */
+        public Builder kinesisProxy(IKinesisProxy kinesisProxy) {
+            this.kinesisProxy = kinesisProxy;
+            return this;
+        }
+
+        /**
          * Build the Worker instance.
          *
          * @return a Worker instance.
@@ -1255,12 +1276,14 @@ public class Worker implements Runnable {
             if (shardPrioritization == null) {
                 shardPrioritization = new ParentsFirstShardPrioritization(1);
             }
-
+            if (kinesisProxy == null) {
+                kinesisProxy = new KinesisProxy(config, kinesisClient);
+            }
 
             return new Worker(config.getApplicationName(),
                     recordProcessorFactory,
                     config,
-                    new StreamConfig(new KinesisProxy(config, kinesisClient),
+                    new StreamConfig(kinesisProxy,
                             config.getMaxRecords(),
                             config.getIdleTimeBetweenReadsInMillis(),
                             config.shouldCallProcessRecordsEvenForEmptyRecordList(),

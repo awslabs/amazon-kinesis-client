@@ -14,16 +14,27 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map.Entry;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IPreparedCheckpointer;
@@ -31,15 +42,15 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.InMemoryCheck
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
+import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsScope;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.Record;
-
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Matchers.anyString;
 
 /**
  *
  */
+@RunWith(MockitoJUnitRunner.class)
 public class RecordProcessorCheckpointerTest {
     private String startingSequenceNumber = "13";
     private ExtendedSequenceNumber startingExtendedSequenceNumber = new ExtendedSequenceNumber(startingSequenceNumber);
@@ -48,6 +59,9 @@ public class RecordProcessorCheckpointerTest {
     private ShardInfo shardInfo;
     private SequenceNumberValidator sequenceNumberValidator;
     private String shardId = "shardId-123";
+    
+    @Mock
+    IMetricsFactory metricsFactory;
 
     /**
      * @throws java.lang.Exception
@@ -78,7 +92,7 @@ public class RecordProcessorCheckpointerTest {
     public final void testCheckpoint() throws Exception {
         // First call to checkpoint
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, null);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, null, metricsFactory);
         processingCheckpointer.setLargestPermittedCheckpointValue(startingExtendedSequenceNumber);
         processingCheckpointer.checkpoint();
         Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpoint(shardId));
@@ -98,7 +112,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testCheckpointRecord() throws Exception {
     	RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
     	processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
     	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5025");
     	Record record = new Record().withSequenceNumber("5025");
@@ -114,7 +128,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testCheckpointSubRecord() throws Exception {
     	RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
     	processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
     	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5030");
     	Record record = new Record().withSequenceNumber("5030");
@@ -131,7 +145,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testCheckpointSequenceNumber() throws Exception {
     	RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
     	processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
     	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5035");
     	processingCheckpointer.setLargestPermittedCheckpointValue(extendedSequenceNumber);
@@ -146,7 +160,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testCheckpointExtendedSequenceNumber() throws Exception {
     	RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
     	processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
     	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5040");
     	processingCheckpointer.setLargestPermittedCheckpointValue(extendedSequenceNumber);
@@ -162,7 +176,7 @@ public class RecordProcessorCheckpointerTest {
     public final void testPrepareCheckpoint() throws Exception {
         // First call to checkpoint
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
         processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
 
         ExtendedSequenceNumber sequenceNumber1 = new ExtendedSequenceNumber("5001");
@@ -193,7 +207,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testPrepareCheckpointRecord() throws Exception {
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
         processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
         ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5025");
         Record record = new Record().withSequenceNumber("5025");
@@ -218,7 +232,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testPrepareCheckpointSubRecord() throws Exception {
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
         processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
         ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5030");
         Record record = new Record().withSequenceNumber("5030");
@@ -244,7 +258,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testPrepareCheckpointSequenceNumber() throws Exception {
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
         processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
         ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5035");
         processingCheckpointer.setLargestPermittedCheckpointValue(extendedSequenceNumber);
@@ -268,7 +282,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testPrepareCheckpointExtendedSequenceNumber() throws Exception {
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
         processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
         ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5040");
         processingCheckpointer.setLargestPermittedCheckpointValue(extendedSequenceNumber);
@@ -291,7 +305,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testMultipleOutstandingCheckpointersHappyCase() throws Exception {
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
         processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
         processingCheckpointer.setLargestPermittedCheckpointValue(new ExtendedSequenceNumber("6040"));
 
@@ -323,7 +337,7 @@ public class RecordProcessorCheckpointerTest {
     @Test
     public final void testMultipleOutstandingCheckpointersOutOfOrder() throws Exception {
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
         processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
         processingCheckpointer.setLargestPermittedCheckpointValue(new ExtendedSequenceNumber("7040"));
 
@@ -358,7 +372,7 @@ public class RecordProcessorCheckpointerTest {
      */
     @Test
     public final void testUpdate() throws Exception {
-        RecordProcessorCheckpointer checkpointer = new RecordProcessorCheckpointer(shardInfo, checkpoint, null);
+        RecordProcessorCheckpointer checkpointer = new RecordProcessorCheckpointer(shardInfo, checkpoint, null, metricsFactory);
 
         ExtendedSequenceNumber sequenceNumber = new ExtendedSequenceNumber("10");
         checkpointer.setLargestPermittedCheckpointValue(sequenceNumber);
@@ -379,7 +393,7 @@ public class RecordProcessorCheckpointerTest {
         SequenceNumberValidator validator = mock(SequenceNumberValidator.class);
         Mockito.doNothing().when(validator).validateSequenceNumber(anyString());
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, validator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, validator, metricsFactory);
 
         // Several checkpoints we're gonna hit
         ExtendedSequenceNumber tooSmall = new ExtendedSequenceNumber("2");
@@ -467,7 +481,7 @@ public class RecordProcessorCheckpointerTest {
         SequenceNumberValidator validator = mock(SequenceNumberValidator.class);
         Mockito.doNothing().when(validator).validateSequenceNumber(anyString());
         RecordProcessorCheckpointer processingCheckpointer =
-                new RecordProcessorCheckpointer(shardInfo, checkpoint, validator);
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, validator, metricsFactory);
 
         // Several checkpoints we're gonna hit
         ExtendedSequenceNumber tooSmall = new ExtendedSequenceNumber("2");
@@ -595,7 +609,7 @@ public class RecordProcessorCheckpointerTest {
 
         for (LinkedHashMap<String, CheckpointAction> testPlan : getMixedCallsTestPlan()) {
             RecordProcessorCheckpointer processingCheckpointer =
-                    new RecordProcessorCheckpointer(shardInfo, checkpoint, validator);
+                    new RecordProcessorCheckpointer(shardInfo, checkpoint, validator, metricsFactory);
             testMixedCheckpointCalls(processingCheckpointer, testPlan, CheckpointerType.CHECKPOINTER);
         }
     }
@@ -615,7 +629,7 @@ public class RecordProcessorCheckpointerTest {
 
         for (LinkedHashMap<String, CheckpointAction> testPlan : getMixedCallsTestPlan()) {
             RecordProcessorCheckpointer processingCheckpointer =
-                    new RecordProcessorCheckpointer(shardInfo, checkpoint, validator);
+                    new RecordProcessorCheckpointer(shardInfo, checkpoint, validator, metricsFactory);
             testMixedCheckpointCalls(processingCheckpointer, testPlan, CheckpointerType.PREPARED_CHECKPOINTER);
         }
     }
@@ -636,7 +650,7 @@ public class RecordProcessorCheckpointerTest {
 
         for (LinkedHashMap<String, CheckpointAction> testPlan : getMixedCallsTestPlan()) {
             RecordProcessorCheckpointer processingCheckpointer =
-                    new RecordProcessorCheckpointer(shardInfo, checkpoint, validator);
+                    new RecordProcessorCheckpointer(shardInfo, checkpoint, validator, metricsFactory);
             testMixedCheckpointCalls(processingCheckpointer, testPlan, CheckpointerType.PREPARE_THEN_CHECKPOINTER);
         }
     }
@@ -783,6 +797,49 @@ public class RecordProcessorCheckpointerTest {
             Assert.assertEquals(new ExtendedSequenceNumber(entry.getKey()),
                     checkpoint.getCheckpointObject(shardId).getCheckpoint());
             Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
+        }
+    }
+
+    @Test
+    public final void testUnsetMetricsScopeDuringCheckpointing() throws Exception {
+        // First call to checkpoint
+        RecordProcessorCheckpointer processingCheckpointer =
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, null, metricsFactory);
+        IMetricsScope scope = null;
+        if (MetricsHelper.isMetricsScopePresent()) {
+            scope = MetricsHelper.getMetricsScope();
+            MetricsHelper.unsetMetricsScope();
+        }
+        ExtendedSequenceNumber sequenceNumber = new ExtendedSequenceNumber("5019");
+        processingCheckpointer.setLargestPermittedCheckpointValue(sequenceNumber);
+        processingCheckpointer.checkpoint();
+        Assert.assertEquals(sequenceNumber, checkpoint.getCheckpoint(shardId));
+        verify(metricsFactory).createMetrics();
+        Assert.assertFalse(MetricsHelper.isMetricsScopePresent());
+        if (scope != null) {
+            MetricsHelper.setMetricsScope(scope);
+        }
+    }
+
+    @Test
+    public final void testSetMetricsScopeDuringCheckpointing() throws Exception {
+        // First call to checkpoint
+        RecordProcessorCheckpointer processingCheckpointer =
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, null, metricsFactory);
+        boolean shouldUnset = false;
+        if (!MetricsHelper.isMetricsScopePresent()) {
+            shouldUnset = true;
+            MetricsHelper.setMetricsScope(new NullMetricsScope());
+        }
+        ExtendedSequenceNumber sequenceNumber = new ExtendedSequenceNumber("5019");
+        processingCheckpointer.setLargestPermittedCheckpointValue(sequenceNumber);
+        processingCheckpointer.checkpoint();
+        Assert.assertEquals(sequenceNumber, checkpoint.getCheckpoint(shardId));
+        verify(metricsFactory, never()).createMetrics();
+        Assert.assertTrue(MetricsHelper.isMetricsScopePresent());
+        assertEquals(NullMetricsScope.class, MetricsHelper.getMetricsScope().getClass());
+        if (shouldUnset) {
+            MetricsHelper.unsetMetricsScope();
         }
     }
 }
