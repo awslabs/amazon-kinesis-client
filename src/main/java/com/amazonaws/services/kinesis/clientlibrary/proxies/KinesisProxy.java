@@ -217,10 +217,10 @@ public class KinesisProxy implements IKinesisProxyExtended {
             if (Class.forName("com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient")
                     .isAssignableFrom(client.getClass())) {
                 isKinesisClient = false;
-                LOG.info("Client is DynamoDb client, will use DescribeStream.");
+                LOG.debug("Client is DynamoDb client, will use DescribeStream.");
             }
         } catch (ClassNotFoundException e) {
-            LOG.info("Client is Kinesis Client, using ListShards instead of DescribeStream.");
+            LOG.debug("Client is Kinesis Client, using ListShards instead of DescribeStream.");
         }
     }
 
@@ -232,7 +232,6 @@ public class KinesisProxy implements IKinesisProxyExtended {
         throws ResourceNotFoundException, InvalidArgumentException, ExpiredIteratorException {
 
         final GetRecordsRequest getRecordsRequest = new GetRecordsRequest();
-        // TODO: remove this once older constructors are removed
         getRecordsRequest.setRequestCredentials(credentialsProvider.getCredentials());
         getRecordsRequest.setShardIterator(shardIterator);
         getRecordsRequest.setLimit(maxRecords);
@@ -249,7 +248,6 @@ public class KinesisProxy implements IKinesisProxyExtended {
     public DescribeStreamResult getStreamInfo(String startShardId)
             throws ResourceNotFoundException, LimitExceededException {
         final DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
-        // TODO: remove this once older constructors are removed
         describeStreamRequest.setRequestCredentials(credentialsProvider.getCredentials());
         describeStreamRequest.setStreamName(streamName);
         describeStreamRequest.setExclusiveStartShardId(startShardId);
@@ -292,10 +290,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
     }
     
     private ListShardsResult listShards(final String nextToken) {
-        // TODO: remove this before pushing code in.
-        LOG.info("Using ListShards to get shards information");
         final ListShardsRequest request = new ListShardsRequest();
-        // TODO: remove this once older constructors are removed
         request.setRequestCredentials(credentialsProvider.getCredentials());
         if (StringUtils.isEmpty(nextToken)) {
             request.setStreamName(streamName);
@@ -442,7 +437,6 @@ public class KinesisProxy implements IKinesisProxyExtended {
                     + "ShardIteratorTypes. For methods to use with other ShardIteratorTypes, see IKinesisProxy.java");
         }
         final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
-        // TODO: remove this once older constructors are removed
         getShardIteratorRequest.setRequestCredentials(credentialsProvider.getCredentials());
         getShardIteratorRequest.setStreamName(streamName);
         getShardIteratorRequest.setShardId(shardId);
@@ -459,7 +453,6 @@ public class KinesisProxy implements IKinesisProxyExtended {
     @Override
     public String getIterator(String shardId, String iteratorType) {
         final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
-        // TODO: remove this once older constructors are removed
         getShardIteratorRequest.setRequestCredentials(credentialsProvider.getCredentials());
         getShardIteratorRequest.setStreamName(streamName);
         getShardIteratorRequest.setShardId(shardId);
@@ -476,7 +469,6 @@ public class KinesisProxy implements IKinesisProxyExtended {
     @Override
     public String getIterator(String shardId, Date timestamp) {
         final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
-        // TODO: remove this once older constructors are removed
         getShardIteratorRequest.setRequestCredentials(credentialsProvider.getCredentials());
         getShardIteratorRequest.setStreamName(streamName);
         getShardIteratorRequest.setShardId(shardId);
@@ -496,7 +488,6 @@ public class KinesisProxy implements IKinesisProxyExtended {
             String partitionKey,
             ByteBuffer data) throws ResourceNotFoundException, InvalidArgumentException {
         final PutRecordRequest putRecordRequest = new PutRecordRequest();
-        // TODO: remove this once older constructors are removed
         putRecordRequest.setRequestCredentials(credentialsProvider.getCredentials());
         putRecordRequest.setStreamName(streamName);
         putRecordRequest.setSequenceNumberForOrdering(exclusiveMinimumSequenceNumber);
