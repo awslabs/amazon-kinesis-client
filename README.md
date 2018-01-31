@@ -30,6 +30,15 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
+### Release 1.8.10
+* Allow providing a custom IKinesisProxy implementation.
+  * [PR #274](https://github.com/awslabs/amazon-kinesis-client/pull/274)
+* Checkpointing on a different thread should no longer emit a warning about NullMetricsScope.
+  * [PR #284](https://github.com/awslabs/amazon-kinesis-client/pull/284)
+  * [Issue #48](https://github.com/awslabs/amazon-kinesis-client/issues/48)
+* Upgraded the AWS Java SDK to version 1.11.271
+  * [PR #287](https://github.com/awslabs/amazon-kinesis-client/pull/287)
+
 ### Release 1.8.9
 * Allow disabling check for the case where a child shard has an open parent shard.  
   There is a race condition where it's possible for the a parent shard to appear open, while having child shards. This check can now be disabled by setting [`ignoreUnexpectedChildShards`](https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1037) to true.
