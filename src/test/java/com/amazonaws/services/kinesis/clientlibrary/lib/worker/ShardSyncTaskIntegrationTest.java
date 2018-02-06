@@ -18,7 +18,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -91,13 +90,11 @@ public class ShardSyncTaskIntegrationTest {
                 new KinesisClientLeaseManager("ShardSyncTaskIntegrationTest",
                         new AmazonDynamoDBClient(credentialsProvider),
                         useConsistentReads);
-        
-        AmazonKinesisClient client = new AmazonDynamoDBStreamsAdapterClient();
-        client.setEndpoint(KINESIS_ENDPOINT);
-        client.setSignerRegionOverride("us-east-1");
-        
-        kinesisProxy = new KinesisProxy(STREAM_NAME, new DefaultAWSCredentialsProviderChain(), client, 1000L, 50, 1000L,
-                50);
+
+        kinesisProxy =
+                new KinesisProxy(STREAM_NAME,
+                        new DefaultAWSCredentialsProviderChain(),
+                        KINESIS_ENDPOINT);
     }
 
     /**
