@@ -23,13 +23,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
-import lombok.Data;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.model.DescribeStreamRequest;
 import com.amazonaws.services.kinesis.model.DescribeStreamResult;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
@@ -39,12 +40,17 @@ import com.amazonaws.services.kinesis.model.GetShardIteratorRequest;
 import com.amazonaws.services.kinesis.model.GetShardIteratorResult;
 import com.amazonaws.services.kinesis.model.InvalidArgumentException;
 import com.amazonaws.services.kinesis.model.LimitExceededException;
+import com.amazonaws.services.kinesis.model.ListShardsRequest;
+import com.amazonaws.services.kinesis.model.ListShardsResult;
 import com.amazonaws.services.kinesis.model.PutRecordRequest;
 import com.amazonaws.services.kinesis.model.PutRecordResult;
+import com.amazonaws.services.kinesis.model.ResourceInUseException;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamStatus;
+
+import lombok.Data;
 
 /**
  * Kinesis proxy - used to make calls to Amazon Kinesis (e.g. fetch data records and list of shards).
@@ -70,51 +76,24 @@ public class KinesisProxy implements IKinesisProxyExtended {
     private static final int DEFAULT_DESCRIBE_STREAM_RETRY_TIMES = 50;
     private final long describeStreamBackoffTimeInMillis;
     private final int maxDescribeStreamRetryAttempts;
+    private final long listShardsBackoffTimeInMillis;
+    private final int maxListShardsRetryAttempts;
+    private boolean isKinesisClient = true;
 
     /**
-     * Public constructor.
+     * @deprecated We expect the client to be passed to the proxy, and the proxy will not require to create it.
      * 
-     * @param streamName Data records will be fetched from this stream
-     * @param credentialProvider Provides credentials for signing Kinesis requests
-     * @param endpoint Kinesis endpoint
+     * @param credentialProvider
+     * @param endpoint
+     * @param serviceName
+     * @param regionId
+     * @return
      */
-
-    public KinesisProxy(final String streamName, AWSCredentialsProvider credentialProvider, String endpoint) {
-        this(streamName, credentialProvider, endpoint, defaultServiceName, defaultRegionId,
-                DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS, DEFAULT_DESCRIBE_STREAM_RETRY_TIMES);
-    }
-
-    /**
-     * Public constructor.
-     * 
-     * @param streamName Data records will be fetched from this stream
-     * @param credentialProvider Provides credentials for signing Kinesis requests
-     * @param endpoint Kinesis endpoint
-     * @param serviceName service name
-     * @param regionId region id
-     * @param describeStreamBackoffTimeInMillis Backoff time for DescribeStream calls in milliseconds
-     * @param maxDescribeStreamRetryAttempts Number of retry attempts for DescribeStream calls
-     */
-    public KinesisProxy(final String streamName,
-            AWSCredentialsProvider credentialProvider,
-            String endpoint,
-            String serviceName,
-            String regionId,
-            long describeStreamBackoffTimeInMillis,
-            int maxDescribeStreamRetryAttempts) {
-        this(streamName, credentialProvider, buildClientSettingEndpoint(credentialProvider,
-                endpoint,
-                serviceName,
-                regionId), describeStreamBackoffTimeInMillis, maxDescribeStreamRetryAttempts);
-        
-
-        LOG.debug("KinesisProxy has created a kinesisClient");
-    }
-    
+    @Deprecated
     private static AmazonKinesisClient buildClientSettingEndpoint(AWSCredentialsProvider credentialProvider,
-            String endpoint,
-            String serviceName,
-            String regionId) {
+                                                                  String endpoint,
+                                                                  String serviceName,
+                                                                  String regionId) {
         AmazonKinesisClient client = new AmazonKinesisClient(credentialProvider);
         client.setEndpoint(endpoint);
         client.setSignerRegionOverride(regionId);
@@ -124,24 +103,123 @@ public class KinesisProxy implements IKinesisProxyExtended {
     /**
      * Public constructor.
      * 
+     * @deprecated Deprecating constructor, this constructor doesn't use AWS best practices, moving forward please use
+     * {@link #KinesisProxy(KinesisClientLibConfiguration, AmazonKinesis)} or
+     * {@link #KinesisProxy(String, AmazonKinesis, long, int, long, int)} to create the object. Will be removed in the
+     * next major/minor release.
+     * 
+     * @param streamName Data records will be fetched from this stream
+     * @param credentialProvider Provides credentials for signing Kinesis requests
+     * @param endpoint Kinesis endpoint
+     */
+    @Deprecated
+    public KinesisProxy(final String streamName, AWSCredentialsProvider credentialProvider, String endpoint) {
+        this(streamName, credentialProvider, endpoint, defaultServiceName, defaultRegionId,
+                DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS, DEFAULT_DESCRIBE_STREAM_RETRY_TIMES,
+                KinesisClientLibConfiguration.DEFAULT_LIST_SHARDS_BACKOFF_TIME_IN_MILLIS,
+                KinesisClientLibConfiguration.DEFAULT_MAX_LIST_SHARDS_RETRY_ATTEMPTS);
+    }
+
+    /**
+     * Public constructor.
+     * 
+     * @deprecated Deprecating constructor, this constructor doesn't use AWS best practices, moving forward please use
+     * {@link #KinesisProxy(KinesisClientLibConfiguration, AmazonKinesis)} or
+     * {@link #KinesisProxy(String, AmazonKinesis, long, int, long, int)} to create the object. Will be removed in the
+     * next major/minor release.
+     * 
+     * @param streamName Data records will be fetched from this stream
+     * @param credentialProvider Provides credentials for signing Kinesis requests
+     * @param endpoint Kinesis endpoint
+     * @param serviceName service name
+     * @param regionId region id
+     * @param describeStreamBackoffTimeInMillis Backoff time for DescribeStream calls in milliseconds
+     * @param maxDescribeStreamRetryAttempts Number of retry attempts for DescribeStream calls
+     */
+    @Deprecated
+    public KinesisProxy(final String streamName,
+            AWSCredentialsProvider credentialProvider,
+            String endpoint,
+            String serviceName,
+            String regionId,
+            long describeStreamBackoffTimeInMillis,
+            int maxDescribeStreamRetryAttempts,
+            long listShardsBackoffTimeInMillis,
+            int maxListShardsRetryAttempts) {
+        this(streamName,
+                credentialProvider,
+                buildClientSettingEndpoint(credentialProvider, endpoint, serviceName, regionId),
+                describeStreamBackoffTimeInMillis,
+                maxDescribeStreamRetryAttempts,
+                listShardsBackoffTimeInMillis,
+                maxListShardsRetryAttempts);
+        LOG.debug("KinesisProxy has created a kinesisClient");
+    }
+
+    /**
+     * Public constructor.
+     * 
+     * @deprecated Deprecating constructor, this constructor doesn't use AWS best practices, moving forward please use
+     * {@link #KinesisProxy(KinesisClientLibConfiguration, AmazonKinesis)} or
+     * {@link #KinesisProxy(String, AmazonKinesis, long, int, long, int)} to create the object. Will be removed in the
+     * next major/minor release.
+     * 
      * @param streamName Data records will be fetched from this stream
      * @param credentialProvider Provides credentials for signing Kinesis requests
      * @param kinesisClient Kinesis client (used to fetch data from Kinesis)
      * @param describeStreamBackoffTimeInMillis Backoff time for DescribeStream calls in milliseconds
      * @param maxDescribeStreamRetryAttempts Number of retry attempts for DescribeStream calls
      */
+    @Deprecated
     public KinesisProxy(final String streamName,
             AWSCredentialsProvider credentialProvider,
             AmazonKinesis kinesisClient,
             long describeStreamBackoffTimeInMillis,
-            int maxDescribeStreamRetryAttempts) {
-        this.streamName = streamName;
+            int maxDescribeStreamRetryAttempts,
+            long listShardsBackoffTimeInMillis,
+            int maxListShardsRetryAttempts) {
+        this(streamName, kinesisClient, describeStreamBackoffTimeInMillis, maxDescribeStreamRetryAttempts,
+                listShardsBackoffTimeInMillis, maxListShardsRetryAttempts);
         this.credentialsProvider = credentialProvider;
+        LOG.debug("KinesisProxy( " + streamName + ")");
+    }
+
+    /**
+     * Public constructor.
+     * @param config
+     */
+    public KinesisProxy(final KinesisClientLibConfiguration config, final AmazonKinesis client) {
+        this(config.getStreamName(),
+                client,
+                DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS,
+                DEFAULT_DESCRIBE_STREAM_RETRY_TIMES,
+                config.getListShardsBackoffTimeInMillis(),
+                config.getMaxListShardsRetryAttempts());
+        this.credentialsProvider = config.getKinesisCredentialsProvider();
+    }
+
+    public KinesisProxy(final String streamName,
+            final AmazonKinesis client,
+            final long describeStreamBackoffTimeInMillis,
+            final int maxDescribeStreamRetryAttempts,
+            final long listShardsBackoffTimeInMillis,
+            final int maxListShardsRetryAttempts) {
+        this.streamName = streamName;
+        this.client = client;
         this.describeStreamBackoffTimeInMillis = describeStreamBackoffTimeInMillis;
         this.maxDescribeStreamRetryAttempts = maxDescribeStreamRetryAttempts;
-        this.client = kinesisClient;
+        this.listShardsBackoffTimeInMillis = listShardsBackoffTimeInMillis;
+        this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
 
-        LOG.debug("KinesisProxy( " + streamName + ")");
+        try {
+            if (Class.forName("com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient")
+                    .isAssignableFrom(client.getClass())) {
+                isKinesisClient = false;
+                LOG.debug("Client is DynamoDb client, will use DescribeStream.");
+            }
+        } catch (ClassNotFoundException e) {
+            LOG.debug("Client is Kinesis Client, using ListShards instead of DescribeStream.");
+        }
     }
 
     /**
@@ -164,6 +242,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
      * {@inheritDoc}
      */
     @Override
+    @Deprecated
     public DescribeStreamResult getStreamInfo(String startShardId)
             throws ResourceNotFoundException, LimitExceededException {
         final DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
@@ -207,6 +286,47 @@ public class KinesisProxy implements IKinesisProxyExtended {
             return null;
         }
     }
+    
+    private ListShardsResult listShards(final String nextToken) {
+        final ListShardsRequest request = new ListShardsRequest();
+        request.setRequestCredentials(credentialsProvider.getCredentials());
+        if (StringUtils.isEmpty(nextToken)) {
+            request.setStreamName(streamName);
+        } else {
+            request.setNextToken(nextToken);
+        }
+        ListShardsResult result = null;
+        LimitExceededException lastException = null;
+        int remainingRetries = this.maxListShardsRetryAttempts;
+        
+        while (result == null) {
+            try {
+                result = client.listShards(request);
+            } catch (LimitExceededException e) {
+                LOG.info("Got LimitExceededException when listing shards " + streamName + ". Backing off for "
+                        + this.listShardsBackoffTimeInMillis + " millis.");
+                try {
+                    Thread.sleep(this.listShardsBackoffTimeInMillis);
+                } catch (InterruptedException ie) {
+                    LOG.debug("Stream " + streamName + " : Sleep  was interrupted ", ie);
+                }
+                lastException = e;
+            } catch (ResourceInUseException e) {
+                LOG.info("Stream is not in Active/Updating status, returning null (wait until stream is in Active or"
+                        + " Updating)");
+                return null;
+            }
+            remainingRetries--;
+            if (remainingRetries <= 0 && result == null) {
+                if (lastException != null) {
+                    throw lastException;
+                }
+                throw new IllegalStateException("Received null from ListShards call.");
+            }
+        }
+        
+        return result;
+    }
 
     /**
      * {@inheritDoc}
@@ -233,27 +353,47 @@ public class KinesisProxy implements IKinesisProxyExtended {
      */
     @Override
     public synchronized List<Shard> getShardList() {
-
-        DescribeStreamResult response;
         if (shardIterationState == null) {
             shardIterationState = new ShardIterationState();
         }
+        
+        if (isKinesisClient) {
+            ListShardsResult result;
+            String nextToken = null;
+            
+            do {
+                result = listShards(nextToken);
+                
+                if (result == null) {
+                    /*
+                    * If listShards ever returns null, we should bail and return null. This indicates the stream is not
+                    * in ACTIVE or UPDATING state and we may not have accurate/consistent information about the stream.
+                    */
+                    return null;
+                } else {
+                    shardIterationState.update(result.getShards());
+                    nextToken = result.getNextToken();
+                }
+            } while (StringUtils.isNotEmpty(result.getNextToken()));
+            
+        } else {
+            DescribeStreamResult response;
 
-        do {
-            response = getStreamInfo(shardIterationState.getLastShardId());
+            do {
+                response = getStreamInfo(shardIterationState.getLastShardId());
 
-            if (response == null) {
+                if (response == null) {
                 /*
                  * If getStreamInfo ever returns null, we should bail and return null. This indicates the stream is not
                  * in ACTIVE or UPDATING state and we may not have accurate/consistent information about the stream.
                  */
-                return null;
-            } else {
-                shardIterationState.update(response.getStreamDescription().getShards());
-            }
-        } while (response.getStreamDescription().isHasMoreShards());
+                    return null;
+                } else {
+                    shardIterationState.update(response.getStreamDescription().getShards());
+                }
+            } while (response.getStreamDescription().isHasMoreShards());
+        }
         this.listOfShardsSinceLastGet.set(shardIterationState.getShards());
-
         shardIterationState = new ShardIterationState();
         return listOfShardsSinceLastGet.get();
     }

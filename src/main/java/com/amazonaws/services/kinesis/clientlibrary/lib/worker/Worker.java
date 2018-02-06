@@ -48,7 +48,7 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxyFactory;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
@@ -249,8 +249,7 @@ public class Worker implements Runnable {
         this(config.getApplicationName(), new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),
                 config,
                 new StreamConfig(
-                        new KinesisProxyFactory(config.getKinesisCredentialsProvider(), kinesisClient)
-                                .getProxy(config.getStreamName()),
+                        new KinesisProxy(config, kinesisClient),
                         config.getMaxRecords(), config.getIdleTimeBetweenReadsInMillis(),
                         config.shouldCallProcessRecordsEvenForEmptyRecordList(),
                         config.shouldValidateSequenceNumberBeforeCheckpointing(),
@@ -1278,8 +1277,7 @@ public class Worker implements Runnable {
                 shardPrioritization = new ParentsFirstShardPrioritization(1);
             }
             if (kinesisProxy == null) {
-                kinesisProxy = new KinesisProxyFactory(config.getKinesisCredentialsProvider(), kinesisClient)
-                    .getProxy(config.getStreamName());
+                kinesisProxy = new KinesisProxy(config, kinesisClient);
             }
 
             return new Worker(config.getApplicationName(),
