@@ -2,7 +2,8 @@
 
 ## Release 1.9.0 (February 6, 2018)
 * Introducing support for ListShards API. This API is used in place of DescribeStream API to provide more throughput during ShardSyncTask. Please consult the [AWS Documentation for ListShards](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListShards.html) for more information.
-  * ListShards supoorts higher call rate, which should reduce instances of throttling when attempting to synchronize the shard list.
+  * ListShards supports higher call rate, which should reduce instances of throttling when attempting to synchronize the shard list.
+  * __WARNING: `ListShards` is a new API, and may require updating any explicit IAM policies__
   * Added configuration parameters for ListShards usage
   
   | Name | Default | Description |
@@ -11,7 +12,7 @@
   | [listShardsRetryAttempts](https://github.com/awslabs/amazon-kinesis-client/blob/3ae916c5fcdccd6b835c86ba7f6f53dd5b4c8b04/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1423) | 50 | This is the maximum number of times the KinesisProxy will retry to make ListShards calls on being throttled. |
   
 * Updating the version of AWS Java SDK to 1.11.272.
-  * Version 1.11.272 is now the minimum support versiojn of the SDK.
+  * Version 1.11.272 is now the minimum support version of the SDK.
 * Deprecating the following methods, and classes. These methods, and classes will be removed in a future release.
   * Deprecated [IKinesisProxy#getStreamInfo](https://github.com/awslabs/amazon-kinesis-client/blob/3ae916c5fcdccd6b835c86ba7f6f53dd5b4c8b04/src/main/java/com/amazonaws/services/kinesis/clientlibrary/proxies/IKinesisProxy.java#L48-L62).
   * Deprecated [IKinesisProxyFactory](https://github.com/awslabs/amazon-kinesis-client/blob/3ae916c5fcdccd6b835c86ba7f6f53dd5b4c8b04/src/main/java/com/amazonaws/services/kinesis/clientlibrary/proxies/IKinesisProxyFactory.java).
