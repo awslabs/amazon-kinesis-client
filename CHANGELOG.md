@@ -3,6 +3,7 @@
 ## Release 1.9.0 (February 6, 2018)
 * Introducing support for ListShards API. This API is used in place of DescribeStream API to provide more throughput during ShardSyncTask. Please consult the [AWS Documentation for ListShards](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListShards.html) for more information.
   * ListShards supports higher call rate, which should reduce instances of throttling when attempting to synchronize the shard list.
+  * __WARNING: `ListShards` is a new API, and may require updating any explicit IAM policies__
   * Added configuration parameters for ListShards usage
   
   | Name | Default | Description |
