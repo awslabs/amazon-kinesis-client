@@ -1500,6 +1500,33 @@ public class WorkerTest {
         Assert.assertTrue(worker.getStreamConfig().getStreamProxy() instanceof KinesisLocalFileProxy);
     }
 
+    @Test
+    public void testBuilderWithDefaultLeaseManager()  {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+
+        Worker worker = new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .config(config)
+                .build();
+
+        Assert.assertNotNull(worker.getLeaseCoordinator().getLeaseManager());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testBuilderWhenLeaseManagerIsSet()  {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        // Create an instance of ILeaseManager for injection and validation
+        ILeaseManager<KinesisClientLease> leaseManager = (ILeaseManager<KinesisClientLease>) mock(ILeaseManager.class);
+        Worker worker = new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .config(config)
+                .leaseManager(leaseManager)
+                .build();
+
+        Assert.assertSame(leaseManager, worker.getLeaseCoordinator().getLeaseManager());
+    }
+
     private abstract class InjectableWorker extends Worker {
         InjectableWorker(String applicationName, IRecordProcessorFactory recordProcessorFactory,
                 KinesisClientLibConfiguration config, StreamConfig streamConfig,

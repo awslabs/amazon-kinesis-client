@@ -427,6 +427,13 @@ public class Worker implements Runnable {
     }
 
     /**
+     * @return the leaseCoordinator
+     */
+    KinesisClientLibLeaseCoordinator getLeaseCoordinator(){
+        return leaseCoordinator;
+    }
+
+    /**
      * Start consuming data from the stream, and pass it to the application record processors.
      */
     public void run() {
