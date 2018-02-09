@@ -122,11 +122,15 @@ public class Worker implements Runnable {
     /**
      * Constructor.
      *
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
+     *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
      * @param config
      *            Kinesis Client Library configuration
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config) {
@@ -136,6 +140,9 @@ public class Worker implements Runnable {
     /**
      * Constructor.
      *
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
+     *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
      * @param config
@@ -143,6 +150,7 @@ public class Worker implements Runnable {
      * @param execService
      *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, ExecutorService execService) {
@@ -156,6 +164,9 @@ public class Worker implements Runnable {
     }
 
     /**
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
+     *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
      * @param config
@@ -163,6 +174,7 @@ public class Worker implements Runnable {
      * @param metricsFactory
      *            Metrics factory used to emit metrics
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, IMetricsFactory metricsFactory) {
@@ -170,6 +182,9 @@ public class Worker implements Runnable {
     }
 
     /**
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
+     *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
      * @param config
@@ -179,6 +194,7 @@ public class Worker implements Runnable {
      * @param execService
      *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, IMetricsFactory metricsFactory, ExecutorService execService) {
@@ -190,6 +206,9 @@ public class Worker implements Runnable {
     }
 
     /**
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
+     *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
      * @param config
@@ -201,6 +220,7 @@ public class Worker implements Runnable {
      * @param cloudWatchClient
      *            CloudWatch Client for publishing metrics
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
@@ -209,6 +229,9 @@ public class Worker implements Runnable {
     }
 
     /**
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
+     *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
      * @param config
@@ -222,6 +245,7 @@ public class Worker implements Runnable {
      * @param execService
      *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
@@ -235,6 +259,9 @@ public class Worker implements Runnable {
      * This constructor is for binary compatibility with code compiled against version of the KCL that only have
      * constructors taking "Client" objects.
      *
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
+     *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
      * @param config
@@ -246,6 +273,7 @@ public class Worker implements Runnable {
      * @param cloudWatchClient
      *            CloudWatch Client for publishing metrics
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesisClient kinesisClient,
@@ -258,6 +286,9 @@ public class Worker implements Runnable {
      * This constructor is for binary compatibility with code compiled against version of the KCL that only have
      * constructors taking "Client" objects.
      *
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
+     *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
      * @param config
@@ -271,6 +302,7 @@ public class Worker implements Runnable {
      * @param execService
      *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesisClient kinesisClient,
@@ -282,6 +314,9 @@ public class Worker implements Runnable {
     /**
      * This constructor is for binary compatibility with code compiled against version of the KCL that only have
      * constructors taking "Client" objects.
+     *
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
      *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
@@ -296,6 +331,7 @@ public class Worker implements Runnable {
      * @param execService
      *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesisClient kinesisClient,
@@ -305,6 +341,9 @@ public class Worker implements Runnable {
     }
 
     /**
+     * @deprecated The access to this constructor will be changed in a future release. The recommended way to create
+     * a Worker is to use {@link Builder}
+     *
      * @param recordProcessorFactory
      *            Used to get record processor instances for processing data from shards
      * @param config
@@ -318,6 +357,7 @@ public class Worker implements Runnable {
      * @param execService
      *            ExecutorService to use for processing records (support for multi-threaded consumption)
      */
+    @Deprecated
     public Worker(
             com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
