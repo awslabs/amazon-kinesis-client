@@ -33,6 +33,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -1070,21 +1072,22 @@ public class Worker implements Runnable {
     public static class Builder {
 
         private IRecordProcessorFactory recordProcessorFactory;
-        private RecordsFetcherFactory recordsFetcherFactory;
+        @Setter @Accessors(fluent = true)
         private KinesisClientLibConfiguration config;
+        @Setter @Accessors(fluent = true)
         private AmazonKinesis kinesisClient;
+        @Setter @Accessors(fluent = true)
         private AmazonDynamoDB dynamoDBClient;
+        @Setter @Accessors(fluent = true)
         private AmazonCloudWatch cloudWatchClient;
+        @Setter @Accessors(fluent = true)
         private IMetricsFactory metricsFactory;
+        @Setter @Accessors(fluent = true)
         private ExecutorService execService;
+        @Setter @Accessors(fluent = true)
         private ShardPrioritization shardPrioritization;
+        @Setter @Accessors(fluent = true)
         private IKinesisProxy kinesisProxy;
-
-        /**
-         * Default constructor.
-         */
-        public Builder() {
-        }
 
         /**
          * Provide a V1 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor
@@ -1110,104 +1113,6 @@ public class Worker implements Runnable {
          */
         public Builder recordProcessorFactory(IRecordProcessorFactory recordProcessorFactory) {
             this.recordProcessorFactory = recordProcessorFactory;
-            return this;
-        }
-
-        /**
-         * Set the Worker config.
-         *
-         * @param config
-         *            Kinesis Client Library configuration
-         * @return A reference to this updated object so that method calls can be chained together.
-         */
-        public Builder config(KinesisClientLibConfiguration config) {
-            this.config = config;
-            return this;
-        }
-
-        /**
-         * Set the Kinesis client.
-         *
-         * @param kinesisClient
-         *            Kinesis Client used for fetching data
-         * @return A reference to this updated object so that method calls can be chained together.
-         */
-        public Builder kinesisClient(AmazonKinesis kinesisClient) {
-            this.kinesisClient = kinesisClient;
-            return this;
-        }
-
-        /**
-         * Set the DynamoDB client.
-         *
-         * @param dynamoDBClient
-         *            DynamoDB client used for checkpoints and tracking leases
-         * @return A reference to this updated object so that method calls can be chained together.
-         */
-        public Builder dynamoDBClient(AmazonDynamoDB dynamoDBClient) {
-            this.dynamoDBClient = dynamoDBClient;
-            return this;
-        }
-
-        /**
-         * Set the Cloudwatch client.
-         *
-         * @param cloudWatchClient
-         *            CloudWatch Client for publishing metrics
-         * @return A reference to this updated object so that method calls can be chained together.
-         */
-        public Builder cloudWatchClient(AmazonCloudWatch cloudWatchClient) {
-            this.cloudWatchClient = cloudWatchClient;
-            return this;
-        }
-
-        /**
-         * Set the metrics factory.
-         *
-         * @param metricsFactory
-         *            Metrics factory used to emit metrics
-         * @return A reference to this updated object so that method calls can be chained together.
-         */
-        public Builder metricsFactory(IMetricsFactory metricsFactory) {
-            this.metricsFactory = metricsFactory;
-            return this;
-        }
-
-        /**
-         * Set the executor service for processing records.
-         *
-         * @param execService
-         *            ExecutorService to use for processing records (support for multi-threaded consumption)
-         * @return A reference to this updated object so that method calls can be chained together.
-         */
-        public Builder execService(ExecutorService execService) {
-            this.execService = execService;
-            return this;
-        }
-
-        /**
-         * Provides logic how to prioritize shard processing.
-         * 
-         * @param shardPrioritization
-         *            shardPrioritization is responsible to order shards before processing
-         * 
-         * @return A reference to this updated object so that method calls can be chained together.
-         */
-        public Builder shardPrioritization(ShardPrioritization shardPrioritization) {
-            this.shardPrioritization = shardPrioritization;
-            return this;
-        }
-
-        /**
-         * Set KinesisProxy for the worker.
-         *
-         * @param kinesisProxy
-         *            Sets an implementation of IKinesisProxy.
-         *
-         * @return A reference to this updated object so that method calls can be chained together.
-         */
-        public Builder kinesisProxy(IKinesisProxy kinesisProxy) {
-            this.kinesisProxy = kinesisProxy;
             return this;
         }
 
