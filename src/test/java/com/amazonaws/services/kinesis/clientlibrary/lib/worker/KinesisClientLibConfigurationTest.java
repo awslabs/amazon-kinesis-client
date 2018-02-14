@@ -268,8 +268,8 @@ public class KinesisClientLibConfigurationTest {
         IRecordProcessorFactory processorFactory = Mockito.mock(IRecordProcessorFactory.class);
         new Worker(processorFactory, kclConfig);
 
-        Mockito.verify(kclConfig, Mockito.times(9)).getRegionName();
-        Mockito.verify(kclConfig, Mockito.times(4)).getKinesisEndpoint();
+        Mockito.verify(kclConfig, Mockito.times(5)).getRegionName();
+        Mockito.verify(kclConfig, Mockito.times(2)).getKinesisEndpoint();
 
         kclConfig = Mockito.spy(
                 new KinesisClientLibConfiguration("Test", "Test", credentialsProvider, "0")
@@ -277,8 +277,8 @@ public class KinesisClientLibConfigurationTest {
 
         new Worker(processorFactory, kclConfig);
 
-        Mockito.verify(kclConfig, Mockito.times(3)).getRegionName();
-        Mockito.verify(kclConfig, Mockito.times(3)).getKinesisEndpoint();
+        Mockito.verify(kclConfig, Mockito.times(2)).getRegionName();
+        Mockito.verify(kclConfig, Mockito.times(2)).getKinesisEndpoint();
     }
 
     @Test
