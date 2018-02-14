@@ -35,6 +35,8 @@ import java.util.concurrent.TimeoutException;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -538,6 +540,13 @@ public class Worker implements Runnable {
      */
     public String getApplicationName() {
         return applicationName;
+    }
+
+    /**
+     * @return the leaseCoordinator
+     */
+    KinesisClientLibLeaseCoordinator getLeaseCoordinator(){
+        return leaseCoordinator;
     }
 
     /**
@@ -1122,6 +1131,7 @@ public class Worker implements Runnable {
         private AmazonCloudWatch cloudWatchClient;
         @Setter @Accessors(fluent = true)
         private IMetricsFactory metricsFactory;
+        private ILeaseManager<KinesisClientLease> leaseManager;
         @Setter @Accessors(fluent = true)
         private ExecutorService execService;
         @Setter @Accessors(fluent = true)
@@ -1218,6 +1228,9 @@ public class Worker implements Runnable {
             if (metricsFactory == null) {
                 metricsFactory = getMetricsFactory(cloudWatchClient, config);
             }
+            if (leaseManager == null) {
+                leaseManager = new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient);
+            }
             if (shardPrioritization == null) {
                 shardPrioritization = new ParentsFirstShardPrioritization(1);
             }
@@ -1239,8 +1252,7 @@ public class Worker implements Runnable {
                     config.getShardSyncIntervalMillis(),
                     config.shouldCleanupLeasesUponShardCompletion(),
                     null,
-                    new KinesisClientLibLeaseCoordinator(new KinesisClientLeaseManager(config.getTableName(),
-                            dynamoDBClient),
+                    new KinesisClientLibLeaseCoordinator(leaseManager,
                             config.getWorkerIdentifier(),
                             config.getFailoverTimeMillis(),
                             config.getEpsilonMillis(),
