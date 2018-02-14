@@ -32,11 +32,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
-import lombok.Setter;
-import lombok.experimental.Accessors;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -52,16 +47,21 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import lombok.Setter;
+import lombok.experimental.Accessors;
 
 /**
  * Worker is the high level class that Kinesis applications use to start processing data. It initializes and oversees
@@ -1131,6 +1131,7 @@ public class Worker implements Runnable {
         private AmazonCloudWatch cloudWatchClient;
         @Setter @Accessors(fluent = true)
         private IMetricsFactory metricsFactory;
+        @Setter @Accessors(fluent = true)
         private ILeaseManager<KinesisClientLease> leaseManager;
         @Setter @Accessors(fluent = true)
         private ExecutorService execService;
