@@ -71,6 +71,7 @@ public class Worker implements Runnable {
     private static final Log LOG = LogFactory.getLog(Worker.class);
 
     private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
+    private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
 
     private WorkerLog wlog = new WorkerLog();
 
@@ -278,7 +279,7 @@ public class Worker implements Runnable {
                 config.getShardPrioritizationStrategy(),
                 config.getRetryGetRecordsInSeconds(),
                 config.getMaxGetRecordsThreadPool(),
-                new NoOpWorkerStateChangeListener());
+                DEFAULT_WORKER_STATE_CHANGE_LISTENER);
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
@@ -350,7 +351,7 @@ public class Worker implements Runnable {
         this(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
                 shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
                 metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
-                shardPrioritization, Optional.empty(), Optional.empty(), new NoOpWorkerStateChangeListener());
+                shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER);
     }
 
     /**
@@ -887,22 +888,6 @@ public class Worker implements Runnable {
     }
 
     /**
-     * A listener for callbacks on changes worker state
-     */
-    @FunctionalInterface
-    public interface WorkerStateChangeListener {
-        enum WorkerState {
-            CREATED,
-            INITIALIZING,
-            STARTED,
-            SHUTTING_DOWN,
-            SHUT_DOWN
-        }
-
-        void onWorkerStateChange(WorkerState newState);
-    }
-
-    /**
      * Logger for suppressing too much INFO logging. To avoid too much logging information Worker will output logging at
      * INFO level for a single pass through the main loop every minute. At DEBUG level it will output all INFO logs on
      * every pass.
@@ -1345,8 +1330,8 @@ public class Worker implements Runnable {
                 kinesisProxy = new KinesisProxy(config, kinesisClient);
             }
 
-            if (workerStateChangeListener == null){
-                workerStateChangeListener = new NoOpWorkerStateChangeListener();
+            if (workerStateChangeListener == null) {
+                workerStateChangeListener = DEFAULT_WORKER_STATE_CHANGE_LISTENER;
             }
 
             return new Worker(config.getApplicationName(),
