@@ -9,7 +9,6 @@ public interface WorkerStateChangeListener {
 		CREATED,
 		INITIALIZING,
 		STARTED,
-		SHUTTING_DOWN,
 		SHUT_DOWN
 	}
 

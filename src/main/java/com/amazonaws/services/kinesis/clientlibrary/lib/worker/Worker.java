@@ -445,7 +445,6 @@ public class Worker implements Runnable {
         if (shutdown) {
             return;
         }
-        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.INITIALIZING);
 
         try {
             initialize();
@@ -455,7 +454,6 @@ public class Worker implements Runnable {
             shutdown();
         }
 
-        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.STARTED);
         while (!shouldShutdown()) {
             runProcessLoop();
         }
@@ -501,6 +499,7 @@ public class Worker implements Runnable {
     }
 
     private void initialize() {
+        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.INITIALIZING);
         boolean isDone = false;
         Exception lastException = null;
 
@@ -550,6 +549,7 @@ public class Worker implements Runnable {
         if (!isDone) {
             throw new RuntimeException(lastException);
         }
+        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.STARTED);
     }
 
     /**
@@ -786,7 +786,6 @@ public class Worker implements Runnable {
             LOG.warn("Shutdown requested a second time.");
             return;
         }
-        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUTTING_DOWN);
         LOG.info("Worker shutdown requested.");
 
         // Set shutdown flag, so Worker.run can start shutdown process.
@@ -797,6 +796,7 @@ public class Worker implements Runnable {
         // Lost leases will force Worker to begin shutdown process for all shard consumers in
         // Worker.run().
         leaseCoordinator.stop();
+        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
     }
 
     /**
@@ -813,7 +813,6 @@ public class Worker implements Runnable {
         if (metricsFactory instanceof WorkerCWMetricsFactory) {
             ((CWMetricsFactory) metricsFactory).shutdown();
         }
-        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
         shutdownComplete = true;
     }
 
