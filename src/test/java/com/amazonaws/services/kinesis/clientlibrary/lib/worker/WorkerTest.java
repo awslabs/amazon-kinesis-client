@@ -22,6 +22,7 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
@@ -89,6 +90,7 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcess
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerCWMetricsFactory;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerThreadPoolExecutor;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.WorkerStateChangeListener.WorkerState;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
@@ -142,7 +144,7 @@ public class WorkerTest {
 
     private static final String KINESIS_SHARD_ID_FORMAT = "kinesis-0-0-%d";
     private static final String CONCURRENCY_TOKEN_FORMAT = "testToken-%d";
-    
+
     private RecordsFetcherFactory recordsFetcherFactory;
     private KinesisClientLibConfiguration config;
 
@@ -170,7 +172,9 @@ public class WorkerTest {
     private Future<TaskResult> taskFuture;
     @Mock
     private TaskResult taskResult;
-    
+    @Mock
+    private WorkerStateChangeListener workerStateChangeListener;
+
     @Before
     public void setup() {
         config = spy(new KinesisClientLibConfiguration("app", null, null, null));
@@ -179,7 +183,7 @@ public class WorkerTest {
     }
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
-    private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY = 
+    private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY =
             new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory() {
 
         @Override
@@ -212,8 +216,8 @@ public class WorkerTest {
             };
         }
     };
-    
-    private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 = 
+
+    private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 =
             new V1ToV2RecordProcessorFactoryAdapter(SAMPLE_RECORD_PROCESSOR_FACTORY);
 
 
@@ -619,7 +623,7 @@ public class WorkerTest {
                 return null;
             }
         }).when(v2RecordProcessor).processRecords(any(ProcessRecordsInput.class));
-        
+
         RecordsFetcherFactory recordsFetcherFactory = mock(RecordsFetcherFactory.class);
         GetRecordsCache getRecordsCache = mock(GetRecordsCache.class);
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
@@ -659,7 +663,7 @@ public class WorkerTest {
      * This test is testing the {@link Worker}'s shutdown behavior and by extension the behavior of
      * {@link ThreadPoolExecutor#shutdownNow()}. It depends on the thread pool sending an interrupt to the pool threads.
      * This behavior makes the test a bit racy, since we need to ensure a specific order of events.
-     * 
+     *
      * @throws Exception
      */
     @Test
@@ -1356,7 +1360,7 @@ public class WorkerTest {
                 executorService,
                 metricsFactory,
                 taskBackoffTimeMillis,
-                failoverTimeMillis, 
+                failoverTimeMillis,
                 false,
                 shardPrioritization);
 
@@ -1432,7 +1436,7 @@ public class WorkerTest {
                 config,
                 streamConfig,
                 INITIAL_POSITION_TRIM_HORIZON,
-                parentShardPollIntervalMillis, 
+                parentShardPollIntervalMillis,
                 shardSyncIntervalMillis,
                 cleanupLeasesUponShardCompletion,
                 leaseCoordinator,
@@ -1498,6 +1502,105 @@ public class WorkerTest {
             .build();
         Assert.assertNotNull(worker.getStreamConfig().getStreamProxy());
         Assert.assertTrue(worker.getStreamConfig().getStreamProxy() instanceof KinesisLocalFileProxy);
+    }
+
+    @Test
+    public void testBuilderForWorkerStateListener() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        Worker worker = new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .config(config)
+                .build();
+        Assert.assertTrue(worker.getWorkerStateChangeListener() instanceof NoOpWorkerStateChangeListener);
+    }
+
+    @Test
+    public void testBuilderWhenWorkerStateListenerIsSet() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        Worker worker = new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .workerStateChangeListener(workerStateChangeListener)
+                .config(config)
+                .build();
+        Assert.assertSame(workerStateChangeListener, worker.getWorkerStateChangeListener());
+    }
+
+    @Test
+    public void testWorkerStateListenerStatePassesThroughCreatedState() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .workerStateChangeListener(workerStateChangeListener)
+                .config(config)
+                .build();
+
+        verify(workerStateChangeListener, times(1)).onWorkerStateChange(eq(WorkerState.CREATED));
+    }
+
+    @Test
+    public void testWorkerStateChangeListenerGoesThroughStates() throws Exception {
+
+        final CountDownLatch workerInitialized = new CountDownLatch(1);
+        final CountDownLatch workerStarted = new CountDownLatch(1);
+        final IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        final IRecordProcessor processor = mock(IRecordProcessor.class);
+
+        ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
+                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
+                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+        final List<KinesisClientLease> leases = new ArrayList<>();
+        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        leases.add(lease);
+
+        doAnswer(new Answer<Boolean>() {
+            @Override
+            public Boolean answer(InvocationOnMock invocation) throws Throwable {
+                workerInitialized.countDown();
+                return true;
+            }
+        }).when(leaseManager).waitUntilLeaseTableExists(anyLong(), anyLong());
+        doAnswer(new Answer<IRecordProcessor>() {
+            @Override
+            public IRecordProcessor answer(InvocationOnMock invocation) throws Throwable {
+                workerStarted.countDown();
+                return processor;
+            }
+        }).when(recordProcessorFactory).createProcessor();
+
+        when(config.getWorkerIdentifier()).thenReturn("Self");
+        when(leaseManager.listLeases()).thenReturn(leases);
+        when(leaseManager.renewLease(leases.get(0))).thenReturn(true);
+        when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
+                .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
+        when(taskFuture.isDone()).thenReturn(true);
+        when(taskFuture.get()).thenReturn(taskResult);
+        when(taskResult.isShardEndReached()).thenReturn(true);
+
+        Worker worker = new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .config(config)
+                .leaseManager(leaseManager)
+                .kinesisProxy(kinesisProxy)
+                .execService(executorService)
+                .workerStateChangeListener(workerStateChangeListener)
+                .build();
+
+        verify(workerStateChangeListener, times(1)).onWorkerStateChange(eq(WorkerState.CREATED));
+
+        WorkerThread workerThread = new WorkerThread(worker);
+        workerThread.start();
+
+        workerInitialized.await();
+        verify(workerStateChangeListener, times(1)).onWorkerStateChange(eq(WorkerState.INITIALIZING));
+
+        workerStarted.await();
+        verify(workerStateChangeListener, times(1)).onWorkerStateChange(eq(WorkerState.STARTED));
+
+        boolean workerShutdown = worker.createGracefulShutdownCallable()
+                .call();
+
+        verify(workerStateChangeListener, times(1)).onWorkerStateChange(eq(WorkerState.SHUT_DOWN));
     }
 
     @Test
@@ -1801,7 +1904,7 @@ public class WorkerTest {
         TestStreamletFactory recordProcessorFactory = new TestStreamletFactory(recordCounter, shardSequenceVerifier);
 
         ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
-        
+
         WorkerThread workerThread = runWorker(
                 shardList, initialLeases, callProcessRecordsForEmptyRecordList, failoverTimeMillis,
                 numberOfRecordsPerShard, fileBasedProxy, recordProcessorFactory, executorService, nullMetricsFactory, clientConfig);
@@ -1857,7 +1960,7 @@ public class WorkerTest {
                 idleTimeInMilliseconds,
                 callProcessRecordsForEmptyRecordList,
                 skipCheckpointValidationValue, InitialPositionInStreamExtended.newInitialPositionAtTimestamp(timestamp));
-        
+
         Worker worker =
                 new Worker(stageName,
                         recordProcessorFactory,
@@ -1874,7 +1977,7 @@ public class WorkerTest {
                         failoverTimeMillis,
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         shardPrioritization);
-        
+
         WorkerThread workerThread = new WorkerThread(worker);
         workerThread.start();
         return workerThread;
