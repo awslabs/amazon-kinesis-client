@@ -1163,6 +1163,7 @@ public class Worker implements Runnable {
         private ShardPrioritization shardPrioritization;
         @Setter @Accessors(fluent = true)
         private IKinesisProxy kinesisProxy;
+        @Setter @Accessors(fluent = true)
         private WorkerStateChangeListener workerStateChangeListener;
 
         @VisibleForTesting
