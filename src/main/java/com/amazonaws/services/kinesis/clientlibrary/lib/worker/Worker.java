@@ -32,6 +32,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.amazonaws.regions.Regions;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -1163,6 +1164,7 @@ public class Worker implements Runnable {
         private ShardPrioritization shardPrioritization;
         @Setter @Accessors(fluent = true)
         private IKinesisProxy kinesisProxy;
+        @Setter @Accessors(fluent = true)
         private WorkerStateChangeListener workerStateChangeListener;
 
         @VisibleForTesting
@@ -1331,6 +1333,9 @@ public class Worker implements Runnable {
             } else if (StringUtils.isNotEmpty(region)) {
                 LOG.debug("The region for the client has been set to " + region);
                 builder.withRegion(region);
+            } else {
+                LOG.debug("Endpoint URL and region are not set, setting region to us-east-1");
+                builder.withRegion(Regions.US_EAST_1);
             }
             return (AmazonWebServiceClient) builder.build();
         }
