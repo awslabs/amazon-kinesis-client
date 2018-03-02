@@ -32,24 +32,17 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.AmazonWebServiceClient;
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
-import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
-import com.amazonaws.services.kinesis.AmazonKinesisClientBuilder;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
@@ -67,7 +60,6 @@ import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import lombok.NonNull;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
@@ -407,16 +399,28 @@ public class Worker implements Runnable {
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
-            setRegionForClient((AmazonWebServiceClient) kinesisClient, config.getRegionName());
-            setRegionForClient((AmazonWebServiceClient) dynamoDBClient, config.getRegionName());
+            Region region = RegionUtils.getRegion(config.getRegionName());
+            kinesisClient.setRegion(region);
+            LOG.debug("The region of Amazon Kinesis client has been set to " + config.getRegionName());
+            dynamoDBClient.setRegion(region);
+            LOG.debug("The region of Amazon DynamoDB client has been set to " + config.getRegionName());
         }
         // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
         if (config.getDynamoDBEndpoint() != null) {
-            setEndpointForClient((AmazonWebServiceClient) dynamoDBClient, config.getDynamoDBEndpoint());
+            dynamoDBClient.setEndpoint(config.getDynamoDBEndpoint());
+            LOG.debug("The endpoint of Amazon DynamoDB client has been set to " + config.getDynamoDBEndpoint());
         }
         // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
         if (config.getKinesisEndpoint() != null) {
-            setEndpointForClient((AmazonWebServiceClient) kinesisClient, config.getKinesisEndpoint());
+            kinesisClient.setEndpoint(config.getKinesisEndpoint());
+            if (config.getRegionName() != null) {
+                LOG.warn("Received configuration for both region name as " + config.getRegionName()
+                        + ", and Amazon Kinesis endpoint as " + config.getKinesisEndpoint()
+                        + ". Amazon Kinesis endpoint will overwrite region name.");
+                LOG.debug("The region of Amazon Kinesis client has been overwritten to " + config.getKinesisEndpoint());
+            } else {
+                LOG.debug("The region of Amazon Kinesis client has been set to " + config.getKinesisEndpoint());
+            }
         }
     }
 
@@ -1076,7 +1080,9 @@ public class Worker implements Runnable {
             metricsFactory = new NullMetricsFactory();
         } else {
             if (config.getRegionName() != null) {
-                setRegionForClient((AmazonWebServiceClient) cloudWatchClient, config.getRegionName());
+                Region region = RegionUtils.getRegion(config.getRegionName());
+                cloudWatchClient.setRegion(region);
+                LOG.debug("The region of Amazon CloudWatch client has been set to " + config.getRegionName());
             }
             metricsFactory = new WorkerCWMetricsFactory(cloudWatchClient, config.getApplicationName(),
                     config.getMetricsBufferTimeMillis(), config.getMetricsMaxQueueSize(), config.getMetricsLevel(),
@@ -1093,24 +1099,6 @@ public class Worker implements Runnable {
     private static ExecutorService getExecutorService() {
         ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("RecordProcessor-%04d").build();
         return new WorkerThreadPoolExecutor(threadFactory);
-    }
-
-    private static void setRegionForClient(@NonNull final AmazonWebServiceClient client, @NonNull final String region) {
-        try {
-            client.setRegion(RegionUtils.getRegion(region));
-            LOG.debug("Region set for client to " + region);
-        } catch (UnsupportedOperationException e) {
-            LOG.debug("Trying to set region for immutable client", e);
-        }
-    }
-
-    private static void setEndpointForClient(@NonNull final AmazonWebServiceClient client, @NonNull final String endpointUrl) {
-        try {
-            client.setEndpoint(endpointUrl);
-            LOG.debug("Endpoint set for client to " + endpointUrl);
-        } catch (UnsupportedOperationException e) {
-            LOG.debug("Trying to set endpoint for immutable client", e);
-        }
     }
 
     /**
@@ -1166,21 +1154,6 @@ public class Worker implements Runnable {
         @Setter @Accessors(fluent = true)
         private WorkerStateChangeListener workerStateChangeListener;
 
-        @VisibleForTesting
-        AmazonKinesis getKinesisClient() {
-            return kinesisClient;
-        }
-
-        @VisibleForTesting
-        AmazonDynamoDB getDynamoDBClient() {
-            return dynamoDBClient;
-        }
-
-        @VisibleForTesting
-        AmazonCloudWatch getCloudWatchClient() {
-            return cloudWatchClient;
-        }
-
         /**
          * Provide a V1 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor
          * IRecordProcessor}.
@@ -1228,39 +1201,44 @@ public class Worker implements Runnable {
                 execService = getExecutorService();
             }
             if (kinesisClient == null) {
-                kinesisClient = (AmazonKinesis) createClient(AmazonKinesisClientBuilder.standard(),
-                        config.getKinesisCredentialsProvider(),
-                        config.getKinesisClientConfiguration(),
-                        config.getKinesisEndpoint(),
-                        config.getRegionName());
+                kinesisClient = new AmazonKinesisClient(config.getKinesisCredentialsProvider(),
+                        config.getKinesisClientConfiguration());
             }
             if (dynamoDBClient == null) {
-                dynamoDBClient = (AmazonDynamoDB) createClient(AmazonDynamoDBClientBuilder.standard(),
-                        config.getDynamoDBCredentialsProvider(),
-                        config.getDynamoDBClientConfiguration(),
-                        config.getDynamoDBEndpoint(),
-                        config.getRegionName());
+                dynamoDBClient = new AmazonDynamoDBClient(config.getDynamoDBCredentialsProvider(),
+                        config.getDynamoDBClientConfiguration());
             }
             if (cloudWatchClient == null) {
-                cloudWatchClient = (AmazonCloudWatch) createClient(AmazonCloudWatchClientBuilder.standard(),
-                        config.getCloudWatchCredentialsProvider(),
-                        config.getCloudWatchClientConfiguration(),
-                        null,
-                        config.getRegionName());
+                cloudWatchClient = new AmazonCloudWatchClient(config.getCloudWatchCredentialsProvider(),
+                        config.getCloudWatchClientConfiguration());
             }
             // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
             if (config.getRegionName() != null) {
-                setRegionForClient((AmazonWebServiceClient) cloudWatchClient, config.getRegionName());
-                setRegionForClient((AmazonWebServiceClient) kinesisClient, config.getRegionName());
-                setRegionForClient((AmazonWebServiceClient) dynamoDBClient, config.getRegionName());
+                Region region = RegionUtils.getRegion(config.getRegionName());
+                cloudWatchClient.setRegion(region);
+                LOG.debug("The region of Amazon CloudWatch client has been set to " + config.getRegionName());
+                kinesisClient.setRegion(region);
+                LOG.debug("The region of Amazon Kinesis client has been set to " + config.getRegionName());
+                dynamoDBClient.setRegion(region);
+                LOG.debug("The region of Amazon DynamoDB client has been set to " + config.getRegionName());
             }
             // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
             if (config.getDynamoDBEndpoint() != null) {
-                setEndpointForClient((AmazonWebServiceClient) dynamoDBClient, config.getDynamoDBEndpoint());
+                dynamoDBClient.setEndpoint(config.getDynamoDBEndpoint());
+                LOG.debug("The endpoint of Amazon DynamoDB client has been set to " + config.getDynamoDBEndpoint());
             }
             // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
             if (config.getKinesisEndpoint() != null) {
-                setEndpointForClient((AmazonWebServiceClient) kinesisClient, config.getKinesisEndpoint());
+                kinesisClient.setEndpoint(config.getKinesisEndpoint());
+                if (config.getRegionName() != null) {
+                    LOG.warn("Received configuration for both region name as " + config.getRegionName()
+                            + ", and Amazon Kinesis endpoint as " + config.getKinesisEndpoint()
+                            + ". Amazon Kinesis endpoint will overwrite region name.");
+                    LOG.debug("The region of Amazon Kinesis client has been overwritten to "
+                            + config.getKinesisEndpoint());
+                } else {
+                    LOG.debug("The region of Amazon Kinesis client has been set to " + config.getKinesisEndpoint());
+                }
             }
             if (metricsFactory == null) {
                 metricsFactory = getMetricsFactory(cloudWatchClient, config);
@@ -1312,28 +1290,6 @@ public class Worker implements Runnable {
                     config.getRetryGetRecordsInSeconds(),
                     config.getMaxGetRecordsThreadPool(),
                     workerStateChangeListener);
-        }
-
-        AmazonWebServiceClient createClient(@NonNull final AwsClientBuilder builder,
-                                            final AWSCredentialsProvider credentialsProvider,
-                                            final ClientConfiguration clientConfiguration,
-                                            final String endpointUrl,
-                                            final String region) {
-            if (credentialsProvider != null) {
-                builder.withCredentials(credentialsProvider);
-            }
-            if (clientConfiguration != null) {
-                builder.withClientConfiguration(clientConfiguration);
-            }
-            if (StringUtils.isNotEmpty(endpointUrl)) {
-                LOG.warn("Received configuration for both region name as " + region + ", and endpoint as "
-                        + endpointUrl + ". Client endpoint will overwrite region name.");
-                builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(endpointUrl, region));
-            } else if (StringUtils.isNotEmpty(region)) {
-                LOG.debug("The region for the client has been set to " + region);
-                builder.withRegion(region);
-            }
-            return (AmazonWebServiceClient) builder.build();
         }
 
     }
