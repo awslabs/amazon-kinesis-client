@@ -81,6 +81,7 @@ public class Worker implements Runnable {
     private static final Log LOG = LogFactory.getLog(Worker.class);
 
     private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
+    private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
 
     private WorkerLog wlog = new WorkerLog();
 
@@ -103,7 +104,6 @@ public class Worker implements Runnable {
     private final Optional<Integer> retryGetRecordsInSeconds;
     private final Optional<Integer> maxGetRecordsThreadPool;
 
-    // private final KinesisClientLeaseManager leaseManager;
     private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager controlServer;
 
@@ -128,6 +128,8 @@ public class Worker implements Runnable {
     protected boolean gracefuleShutdownStarted = false;
     @VisibleForTesting
     protected GracefulShutdownCoordinator gracefulShutdownCoordinator = new GracefulShutdownCoordinator();
+
+    private WorkerStateChangeListener workerStateChangeListener;
 
     /**
      * Constructor.
@@ -400,7 +402,8 @@ public class Worker implements Runnable {
                 config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
                 config.getShardPrioritizationStrategy(),
                 config.getRetryGetRecordsInSeconds(),
-                config.getMaxGetRecordsThreadPool());
+                config.getMaxGetRecordsThreadPool(),
+                DEFAULT_WORKER_STATE_CHANGE_LISTENER);
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
@@ -460,7 +463,7 @@ public class Worker implements Runnable {
         this(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
                 shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
                 metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
-                shardPrioritization, Optional.empty(), Optional.empty());
+                shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER);
     }
 
     /**
@@ -507,7 +510,7 @@ public class Worker implements Runnable {
            KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
            IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
            boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
-           Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool) {
+           Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.config = config;
@@ -529,6 +532,8 @@ public class Worker implements Runnable {
         this.shardPrioritization = shardPrioritization;
         this.retryGetRecordsInSeconds = retryGetRecordsInSeconds;
         this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
+        this.workerStateChangeListener = workerStateChangeListener;
+        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.CREATED);
     }
 
     /**
@@ -606,6 +611,7 @@ public class Worker implements Runnable {
     }
 
     private void initialize() {
+        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.INITIALIZING);
         boolean isDone = false;
         Exception lastException = null;
 
@@ -655,6 +661,7 @@ public class Worker implements Runnable {
         if (!isDone) {
             throw new RuntimeException(lastException);
         }
+        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.STARTED);
     }
 
     /**
@@ -705,10 +712,10 @@ public class Worker implements Runnable {
 
     /**
      * Starts the requestedShutdown process, and returns a future that can be used to track the process.
-     * 
+     *
      * This is deprecated in favor of {@link #startGracefulShutdown()}, which returns a more complete future, and
      * indicates the process behavior
-     * 
+     *
      * @return a future that will be set once shutdown is completed.
      */
     @Deprecated
@@ -752,7 +759,7 @@ public class Worker implements Runnable {
      * Requests a graceful shutdown of the worker, notifying record processors, that implement
      * {@link IShutdownNotificationAware}, of the impending shutdown. This gives the record processor a final chance to
      * checkpoint.
-     * 
+     *
      * This will only create a single shutdown future. Additional attempts to start a graceful shutdown will return the
      * previous future.
      *
@@ -867,6 +874,10 @@ public class Worker implements Runnable {
         return shardInfoShardConsumerMap;
     }
 
+    WorkerStateChangeListener getWorkerStateChangeListener() {
+        return workerStateChangeListener;
+    }
+
     /**
      * Signals worker to shutdown. Worker will try initiating shutdown of all record processors. Note that if executor
      * services were passed to the worker by the user, worker will not attempt to shutdown those resources.
@@ -897,6 +908,7 @@ public class Worker implements Runnable {
         // Lost leases will force Worker to begin shutdown process for all shard consumers in
         // Worker.run().
         leaseCoordinator.stop();
+        workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
     }
 
     /**
@@ -919,7 +931,7 @@ public class Worker implements Runnable {
     /**
      * Returns whether worker can shutdown immediately. Note that this method is called from Worker's {{@link #run()}
      * method before every loop run, so method must do minimum amount of work to not impact shard processing timings.
-     * 
+     *
      * @return Whether worker should shutdown immediately.
      */
     @VisibleForTesting
@@ -1050,7 +1062,7 @@ public class Worker implements Runnable {
 
     /**
      * Given configuration, returns appropriate metrics factory.
-     * 
+     *
      * @param cloudWatchClient
      *            Amazon CloudWatch client
      * @param config
@@ -1075,7 +1087,7 @@ public class Worker implements Runnable {
 
     /**
      * Returns default executor service that should be used by the worker.
-     * 
+     *
      * @return Default executor service that should be used by the worker.
      */
     private static ExecutorService getExecutorService() {
@@ -1151,6 +1163,7 @@ public class Worker implements Runnable {
         private ShardPrioritization shardPrioritization;
         @Setter @Accessors(fluent = true)
         private IKinesisProxy kinesisProxy;
+        private WorkerStateChangeListener workerStateChangeListener;
 
         @VisibleForTesting
         AmazonKinesis getKinesisClient() {
@@ -1261,6 +1274,10 @@ public class Worker implements Runnable {
                 kinesisProxy = new KinesisProxy(config, kinesisClient);
             }
 
+            if (workerStateChangeListener == null) {
+                workerStateChangeListener = DEFAULT_WORKER_STATE_CHANGE_LISTENER;
+            }
+
             return new Worker(config.getApplicationName(),
                     recordProcessorFactory,
                     config,
@@ -1292,8 +1309,8 @@ public class Worker implements Runnable {
                     config.getSkipShardSyncAtWorkerInitializationIfLeasesExist(),
                     shardPrioritization,
                     config.getRetryGetRecordsInSeconds(),
-                    config.getMaxGetRecordsThreadPool());
-
+                    config.getMaxGetRecordsThreadPool(),
+                    workerStateChangeListener);
         }
 
         AmazonWebServiceClient createClient(@NonNull final AwsClientBuilder builder,

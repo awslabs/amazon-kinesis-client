@@ -169,6 +169,21 @@ public class RecordProcessorCheckpointerTest {
     }
 
     /**
+     * Test method for {@link RecordProcessorCheckpointer#checkpoint(String SHARD_END)}.
+     */
+    @Test
+    public final void testCheckpointAtShardEnd() throws Exception {
+        RecordProcessorCheckpointer processingCheckpointer =
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
+        processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
+        ExtendedSequenceNumber extendedSequenceNumber = ExtendedSequenceNumber.SHARD_END;
+        processingCheckpointer.setLargestPermittedCheckpointValue(extendedSequenceNumber);
+        processingCheckpointer.checkpoint(ExtendedSequenceNumber.SHARD_END.getSequenceNumber());
+        Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpoint(shardId));
+    }
+
+
+    /**
      * Test method for
      * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#prepareCheckpoint()}.
      */
@@ -298,6 +313,30 @@ public class RecordProcessorCheckpointerTest {
         Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
         Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
     }
+
+    /**
+     * Test method for {@link RecordProcessorCheckpointer#checkpoint(String SHARD_END)}.
+     */
+    @Test
+    public final void testPrepareCheckpointAtShardEnd() throws Exception {
+        RecordProcessorCheckpointer processingCheckpointer =
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
+        processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
+        ExtendedSequenceNumber extendedSequenceNumber = ExtendedSequenceNumber.SHARD_END;
+        processingCheckpointer.setLargestPermittedCheckpointValue(extendedSequenceNumber);
+        IPreparedCheckpointer preparedCheckpoint = processingCheckpointer.prepareCheckpoint(ExtendedSequenceNumber.SHARD_END.getSequenceNumber());
+        Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpoint(shardId));
+        Assert.assertEquals(startingExtendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
+        Assert.assertEquals(extendedSequenceNumber, preparedCheckpoint.getPendingCheckpoint());
+        Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
+
+        // Checkpoint using preparedCheckpoint
+        preparedCheckpoint.checkpoint();
+        Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpoint(shardId));
+        Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
+        Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
+    }
+
 
     /**
      * Test that having multiple outstanding prepared checkpointers works if they are redeemed in the right order.
