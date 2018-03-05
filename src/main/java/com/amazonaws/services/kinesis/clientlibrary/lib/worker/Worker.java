@@ -32,7 +32,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.amazonaws.regions.Regions;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -42,6 +41,7 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.RegionUtils;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
@@ -408,16 +408,16 @@ public class Worker implements Runnable {
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
-            setRegionForClient((AmazonWebServiceClient) kinesisClient, config.getRegionName());
-            setRegionForClient((AmazonWebServiceClient) dynamoDBClient, config.getRegionName());
+            setRegionForClient(kinesisClient, config.getRegionName());
+            setRegionForClient(dynamoDBClient, config.getRegionName());
         }
         // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
         if (config.getDynamoDBEndpoint() != null) {
-            setEndpointForClient((AmazonWebServiceClient) dynamoDBClient, config.getDynamoDBEndpoint());
+            setEndpointForClient(dynamoDBClient, config.getDynamoDBEndpoint());
         }
         // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
         if (config.getKinesisEndpoint() != null) {
-            setEndpointForClient((AmazonWebServiceClient) kinesisClient, config.getKinesisEndpoint());
+            setEndpointForClient(kinesisClient, config.getKinesisEndpoint());
         }
     }
 
@@ -1077,7 +1077,7 @@ public class Worker implements Runnable {
             metricsFactory = new NullMetricsFactory();
         } else {
             if (config.getRegionName() != null) {
-                setRegionForClient((AmazonWebServiceClient) cloudWatchClient, config.getRegionName());
+                setRegionForClient(cloudWatchClient, config.getRegionName());
             }
             metricsFactory = new WorkerCWMetricsFactory(cloudWatchClient, config.getApplicationName(),
                     config.getMetricsBufferTimeMillis(), config.getMetricsMaxQueueSize(), config.getMetricsLevel(),
@@ -1096,21 +1096,43 @@ public class Worker implements Runnable {
         return new WorkerThreadPoolExecutor(threadFactory);
     }
 
-    private static void setRegionForClient(@NonNull final AmazonWebServiceClient client, @NonNull final String region) {
+    private static void setRegionForClient(@NonNull final Object client, @NonNull final String region) {
         try {
-            client.setRegion(RegionUtils.getRegion(region));
-            LOG.debug("Region set for client to " + region);
+            if (client instanceof AmazonKinesis) {
+                LOG.debug("Configuration passed for region as " + region + " for AmazonKinesis client.");
+                ((AmazonKinesis) client).setRegion(RegionUtils.getRegion(region));
+            } else if (client instanceof AmazonDynamoDB) {
+                LOG.debug("Configuration passed for region as " + region + " for AmazonDynamoDB client.");
+                ((AmazonDynamoDB) client).setRegion(RegionUtils.getRegion(region));
+            } else if (client instanceof AmazonCloudWatch) {
+                LOG.debug("Configuration passed for region as " + region + " for AmazonCloudWatch client.");
+                ((AmazonCloudWatch) client).setRegion(RegionUtils.getRegion(region));
+            } else {
+                LOG.warn("Client passed is not an instance of AmazonKinesis, AmazonDynamoDB or AmazonCloudWatch. "
+                        + "Could not set the region to " + region + ".");
+            }
         } catch (UnsupportedOperationException e) {
-            LOG.debug("Trying to set region for immutable client", e);
+            LOG.debug("Exception thrown, indicating that the client is immutable.", e);
         }
     }
 
-    private static void setEndpointForClient(@NonNull final AmazonWebServiceClient client, @NonNull final String endpointUrl) {
+    private static void setEndpointForClient(@NonNull final Object client, @NonNull final String endpointUrl) {
         try {
-            client.setEndpoint(endpointUrl);
-            LOG.debug("Endpoint set for client to " + endpointUrl);
+            if (client instanceof AmazonKinesis) {
+                LOG.debug("Configuration passed for endpoint as " + endpointUrl + " for AmazonKinesis client.");
+                ((AmazonKinesis) client).setEndpoint(endpointUrl);
+            } else if (client instanceof AmazonDynamoDB) {
+                LOG.debug("Configuration passed for endpoint as " + endpointUrl + " for AmazonDynamoDB client.");
+                ((AmazonDynamoDB) client).setEndpoint(endpointUrl);
+            } else if (client instanceof AmazonCloudWatch) {
+                LOG.debug("Configuration passed for endpoint as " + endpointUrl + " for AmazonCloudWatch client.");
+                ((AmazonCloudWatch) client).setEndpoint(endpointUrl);
+            } else {
+                LOG.warn("Client passed is not an instance of AmazonKinesis, AmazonDynamoDB or AmazonCloudWatch. "
+                        + "Could not set the endpoint to " + endpointUrl + ".");
+            }
         } catch (UnsupportedOperationException e) {
-            LOG.debug("Trying to set endpoint for immutable client", e);
+            LOG.debug("Exception thrown, indicating that the client is immutable.", e);
         }
     }
 
@@ -1251,17 +1273,17 @@ public class Worker implements Runnable {
             }
             // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
             if (config.getRegionName() != null) {
-                setRegionForClient((AmazonWebServiceClient) cloudWatchClient, config.getRegionName());
-                setRegionForClient((AmazonWebServiceClient) kinesisClient, config.getRegionName());
-                setRegionForClient((AmazonWebServiceClient) dynamoDBClient, config.getRegionName());
+                setRegionForClient(cloudWatchClient, config.getRegionName());
+                setRegionForClient(kinesisClient, config.getRegionName());
+                setRegionForClient(dynamoDBClient, config.getRegionName());
             }
             // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
             if (config.getDynamoDBEndpoint() != null) {
-                setEndpointForClient((AmazonWebServiceClient) dynamoDBClient, config.getDynamoDBEndpoint());
+                setEndpointForClient(dynamoDBClient, config.getDynamoDBEndpoint());
             }
             // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
             if (config.getKinesisEndpoint() != null) {
-                setEndpointForClient((AmazonWebServiceClient) kinesisClient, config.getKinesisEndpoint());
+                setEndpointForClient(kinesisClient, config.getKinesisEndpoint());
             }
             if (metricsFactory == null) {
                 metricsFactory = getMetricsFactory(cloudWatchClient, config);
