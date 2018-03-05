@@ -1651,9 +1651,9 @@ public class WorkerTest {
                 .withKinesisEndpoint(endpoint)
                 .withDynamoDBEndpoint(endpoint);
 
-        AmazonKinesis kinesisClient = spy(AmazonKinesisClientBuilder.defaultClient());
-        AmazonDynamoDB dynamoDBClient = spy(AmazonDynamoDBClientBuilder.defaultClient());
-        AmazonCloudWatch cloudWatchClient = spy(AmazonCloudWatchClientBuilder.defaultClient());
+        AmazonKinesis kinesisClient = spy(AmazonKinesisClientBuilder.standard().withRegion(Regions.US_EAST_1).build());
+        AmazonDynamoDB dynamoDBClient = spy(AmazonDynamoDBClientBuilder.standard().withRegion(Regions.US_EAST_1).build());
+        AmazonCloudWatch cloudWatchClient = spy(AmazonCloudWatchClientBuilder.standard().withRegion(Regions.US_EAST_1).build());
 
         new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(config)
                 .kinesisClient(kinesisClient)
@@ -1679,9 +1679,9 @@ public class WorkerTest {
 
         Worker.Builder builder = new Worker.Builder();
 
-        AmazonKinesis kinesisClient = spy(AmazonKinesisClientBuilder.defaultClient());
-        AmazonDynamoDB dynamoDBClient = spy(AmazonDynamoDBClientBuilder.defaultClient());
-        AmazonCloudWatch cloudWatchClient = spy(AmazonCloudWatchClientBuilder.defaultClient());
+        AmazonKinesis kinesisClient = spy(AmazonKinesisClientBuilder.standard().withRegion(Regions.US_EAST_1).build());
+        AmazonDynamoDB dynamoDBClient = spy(AmazonDynamoDBClientBuilder.standard().withRegion(Regions.US_EAST_1).build());
+        AmazonCloudWatch cloudWatchClient = spy(AmazonCloudWatchClientBuilder.standard().withRegion(Regions.US_EAST_1).build());
 
         builder.recordProcessorFactory(recordProcessorFactory).config(config)
                 .kinesisClient(kinesisClient)
