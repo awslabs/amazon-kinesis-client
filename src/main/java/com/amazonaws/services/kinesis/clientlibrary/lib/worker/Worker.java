@@ -1327,14 +1327,14 @@ public class Worker implements Runnable {
                 builder.withClientConfiguration(clientConfiguration);
             }
             if (StringUtils.isNotEmpty(endpointUrl)) {
-                LOG.warn("Received configuration for both region name as " + region + ", and endpoint as "
-                        + endpointUrl + ". Client endpoint will overwrite region name.");
+                LOG.warn("Received configuration for endpoint as " + endpointUrl + ", and region as "
+                        + region + ".");
                 builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(endpointUrl, region));
             } else if (StringUtils.isNotEmpty(region)) {
-                LOG.debug("The region for the client has been set to " + region);
+                LOG.warn("Received configuration for region as " + region + ".");
                 builder.withRegion(region);
             } else {
-                LOG.debug("Endpoint URL and region are not set, setting region to us-east-1");
+                LOG.warn("No configuration received for endpoint and region, will default region to us-east-1");
                 builder.withRegion(Regions.US_EAST_1);
             }
             return (AmazonWebServiceClient) builder.build();
