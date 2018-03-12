@@ -1200,6 +1200,7 @@ public class KinesisClientLibConfiguration {
      * @param skipShardSyncAtStartupIfLeasesExist Should Worker skip syncing shards and leases at startup (Worker
      *        initialization).
      * @return KinesisClientLibConfiguration
+     * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withSkipShardSyncAtStartupIfLeasesExist(
             boolean skipShardSyncAtStartupIfLeasesExist) {

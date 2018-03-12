@@ -17,21 +17,17 @@ package com.amazonaws.services.kinesis.multilang;
 import java.io.BufferedReader;
 import java.io.IOException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.multilang.messages.Message;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Gets the next message off the STDOUT of the child process. Throws an exception if a message is not found before the
  * end of the input stream is reached.
  */
+@Slf4j
 class GetNextMessageTask extends LineReaderTask<Message> {
-
-    private static final Log LOG = LogFactory.getLog(GetNextMessageTask.class);
-
     private ObjectMapper objectMapper;
 
     private static final String EMPTY_LINE = "";
@@ -68,7 +64,7 @@ class GetNextMessageTask extends LineReaderTask<Message> {
                 return new HandleLineResult<Message>(objectMapper.readValue(line, Message.class));
             }
         } catch (IOException e) {
-            LOG.info("Skipping unexpected line on STDOUT for shard " + getShardId() + ": " + line);
+            log.info("Skipping unexpected line on STDOUT for shard {}: {}", getShardId(), line);
         }
         return new HandleLineResult<Message>();
     }

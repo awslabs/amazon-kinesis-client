@@ -16,7 +16,6 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.io.IOException;
 import java.io.PrintStream;
-
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -24,12 +23,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Main app that launches the worker that runs the multi-language record processor.
@@ -58,10 +56,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
  * AWSCredentialsProvider = DefaultAWSCredentialsProviderChain
  * </pre>
  */
+@Slf4j
 public class MultiLangDaemon implements Callable<Integer> {
-
-    private static final Log LOG = LogFactory.getLog(MultiLangDaemon.class);
-
     private Worker worker;
 
     /**
@@ -113,7 +109,7 @@ public class MultiLangDaemon implements Callable<Integer> {
         try {
             worker.run();
         } catch (Throwable t) {
-            LOG.error("Caught throwable while processing data.", t);
+            log.error("Caught throwable while processing data.", t);
             exitCode = 1;
         }
         return exitCode;
@@ -152,13 +148,13 @@ public class MultiLangDaemon implements Callable<Integer> {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                LOG.info("Process terminanted, will initiate shutdown.");
+                log.info("Process terminanted, will initiate shutdown.");
                 try {
                     Future<Void> fut = daemon.worker.requestShutdown();
                     fut.get(shutdownGraceMillis, TimeUnit.MILLISECONDS);
-                    LOG.info("Process shutdown is complete.");
+                    log.info("Process shutdown is complete.");
                 } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                    LOG.error("Encountered an error during shutdown.", e);
+                    log.error("Encountered an error during shutdown.", e);
                 }
             }
         });
@@ -167,7 +163,7 @@ public class MultiLangDaemon implements Callable<Integer> {
         try {
             System.exit(future.get());
         } catch (InterruptedException | ExecutionException e) {
-            LOG.error("Encountered an error while running daemon", e);
+            log.error("Encountered an error while running daemon", e);
         }
         System.exit(1);
     }

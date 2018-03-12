@@ -14,21 +14,19 @@
  */
 package com.amazonaws.services.kinesis.metrics.impl;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * MetricsHelper assists with common metrics operations, most notably the storage of IMetricsScopes objects in a
  * ThreadLocal so we don't have to pass one throughout the whole call stack.
  */
+@Slf4j
 public class MetricsHelper {
-
-    private static final Log LOG = LogFactory.getLog(MetricsHelper.class);
     private static final NullMetricsScope NULL_METRICS_SCOPE = new NullMetricsScope();
 
     private static final ThreadLocal<IMetricsScope> currentScope = new ThreadLocal<IMetricsScope>();
@@ -98,8 +96,8 @@ public class MetricsHelper {
     public static IMetricsScope getMetricsScope() {
         IMetricsScope result = currentScope.get();
         if (result == null) {
-            LOG.warn(String.format("No metrics scope set in thread %s, getMetricsScope returning NullMetricsScope.",
-                    Thread.currentThread().getName()));
+            log.warn("No metrics scope set in thread {}, getMetricsScope returning NullMetricsScope.",
+                    Thread.currentThread().getName());
 
             return NULL_METRICS_SCOPE;
         } else {

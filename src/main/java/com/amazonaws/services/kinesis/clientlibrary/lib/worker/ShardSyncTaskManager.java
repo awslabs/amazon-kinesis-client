@@ -19,23 +19,20 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The ShardSyncTaskManager is used to track the task to sync shards with leases (create leases for new
  * Kinesis shards, remove obsolete leases). We'll have at most one outstanding sync task at any time.
  * Worker will use this class to kick off a sync task when it finds shards which have been completely processed.
  */
+@Slf4j
 class ShardSyncTaskManager {
-
-    private static final Log LOG = LogFactory.getLog(ShardSyncTaskManager.class);
-
     private ITask currentTask;
     private Future<TaskResult> future;
     private final IKinesisProxy kinesisProxy;
@@ -90,11 +87,11 @@ class ShardSyncTaskManager {
                 try {
                     TaskResult result = future.get();
                     if (result.getException() != null) {
-                        LOG.error("Caught exception running " + currentTask.getTaskType() + " task: ",
+                        log.error("Caught exception running {} task: ", currentTask.getTaskType(),
                                 result.getException());
                     }
                 } catch (InterruptedException | ExecutionException e) {
-                    LOG.warn(currentTask.getTaskType() + " task encountered exception.", e);
+                    log.warn("{} task encountered exception.", currentTask.getTaskType(), e);
                 }
             }
 
@@ -107,12 +104,12 @@ class ShardSyncTaskManager {
                             shardSyncIdleTimeMillis), metricsFactory);
             future = executorService.submit(currentTask);
             submittedNewTask = true;
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Submitted new " + currentTask.getTaskType() + " task.");
+            if (log.isDebugEnabled()) {
+                log.debug("Submitted new {} task.", currentTask.getTaskType());
             }
         } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Previous " + currentTask.getTaskType() + " task still pending.  Not submitting new task.");
+            if (log.isDebugEnabled()) {
+                log.debug("Previous {} task still pending.  Not submitting new task.", currentTask.getTaskType());
             }
         }
 

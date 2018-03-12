@@ -16,8 +16,7 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.io.BufferedReader;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * This class is used to drain the STDOUT of the child process. After the child process has been given a shutdown
@@ -36,22 +35,20 @@ import org.apache.commons.logging.LogFactory;
  * To prevent the child process from becoming blocked in this way, it is the responsibility of the parent process to
  * drain the child process's STDOUT. We reprint each drained line to our log to permit debugging.
  */
+@Slf4j
 class DrainChildSTDOUTTask extends LineReaderTask<Boolean> {
-
-    private static final Log LOG = LogFactory.getLog(DrainChildSTDOUTTask.class);
-
     DrainChildSTDOUTTask() {
     }
 
     @Override
     protected HandleLineResult<Boolean> handleLine(String line) {
-        LOG.info("Drained line for shard " + getShardId() + ": " + line);
+        log.info("Drained line for shard {}: {}", getShardId(), line);
         return new HandleLineResult<Boolean>();
     }
 
     @Override
     protected Boolean returnAfterException(Exception e) {
-        LOG.info("Encountered exception while draining STDOUT of child process for shard " + getShardId(), e);
+        log.info("Encountered exception while draining STDOUT of child process for shard {}", getShardId(), e);
         return false;
     }
 

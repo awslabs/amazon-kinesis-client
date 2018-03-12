@@ -25,9 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -35,6 +32,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ExceptionThrowingLeaseManager.ExceptionThrowingLeaseManagerMethods;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
@@ -53,13 +51,14 @@ import com.amazonaws.services.kinesis.model.SequenceNumberRange;
 import com.amazonaws.services.kinesis.model.Shard;
 
 import junit.framework.Assert;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
  */
 // CHECKSTYLE:IGNORE JavaNCSS FOR NEXT 800 LINES
+@Slf4j
 public class ShardSyncerTest {
-    private static final Log LOG = LogFactory.getLog(ShardSyncer.class);
     private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
     private static final InitialPositionInStreamExtended INITIAL_POSITION_TRIM_HORIZON =
@@ -96,7 +95,7 @@ public class ShardSyncerTest {
     public void setUp() throws Exception {
         boolean created = leaseManager.createLeaseTableIfNotExists(1L, 1L);
         if (created) {
-            LOG.info("New table created.");
+            log.info("New table created.");
         }
         leaseManager.deleteAll();
     }
@@ -467,7 +466,7 @@ public class ShardSyncerTest {
                             cleanupLeasesOfCompletedShards);
                     return;
                 } catch (LeasingException e) {
-                    LOG.debug("Catch leasing exception", e);
+                    log.debug("Catch leasing exception", e);
                 }
                 // Clear throwing exception scenario every time after calling ShardSyncer
                 exceptionThrowingLeaseManager.clearLeaseManagerThrowingExceptionScenario();

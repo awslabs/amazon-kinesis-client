@@ -21,11 +21,6 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
-import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
@@ -33,17 +28,19 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
+import com.amazonaws.services.kinesis.model.Record;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Streamlet that tracks records it's seen - useful for testing.
  */
+@Slf4j
 class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
-
-    private static final Log LOG = LogFactory.getLog(TestStreamlet.class);
-
     private List<Record> records = new ArrayList<Record>();
 
     private Set<String> processedSeqNums = new HashSet<String>(); // used for deduping
@@ -91,7 +88,7 @@ class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
         IRecordProcessorCheckpointer checkpointer = input.getCheckpointer();
         if ((dataRecords != null) && (!dataRecords.isEmpty())) {
             for (Record record : dataRecords) {
-                LOG.debug("Processing record: " + record);
+                log.debug("Processing record: {}", record);
                 String seqNum = record.getSequenceNumber();
                 if (!processedSeqNums.contains(seqNum)) {
                     records.add(record);
@@ -108,7 +105,7 @@ class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
                 | KinesisClientLibDependencyException | InvalidStateException e) {
             // Continue processing records and checkpoint next time if we get a transient error.
             // Don't checkpoint if the processor has been shutdown.
-            LOG.debug("Caught exception while checkpointing: ", e);
+            log.debug("Caught exception while checkpointing: ", e);
         }
 
         if (sem != null) {
@@ -128,7 +125,7 @@ class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
             try {
                 checkpointer.checkpoint();
             } catch (KinesisClientLibNonRetryableException e) {
-                LOG.error("Caught exception when checkpointing while shutdown.", e);
+                log.error("Caught exception when checkpointing while shutdown.", e);
                 throw new RuntimeException(e);
             }
         }

@@ -64,8 +64,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Condition;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -92,8 +90,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerCWMe
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerThreadPoolExecutor;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.WorkerStateChangeListener.WorkerState;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.util.KinesisLocalFileDataCreator;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
@@ -115,15 +113,14 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Unit tests of Worker.
  */
 @RunWith(MockitoJUnitRunner.class)
+@Slf4j
 public class WorkerTest {
-
-    private static final Log LOG = LogFactory.getLog(WorkerTest.class);
-
     // @Rule
     // public Timeout timeout = new Timeout((int)TimeUnit.SECONDS.toMillis(30));
 
@@ -707,18 +704,18 @@ public class WorkerTest {
                 final long startTimeMillis = System.currentTimeMillis();
                 long elapsedTimeMillis = 0;
 
-                LOG.info("Entering sleep @ " + startTimeMillis + " with elapsedMills: " + elapsedTimeMillis);
+                log.info("Entering sleep @ {} with elapsedMills: {}", startTimeMillis, elapsedTimeMillis);
                 shutdownBlocker.acquire();
                 try {
                     actionBlocker.acquire();
                 } catch (InterruptedException e) {
-                    LOG.info("Sleep interrupted @ " + System.currentTimeMillis() + " elapsedMillis: "
-                            + (System.currentTimeMillis() - startTimeMillis));
+                    log.info("Sleep interrupted @ {} elapsedMillis: {}", System.currentTimeMillis(),
+                            (System.currentTimeMillis() - startTimeMillis));
                     recordProcessorInterrupted.getAndSet(true);
                 }
                 shutdownBlocker.release();
                 elapsedTimeMillis = System.currentTimeMillis() - startTimeMillis;
-                LOG.info("Sleep completed @ " + System.currentTimeMillis() + " elapsedMillis: " + elapsedTimeMillis);
+                log.info("Sleep completed @ {} elapsedMillis: {}", System.currentTimeMillis(), elapsedTimeMillis);
 
                 return null;
             }
@@ -2097,7 +2094,7 @@ public class WorkerTest {
             String shardId = shard.getShardId();
             String endingSequenceNumber = shard.getSequenceNumberRange().getEndingSequenceNumber();
             if (endingSequenceNumber != null) {
-                LOG.info("Closed shard " + shardId + " has an endingSequenceNumber " + endingSequenceNumber);
+                log.info("Closed shard {} has an endingSequenceNumber {}", shardId, endingSequenceNumber);
                 Assert.assertEquals(ShutdownReason.TERMINATE, shardsLastProcessorShutdownReason.get(shardId));
             }
         }

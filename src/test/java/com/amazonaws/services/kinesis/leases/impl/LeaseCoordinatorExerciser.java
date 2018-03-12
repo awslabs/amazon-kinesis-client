@@ -27,11 +27,8 @@ import java.util.Map;
 
 import javax.swing.*;
 
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
@@ -41,9 +38,10 @@ import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputExc
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
 
-public class LeaseCoordinatorExerciser {
+import lombok.extern.slf4j.Slf4j;
 
-    private static final Log LOG = LogFactory.getLog(LeaseCoordinatorExerciser.class);
+@Slf4j
+public class LeaseCoordinatorExerciser {
 
     public static void main(String[] args)
         throws InterruptedException, DependencyException, InvalidStateException, ProvisionedThroughputException,
@@ -61,9 +59,9 @@ public class LeaseCoordinatorExerciser {
         ILeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("nagl_ShardProgress", ddb);
 
         if (leaseManager.createLeaseTableIfNotExists(10L, 50L)) {
-            LOG.info("Waiting for newly created lease table");
+            log.info("Waiting for newly created lease table");
             if (!leaseManager.waitUntilLeaseTableExists(10, 300)) {
-                LOG.error("Table was not created in time");
+                log.error("Table was not created in time");
                 return;
             }
         }
@@ -116,7 +114,7 @@ public class LeaseCoordinatorExerciser {
                         try {
                             coord.start();
                         } catch (LeasingException e) {
-                            LOG.error(e);
+                            log.error("{}", e);
                         }
                         button.setLabel("Stop " + coord.getWorkerIdentifier());
                     }

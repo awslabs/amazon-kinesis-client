@@ -14,9 +14,6 @@
  */
 package com.amazonaws.services.kinesis.leases.impl;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
@@ -28,10 +25,6 @@ import com.amazonaws.services.kinesis.leases.interfaces.IKinesisClientLeaseManag
  * An implementation of LeaseManager for the KinesisClientLibrary - takeLease updates the ownerSwitchesSinceCheckpoint field.
  */
 public class KinesisClientLeaseManager extends LeaseManager<KinesisClientLease> implements IKinesisClientLeaseManager {
-
-    @SuppressWarnings("unused")
-    private static final Log LOG = LogFactory.getLog(KinesisClientLeaseManager.class);
-
     /**
      * Constructor.
      * 

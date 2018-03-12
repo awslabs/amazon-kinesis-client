@@ -19,8 +19,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import lombok.extern.slf4j.Slf4j;
 
 class GracefulShutdownCoordinator {
 
@@ -36,10 +35,8 @@ class GracefulShutdownCoordinator {
         return new GracefulShutdownCallable(startWorkerShutdown);
     }
 
+    @Slf4j
     static class GracefulShutdownCallable implements Callable<Boolean> {
-
-        private static final Log log = LogFactory.getLog(GracefulShutdownCallable.class);
-
         private final Callable<GracefulShutdownContext> startWorkerShutdown;
 
         GracefulShutdownCallable(Callable<GracefulShutdownContext> startWorkerShutdown) {
@@ -83,8 +80,8 @@ class GracefulShutdownCoordinator {
                     }
                 }
             } catch (InterruptedException ie) {
-                log.warn("Interrupted while waiting for notification complete, terminating shutdown.  "
-                        + awaitingLogMessage(context));
+                log.warn("Interrupted while waiting for notification complete, terminating shutdown. {}",
+                        awaitingLogMessage(context));
                 return false;
             }
 
@@ -120,8 +117,8 @@ class GracefulShutdownCoordinator {
                     }
                 }
             } catch (InterruptedException ie) {
-                log.warn("Interrupted while waiting for shutdown completion, terminating shutdown. "
-                        + awaitingFinalShutdownMessage(context));
+                log.warn("Interrupted while waiting for shutdown completion, terminating shutdown. {}",
+                        awaitingFinalShutdownMessage(context));
                 return false;
             }
             return true;
@@ -138,10 +135,10 @@ class GracefulShutdownCoordinator {
         private boolean workerShutdownWithRemaining(long outstanding, GracefulShutdownContext context) {
             if (isWorkerShutdownComplete(context)) {
                 if (outstanding != 0) {
-                    log.info("Shutdown completed, but shutdownCompleteLatch still had outstanding " + outstanding
-                            + " with a current value of " + context.getShutdownCompleteLatch().getCount() + ". shutdownComplete: "
-                            + context.getWorker().isShutdownComplete() + " -- Consumer Map: "
-                            + context.getWorker().getShardInfoShardConsumerMap().size());
+                    log.info("Shutdown completed, but shutdownCompleteLatch still had outstanding {} with a current"
+                            + " value of {}. shutdownComplete: {} -- Consumer Map: {}", outstanding,
+                            context.getShutdownCompleteLatch().getCount(), context.getWorker().isShutdownComplete(),
+                            context.getWorker().getShardInfoShardConsumerMap().size());
                     return true;
                 }
             }

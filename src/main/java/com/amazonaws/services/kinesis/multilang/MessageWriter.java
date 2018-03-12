@@ -22,29 +22,24 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
-
+import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
 import com.amazonaws.services.kinesis.multilang.messages.InitializeMessage;
 import com.amazonaws.services.kinesis.multilang.messages.Message;
 import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownRequestedMessage;
-
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Defines methods for writing {@link Message} objects to the child process's STDIN.
  */
+@Slf4j
 class MessageWriter {
-
-    private static final Log LOG = LogFactory.getLog(MessageWriter.class);
-
     private BufferedWriter writer;
 
     private volatile boolean open = true;
@@ -82,7 +77,7 @@ class MessageWriter {
                         writer.write(System.lineSeparator(), 0, System.lineSeparator().length());
                         writer.flush();
                     }
-                    LOG.info("Message size == " + message.getBytes().length + " bytes for shard " + shardId);
+                    log.info("Message size == {} bytes for shard {}", message.getBytes().length, shardId);
                 } catch (IOException e) {
                     open = false;
                 }
@@ -94,7 +89,7 @@ class MessageWriter {
             return this.executorService.submit(writeMessageToOutputTask);
         } else {
             String errorMessage = "Cannot write message " + message + " because writer is closed for shard " + shardId;
-            LOG.info(errorMessage);
+            log.info(errorMessage);
             throw new IllegalStateException(errorMessage);
         }
     }
@@ -106,7 +101,7 @@ class MessageWriter {
      * @return
      */
     private Future<Boolean> writeMessage(Message message) {
-        LOG.info("Writing " + message.getClass().getSimpleName() + " to child process for shard " + shardId);
+        log.info("Writing {} to child process for shard {}", message.getClass().getSimpleName(), shardId);
         try {
             String jsonText = objectMapper.writeValueAsString(message);
             return writeMessageToOutput(jsonText);
@@ -114,7 +109,7 @@ class MessageWriter {
             String errorMessage =
                     String.format("Encountered I/O error while writing %s action to subprocess", message.getClass()
                             .getSimpleName());
-            LOG.error(errorMessage, e);
+            log.error(errorMessage, e);
             throw new RuntimeException(errorMessage, e);
         }
     }

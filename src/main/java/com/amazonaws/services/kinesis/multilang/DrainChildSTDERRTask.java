@@ -16,22 +16,19 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.io.BufferedReader;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Reads lines off the STDERR of the child process and prints them to this process's (the JVM's) STDERR and log.
  */
+@Slf4j
 class DrainChildSTDERRTask extends LineReaderTask<Boolean> {
-
-    private static final Log LOG = LogFactory.getLog(DrainChildSTDERRTask.class);
-
     DrainChildSTDERRTask() {
     }
 
     @Override
     protected HandleLineResult<Boolean> handleLine(String line) {
-        LOG.error("Received error line from subprocess [" + line + "] for shard " + getShardId());
+        log.error("Received error line from subprocess [{}] for shard {}", line, getShardId());
         System.err.println(line);
         return new HandleLineResult<Boolean>();
     }

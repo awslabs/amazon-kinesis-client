@@ -24,8 +24,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.kinesis.AmazonKinesis;
@@ -51,14 +49,13 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamStatus;
 
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Kinesis proxy - used to make calls to Amazon Kinesis (e.g. fetch data records and list of shards).
  */
+@Slf4j
 public class KinesisProxy implements IKinesisProxyExtended {
-
-    private static final Log LOG = LogFactory.getLog(KinesisProxy.class);
-
     private static final EnumSet<ShardIteratorType> EXPECTED_ITERATOR_TYPES = EnumSet
             .of(ShardIteratorType.AT_SEQUENCE_NUMBER, ShardIteratorType.AFTER_SEQUENCE_NUMBER);
 
@@ -153,7 +150,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
                 maxDescribeStreamRetryAttempts,
                 listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts);
-        LOG.debug("KinesisProxy has created a kinesisClient");
+        log.debug("KinesisProxy has created a kinesisClient");
     }
 
     /**
@@ -181,7 +178,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
         this(streamName, kinesisClient, describeStreamBackoffTimeInMillis, maxDescribeStreamRetryAttempts,
                 listShardsBackoffTimeInMillis, maxListShardsRetryAttempts);
         this.credentialsProvider = credentialProvider;
-        LOG.debug("KinesisProxy( " + streamName + ")");
+        log.debug("KinesisProxy( " + streamName + ")");
     }
 
     /**
@@ -215,10 +212,10 @@ public class KinesisProxy implements IKinesisProxyExtended {
             if (Class.forName("com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient")
                     .isAssignableFrom(client.getClass())) {
                 isKinesisClient = false;
-                LOG.debug("Client is DynamoDb client, will use DescribeStream.");
+                log.debug("Client is DynamoDb client, will use DescribeStream.");
             }
         } catch (ClassNotFoundException e) {
-            LOG.debug("Client is Kinesis Client, using ListShards instead of DescribeStream.");
+            log.debug("Client is Kinesis Client, using ListShards instead of DescribeStream.");
         }
     }
 
@@ -259,12 +256,12 @@ public class KinesisProxy implements IKinesisProxyExtended {
             try {
                 response = client.describeStream(describeStreamRequest);
             } catch (LimitExceededException le) {
-                LOG.info("Got LimitExceededException when describing stream " + streamName + ". Backing off for "
-                        + this.describeStreamBackoffTimeInMillis + " millis.");
+                log.info("Got LimitExceededException when describing stream {}. Backing off for {} millis.", streamName,
+                        this.describeStreamBackoffTimeInMillis);
                 try {
                     Thread.sleep(this.describeStreamBackoffTimeInMillis);
                 } catch (InterruptedException ie) {
-                    LOG.debug("Stream " + streamName + " : Sleep  was interrupted ", ie);
+                    log.debug("Stream {} : Sleep  was interrupted ", streamName, ie);
                 }
                 lastException = le;
             }
@@ -281,8 +278,8 @@ public class KinesisProxy implements IKinesisProxyExtended {
                 || StreamStatus.UPDATING.toString().equals(response.getStreamDescription().getStreamStatus())) {
             return response;
         } else {
-            LOG.info("Stream is in status " + response.getStreamDescription().getStreamStatus()
-                    + ", KinesisProxy.DescribeStream returning null (wait until stream is Active or Updating");
+            log.info("Stream is in status {}, KinesisProxy.DescribeStream returning null (wait until stream is Active "
+                    + "or Updating", response.getStreamDescription().getStreamStatus());
             return null;
         }
     }
@@ -303,16 +300,16 @@ public class KinesisProxy implements IKinesisProxyExtended {
             try {
                 result = client.listShards(request);
             } catch (LimitExceededException e) {
-                LOG.info("Got LimitExceededException when listing shards " + streamName + ". Backing off for "
-                        + this.listShardsBackoffTimeInMillis + " millis.");
+                log.info("Got LimitExceededException when listing shards {}. Backing off for {} millis.", streamName,
+                        this.listShardsBackoffTimeInMillis);
                 try {
                     Thread.sleep(this.listShardsBackoffTimeInMillis);
                 } catch (InterruptedException ie) {
-                    LOG.debug("Stream " + streamName + " : Sleep  was interrupted ", ie);
+                    log.debug("Stream {} : Sleep  was interrupted ", streamName, ie);
                 }
                 lastException = e;
             } catch (ResourceInUseException e) {
-                LOG.info("Stream is not in Active/Updating status, returning null (wait until stream is in Active or"
+                log.info("Stream is not in Active/Updating status, returning null (wait until stream is in Active or"
                         + " Updating)");
                 return null;
             }
@@ -344,7 +341,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
             }
         }
         
-        LOG.warn("Cannot find the shard given the shardId " + shardId);
+        log.warn("Cannot find the shard given the shardId {}", shardId);
         return null;
     }
 
@@ -426,12 +423,12 @@ public class KinesisProxy implements IKinesisProxyExtended {
         try {
             shardIteratorType = ShardIteratorType.fromValue(iteratorType);
         } catch (IllegalArgumentException iae) {
-            LOG.error("Caught illegal argument exception while parsing iteratorType: " + iteratorType, iae);
+            log.error("Caught illegal argument exception while parsing iteratorType: {}", iteratorType, iae);
             shardIteratorType = null;
         }
 
         if (!EXPECTED_ITERATOR_TYPES.contains(shardIteratorType)) {
-            LOG.info("This method should only be used for AT_SEQUENCE_NUMBER and AFTER_SEQUENCE_NUMBER "
+            log.info("This method should only be used for AT_SEQUENCE_NUMBER and AFTER_SEQUENCE_NUMBER "
                     + "ShardIteratorTypes. For methods to use with other ShardIteratorTypes, see IKinesisProxy.java");
         }
         final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();

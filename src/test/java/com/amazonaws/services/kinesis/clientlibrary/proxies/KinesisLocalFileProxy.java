@@ -33,9 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.model.DescribeStreamResult;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
@@ -48,11 +45,14 @@ import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * This is a (temporary) test utility class, to mimic Kinesis without having to integrate with Alpha.
  * In future, we should consider moving this to the Kinesis client/sampleApp package (if useful to
  * other Kinesis clients).
  */
+@Slf4j
 public class KinesisLocalFileProxy implements IKinesisProxy {
 
     /**
@@ -83,8 +83,6 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
             return position;
         }
     };
-
-    private static final Log LOG = LogFactory.getLog(KinesisLocalFileProxy.class);
 
     private static final String ITERATOR_DELIMITER = ":";
 
@@ -385,9 +383,9 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
              */
             response.setNextShardIterator(serializeIterator(iterator.shardId, lastRecordsSeqNo.add(BigInteger.ONE)
                     .toString()));
-            LOG.debug("Returning a non null iterator for shard " + iterator.shardId);
+            log.debug("Returning a non null iterator for shard {}", iterator.shardId);
         } else {
-            LOG.info("Returning null iterator for shard " + iterator.shardId);
+            log.info("Returning null iterator for shard {}", iterator.shardId);
         }
 
         return response;

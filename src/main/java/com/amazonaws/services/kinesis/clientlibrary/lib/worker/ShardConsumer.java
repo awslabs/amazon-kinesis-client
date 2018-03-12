@@ -20,9 +20,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
@@ -32,16 +29,15 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Responsible for consuming data records of a (specified) shard.
  * The instance should be shutdown when we lose the primary responsibility for a shard.
  * A new instance should be created if the primary responsibility is reassigned back to this process.
  */
+@Slf4j
 class ShardConsumer {
-
-    private static final Log LOG = LogFactory.getLog(ShardConsumer.class);
-
     private final StreamConfig streamConfig;
     private final IRecordProcessor recordProcessor;
     private final KinesisClientLibConfiguration config;
@@ -269,30 +265,29 @@ class ShardConsumer {
                     future = executorService.submit(currentTask);
                     currentTaskSubmitTime = System.currentTimeMillis();
                     submittedNewTask = true;
-                    LOG.debug("Submitted new " + currentTask.getTaskType()
-                            + " task for shard " + shardInfo.getShardId());
+                    log.debug("Submitted new {} task for shard {}", currentTask.getTaskType(), shardInfo.getShardId());
                 } catch (RejectedExecutionException e) {
-                    LOG.info(currentTask.getTaskType() + " task was not accepted for execution.", e);
+                    log.info("{} task was not accepted for execution.", currentTask.getTaskType(), e);
                 } catch (RuntimeException e) {
-                    LOG.info(currentTask.getTaskType() + " task encountered exception ", e);
+                    log.info("{} task encountered exception ", currentTask.getTaskType(), e);
                 }
             } else {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(String.format("No new task to submit for shard %s, currentState %s",
+                if (log.isDebugEnabled()) {
+                    log.debug("No new task to submit for shard {}, currentState {}",
                             shardInfo.getShardId(),
-                            currentState.toString()));
+                            currentState.toString());
                 }
             }
         } else {
             final long timeElapsed = System.currentTimeMillis() - currentTaskSubmitTime;
             final String commonMessage = String.format("Previous %s task still pending for shard %s since %d ms ago. ",
                     currentTask.getTaskType(), shardInfo.getShardId(), timeElapsed);
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(commonMessage + "Not submitting new task.");
+            if (log.isDebugEnabled()) {
+                log.debug("{} Not submitting new task.", commonMessage);
             }
             config.getLogWarningForTaskAfterMillis().ifPresent(value -> {
                 if (timeElapsed > value) {
-                    LOG.warn(commonMessage);
+                    log.warn(commonMessage);
                 }
             });
         }
@@ -328,14 +323,13 @@ class ShardConsumer {
     }
 
     private void logTaskException(TaskResult taskResult) {
-        if (LOG.isDebugEnabled()) {
+        if (log.isDebugEnabled()) {
             Exception taskException = taskResult.getException();
             if (taskException instanceof BlockedOnParentShardException) {
                 // No need to log the stack trace for this exception (it is very specific).
-                LOG.debug("Shard " + shardInfo.getShardId() + " is blocked on completion of parent shard.");
+                log.debug("Shard {} is blocked on completion of parent shard.", shardInfo.getShardId());
             } else {
-                LOG.debug("Caught exception running " + currentTask.getTaskType() + " task: ",
-                        taskResult.getException());
+                log.debug("Caught exception running {} task: ", currentTask.getTaskType(), taskResult.getException());
             }
         }
     }
@@ -419,10 +413,9 @@ class ShardConsumer {
             if (currentState.getTaskType() == currentTask.getTaskType()) {
                 currentState = currentState.successTransition();
             } else {
-                LOG.error("Current State task type of '" + currentState.getTaskType()
-                        + "' doesn't match the current tasks type of '" + currentTask.getTaskType()
-                        + "'.  This shouldn't happen, and indicates a programming error. "
-                        + "Unable to safely transition to the next state.");
+                log.error("Current State task type of '{}' doesn't match the current tasks type of '{}'.  This"
+                        + " shouldn't happen, and indicates a programming error. Unable to safely transition to the"
+                        + " next state.", currentState.getTaskType(), currentTask.getTaskType());
             }
         }
         //
