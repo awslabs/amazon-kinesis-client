@@ -21,20 +21,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListSet;
 
-import junit.framework.Assert;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.model.Shard;
+
+import junit.framework.Assert;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Helper class to verify shard lineage in unit tests that use TestStreamlet.
  * Verifies that parent shard processors were shutdown before child shard processor was initialized.
  */
+@Slf4j
 class ShardSequenceVerifier {
-
-    private static final Log LOG = LogFactory.getLog(ShardSequenceVerifier.class);
     private Map<String, Shard> shardIdToShards = new HashMap<String, Shard>();
     private ConcurrentSkipListSet<String> initializedShards = new ConcurrentSkipListSet<>();
     private ConcurrentSkipListSet<String> shutdownShards = new ConcurrentSkipListSet<>();
@@ -56,7 +53,7 @@ class ShardSequenceVerifier {
                 if (!shutdownShards.contains(parentShardId)) {
                     String message = "Parent shard " + parentShardId + " was not shutdown before shard "
                             + shardId + " was initialized.";
-                    LOG.error(message);
+                    log.error(message);
                     validationFailures.add(message);
                 }
             }
@@ -72,7 +69,7 @@ class ShardSequenceVerifier {
     
     void verify() {
         for (String message : validationFailures) {
-            LOG.error(message);
+            log.error(message);
         }
         Assert.assertTrue(validationFailures.isEmpty());
     }

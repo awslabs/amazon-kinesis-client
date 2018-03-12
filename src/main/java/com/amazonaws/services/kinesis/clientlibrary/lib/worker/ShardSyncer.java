@@ -26,8 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.commons.lang.StringUtils;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
@@ -42,15 +40,16 @@ import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.amazonaws.services.kinesis.model.Shard;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Helper class to sync leases with shards of the Kinesis stream.
  * It will create new leases/activities when it discovers new Kinesis shards (bootstrap/resharding).
  * It deletes leases for shards that have been trimmed from Kinesis, or if we've completed processing it
  * and begun processing it's child shards.
  */
+@Slf4j
 class ShardSyncer {
-
-    private static final Log LOG = LogFactory.getLog(ShardSyncer.class);
 
     /**
      * Note constructor is private: We use static synchronized methods - this is a utility class.
@@ -119,7 +118,7 @@ class ShardSyncer {
             boolean ignoreUnexpectedChildShards)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
         List<Shard> shards = getShardList(kinesisProxy);
-        LOG.debug("Num shards: " + shards.size());
+        log.debug("Num shards: {}", shards.size());
 
         Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(shards);
         Map<String, Set<String>> shardIdToChildShardIdsMap = constructShardIdToChildShardIdsMap(shardIdToShardMap);
@@ -132,7 +131,7 @@ class ShardSyncer {
 
         List<KinesisClientLease> newLeasesToCreate = determineNewLeasesToCreate(shards, currentLeases, initialPosition,
                                                                                 inconsistentShardIds);
-        LOG.debug("Num new leases to create: " + newLeasesToCreate.size());
+        log.debug("Num new leases to create: {}", newLeasesToCreate.size());
         for (KinesisClientLease lease : newLeasesToCreate) {
             long startTimeMillis = System.currentTimeMillis();
             boolean success = false;
@@ -228,7 +227,7 @@ class ShardSyncer {
         for (String shardId : shardIdsOfClosedShards) {
             Shard shard = shardIdToShardMap.get(shardId);
             if (shard == null) {
-                LOG.info("Shard " + shardId + " is not present in Kinesis anymore.");
+                log.info("Shard {} is not present in Kinesis anymore.", shardId);
                 continue;
             }
             
@@ -381,7 +380,7 @@ class ShardSyncer {
         Set<String> shardIdsOfCurrentLeases = new HashSet<String>();
         for (KinesisClientLease lease : currentLeases) {
             shardIdsOfCurrentLeases.add(lease.getLeaseKey());
-            LOG.debug("Existing lease: " + lease);
+            log.debug("Existing lease: {}", lease);
         }
 
         List<Shard> openShards = getOpenShards(shards);
@@ -390,13 +389,13 @@ class ShardSyncer {
         // Iterate over the open shards and find those that don't have any lease entries.
         for (Shard shard : openShards) {
             String shardId = shard.getShardId();
-            LOG.debug("Evaluating leases for open shard " + shardId + " and its ancestors.");
+            log.debug("Evaluating leases for open shard {} and its ancestors.", shardId);
             if (shardIdsOfCurrentLeases.contains(shardId)) {
-                LOG.debug("Lease for shardId " + shardId + " already exists. Not creating a lease");
+                log.debug("Lease for shardId {} already exists. Not creating a lease", shardId);
             } else if (inconsistentShardIds.contains(shardId)) {
-                LOG.info("shardId " + shardId + " is an inconsistent child.  Not creating a lease");
+                log.info("shardId {} is an inconsistent child.  Not creating a lease", shardId);
             } else {
-                LOG.debug("Need to create a lease for shardId " + shardId);
+                log.debug("Need to create a lease for shardId {}", shardId);
                 KinesisClientLease newLease = newKCLLease(shard);
                 boolean isDescendant =
                         checkIfDescendantAndAddNewLeasesForAncestors(shardId,
@@ -435,7 +434,7 @@ class ShardSyncer {
                 } else {
                     newLease.setCheckpoint(convertToCheckpoint(initialPosition));
                 }
-                LOG.debug("Set checkpoint of " + newLease.getLeaseKey() + " to " + newLease.getCheckpoint());
+                log.debug("Set checkpoint of {} to {}", newLease.getLeaseKey(), newLease.getCheckpoint());
                 shardIdToNewLeaseMap.put(shardId, newLease);
             }
         }
@@ -511,9 +510,9 @@ class ShardSyncer {
                             memoizationContext)) {
                         isDescendant = true;
                         descendantParentShardIds.add(parentShardId);
-                        LOG.debug("Parent shard " + parentShardId + " is a descendant.");
+                        log.debug("Parent shard {} is a descendant.", parentShardId);
                     } else {
-                        LOG.debug("Parent shard " + parentShardId + " is NOT a descendant.");
+                        log.debug("Parent shard {} is NOT a descendant.", parentShardId);
                     }
                 }
 
@@ -521,7 +520,7 @@ class ShardSyncer {
                 if (isDescendant) {
                     for (String parentShardId : parentShardIds) {
                         if (!shardIdsOfCurrentLeases.contains(parentShardId)) {
-                            LOG.debug("Need to create a lease for shardId " + parentShardId);
+                            log.debug("Need to create a lease for shardId {}", parentShardId);
                             KinesisClientLease lease = shardIdToLeaseMapOfNewShards.get(parentShardId);
                             if (lease == null) {
                                 lease = newKCLLease(shardIdToShardMapOfAllKinesisShards.get(parentShardId));
@@ -612,9 +611,8 @@ class ShardSyncer {
         }
         
         if (!garbageLeases.isEmpty()) {
-            LOG.info("Found " + garbageLeases.size()
-                    + " candidate leases for cleanup. Refreshing list of" 
-                    + " Kinesis shards to pick up recent/latest shards");
+            log.info("Found {} candidate leases for cleanup. Refreshing list of" 
+                    + " Kinesis shards to pick up recent/latest shards", garbageLeases.size());
             List<Shard> currentShardList = getShardList(kinesisProxy);
             Set<String> currentKinesisShardIds = new HashSet<>();
             for (Shard shard : currentShardList) {
@@ -623,8 +621,7 @@ class ShardSyncer {
 
             for (KinesisClientLease lease : garbageLeases) {
                 if (isCandidateForCleanup(lease, currentKinesisShardIds)) {
-                    LOG.info("Deleting lease for shard " + lease.getLeaseKey()
-                            + " as it is not present in Kinesis stream.");
+                    log.info("Deleting lease for shard {} as it is not present in Kinesis stream.", lease.getLeaseKey());
                     leaseManager.deleteLease(lease);
                 }
             }
@@ -649,7 +646,7 @@ class ShardSyncer {
         if (currentKinesisShardIds.contains(lease.getLeaseKey())) {
             isCandidateForCleanup = false;
         } else {
-            LOG.info("Found lease for non-existent shard: " + lease.getLeaseKey() + ". Checking its parent shards");
+            log.info("Found lease for non-existent shard: {}. Checking its parent shards", lease.getLeaseKey());
             Set<String> parentShardIds = lease.getParentShardIds();
             for (String parentShardId : parentShardIds) {
                 
@@ -659,7 +656,7 @@ class ShardSyncer {
                     String message =
                             "Parent shard " + parentShardId + " exists but not the child shard "
                                     + lease.getLeaseKey();
-                    LOG.info(message);
+                    log.info(message);
                     throw new KinesisClientLibIOException(message);
                 }
             }
@@ -760,8 +757,8 @@ class ShardSyncer {
             }
             
             if (okayToDelete) {
-                LOG.info("Deleting lease for shard " + leaseForClosedShard.getLeaseKey()
-                        + " as it has been completely processed and processing of child shards has begun.");
+                log.info("Deleting lease for shard {} as it has been completely processed and processing of child "
+                        + "shards has begun.", leaseForClosedShard.getLeaseKey());
                 leaseManager.deleteLease(leaseForClosedShard);
             }
         }
@@ -817,7 +814,7 @@ class ShardSyncer {
             String endingSequenceNumber = shard.getSequenceNumberRange().getEndingSequenceNumber();
             if (endingSequenceNumber == null) {
                 openShards.add(shard);
-                LOG.debug("Found open shard: " + shard.getShardId());
+                log.debug("Found open shard: {}", shard.getShardId());
             }
         }
         return openShards;

@@ -18,19 +18,15 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Random;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * A CWPublisherRunnable contains the logic of when to publish metrics.
  * 
  * @param <KeyType>
  */
-
+@Slf4j
 public class CWPublisherRunnable<KeyType> implements Runnable {
-
-    private static final Log LOG = LogFactory.getLog(CWPublisherRunnable.class);
-
     private final ICWMetricsPublisher<KeyType> metricsPublisher;
     private final MetricAccumulatingQueue<KeyType> queue;
     private final long bufferTimeMillis;
@@ -68,12 +64,12 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
             int maxQueueSize,
             int batchSize,
             int maxJitter) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Constructing CWPublisherRunnable with maxBufferTimeMillis %d maxQueueSize %d batchSize %d maxJitter %d",
+        if (log.isDebugEnabled()) {
+            log.debug("Constructing CWPublisherRunnable with maxBufferTimeMillis {} maxQueueSize {} batchSize {} maxJitter {}",
                     bufferTimeMillis,
                     maxQueueSize,
                     batchSize,
-                    maxJitter));
+                    maxJitter);
         }
 
         this.metricsPublisher = metricsPublisher;
@@ -89,11 +85,11 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
             try {
                 runOnce();
             } catch (Throwable t) {
-                LOG.error("Encountered throwable in CWPublisherRunable", t);
+                log.error("Encountered throwable in CWPublisherRunable", t);
             }
         }
 
-        LOG.info("CWPublication thread finished.");
+        log.info("CWPublication thread finished.");
     }
 
     /**
@@ -112,13 +108,13 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
             long timeSinceFlush = Math.max(0, getTime() - lastFlushTime);
             if (timeSinceFlush >= bufferTimeMillis || queue.size() >= flushSize || shuttingDown) {
                 dataToPublish = queue.drain(flushSize);
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(String.format("Drained %d datums from queue", dataToPublish.size()));
+                if (log.isDebugEnabled()) {
+                    log.debug("Drained {} datums from queue", dataToPublish.size());
                 }
 
                 if (shuttingDown) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug(String.format("Shutting down with %d datums left on the queue", queue.size()));
+                    if (log.isDebugEnabled()) {
+                        log.debug("Shutting down with {} datums left on the queue", queue.size());
                     }
 
                     // If we're shutting down, we successfully shut down only when the queue is empty.
@@ -126,9 +122,9 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
                 }
             } else {
                 long waitTime = bufferTimeMillis - timeSinceFlush;
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug(String.format("Waiting up to %dms for %d more datums to appear.", waitTime, flushSize
-                            - queue.size()));
+                if (log.isDebugEnabled()) {
+                    log.debug("Waiting up to {} ms for {} more datums to appear.", waitTime, flushSize
+                            - queue.size());
                 }
 
                 try {
@@ -143,7 +139,7 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
             try {
                 metricsPublisher.publishMetrics(dataToPublish);
             } catch (Throwable t) {
-                LOG.error("Caught exception thrown by metrics Publisher in CWPublisherRunnable", t);
+                log.error("Caught exception thrown by metrics Publisher in CWPublisherRunnable", t);
             }
             // Changing the value of lastFlushTime will change the time when metrics are flushed next.
             lastFlushTime = getTime() + nextJitterValueToUse;
@@ -162,7 +158,7 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
     }
 
     public void shutdown() {
-        LOG.info("Shutting down CWPublication thread.");
+        log.info("Shutting down CWPublication thread.");
         synchronized (queue) {
             shuttingDown = true;
             queue.notify();
@@ -181,17 +177,17 @@ public class CWPublisherRunnable<KeyType> implements Runnable {
     public void enqueue(Collection<MetricDatumWithKey<KeyType>> data) {
         synchronized (queue) {
             if (shuttingDown) {
-                LOG.warn(String.format("Dropping metrics %s because CWPublisherRunnable is shutting down.", data));
+                log.warn("Dropping metrics {} because CWPublisherRunnable is shutting down.", data);
                 return;
             }
 
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(String.format("Enqueueing %d datums for publication", data.size()));
+            if (log.isDebugEnabled()) {
+                log.debug("Enqueueing {} datums for publication", data.size());
             }
 
             for (MetricDatumWithKey<KeyType> datumWithKey : data) {
                 if (!queue.offer(datumWithKey.key, datumWithKey.datum)) {
-                    LOG.warn("Metrics queue full - dropping metric " + datumWithKey.datum);
+                    log.warn("Metrics queue full - dropping metric {}", datumWithKey.datum);
                 }
             }
 

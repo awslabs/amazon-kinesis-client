@@ -26,20 +26,17 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfigurator;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * This class captures the configuration needed to run the MultiLangDaemon.
  */
+@Slf4j
 public class MultiLangDaemonConfig {
-
-    private static final Log LOG = LogFactory.getLog(MultiLangDaemonConfig.class);
-
     private static final String USER_AGENT = "amazon-kinesis-multi-lang-daemon";
     private static final String VERSION = "1.0.1";
 
@@ -102,8 +99,8 @@ public class MultiLangDaemonConfig {
         executorService = buildExecutorService(properties);
         recordProcessorFactory = new MultiLangRecordProcessorFactory(executableName, executorService, kinesisClientLibConfig);
 
-        LOG.info("Running " + kinesisClientLibConfig.getApplicationName() + " to process stream "
-                + kinesisClientLibConfig.getStreamName() + " with executable " + executableName);
+        log.info("Running {} to process stream {} with executable {}", kinesisClientLibConfig.getApplicationName(),
+                kinesisClientLibConfig.getStreamName(), executableName);
         prepare(processingLanguage);
     }
 
@@ -111,9 +108,9 @@ public class MultiLangDaemonConfig {
         // Ensure the JVM will refresh the cached IP values of AWS resources (e.g. service endpoints).
         java.security.Security.setProperty("networkaddress.cache.ttl", "60");
 
-        LOG.info("Using workerId: " + kinesisClientLibConfig.getWorkerIdentifier());
-        LOG.info("Using credentials with access key id: "
-                + kinesisClientLibConfig.getKinesisCredentialsProvider().getCredentials().getAWSAccessKeyId());
+        log.info("Using workerId: {}", kinesisClientLibConfig.getWorkerIdentifier());
+        log.info("Using credentials with access key id: {}",
+                kinesisClientLibConfig.getKinesisCredentialsProvider().getCredentials().getAWSAccessKeyId());
 
         StringBuilder userAgent = new StringBuilder(KinesisClientLibConfiguration.KINESIS_CLIENT_LIB_USER_AGENT);
         userAgent.append(" ");
@@ -131,8 +128,7 @@ public class MultiLangDaemonConfig {
             userAgent.append(recordProcessorFactory.getCommandArray()[0]);
         }
 
-        LOG.info(String.format("MultiLangDaemon is adding the following fields to the User Agent: %s",
-                userAgent.toString()));
+        log.info("MultiLangDaemon is adding the following fields to the User Agent: {}", userAgent.toString());
         kinesisClientLibConfig.withUserAgent(userAgent.toString());
     }
 
@@ -174,13 +170,13 @@ public class MultiLangDaemonConfig {
     private static ExecutorService buildExecutorService(Properties properties) {
         int maxActiveThreads = getMaxActiveThreads(properties);
         ThreadFactoryBuilder builder = new ThreadFactoryBuilder().setNameFormat("multi-lang-daemon-%04d");
-        LOG.debug(String.format("Value for %s property is %d", PROP_MAX_ACTIVE_THREADS, maxActiveThreads));
+        log.debug("Value for {} property is {}", PROP_MAX_ACTIVE_THREADS, maxActiveThreads);
         if (maxActiveThreads <= 0) {
-            LOG.info("Using a cached thread pool.");
+            log.info("Using a cached thread pool.");
             return new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>(),
                     builder.build());
         } else {
-            LOG.info(String.format("Using a fixed thread pool with %d max active threads.", maxActiveThreads));
+            log.info("Using a fixed thread pool with {} max active threads.", maxActiveThreads);
             return new ThreadPoolExecutor(maxActiveThreads, maxActiveThreads, 0L, TimeUnit.MILLISECONDS,
                     new LinkedBlockingQueue<Runnable>(), builder.build());
         }

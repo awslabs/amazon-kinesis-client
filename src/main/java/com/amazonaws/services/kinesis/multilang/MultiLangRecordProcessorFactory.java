@@ -16,21 +16,18 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.util.concurrent.ExecutorService;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Creates {@link MultiLangRecordProcessor}'s.
  */
+@Slf4j
 public class MultiLangRecordProcessorFactory implements IRecordProcessorFactory {
-
-    private static final Log LOG = LogFactory.getLog(MultiLangRecordProcessorFactory.class);
-
     private static final String COMMAND_DELIMETER_REGEX = " +";
 
     private final String command;
@@ -67,7 +64,7 @@ public class MultiLangRecordProcessorFactory implements IRecordProcessorFactory 
 
     @Override
     public IRecordProcessor createProcessor() {
-        LOG.debug(String.format("Creating new record processor for client executable: %s", command));
+        log.debug("Creating new record processor for client executable: {}", command);
         /*
          * Giving ProcessBuilder the command as an array of Strings allows users to specify command line arguments.
          */

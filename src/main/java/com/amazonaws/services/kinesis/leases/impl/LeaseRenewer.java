@@ -29,9 +29,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
@@ -43,12 +40,13 @@ import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingSc
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * An implementation of ILeaseRenewer that uses DynamoDB via LeaseManager.
  */
+@Slf4j
 public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
-
-    private static final Log LOG = LogFactory.getLog(LeaseRenewer.class);
     private static final int RENEWAL_RETRIES = 2;
 
     private final ILeaseManager<T> leaseManager;
@@ -78,13 +76,13 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
      */
     @Override
     public void renewLeases() throws DependencyException, InvalidStateException {
-        if (LOG.isDebugEnabled()) {
+        if (log.isDebugEnabled()) {
             // Due to the eventually consistent nature of ConcurrentNavigableMap iterators, this log entry may become
             // inaccurate during iteration.
-            LOG.debug(String.format("Worker %s holding %d leases: %s",
+            log.debug("Worker {} holding %d leases: {}",
                     workerIdentifier,
                     ownedLeases.size(),
-                    ownedLeases));
+                    ownedLeases);
         }
 
         /*
@@ -112,11 +110,11 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
                     lostLeases++;
                 }
             } catch (InterruptedException e) {
-                LOG.info("Interrupted while waiting for a lease to renew.");
+                log.info("Interrupted while waiting for a lease to renew.");
                 leasesInUnknownState += 1;
                 Thread.currentThread().interrupt();
             } catch (ExecutionException e) {
-                LOG.error("Encountered an exception while renewing a lease.", e.getCause());
+                log.error("Encountered an exception while renewing a lease.", e.getCause());
                 leasesInUnknownState += 1;
                 lastException = e;
             }
@@ -181,24 +179,24 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
                     }
 
                     if (renewedLease) {
-                        if (LOG.isDebugEnabled()) {
-                            LOG.debug(String.format("Worker %s successfully renewed lease with key %s",
+                        if (log.isDebugEnabled()) {
+                            log.debug("Worker {} successfully renewed lease with key {}",
                                     workerIdentifier,
-                                    leaseKey));
+                                    leaseKey);
                         }
                     } else {
-                        LOG.info(String.format("Worker %s lost lease with key %s", workerIdentifier, leaseKey));
+                        log.info("Worker {} lost lease with key {}", workerIdentifier, leaseKey);
                         ownedLeases.remove(leaseKey);
                     }
 
                     success = true;
                     break;
                 } catch (ProvisionedThroughputException e) {
-                    LOG.info(String.format("Worker %s could not renew lease with key %s on try %d out of %d due to capacity",
+                    log.info("Worker {} could not renew lease with key {} on try {} out of {} due to capacity",
                             workerIdentifier,
                             leaseKey,
                             i,
-                            RENEWAL_RETRIES));
+                            RENEWAL_RETRIES);
                 }
             }
         } finally {
@@ -252,8 +250,8 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
             }
 
             if (copy.isExpired(leaseDurationNanos, now)) {
-                LOG.info(String.format("getCurrentlyHeldLease not returning lease with key %s because it is expired",
-                        copy.getLeaseKey()));
+                log.info("getCurrentlyHeldLease not returning lease with key {} because it is expired",
+                        copy.getLeaseKey());
                 return null;
             } else {
                 return copy;
@@ -275,9 +273,9 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
         T authoritativeLease = ownedLeases.get(leaseKey);
 
         if (authoritativeLease == null) {
-            LOG.info(String.format("Worker %s could not update lease with key %s because it does not hold it",
+            log.info("Worker {} could not update lease with key {} because it does not hold it",
                     workerIdentifier,
-                    leaseKey));
+                    leaseKey);
             return false;
         }
 
@@ -287,8 +285,8 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
          * called update.
          */
         if (!authoritativeLease.getConcurrencyToken().equals(concurrencyToken)) {
-            LOG.info(String.format("Worker %s refusing to update lease with key %s because"
-                    + " concurrency tokens don't match", workerIdentifier, leaseKey));
+            log.info("Worker {} refusing to update lease with key {} because"
+                    + " concurrency tokens don't match", workerIdentifier, leaseKey);
             return false;
         }
 
@@ -306,9 +304,9 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
                      * If updateLease returns false, it means someone took the lease from us. Remove the lease
                      * from our set of owned leases pro-actively rather than waiting for a run of renewLeases().
                      */
-                    LOG.info(String.format("Worker %s lost lease with key %s - discovered during update",
+                    log.info("Worker {} lost lease with key {} - discovered during update",
                             workerIdentifier,
-                            leaseKey));
+                            leaseKey);
 
                     /*
                      * Remove only if the value currently in the map is the same as the authoritative lease. We're
@@ -345,8 +343,8 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
 
         for (T lease : newLeases) {
             if (lease.getLastCounterIncrementNanos() == null) {
-                LOG.info(String.format("addLeasesToRenew ignoring lease with key %s because it does not have lastRenewalNanos set",
-                        lease.getLeaseKey()));
+                log.info("addLeasesToRenew ignoring lease with key {} because it does not have lastRenewalNanos set",
+                        lease.getLeaseKey());
                 continue;
             }
 
@@ -389,7 +387,7 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
 
         for (T lease : leases) {
             if (workerIdentifier.equals(lease.getLeaseOwner())) {
-                LOG.info(String.format(" Worker %s found lease %s", workerIdentifier, lease));
+                log.info(" Worker {} found lease {}", workerIdentifier, lease);
                 // Okay to renew even if lease is expired, because we start with an empty list and we add the lease to
                 // our list only after a successful renew. So we don't need to worry about the edge case where we could
                 // continue renewing a lease after signaling a lease loss to the application.
@@ -397,7 +395,7 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
                     myLeases.add(lease);
                 }
             } else {
-                LOG.debug(String.format("Worker %s ignoring lease %s ", workerIdentifier, lease));
+                log.debug("Worker {} ignoring lease {} ", workerIdentifier, lease);
             }
         }
 

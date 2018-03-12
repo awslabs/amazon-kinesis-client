@@ -14,20 +14,17 @@
  */
 package com.amazonaws.services.kinesis.metrics.impl;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.cloudwatch.model.Dimension;
 import com.amazonaws.services.cloudwatch.model.MetricDatum;
 import com.amazonaws.services.cloudwatch.model.StatisticSet;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * An AccumulatingMetricsScope that outputs via log4j.
  */
+@Slf4j
 public class LogMetricsScope extends AccumulateByNameMetricsScope {
-
-    private static final Log LOG = LogFactory.getLog(LogMetricsScope.class);
-
     @Override
     public void end() {
         StringBuilder output = new StringBuilder();
@@ -53,6 +50,6 @@ public class LogMetricsScope extends AccumulateByNameMetricsScope {
                     datum.getUnit()));
         }
 
-        LOG.info(output.toString());
+        log.info(output.toString());
     }
 }

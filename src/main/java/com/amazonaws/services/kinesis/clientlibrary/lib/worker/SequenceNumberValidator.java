@@ -14,9 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
@@ -26,6 +23,8 @@ import com.amazonaws.services.kinesis.model.InvalidArgumentException;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * This class provides some methods for validating sequence numbers. It provides a method
  * {@link #validateSequenceNumber(String)} which validates a sequence number by attempting to get an iterator from
@@ -34,10 +33,8 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
  * which could prevent another shard consumer instance from processing the shard later on). This class also provides a
  * utility function {@link #isDigits(String)} which is used to check whether a string is all digits
  */
+@Slf4j
 public class SequenceNumberValidator {
-
-    private static final Log LOG = LogFactory.getLog(SequenceNumberValidator.class);
-
     private IKinesisProxy proxy;
     private String shardId;
     private boolean validateWithGetIterator;
@@ -73,24 +70,24 @@ public class SequenceNumberValidator {
         boolean atShardEnd = ExtendedSequenceNumber.SHARD_END.getSequenceNumber().equals(sequenceNumber);
 
         if (!atShardEnd && !isDigits(sequenceNumber)) {
-            LOG.info("Sequence number must be numeric, but was " + sequenceNumber);
+            log.info("Sequence number must be numeric, but was {}", sequenceNumber);
             throw new IllegalArgumentException("Sequence number must be numeric, but was " + sequenceNumber);
         }
         try {
             if (!atShardEnd &&validateWithGetIterator) {
                 proxy.getIterator(shardId, ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(), sequenceNumber);
-                LOG.info("Validated sequence number " + sequenceNumber + " with shard id " + shardId);
+                log.info("Validated sequence number {} with shard id {}", sequenceNumber, shardId);
             }
         } catch (InvalidArgumentException e) {
-            LOG.info("Sequence number " + sequenceNumber + " is invalid for shard " + shardId, e);
+            log.info("Sequence number {} is invalid for shard {}", sequenceNumber, shardId, e);
             throw new IllegalArgumentException("Sequence number " + sequenceNumber + " is invalid for shard "
                     + shardId, e);
         } catch (ProvisionedThroughputExceededException e) {
             // clients should have back off logic in their checkpoint logic
-            LOG.info("Exceeded throughput while getting an iterator for shard " + shardId, e);
+            log.info("Exceeded throughput while getting an iterator for shard {}", shardId, e);
             throw new ThrottlingException("Exceeded throughput while getting an iterator for shard " + shardId, e);
         } catch (AmazonServiceException e) {
-            LOG.info("Encountered service exception while getting an iterator for shard " + shardId, e);
+            log.info("Encountered service exception while getting an iterator for shard {}", shardId, e);
             if (e.getStatusCode() >= SERVER_SIDE_ERROR_CODE) {
                 // clients can choose whether to retry in their checkpoint logic
                 throw new KinesisClientLibDependencyException("Encountered service exception while getting an iterator"

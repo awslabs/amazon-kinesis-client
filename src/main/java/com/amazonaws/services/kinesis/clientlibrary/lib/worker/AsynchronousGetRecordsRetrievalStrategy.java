@@ -35,12 +35,12 @@ import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.NonNull;
-import lombok.extern.apachecommons.CommonsLog;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
  */
-@CommonsLog
+@Slf4j
 public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrievalStrategy {
     private static final int TIME_TO_KEEP_ALIVE = 5;
     private static final int CORE_THREAD_POOL_COUNT = 1;

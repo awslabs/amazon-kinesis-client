@@ -14,16 +14,16 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import org.apache.commons.logging.Log;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.slf4j.Logger;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ThrottlingReporterTest {
@@ -31,14 +31,14 @@ public class ThrottlingReporterTest {
     private static final String SHARD_ID = "Shard-001";
 
     @Mock
-    private Log throttleLog;
+    private Logger throttleLog;
 
     @Test
     public void testLessThanMaxThrottles() {
         ThrottlingReporter reporter = new LogTestingThrottingReporter(5, SHARD_ID);
         reporter.throttled();
-        verify(throttleLog).warn(any(Object.class));
-        verify(throttleLog, never()).error(any(Object.class));
+        verify(throttleLog).warn(anyString());
+        verify(throttleLog, never()).error(anyString());
 
     }
 
@@ -47,8 +47,8 @@ public class ThrottlingReporterTest {
         ThrottlingReporter reporter = new LogTestingThrottingReporter(1, SHARD_ID);
         reporter.throttled();
         reporter.throttled();
-        verify(throttleLog).warn(any(Object.class));
-        verify(throttleLog).error(any(Object.class));
+        verify(throttleLog).warn(anyString());
+        verify(throttleLog).error(anyString());
     }
 
     @Test
@@ -60,8 +60,8 @@ public class ThrottlingReporterTest {
         reporter.throttled();
         reporter.success();
         reporter.throttled();
-        verify(throttleLog, times(2)).warn(any(Object.class));
-        verify(throttleLog, times(3)).error(any(Object.class));
+        verify(throttleLog, times(2)).warn(anyString());
+        verify(throttleLog, times(3)).error(anyString());
 
     }
 
@@ -72,7 +72,7 @@ public class ThrottlingReporterTest {
         }
 
         @Override
-        protected Log getLog() {
+        protected Logger getLog() {
             return throttleLog;
         }
     }

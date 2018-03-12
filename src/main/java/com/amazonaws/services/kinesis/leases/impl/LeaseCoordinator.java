@@ -26,9 +26,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
@@ -44,12 +41,15 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * LeaseCoordinator abstracts away LeaseTaker and LeaseRenewer from the application code that's using leasing. It owns
  * the scheduling of the two previously mentioned components as well as informing LeaseRenewer when LeaseTaker takes new
  * leases.
  *
  */
+@Slf4j
 public class LeaseCoordinator<T extends Lease> {
 
     /*
@@ -57,8 +57,6 @@ public class LeaseCoordinator<T extends Lease> {
      * can easily create InterceptingMetricsFactories that rename this dimension to suit the destination metrics system.
      */
     public static final String WORKER_IDENTIFIER_METRIC = "WorkerIdentifier";
-
-    private static final Log LOG = LogFactory.getLog(LeaseCoordinator.class);
 
     // Time to wait for in-flight Runnables to finish when calling .stop();
     private static final long STOP_WAIT_TIME_MILLIS = 2000L;
@@ -148,15 +146,14 @@ public class LeaseCoordinator<T extends Lease> {
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
         this.metricsFactory = metricsFactory;
 
-        LOG.info(String.format(
-                "With failover time %d ms and epsilon %d ms, LeaseCoordinator will renew leases every %d ms, take" +
-                        "leases every %d ms, process maximum of %d leases and steal %d lease(s) at a time.",
+        log.info("With failover time {} ms and epsilon {} ms, LeaseCoordinator will renew leases every {} ms, take"
+                        + "leases every {} ms, process maximum of {} leases and steal {} lease(s) at a time.",
                 leaseDurationMillis,
                 epsilonMillis,
                 renewerIntervalMillis,
                 takerIntervalMillis,
                 maxLeasesForWorker,
-                maxLeasesToStealAtOneTime));
+                maxLeasesToStealAtOneTime);
     }
 
     private class TakerRunnable implements Runnable {
@@ -166,9 +163,9 @@ public class LeaseCoordinator<T extends Lease> {
             try {
                 runTaker();
             } catch (LeasingException e) {
-                LOG.error("LeasingException encountered in lease taking thread", e);
+                log.error("LeasingException encountered in lease taking thread", e);
             } catch (Throwable t) {
-                LOG.error("Throwable encountered in lease taking thread", t);
+                log.error("Throwable encountered in lease taking thread", t);
             }
         }
 
@@ -181,9 +178,9 @@ public class LeaseCoordinator<T extends Lease> {
             try {
                 runRenewer();
             } catch (LeasingException e) {
-                LOG.error("LeasingException encountered in lease renewing thread", e);
+                log.error("LeasingException encountered in lease renewing thread", e);
             } catch (Throwable t) {
-                LOG.error("Throwable encountered in lease renewing thread", t);
+                log.error("Throwable encountered in lease renewing thread", t);
             }
         }
 
@@ -296,19 +293,19 @@ public class LeaseCoordinator<T extends Lease> {
             leaseCoordinatorThreadPool.shutdown();
             try {
                 if (leaseCoordinatorThreadPool.awaitTermination(STOP_WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS)) {
-                    LOG.info(String.format("Worker %s has successfully stopped lease-tracking threads",
-                            leaseTaker.getWorkerIdentifier()));
+                    log.info("Worker {} has successfully stopped lease-tracking threads",
+                            leaseTaker.getWorkerIdentifier());
                 } else {
                     leaseCoordinatorThreadPool.shutdownNow();
-                    LOG.info(String.format("Worker %s stopped lease-tracking threads %dms after stop",
-                        leaseTaker.getWorkerIdentifier(),
-                        STOP_WAIT_TIME_MILLIS));
+                    log.info("Worker {} stopped lease-tracking threads {} ms after stop",
+                            leaseTaker.getWorkerIdentifier(),
+                            STOP_WAIT_TIME_MILLIS);
                 }
             } catch (InterruptedException e) {
-                LOG.debug("Encountered InterruptedException when awaiting threadpool termination");
+                log.debug("Encountered InterruptedException when awaiting threadpool termination");
             }
         } else {
-            LOG.debug("Threadpool was null, no need to shutdown/terminate threadpool.");
+            log.debug("Threadpool was null, no need to shutdown/terminate threadpool.");
         }
 
         leaseRenewalThreadpool.shutdownNow();

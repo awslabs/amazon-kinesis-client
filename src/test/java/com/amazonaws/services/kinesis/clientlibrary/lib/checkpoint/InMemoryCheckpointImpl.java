@@ -17,20 +17,17 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Everything is stored in memory and there is no fault-tolerance.
  */
+@Slf4j
 public class InMemoryCheckpointImpl implements ICheckpoint {
-
-    private static final Log LOG = LogFactory.getLog(InMemoryCheckpointImpl.class);
-
     private Map<String, ExtendedSequenceNumber> checkpoints = new HashMap<>();
     private Map<String, ExtendedSequenceNumber> flushpoints = new HashMap<>();
     private Map<String, ExtendedSequenceNumber> pendingCheckpoints = new HashMap<>();
@@ -51,13 +48,13 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
         if (checkpoint == null) {
             checkpoint = new ExtendedSequenceNumber(startingSequenceNumber);
         }
-        LOG.debug("getLastCheckpoint shardId: " + shardId + " checkpoint: " + checkpoint);
+        log.debug("getLastCheckpoint shardId: {} checkpoint: {}", shardId, checkpoint);
         return checkpoint;
     }
 
     ExtendedSequenceNumber getLastFlushpoint(String shardId) {
         ExtendedSequenceNumber flushpoint = flushpoints.get(shardId);
-        LOG.debug("getLastFlushpoint shardId: " + shardId + " flushpoint: " + flushpoint);
+        log.debug("getLastFlushpoint shardId: {} flushpoint: {}", shardId, flushpoint);
         return flushpoint;
     }
 
@@ -73,8 +70,8 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
     ExtendedSequenceNumber getGreatestPrimaryFlushpoint(String shardId) throws KinesisClientLibException {
         verifyNotEmpty(shardId, "shardId must not be null.");
         ExtendedSequenceNumber greatestFlushpoint = getLastFlushpoint(shardId);
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("getGreatestPrimaryFlushpoint value for shardId " + shardId + " = " + greatestFlushpoint);
+        if (log.isDebugEnabled()) {
+            log.debug("getGreatestPrimaryFlushpoint value for shardId {} = {}", shardId, greatestFlushpoint);
         }
         return greatestFlushpoint;
     };
@@ -82,8 +79,8 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
     ExtendedSequenceNumber getRestartPoint(String shardId) {
         verifyNotEmpty(shardId, "shardId must not be null.");
         ExtendedSequenceNumber restartPoint = getLastCheckpoint(shardId);
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("getRestartPoint value for shardId " + shardId + " = " + restartPoint);
+        if (log.isDebugEnabled()) {
+            log.debug("getRestartPoint value for shardId {} = {}", shardId, restartPoint);
         }
         return restartPoint;
     }
@@ -98,8 +95,8 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
         flushpoints.put(shardId, checkpointValue);
         pendingCheckpoints.remove(shardId);
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("shardId: " + shardId + " checkpoint: " + checkpointValue);
+        if (log.isDebugEnabled()) {
+            log.debug("shardId: {} checkpoint: {}", shardId, checkpointValue);
         }
 
     }
@@ -110,7 +107,7 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
     @Override
     public ExtendedSequenceNumber getCheckpoint(String shardId) throws KinesisClientLibException {
         ExtendedSequenceNumber checkpoint = flushpoints.get(shardId);
-        LOG.debug("getCheckpoint shardId: " + shardId + " checkpoint: " + checkpoint);
+        log.debug("getCheckpoint shardId: {} checkpoint: {}",  shardId, checkpoint);
         return checkpoint;
     }
 
@@ -126,7 +123,7 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
         ExtendedSequenceNumber pendingCheckpoint = pendingCheckpoints.get(shardId);
 
         Checkpoint checkpointObj = new Checkpoint(checkpoint, pendingCheckpoint);
-        LOG.debug("getCheckpointObject shardId: " + shardId + ", " + checkpointObj);
+        log.debug("getCheckpointObject shardId: {}, {}", shardId, checkpointObj);
         return checkpointObj;
     }
 

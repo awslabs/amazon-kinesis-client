@@ -14,13 +14,13 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import lombok.Getter;
+import org.slf4j.Logger;
+
 import lombok.RequiredArgsConstructor;
-import lombok.extern.apachecommons.CommonsLog;
-import org.apache.commons.logging.Log;
+import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
-@CommonsLog
+@Slf4j
 class ThrottlingReporter {
 
     private final int maxConsecutiveWarnThrottles;
@@ -45,7 +45,7 @@ class ThrottlingReporter {
         consecutiveThrottles = 0;
     }
 
-    protected Log getLog() {
+    protected Logger getLog() {
         return log;
     }
 

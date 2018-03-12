@@ -17,22 +17,18 @@ package com.amazonaws.services.kinesis.metrics.impl;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.model.MetricDatum;
 import com.amazonaws.services.cloudwatch.model.PutMetricDataRequest;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Default implementation for publishing metrics to CloudWatch.
  */
-
+@Slf4j
 public class DefaultCWMetricsPublisher implements ICWMetricsPublisher<CWMetricKey> {
-
-    private static final Log LOG = LogFactory.getLog(CWPublisherRunnable.class);
-
     // CloudWatch API has a limit of 20 MetricDatums per request
     private static final int BATCH_SIZE = 20;
 
@@ -62,9 +58,9 @@ public class DefaultCWMetricsPublisher implements ICWMetricsPublisher<CWMetricKe
             try {
                 cloudWatchClient.putMetricData(request);
 
-                LOG.debug(String.format("Successfully published %d datums.", endIndex - startIndex));
+                log.debug("Successfully published {} datums.", endIndex - startIndex);
             } catch (AmazonClientException e) {
-                LOG.warn(String.format("Could not publish %d datums to CloudWatch", endIndex - startIndex), e);
+                log.warn("Could not publish {} datums to CloudWatch", endIndex - startIndex, e);
             }
         }
     }
