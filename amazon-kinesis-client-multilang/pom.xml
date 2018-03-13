@@ -83,13 +83,6 @@
       <scope>test</scope>
     </dependency>
 
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>DynamoDBLocal</artifactId>
-      <version>1.11.86</version>
-      <scope>test</scope>
-    </dependency>
-
   </dependencies>
 
 </project>

@@ -41,10 +41,22 @@
       <distribution>repo</distribution>
     </license>
   </licenses>
+
   <modules>
     <module>amazon-kinesis-client</module>
     <module>amazon-kinesis-client-multilang</module>
   </modules>
+
+  <developers>
+    <developer>
+      <id>amazonwebservices</id>
+      <organization>Amazon Web Services</organization>
+      <organizationUrl>https://aws.amazon.com</organizationUrl>
+      <roles>
+        <role>developer</role>
+      </roles>
+    </developer>
+  </developers>
 
   <build>
     <pluginManagement>
