@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.multilang.config;
+package software.amazon.aws.services.kinesis.multilang.config;
 
 import static org.junit.Assert.assertEquals;
 
@@ -30,9 +30,9 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
     private static final String TEST_SECRET_KEY = "456";
 
     private String credentialName1 =
-            "com.amazonaws.services.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$AlwaysSucceedCredentialsProvider";
+            "software.amazon.aws.services.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$AlwaysSucceedCredentialsProvider";
     private String credentialName2 =
-            "com.amazonaws.services.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$ConstructorCredentialsProvider";
+            "software.amazon.aws.services.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$ConstructorCredentialsProvider";
     private AWSCredentialsProviderPropertyValueDecoder decoder = new AWSCredentialsProviderPropertyValueDecoder();
 
     @Test

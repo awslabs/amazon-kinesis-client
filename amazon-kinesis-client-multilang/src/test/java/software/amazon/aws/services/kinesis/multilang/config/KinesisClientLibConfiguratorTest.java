@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.multilang.config;
+package software.amazon.aws.services.kinesis.multilang.config;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -39,15 +39,15 @@ import software.amazon.aws.services.kinesis.multilang.config.KinesisClientLibCon
 public class KinesisClientLibConfiguratorTest {
 
     private String credentialName1 =
-            "com.amazonaws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProvider";
+            "software.amazon.aws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProvider";
     private String credentialName2 =
-            "com.amazonaws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysFailCredentialsProvider";
+            "software.amazon.aws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysFailCredentialsProvider";
     private String credentialNameKinesis =
-            "com.amazonaws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProviderKinesis";
+            "software.amazon.aws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProviderKinesis";
     private String credentialNameDynamoDB =
-            "com.amazonaws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProviderDynamoDB";
+            "software.amazon.aws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProviderDynamoDB";
     private String credentialNameCloudWatch =
-            "com.amazonaws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProviderCloudWatch";
+            "software.amazon.aws.services.kinesis.multilang.config.KinesisClientLibConfiguratorTest$AlwaysSucceedCredentialsProviderCloudWatch";
     private KinesisClientLibConfigurator configurator = new KinesisClientLibConfigurator();
 
     @Test

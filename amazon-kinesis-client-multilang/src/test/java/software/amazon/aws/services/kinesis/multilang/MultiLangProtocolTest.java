@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.multilang;
+package software.amazon.aws.services.kinesis.multilang;
 
 import software.amazon.aws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import software.amazon.aws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
@@ -37,9 +37,6 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
-import software.amazon.aws.services.kinesis.multilang.MessageReader;
-import software.amazon.aws.services.kinesis.multilang.MessageWriter;
-import software.amazon.aws.services.kinesis.multilang.MultiLangProtocol;
 
 import java.util.ArrayList;
 import java.util.Collections;
