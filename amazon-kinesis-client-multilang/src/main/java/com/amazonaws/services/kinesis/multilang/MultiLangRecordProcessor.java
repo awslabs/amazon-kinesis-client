@@ -21,16 +21,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -39,9 +38,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * that object when its corresponding {@link #initialize}, {@link #processRecords}, and {@link #shutdown} methods are
  * called.
  */
+@Slf4j
 public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNotificationAware {
-
-    private static final Log LOG = LogFactory.getLog(MultiLangRecordProcessor.class);
     private static final int EXIT_VALUE = 1;
 
     /** Whether or not record processor initialization is successful. Defaults to false. */
@@ -116,7 +114,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
         // In cases where KCL loses lease for the shard after creating record processor instance but before
         // record processor initialize() is called, then shutdown() may be called directly before initialize().
         if (!initialized) {
-            LOG.info("Record processor was not initialized and will not have a child process, "
+            log.info("Record processor was not initialized and will not have a child process, "
                     + "so not invoking child process shutdown.");
             this.state = ProcessState.SHUTDOWN;
             return;
@@ -130,7 +128,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
 
                 childProcessShutdownSequence();
             } else {
-                LOG.warn("Shutdown was called but this processor is already shutdown. Not doing anything.");
+                log.warn("Shutdown was called but this processor is already shutdown. Not doing anything.");
             }
         } catch (Throwable t) {
             if (ProcessState.ACTIVE.equals(this.state)) {
@@ -144,14 +142,14 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
 
     @Override
     public void shutdownRequested(IRecordProcessorCheckpointer checkpointer) {
-        LOG.info("Shutdown is requested.");
+        log.info("Shutdown is requested.");
         if (!initialized) {
-            LOG.info("Record processor was not initialized so no need to initiate a final checkpoint.");
+            log.info("Record processor was not initialized so no need to initiate a final checkpoint.");
             return;
         }
-        LOG.info("Requesting a checkpoint on shutdown notification.");
+        log.info("Requesting a checkpoint on shutdown notification.");
         if (!protocol.shutdownRequested(checkpointer)) {
-            LOG.error("Child process failed to complete shutdown notification.");
+            log.error("Child process failed to complete shutdown notification.");
         }
     }
 
@@ -226,7 +224,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
                 messageWriter.close();
             }
         } catch (IOException e) {
-            LOG.error("Encountered exception while trying to close output stream.", e);
+            log.error("Encountered exception while trying to close output stream.", e);
         }
 
         // We should drain the STDOUT and STDERR of the child process. If we don't, the child process might remain
@@ -243,9 +241,9 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
          * sure that it exits before we finish.
          */
         try {
-            LOG.info("Child process exited with value: " + process.waitFor());
+            log.info("Child process exited with value: {}", process.waitFor());
         } catch (InterruptedException e) {
-            LOG.error("Interrupted before process finished exiting. Attempting to kill process.");
+            log.error("Interrupted before process finished exiting. Attempting to kill process.");
             process.destroy();
         }
 
@@ -256,7 +254,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
         try {
             inputStream.close();
         } catch (IOException e) {
-            LOG.error("Encountered exception while trying to close " + name + " stream.", e);
+            log.error("Encountered exception while trying to close {} stream.", name, e);
         }
     }
 
@@ -271,7 +269,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
         try {
             future.get();
         } catch (InterruptedException | ExecutionException e) {
-            LOG.error("Encountered error while " + whatThisFutureIsDoing + " for shard " + shardId, e);
+            log.error("Encountered error while {} for shard {}", whatThisFutureIsDoing, shardId, e);
         }
     }
 
@@ -284,12 +282,12 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
      */
     private void stopProcessing(String message, Throwable reason) {
         try {
-            LOG.error(message, reason);
+            log.error(message, reason);
             if (!state.equals(ProcessState.SHUTDOWN)) {
                 childProcessShutdownSequence();
             }
         } catch (Throwable t) {
-            LOG.error("Encountered error while trying to shutdown", t);
+            log.error("Encountered error while trying to shutdown", t);
         }
         exit();
     }

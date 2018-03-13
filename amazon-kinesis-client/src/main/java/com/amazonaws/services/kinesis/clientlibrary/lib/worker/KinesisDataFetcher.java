@@ -18,8 +18,6 @@ import java.util.Collections;
 import java.util.Date;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
@@ -32,14 +30,13 @@ import com.amazonaws.util.CollectionUtils;
 import com.google.common.collect.Iterables;
 
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
  */
+@Slf4j
 class KinesisDataFetcher {
-
-    private static final Log LOG = LogFactory.getLog(KinesisDataFetcher.class);
-
     private String nextIterator;
     private IKinesisProxy kinesisProxy;
     private final String shardId;
@@ -73,7 +70,7 @@ class KinesisDataFetcher {
             try {
                 return new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
             } catch (ResourceNotFoundException e) {
-                LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
+                log.info("Caught ResourceNotFoundException when fetching records for shard {}", shardId);
                 return TERMINAL_RESULT;
             }
         } else {
@@ -134,14 +131,14 @@ class KinesisDataFetcher {
      * @param initialPositionInStream The initialPositionInStream.
      */
     public void initialize(String initialCheckpoint, InitialPositionInStreamExtended initialPositionInStream) {
-        LOG.info("Initializing shard " + shardId + " with " + initialCheckpoint);
+        log.info("Initializing shard {} with {}", shardId, initialCheckpoint);
         advanceIteratorTo(initialCheckpoint, initialPositionInStream);
         isInitialized = true;
     }
 
     public void initialize(ExtendedSequenceNumber initialCheckpoint,
             InitialPositionInStreamExtended initialPositionInStream) {
-        LOG.info("Initializing shard " + shardId + " with " + initialCheckpoint.getSequenceNumber());
+        log.info("Initializing shard {} with {}", shardId, initialCheckpoint.getSequenceNumber());
         advanceIteratorTo(initialCheckpoint.getSequenceNumber(), initialPositionInStream);
         isInitialized = true;
     }
@@ -182,13 +179,13 @@ class KinesisDataFetcher {
     private String getIterator(String iteratorType, String sequenceNumber) {
         String iterator = null;
         try {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Calling getIterator for " + shardId + ", iterator type " + iteratorType
-                    + " and sequence number " + sequenceNumber);
+            if (log.isDebugEnabled()) {
+                log.debug("Calling getIterator for {}, iterator type {} and sequence number {}", shardId, iteratorType,
+                        sequenceNumber);
             }
             iterator = kinesisProxy.getIterator(shardId, iteratorType, sequenceNumber);
         } catch (ResourceNotFoundException e) {
-            LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
+            log.info("Caught ResourceNotFoundException when getting an iterator for shard {}", shardId, e);
         }
         return iterator;
     }
@@ -200,12 +197,12 @@ class KinesisDataFetcher {
     private String getIterator(String iteratorType) {
         String iterator = null;
         try {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Calling getIterator for " + shardId + " and iterator type " + iteratorType);
+            if (log.isDebugEnabled()) {
+                log.debug("Calling getIterator for {} and iterator type {}", shardId, iteratorType);
             }
             iterator = kinesisProxy.getIterator(shardId, iteratorType);
         } catch (ResourceNotFoundException e) {
-            LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
+            log.info("Caught ResourceNotFoundException when getting an iterator for shard {}", shardId, e);
         }
         return iterator;
     }
@@ -217,12 +214,12 @@ class KinesisDataFetcher {
     private String getIterator(Date timestamp) {
         String iterator = null;
         try {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Calling getIterator for " + shardId + " and timestamp " + timestamp);
+            if (log.isDebugEnabled()) {
+                log.debug("Calling getIterator for {} and timestamp {}", shardId, timestamp);
             }
             iterator = kinesisProxy.getIterator(shardId, timestamp);
         } catch (ResourceNotFoundException e) {
-            LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
+            log.info("Caught ResourceNotFoundException when getting an iterator for shard {}", shardId, e);
         }
         return iterator;
     }

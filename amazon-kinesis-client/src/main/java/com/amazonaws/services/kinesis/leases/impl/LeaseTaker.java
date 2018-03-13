@@ -26,9 +26,6 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
@@ -39,13 +36,13 @@ import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * An implementation of ILeaseTaker that uses DynamoDB via LeaseManager.
  */
+@Slf4j
 public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
-
-    private static final Log LOG = LogFactory.getLog(LeaseTaker.class);
-
     private static final int TAKE_RETRIES = 3;
     private static final int SCAN_RETRIES = 1;
 
@@ -146,10 +143,10 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                     updateAllLeases(timeProvider);
                     success = true;
                 } catch (ProvisionedThroughputException e) {
-                    LOG.info(String.format("Worker %s could not find expired leases on try %d out of %d",
+                    log.info("Worker {} could not find expired leases on try {} out of {}",
                             workerIdentifier,
                             i,
-                            TAKE_RETRIES));
+                            TAKE_RETRIES);
                     lastException = e;
                 }
             }
@@ -158,8 +155,8 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
         }
 
         if (lastException != null) {
-            LOG.error("Worker " + workerIdentifier
-                    + " could not scan leases table, aborting takeLeases. Exception caught by last retry:",
+            log.error("Worker {} could not scan leases table, aborting takeLeases. Exception caught by last retry:",
+                    workerIdentifier,
                     lastException);
             return takenLeases;
         }
@@ -187,11 +184,11 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                         success = true;
                         break;
                     } catch (ProvisionedThroughputException e) {
-                        LOG.info(String.format("Could not take lease with key %s for worker %s on try %d out of %d due to capacity",
+                        log.info("Could not take lease with key {} for worker {} on try {} out of {} due to capacity",
                                 leaseKey,
                                 workerIdentifier,
                                 i,
-                                TAKE_RETRIES));
+                                TAKE_RETRIES);
                     }
                 }
             } finally {
@@ -200,17 +197,17 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
         }
 
         if (takenLeases.size() > 0) {
-            LOG.info(String.format("Worker %s successfully took %d leases: %s",
+            log.info("Worker {} successfully took {} leases: {}",
                     workerIdentifier,
                     takenLeases.size(),
-                    stringJoin(takenLeases.keySet(), ", ")));
+                    stringJoin(takenLeases.keySet(), ", "));
         }
 
         if (untakenLeaseKeys.size() > 0) {
-            LOG.info(String.format("Worker %s failed to take %d leases: %s",
+            log.info("Worker {} failed to take {} leases: {}",
                     workerIdentifier,
                     untakenLeaseKeys.size(),
-                    stringJoin(untakenLeaseKeys, ", ")));
+                    stringJoin(untakenLeaseKeys, ", "));
         }
 
         MetricsHelper.getMetricsScope().addData(
@@ -284,16 +281,16 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
                     // if this new lease is unowned, it's never been renewed.
                     lease.setLastCounterIncrementNanos(0L);
 
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Treating new lease with key " + leaseKey
-                                + " as never renewed because it is new and unowned.");
+                    if (log.isDebugEnabled()) {
+                        log.debug("Treating new lease with key {} as never renewed because it is new and unowned.",
+                                leaseKey);
                     }
                 } else {
                     // if this new lease is owned, treat it as renewed as of the scan
                     lease.setLastCounterIncrementNanos(lastScanTimeNanos);
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Treating new lease with key " + leaseKey
-                                + " as recently renewed because it is new and owned.");
+                    if (log.isDebugEnabled()) {
+                        log.debug("Treating new lease with key {} as recently renewed because it is new and owned.",
+                                leaseKey);
                     }
                 }
             }
@@ -356,14 +353,14 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
             // exceed the max allowed for this worker.
             int leaseSpillover = Math.max(0, target - maxLeasesForWorker);
             if (target > maxLeasesForWorker) {
-                LOG.warn(String.format("Worker %s target is %d leases and maxLeasesForWorker is %d."
-                        + " Resetting target to %d, lease spillover is %d. "
+                log.warn("Worker {} target is {} leases and maxLeasesForWorker is {}."
+                        + " Resetting target to {}, lease spillover is {}. "
                         + " Note that some shards may not be processed if no other workers are able to pick them up.",
                         workerIdentifier,
                         target,
                         maxLeasesForWorker,
                         maxLeasesForWorker,
-                        leaseSpillover));
+                        leaseSpillover);
                 target = maxLeasesForWorker;
             }
             metrics.addData("LeaseSpillover", leaseSpillover, StandardUnit.Count, MetricsLevel.SUMMARY);
@@ -390,25 +387,25 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
             // If there are no expired leases and we need a lease, consider stealing.
             List<T> leasesToSteal = chooseLeasesToSteal(leaseCounts, numLeasesToReachTarget, target);
             for (T leaseToSteal : leasesToSteal) {
-                LOG.info(String.format("Worker %s needed %d leases but none were expired, so it will steal lease %s from %s",
+                log.info("Worker {} needed {} leases but none were expired, so it will steal lease {} from {}",
                         workerIdentifier,
                         numLeasesToReachTarget,
                         leaseToSteal.getLeaseKey(),
-                        leaseToSteal.getLeaseOwner()));
+                        leaseToSteal.getLeaseOwner());
                 leasesToTake.add(leaseToSteal);
             }
         }
 
         if (!leasesToTake.isEmpty()) {
-            LOG.info(String.format("Worker %s saw %d total leases, %d available leases, %d "
-                    + "workers. Target is %d leases, I have %d leases, I will take %d leases",
+            log.info("Worker {} saw {} total leases, {} available leases, {} "
+                    + "workers. Target is {} leases, I have {} leases, I will take {} leases",
                     workerIdentifier,
                     numLeases,
                     originalExpiredLeasesSize,
                     numWorkers,
                     target,
                     myCount,
-                    leasesToTake.size()));
+                    leasesToTake.size());
         }
 
         metrics.addData("TotalLeases", numLeases, StandardUnit.Count, MetricsLevel.DETAILED);
@@ -456,8 +453,8 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
         }
 
         if (numLeasesToSteal <= 0) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(String.format("Worker %s not stealing from most loaded worker %s.  He has %d,"
+            if (log.isDebugEnabled()) {
+                log.debug(String.format("Worker %s not stealing from most loaded worker %s.  He has %d,"
                         + " target is %d, and I need %d",
                         workerIdentifier,
                         mostLoadedWorker.getKey(),
@@ -467,16 +464,16 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
             }
             return leasesToSteal;
         } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(String.format("Worker %s will attempt to steal %d leases from most loaded worker %s. "
-                        + " He has %d leases, target is %d, I need %d, maxLeasesToSteatAtOneTime is %d.",
+            if (log.isDebugEnabled()) {
+                log.debug("Worker {} will attempt to steal {} leases from most loaded worker {}. "
+                        + " He has {} leases, target is {}, I need {}, maxLeasesToSteatAtOneTime is {}.",
                         workerIdentifier,
                         numLeasesToSteal,
                         mostLoadedWorker.getKey(),
                         mostLoadedWorker.getValue(),
                         target,
                         needed,
-                        maxLeasesToStealAtOneTime));
+                        maxLeasesToStealAtOneTime);
             }
         }
 

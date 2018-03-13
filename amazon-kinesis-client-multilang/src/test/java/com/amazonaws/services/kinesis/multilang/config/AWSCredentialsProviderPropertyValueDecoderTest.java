@@ -29,9 +29,9 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
     private static final String TEST_SECRET_KEY = "456";
 
     private String credentialName1 =
-            "com.amazonaws.services.kinesis.clientlibrary.config.AWSCredentialsProviderPropertyValueDecoderTest$AlwaysSucceedCredentialsProvider";
+            "com.amazonaws.services.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$AlwaysSucceedCredentialsProvider";
     private String credentialName2 =
-            "com.amazonaws.services.kinesis.clientlibrary.config.AWSCredentialsProviderPropertyValueDecoderTest$ConstructorCredentialsProvider";
+            "com.amazonaws.services.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$ConstructorCredentialsProvider";
     private AWSCredentialsProviderPropertyValueDecoder decoder = new AWSCredentialsProviderPropertyValueDecoder();
 
     @Test

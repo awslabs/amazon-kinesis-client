@@ -28,11 +28,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * KinesisClientLibConfigurator constructs a KinesisClientLibConfiguration from java properties file. The following
@@ -42,9 +41,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibC
  * KinesisClientLibConfiguration and has a corresponding "with{variableName}" setter method, will be read in, and its
  * value in properties file will be assigned to corresponding variable in KinesisClientLibConfiguration.
  */
+@Slf4j
 public class KinesisClientLibConfigurator {
-
-    private static final Log LOG = LogFactory.getLog(KinesisClientLibConfigurator.class);
     private static final String PREFIX = "with";
 
     // Required properties
@@ -140,8 +138,8 @@ public class KinesisClientLibConfigurator {
         String workerId = stringValueDecoder.decodeValue(properties.getProperty(PROP_WORKER_ID));
         if (workerId == null || workerId.isEmpty()) {
             workerId = UUID.randomUUID().toString();
-            LOG.info("Value of workerId is not provided in the properties. WorkerId is automatically "
-                    + "assigned as: " + workerId);
+            log.info("Value of workerId is not provided in the properties. WorkerId is automatically assigned as: {}",
+                    workerId);
         }
 
         KinesisClientLibConfiguration config =
@@ -202,38 +200,27 @@ public class KinesisClientLibConfigurator {
                         IPropertyValueDecoder<?> decoder = classToDecoder.get(paramType);
                         try {
                             method.invoke(config, decoder.decodeValue(propertyValue));
-                            LOG.info(String.format("Successfully set property %s with value %s",
-                                    propertyKey,
-                                    propertyValue));
+                            log.info("Successfully set property {} with value {}", propertyKey, propertyValue);
                             return;
                         } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
                             // At this point, we really thought that we could call this method.
-                            LOG.warn(String.format("Encountered an error while invoking method %s with value %s. "
-                                    + "Exception was %s",
-                                    method,
-                                    propertyValue,
-                                    e));
+                            log.warn("Encountered an error while invoking method %s with value {}. Exception was {}",
+                                    method, propertyValue, e);
                         } catch (UnsupportedOperationException e) {
-                            LOG.warn(String.format("The property %s is not supported as type %s at this time.",
-                                    propertyKey,
-                                    paramType));
+                            log.warn("The property {} is not supported as type {} at this time.", propertyKey,
+                                    paramType);
                         }
                     } else {
-                        LOG.debug(String.format("No method for decoding parameters of type %s so method %s could not "
-                                + "be invoked.",
-                                paramType,
-                                method));
+                        log.debug("No method for decoding parameters of type {} so method {} could not be invoked.",
+                                paramType, method);
                     }
                 } else {
-                    LOG.debug(String.format("Method %s doesn't look like it is appropriate for setting property %s. "
-                            + "Looking for something called %s.",
-                            method,
-                            propertyKey,
-                            targetMethodName));
+                    log.debug("Method {} doesn't look like it is appropriate for setting property {}. Looking for"
+                                    + " something called {}.", method, propertyKey, targetMethodName);
                 }
             }
         } else {
-            LOG.debug(String.format("There was no appropriately named method for setting property %s.", propertyKey));
+            log.debug(String.format("There was no appropriately named method for setting property %s.", propertyKey));
         }
     }
 }

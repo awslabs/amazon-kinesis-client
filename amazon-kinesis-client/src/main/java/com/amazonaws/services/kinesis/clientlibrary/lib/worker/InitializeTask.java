@@ -14,9 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.Checkpoint;
@@ -25,13 +22,13 @@ import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Task for initializing shard position and invoking the RecordProcessor initialize() API.
  */
+@Slf4j
 class InitializeTask implements ITask {
-
-    private static final Log LOG = LogFactory.getLog(InitializeTask.class);
-
     private static final String RECORD_PROCESSOR_INITIALIZE_METRIC = "RecordProcessor.initialize";
 
     private final ShardInfo shardInfo;
@@ -78,7 +75,7 @@ class InitializeTask implements ITask {
         Exception exception = null;
 
         try {
-            LOG.debug("Initializing ShardId " + shardInfo.getShardId());
+            log.debug("Initializing ShardId {}", shardInfo.getShardId());
             Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.getShardId());
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.getCheckpoint();
 
@@ -87,7 +84,7 @@ class InitializeTask implements ITask {
             recordProcessorCheckpointer.setLargestPermittedCheckpointValue(initialCheckpoint);
             recordProcessorCheckpointer.setInitialCheckpointValue(initialCheckpoint);
 
-            LOG.debug("Calling the record processor initialize().");
+            log.debug("Calling the record processor initialize().");
             final InitializationInput initializationInput = new InitializationInput()
                 .withShardId(shardInfo.getShardId())
                 .withExtendedSequenceNumber(initialCheckpoint)
@@ -95,7 +92,7 @@ class InitializeTask implements ITask {
             final long recordProcessorStartTimeMillis = System.currentTimeMillis();
             try {
                 recordProcessor.initialize(initializationInput);
-                LOG.debug("Record processor initialize() completed.");
+                log.debug("Record processor initialize() completed.");
             } catch (Exception e) {
                 applicationException = true;
                 throw e;
@@ -107,16 +104,16 @@ class InitializeTask implements ITask {
             return new TaskResult(null);
         } catch (Exception e) {
             if (applicationException) {
-                LOG.error("Application initialize() threw exception: ", e);
+                log.error("Application initialize() threw exception: ", e);
             } else {
-                LOG.error("Caught exception: ", e);
+                log.error("Caught exception: ", e);
             }
             exception = e;
             // backoff if we encounter an exception.
             try {
                 Thread.sleep(this.backoffTimeMillis);
             } catch (InterruptedException ie) {
-                LOG.debug("Interrupted sleep", ie);
+                log.debug("Interrupted sleep", ie);
             }
         }
 

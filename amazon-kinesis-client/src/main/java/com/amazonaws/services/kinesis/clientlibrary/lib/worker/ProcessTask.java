@@ -15,12 +15,8 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.math.BigInteger;
-import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
@@ -33,18 +29,17 @@ import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
-import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.Shard;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Task for fetching data records and invoking processRecords() on the record processor instance.
  */
+@Slf4j
 class ProcessTask implements ITask {
-
-    private static final Log LOG = LogFactory.getLog(ProcessTask.class);
-
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     private static final String DATA_BYTES_PROCESSED_METRIC = "DataBytesProcessed";
     private static final String RECORDS_PROCESSED_METRIC = "RecordsProcessed";
@@ -130,7 +125,7 @@ class ProcessTask implements ITask {
             this.shard = null;
         }
         if (this.shard == null && !skipShardSyncAtWorkerInitializationIfLeasesExist) {
-            LOG.warn("Cannot get the shard for this ProcessTask, so duplicate KPL user records "
+            log.warn("Cannot get the shard for this ProcessTask, so duplicate KPL user records "
                     + "in the event of resharding will not be dropped during deaggregation of Amazon "
                     + "Kinesis records.");
         }
@@ -152,7 +147,7 @@ class ProcessTask implements ITask {
 
         try {
             if (dataFetcher.isShardEndReached()) {
-                LOG.info("Reached end of shard " + shardInfo.getShardId());
+                log.info("Reached end of shard {}", shardInfo.getShardId());
                 return new TaskResult(null, true);
             }
 
@@ -181,7 +176,7 @@ class ProcessTask implements ITask {
             backoff();
 
         } catch (RuntimeException e) {
-            LOG.error("ShardId " + shardInfo.getShardId() + ": Caught exception: ", e);
+            log.error("ShardId {}: Caught exception: ", shardInfo.getShardId(), e);
             exception = e;
             backoff();
         }
@@ -197,7 +192,7 @@ class ProcessTask implements ITask {
         try {
             Thread.sleep(this.backoffTimeMillis);
         } catch (InterruptedException ie) {
-            LOG.debug(shardInfo.getShardId() + ": Sleep was interrupted", ie);
+            log.debug("{}: Sleep was interrupted", shardInfo.getShardId(), ie);
         }
     }
 
@@ -210,8 +205,8 @@ class ProcessTask implements ITask {
      *            the records to be dispatched. It's possible the records have been adjusted by KPL deaggregation.
      */
     private void callProcessRecords(ProcessRecordsInput input, List<Record> records) {
-        LOG.debug("Calling application processRecords() with " + records.size() + " records from "
-                + shardInfo.getShardId());
+        log.debug("Calling application processRecords() with {} records from {}", records.size(),
+                shardInfo.getShardId());
         final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput().withRecords(records)
                 .withCheckpointer(recordProcessorCheckpointer)
                 .withMillisBehindLatest(input.getMillisBehindLatest());
@@ -220,9 +215,9 @@ class ProcessTask implements ITask {
         try {
             recordProcessor.processRecords(processRecordsInput);
         } catch (Exception e) {
-            LOG.error("ShardId " + shardInfo.getShardId()
-                    + ": Application processRecords() threw an exception when processing shard ", e);
-            LOG.error("ShardId " + shardInfo.getShardId() + ": Skipping over the following data records: " + records);
+            log.error("ShardId {}: Application processRecords() threw an exception when processing shard ",
+                    shardInfo.getShardId(), e);
+            log.error("ShardId {}: Skipping over the following data records: {}", shardInfo.getShardId(), records);
         } finally {
             MetricsHelper.addLatencyPerShard(shardInfo.getShardId(), RECORD_PROCESSOR_PROCESS_RECORDS_METRIC,
                     recordProcessorStartTimeMillis, MetricsLevel.SUMMARY);
@@ -270,18 +265,18 @@ class ProcessTask implements ITask {
      *            the time when the task started
      */
     private void handleNoRecords(long startTimeMillis) {
-        LOG.debug("Kinesis didn't return any records for shard " + shardInfo.getShardId());
+        log.debug("Kinesis didn't return any records for shard {}", shardInfo.getShardId());
 
         long sleepTimeMillis = streamConfig.getIdleTimeInMilliseconds()
                 - (System.currentTimeMillis() - startTimeMillis);
         if (sleepTimeMillis > 0) {
             sleepTimeMillis = Math.max(sleepTimeMillis, streamConfig.getIdleTimeInMilliseconds());
             try {
-                LOG.debug("Sleeping for " + sleepTimeMillis + " ms since there were no new records in shard "
-                        + shardInfo.getShardId());
+                log.debug("Sleeping for {} ms since there were no new records in shard {}", sleepTimeMillis,
+                        shardInfo.getShardId());
                 Thread.sleep(sleepTimeMillis);
             } catch (InterruptedException e) {
-                LOG.debug("ShardId " + shardInfo.getShardId() + ": Sleep was interrupted");
+                log.debug("ShardId {}: Sleep was interrupted", shardInfo.getShardId());
             }
         }
     }
@@ -316,8 +311,8 @@ class ProcessTask implements ITask {
 
             if (extendedSequenceNumber.compareTo(lastCheckpointValue) <= 0) {
                 recordIterator.remove();
-                LOG.debug("removing record with ESN " + extendedSequenceNumber
-                        + " because the ESN is <= checkpoint (" + lastCheckpointValue + ")");
+                log.debug("removing record with ESN {} because the ESN is <= checkpoint ({})", extendedSequenceNumber,
+                        lastCheckpointValue);
                 continue;
             }
 
@@ -342,9 +337,9 @@ class ProcessTask implements ITask {
             return getRecordsResultAndRecordMillisBehindLatest();
         } catch (ExpiredIteratorException e) {
             // If we see a ExpiredIteratorException, try once to restart from the greatest remembered sequence number
-            LOG.info("ShardId " + shardInfo.getShardId()
+            log.info("ShardId {}"
                     + ": getRecords threw ExpiredIteratorException - restarting after greatest seqNum "
-                    + "passed to customer", e);
+                    + "passed to customer", shardInfo.getShardId(), e);
             MetricsHelper.getMetricsScope().addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.Count,
                     MetricsLevel.SUMMARY);
 
@@ -362,7 +357,7 @@ class ProcessTask implements ITask {
                 String msg =
                         "Shard " + shardInfo.getShardId()
                                 + ": getRecords threw ExpiredIteratorException with a fresh iterator.";
-                LOG.error(msg, ex);
+                log.error(msg, ex);
                 throw ex;
             }
         }

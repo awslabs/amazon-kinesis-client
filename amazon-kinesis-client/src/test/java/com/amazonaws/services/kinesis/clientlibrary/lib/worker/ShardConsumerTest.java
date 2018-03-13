@@ -50,8 +50,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
@@ -80,14 +78,14 @@ import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Unit tests of {@link ShardConsumer}.
  */
 @RunWith(MockitoJUnitRunner.class)
+@Slf4j
 public class ShardConsumerTest {
-
-    private static final Log LOG = LogFactory.getLog(ShardConsumerTest.class);
-
     private final IMetricsFactory metricsFactory = new NullMetricsFactory();
     private final boolean callProcessRecordsForEmptyRecordList = false;
     private final long taskBackoffTimeMillis = 500L;
@@ -385,7 +383,7 @@ public class ShardConsumerTest {
         for (int i = 0; i < numRecs;) {
             boolean newTaskSubmitted = consumer.consumeShard();
             if (newTaskSubmitted) {
-                LOG.debug("New processing task was submitted, call # " + i);
+                log.debug("New processing task was submitted, call # {}", i);
                 assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
                 // CHECKSTYLE:IGNORE ModifiedControlVariable FOR NEXT 1 LINES
                 i += maxRecords;
@@ -529,7 +527,7 @@ public class ShardConsumerTest {
         for (int i = 0; i < numRecs;) {
             boolean newTaskSubmitted = consumer.consumeShard();
             if (newTaskSubmitted) {
-                LOG.debug("New processing task was submitted, call # " + i);
+                log.debug("New processing task was submitted, call # {}", i);
                 assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
                 // CHECKSTYLE:IGNORE ModifiedControlVariable FOR NEXT 1 LINES
                 i += maxRecords;
@@ -667,7 +665,7 @@ public class ShardConsumerTest {
         for (int i = 0; i < numRecs;) {
             boolean newTaskSubmitted = consumer.consumeShard();
             if (newTaskSubmitted) {
-                LOG.debug("New processing task was submitted, call # " + i);
+                log.debug("New processing task was submitted, call # {}", i);
                 assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
                 // CHECKSTYLE:IGNORE ModifiedControlVariable FOR NEXT 1 LINES
                 i += maxRecords;

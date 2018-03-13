@@ -1,37 +1,33 @@
 /*
- * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.multilang;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.multilang.messages.Message;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Gets the next message off the STDOUT of the child process. Throws an exception if a message is not found before the
  * end of the input stream is reached.
  */
+@Slf4j
 class GetNextMessageTask extends LineReaderTask<Message> {
-
-    private static final Log LOG = LogFactory.getLog(GetNextMessageTask.class);
-
     private ObjectMapper objectMapper;
 
     private static final String EMPTY_LINE = "";
@@ -68,7 +64,7 @@ class GetNextMessageTask extends LineReaderTask<Message> {
                 return new HandleLineResult<Message>(objectMapper.readValue(line, Message.class));
             }
         } catch (IOException e) {
-            LOG.info("Skipping unexpected line on STDOUT for shard " + getShardId() + ": " + line);
+            log.info("Skipping unexpected line on STDOUT for shard {}: {}", getShardId(), line);
         }
         return new HandleLineResult<Message>();
     }

@@ -17,21 +17,20 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import java.util.Arrays;
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Mock Lease Manager by randomly throwing Leasing Exceptions.
  * 
  */
+@Slf4j
 class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease> {
-    private static final Log LOG = LogFactory.getLog(ExceptionThrowingLeaseManager.class);
     private static final Throwable EXCEPTION_MSG = new Throwable("Test Exception");
 
     // Use array below to control in what situations we want to throw exceptions.
@@ -113,7 +112,7 @@ class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease>
         if (method.equals(methodThrowingException)
                 && (leaseManagerMethodCallingCount[method.getIndex()] == timeThrowingException)) {
             // Throw Dependency Exception if all conditions are satisfied.
-            LOG.debug("Throwing DependencyException in " + methodName);
+            log.debug("Throwing DependencyException in {}", methodName);
             throw new DependencyException(EXCEPTION_MSG);
         }
     }

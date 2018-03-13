@@ -19,10 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.kinesis.leases.util.DynamoUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
@@ -50,13 +46,13 @@ import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputExc
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSerializer;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * An implementation of ILeaseManager that uses DynamoDB.
  */
+@Slf4j
 public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
-
-    private static final Log LOG = LogFactory.getLog(LeaseManager.class);
-
     protected String table;
     protected AmazonDynamoDB dynamoDBClient;
     protected ILeaseSerializer<T> serializer;
@@ -112,7 +108,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
             //
             // Something went wrong with DynamoDB
             //
-            LOG.error("Failed to get table status for " + table, de);
+            log.error("Failed to get table status for {}", table, de);
         }
         CreateTableRequest request = new CreateTableRequest();
         request.setTableName(table);
@@ -127,7 +123,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         try {
             dynamoDBClient.createTable(request);
         } catch (ResourceInUseException e) {
-            LOG.info("Table " + table + " already exists.");
+            log.info("Table {} already exists.", table);
             return false;
         } catch (LimitExceededException e) {
             throw new ProvisionedThroughputException("Capacity exceeded when creating table " + table, e);
@@ -154,9 +150,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         try {
             result = dynamoDBClient.describeTable(request);
         } catch (ResourceNotFoundException e) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(String.format("Got ResourceNotFoundException for table %s in leaseTableExists, returning false.",
-                        table));
+            if (log.isDebugEnabled()) {
+                log.debug("Got ResourceNotFoundException for table {} in leaseTableExists, returning false.", table);
             }
             return null;
         } catch (AmazonClientException e) {
@@ -164,8 +159,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         }
 
         TableStatus tableStatus = TableStatus.fromValue(result.getTable().getTableStatus());
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Lease table exists and is in status " + tableStatus);
+        if (log.isDebugEnabled()) {
+            log.debug("Lease table exists and is in status {}", tableStatus);
         }
 
         return tableStatus;
@@ -201,7 +196,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         try {
             Thread.sleep(timeToSleepMillis);
         } catch (InterruptedException e) {
-            LOG.debug("Interrupted while sleeping");
+            log.debug("Interrupted while sleeping");
         }
 
         return System.currentTimeMillis() - startTime;
@@ -233,8 +228,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
      * @throws ProvisionedThroughputException if DynamoDB scan fail due to exceeded capacity
      */
     List<T> list(Integer limit) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Listing leases from table " + table);
+        if (log.isDebugEnabled()) {
+            log.debug("Listing leases from table {}", table);
         }
 
         ScanRequest scanRequest = new ScanRequest();
@@ -249,8 +244,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
 
             while (scanResult != null) {
                 for (Map<String, AttributeValue> item : scanResult.getItems()) {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Got item " + item.toString() + " from DynamoDB.");
+                    if (log.isDebugEnabled()) {
+                        log.debug("Got item {} from DynamoDB.", item.toString());
                     }
 
                     result.add(serializer.fromDynamoRecord(item));
@@ -260,23 +255,23 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
                 if (lastEvaluatedKey == null) {
                     // Signify that we're done.
                     scanResult = null;
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("lastEvaluatedKey was null - scan finished.");
+                    if (log.isDebugEnabled()) {
+                        log.debug("lastEvaluatedKey was null - scan finished.");
                     }
                 } else {
                     // Make another request, picking up where we left off.
                     scanRequest.setExclusiveStartKey(lastEvaluatedKey);
 
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("lastEvaluatedKey was " + lastEvaluatedKey + ", continuing scan.");
+                    if (log.isDebugEnabled()) {
+                        log.debug("lastEvaluatedKey was {}, continuing scan.", lastEvaluatedKey);
                     }
 
                     scanResult = dynamoDBClient.scan(scanRequest);
                 }
             }
 
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Listed " + result.size() + " leases from table " + table);
+            if (log.isDebugEnabled()) {
+                log.debug("Listed {} leases from table {}", result.size(), table);
             }
 
             return result;
@@ -297,8 +292,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(lease, "lease cannot be null");
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Creating lease " + lease);
+        if (log.isDebugEnabled()) {
+            log.debug("Creating lease {}", lease);
         }
 
         PutItemRequest request = new PutItemRequest();
@@ -309,8 +304,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         try {
             dynamoDBClient.putItem(request);
         } catch (ConditionalCheckFailedException e) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Did not create lease " + lease + " because it already existed");
+            if (log.isDebugEnabled()) {
+                log.debug("Did not create lease {} because it already existed", lease);
             }
 
             return false;
@@ -329,8 +324,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(leaseKey, "leaseKey cannot be null");
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Getting lease with key " + leaseKey);
+        if (log.isDebugEnabled()) {
+            log.debug("Getting lease with key {}", leaseKey);
         }
 
         GetItemRequest request = new GetItemRequest();
@@ -343,15 +338,15 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
 
             Map<String, AttributeValue> dynamoRecord = result.getItem();
             if (dynamoRecord == null) {
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("No lease found with key " + leaseKey + ", returning null.");
+                if (log.isDebugEnabled()) {
+                    log.debug("No lease found with key {}, returning null.", leaseKey);
                 }
 
                 return null;
             } else {
                 T lease = serializer.fromDynamoRecord(dynamoRecord);
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Got lease " + lease);
+                if (log.isDebugEnabled()) {
+                    log.debug("Got lease {}", lease);
                 }
 
                 return lease;
@@ -369,8 +364,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(lease, "lease cannot be null");
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Renewing lease with key " + lease.getLeaseKey());
+        if (log.isDebugEnabled()) {
+            log.debug("Renewing lease with key {}", lease.getLeaseKey());
         }
 
         UpdateItemRequest request = new UpdateItemRequest();
@@ -382,9 +377,9 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         try {
             dynamoDBClient.updateItem(request);
         } catch (ConditionalCheckFailedException e) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Lease renewal failed for lease with key " + lease.getLeaseKey()
-                        + " because the lease counter was not " + lease.getLeaseCounter());
+            if (log.isDebugEnabled()) {
+                log.debug("Lease renewal failed for lease with key {} because the lease counter was not {}",
+                        lease.getLeaseKey(), lease.getLeaseCounter());
             }
 
             // If we had a spurious retry during the Dynamo update, then this conditional PUT failure
@@ -398,8 +393,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
                 return false;
             }
 
-            LOG.info("Detected spurious renewal failure for lease with key " + lease.getLeaseKey()
-                    + ", but recovered");
+            log.info("Detected spurious renewal failure for lease with key {}, but recovered", lease.getLeaseKey());
         } catch (AmazonClientException e) {
             throw convertAndRethrowExceptions("renew", lease.getLeaseKey(), e);
         }
@@ -417,11 +411,11 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         verifyNotNull(lease, "lease cannot be null");
         verifyNotNull(owner, "owner cannot be null");
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Taking lease with leaseKey %s from %s to %s",
+        if (log.isDebugEnabled()) {
+            log.debug("Taking lease with leaseKey {} from {} to {}",
                     lease.getLeaseKey(),
                     lease.getLeaseOwner() == null ? "nobody" : lease.getLeaseOwner(),
-                    owner));
+                    owner);
         }
 
         UpdateItemRequest request = new UpdateItemRequest();
@@ -436,9 +430,9 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         try {
             dynamoDBClient.updateItem(request);
         } catch (ConditionalCheckFailedException e) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Lease renewal failed for lease with key " + lease.getLeaseKey()
-                        + " because the lease counter was not " + lease.getLeaseCounter());
+            if (log.isDebugEnabled()) {
+                log.debug("Lease renewal failed for lease with key {} because the lease counter was not {}",
+                        lease.getLeaseKey(), lease.getLeaseCounter());
             }
 
             return false;
@@ -460,10 +454,10 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(lease, "lease cannot be null");
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Evicting lease with leaseKey %s owned by %s",
+        if (log.isDebugEnabled()) {
+            log.debug("Evicting lease with leaseKey {} owned by {}",
                     lease.getLeaseKey(),
-                    lease.getLeaseOwner()));
+                    lease.getLeaseOwner());
         }
 
         UpdateItemRequest request = new UpdateItemRequest();
@@ -478,9 +472,9 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         try {
             dynamoDBClient.updateItem(request);
         } catch (ConditionalCheckFailedException e) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Lease eviction failed for lease with key " + lease.getLeaseKey()
-                        + " because the lease owner was not " + lease.getLeaseOwner());
+            if (log.isDebugEnabled()) {
+                log.debug("Lease eviction failed for lease with key {} because the lease owner was not {}",
+                        lease.getLeaseKey(), lease.getLeaseOwner());
             }
 
             return false;
@@ -499,7 +493,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
     public void deleteAll() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         List<T> allLeases = listLeases();
 
-        LOG.warn("Deleting " + allLeases.size() + " items from table " + table);
+        log.warn("Deleting {} items from table {}", allLeases.size(), table);
 
         for (T lease : allLeases) {
             DeleteItemRequest deleteRequest = new DeleteItemRequest();
@@ -517,8 +511,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
     public void deleteLease(T lease) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(lease, "lease cannot be null");
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Deleting lease with leaseKey %s", lease.getLeaseKey()));
+        if (log.isDebugEnabled()) {
+            log.debug("Deleting lease with leaseKey {}", lease.getLeaseKey());
         }
 
         DeleteItemRequest deleteRequest = new DeleteItemRequest();
@@ -540,8 +534,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(lease, "lease cannot be null");
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Updating lease %s", lease));
+        if (log.isDebugEnabled()) {
+            log.debug("Updating lease {}", lease);
         }
 
         UpdateItemRequest request = new UpdateItemRequest();
@@ -556,9 +550,9 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         try {
             dynamoDBClient.updateItem(request);
         } catch (ConditionalCheckFailedException e) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Lease update failed for lease with key " + lease.getLeaseKey()
-                        + " because the lease counter was not " + lease.getLeaseCounter());
+            if (log.isDebugEnabled()) {
+                log.debug("Lease update failed for lease with key {} because the lease counter was not {}",
+                        lease.getLeaseKey(), lease.getLeaseCounter());
             }
 
             return false;
@@ -577,7 +571,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
     protected DependencyException convertAndRethrowExceptions(String operation, String leaseKey, AmazonClientException e)
         throws ProvisionedThroughputException, InvalidStateException {
         if (e instanceof ProvisionedThroughputExceededException) {
-            LOG.warn("Provisioned Throughput on the lease table has been exceeded. It's recommended that you increase the IOPs on the table. Failure to increase the IOPs may cause the application to not make progress.");
+            log.warn("Provisioned Throughput on the lease table has been exceeded. It's recommended that you increase the IOPs on the table. Failure to increase the IOPs may cause the application to not make progress.");
             throw new ProvisionedThroughputException(e);
         } else if (e instanceof ResourceNotFoundException) {
             // @formatter:on

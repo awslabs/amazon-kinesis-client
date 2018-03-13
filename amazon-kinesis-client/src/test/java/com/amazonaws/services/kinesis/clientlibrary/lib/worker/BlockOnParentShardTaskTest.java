@@ -20,8 +20,6 @@ import static org.mockito.Mockito.when;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -40,8 +38,6 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
  *
  */
 public class BlockOnParentShardTaskTest {
-
-    private static final Log LOG = LogFactory.getLog(BlockOnParentShardTaskTest.class);
     private final long backoffTimeInMillis = 50L;
     private final String shardId = "shardId-97";
     private final String concurrencyToken = "testToken";

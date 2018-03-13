@@ -1,16 +1,16 @@
 /*
- * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.multilang;
 
@@ -20,8 +20,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.concurrent.Callable;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * This abstract class captures the process of reading from an input stream. Three methods must be provided for
@@ -34,10 +33,8 @@ import org.apache.commons.logging.LogFactory;
  * 
  * @param <T>
  */
+@Slf4j
 abstract class LineReaderTask<T> implements Callable<T> {
-
-    private static final Log LOG = LogFactory.getLog(LineReaderTask.class);
-
     private BufferedReader reader;
 
     private String description;
@@ -56,7 +53,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
     public T call() throws Exception {
         String nextLine = null;
         try {
-            LOG.info("Starting: " + description);
+            log.info("Starting: {}", description);
             while ((nextLine = reader.readLine()) != null) {
                 HandleLineResult<T> result = handleLine(nextLine);
                 if (result.hasReturnValue()) {
@@ -66,7 +63,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
         } catch (IOException e) {
             return returnAfterException(e);
         }
-        LOG.info("Stopping: " + description);
+        log.info("Stopping: {}", description);
         return returnAfterEndOfInput();
     }
 

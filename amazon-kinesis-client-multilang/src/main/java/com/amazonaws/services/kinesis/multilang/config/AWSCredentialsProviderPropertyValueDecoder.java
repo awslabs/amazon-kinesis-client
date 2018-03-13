@@ -14,21 +14,21 @@
  */
 package com.amazonaws.services.kinesis.multilang.config;
 
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.lang.reflect.Constructor;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSCredentialsProviderChain;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Get AWSCredentialsProvider property.
  */
+@Slf4j
 class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecoder<AWSCredentialsProvider> {
-    private static final Log LOG = LogFactory.getLog(AWSCredentialsProviderPropertyValueDecoder.class);
     private static final String AUTH_PREFIX = "com.amazonaws.auth.";
     private static final String LIST_DELIMITER = ",";
     private static final String ARG_DELIMITER = "|";
@@ -82,14 +82,14 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                   credentialsProviders.add((AWSCredentialsProvider) c.newInstance(
                         Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length)));
               } catch (Exception e) {
-                  LOG.debug("Can't find any credentials provider matching " + providerName + ".");
+                  log.debug("Can't find any credentials provider matching {}.", providerName);
               }
             } else {
               try {
                   Class<?> className = Class.forName(providerName);
                   credentialsProviders.add((AWSCredentialsProvider) className.newInstance());
               } catch (Exception e) {
-                  LOG.debug("Can't find any credentials provider matching " + providerName + ".");
+                  log.debug("Can't find any credentials provider matching {}.", providerName);
               }
             }
         }

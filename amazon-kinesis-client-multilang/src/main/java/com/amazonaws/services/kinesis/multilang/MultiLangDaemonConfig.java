@@ -1,16 +1,9 @@
 /*
- *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
- *
- *  Licensed under the Amazon Software License (the "License").
- *  You may not use this file except in compliance with the License.
- *  A copy of the License is located at
- *
- *  http://aws.amazon.com/asl/
- *
- *  or in the "license" file accompanying this file. This file is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- *  express or implied. See the License for the specific language governing
- *  permissions and limitations under the License.
+ * Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved. Licensed under the Amazon Software License
+ * (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
+ * http://aws.amazon.com/asl/ or in the "license" file accompanying this file. This file is distributed on an "AS IS"
+ * BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
+ * language governing permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.multilang;
 
@@ -26,20 +19,17 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
-import com.amazonaws.services.kinesis.multilang.config.KinesisClientLibConfigurator;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import com.amazonaws.services.kinesis.multilang.config.KinesisClientLibConfigurator;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * This class captures the configuration needed to run the MultiLangDaemon.
  */
+@Slf4j
 public class MultiLangDaemonConfig {
-
-    private static final Log LOG = LogFactory.getLog(MultiLangDaemonConfig.class);
-
     private static final String USER_AGENT = "amazon-kinesis-multi-lang-daemon";
     private static final String VERSION = "1.0.1";
 
@@ -56,9 +46,12 @@ public class MultiLangDaemonConfig {
     /**
      * Constructor.
      * 
-     * @param propertiesFile The location of the properties file.
-     * @throws IOException Thrown when the properties file can't be accessed.
-     * @throws IllegalArgumentException Thrown when the contents of the properties file are not as expected.
+     * @param propertiesFile
+     *            The location of the properties file.
+     * @throws IOException
+     *             Thrown when the properties file can't be accessed.
+     * @throws IllegalArgumentException
+     *             Thrown when the contents of the properties file are not as expected.
      */
     public MultiLangDaemonConfig(String propertiesFile) throws IOException, IllegalArgumentException {
         this(propertiesFile, Thread.currentThread().getContextClassLoader());
@@ -66,33 +59,39 @@ public class MultiLangDaemonConfig {
 
     /**
      * 
-     * @param propertiesFile The location of the properties file.
-     * @param classLoader A classloader, useful if trying to programmatically configure with the daemon, such as in a
-     *        unit test.
-     * @throws IOException Thrown when the properties file can't be accessed.
-     * @throws IllegalArgumentException Thrown when the contents of the properties file are not as expected.
+     * @param propertiesFile
+     *            The location of the properties file.
+     * @param classLoader
+     *            A classloader, useful if trying to programmatically configure with the daemon, such as in a unit test.
+     * @throws IOException
+     *             Thrown when the properties file can't be accessed.
+     * @throws IllegalArgumentException
+     *             Thrown when the contents of the properties file are not as expected.
      */
-    public MultiLangDaemonConfig(String propertiesFile, ClassLoader classLoader) throws IOException,
-            IllegalArgumentException {
+    public MultiLangDaemonConfig(String propertiesFile, ClassLoader classLoader)
+            throws IOException, IllegalArgumentException {
         this(propertiesFile, classLoader, new KinesisClientLibConfigurator());
     }
 
     /**
      * 
-     * @param propertiesFile The location of the properties file.
-     * @param classLoader A classloader, useful if trying to programmatically configure with the daemon, such as in a
-     *        unit test.
-     * @param configurator A configurator to use.
-     * @throws IOException Thrown when the properties file can't be accessed.
-     * @throws IllegalArgumentException Thrown when the contents of the properties file are not as expected.
+     * @param propertiesFile
+     *            The location of the properties file.
+     * @param classLoader
+     *            A classloader, useful if trying to programmatically configure with the daemon, such as in a unit test.
+     * @param configurator
+     *            A configurator to use.
+     * @throws IOException
+     *             Thrown when the properties file can't be accessed.
+     * @throws IllegalArgumentException
+     *             Thrown when the contents of the properties file are not as expected.
      */
-    public MultiLangDaemonConfig(String propertiesFile,
-            ClassLoader classLoader,
+    public MultiLangDaemonConfig(String propertiesFile, ClassLoader classLoader,
             KinesisClientLibConfigurator configurator) throws IOException, IllegalArgumentException {
         Properties properties = loadProperties(classLoader, propertiesFile);
         if (!validateProperties(properties)) {
-            throw new IllegalArgumentException("Must provide an executable name in the properties file, "
-                    + "e.g. executableName = sampleapp.py");
+            throw new IllegalArgumentException(
+                    "Must provide an executable name in the properties file, " + "e.g. executableName = sampleapp.py");
         }
 
         String executableName = properties.getProperty(PROP_EXECUTABLE_NAME);
@@ -100,10 +99,11 @@ public class MultiLangDaemonConfig {
 
         kinesisClientLibConfig = configurator.getConfiguration(properties);
         executorService = buildExecutorService(properties);
-        recordProcessorFactory = new MultiLangRecordProcessorFactory(executableName, executorService, kinesisClientLibConfig);
+        recordProcessorFactory = new MultiLangRecordProcessorFactory(executableName, executorService,
+                kinesisClientLibConfig);
 
-        LOG.info("Running " + kinesisClientLibConfig.getApplicationName() + " to process stream "
-                + kinesisClientLibConfig.getStreamName() + " with executable " + executableName);
+        log.info("Running {} to process stream {} with executable {}", kinesisClientLibConfig.getApplicationName(),
+                kinesisClientLibConfig.getStreamName(), executableName);
         prepare(processingLanguage);
     }
 
@@ -111,9 +111,9 @@ public class MultiLangDaemonConfig {
         // Ensure the JVM will refresh the cached IP values of AWS resources (e.g. service endpoints).
         java.security.Security.setProperty("networkaddress.cache.ttl", "60");
 
-        LOG.info("Using workerId: " + kinesisClientLibConfig.getWorkerIdentifier());
-        LOG.info("Using credentials with access key id: "
-                + kinesisClientLibConfig.getKinesisCredentialsProvider().getCredentials().getAWSAccessKeyId());
+        log.info("Using workerId: {}", kinesisClientLibConfig.getWorkerIdentifier());
+        log.info("Using credentials with access key id: {}",
+                kinesisClientLibConfig.getKinesisCredentialsProvider().getCredentials().getAWSAccessKeyId());
 
         StringBuilder userAgent = new StringBuilder(KinesisClientLibConfiguration.KINESIS_CLIENT_LIB_USER_AGENT);
         userAgent.append(" ");
@@ -131,8 +131,7 @@ public class MultiLangDaemonConfig {
             userAgent.append(recordProcessorFactory.getCommandArray()[0]);
         }
 
-        LOG.info(String.format("MultiLangDaemon is adding the following fields to the User Agent: %s",
-                userAgent.toString()));
+        log.info("MultiLangDaemon is adding the following fields to the User Agent: {}", userAgent.toString());
         kinesisClientLibConfig.withUserAgent(userAgent.toString());
     }
 
@@ -174,13 +173,13 @@ public class MultiLangDaemonConfig {
     private static ExecutorService buildExecutorService(Properties properties) {
         int maxActiveThreads = getMaxActiveThreads(properties);
         ThreadFactoryBuilder builder = new ThreadFactoryBuilder().setNameFormat("multi-lang-daemon-%04d");
-        LOG.debug(String.format("Value for %s property is %d", PROP_MAX_ACTIVE_THREADS, maxActiveThreads));
+        log.debug("Value for {} property is {}", PROP_MAX_ACTIVE_THREADS, maxActiveThreads);
         if (maxActiveThreads <= 0) {
-            LOG.info("Using a cached thread pool.");
+            log.info("Using a cached thread pool.");
             return new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>(),
                     builder.build());
         } else {
-            LOG.info(String.format("Using a fixed thread pool with %d max active threads.", maxActiveThreads));
+            log.info("Using a fixed thread pool with {} max active threads.", maxActiveThreads);
             return new ThreadPoolExecutor(maxActiveThreads, maxActiveThreads, 0L, TimeUnit.MILLISECONDS,
                     new LinkedBlockingQueue<Runnable>(), builder.build());
         }

@@ -32,9 +32,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
@@ -62,16 +59,15 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Worker is the high level class that Kinesis applications use to start processing data. It initializes and oversees
  * different components (e.g. syncing shard and lease information, tracking shard assignments, and processing data from
  * the shards).
  */
+@Slf4j
 public class Worker implements Runnable {
-
-    private static final Log LOG = LogFactory.getLog(Worker.class);
-
     private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
     private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
 
@@ -401,25 +397,25 @@ public class Worker implements Runnable {
         if (config.getRegionName() != null) {
             Region region = RegionUtils.getRegion(config.getRegionName());
             kinesisClient.setRegion(region);
-            LOG.debug("The region of Amazon Kinesis client has been set to " + config.getRegionName());
+            log.debug("The region of Amazon Kinesis client has been set to {}", config.getRegionName());
             dynamoDBClient.setRegion(region);
-            LOG.debug("The region of Amazon DynamoDB client has been set to " + config.getRegionName());
+            log.debug("The region of Amazon DynamoDB client has been set to {}", config.getRegionName());
         }
         // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
         if (config.getDynamoDBEndpoint() != null) {
             dynamoDBClient.setEndpoint(config.getDynamoDBEndpoint());
-            LOG.debug("The endpoint of Amazon DynamoDB client has been set to " + config.getDynamoDBEndpoint());
+            log.debug("The endpoint of Amazon DynamoDB client has been set to {}", config.getDynamoDBEndpoint());
         }
         // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
         if (config.getKinesisEndpoint() != null) {
             kinesisClient.setEndpoint(config.getKinesisEndpoint());
             if (config.getRegionName() != null) {
-                LOG.warn("Received configuration for both region name as " + config.getRegionName()
-                        + ", and Amazon Kinesis endpoint as " + config.getKinesisEndpoint()
-                        + ". Amazon Kinesis endpoint will overwrite region name.");
-                LOG.debug("The region of Amazon Kinesis client has been overwritten to " + config.getKinesisEndpoint());
+                log.warn("Received configuration for both region name as {}, and Amazon Kinesis endpoint as {}"
+                        + ". Amazon Kinesis endpoint will overwrite region name.", config.getRegionName(),
+                        config.getKinesisEndpoint());
+                log.debug("The region of Amazon Kinesis client has been overwritten to {}", config.getKinesisEndpoint());
             } else {
-                LOG.debug("The region of Amazon Kinesis client has been set to " + config.getKinesisEndpoint());
+                log.debug("The region of Amazon Kinesis client has been set to {}", config.getKinesisEndpoint());
             }
         }
     }
@@ -564,9 +560,9 @@ public class Worker implements Runnable {
 
         try {
             initialize();
-            LOG.info("Initialization complete. Starting worker loop.");
+            log.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e1) {
-            LOG.error("Unable to initialize after " + MAX_INITIALIZATION_ATTEMPTS + " attempts. Shutting down.", e1);
+            log.error("Unable to initialize after {} attempts. Shutting down.", MAX_INITIALIZATION_ATTEMPTS, e1);
             shutdown();
         }
 
@@ -575,7 +571,7 @@ public class Worker implements Runnable {
         }
 
         finalShutdown();
-        LOG.info("Worker loop is complete. Exiting from worker.");
+        log.info("Worker loop is complete. Exiting from worker.");
     }
 
     @VisibleForTesting
@@ -603,12 +599,12 @@ public class Worker implements Runnable {
             wlog.info("Sleeping ...");
             Thread.sleep(idleTimeInMilliseconds);
         } catch (Exception e) {
-            LOG.error(String.format("Worker.run caught exception, sleeping for %s milli seconds!",
-                    String.valueOf(idleTimeInMilliseconds)), e);
+            log.error("Worker.run caught exception, sleeping for {} milli seconds!",
+                    String.valueOf(idleTimeInMilliseconds), e);
             try {
                 Thread.sleep(idleTimeInMilliseconds);
             } catch (InterruptedException ex) {
-                LOG.info("Worker: sleep interrupted after catching exception ", ex);
+                log.info("Worker: sleep interrupted after catching exception ", ex);
             }
         }
         wlog.resetInfoLogging();
@@ -621,35 +617,35 @@ public class Worker implements Runnable {
 
         for (int i = 0; (!isDone) && (i < MAX_INITIALIZATION_ATTEMPTS); i++) {
             try {
-                LOG.info("Initialization attempt " + (i + 1));
-                LOG.info("Initializing LeaseCoordinator");
+                log.info("Initialization attempt {}", (i + 1));
+                log.info("Initializing LeaseCoordinator");
                 leaseCoordinator.initialize();
 
                 TaskResult result = null;
                 if (!skipShardSyncAtWorkerInitializationIfLeasesExist
                         || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
-                    LOG.info("Syncing Kinesis shard info");
+                    log.info("Syncing Kinesis shard info");
                     ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
                             leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
                             config.shouldIgnoreUnexpectedChildShards(), 0L);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
-                    LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
+                    log.info("Skipping shard sync per config setting (and lease table is not empty)");
                 }
 
                 if (result == null || result.getException() == null) {
                     if (!leaseCoordinator.isRunning()) {
-                        LOG.info("Starting LeaseCoordinator");
+                        log.info("Starting LeaseCoordinator");
                         leaseCoordinator.start();
                     } else {
-                        LOG.info("LeaseCoordinator is already running. No need to start it.");
+                        log.info("LeaseCoordinator is already running. No need to start it.");
                     }
                     isDone = true;
                 } else {
                     lastException = result.getException();
                 }
             } catch (LeasingException e) {
-                LOG.error("Caught exception when initializing LeaseCoordinator", e);
+                log.error("Caught exception when initializing LeaseCoordinator", e);
                 lastException = e;
             } catch (Exception e) {
                 lastException = e;
@@ -658,7 +654,7 @@ public class Worker implements Runnable {
             try {
                 Thread.sleep(parentShardPollIntervalMillis);
             } catch (InterruptedException e) {
-                LOG.debug("Sleep interrupted while initializing worker.");
+                log.debug("Sleep interrupted while initializing worker.");
             }
         }
 
@@ -899,10 +895,10 @@ public class Worker implements Runnable {
      */
     public void shutdown() {
         if (shutdown) {
-            LOG.warn("Shutdown requested a second time.");
+            log.warn("Shutdown requested a second time.");
             return;
         }
-        LOG.info("Worker shutdown requested.");
+        log.info("Worker shutdown requested.");
 
         // Set shutdown flag, so Worker.run can start shutdown process.
         shutdown = true;
@@ -920,7 +916,7 @@ public class Worker implements Runnable {
      * threads, etc.
      */
     private void finalShutdown() {
-        LOG.info("Starting worker's final shutdown.");
+        log.info("Starting worker's final shutdown.");
 
         if (executorService instanceof WorkerThreadPoolExecutor) {
             // This should interrupt all active record processor tasks.
@@ -941,16 +937,16 @@ public class Worker implements Runnable {
     @VisibleForTesting
     boolean shouldShutdown() {
         if (executorService.isShutdown()) {
-            LOG.error("Worker executor service has been shutdown, so record processors cannot be shutdown.");
+            log.error("Worker executor service has been shutdown, so record processors cannot be shutdown.");
             return true;
         }
         if (shutdown) {
             if (shardInfoShardConsumerMap.isEmpty()) {
-                LOG.info("All record processors have been shutdown successfully.");
+                log.info("All record processors have been shutdown successfully.");
                 return true;
             }
             if ((System.currentTimeMillis() - shutdownStartTimeMillis) >= failoverTimeMillis) {
-                LOG.info("Lease failover time is reached, so forcing shutdown.");
+                log.info("Lease failover time is reached, so forcing shutdown.");
                 return true;
             }
         }
@@ -1019,27 +1015,27 @@ public class Worker implements Runnable {
 
         @SuppressWarnings("unused")
         public void debug(Object message, Throwable t) {
-            LOG.debug(message, t);
+            log.debug("{}", message, t);
         }
 
         public void info(Object message) {
             if (this.isInfoEnabled()) {
-                LOG.info(message);
+                log.info("{}", message);
             }
         }
 
         public void infoForce(Object message) {
-            LOG.info(message);
+            log.info("{}", message);
         }
 
         @SuppressWarnings("unused")
         public void warn(Object message) {
-            LOG.warn(message);
+            log.warn("{}", message);
         }
 
         @SuppressWarnings("unused")
         public void error(Object message, Throwable t) {
-            LOG.error(message, t);
+            log.error("{}", message, t);
         }
 
         private boolean isInfoEnabled() {
@@ -1049,7 +1045,7 @@ public class Worker implements Runnable {
         private void resetInfoLogging() {
             if (infoReporting) {
                 // We just logged at INFO level for a pass through worker loop
-                if (LOG.isInfoEnabled()) {
+                if (log.isInfoEnabled()) {
                     infoReporting = false;
                     nextReportTime = System.currentTimeMillis() + reportIntervalMillis;
                 } // else is DEBUG or TRACE so leave reporting true
@@ -1082,7 +1078,7 @@ public class Worker implements Runnable {
             if (config.getRegionName() != null) {
                 Region region = RegionUtils.getRegion(config.getRegionName());
                 cloudWatchClient.setRegion(region);
-                LOG.debug("The region of Amazon CloudWatch client has been set to " + config.getRegionName());
+                log.debug("The region of Amazon CloudWatch client has been set to {}", config.getRegionName());
             }
             metricsFactory = new WorkerCWMetricsFactory(cloudWatchClient, config.getApplicationName(),
                     config.getMetricsBufferTimeMillis(), config.getMetricsMaxQueueSize(), config.getMetricsLevel(),
@@ -1216,28 +1212,28 @@ public class Worker implements Runnable {
             if (config.getRegionName() != null) {
                 Region region = RegionUtils.getRegion(config.getRegionName());
                 cloudWatchClient.setRegion(region);
-                LOG.debug("The region of Amazon CloudWatch client has been set to " + config.getRegionName());
+                log.debug("The region of Amazon CloudWatch client has been set to {}", config.getRegionName());
                 kinesisClient.setRegion(region);
-                LOG.debug("The region of Amazon Kinesis client has been set to " + config.getRegionName());
+                log.debug("The region of Amazon Kinesis client has been set to {}", config.getRegionName());
                 dynamoDBClient.setRegion(region);
-                LOG.debug("The region of Amazon DynamoDB client has been set to " + config.getRegionName());
+                log.debug("The region of Amazon DynamoDB client has been set to {}", config.getRegionName());
             }
             // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
             if (config.getDynamoDBEndpoint() != null) {
                 dynamoDBClient.setEndpoint(config.getDynamoDBEndpoint());
-                LOG.debug("The endpoint of Amazon DynamoDB client has been set to " + config.getDynamoDBEndpoint());
+                log.debug("The endpoint of Amazon DynamoDB client has been set to {}", config.getDynamoDBEndpoint());
             }
             // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
             if (config.getKinesisEndpoint() != null) {
                 kinesisClient.setEndpoint(config.getKinesisEndpoint());
                 if (config.getRegionName() != null) {
-                    LOG.warn("Received configuration for both region name as " + config.getRegionName()
-                            + ", and Amazon Kinesis endpoint as " + config.getKinesisEndpoint()
-                            + ". Amazon Kinesis endpoint will overwrite region name.");
-                    LOG.debug("The region of Amazon Kinesis client has been overwritten to "
-                            + config.getKinesisEndpoint());
+                    log.warn("Received configuration for both region name as {}, and Amazon Kinesis endpoint as {}"
+                            + ". Amazon Kinesis endpoint will overwrite region name.", config.getRegionName(),
+                            config.getKinesisEndpoint());
+                    log.debug("The region of Amazon Kinesis client has been overwritten to {}",
+                            config.getKinesisEndpoint());
                 } else {
-                    LOG.debug("The region of Amazon Kinesis client has been set to " + config.getKinesisEndpoint());
+                    log.debug("The region of Amazon Kinesis client has been set to {}", config.getKinesisEndpoint());
                 }
             }
             if (metricsFactory == null) {

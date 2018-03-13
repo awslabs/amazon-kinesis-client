@@ -33,7 +33,7 @@ import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
 import lombok.NonNull;
-import lombok.extern.apachecommons.CommonsLog;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * This is the prefetch caching class, this class spins up a thread if prefetching is enabled. That thread fetches the
@@ -43,7 +43,7 @@ import lombok.extern.apachecommons.CommonsLog;
  * be present in the cache across multiple GetRecordsResult object. If no data is available in the cache, the call from
  * the record processor is blocked till records are retrieved from Kinesis.
  */
-@CommonsLog
+@Slf4j
 public class PrefetchGetRecordsCache implements GetRecordsCache {
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     LinkedBlockingQueue<ProcessRecordsInput> getRecordsResultQueue;
@@ -172,8 +172,8 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                     } catch (InterruptedException e) {
                         log.info("Thread was interrupted, indicating shutdown was called on the cache.");
                     } catch (ExpiredIteratorException e) {
-                        log.info(String.format("ShardId %s: getRecords threw ExpiredIteratorException - restarting"
-                                + " after greatest seqNum passed to customer", shardId), e);
+                        log.info("ShardId {}: getRecords threw ExpiredIteratorException - restarting"
+                                + " after greatest seqNum passed to customer", shardId, e);
                         
                         MetricsHelper.getMetricsScope().addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.Count,
                                 MetricsLevel.SUMMARY);
@@ -246,14 +246,14 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
 
         public synchronized void waitForConsumer() throws InterruptedException {
             if (!shouldGetNewRecords()) {
-                log.debug("Queue is full waiting for consumer for " + idleMillisBetweenCalls + " ms");
+                log.debug("Queue is full waiting for consumer for {} ms", idleMillisBetweenCalls);
                 this.wait(idleMillisBetweenCalls);
             }
         }
         
         public synchronized boolean shouldGetNewRecords() {
             if (log.isDebugEnabled()) {
-                log.debug("Current Prefetch Counter States: " + this.toString());
+                log.debug("Current Prefetch Counter States: {}", this.toString());
             }
             return size < maxRecordsCount && byteSize < maxByteSize;
         }

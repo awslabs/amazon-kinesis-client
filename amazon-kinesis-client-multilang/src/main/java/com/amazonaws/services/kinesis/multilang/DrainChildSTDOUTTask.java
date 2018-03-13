@@ -1,23 +1,22 @@
 /*
- * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.multilang;
 
 import java.io.BufferedReader;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * This class is used to drain the STDOUT of the child process. After the child process has been given a shutdown
@@ -36,22 +35,20 @@ import org.apache.commons.logging.LogFactory;
  * To prevent the child process from becoming blocked in this way, it is the responsibility of the parent process to
  * drain the child process's STDOUT. We reprint each drained line to our log to permit debugging.
  */
+@Slf4j
 class DrainChildSTDOUTTask extends LineReaderTask<Boolean> {
-
-    private static final Log LOG = LogFactory.getLog(DrainChildSTDOUTTask.class);
-
     DrainChildSTDOUTTask() {
     }
 
     @Override
     protected HandleLineResult<Boolean> handleLine(String line) {
-        LOG.info("Drained line for shard " + getShardId() + ": " + line);
+        log.info("Drained line for shard {}: {}", getShardId(), line);
         return new HandleLineResult<Boolean>();
     }
 
     @Override
     protected Boolean returnAfterException(Exception e) {
-        LOG.info("Encountered exception while draining STDOUT of child process for shard " + getShardId(), e);
+        log.info("Encountered exception while draining STDOUT of child process for shard {}", getShardId(), e);
         return false;
     }
 

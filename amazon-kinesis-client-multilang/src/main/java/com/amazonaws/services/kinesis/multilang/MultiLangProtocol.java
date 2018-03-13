@@ -14,6 +14,12 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
@@ -27,18 +33,13 @@ import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownRequestedMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
-import lombok.extern.apachecommons.CommonsLog;
 
-import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * An implementation of the multi language protocol.
  */
-@CommonsLog
+@Slf4j
 class MultiLangProtocol {
 
     private MessageReader messageReader;
@@ -142,13 +143,10 @@ class MultiLangProtocol {
             boolean writerIsStillOpen = writeFuture.get();
             return statusWasCorrect && writerIsStillOpen;
         } catch (InterruptedException e) {
-            log.error(String.format("Interrupted while writing %s message for shard %s", action,
-                    initializationInput.getShardId()));
+            log.error("Interrupted while writing {} message for shard {}", action, initializationInput.getShardId());
             return false;
         } catch (ExecutionException e) {
-            log.error(
-                    String.format("Failed to write %s message for shard %s", action, initializationInput.getShardId()),
-                    e);
+            log.error("Failed to write {} message for shard {}", action, initializationInput.getShardId(), e);
             return false;
         }
     }
@@ -196,15 +194,15 @@ class MultiLangProtocol {
         try {
             return Optional.of(fm.get());
         } catch (InterruptedException e) {
-            log.error(String.format("Interrupted while waiting for %s message for shard %s", action,
-                    initializationInput.getShardId()), e);
+            log.error("Interrupted while waiting for {} message for shard {}", action,
+                    initializationInput.getShardId(), e);
         } catch (ExecutionException e) {
-            log.error(String.format("Failed to get status message for %s action for shard %s", action,
-                    initializationInput.getShardId()), e);
+            log.error("Failed to get status message for {} action for shard {}", action,
+                    initializationInput.getShardId(), e);
         } catch (TimeoutException e) {
-            log.error(String.format("Timedout to get status message for %s action for shard %s. Terminating...",
+            log.error("Timedout to get status message for {} action for shard {}. Terminating...",
                     action,
-                    initializationInput.getShardId()),
+                    initializationInput.getShardId(),
                     e);
             haltJvm(1);
         }
@@ -229,8 +227,8 @@ class MultiLangProtocol {
      * @return Whether or not this operation succeeded.
      */
     private boolean validateStatusMessage(StatusMessage statusMessage, String action) {
-        log.info("Received response " + statusMessage + " from subprocess while waiting for " + action
-                + " while processing shard " + initializationInput.getShardId());
+        log.info("Received response {} from subprocess while waiting for {}"
+                + " while processing shard {}", statusMessage, action,  initializationInput.getShardId());
         return !(statusMessage == null || statusMessage.getResponseFor() == null || !statusMessage.getResponseFor()
                 .equals(action));
 

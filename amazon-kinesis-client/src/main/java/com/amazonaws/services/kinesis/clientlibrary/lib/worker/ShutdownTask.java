@@ -14,9 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
@@ -27,13 +24,13 @@ import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Task for invoking the RecordProcessor shutdown() callback.
  */
+@Slf4j
 class ShutdownTask implements ITask {
-
-    private static final Log LOG = LogFactory.getLog(ShutdownTask.class);
-
     private static final String RECORD_PROCESSOR_SHUTDOWN_METRIC = "RecordProcessor.shutdown";
 
     private final ShardInfo shardInfo;
@@ -96,8 +93,8 @@ class ShutdownTask implements ITask {
                 recordProcessorCheckpointer.setLargestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
             }
 
-            LOG.debug("Invoking shutdown() for shard " + shardInfo.getShardId() + ", concurrencyToken "
-                    + shardInfo.getConcurrencyToken() + ". Shutdown reason: " + reason);
+            log.debug("Invoking shutdown() for shard {}, concurrencyToken {}. Shutdown reason: {}",
+                    shardInfo.getShardId(), shardInfo.getConcurrencyToken(), reason);
             final ShutdownInput shutdownInput = new ShutdownInput()
                     .withShutdownReason(reason)
                     .withCheckpointer(recordProcessorCheckpointer);
@@ -113,9 +110,9 @@ class ShutdownTask implements ITask {
                                 + shardInfo.getShardId());
                     }
                 }
-                LOG.debug("Shutting down retrieval strategy.");
+                log.debug("Shutting down retrieval strategy.");
                 getRecordsCache.shutdown();
-                LOG.debug("Record processor completed shutdown() for shard " + shardInfo.getShardId());
+                log.debug("Record processor completed shutdown() for shard {}", shardInfo.getShardId());
             } catch (Exception e) {
                 applicationException = true;
                 throw e;
@@ -125,29 +122,29 @@ class ShutdownTask implements ITask {
             }
 
             if (reason == ShutdownReason.TERMINATE) {
-                LOG.debug("Looking for child shards of shard " + shardInfo.getShardId());
+                log.debug("Looking for child shards of shard {}", shardInfo.getShardId());
                 // create leases for the child shards
                 ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                         leaseManager,
                         initialPositionInStream,
                         cleanupLeasesOfCompletedShards,
                         ignoreUnexpectedChildShards);
-                LOG.debug("Finished checking for child shards of shard " + shardInfo.getShardId());
+                log.debug("Finished checking for child shards of shard {}", shardInfo.getShardId());
             }
 
             return new TaskResult(null);
         } catch (Exception e) {
             if (applicationException) {
-                LOG.error("Application exception. ", e);
+                log.error("Application exception. ", e);
             } else {
-                LOG.error("Caught exception: ", e);
+                log.error("Caught exception: ", e);
             }
             exception = e;
             // backoff if we encounter an exception.
             try {
                 Thread.sleep(this.backoffTimeMillis);
             } catch (InterruptedException ie) {
-                LOG.debug("Interrupted sleep", ie);
+                log.debug("Interrupted sleep", ie);
             }
         }
 

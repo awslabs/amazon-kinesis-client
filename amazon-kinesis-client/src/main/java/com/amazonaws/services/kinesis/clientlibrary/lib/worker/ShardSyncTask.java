@@ -14,12 +14,11 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * This task syncs leases/activies with shards of the stream.
@@ -27,10 +26,8 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
  * It will clean up leases/activities for shards that have been completely processed (if
  * cleanupLeasesUponShardCompletion is true).
  */
+@Slf4j
 class ShardSyncTask implements ITask {
-
-    private static final Log LOG = LogFactory.getLog(ShardSyncTask.class);
-
     private final IKinesisProxy kinesisProxy;
     private final ILeaseManager<KinesisClientLease> leaseManager;
     private InitialPositionInStreamExtended initialPosition;
@@ -77,7 +74,7 @@ class ShardSyncTask implements ITask {
                 Thread.sleep(shardSyncTaskIdleTimeMillis);
             }
         } catch (Exception e) {
-            LOG.error("Caught exception while sync'ing Kinesis shards and leases", e);
+            log.error("Caught exception while sync'ing Kinesis shards and leases", e);
             exception = e;
         }
 
