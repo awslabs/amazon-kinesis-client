@@ -24,10 +24,10 @@ import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownRea
 import software.amazon.aws.services.kinesis.clientlibrary.types.InitializationInput;
 import software.amazon.aws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
-import com.amazonaws.services.kinesis.multilang.messages.Message;
-import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
-import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.CheckpointMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.Message;
+import software.amazon.aws.services.kinesis.multilang.messages.ProcessRecordsMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.StatusMessage;
 import com.google.common.util.concurrent.SettableFuture;
 import org.junit.Before;
 import org.junit.Test;
@@ -37,6 +37,9 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
+import software.amazon.aws.services.kinesis.multilang.MessageReader;
+import software.amazon.aws.services.kinesis.multilang.MessageWriter;
+import software.amazon.aws.services.kinesis.multilang.MultiLangProtocol;
 
 import java.util.ArrayList;
 import java.util.Collections;

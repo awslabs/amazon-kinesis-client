@@ -32,9 +32,10 @@ import org.mockito.Mockito;
 
 import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.kinesis.multilang.messages.Message;
+import software.amazon.aws.services.kinesis.multilang.messages.Message;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import software.amazon.aws.services.kinesis.multilang.MessageWriter;
 
 public class MessageWriterTest {
 

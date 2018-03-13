@@ -23,6 +23,8 @@ import org.mockito.Mockito;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.aws.services.kinesis.multilang.MultiLangDaemon;
+import software.amazon.aws.services.kinesis.multilang.MultiLangRecordProcessorFactory;
 
 public class MultiLangDaemonTest {
 

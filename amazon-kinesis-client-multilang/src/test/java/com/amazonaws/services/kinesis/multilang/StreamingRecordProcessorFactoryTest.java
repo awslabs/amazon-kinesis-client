@@ -22,6 +22,8 @@ import software.amazon.aws.services.kinesis.clientlibrary.interfaces.v2.IRecordP
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.aws.services.kinesis.multilang.MultiLangRecordProcessor;
+import software.amazon.aws.services.kinesis.multilang.MultiLangRecordProcessorFactory;
 
 @RunWith(MockitoJUnitRunner.class)
 public class StreamingRecordProcessorFactoryTest {

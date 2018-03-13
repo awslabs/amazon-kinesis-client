@@ -26,6 +26,14 @@ import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownRea
 import com.amazonaws.services.kinesis.model.Record;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import software.amazon.aws.services.kinesis.multilang.messages.CheckpointMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.InitializeMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.JsonFriendlyRecord;
+import software.amazon.aws.services.kinesis.multilang.messages.Message;
+import software.amazon.aws.services.kinesis.multilang.messages.ProcessRecordsMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.ShutdownMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.ShutdownRequestedMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.StatusMessage;
 
 public class MessageTest {
 

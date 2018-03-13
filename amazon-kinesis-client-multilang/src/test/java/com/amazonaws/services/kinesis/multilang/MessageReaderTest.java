@@ -31,9 +31,10 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-import com.amazonaws.services.kinesis.multilang.messages.Message;
-import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.Message;
+import software.amazon.aws.services.kinesis.multilang.messages.StatusMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import software.amazon.aws.services.kinesis.multilang.MessageReader;
 
 public class MessageReaderTest {
 

@@ -26,11 +26,11 @@ import software.amazon.aws.services.kinesis.clientlibrary.types.InitializationIn
 import software.amazon.aws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import software.amazon.aws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.kinesis.multilang.messages.InitializeMessage;
-import com.amazonaws.services.kinesis.multilang.messages.Message;
-import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
-import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
-import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.InitializeMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.Message;
+import software.amazon.aws.services.kinesis.multilang.messages.ProcessRecordsMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.ShutdownMessage;
+import software.amazon.aws.services.kinesis.multilang.messages.StatusMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Assert;
 import org.junit.Before;
@@ -41,6 +41,10 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
+import software.amazon.aws.services.kinesis.multilang.DrainChildSTDERRTask;
+import software.amazon.aws.services.kinesis.multilang.MessageReader;
+import software.amazon.aws.services.kinesis.multilang.MessageWriter;
+import software.amazon.aws.services.kinesis.multilang.MultiLangRecordProcessor;
 
 import java.io.IOException;
 import java.io.InputStream;

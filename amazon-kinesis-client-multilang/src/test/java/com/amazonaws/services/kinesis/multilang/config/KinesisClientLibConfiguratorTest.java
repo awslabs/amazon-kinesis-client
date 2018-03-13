@@ -34,6 +34,7 @@ import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitialPosi
 import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import software.amazon.aws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
+import software.amazon.aws.services.kinesis.multilang.config.KinesisClientLibConfigurator;
 
 public class KinesisClientLibConfiguratorTest {
 

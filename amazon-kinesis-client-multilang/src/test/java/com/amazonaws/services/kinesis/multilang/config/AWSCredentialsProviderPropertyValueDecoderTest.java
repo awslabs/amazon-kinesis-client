@@ -22,6 +22,7 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.AWSCredentialsProviderChain;
+import software.amazon.aws.services.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoder;
 
 public class AWSCredentialsProviderPropertyValueDecoderTest {
 
