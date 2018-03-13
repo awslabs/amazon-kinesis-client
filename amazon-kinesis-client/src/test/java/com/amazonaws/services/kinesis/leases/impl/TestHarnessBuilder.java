@@ -23,11 +23,14 @@ import java.util.concurrent.Callable;
 
 import org.junit.Assert;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.leases.exceptions.DependencyException;
+import software.amazon.aws.services.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.aws.services.kinesis.leases.exceptions.LeasingException;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLeaseManager;
+import software.amazon.aws.services.kinesis.leases.impl.LeaseTaker;
+import software.amazon.aws.services.kinesis.leases.interfaces.ILeaseRenewer;
 
 public class TestHarnessBuilder {
 

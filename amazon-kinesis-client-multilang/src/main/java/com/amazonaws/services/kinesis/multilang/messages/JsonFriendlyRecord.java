@@ -16,7 +16,7 @@ package com.amazonaws.services.kinesis.multilang.messages;
 
 import java.util.Date;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
+import software.amazon.aws.services.kinesis.clientlibrary.types.UserRecord;
 import com.amazonaws.services.kinesis.model.Record;
 import com.fasterxml.jackson.annotation.JsonProperty;
 

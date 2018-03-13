@@ -25,6 +25,9 @@ import org.junit.Test;
 import com.amazonaws.services.cloudwatch.model.Dimension;
 import com.amazonaws.services.cloudwatch.model.MetricDatum;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
+import software.amazon.aws.services.kinesis.metrics.impl.CWMetricKey;
+import software.amazon.aws.services.kinesis.metrics.impl.MetricAccumulatingQueue;
+import software.amazon.aws.services.kinesis.metrics.impl.MetricDatumWithKey;
 
 public class MetricAccumulatingQueueTest {
 

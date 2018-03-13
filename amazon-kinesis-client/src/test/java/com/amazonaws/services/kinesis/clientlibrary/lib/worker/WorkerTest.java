@@ -81,30 +81,58 @@ import org.mockito.stubbing.Answer;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerCWMetricsFactory;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerThreadPoolExecutor;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.WorkerStateChangeListener.WorkerState;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import software.amazon.aws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.BlockOnParentShardTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GetRecordsCache;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GetRecordsRetrievalStrategy;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GracefulShutdownCoordinator;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ITask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitializeTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibLeaseCoordinator;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.MetricsCollectingTaskDecorator;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.NoOpShardPrioritization;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.NoOpWorkerStateChangeListener;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.RecordsFetcherFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardConsumer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardPrioritization;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardSyncer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownNotificationTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.SimpleRecordsFetcherFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.TaskResult;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.TaskType;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.V1ToV2RecordProcessorFactoryAdapter;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerCWMetricsFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerThreadPoolExecutor;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.WorkerStateChangeListener;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.WorkerStateChangeListener.WorkerState;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.Worker;
+import software.amazon.aws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
+import software.amazon.aws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.util.KinesisLocalFileDataCreator;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.clientlibrary.types.InitializationInput;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ShutdownInput;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseBuilder;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
-import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
-import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
-import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLeaseManager;
+import software.amazon.aws.services.kinesis.leases.impl.LeaseManager;
+import software.amazon.aws.services.kinesis.leases.interfaces.ILeaseManager;
+import software.amazon.aws.services.kinesis.metrics.impl.CWMetricsFactory;
+import software.amazon.aws.services.kinesis.metrics.impl.NullMetricsFactory;
+import software.amazon.aws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
@@ -150,7 +178,7 @@ public class WorkerTest {
     @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
     @Mock
-    private com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory v1RecordProcessorFactory;
+    private software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory v1RecordProcessorFactory;
     @Mock
     private IKinesisProxy proxy;
     @Mock
@@ -180,12 +208,12 @@ public class WorkerTest {
     }
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
-    private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY =
-            new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory() {
+    private static final software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY =
+            new software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory() {
 
         @Override
-        public com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor createProcessor() {
-            return new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor() {
+        public software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessor createProcessor() {
+            return new software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessor() {
 
                 @Override
                 public void shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason) {
@@ -447,7 +475,7 @@ public class WorkerTest {
 
     /**
      * Runs worker with threadPoolSize == numShards
-     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker#run()}.
+     * Test method for {@link Worker#run()}.
      */
     @Test
     public final void testRunWithThreadPoolSizeEqualToNumShards() throws Exception {
@@ -458,7 +486,7 @@ public class WorkerTest {
 
     /**
      * Runs worker with threadPoolSize < numShards
-     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker#run()}.
+     * Test method for {@link Worker#run()}.
      */
     @Test
     public final void testRunWithThreadPoolSizeLessThanNumShards() throws Exception {
@@ -469,7 +497,7 @@ public class WorkerTest {
 
     /**
      * Runs worker with threadPoolSize > numShards
-     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker#run()}.
+     * Test method for {@link Worker#run()}.
      */
     @Test
     public final void testRunWithThreadPoolSizeMoreThanNumShards() throws Exception {
@@ -1629,13 +1657,13 @@ public class WorkerTest {
 
     private abstract class InjectableWorker extends Worker {
         InjectableWorker(String applicationName, IRecordProcessorFactory recordProcessorFactory,
-                KinesisClientLibConfiguration config, StreamConfig streamConfig,
-                InitialPositionInStreamExtended initialPositionInStream,
-                long parentShardPollIntervalMillis, long shardSyncIdleTimeMillis,
-                boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
-                KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
-                IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
-                boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
+                         KinesisClientLibConfiguration config, StreamConfig streamConfig,
+                         InitialPositionInStreamExtended initialPositionInStream,
+                         long parentShardPollIntervalMillis, long shardSyncIdleTimeMillis,
+                         boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
+                         KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
+                         IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
+                         boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization) {
             super(applicationName,
                     recordProcessorFactory,
                     config,

@@ -46,6 +46,7 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.aws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 
 /**
  * This is a (temporary) test utility class, to mimic Kinesis without having to integrate with Alpha.
@@ -174,7 +175,7 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
     /*
      * (non-Javadoc)
      *
-     * @see com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy#getStreamInfo()
+     * @see software.amazon.aws.services.kinesis.clientlibrary.proxies.IKinesisProxy#getStreamInfo()
      */
     @Override
     public DescribeStreamResult getStreamInfo(String startShardId) throws ResourceNotFoundException {
@@ -337,7 +338,7 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
     /*
      * (non-Javadoc)
      *
-     * @see com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy#get(java.nio.ByteBuffer, int)
+     * @see software.amazon.aws.services.kinesis.clientlibrary.proxies.IKinesisProxy#get(java.nio.ByteBuffer, int)
      */
     @Override
     public GetRecordsResult get(String serializedKinesisIterator, int maxRecords)

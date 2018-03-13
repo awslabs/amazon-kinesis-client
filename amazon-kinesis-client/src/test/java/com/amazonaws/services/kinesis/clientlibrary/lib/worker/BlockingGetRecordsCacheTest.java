@@ -30,7 +30,9 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.BlockingGetRecordsCache;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GetRecordsRetrievalStrategy;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 

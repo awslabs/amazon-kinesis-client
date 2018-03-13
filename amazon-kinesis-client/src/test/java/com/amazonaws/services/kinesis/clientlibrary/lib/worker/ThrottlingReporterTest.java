@@ -24,6 +24,7 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.slf4j.Logger;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ThrottlingReporter;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ThrottlingReporterTest {

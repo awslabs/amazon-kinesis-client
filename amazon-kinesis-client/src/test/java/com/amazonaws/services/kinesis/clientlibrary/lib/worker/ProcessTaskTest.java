@@ -43,11 +43,23 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.clientlibrary.types.Messages.AggregatedRecord;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GetRecordsCache;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisDataFetcher;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ProcessTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.TaskResult;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ThrottlingReporter;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.clientlibrary.types.Messages;
+import software.amazon.aws.services.kinesis.clientlibrary.types.Messages.AggregatedRecord;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import software.amazon.aws.services.kinesis.clientlibrary.types.UserRecord;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.Record;
 import com.google.protobuf.ByteString;
@@ -69,9 +81,11 @@ public class ProcessTaskTest {
     private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
 
-    private @Mock KinesisDataFetcher mockDataFetcher;
+    private @Mock
+    KinesisDataFetcher mockDataFetcher;
     private @Mock IRecordProcessor mockRecordProcessor;
-    private @Mock RecordProcessorCheckpointer mockCheckpointer;
+    private @Mock
+    RecordProcessorCheckpointer mockCheckpointer;
     @Mock
     private ThrottlingReporter throttlingReporter;
     @Mock
@@ -339,8 +353,8 @@ public class ProcessTaskTest {
         ByteBuffer bb = ByteBuffer.allocate(1024);
         bb.put(new byte[] {-13, -119, -102, -62 });
 
-        com.amazonaws.services.kinesis.clientlibrary.types.Messages.Record r =
-                com.amazonaws.services.kinesis.clientlibrary.types.Messages.Record.newBuilder()
+        Messages.Record r =
+                Messages.Record.newBuilder()
                         .setData(ByteString.copyFrom(TEST_DATA))
                         .setPartitionKeyIndex(0)
                         .build();

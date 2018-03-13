@@ -17,11 +17,11 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import java.util.Arrays;
 import java.util.List;
 
-import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import software.amazon.aws.services.kinesis.leases.exceptions.DependencyException;
+import software.amazon.aws.services.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.aws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
+import software.amazon.aws.services.kinesis.leases.interfaces.ILeaseManager;
 
 import lombok.extern.slf4j.Slf4j;
 

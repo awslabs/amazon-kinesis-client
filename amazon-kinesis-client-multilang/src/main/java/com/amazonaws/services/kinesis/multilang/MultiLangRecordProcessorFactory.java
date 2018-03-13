@@ -16,9 +16,9 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.util.concurrent.ExecutorService;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;

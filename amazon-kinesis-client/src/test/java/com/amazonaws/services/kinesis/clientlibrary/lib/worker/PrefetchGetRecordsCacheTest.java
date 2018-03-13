@@ -44,8 +44,11 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GetRecordsRetrievalStrategy;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisDataFetcher;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.PrefetchGetRecordsCache;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import software.amazon.aws.services.kinesis.metrics.impl.NullMetricsFactory;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;

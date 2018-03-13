@@ -21,10 +21,12 @@ import org.junit.runner.Description;
 
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import software.amazon.aws.services.kinesis.metrics.impl.MetricsHelper;
+import software.amazon.aws.services.kinesis.metrics.impl.NullMetricsFactory;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 
 @Ignore
 @Slf4j

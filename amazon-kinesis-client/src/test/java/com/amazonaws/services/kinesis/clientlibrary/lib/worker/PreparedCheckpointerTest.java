@@ -1,8 +1,10 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IPreparedCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.IPreparedCheckpointer;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.DoesNothingPreparedCheckpointer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.PreparedCheckpointer;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;

@@ -21,10 +21,10 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.metrics.impl.MetricsHelper;
+import software.amazon.aws.services.kinesis.metrics.impl.NullMetricsFactory;
 
 /**
  * Base class for unit testing checkpoint implementations.

@@ -36,6 +36,11 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.verification.VerificationMode;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GracefulShutdownContext;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GracefulShutdownCoordinator;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardConsumer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.Worker;
 
 @RunWith(MockitoJUnitRunner.class)
 public class GracefulShutdownCoordinatorTest {

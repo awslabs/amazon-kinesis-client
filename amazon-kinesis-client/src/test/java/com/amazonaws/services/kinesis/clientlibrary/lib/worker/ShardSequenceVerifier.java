@@ -25,6 +25,7 @@ import com.amazonaws.services.kinesis.model.Shard;
 
 import junit.framework.Assert;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 
 /**
  * Helper class to verify shard lineage in unit tests that use TestStreamlet.

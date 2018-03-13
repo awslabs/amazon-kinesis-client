@@ -32,8 +32,11 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory;
-import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.Worker;
+import software.amazon.aws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
 
 import junit.framework.Assert;

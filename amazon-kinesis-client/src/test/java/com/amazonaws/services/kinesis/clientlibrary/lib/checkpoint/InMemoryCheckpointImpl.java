@@ -17,11 +17,12 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.checkpoint.Checkpoint;
 
 /**
  * Everything is stored in memory and there is no fault-tolerance.

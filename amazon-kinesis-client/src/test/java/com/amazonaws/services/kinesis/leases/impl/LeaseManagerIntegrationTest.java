@@ -22,7 +22,10 @@ import junit.framework.Assert;
 
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
+import software.amazon.aws.services.kinesis.leases.exceptions.LeasingException;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLeaseManager;
+import software.amazon.aws.services.kinesis.leases.impl.Lease;
 
 public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
 

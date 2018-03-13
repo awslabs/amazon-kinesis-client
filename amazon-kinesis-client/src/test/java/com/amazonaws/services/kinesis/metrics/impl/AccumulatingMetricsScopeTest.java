@@ -19,7 +19,7 @@ import org.junit.Test;
 
 import com.amazonaws.services.cloudwatch.model.MetricDatum;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
-import com.amazonaws.services.kinesis.metrics.impl.AccumulateByNameMetricsScope;
+import software.amazon.aws.services.kinesis.metrics.impl.AccumulateByNameMetricsScope;
 
 public class AccumulatingMetricsScopeTest {
 

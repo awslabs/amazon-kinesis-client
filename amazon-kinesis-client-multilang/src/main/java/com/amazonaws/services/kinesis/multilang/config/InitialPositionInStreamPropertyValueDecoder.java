@@ -17,7 +17,7 @@ package com.amazonaws.services.kinesis.multilang.config;
 import java.util.Arrays;
 import java.util.List;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 
 /**
  * Get an InitialiPosition enum property.

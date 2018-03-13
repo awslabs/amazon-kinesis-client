@@ -40,7 +40,6 @@ import java.util.function.Supplier;
 
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -49,7 +48,11 @@ import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.AsynchronousGetRecordsRetrievalStrategy;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.DataFetcherResult;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisDataFetcher;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.aws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.mockito.stubbing.Answer;

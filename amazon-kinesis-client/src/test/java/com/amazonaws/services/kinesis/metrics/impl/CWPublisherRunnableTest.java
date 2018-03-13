@@ -24,6 +24,10 @@ import org.mockito.Mockito;
 
 import com.amazonaws.services.cloudwatch.model.MetricDatum;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
+import software.amazon.aws.services.kinesis.metrics.impl.CWMetricKey;
+import software.amazon.aws.services.kinesis.metrics.impl.CWPublisherRunnable;
+import software.amazon.aws.services.kinesis.metrics.impl.ICWMetricsPublisher;
+import software.amazon.aws.services.kinesis.metrics.impl.MetricDatumWithKey;
 
 public class CWPublisherRunnableTest {
 

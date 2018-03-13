@@ -14,15 +14,15 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import software.amazon.aws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
+import software.amazon.aws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
+import software.amazon.aws.services.kinesis.clientlibrary.exceptions.ShutdownException;
+import software.amazon.aws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import software.amazon.aws.services.kinesis.clientlibrary.types.InitializationInput;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;
 import com.amazonaws.services.kinesis.multilang.messages.Message;

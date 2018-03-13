@@ -23,7 +23,6 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.auth.SystemPropertiesCredentialsProvider;
 import junit.framework.Assert;
 
 import org.junit.Before;
@@ -31,15 +30,16 @@ import org.junit.Test;
 
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
-import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
-import com.amazonaws.services.kinesis.leases.impl.Lease;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibLeaseCoordinator;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.leases.exceptions.DependencyException;
+import software.amazon.aws.services.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.aws.services.kinesis.leases.exceptions.LeasingException;
+import software.amazon.aws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLeaseManager;
+import software.amazon.aws.services.kinesis.leases.impl.Lease;
+import software.amazon.aws.services.kinesis.leases.interfaces.ILeaseRenewer;
 
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;

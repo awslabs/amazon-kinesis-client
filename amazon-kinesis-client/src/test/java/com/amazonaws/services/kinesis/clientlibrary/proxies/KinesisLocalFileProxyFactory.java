@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.math.BigInteger;
 
 import com.amazonaws.services.kinesis.clientlibrary.proxies.util.KinesisLocalFileDataCreator;
+import software.amazon.aws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import software.amazon.aws.services.kinesis.clientlibrary.proxies.IKinesisProxyFactory;
 
 /** Factory for KinesisProxy objects that use a local file for data. Useful for testing purposes.
  *
@@ -53,7 +55,7 @@ public class KinesisLocalFileProxyFactory implements IKinesisProxyFactory {
     }
 
     /* (non-Javadoc)
-     * @see com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxyFactory#getProxy(java.lang.String)
+     * @see software.amazon.aws.services.kinesis.clientlibrary.proxies.IKinesisProxyFactory#getProxy(java.lang.String)
      */
     @Override
     public IKinesisProxy getProxy(String streamARN) {

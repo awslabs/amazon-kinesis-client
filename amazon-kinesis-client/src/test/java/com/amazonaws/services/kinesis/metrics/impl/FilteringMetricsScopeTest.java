@@ -22,9 +22,10 @@ import org.junit.Test;
 import com.amazonaws.services.cloudwatch.model.Dimension;
 import com.amazonaws.services.cloudwatch.model.MetricDatum;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
-import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import software.amazon.aws.services.kinesis.metrics.interfaces.IMetricsScope;
+import software.amazon.aws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
+import software.amazon.aws.services.kinesis.metrics.impl.FilteringMetricsScope;
 
 public class FilteringMetricsScopeTest {
 

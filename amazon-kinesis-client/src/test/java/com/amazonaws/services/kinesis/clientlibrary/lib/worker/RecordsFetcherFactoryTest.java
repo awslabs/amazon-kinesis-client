@@ -8,7 +8,14 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.BlockingGetRecordsCache;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.DataFetchingStrategy;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GetRecordsCache;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GetRecordsRetrievalStrategy;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.PrefetchGetRecordsCache;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.RecordsFetcherFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.SimpleRecordsFetcherFactory;
+import software.amazon.aws.services.kinesis.metrics.interfaces.IMetricsFactory;
 
 public class RecordsFetcherFactoryTest {
     private String shardId = "TestShard";

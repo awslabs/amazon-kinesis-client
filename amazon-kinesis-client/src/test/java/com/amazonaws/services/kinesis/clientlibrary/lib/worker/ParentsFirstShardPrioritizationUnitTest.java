@@ -25,7 +25,9 @@ import java.util.Random;
 
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ParentsFirstShardPrioritization;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
 public class ParentsFirstShardPrioritizationUnitTest {
 

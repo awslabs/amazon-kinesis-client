@@ -27,10 +27,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
-import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import software.amazon.aws.services.kinesis.leases.exceptions.DependencyException;
+import software.amazon.aws.services.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.aws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.aws.services.kinesis.leases.impl.Lease;
+import software.amazon.aws.services.kinesis.leases.impl.LeaseRenewer;
+import software.amazon.aws.services.kinesis.leases.interfaces.ILeaseManager;
 
 public class LeaseRenewerTest {
 

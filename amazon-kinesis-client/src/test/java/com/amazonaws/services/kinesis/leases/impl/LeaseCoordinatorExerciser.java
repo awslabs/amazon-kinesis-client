@@ -30,13 +30,16 @@ import javax.swing.*;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
-import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
-import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.leases.exceptions.DependencyException;
+import software.amazon.aws.services.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.aws.services.kinesis.leases.exceptions.LeasingException;
+import software.amazon.aws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLeaseManager;
+import software.amazon.aws.services.kinesis.leases.impl.LeaseCoordinator;
+import software.amazon.aws.services.kinesis.leases.interfaces.ILeaseManager;
+import software.amazon.aws.services.kinesis.metrics.impl.CWMetricsFactory;
 
 import lombok.extern.slf4j.Slf4j;
 

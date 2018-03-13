@@ -24,6 +24,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import software.amazon.aws.services.kinesis.leases.impl.LeaseTaker;
 
 /**
  *
@@ -59,7 +60,7 @@ public class LeaseTakerTest {
     }
 
     /**
-     * Test method for {@link com.amazonaws.services.kinesis.leases.impl.LeaseTaker#stringJoin(java.util.Collection, java.lang.String)}.
+     * Test method for {@link LeaseTaker#stringJoin(java.util.Collection, java.lang.String)}.
      */
     @Test
     public final void testStringJoin() {

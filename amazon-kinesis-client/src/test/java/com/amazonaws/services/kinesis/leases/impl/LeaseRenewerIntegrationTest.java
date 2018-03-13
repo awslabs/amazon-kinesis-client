@@ -14,9 +14,11 @@
  */
 package com.amazonaws.services.kinesis.leases.impl;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.leases.exceptions.LeasingException;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
+import software.amazon.aws.services.kinesis.leases.impl.LeaseRenewer;
+import software.amazon.aws.services.kinesis.leases.interfaces.ILeaseRenewer;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;

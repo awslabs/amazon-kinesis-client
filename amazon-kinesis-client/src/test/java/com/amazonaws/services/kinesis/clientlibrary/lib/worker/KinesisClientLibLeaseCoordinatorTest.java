@@ -26,13 +26,14 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import software.amazon.aws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
+import software.amazon.aws.services.kinesis.clientlibrary.exceptions.ShutdownException;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibLeaseCoordinator;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.leases.exceptions.DependencyException;
+import software.amazon.aws.services.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.aws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.aws.services.kinesis.leases.interfaces.ILeaseManager;
 
 public class KinesisClientLibLeaseCoordinatorTest {
     private static final String SHARD_ID = "shardId-test";

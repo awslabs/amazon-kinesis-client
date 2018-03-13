@@ -18,7 +18,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
 
 public class KinesisClientLeaseBuilder {
     private String leaseKey;

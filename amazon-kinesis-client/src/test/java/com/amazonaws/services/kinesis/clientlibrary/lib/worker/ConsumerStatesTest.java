@@ -14,8 +14,8 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ConsumerState;
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ShardConsumerState;
+import static software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ConsumerState;
+import static software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ShardConsumerState;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -38,12 +38,31 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import software.amazon.aws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.BlockOnParentShardTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ConsumerStates;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.GetRecordsCache;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ITask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.InitializeTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisDataFetcher;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ProcessTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardConsumer;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownNotification;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownNotificationTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.ShutdownTask;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.TaskResult;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.TaskType;
+import software.amazon.aws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import software.amazon.aws.services.kinesis.leases.impl.KinesisClientLease;
+import software.amazon.aws.services.kinesis.leases.interfaces.ILeaseManager;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ConsumerStatesTest {

@@ -28,6 +28,9 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.model.MetricDatum;
 import com.amazonaws.services.cloudwatch.model.PutMetricDataRequest;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
+import software.amazon.aws.services.kinesis.metrics.impl.CWMetricKey;
+import software.amazon.aws.services.kinesis.metrics.impl.DefaultCWMetricsPublisher;
+import software.amazon.aws.services.kinesis.metrics.impl.MetricDatumWithKey;
 
 public class DefaultCWMetricsPublisherTest {
 

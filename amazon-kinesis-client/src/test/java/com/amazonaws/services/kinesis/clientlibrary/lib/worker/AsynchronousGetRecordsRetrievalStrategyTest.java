@@ -35,15 +35,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.AsynchronousGetRecordsRetrievalStrategy;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.DataFetcherResult;
+import software.amazon.aws.services.kinesis.clientlibrary.lib.worker.KinesisDataFetcher;
 
 /**
  *

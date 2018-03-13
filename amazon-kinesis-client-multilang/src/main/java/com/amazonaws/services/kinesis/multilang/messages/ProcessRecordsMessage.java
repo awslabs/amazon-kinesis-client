@@ -17,7 +17,7 @@ package com.amazonaws.services.kinesis.multilang.messages;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import software.amazon.aws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.Record;
 import lombok.Getter;
 import lombok.Setter;
