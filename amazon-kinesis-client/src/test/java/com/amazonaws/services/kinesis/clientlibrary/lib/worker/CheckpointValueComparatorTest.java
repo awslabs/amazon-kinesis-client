@@ -18,7 +18,7 @@ import junit.framework.Assert;
 
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
+import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 
 public class CheckpointValueComparatorTest {
     @Test

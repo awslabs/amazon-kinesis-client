@@ -26,7 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map.Entry;
 
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
+import software.amazon.kinesis.metrics.IMetricsScope;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -36,15 +36,15 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IPreparedCheckpointer;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.IPreparedCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.InMemoryCheckpointImpl;
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.impl.NullMetricsScope;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.retrieval.kpl.UserRecord;
+import software.amazon.kinesis.metrics.MetricsHelper;
+import software.amazon.kinesis.metrics.NullMetricsScope;
+import software.amazon.kinesis.metrics.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.Record;
 
 /**

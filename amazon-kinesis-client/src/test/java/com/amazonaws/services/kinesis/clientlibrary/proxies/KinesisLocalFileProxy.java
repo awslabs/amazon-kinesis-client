@@ -46,6 +46,7 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.retrieval.IKinesisProxy;
 
 /**
  * This is a (temporary) test utility class, to mimic Kinesis without having to integrate with Alpha.

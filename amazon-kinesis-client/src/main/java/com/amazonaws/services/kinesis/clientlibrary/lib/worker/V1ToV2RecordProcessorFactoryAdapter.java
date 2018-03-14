@@ -14,20 +14,20 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
 
 /**
- * Adapts a V1 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory
+ * Adapts a V1 {@link software.amazon.kinesis.processor.IRecordProcessorFactory
  * IRecordProcessorFactory} to V2
- * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory IRecordProcessorFactory}.
+ * {@link IRecordProcessorFactory IRecordProcessorFactory}.
  */
 class V1ToV2RecordProcessorFactoryAdapter implements IRecordProcessorFactory {
 
-    private com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory factory;
+    private software.amazon.kinesis.processor.IRecordProcessorFactory factory;
 
     V1ToV2RecordProcessorFactoryAdapter(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory factory) {
+            software.amazon.kinesis.processor.IRecordProcessorFactory factory) {
         this.factory = factory;
     }
 

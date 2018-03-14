@@ -16,9 +16,9 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.concurrent.CountDownLatch;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
+import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 
 /**
  * Contains callbacks for completion of stages in a requested record processor shutdown.

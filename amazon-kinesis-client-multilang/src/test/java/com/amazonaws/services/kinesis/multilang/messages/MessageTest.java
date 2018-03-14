@@ -17,8 +17,8 @@ package com.amazonaws.services.kinesis.multilang.messages;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.InitializationInput;
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import org.junit.Assert;
 import org.junit.Test;
 

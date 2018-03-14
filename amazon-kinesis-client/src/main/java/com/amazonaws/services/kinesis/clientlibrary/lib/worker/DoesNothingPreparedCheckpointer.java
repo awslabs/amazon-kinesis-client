@@ -18,8 +18,8 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateExcep
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IPreparedCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.kinesis.processor.IPreparedCheckpointer;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * A special IPreparedCheckpointer that does nothing, which can be used when preparing a checkpoint at the current

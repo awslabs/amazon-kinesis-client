@@ -68,6 +68,7 @@ import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamDescription;
 import com.amazonaws.services.kinesis.model.StreamStatus;
+import software.amazon.kinesis.retrieval.KinesisProxy;
 
 @RunWith(MockitoJUnitRunner.class)
 public class KinesisProxyTest {

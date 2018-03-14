@@ -40,20 +40,20 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
-import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
-import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
-import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
-import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
+import software.amazon.kinesis.retrieval.IKinesisProxy;
+import software.amazon.kinesis.retrieval.KinesisProxy;
+import software.amazon.kinesis.leases.exceptions.LeasingException;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.KinesisClientLeaseManager;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.metrics.CWMetricsFactory;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
@@ -132,7 +132,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config) {
         this(recordProcessorFactory, config, getExecutorService());
     }
@@ -152,7 +152,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, ExecutorService execService) {
         this(recordProcessorFactory, config,
                 new AmazonKinesisClient(config.getKinesisCredentialsProvider(), config.getKinesisClientConfiguration()),
@@ -176,7 +176,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, IMetricsFactory metricsFactory) {
         this(recordProcessorFactory, config, metricsFactory, getExecutorService());
     }
@@ -196,7 +196,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, IMetricsFactory metricsFactory, ExecutorService execService) {
         this(recordProcessorFactory, config,
                 new AmazonKinesisClient(config.getKinesisCredentialsProvider(), config.getKinesisClientConfiguration()),
@@ -222,7 +222,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
             AmazonCloudWatch cloudWatchClient) {
         this(recordProcessorFactory, config, kinesisClient, dynamoDBClient, cloudWatchClient, getExecutorService());
@@ -247,7 +247,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
             AmazonCloudWatch cloudWatchClient, ExecutorService execService) {
         this(recordProcessorFactory, config, kinesisClient, dynamoDBClient, getMetricsFactory(cloudWatchClient, config),
@@ -275,7 +275,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesisClient kinesisClient,
             AmazonDynamoDBClient dynamoDBClient, AmazonCloudWatchClient cloudWatchClient) {
         this(recordProcessorFactory, config, (AmazonKinesis) kinesisClient, (AmazonDynamoDB) dynamoDBClient,
@@ -304,7 +304,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesisClient kinesisClient,
             AmazonDynamoDBClient dynamoDBClient, AmazonCloudWatchClient cloudWatchClient, ExecutorService execService) {
         this(recordProcessorFactory, config, (AmazonKinesis) kinesisClient, (AmazonDynamoDB) dynamoDBClient,
@@ -333,7 +333,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesisClient kinesisClient,
             AmazonDynamoDBClient dynamoDBClient, IMetricsFactory metricsFactory, ExecutorService execService) {
         this(recordProcessorFactory, config, (AmazonKinesis) kinesisClient, (AmazonDynamoDB) dynamoDBClient,
@@ -359,7 +359,7 @@ public class Worker implements Runnable {
      */
     @Deprecated
     public Worker(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory,
+            software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
             IMetricsFactory metricsFactory, ExecutorService execService) {
         this(config.getApplicationName(), new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),
@@ -1151,7 +1151,7 @@ public class Worker implements Runnable {
         private WorkerStateChangeListener workerStateChangeListener;
 
         /**
-         * Provide a V1 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor
+         * Provide a V1 {@link software.amazon.kinesis.processor.IRecordProcessor
          * IRecordProcessor}.
          *
          * @param recordProcessorFactory
@@ -1159,13 +1159,13 @@ public class Worker implements Runnable {
          * @return A reference to this updated object so that method calls can be chained together.
          */
         public Builder recordProcessorFactory(
-                com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory recordProcessorFactory) {
+                software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory) {
             this.recordProcessorFactory = new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory);
             return this;
         }
 
         /**
-         * Provide a V2 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor
+         * Provide a V2 {@link IRecordProcessor
          * IRecordProcessor}.
          *
          * @param recordProcessorFactory

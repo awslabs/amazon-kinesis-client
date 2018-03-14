@@ -43,11 +43,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.clientlibrary.types.Messages.AggregatedRecord;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.retrieval.GetRecordsCache;
+import software.amazon.kinesis.retrieval.KinesisDataFetcher;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.retrieval.kpl.Messages;
+import software.amazon.kinesis.retrieval.kpl.Messages.AggregatedRecord;
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.retrieval.kpl.UserRecord;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.Record;
 import com.google.protobuf.ByteString;
@@ -69,7 +72,8 @@ public class ProcessTaskTest {
     private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
 
-    private @Mock KinesisDataFetcher mockDataFetcher;
+    private @Mock
+    KinesisDataFetcher mockDataFetcher;
     private @Mock IRecordProcessor mockRecordProcessor;
     private @Mock RecordProcessorCheckpointer mockCheckpointer;
     @Mock
@@ -339,8 +343,8 @@ public class ProcessTaskTest {
         ByteBuffer bb = ByteBuffer.allocate(1024);
         bb.put(new byte[] {-13, -119, -102, -62 });
 
-        com.amazonaws.services.kinesis.clientlibrary.types.Messages.Record r =
-                com.amazonaws.services.kinesis.clientlibrary.types.Messages.Record.newBuilder()
+        Messages.Record r =
+                Messages.Record.newBuilder()
                         .setData(ByteString.copyFrom(TEST_DATA))
                         .setPartitionKeyIndex(0)
                         .build();

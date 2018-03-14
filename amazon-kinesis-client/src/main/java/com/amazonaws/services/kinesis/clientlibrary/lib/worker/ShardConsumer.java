@@ -21,15 +21,20 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.metrics.IMetricsFactory;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.retrieval.AsynchronousGetRecordsRetrievalStrategy;
+import software.amazon.kinesis.retrieval.GetRecordsCache;
+import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
+import software.amazon.kinesis.retrieval.KinesisDataFetcher;
+import software.amazon.kinesis.retrieval.SynchronousGetRecordsRetrievalStrategy;
 
 /**
  * Responsible for consuming data records of a (specified) shard.

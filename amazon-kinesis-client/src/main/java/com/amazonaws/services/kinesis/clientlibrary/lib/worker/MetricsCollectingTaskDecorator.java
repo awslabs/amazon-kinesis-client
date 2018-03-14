@@ -14,9 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
-import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsHelper;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.MetricsLevel;
 
 /**
  * Decorates an ITask and reports metrics about its timing and success/failure.

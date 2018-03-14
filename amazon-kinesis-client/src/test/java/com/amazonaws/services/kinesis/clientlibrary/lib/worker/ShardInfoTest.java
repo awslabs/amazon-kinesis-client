@@ -28,7 +28,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 public class ShardInfoTest {
     private static final String CONCURRENCY_TOKEN = UUID.randomUUID().toString();

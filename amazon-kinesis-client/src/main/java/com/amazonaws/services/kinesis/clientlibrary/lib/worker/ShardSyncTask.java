@@ -14,9 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import software.amazon.kinesis.retrieval.IKinesisProxy;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.ILeaseManager;
 
 import lombok.extern.slf4j.Slf4j;
 

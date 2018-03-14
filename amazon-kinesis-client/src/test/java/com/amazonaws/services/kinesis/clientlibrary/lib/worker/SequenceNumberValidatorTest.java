@@ -21,8 +21,8 @@ import org.mockito.Mockito;
 
 import static org.junit.Assert.fail;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
+import software.amazon.kinesis.retrieval.IKinesisProxy;
 import com.amazonaws.services.kinesis.model.InvalidArgumentException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 

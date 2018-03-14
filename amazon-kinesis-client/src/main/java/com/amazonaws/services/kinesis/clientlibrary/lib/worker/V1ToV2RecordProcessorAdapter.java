@@ -14,21 +14,21 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.lifecycle.InitializationInput;
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.ShutdownInput;
 
 /**
- * Adapts a V1 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor IRecordProcessor}
- * to V2 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor IRecordProcessor}.
+ * Adapts a V1 {@link software.amazon.kinesis.processor.IRecordProcessor IRecordProcessor}
+ * to V2 {@link IRecordProcessor IRecordProcessor}.
  */
 class V1ToV2RecordProcessorAdapter implements IRecordProcessor {
 
-    private com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor recordProcessor;
+    private software.amazon.kinesis.processor.IRecordProcessor recordProcessor;
     
     V1ToV2RecordProcessorAdapter(
-            com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor recordProcessor) {
+            software.amazon.kinesis.processor.IRecordProcessor recordProcessor) {
         this.recordProcessor = recordProcessor;
     }
 

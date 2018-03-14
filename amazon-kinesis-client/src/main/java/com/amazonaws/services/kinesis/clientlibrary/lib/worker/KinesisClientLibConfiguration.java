@@ -23,12 +23,18 @@ import org.apache.commons.lang.Validate;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.RegionUtils;
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
-import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.metrics.MetricsHelper;
+import software.amazon.kinesis.metrics.IMetricsScope;
+import software.amazon.kinesis.metrics.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
 
 import lombok.Getter;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.retrieval.DataFetchingStrategy;
+import software.amazon.kinesis.retrieval.KinesisProxy;
+import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
+import software.amazon.kinesis.retrieval.SimpleRecordsFetcherFactory;
 
 /**
  * Configuration for the Amazon Kinesis Client Library.
@@ -994,11 +1000,11 @@ public class KinesisClientLibConfiguration {
      * <p>
      * This value is only used when no records are returned; if records are returned, the {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ProcessTask} will
      * immediately retrieve the next set of records after the call to
-     * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor#processRecords(ProcessRecordsInput)}
+     * {@link IRecordProcessor#processRecords(ProcessRecordsInput)}
      * has returned. Setting this value to high may result in the KCL being unable to catch up. If you are changing this
      * value it's recommended that you enable {@link #withCallProcessRecordsEvenForEmptyRecordList(boolean)}, and
      * monitor how far behind the records retrieved are by inspecting
-     * {@link com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput#getMillisBehindLatest()}, and the
+     * {@link ProcessRecordsInput#getMillisBehindLatest()}, and the
      * <a href=
      * "http://docs.aws.amazon.com/streams/latest/dev/monitoring-with-cloudwatch.html#kinesis-metrics-stream">CloudWatch
      * Metric: GetRecords.MillisBehindLatest</a>
@@ -1407,7 +1413,7 @@ public class KinesisClientLibConfiguration {
 
     /**
      * @param listShardsBackoffTimeInMillis Max sleep between two listShards call when throttled
-     *                                     in {@link com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy}.
+     *                                     in {@link KinesisProxy}.
      * @return
      */
     public KinesisClientLibConfiguration withListShardsBackoffTimeInMillis(long listShardsBackoffTimeInMillis) {
@@ -1418,7 +1424,7 @@ public class KinesisClientLibConfiguration {
 
     /**
      * @param maxListShardsRetryAttempts Max number of retries for listShards when throttled
-     *                                   in {@link com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy}.
+     *                                   in {@link KinesisProxy}.
      * @return
      */
     public KinesisClientLibConfiguration withMaxListShardsRetryAttempts(int maxListShardsRetryAttempts) {

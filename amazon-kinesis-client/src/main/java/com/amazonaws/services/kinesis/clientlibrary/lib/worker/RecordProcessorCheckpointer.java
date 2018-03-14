@@ -19,14 +19,14 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibD
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IPreparedCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingScope;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.IPreparedCheckpointer;
+import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.retrieval.kpl.UserRecord;
+import software.amazon.kinesis.metrics.MetricsHelper;
+import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingScope;
+import software.amazon.kinesis.metrics.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.Record;
 
 import lombok.extern.slf4j.Slf4j;

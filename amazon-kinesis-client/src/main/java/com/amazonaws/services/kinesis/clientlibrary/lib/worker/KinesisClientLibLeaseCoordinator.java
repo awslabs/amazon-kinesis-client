@@ -27,16 +27,16 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibE
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.Checkpoint;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.metrics.IMetricsFactory;
 
 import lombok.extern.slf4j.Slf4j;
 

@@ -14,7 +14,7 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import software.amazon.kinesis.retrieval.IKinesisProxy;
 
 /**
  * Used to capture stream configuration and pass it along.

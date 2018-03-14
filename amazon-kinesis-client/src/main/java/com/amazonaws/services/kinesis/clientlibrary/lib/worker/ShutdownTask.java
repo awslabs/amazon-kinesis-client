@@ -14,14 +14,15 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.retrieval.GetRecordsCache;
+import software.amazon.kinesis.retrieval.IKinesisProxy;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.lifecycle.ShutdownInput;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.metrics.MetricsHelper;
+import software.amazon.kinesis.metrics.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.slf4j.Slf4j;

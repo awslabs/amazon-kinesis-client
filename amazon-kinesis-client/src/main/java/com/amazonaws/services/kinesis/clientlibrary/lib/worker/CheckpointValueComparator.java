@@ -18,7 +18,7 @@ import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.Comparator;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
+import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 
 /**
  * 

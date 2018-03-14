@@ -18,8 +18,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
 
 /**
  * Factory for TestStreamlet record processors.

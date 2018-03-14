@@ -14,7 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
+import software.amazon.kinesis.lifecycle.ShutdownInput;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+
 import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ConsumerState;
 import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ShardConsumerState;
 
@@ -46,7 +48,7 @@ public enum ShutdownReason {
     /**
      * Indicates that the entire application is being shutdown, and if desired the record processor will be given a
      * final chance to checkpoint. This state will not trigger a direct call to
-     * {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor#shutdown(ShutdownInput)}, but
+     * {@link IRecordProcessor#shutdown(ShutdownInput)}, but
      * instead depend on a different interface for backward compatibility.
      */
     REQUESTED(1, ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState());

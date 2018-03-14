@@ -14,9 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
 
 /**
  * Notifies record processor of incoming shutdown request, and gives them a chance to checkpoint.

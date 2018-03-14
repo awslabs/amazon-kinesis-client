@@ -82,29 +82,33 @@ import org.mockito.stubbing.Answer;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerCWMetricsFactory;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerThreadPoolExecutor;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.WorkerStateChangeListener.WorkerState;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import software.amazon.kinesis.retrieval.GetRecordsCache;
+import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
+import software.amazon.kinesis.retrieval.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
+import software.amazon.kinesis.retrieval.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.util.KinesisLocalFileDataCreator;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
-import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseBuilder;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
-import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
-import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
-import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
+import software.amazon.kinesis.retrieval.SimpleRecordsFetcherFactory;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.lifecycle.InitializationInput;
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.ShutdownInput;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.KinesisClientLeaseBuilder;
+import software.amazon.kinesis.leases.KinesisClientLeaseManager;
+import software.amazon.kinesis.leases.LeaseManager;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.metrics.CWMetricsFactory;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.metrics.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
@@ -150,7 +154,7 @@ public class WorkerTest {
     @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
     @Mock
-    private com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory v1RecordProcessorFactory;
+    private software.amazon.kinesis.processor.IRecordProcessorFactory v1RecordProcessorFactory;
     @Mock
     private IKinesisProxy proxy;
     @Mock
@@ -180,12 +184,12 @@ public class WorkerTest {
     }
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
-    private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY =
-            new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory() {
+    private static final software.amazon.kinesis.processor.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY =
+            new software.amazon.kinesis.processor.IRecordProcessorFactory() {
 
         @Override
-        public com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor createProcessor() {
-            return new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor() {
+        public software.amazon.kinesis.processor.IRecordProcessor createProcessor() {
+            return new software.amazon.kinesis.processor.IRecordProcessor() {
 
                 @Override
                 public void shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason) {
