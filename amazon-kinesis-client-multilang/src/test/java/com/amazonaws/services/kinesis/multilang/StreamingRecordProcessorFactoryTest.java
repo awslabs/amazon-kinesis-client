@@ -14,11 +14,11 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;

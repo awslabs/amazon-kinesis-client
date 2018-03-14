@@ -18,8 +18,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
-import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import lombok.extern.slf4j.Slf4j;
 

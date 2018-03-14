@@ -14,7 +14,7 @@
  */
 package com.amazonaws.services.kinesis.multilang.messages;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 
 /**
  * A message to indicate to the client's process that it should shutdown and then terminate.

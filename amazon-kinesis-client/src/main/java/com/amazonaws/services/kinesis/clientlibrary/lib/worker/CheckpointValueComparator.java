@@ -18,7 +18,8 @@ import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.Comparator;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
+import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 
 /**
  * 
@@ -87,7 +88,7 @@ class CheckpointValueComparator implements Comparator<String>, Serializable {
      * @return a BigInteger value representation of the checkpointValue
      */
     private static BigInteger bigIntegerValue(String checkpointValue) {
-        if (SequenceNumberValidator.isDigits(checkpointValue)) {
+        if (Checkpoint.SequenceNumberValidator.isDigits(checkpointValue)) {
             return new BigInteger(checkpointValue);
         } else if (SentinelCheckpoint.LATEST.toString().equals(checkpointValue)) {
             return LATEST_BIG_INTEGER_VALUE;
@@ -106,7 +107,7 @@ class CheckpointValueComparator implements Comparator<String>, Serializable {
      * @return true if and only if the string is all digits or one of the SentinelCheckpoint values
      */
     private static boolean isDigitsOrSentinelValue(String string) {
-        return SequenceNumberValidator.isDigits(string) || isSentinelValue(string);
+        return Checkpoint.SequenceNumberValidator.isDigits(string) || isSentinelValue(string);
     }
 
     /**

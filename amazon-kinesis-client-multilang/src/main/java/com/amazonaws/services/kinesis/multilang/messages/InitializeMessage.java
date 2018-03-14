@@ -14,7 +14,7 @@
  */
 package com.amazonaws.services.kinesis.multilang.messages;
 
-import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
+import software.amazon.kinesis.lifecycle.InitializationInput;
 import lombok.Getter;
 import lombok.Setter;
 
