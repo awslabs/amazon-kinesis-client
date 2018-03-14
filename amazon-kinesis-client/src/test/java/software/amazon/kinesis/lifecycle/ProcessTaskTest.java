@@ -39,11 +39,11 @@ import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ThrottlingReporter;
+import software.amazon.kinesis.coordinator.StreamConfig;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;

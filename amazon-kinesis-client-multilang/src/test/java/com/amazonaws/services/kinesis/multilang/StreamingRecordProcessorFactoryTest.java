@@ -14,7 +14,7 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import org.junit.Assert;
 import org.junit.Test;
 

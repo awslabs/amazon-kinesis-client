@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.lifecycle;
 
 import java.util.concurrent.CountDownLatch;
 
@@ -24,7 +24,7 @@ import software.amazon.kinesis.leases.LeaseCoordinator;
  * Contains callbacks for completion of stages in a requested record processor shutdown.
  *
  */
-class ShardConsumerShutdownNotification implements ShutdownNotification {
+public class ShardConsumerShutdownNotification implements ShutdownNotification {
 
     private final LeaseCoordinator<KinesisClientLease> leaseCoordinator;
     private final KinesisClientLease lease;
@@ -48,8 +48,8 @@ class ShardConsumerShutdownNotification implements ShutdownNotification {
      * @param shutdownCompleteLatch
      *            used to inform the caller once the record processor is fully shutdown
      */
-    ShardConsumerShutdownNotification(LeaseCoordinator<KinesisClientLease> leaseCoordinator, KinesisClientLease lease,
-                                      CountDownLatch notificationCompleteLatch, CountDownLatch shutdownCompleteLatch) {
+    public ShardConsumerShutdownNotification(LeaseCoordinator<KinesisClientLease> leaseCoordinator, KinesisClientLease lease,
+                                             CountDownLatch notificationCompleteLatch, CountDownLatch shutdownCompleteLatch) {
         this.leaseCoordinator = leaseCoordinator;
         this.lease = lease;
         this.notificationCompleteLatch = notificationCompleteLatch;

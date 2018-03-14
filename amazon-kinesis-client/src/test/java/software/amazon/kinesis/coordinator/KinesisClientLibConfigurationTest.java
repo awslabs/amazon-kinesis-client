@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.coordinator;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -22,6 +22,7 @@ import static org.junit.Assert.fail;
 
 import java.util.Date;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -32,6 +33,8 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
+import software.amazon.kinesis.coordinator.Worker;
 import software.amazon.kinesis.processor.IRecordProcessorFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import com.google.common.collect.ImmutableSet;

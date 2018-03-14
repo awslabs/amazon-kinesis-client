@@ -24,9 +24,9 @@ import java.util.Set;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.TestStreamlet;
+import software.amazon.kinesis.utils.TestStreamlet;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;

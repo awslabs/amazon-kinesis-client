@@ -26,7 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map.Entry;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsScope;
 import org.junit.After;
@@ -87,7 +87,7 @@ public class RecordProcessorCheckpointerTest {
 
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#checkpoint()}.
+     * {@link RecordProcessorCheckpointer#checkpoint()}.
      */
     @Test
     public final void testCheckpoint() throws Exception {
@@ -108,7 +108,7 @@ public class RecordProcessorCheckpointerTest {
     
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#checkpoint(Record record)}.
+     * {@link RecordProcessorCheckpointer#checkpoint(Record record)}.
      */    
     @Test
     public final void testCheckpointRecord() throws Exception {
@@ -124,7 +124,7 @@ public class RecordProcessorCheckpointerTest {
     
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#checkpoint(Record record)}.
+     * {@link RecordProcessorCheckpointer#checkpoint(Record record)}.
      */
     @Test
     public final void testCheckpointSubRecord() throws Exception {
@@ -141,7 +141,7 @@ public class RecordProcessorCheckpointerTest {
     
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#checkpoint(String sequenceNumber)}.
+     * {@link RecordProcessorCheckpointer#checkpoint(String sequenceNumber)}.
      */
     @Test
     public final void testCheckpointSequenceNumber() throws Exception {
@@ -156,7 +156,7 @@ public class RecordProcessorCheckpointerTest {
     
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#checkpoint(String sequenceNumber, long subSequenceNumber)}.
+     * {@link RecordProcessorCheckpointer#checkpoint(String sequenceNumber, long subSequenceNumber)}.
      */
     @Test
     public final void testCheckpointExtendedSequenceNumber() throws Exception {
@@ -186,7 +186,7 @@ public class RecordProcessorCheckpointerTest {
 
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#prepareCheckpoint()}.
+     * {@link RecordProcessorCheckpointer#prepareCheckpoint()}.
      */
     @Test
     public final void testPrepareCheckpoint() throws Exception {
@@ -218,7 +218,7 @@ public class RecordProcessorCheckpointerTest {
 
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#prepareCheckpoint(Record record)}.
+     * {@link RecordProcessorCheckpointer#prepareCheckpoint(Record record)}.
      */
     @Test
     public final void testPrepareCheckpointRecord() throws Exception {
@@ -243,7 +243,7 @@ public class RecordProcessorCheckpointerTest {
 
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#prepareCheckpoint(Record record)}.
+     * {@link RecordProcessorCheckpointer#prepareCheckpoint(Record record)}.
      */
     @Test
     public final void testPrepareCheckpointSubRecord() throws Exception {
@@ -269,7 +269,7 @@ public class RecordProcessorCheckpointerTest {
 
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#checkpoint(String sequenceNumber)}.
+     * {@link RecordProcessorCheckpointer#checkpoint(String sequenceNumber)}.
      */
     @Test
     public final void testPrepareCheckpointSequenceNumber() throws Exception {
@@ -293,7 +293,7 @@ public class RecordProcessorCheckpointerTest {
 
     /**
      * Test method for
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer#checkpoint(String sequenceNumber, long subSequenceNumber)}.
+     * {@link RecordProcessorCheckpointer#checkpoint(String sequenceNumber, long subSequenceNumber)}.
      */
     @Test
     public final void testPrepareCheckpointExtendedSequenceNumber() throws Exception {

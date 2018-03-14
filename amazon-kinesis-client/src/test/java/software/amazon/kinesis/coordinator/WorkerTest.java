@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.coordinator;
 
 import static org.hamcrest.CoreMatchers.both;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -64,6 +64,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import org.hamcrest.Condition;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -104,9 +106,9 @@ import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.V1ToV2RecordProcessorFactoryAdapter;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerCWMetricsFactory;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerThreadPoolExecutor;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.WorkerStateChangeListener.WorkerState;
+import software.amazon.kinesis.coordinator.Worker.WorkerCWMetricsFactory;
+import software.amazon.kinesis.coordinator.Worker.WorkerThreadPoolExecutor;
+import software.amazon.kinesis.coordinator.WorkerStateChangeListener.WorkerState;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
@@ -136,6 +138,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.utils.TestStreamlet;
+import software.amazon.kinesis.utils.TestStreamletFactory;
 
 /**
  * Unit tests of Worker.
@@ -469,7 +473,7 @@ public class WorkerTest {
 
     /**
      * Runs worker with threadPoolSize == numShards
-     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker#run()}.
+     * Test method for {@link Worker#run()}.
      */
     @Test
     public final void testRunWithThreadPoolSizeEqualToNumShards() throws Exception {
@@ -480,7 +484,7 @@ public class WorkerTest {
 
     /**
      * Runs worker with threadPoolSize < numShards
-     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker#run()}.
+     * Test method for {@link Worker#run()}.
      */
     @Test
     public final void testRunWithThreadPoolSizeLessThanNumShards() throws Exception {
@@ -491,7 +495,7 @@ public class WorkerTest {
 
     /**
      * Runs worker with threadPoolSize > numShards
-     * Test method for {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker#run()}.
+     * Test method for {@link Worker#run()}.
      */
     @Test
     public final void testRunWithThreadPoolSizeMoreThanNumShards() throws Exception {

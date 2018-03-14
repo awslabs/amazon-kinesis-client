@@ -17,7 +17,7 @@ package software.amazon.kinesis.checkpoint;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.model.InvalidArgumentException;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;

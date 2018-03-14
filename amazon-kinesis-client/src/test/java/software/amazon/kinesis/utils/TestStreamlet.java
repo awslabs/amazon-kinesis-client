@@ -1,18 +1,18 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.utils;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -138,7 +138,7 @@ public class TestStreamlet implements IRecordProcessor, IShutdownNotificationAwa
     /**
      * @return the shardId
      */
-    String getShardId() {
+    public String getShardId() {
         return shardId;
     }
 
@@ -152,7 +152,7 @@ public class TestStreamlet implements IRecordProcessor, IShutdownNotificationAwa
     /**
      * @return the numProcessRecordsCallsWithEmptyRecordList
      */
-    long getNumProcessRecordsCallsWithEmptyRecordList() {
+    public long getNumProcessRecordsCallsWithEmptyRecordList() {
         return numProcessRecordsCallsWithEmptyRecordList;
     }
 

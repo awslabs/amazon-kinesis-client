@@ -29,7 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 
 import lombok.extern.slf4j.Slf4j;
 

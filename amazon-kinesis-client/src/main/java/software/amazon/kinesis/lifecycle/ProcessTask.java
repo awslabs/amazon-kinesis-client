@@ -19,10 +19,10 @@ import java.util.List;
 import java.util.ListIterator;
 
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ThrottlingReporter;
+import software.amazon.kinesis.coordinator.StreamConfig;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.IKinesisProxy;

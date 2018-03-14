@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.retrieval;
 
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.never;
@@ -24,6 +24,7 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.slf4j.Logger;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ThrottlingReporterTest {

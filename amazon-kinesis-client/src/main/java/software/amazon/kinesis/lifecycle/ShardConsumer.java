@@ -21,13 +21,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownNotification;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
+import software.amazon.kinesis.coordinator.StreamConfig;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.leases.KinesisClientLease;
