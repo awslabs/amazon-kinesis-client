@@ -28,7 +28,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisDataFetcher;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingScope;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;

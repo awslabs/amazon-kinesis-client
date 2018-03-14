@@ -39,7 +39,7 @@ import lombok.extern.slf4j.Slf4j;
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
  */
 @Slf4j
-class KinesisDataFetcher {
+public class KinesisDataFetcher {
     private String nextIterator;
     private IKinesisProxy kinesisProxy;
     private final String shardId;
@@ -152,7 +152,7 @@ class KinesisDataFetcher {
      * @param sequenceNumber advance the iterator to the record at this sequence number.
      * @param initialPositionInStream The initialPositionInStream.
      */
-    void advanceIteratorTo(String sequenceNumber, InitialPositionInStreamExtended initialPositionInStream) {
+    public void advanceIteratorTo(String sequenceNumber, InitialPositionInStreamExtended initialPositionInStream) {
         if (sequenceNumber == null) {
             throw new IllegalArgumentException("SequenceNumber should not be null: shardId " + shardId);
         } else if (sequenceNumber.equals(SentinelCheckpoint.LATEST.toString())) {
@@ -241,7 +241,7 @@ class KinesisDataFetcher {
     /**
      * @return the shardEndReached
      */
-    protected boolean isShardEndReached() {
+    public boolean isShardEndReached() {
         return isShardEndReached;
     }
 
