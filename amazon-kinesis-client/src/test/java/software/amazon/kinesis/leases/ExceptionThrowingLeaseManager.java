@@ -1,18 +1,18 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.leases;
 
 import java.util.Arrays;
 import java.util.List;
@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
  * 
  */
 @Slf4j
-class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease> {
+public class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease> {
     private static final Throwable EXCEPTION_MSG = new Throwable("Test Exception");
 
     // Use array below to control in what situations we want to throw exceptions.
@@ -39,7 +39,7 @@ class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease>
     /**
      * Methods which we support (simulate exceptions).
      */
-    enum ExceptionThrowingLeaseManagerMethods {
+    public enum ExceptionThrowingLeaseManagerMethods {
         CREATELEASETABLEIFNOTEXISTS(0),
         LEASETABLEEXISTS(1),
         WAITUNTILLEASETABLEEXISTS(2),

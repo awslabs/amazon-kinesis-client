@@ -1,18 +1,18 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.checkpoint;
 
 import junit.framework.Assert;
 
@@ -21,6 +21,7 @@ import org.mockito.Mockito;
 
 import static org.junit.Assert.fail;
 
+import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
 import com.amazonaws.services.kinesis.model.InvalidArgumentException;
@@ -36,7 +37,7 @@ public class SequenceNumberValidatorTest {
 
         IKinesisProxy proxy = Mockito.mock(IKinesisProxy.class);
 
-        SequenceNumberValidator validator = new SequenceNumberValidator(proxy, shardId, validateWithGetIterator);
+        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(proxy, shardId, validateWithGetIterator);
 
         String goodSequence = "456";
         String iterator = "happyiterator";
@@ -69,7 +70,7 @@ public class SequenceNumberValidatorTest {
     public final void testNoValidation() {
         IKinesisProxy proxy = Mockito.mock(IKinesisProxy.class);
         String shardId = "shardid-123";
-        SequenceNumberValidator validator = new SequenceNumberValidator(proxy, shardId, !validateWithGetIterator);
+        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(proxy, shardId, !validateWithGetIterator);
         String goodSequence = "456";
 
         // Just checking that the false flag for validating against getIterator is honored
@@ -82,7 +83,7 @@ public class SequenceNumberValidatorTest {
         nonNumericValueValidationTest(validator, proxy, !validateWithGetIterator);
     }
 
-    private void nonNumericValueValidationTest(SequenceNumberValidator validator,
+    private void nonNumericValueValidationTest(Checkpoint.SequenceNumberValidator validator,
             IKinesisProxy proxy,
             boolean validateWithGetIterator) {
 
@@ -115,7 +116,7 @@ public class SequenceNumberValidatorTest {
         };
         for (String digits : stringsOfDigits) {
             Assert.assertTrue("Expected that " + digits + " would be considered a string of digits.",
-                    SequenceNumberValidator.isDigits(digits));
+                    Checkpoint.SequenceNumberValidator.isDigits(digits));
         }
         // Check things that are not all digits
         String[] stringsWithNonDigits = {
@@ -133,7 +134,7 @@ public class SequenceNumberValidatorTest {
         };
         for (String notAllDigits : stringsWithNonDigits) {
             Assert.assertFalse("Expected that " + notAllDigits + " would not be considered a string of digits.",
-                    SequenceNumberValidator.isDigits(notAllDigits));
+                    Checkpoint.SequenceNumberValidator.isDigits(notAllDigits));
         }
     }
 }

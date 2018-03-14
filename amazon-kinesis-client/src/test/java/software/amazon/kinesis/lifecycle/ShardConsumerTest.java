@@ -54,8 +54,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionIn
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.SequenceNumberValidator;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.kinesis.leases.ShardInfo;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownNotification;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.TestStreamlet;
@@ -68,12 +67,6 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import software.amazon.kinesis.lifecycle.ConsumerStates;
-import software.amazon.kinesis.lifecycle.ITask;
-import software.amazon.kinesis.lifecycle.InitializeTask;
-import software.amazon.kinesis.lifecycle.ShardConsumer;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
-import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.checkpoint.Checkpoint;
@@ -90,8 +83,6 @@ import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.SimpleRecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.SynchronousGetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.lifecycle.InitializationInput;
-import software.amazon.kinesis.lifecycle.ShutdownInput;
 import software.amazon.kinesis.retrieval.kpl.UserRecord;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.ILeaseManager;
@@ -359,7 +350,7 @@ public class ShardConsumerTest {
         RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
                 shardInfo,
                 checkpoint,
-                new SequenceNumberValidator(
+                new Checkpoint.SequenceNumberValidator(
                         streamConfig.getStreamProxy(),
                         shardInfo.getShardId(),
                         streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()
@@ -511,7 +502,7 @@ public class ShardConsumerTest {
         RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
                 shardInfo,
                 checkpoint,
-                new SequenceNumberValidator(
+                new Checkpoint.SequenceNumberValidator(
                         streamConfig.getStreamProxy(),
                         shardInfo.getShardId(),
                         streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()
@@ -640,7 +631,7 @@ public class ShardConsumerTest {
         RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
                 shardInfo,
                 checkpoint,
-                new SequenceNumberValidator(
+                new Checkpoint.SequenceNumberValidator(
                         streamConfig.getStreamProxy(),
                         shardInfo.getShardId(),
                         streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()

@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 
+import software.amazon.kinesis.leases.ShardSequenceVerifier;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
 

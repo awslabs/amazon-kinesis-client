@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.leases;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -95,7 +95,7 @@ public class ShardInfo {
      *
      * @return completion status of the shard
      */
-    protected boolean isCompleted() {
+    public boolean isCompleted() {
         return ExtendedSequenceNumber.SHARD_END.equals(checkpoint);
     }
 

@@ -22,10 +22,10 @@ import java.util.concurrent.RejectedExecutionException;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.MetricsCollectingTaskDecorator;
+import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.SequenceNumberValidator;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.kinesis.leases.ShardInfo;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownNotification;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
 import software.amazon.kinesis.processor.ICheckpoint;
@@ -175,7 +175,7 @@ public class ShardConsumer {
                 new RecordProcessorCheckpointer(
                         shardInfo,
                         checkpoint,
-                        new SequenceNumberValidator(
+                        new Checkpoint.SequenceNumberValidator(
                                 streamConfig.getStreamProxy(),
                                 shardInfo.getShardId(),
                                 streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),

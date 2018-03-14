@@ -19,6 +19,10 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibD
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
+import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.checkpoint.DoesNothingPreparedCheckpointer;
+import software.amazon.kinesis.checkpoint.PreparedCheckpointer;
+import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.IPreparedCheckpointer;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
@@ -47,7 +51,7 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
 
     private ShardInfo shardInfo;
 
-    private SequenceNumberValidator sequenceNumberValidator;
+    private Checkpoint.SequenceNumberValidator sequenceNumberValidator;
 
     private ExtendedSequenceNumber sequenceNumberAtShardEnd;
     
@@ -61,7 +65,7 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
      */
     public RecordProcessorCheckpointer(ShardInfo shardInfo,
                                        ICheckpoint checkpoint,
-                                       SequenceNumberValidator validator,
+                                       Checkpoint.SequenceNumberValidator validator,
                                        IMetricsFactory metricsFactory) {
         this.shardInfo = shardInfo;
         this.checkpoint = checkpoint;

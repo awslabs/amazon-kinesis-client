@@ -16,8 +16,8 @@ package software.amazon.kinesis.lifecycle;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardSyncer;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.ShardSyncer;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.IKinesisProxy;

@@ -1,18 +1,18 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.leases;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,6 +25,7 @@ import com.amazonaws.services.kinesis.model.Shard;
 
 import junit.framework.Assert;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.leases.ShardObjectHelper;
 import software.amazon.kinesis.lifecycle.ShutdownReason;
 
 /**
@@ -32,7 +33,7 @@ import software.amazon.kinesis.lifecycle.ShutdownReason;
  * Verifies that parent shard processors were shutdown before child shard processor was initialized.
  */
 @Slf4j
-class ShardSequenceVerifier {
+public class ShardSequenceVerifier {
     private Map<String, Shard> shardIdToShards = new HashMap<String, Shard>();
     private ConcurrentSkipListSet<String> initializedShards = new ConcurrentSkipListSet<>();
     private ConcurrentSkipListSet<String> shutdownShards = new ConcurrentSkipListSet<>();
@@ -41,13 +42,13 @@ class ShardSequenceVerifier {
     /**
      * Constructor with the shard list for the stream.
      */
-    ShardSequenceVerifier(List<Shard> shardList) {
+    public ShardSequenceVerifier(List<Shard> shardList) {
         for (Shard shard : shardList) {
             shardIdToShards.put(shard.getShardId(), shard);
         }
     }
     
-    void registerInitialization(String shardId) {
+    public void registerInitialization(String shardId) {
         List<String> parentShardIds = ShardObjectHelper.getParentShardIds(shardIdToShards.get(shardId));
         for (String parentShardId : parentShardIds) {
             if (initializedShards.contains(parentShardId)) {
@@ -62,13 +63,13 @@ class ShardSequenceVerifier {
         initializedShards.add(shardId);
     }
     
-    void registerShutdown(String shardId, ShutdownReason reason) {
+    public void registerShutdown(String shardId, ShutdownReason reason) {
         if (reason.equals(ShutdownReason.TERMINATE)) {
             shutdownShards.add(shardId);
         }
     }
     
-    void verify() {
+    public void verify() {
         for (String message : validationFailures) {
             log.error(message);
         }

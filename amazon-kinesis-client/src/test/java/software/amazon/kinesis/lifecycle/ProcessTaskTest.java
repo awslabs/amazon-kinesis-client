@@ -41,7 +41,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionIn
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.kinesis.leases.ShardInfo;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ThrottlingReporter;
 import org.junit.Before;
@@ -50,15 +50,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import software.amazon.kinesis.lifecycle.ProcessTask;
-import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.KinesisDataFetcher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.retrieval.kpl.Messages;
 import software.amazon.kinesis.retrieval.kpl.Messages.AggregatedRecord;
-import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.kpl.UserRecord;
 import com.amazonaws.services.kinesis.model.ProvisionedThroughputExceededException;
 import com.amazonaws.services.kinesis.model.Record;

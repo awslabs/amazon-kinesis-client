@@ -1,29 +1,29 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.leases;
 
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.ITask;
 import software.amazon.kinesis.lifecycle.TaskResult;
+import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +34,7 @@ import lombok.extern.slf4j.Slf4j;
  * Worker will use this class to kick off a sync task when it finds shards which have been completely processed.
  */
 @Slf4j
-class ShardSyncTaskManager {
+public class ShardSyncTaskManager {
     private ITask currentTask;
     private Future<TaskResult> future;
     private final IKinesisProxy kinesisProxy;
@@ -60,14 +60,14 @@ class ShardSyncTaskManager {
      * @param metricsFactory Metrics factory
      * @param executorService ExecutorService to execute the shard sync tasks
      */
-    ShardSyncTaskManager(final IKinesisProxy kinesisProxy,
-            final ILeaseManager<KinesisClientLease> leaseManager,
-            final InitialPositionInStreamExtended initialPositionInStream,
-            final boolean cleanupLeasesUponShardCompletion,
-            final boolean ignoreUnexpectedChildShards,
-            final long shardSyncIdleTimeMillis,
-            final IMetricsFactory metricsFactory,
-            ExecutorService executorService) {
+    public ShardSyncTaskManager(final IKinesisProxy kinesisProxy,
+                                final ILeaseManager<KinesisClientLease> leaseManager,
+                                final InitialPositionInStreamExtended initialPositionInStream,
+                                final boolean cleanupLeasesUponShardCompletion,
+                                final boolean ignoreUnexpectedChildShards,
+                                final long shardSyncIdleTimeMillis,
+                                final IMetricsFactory metricsFactory,
+                                ExecutorService executorService) {
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.metricsFactory = metricsFactory;
@@ -78,7 +78,7 @@ class ShardSyncTaskManager {
         this.initialPositionInStream = initialPositionInStream;
     }
 
-    synchronized boolean syncShardAndLeaseInfo(Set<String> closedShardIds) {
+    public synchronized boolean syncShardAndLeaseInfo(Set<String> closedShardIds) {
         return checkAndSubmitNextTask(closedShardIds);
     }
 

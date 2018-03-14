@@ -20,7 +20,7 @@ import java.util.ListIterator;
 
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.kinesis.leases.ShardInfo;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ThrottlingReporter;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;

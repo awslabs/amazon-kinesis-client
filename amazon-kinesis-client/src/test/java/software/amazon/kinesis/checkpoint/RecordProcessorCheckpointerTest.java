@@ -1,18 +1,18 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.checkpoint;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -26,6 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map.Entry;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsScope;
 import org.junit.After;
 import org.junit.Assert;
@@ -39,7 +41,6 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.IPreparedCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.InMemoryCheckpointImpl;
-import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.retrieval.kpl.UserRecord;
 import software.amazon.kinesis.metrics.MetricsHelper;
@@ -57,7 +58,7 @@ public class RecordProcessorCheckpointerTest {
     private String testConcurrencyToken = "testToken";
     private ICheckpoint checkpoint;
     private ShardInfo shardInfo;
-    private SequenceNumberValidator sequenceNumberValidator;
+    private Checkpoint.SequenceNumberValidator sequenceNumberValidator;
     private String shardId = "shardId-123";
     
     @Mock
@@ -74,7 +75,7 @@ public class RecordProcessorCheckpointerTest {
         Assert.assertEquals(this.startingExtendedSequenceNumber, checkpoint.getCheckpoint(shardId));
 
         shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
-        sequenceNumberValidator = new SequenceNumberValidator(null, shardId, false);
+        sequenceNumberValidator = new Checkpoint.SequenceNumberValidator(null, shardId, false);
     }
 
     /**
@@ -429,7 +430,7 @@ public class RecordProcessorCheckpointerTest {
      */
     @Test
     public final void testClientSpecifiedCheckpoint() throws Exception {
-        SequenceNumberValidator validator = mock(SequenceNumberValidator.class);
+        Checkpoint.SequenceNumberValidator validator = mock(Checkpoint.SequenceNumberValidator.class);
         Mockito.doNothing().when(validator).validateSequenceNumber(anyString());
         RecordProcessorCheckpointer processingCheckpointer =
                 new RecordProcessorCheckpointer(shardInfo, checkpoint, validator, metricsFactory);
@@ -517,7 +518,7 @@ public class RecordProcessorCheckpointerTest {
      */
     @Test
     public final void testClientSpecifiedTwoPhaseCheckpoint() throws Exception {
-        SequenceNumberValidator validator = mock(SequenceNumberValidator.class);
+        Checkpoint.SequenceNumberValidator validator = mock(Checkpoint.SequenceNumberValidator.class);
         Mockito.doNothing().when(validator).validateSequenceNumber(anyString());
         RecordProcessorCheckpointer processingCheckpointer =
                 new RecordProcessorCheckpointer(shardInfo, checkpoint, validator, metricsFactory);
@@ -643,7 +644,7 @@ public class RecordProcessorCheckpointerTest {
     @SuppressWarnings("serial")
     @Test
     public final void testMixedCheckpointCalls() throws Exception {
-        SequenceNumberValidator validator = mock(SequenceNumberValidator.class);
+        Checkpoint.SequenceNumberValidator validator = mock(Checkpoint.SequenceNumberValidator.class);
         Mockito.doNothing().when(validator).validateSequenceNumber(anyString());
 
         for (LinkedHashMap<String, CheckpointAction> testPlan : getMixedCallsTestPlan()) {
@@ -663,7 +664,7 @@ public class RecordProcessorCheckpointerTest {
     @SuppressWarnings("serial")
     @Test
     public final void testMixedTwoPhaseCheckpointCalls() throws Exception {
-        SequenceNumberValidator validator = mock(SequenceNumberValidator.class);
+        Checkpoint.SequenceNumberValidator validator = mock(Checkpoint.SequenceNumberValidator.class);
         Mockito.doNothing().when(validator).validateSequenceNumber(anyString());
 
         for (LinkedHashMap<String, CheckpointAction> testPlan : getMixedCallsTestPlan()) {
@@ -684,7 +685,7 @@ public class RecordProcessorCheckpointerTest {
     @SuppressWarnings("serial")
     @Test
     public final void testMixedTwoPhaseCheckpointCalls2() throws Exception {
-        SequenceNumberValidator validator = mock(SequenceNumberValidator.class);
+        Checkpoint.SequenceNumberValidator validator = mock(Checkpoint.SequenceNumberValidator.class);
         Mockito.doNothing().when(validator).validateSequenceNumber(anyString());
 
         for (LinkedHashMap<String, CheckpointAction> testPlan : getMixedCallsTestPlan()) {

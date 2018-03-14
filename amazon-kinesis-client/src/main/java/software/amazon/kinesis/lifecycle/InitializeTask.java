@@ -15,7 +15,7 @@
 package software.amazon.kinesis.lifecycle;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.kinesis.leases.ShardInfo;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;

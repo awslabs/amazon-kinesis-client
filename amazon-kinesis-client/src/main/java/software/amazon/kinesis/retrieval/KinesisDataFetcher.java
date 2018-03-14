@@ -18,13 +18,10 @@ import java.util.Collections;
 import java.util.Date;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.kinesis.leases.ShardInfo;
 import org.apache.commons.lang.StringUtils;
 
 import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
-import software.amazon.kinesis.retrieval.DataFetcherResult;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.retrieval.MetricsCollectingKinesisProxyDecorator;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;

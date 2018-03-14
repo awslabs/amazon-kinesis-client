@@ -23,6 +23,8 @@ import org.apache.commons.lang.Validate;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.RegionUtils;
+import software.amazon.kinesis.leases.NoOpShardPrioritization;
+import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.ProcessTask;
 import software.amazon.kinesis.lifecycle.ShardConsumer;

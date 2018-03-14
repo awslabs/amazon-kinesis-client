@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.kinesis.leases.ShardInfo;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,11 +43,6 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
-import software.amazon.kinesis.retrieval.AsynchronousGetRecordsRetrievalStrategy;
-import software.amazon.kinesis.retrieval.DataFetcherResult;
-import software.amazon.kinesis.retrieval.GetRecordsCache;
-import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
@@ -55,9 +50,6 @@ import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 
 import lombok.extern.apachecommons.CommonsLog;
-import software.amazon.kinesis.retrieval.KinesisDataFetcher;
-import software.amazon.kinesis.retrieval.PrefetchGetRecordsCache;
-import software.amazon.kinesis.retrieval.SynchronousGetRecordsRetrievalStrategy;
 
 /**
  * These are the integration tests for the PrefetchGetRecordsCache class. 

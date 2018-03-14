@@ -1,18 +1,18 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.leases;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -25,7 +25,7 @@ import com.amazonaws.services.kinesis.model.Shard;
 /**
  * Helper class to create Shard, SequenceRange and related objects.
  */
-class ShardObjectHelper {
+public class ShardObjectHelper {
 
     private static final int EXPONENT = 128;
     
@@ -42,7 +42,7 @@ class ShardObjectHelper {
     /**
      * Max value of a hash key (2^128 -1). Useful for defining hash key range for a shard.
      */
-    static final String MAX_HASH_KEY = new BigInteger("2").pow(EXPONENT).subtract(BigInteger.ONE).toString();
+    public static final String MAX_HASH_KEY = new BigInteger("2").pow(EXPONENT).subtract(BigInteger.ONE).toString();
     
     /**
      * Min value of a hash key (0). Useful for defining sequence number range for a shard.
@@ -78,11 +78,11 @@ class ShardObjectHelper {
      * @param hashKeyRange
      * @return
      */
-    static Shard newShard(String shardId,
-            String parentShardId,
-            String adjacentParentShardId,
-            SequenceNumberRange sequenceNumberRange,
-            HashKeyRange hashKeyRange) {
+    public static Shard newShard(String shardId,
+                                 String parentShardId,
+                                 String adjacentParentShardId,
+                                 SequenceNumberRange sequenceNumberRange,
+                                 HashKeyRange hashKeyRange) {
         Shard shard = new Shard();
         shard.setShardId(shardId);
         shard.setParentShardId(parentShardId);
@@ -98,7 +98,7 @@ class ShardObjectHelper {
      * @param endingSequenceNumber
      * @return
      */
-    static SequenceNumberRange newSequenceNumberRange(String startingSequenceNumber, String endingSequenceNumber) {
+    public static SequenceNumberRange newSequenceNumberRange(String startingSequenceNumber, String endingSequenceNumber) {
         SequenceNumberRange range = new SequenceNumberRange();
         range.setStartingSequenceNumber(startingSequenceNumber);
         range.setEndingSequenceNumber(endingSequenceNumber);
@@ -110,7 +110,7 @@ class ShardObjectHelper {
      * @param endingHashKey
      * @return
      */
-    static HashKeyRange newHashKeyRange(String startingHashKey, String endingHashKey) {
+    public static HashKeyRange newHashKeyRange(String startingHashKey, String endingHashKey) {
         HashKeyRange range = new HashKeyRange();
         range.setStartingHashKey(startingHashKey);
         range.setEndingHashKey(endingHashKey);

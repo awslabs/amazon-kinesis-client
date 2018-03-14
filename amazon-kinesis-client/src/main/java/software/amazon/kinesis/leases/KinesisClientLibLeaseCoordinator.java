@@ -1,18 +1,18 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.leases;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -33,9 +33,6 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.LeaseCoordinator;
-import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
  * This class is used to coordinate/manage leases owned by this worker process and to get/set checkpoints.
  */
 @Slf4j
-class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLease> implements ICheckpoint {
+public class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLease> implements ICheckpoint {
     private static final long DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
     private static final long DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
 
@@ -144,7 +141,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    boolean setCheckpoint(String shardId, ExtendedSequenceNumber checkpoint, UUID concurrencyToken)
+    public boolean setCheckpoint(String shardId, ExtendedSequenceNumber checkpoint, UUID concurrencyToken)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         KinesisClientLease lease = getCurrentlyHeldLease(shardId);
         if (lease == null) {
@@ -295,7 +292,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @throws DependencyException
      * @throws ProvisionedThroughputException
      */
-    void initialize() throws ProvisionedThroughputException, DependencyException, IllegalStateException {
+    public void initialize() throws ProvisionedThroughputException, DependencyException, IllegalStateException {
         final boolean newTableCreated =
                 leaseManager.createLeaseTableIfNotExists(initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity);
         if (newTableCreated) {
@@ -317,7 +314,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @throws DependencyException
      * @throws InvalidStateException
      */
-    void runLeaseTaker() throws DependencyException, InvalidStateException {
+    public void runLeaseTaker() throws DependencyException, InvalidStateException {
         super.runTaker();
     }
 
@@ -327,7 +324,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @throws DependencyException
      * @throws InvalidStateException
      */
-    void runLeaseRenewer() throws DependencyException, InvalidStateException {
+    public void runLeaseRenewer() throws DependencyException, InvalidStateException {
         super.runRenewer();
     }
 
@@ -337,7 +334,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * 
      * @return LeaseManager
      */
-    ILeaseManager<KinesisClientLease> getLeaseManager() {
+    public ILeaseManager<KinesisClientLease> getLeaseManager() {
         return leaseManager;
     }
 

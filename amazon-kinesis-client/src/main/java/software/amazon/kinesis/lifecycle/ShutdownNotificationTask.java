@@ -14,7 +14,7 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.kinesis.leases.ShardInfo;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownNotification;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;

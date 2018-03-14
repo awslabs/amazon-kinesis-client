@@ -38,7 +38,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import software.amazon.kinesis.leases.ShardInfo;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import org.junit.After;
 import org.junit.Before;
@@ -49,13 +49,9 @@ import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import software.amazon.kinesis.retrieval.AsynchronousGetRecordsRetrievalStrategy;
-import software.amazon.kinesis.retrieval.DataFetcherResult;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.mockito.stubbing.Answer;
-import software.amazon.kinesis.retrieval.KinesisDataFetcher;
 
 @RunWith(MockitoJUnitRunner.class)
 public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {

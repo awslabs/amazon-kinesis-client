@@ -1,25 +1,24 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.leases;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.ITask;
 import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.lifecycle.TaskType;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.ILeaseManager;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -30,7 +29,7 @@ import lombok.extern.slf4j.Slf4j;
  * cleanupLeasesUponShardCompletion is true).
  */
 @Slf4j
-class ShardSyncTask implements ITask {
+public class ShardSyncTask implements ITask {
     private final IKinesisProxy kinesisProxy;
     private final ILeaseManager<KinesisClientLease> leaseManager;
     private InitialPositionInStreamExtended initialPosition;
@@ -46,12 +45,12 @@ class ShardSyncTask implements ITask {
      *        start processing records from this point in the stream (when an application starts up for the first time)
      *        except for shards that already have a checkpoint (and their descendant shards).
      */
-    ShardSyncTask(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesUponShardCompletion,
-            boolean ignoreUnexpectedChildShards,
-            long shardSyncTaskIdleTimeMillis) {
+    public ShardSyncTask(IKinesisProxy kinesisProxy,
+                         ILeaseManager<KinesisClientLease> leaseManager,
+                         InitialPositionInStreamExtended initialPositionInStream,
+                         boolean cleanupLeasesUponShardCompletion,
+                         boolean ignoreUnexpectedChildShards,
+                         long shardSyncTaskIdleTimeMillis) {
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.initialPosition = initialPositionInStream;
