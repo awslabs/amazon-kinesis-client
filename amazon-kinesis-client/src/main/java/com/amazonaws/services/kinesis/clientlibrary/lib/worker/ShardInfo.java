@@ -86,7 +86,7 @@ public class ShardInfo {
      * 
      * @return a list of shardId's that are parents of this shard, or empty if the shard has no parents.
      */
-    protected List<String> getParentShardIds() {
+    public List<String> getParentShardIds() {
         return new LinkedList<String>(parentShardIds);
     }
 

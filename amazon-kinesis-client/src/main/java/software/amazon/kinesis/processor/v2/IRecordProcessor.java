@@ -17,6 +17,7 @@ package software.amazon.kinesis.processor.v2;
 import software.amazon.kinesis.lifecycle.InitializationInput;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.ShutdownInput;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 
 /**
  * The Amazon Kinesis Client Library will instantiate record processors to process data records fetched from Amazon
@@ -50,7 +51,7 @@ public interface IRecordProcessor {
      * <h2><b>Warning</b></h2>
      *
      * When the value of {@link ShutdownInput#getShutdownReason()} is
-     * {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason#TERMINATE} it is required that you
+     * {@link ShutdownReason#TERMINATE} it is required that you
      * checkpoint. Failure to do so will result in an IllegalArgumentException, and the KCL no longer making progress.
      *
      * @param shutdownInput

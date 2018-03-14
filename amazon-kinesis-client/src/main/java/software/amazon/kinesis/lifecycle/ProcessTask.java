@@ -12,20 +12,23 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.lifecycle;
 
 import java.math.BigInteger;
 import java.util.List;
 import java.util.ListIterator;
 
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ThrottlingReporter;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
 import software.amazon.kinesis.retrieval.IKinesisProxyExtended;
 import software.amazon.kinesis.retrieval.KinesisDataFetcher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.kpl.UserRecord;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.IMetricsScope;
@@ -41,7 +44,7 @@ import lombok.extern.slf4j.Slf4j;
  * Task for fetching data records and invoking processRecords() on the record processor instance.
  */
 @Slf4j
-class ProcessTask implements ITask {
+public class ProcessTask implements ITask {
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     private static final String DATA_BYTES_PROCESSED_METRIC = "DataBytesProcessed";
     private static final String RECORDS_PROCESSED_METRIC = "RecordsProcessed";

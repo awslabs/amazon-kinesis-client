@@ -49,7 +49,7 @@ import lombok.extern.slf4j.Slf4j;
  * and begun processing it's child shards.
  */
 @Slf4j
-class ShardSyncer {
+public class ShardSyncer {
 
     /**
      * Note constructor is private: We use static synchronized methods - this is a utility class.
@@ -80,7 +80,7 @@ class ShardSyncer {
      * @throws ProvisionedThroughputException
      * @throws KinesisClientLibIOException
      */
-    static synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
+    public static synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards,

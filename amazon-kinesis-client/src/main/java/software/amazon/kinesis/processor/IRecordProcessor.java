@@ -17,7 +17,7 @@ package software.amazon.kinesis.processor;
 import java.util.List;
 
 import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 
 /**
  * The Amazon Kinesis Client Library will instantiate record processors to process data records fetched from Amazon

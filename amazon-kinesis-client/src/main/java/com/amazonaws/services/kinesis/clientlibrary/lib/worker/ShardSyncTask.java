@@ -14,6 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import software.amazon.kinesis.lifecycle.ITask;
+import software.amazon.kinesis.lifecycle.TaskResult;
+import software.amazon.kinesis.lifecycle.TaskType;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.ILeaseManager;

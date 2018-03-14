@@ -21,7 +21,7 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingExcepti
 import software.amazon.kinesis.processor.IPreparedCheckpointer;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.lifecycle.InitializationInput;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.ShutdownInput;

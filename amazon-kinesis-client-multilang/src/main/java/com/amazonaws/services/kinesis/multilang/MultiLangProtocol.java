@@ -23,7 +23,7 @@ import java.util.concurrent.TimeoutException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.lifecycle.InitializationInput;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.multilang.messages.CheckpointMessage;

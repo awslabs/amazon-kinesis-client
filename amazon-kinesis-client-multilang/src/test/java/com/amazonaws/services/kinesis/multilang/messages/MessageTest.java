@@ -22,7 +22,7 @@ import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 import com.amazonaws.services.kinesis.model.Record;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

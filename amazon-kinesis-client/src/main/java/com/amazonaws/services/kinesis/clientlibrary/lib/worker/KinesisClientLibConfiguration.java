@@ -24,6 +24,8 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.RegionUtils;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.ProcessTask;
+import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.IMetricsScope;
 import software.amazon.kinesis.metrics.MetricsLevel;
@@ -998,7 +1000,7 @@ public class KinesisClientLibConfiguration {
      * Controls how long the KCL will sleep if no records are returned from Kinesis
      *
      * <p>
-     * This value is only used when no records are returned; if records are returned, the {@link com.amazonaws.services.kinesis.clientlibrary.lib.worker.ProcessTask} will
+     * This value is only used when no records are returned; if records are returned, the {@link ProcessTask} will
      * immediately retrieve the next set of records after the call to
      * {@link IRecordProcessor#processRecords(ProcessRecordsInput)}
      * has returned. Setting this value to high may result in the KCL being unable to catch up. If you are changing this

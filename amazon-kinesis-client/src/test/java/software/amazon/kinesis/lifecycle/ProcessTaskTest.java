@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.lifecycle;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -37,12 +37,21 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ThrottlingReporter;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import software.amazon.kinesis.lifecycle.ProcessTask;
+import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.KinesisDataFetcher;
@@ -75,7 +84,8 @@ public class ProcessTaskTest {
     private @Mock
     KinesisDataFetcher mockDataFetcher;
     private @Mock IRecordProcessor mockRecordProcessor;
-    private @Mock RecordProcessorCheckpointer mockCheckpointer;
+    private @Mock
+    RecordProcessorCheckpointer mockCheckpointer;
     @Mock
     private ThrottlingReporter throttlingReporter;
     @Mock

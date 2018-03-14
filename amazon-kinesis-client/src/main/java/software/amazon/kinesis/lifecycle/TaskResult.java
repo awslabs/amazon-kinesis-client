@@ -1,24 +1,24 @@
 /*
- * Copyright 2012-2013 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.lifecycle;
 
 /**
  * Used to capture information from a task that we want to communicate back to the higher layer.
  * E.g. exception thrown when executing the task, if we reach end of a shard.
  */
-class TaskResult {
+public class TaskResult {
 
     // Did we reach the end of the shard while processing this task.
     private boolean shardEndReached;
@@ -29,7 +29,7 @@ class TaskResult {
     /**
      * @return the shardEndReached
      */
-    protected boolean isShardEndReached() {
+    public boolean isShardEndReached() {
         return shardEndReached;
     }
 
@@ -50,7 +50,7 @@ class TaskResult {
     /**
      * @param e Any exception encountered when running the process task.
      */
-    TaskResult(Exception e) {
+    public TaskResult(Exception e) {
         this(e, false);
     }
 

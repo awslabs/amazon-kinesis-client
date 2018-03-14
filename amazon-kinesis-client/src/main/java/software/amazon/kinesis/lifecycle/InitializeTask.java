@@ -12,15 +12,17 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License. 
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.lifecycle;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.KinesisDataFetcher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.lifecycle.InitializationInput;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
 
@@ -30,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
  * Task for initializing shard position and invoking the RecordProcessor initialize() API.
  */
 @Slf4j
-class InitializeTask implements ITask {
+public class InitializeTask implements ITask {
     private static final String RECORD_PROCESSOR_INITIALIZE_METRIC = "RecordProcessor.initialize";
 
     private final ShardInfo shardInfo;

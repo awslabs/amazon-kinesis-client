@@ -14,6 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import software.amazon.kinesis.lifecycle.ITask;
+import software.amazon.kinesis.lifecycle.TaskResult;
+import software.amazon.kinesis.lifecycle.TaskType;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
@@ -21,7 +24,7 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 /**
  * Decorates an ITask and reports metrics about its timing and success/failure.
  */
-class MetricsCollectingTaskDecorator implements ITask {
+public class MetricsCollectingTaskDecorator implements ITask {
 
     private final ITask other;
     private final IMetricsFactory factory;

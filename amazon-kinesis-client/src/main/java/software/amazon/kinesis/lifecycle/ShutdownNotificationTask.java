@@ -12,8 +12,10 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.lifecycle;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownNotification;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
@@ -21,7 +23,7 @@ import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
 /**
  * Notifies record processor of incoming shutdown request, and gives them a chance to checkpoint.
  */
-class ShutdownNotificationTask implements ITask {
+public class ShutdownNotificationTask implements ITask {
 
     private final IRecordProcessor recordProcessor;
     private final IRecordProcessorCheckpointer recordProcessorCheckpointer;

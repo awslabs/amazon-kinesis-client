@@ -19,6 +19,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import software.amazon.kinesis.lifecycle.ITask;
+import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.ILeaseManager;

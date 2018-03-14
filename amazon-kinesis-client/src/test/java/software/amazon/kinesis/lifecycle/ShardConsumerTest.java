@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License. 
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.lifecycle;
 
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
@@ -50,6 +50,15 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.SequenceNumberValidator;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownNotification;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.TestStreamlet;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
@@ -59,6 +68,12 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
+import software.amazon.kinesis.lifecycle.ConsumerStates;
+import software.amazon.kinesis.lifecycle.ITask;
+import software.amazon.kinesis.lifecycle.InitializeTask;
+import software.amazon.kinesis.lifecycle.ShardConsumer;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
+import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.checkpoint.Checkpoint;

@@ -19,7 +19,7 @@ import software.amazon.kinesis.retrieval.IKinesisProxy;
 /**
  * Used to capture stream configuration and pass it along.
  */
-class StreamConfig {
+public class StreamConfig {
 
     private final IKinesisProxy streamProxy;
     private final int maxRecords;
@@ -37,12 +37,12 @@ class StreamConfig {
      * @param validateSequenceNumberBeforeCheckpointing Whether to call Amazon Kinesis to validate sequence numbers
      * @param initialPositionInStream Initial position in stream
      */
-    StreamConfig(IKinesisProxy proxy,
-            int maxRecords,
-            long idleTimeInMilliseconds,
-            boolean callProcessRecordsEvenForEmptyRecordList,
-            boolean validateSequenceNumberBeforeCheckpointing,
-            InitialPositionInStreamExtended initialPositionInStream) {
+    public StreamConfig(IKinesisProxy proxy,
+                        int maxRecords,
+                        long idleTimeInMilliseconds,
+                        boolean callProcessRecordsEvenForEmptyRecordList,
+                        boolean validateSequenceNumberBeforeCheckpointing,
+                        InitialPositionInStreamExtended initialPositionInStream) {
         this.streamProxy = proxy;
         this.maxRecords = maxRecords;
         this.idleTimeInMilliseconds = idleTimeInMilliseconds;
@@ -54,42 +54,42 @@ class StreamConfig {
     /**
      * @return the streamProxy
      */
-    IKinesisProxy getStreamProxy() {
+    public IKinesisProxy getStreamProxy() {
         return streamProxy;
     }
 
     /**
      * @return the maxRecords
      */
-    int getMaxRecords() {
+    public int getMaxRecords() {
         return maxRecords;
     }
 
     /**
      * @return the idleTimeInMilliseconds
      */
-    long getIdleTimeInMilliseconds() {
+    public long getIdleTimeInMilliseconds() {
         return idleTimeInMilliseconds;
     }
 
     /**
      * @return the callProcessRecordsEvenForEmptyRecordList
      */
-    boolean shouldCallProcessRecordsEvenForEmptyRecordList() {
+    public boolean shouldCallProcessRecordsEvenForEmptyRecordList() {
         return callProcessRecordsEvenForEmptyRecordList;
     }
 
     /**
      * @return the initialPositionInStream
      */
-    InitialPositionInStreamExtended getInitialPositionInStream() {
+    public InitialPositionInStreamExtended getInitialPositionInStream() {
         return initialPositionInStream;
     }
 
     /**
      * @return validateSequenceNumberBeforeCheckpointing
      */
-    boolean shouldValidateSequenceNumberBeforeCheckpointing() {
+    public boolean shouldValidateSequenceNumberBeforeCheckpointing() {
         return validateSequenceNumberBeforeCheckpointing;
     }
 }

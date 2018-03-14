@@ -21,14 +21,14 @@ import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
 @Slf4j
-class ThrottlingReporter {
+public class ThrottlingReporter {
 
     private final int maxConsecutiveWarnThrottles;
     private final String shardId;
 
     private int consecutiveThrottles = 0;
 
-    void throttled() {
+    public void throttled() {
         consecutiveThrottles++;
         String message = "Shard '" + shardId + "' has been throttled "
                 + consecutiveThrottles + " consecutively";
@@ -41,7 +41,7 @@ class ThrottlingReporter {
 
     }
 
-    void success() {
+    public void success() {
         consecutiveThrottles = 0;
     }
 

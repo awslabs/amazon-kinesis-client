@@ -26,6 +26,7 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibD
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
@@ -40,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
  * Streamlet that tracks records it's seen - useful for testing.
  */
 @Slf4j
-class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
+public class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
     private List<Record> records = new ArrayList<Record>();
 
     private Set<String> processedSeqNums = new HashSet<String>(); // used for deduping
@@ -143,7 +144,7 @@ class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
     /**
      * @return the shutdownReason
      */
-    ShutdownReason getShutdownReason() {
+    public ShutdownReason getShutdownReason() {
         return shutdownReason;
     }
 
@@ -154,7 +155,7 @@ class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
         return numProcessRecordsCallsWithEmptyRecordList;
     }
 
-    boolean isShutdownNotificationCalled() {
+    public boolean isShutdownNotificationCalled() {
         return shutdownNotificationCalled;
     }
 

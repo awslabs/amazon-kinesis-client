@@ -17,7 +17,7 @@ package com.amazonaws.services.kinesis.clientlibrary.types;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 import org.junit.Test;
 
 /**

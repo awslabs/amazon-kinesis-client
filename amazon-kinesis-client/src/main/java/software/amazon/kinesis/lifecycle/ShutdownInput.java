@@ -15,7 +15,6 @@
 package software.amazon.kinesis.lifecycle;
 
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 
 /**

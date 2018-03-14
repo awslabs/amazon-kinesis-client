@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
+package software.amazon.kinesis.lifecycle;
 
 
 import java.util.Optional;
@@ -21,6 +21,13 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.MetricsCollectingTaskDecorator;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.RecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.SequenceNumberValidator;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownNotification;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.StreamConfig;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.leases.KinesisClientLease;
@@ -42,7 +49,7 @@ import software.amazon.kinesis.retrieval.SynchronousGetRecordsRetrievalStrategy;
  * A new instance should be created if the primary responsibility is reassigned back to this process.
  */
 @Slf4j
-class ShardConsumer {
+public class ShardConsumer {
     private final StreamConfig streamConfig;
     private final IRecordProcessor recordProcessor;
     private final KinesisClientLibConfiguration config;
@@ -145,20 +152,20 @@ class ShardConsumer {
      * @param config Kinesis library configuration
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
-    ShardConsumer(ShardInfo shardInfo,
-                  StreamConfig streamConfig,
-                  ICheckpoint checkpoint,
-                  IRecordProcessor recordProcessor,
-                  ILeaseManager<KinesisClientLease> leaseManager,
-                  long parentShardPollIntervalMillis,
-                  boolean cleanupLeasesOfCompletedShards,
-                  ExecutorService executorService,
-                  IMetricsFactory metricsFactory,
-                  long backoffTimeMillis,
-                  boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                  Optional<Integer> retryGetRecordsInSeconds,
-                  Optional<Integer> maxGetRecordsThreadPool,
-                  KinesisClientLibConfiguration config) {
+    public ShardConsumer(ShardInfo shardInfo,
+                         StreamConfig streamConfig,
+                         ICheckpoint checkpoint,
+                         IRecordProcessor recordProcessor,
+                         ILeaseManager<KinesisClientLease> leaseManager,
+                         long parentShardPollIntervalMillis,
+                         boolean cleanupLeasesOfCompletedShards,
+                         ExecutorService executorService,
+                         IMetricsFactory metricsFactory,
+                         long backoffTimeMillis,
+                         boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                         Optional<Integer> retryGetRecordsInSeconds,
+                         Optional<Integer> maxGetRecordsThreadPool,
+                         KinesisClientLibConfiguration config) {
         
         this(
                 shardInfo,
@@ -246,7 +253,7 @@ class ShardConsumer {
      * 
      * @return true if a new process task was submitted, false otherwise
      */
-    synchronized boolean consumeShard() {
+    public synchronized boolean consumeShard() {
         return checkAndSubmitNextTask();
     }
 
@@ -345,7 +352,7 @@ class ShardConsumer {
      * 
      * @param shutdownNotification used to signal that the record processor has been given the chance to shutdown.
      */
-    void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
+    public void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
         this.shutdownNotification = shutdownNotification;
         markForShutdown(ShutdownReason.REQUESTED);
     }
@@ -356,7 +363,7 @@ class ShardConsumer {
      * 
      * @return true if shutdown is complete (false if shutdown is still in progress)
      */
-    synchronized boolean beginShutdown() {
+    public synchronized boolean beginShutdown() {
         markForShutdown(ShutdownReason.ZOMBIE);
         checkAndSubmitNextTask();
 
@@ -376,14 +383,14 @@ class ShardConsumer {
      * 
      * @return true if shutdown is complete
      */
-    boolean isShutdown() {
+    public boolean isShutdown() {
         return currentState.isTerminal();
     }
 
     /**
      * @return the shutdownReason
      */
-    ShutdownReason getShutdownReason() {
+    public ShutdownReason getShutdownReason() {
         return shutdownReason;
     }
 
@@ -430,7 +437,7 @@ class ShardConsumer {
     }
 
     @VisibleForTesting
-    boolean isShutdownRequested() {
+    public boolean isShutdownRequested() {
         return shutdownReason != null;
     }
 
