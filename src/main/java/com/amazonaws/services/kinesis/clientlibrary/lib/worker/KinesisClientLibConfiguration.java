@@ -191,6 +191,11 @@ public class KinesisClientLibConfiguration {
      * The number of times the Proxy will retry listShards call when throttled.
      */
     public static final int DEFAULT_MAX_LIST_SHARDS_RETRY_ATTEMPTS = 50;
+    
+    /**
+     * The number of times a worker will try to initialize before exiting
+     */
+    public static final int DEFAULT_WORKER_INITIALIZATION_RETRY_ATTEMPTS = 20;
 
     private String applicationName;
     private String tableName;
@@ -254,6 +259,9 @@ public class KinesisClientLibConfiguration {
     
     @Getter
     private int maxListShardsRetryAttempts = DEFAULT_MAX_LIST_SHARDS_RETRY_ATTEMPTS;
+    
+    @Getter
+    private int maxWorkerInitializationRetryAttempts = DEFAULT_WORKER_INITIALIZATION_RETRY_ATTEMPTS;
 
     /**
      * Constructor.
@@ -1407,7 +1415,7 @@ public class KinesisClientLibConfiguration {
     /**
      * @param listShardsBackoffTimeInMillis Max sleep between two listShards call when throttled
      *                                     in {@link com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy}.
-     * @return
+     * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withListShardsBackoffTimeInMillis(long listShardsBackoffTimeInMillis) {
         checkIsValuePositive("listShardsBackoffTimeInMillis", listShardsBackoffTimeInMillis);
@@ -1418,11 +1426,22 @@ public class KinesisClientLibConfiguration {
     /**
      * @param maxListShardsRetryAttempts Max number of retries for listShards when throttled
      *                                   in {@link com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy}.
-     * @return
+     * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withMaxListShardsRetryAttempts(int maxListShardsRetryAttempts) {
         checkIsValuePositive("maxListShardsRetryAttempts", maxListShardsRetryAttempts);
         this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
+        return this;
+    }
+    
+    /**
+     * @param maxWorkerInitializationRetryAttempts Max number of retries a worker will attempt to initialize before exiting
+     *                                   in {@link com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy}.
+     * @return KinesisClientLibConfiguration
+     */
+    public KinesisClientLibConfiguration withMaxWorkerInitializationRetryAttempts(int maxWorkerInitializationRetryAttempts) {
+        checkIsValuePositive("maxWorkerInitializationRetryAttempts", maxWorkerInitializationRetryAttempts);
+        this.maxWorkerInitializationRetryAttempts = maxWorkerInitializationRetryAttempts;
         return this;
     }
 }

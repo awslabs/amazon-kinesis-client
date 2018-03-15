@@ -72,7 +72,6 @@ public class Worker implements Runnable {
 
     private static final Log LOG = LogFactory.getLog(Worker.class);
 
-    private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
     private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
 
     private WorkerLog wlog = new WorkerLog();
@@ -566,7 +565,7 @@ public class Worker implements Runnable {
             initialize();
             LOG.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e1) {
-            LOG.error("Unable to initialize after " + MAX_INITIALIZATION_ATTEMPTS + " attempts. Shutting down.", e1);
+            LOG.error("Unable to initialize after " + config.getMaxWorkerInitializationRetryAttempts() + " attempts. Shutting down.", e1);
             shutdown();
         }
 
@@ -619,7 +618,7 @@ public class Worker implements Runnable {
         boolean isDone = false;
         Exception lastException = null;
 
-        for (int i = 0; (!isDone) && (i < MAX_INITIALIZATION_ATTEMPTS); i++) {
+        for (int i = 0; (!isDone) && (i < config.getMaxWorkerInitializationRetryAttempts()); i++) {
             try {
                 LOG.info("Initialization attempt " + (i + 1));
                 LOG.info("Initializing LeaseCoordinator");
