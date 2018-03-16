@@ -16,12 +16,47 @@
 package software.amazon.kinesis.coordinator;
 
 import lombok.Data;
+import lombok.NonNull;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.leases.NoOpShardPrioritization;
+import software.amazon.kinesis.leases.ShardPrioritization;
 
 /**
- *
+ * Used by the KCL to configure the coordinator.
  */
 @Data
 @Accessors(fluent = true)
 public class CoordinatorConfig {
+    /**
+     * Application name used by checkpointer to checkpoint.
+     *
+     * @return String
+     */
+    @NonNull
+    private final String applicationName;
+
+    /**
+     * Interval in milliseconds between polling to check for parent shard completion.
+     * Polling frequently will take up more DynamoDB IOPS (when there are leases for shards waiting on
+     * completion of parent shards).
+     *
+     * <p>Default value: 10000L</p>
+     */
+    private long parentShardPollIntervalMillis = 10000L;
+
+    /**
+     * The Worker will skip shard sync during initialization if there are one or more leases in the lease table. This
+     * assumes that the shards and leases are in-sync. This enables customers to choose faster startup times (e.g.
+     * during incremental deployments of an application).
+     *
+     * <p>Default value: false</p>
+     */
+    private boolean skipShardSyncAtWorkerInitializationIfLeasesExist = false;
+
+    /**
+     * Shard prioritization strategy.
+     *
+     * <p>Default value: {@link NoOpShardPrioritization}</p>
+     */
+    private ShardPrioritization shardPrioritization = new NoOpShardPrioritization();
 }
