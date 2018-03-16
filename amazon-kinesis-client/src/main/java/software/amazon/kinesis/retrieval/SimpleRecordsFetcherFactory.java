@@ -16,12 +16,12 @@ package software.amazon.kinesis.retrieval;
 
 import java.util.concurrent.Executors;
 
-import software.amazon.kinesis.metrics.IMetricsFactory;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import lombok.extern.apachecommons.CommonsLog;
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.metrics.IMetricsFactory;
 
-@CommonsLog
+@Slf4j
 public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private int maxPendingProcessRecordsInput = 3;
     private int maxByteSize = 8 * 1024 * 1024;
