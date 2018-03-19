@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import software.amazon.kinesis.leases.ShardInfo;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -43,19 +42,20 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
-import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
-import software.amazon.kinesis.metrics.NullMetricsFactory;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 
-import lombok.extern.apachecommons.CommonsLog;
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 
 /**
  * These are the integration tests for the PrefetchGetRecordsCache class. 
  */
 @RunWith(MockitoJUnitRunner.class)
-@CommonsLog
+@Slf4j
 public class PrefetchGetRecordsCacheIntegrationTest {
     private static final int MAX_SIZE = 3;
     private static final int MAX_BYTE_SIZE = 5 * 1024 * 1024;
