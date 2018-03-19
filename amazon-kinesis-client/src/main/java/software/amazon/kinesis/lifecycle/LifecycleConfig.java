@@ -15,13 +15,35 @@
 
 package software.amazon.kinesis.lifecycle;
 
+import java.util.Optional;
+
 import lombok.Data;
 import lombok.experimental.Accessors;
 
 /**
- *
+ * Used by the KCL to configure the lifecycle.
  */
 @Data
 @Accessors(fluent = true)
 public class LifecycleConfig {
+    /**
+     * The amount of milliseconds to wait before graceful shutdown forcefully terminates.
+     *
+     * <p>Default value: 5000L</p>
+     */
+    private long shutdownGraceMillis = 5000L;
+
+    /**
+     * Logs warn message if as task is held in  a task for more than the set time.
+     *
+     * <p>Default value: {@link Optional#empty()}</p>
+     */
+    private Optional<Long> logWarningForTaskAfterMillis = Optional.empty();
+
+    /**
+     * Backoff time in milliseconds for Amazon Kinesis Client Library tasks (in the event of failures).
+     *
+     * <p>Default value: 500L</p>
+     */
+    private long taskBackoffTimeMillis = 500L;
 }

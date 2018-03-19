@@ -17,11 +17,19 @@ package software.amazon.kinesis.checkpoint;
 
 import lombok.Data;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 
 /**
- *
+ * Used by the KCL to manage checkpointing.
  */
 @Data
 @Accessors(fluent = true)
 public class CheckpointConfig {
+    /**
+     * KCL will validate client provided sequence numbers with a call to Amazon Kinesis before checkpointing for calls
+     * to {@link RecordProcessorCheckpointer#checkpoint(String)} by default.
+     *
+     * <p>Default value: true</p>
+     */
+    private boolean validateSequenceNumberBeforeCheckpointing = true;
 }
