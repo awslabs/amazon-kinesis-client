@@ -15,9 +15,16 @@
 
 package software.amazon.kinesis.checkpoint;
 
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import lombok.Data;
+import lombok.NonNull;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLeaseManager;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 
 /**
  * Used by the KCL to manage checkpointing.
@@ -25,6 +32,15 @@ import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 @Data
 @Accessors(fluent = true)
 public class CheckpointConfig {
+    @NonNull
+    private final String tableName;
+
+    @NonNull
+    private final AmazonDynamoDB amazonDynamoDB;
+
+    @NonNull
+    private final String workerIdentifier;
+
     /**
      * KCL will validate client provided sequence numbers with a call to Amazon Kinesis before checkpointing for calls
      * to {@link RecordProcessorCheckpointer#checkpoint(String)} by default.
@@ -32,4 +48,41 @@ public class CheckpointConfig {
      * <p>Default value: true</p>
      */
     private boolean validateSequenceNumberBeforeCheckpointing = true;
+
+    private boolean consistentReads = false;
+
+    private long failoverTimeMillis = 10000L;
+
+    private ILeaseManager leaseManager;
+
+    private int maxLeasesForWorker = Integer.MAX_VALUE;
+
+    private int maxLeasesToStealAtOneTime = 1;
+
+    private int maxLeaseRenewalThreads = 20;
+
+    private IMetricsFactory metricsFactory = new NullMetricsFactory();
+
+    private CheckpointFactory checkpointFactory;
+
+    public ILeaseManager leaseManager() {
+        if (leaseManager == null) {
+            leaseManager = new KinesisClientLeaseManager(tableName, amazonDynamoDB, consistentReads);
+        }
+        return leaseManager;
+    }
+
+    public CheckpointFactory checkpointFactory() {
+        if (checkpointFactory == null) {
+            checkpointFactory = new DynamoDBCheckpointFactory(leaseManager(),
+                    workerIdentifier(),
+                    failoverTimeMillis(),
+                    LeaseManagementConfig.EPSILON_MS,
+                    maxLeasesForWorker(),
+                    maxLeasesToStealAtOneTime(),
+                    maxLeaseRenewalThreads(),
+                    metricsFactory());
+        }
+        return checkpointFactory;
+    }
 }

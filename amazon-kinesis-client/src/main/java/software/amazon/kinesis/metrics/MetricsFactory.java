@@ -13,29 +13,11 @@
  *  permissions and limitations under the License.
  */
 
-package software.amazon.kinesis.processor;
-
-        import lombok.Data;
-        import lombok.NonNull;
-        import lombok.experimental.Accessors;
+package software.amazon.kinesis.metrics;
 
 /**
- * Used by the KCL to configure the processor for processing the records.
+ *
  */
-@Data
-@Accessors(fluent = true)
-public class ProcessorConfig {
-    /**
-     *
-     */
-    @NonNull
-    private final ProcessorFactory processorFactory;
-
-    /**
-     * Don't call processRecords() on the record processor for empty record lists.
-     *
-     * <p>Default value: false</p>
-     */
-    private boolean callProcessRecordsEvenForEmptyRecordList = false;
-
+public interface MetricsFactory {
+    IMetricsScope createMetricsScope();
 }

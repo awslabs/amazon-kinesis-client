@@ -15,11 +15,24 @@
 
 package software.amazon.kinesis.leases;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.kinesis.AmazonKinesis;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.retrieval.IKinesisProxyExtended;
 
 /**
  * Used by the KCL to configure lease management.
@@ -27,7 +40,7 @@ import lombok.experimental.Accessors;
 @Data
 @Accessors(fluent = true)
 public class LeaseManagementConfig {
-    private static final long EPSILON_MS = 25L;
+    public static final long EPSILON_MS = 25L;
 
     /**
      * Name of the table to use in DynamoDB
@@ -43,6 +56,8 @@ public class LeaseManagementConfig {
      */
     @NonNull
     private final AmazonDynamoDB amazonDynamoDB;
+    @NonNull
+    private final AmazonKinesis amazonKinesis;
     /**
      * Used to distinguish different workers/processes of a KCL application.
      *
@@ -118,4 +133,63 @@ public class LeaseManagementConfig {
      * <p>Default value: 20</p>
      */
     private int maxLeaseRenewalThreads = 20;
+
+    /**
+     *
+     */
+    private boolean ignoreUnexpectedChildShards = false;
+
+    /**
+     *
+     */
+    private boolean consistentReads = false;
+
+    /**
+     *
+     */
+    private IKinesisProxyExtended kinesisProxy;
+
+    /**
+     * The initial position for getting records from Kinesis streams.
+     *
+     * <p>Default value: {@link InitialPositionInStream#TRIM_HORIZON}</p>
+     */
+    private InitialPositionInStreamExtended initialPositionInStream =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+
+    /**
+     *
+     */
+    private IMetricsFactory metricsFactory = new NullMetricsFactory();
+
+    /**
+     * The {@link ExecutorService} to be used by {@link ShardSyncTaskManager}.
+     *
+     * <p>Default value: {@link LeaseManagementThreadPool}</p>
+     */
+    private ExecutorService executorService = new LeaseManagementThreadPool(
+            new ThreadFactoryBuilder().setNameFormat("ShardSyncTaskManager-%04d").build());
+
+    static class LeaseManagementThreadPool extends ThreadPoolExecutor {
+        private static final long DEFAULT_KEEP_ALIVE_TIME = 60L;
+
+        LeaseManagementThreadPool(ThreadFactory threadFactory) {
+            super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE_TIME, TimeUnit.SECONDS, new SynchronousQueue<>(),
+                    threadFactory);
+        }
+    };
+
+    private LeaseManagementFactory leaseManagementFactory;
+
+    public LeaseManagementFactory leaseManagementFactory() {
+        if (leaseManagementFactory == null) {
+            new DynamoDBLeaseManagementFactory(workerIdentifier(), failoverTimeMillis(), EPSILON_MS,
+                    maxLeasesForWorker(), maxLeasesToStealAtOneTime(), maxLeaseRenewalThreads(), kinesisProxy(),
+                    initialPositionInStream(), cleanupLeasesUponShardCompletion(), ignoreUnexpectedChildShards(),
+                    shardSyncIntervalMillis(), metricsFactory(), executorService(), tableName(), amazonDynamoDB(),
+                    consistentReads());
+        }
+        return leaseManagementFactory;
+    }
+
 }
