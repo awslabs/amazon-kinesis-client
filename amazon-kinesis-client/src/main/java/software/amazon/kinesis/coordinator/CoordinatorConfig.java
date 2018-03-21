@@ -20,6 +20,8 @@ import lombok.NonNull;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.leases.NoOpShardPrioritization;
 import software.amazon.kinesis.leases.ShardPrioritization;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 
 /**
  * Used by the KCL to configure the coordinator.
@@ -59,4 +61,9 @@ public class CoordinatorConfig {
      * <p>Default value: {@link NoOpShardPrioritization}</p>
      */
     private ShardPrioritization shardPrioritization = new NoOpShardPrioritization();
+
+    private IMetricsFactory metricsFactory = new NullMetricsFactory();
+
+    private CoordinatorFactory coordinatorFactory = new SchedulerCoordinatorFactory();
+
 }

@@ -13,29 +13,17 @@
  *  permissions and limitations under the License.
  */
 
-package software.amazon.kinesis.processor;
+package software.amazon.kinesis.retrieval;
 
-        import lombok.Data;
-        import lombok.NonNull;
-        import lombok.experimental.Accessors;
+import software.amazon.kinesis.leases.ShardInfo;
 
 /**
- * Used by the KCL to configure the processor for processing the records.
+ *
  */
-@Data
-@Accessors(fluent = true)
-public class ProcessorConfig {
-    /**
-     *
-     */
-    @NonNull
-    private final ProcessorFactory processorFactory;
+public interface RetrievalFactory {
+    IKinesisProxyExtended createKinesisProxy();
 
-    /**
-     * Don't call processRecords() on the record processor for empty record lists.
-     *
-     * <p>Default value: false</p>
-     */
-    private boolean callProcessRecordsEvenForEmptyRecordList = false;
+    GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(ShardInfo shardInfo);
 
+    GetRecordsCache createGetRecordsCache(ShardInfo shardInfo);
 }

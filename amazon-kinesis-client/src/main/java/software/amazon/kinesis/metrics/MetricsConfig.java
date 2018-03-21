@@ -81,4 +81,8 @@ public class MetricsConfig {
      * <p>Default value: {@link MetricsConfig#DEFAULT_METRICS_ENABLED_DIMENSIONS}</p>
      */
     private Set<String> metricsEnabledDimensions = DEFAULT_METRICS_ENABLED_DIMENSIONS;
+
+    private MetricsFactory metricsFactory;
+
+    private IMetricsFactory iMetricsFactory;
 }

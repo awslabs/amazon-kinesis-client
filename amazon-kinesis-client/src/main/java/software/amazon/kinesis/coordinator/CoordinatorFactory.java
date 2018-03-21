@@ -13,29 +13,17 @@
  *  permissions and limitations under the License.
  */
 
-package software.amazon.kinesis.processor;
+package software.amazon.kinesis.coordinator;
 
-        import lombok.Data;
-        import lombok.NonNull;
-        import lombok.experimental.Accessors;
+import java.util.concurrent.ExecutorService;
 
 /**
- * Used by the KCL to configure the processor for processing the records.
+ *
  */
-@Data
-@Accessors(fluent = true)
-public class ProcessorConfig {
-    /**
-     *
-     */
-    @NonNull
-    private final ProcessorFactory processorFactory;
+public interface CoordinatorFactory {
+    ExecutorService createExecutorService();
 
-    /**
-     * Don't call processRecords() on the record processor for empty record lists.
-     *
-     * <p>Default value: false</p>
-     */
-    private boolean callProcessRecordsEvenForEmptyRecordList = false;
+    GracefulShutdownCoordinator createGracefulShutdownCoordinator();
 
+    WorkerStateChangeListener createWorkerStateChangeListener();
 }

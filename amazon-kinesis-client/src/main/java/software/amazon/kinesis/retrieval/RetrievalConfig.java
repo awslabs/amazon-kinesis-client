@@ -104,4 +104,16 @@ public class RetrievalConfig {
      * <p>Default value: {@link InitialPositionInStream#LATEST}</p>
      */
     private InitialPositionInStream initialPositionInStream = InitialPositionInStream.LATEST;
+
+    private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
+
+    private RetrievalFactory retrievalFactory;
+
+    public RetrievalFactory retrievalFactory() {
+        if (retrievalFactory == null) {
+            retrievalFactory = new SynchronousBlockingRetrievalFactory(streamName(), amazonKinesis(),
+                    listShardsBackoffTimeInMillis(), maxListShardsRetryAttempts(), maxRecords());
+        }
+        return retrievalFactory;
+    }
 }

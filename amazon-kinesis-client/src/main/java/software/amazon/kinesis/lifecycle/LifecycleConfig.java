@@ -46,4 +46,6 @@ public class LifecycleConfig {
      * <p>Default value: 500L</p>
      */
     private long taskBackoffTimeMillis = 500L;
+
+    private LifecycleFactory lifecycleFactory;
 }
