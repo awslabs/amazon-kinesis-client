@@ -183,11 +183,11 @@ public class LeaseManagementConfig {
 
     public LeaseManagementFactory leaseManagementFactory() {
         if (leaseManagementFactory == null) {
-            new DynamoDBLeaseManagementFactory(workerIdentifier(), failoverTimeMillis(), EPSILON_MS,
-                    maxLeasesForWorker(), maxLeasesToStealAtOneTime(), maxLeaseRenewalThreads(), kinesisProxy(),
-                    initialPositionInStream(), cleanupLeasesUponShardCompletion(), ignoreUnexpectedChildShards(),
-                    shardSyncIntervalMillis(), metricsFactory(), executorService(), tableName(), amazonDynamoDB(),
-                    consistentReads());
+            leaseManagementFactory = new DynamoDBLeaseManagementFactory(workerIdentifier(), failoverTimeMillis(),
+                    EPSILON_MS, maxLeasesForWorker(), maxLeasesToStealAtOneTime(), maxLeaseRenewalThreads(),
+                    kinesisProxy(), initialPositionInStream(), cleanupLeasesUponShardCompletion(),
+                    ignoreUnexpectedChildShards(), shardSyncIntervalMillis(), metricsFactory(), executorService(),
+                    tableName(), amazonDynamoDB(), consistentReads());
         }
         return leaseManagementFactory;
     }
