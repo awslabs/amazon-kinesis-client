@@ -14,9 +14,9 @@
  */
 package software.amazon.kinesis.processor;
 
-import java.util.List;
-
-import com.amazonaws.services.kinesis.model.Record;
+import software.amazon.kinesis.lifecycle.InitializationInput;
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.ShutdownInput;
 import software.amazon.kinesis.lifecycle.ShutdownReason;
 
 /**
@@ -28,35 +28,35 @@ public interface IRecordProcessor {
     /**
      * Invoked by the Amazon Kinesis Client Library before data records are delivered to the RecordProcessor instance
      * (via processRecords).
-     * 
-     * @param shardId The record processor will be responsible for processing records of this shard.
+     *
+     * @param initializationInput Provides information related to initialization 
      */
-    void initialize(String shardId);
+    void initialize(InitializationInput initializationInput);
 
     /**
      * Process data records. The Amazon Kinesis Client Library will invoke this method to deliver data records to the
      * application.
      * Upon fail over, the new instance will get records with sequence number > checkpoint position
      * for each partition key.
-     * 
-     * @param records Data records to be processed
-     * @param checkpointer RecordProcessor should use this instance to checkpoint their progress.
+     *
+     * @param processRecordsInput Provides the records to be processed as well as information and capabilities related
+     *        to them (eg checkpointing).
      */
-    void processRecords(List<Record> records, IRecordProcessorCheckpointer checkpointer);
+    void processRecords(ProcessRecordsInput processRecordsInput);
 
     /**
      * Invoked by the Amazon Kinesis Client Library to indicate it will no longer send data records to this
-     * RecordProcessor instance. The reason parameter indicates:
-     * a/ ShutdownReason.TERMINATE - The shard has been closed and there will not be any more records to process. The
-     * record processor should checkpoint (after doing any housekeeping) to acknowledge that it has successfully
-     * completed processing all records in this shard.
-     * b/ ShutdownReason.ZOMBIE: A fail over has occurred and a different record processor is (or will be) responsible
-     * for processing records.
-     * 
-     * @param checkpointer RecordProcessor should use this instance to checkpoint.
-     * @param reason Reason for the shutdown (ShutdownReason.TERMINATE indicates the shard is closed and there are no
-     *        more records to process. Shutdown.ZOMBIE indicates a fail over has occurred).
+     * RecordProcessor instance.
+     *
+     * <h2><b>Warning</b></h2>
+     *
+     * When the value of {@link ShutdownInput#getShutdownReason()} is
+     * {@link ShutdownReason#TERMINATE} it is required that you
+     * checkpoint. Failure to do so will result in an IllegalArgumentException, and the KCL no longer making progress.
+     *
+     * @param shutdownInput
+     *            Provides information and capabilities (eg checkpointing) related to shutdown of this record processor.
      */
-    void shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason);
+    void shutdown(ShutdownInput shutdownInput);
 
 }

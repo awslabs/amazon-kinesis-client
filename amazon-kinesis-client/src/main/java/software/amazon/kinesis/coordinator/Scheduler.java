@@ -50,7 +50,6 @@ import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ProcessorFactory;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 

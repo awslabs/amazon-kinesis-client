@@ -18,7 +18,7 @@ import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import org.junit.Assert;
 import org.junit.Test;
 
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;

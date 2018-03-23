@@ -15,8 +15,6 @@
 
 package software.amazon.kinesis.processor;
 
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
-
 /**
  *
  */

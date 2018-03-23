@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.processor;
 
+
 /**
  * The Amazon Kinesis Client Library will use this to instantiate a record processor per shard.
  * Clients may choose to create separate instantiations, or re-use instantiations.

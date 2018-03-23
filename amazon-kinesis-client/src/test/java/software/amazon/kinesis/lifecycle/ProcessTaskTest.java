@@ -50,7 +50,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.KinesisDataFetcher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;

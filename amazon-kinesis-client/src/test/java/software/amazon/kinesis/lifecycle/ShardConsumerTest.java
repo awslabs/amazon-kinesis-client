@@ -67,7 +67,7 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.InMemoryCheckpointImpl;
 import software.amazon.kinesis.retrieval.AsynchronousGetRecordsRetrievalStrategy;

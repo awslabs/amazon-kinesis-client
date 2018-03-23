@@ -22,7 +22,7 @@ import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.model.Record;
 
 import lombok.Getter;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 
 /**
  * Container for the parameters to the IRecordProcessor's

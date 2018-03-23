@@ -14,8 +14,7 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import software.amazon.kinesis.lifecycle.ShutdownInput;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 
 /**
  * A shutdown request to the ShardConsumer

@@ -18,7 +18,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionIn
 import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardSyncer;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
