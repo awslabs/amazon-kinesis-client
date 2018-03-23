@@ -41,39 +41,38 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
-import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
-import software.amazon.kinesis.leases.ParentsFirstShardPrioritization;
-import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.leases.ShardPrioritization;
-import software.amazon.kinesis.leases.ShardSyncTask;
-import software.amazon.kinesis.leases.ShardSyncTaskManager;
-import software.amazon.kinesis.lifecycle.ShardConsumer;
-import software.amazon.kinesis.lifecycle.ShardConsumerShutdownNotification;
-import software.amazon.kinesis.lifecycle.ShutdownNotification;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
-import software.amazon.kinesis.lifecycle.TaskResult;
-import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.V1ToV2RecordProcessorFactoryAdapter;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
-import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
-import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.retrieval.KinesisProxy;
-import software.amazon.kinesis.leases.exceptions.LeasingException;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.KinesisClientLeaseManager;
-import software.amazon.kinesis.leases.ILeaseManager;
-import software.amazon.kinesis.metrics.CWMetricsFactory;
-import software.amazon.kinesis.metrics.NullMetricsFactory;
-import software.amazon.kinesis.metrics.IMetricsFactory;
-import software.amazon.kinesis.metrics.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.KinesisClientLeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
+import software.amazon.kinesis.leases.ParentsFirstShardPrioritization;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.ShardPrioritization;
+import software.amazon.kinesis.leases.ShardSyncTask;
+import software.amazon.kinesis.leases.ShardSyncTaskManager;
+import software.amazon.kinesis.leases.exceptions.LeasingException;
+import software.amazon.kinesis.lifecycle.ShardConsumer;
+import software.amazon.kinesis.lifecycle.ShardConsumerShutdownNotification;
+import software.amazon.kinesis.lifecycle.ShutdownNotification;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
+import software.amazon.kinesis.lifecycle.TaskResult;
+import software.amazon.kinesis.metrics.CWMetricsFactory;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
+import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.IShutdownNotificationAware;
+import software.amazon.kinesis.retrieval.IKinesisProxy;
+import software.amazon.kinesis.retrieval.KinesisProxy;
 
 /**
  * Worker is the high level class that Kinesis applications use to start processing data. It initializes and oversees
@@ -376,7 +375,8 @@ public class Worker implements Runnable {
             software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration config, AmazonKinesis kinesisClient, AmazonDynamoDB dynamoDBClient,
             IMetricsFactory metricsFactory, ExecutorService execService) {
-        this(config.getApplicationName(), new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory),
+        this(config.getApplicationName(),
+                recordProcessorFactory,
                 config,
                 new StreamConfig(
                         new KinesisProxy(config, kinesisClient),
@@ -1163,20 +1163,6 @@ public class Worker implements Runnable {
         private IKinesisProxy kinesisProxy;
         @Setter @Accessors(fluent = true)
         private WorkerStateChangeListener workerStateChangeListener;
-
-        /**
-         * Provide a V1 {@link software.amazon.kinesis.processor.IRecordProcessor
-         * IRecordProcessor}.
-         *
-         * @param recordProcessorFactory
-         *            Used to get record processor instances for processing data from shards
-         * @return A reference to this updated object so that method calls can be chained together.
-         */
-        public Builder recordProcessorFactory(
-                software.amazon.kinesis.processor.IRecordProcessorFactory recordProcessorFactory) {
-            this.recordProcessorFactory = new V1ToV2RecordProcessorFactoryAdapter(recordProcessorFactory);
-            return this;
-        }
 
         /**
          * Provide a V2 {@link IRecordProcessor

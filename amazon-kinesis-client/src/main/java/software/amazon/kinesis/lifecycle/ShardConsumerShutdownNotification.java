@@ -16,7 +16,7 @@ package software.amazon.kinesis.lifecycle;
 
 import java.util.concurrent.CountDownLatch;
 
-import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.IShutdownNotificationAware;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 

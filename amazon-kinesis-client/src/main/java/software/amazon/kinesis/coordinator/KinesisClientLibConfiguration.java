@@ -36,7 +36,7 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
 
 import lombok.Getter;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.retrieval.DataFetchingStrategy;
 import software.amazon.kinesis.retrieval.KinesisProxy;
 import software.amazon.kinesis.retrieval.RecordsFetcherFactory;

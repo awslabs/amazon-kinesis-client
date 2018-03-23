@@ -16,8 +16,8 @@ package software.amazon.kinesis.lifecycle;
 
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
-import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.IShutdownNotificationAware;
 
 /**
  * Notifies record processor of incoming shutdown request, and gives them a chance to checkpoint.

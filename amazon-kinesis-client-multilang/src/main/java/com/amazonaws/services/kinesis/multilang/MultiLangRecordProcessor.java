@@ -21,8 +21,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
-import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.IShutdownNotificationAware;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.lifecycle.InitializationInput;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;

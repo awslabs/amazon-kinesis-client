@@ -14,7 +14,7 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 
 import static software.amazon.kinesis.lifecycle.ConsumerStates.ConsumerState;
 import static software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerState;

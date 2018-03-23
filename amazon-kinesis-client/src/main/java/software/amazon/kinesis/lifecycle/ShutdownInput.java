@@ -15,7 +15,7 @@
 package software.amazon.kinesis.lifecycle;
 
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 
 /**
  * Container for the parameters to the IRecordProcessor's

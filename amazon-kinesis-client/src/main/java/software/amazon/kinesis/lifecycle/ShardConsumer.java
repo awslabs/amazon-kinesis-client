@@ -28,7 +28,7 @@ import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.coordinator.StreamConfig;
 import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.metrics.IMetricsFactory;

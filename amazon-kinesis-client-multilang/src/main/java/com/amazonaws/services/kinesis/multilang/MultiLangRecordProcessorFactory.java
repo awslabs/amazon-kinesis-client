@@ -16,8 +16,8 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.util.concurrent.ExecutorService;
 
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
-import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessorFactory;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

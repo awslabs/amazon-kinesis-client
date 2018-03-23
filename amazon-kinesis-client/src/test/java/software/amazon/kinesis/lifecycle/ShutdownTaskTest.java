@@ -35,7 +35,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;

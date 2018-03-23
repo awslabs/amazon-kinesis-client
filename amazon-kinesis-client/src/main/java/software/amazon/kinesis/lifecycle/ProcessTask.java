@@ -23,7 +23,7 @@ import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.coordinator.StreamConfig;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
 import software.amazon.kinesis.retrieval.IKinesisProxyExtended;

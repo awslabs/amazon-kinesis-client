@@ -23,7 +23,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.IRecordProcessorFactory;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.coordinator.Worker;
 

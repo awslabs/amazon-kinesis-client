@@ -29,8 +29,8 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingExcepti
 import software.amazon.kinesis.leases.ShardSequenceVerifier;
 import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
-import software.amazon.kinesis.processor.v2.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.IShutdownNotificationAware;
 import software.amazon.kinesis.lifecycle.InitializationInput;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.ShutdownInput;

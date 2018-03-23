@@ -64,8 +64,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import org.hamcrest.Condition;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -84,51 +82,10 @@ import org.mockito.stubbing.Answer;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
-import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
-import software.amazon.kinesis.leases.NoOpShardPrioritization;
-import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.leases.ShardObjectHelper;
-import software.amazon.kinesis.leases.ShardPrioritization;
-import software.amazon.kinesis.leases.ShardSequenceVerifier;
-import software.amazon.kinesis.leases.ShardSyncer;
-import software.amazon.kinesis.lifecycle.BlockOnParentShardTask;
-import software.amazon.kinesis.lifecycle.ITask;
-import software.amazon.kinesis.lifecycle.InitializeTask;
-import software.amazon.kinesis.lifecycle.ShardConsumer;
-import software.amazon.kinesis.lifecycle.ShutdownNotificationTask;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
-import software.amazon.kinesis.lifecycle.ShutdownTask;
-import software.amazon.kinesis.lifecycle.TaskResult;
-import software.amazon.kinesis.lifecycle.TaskType;
-import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.V1ToV2RecordProcessorFactoryAdapter;
-import software.amazon.kinesis.processor.v2.IRecordProcessor;
-import software.amazon.kinesis.processor.v2.IRecordProcessorFactory;
-import software.amazon.kinesis.coordinator.Worker.WorkerCWMetricsFactory;
-import software.amazon.kinesis.coordinator.Worker.WorkerThreadPoolExecutor;
-import software.amazon.kinesis.coordinator.WorkerStateChangeListener.WorkerState;
-import software.amazon.kinesis.retrieval.GetRecordsCache;
-import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
-import software.amazon.kinesis.retrieval.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.util.KinesisLocalFileDataCreator;
-import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
-import software.amazon.kinesis.retrieval.SimpleRecordsFetcherFactory;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.lifecycle.InitializationInput;
-import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
-import software.amazon.kinesis.lifecycle.ShutdownInput;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.KinesisClientLeaseBuilder;
-import software.amazon.kinesis.leases.KinesisClientLeaseManager;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.ILeaseManager;
-import software.amazon.kinesis.metrics.CWMetricsFactory;
-import software.amazon.kinesis.metrics.NullMetricsFactory;
-import software.amazon.kinesis.metrics.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
@@ -138,6 +95,48 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.coordinator.Worker.WorkerCWMetricsFactory;
+import software.amazon.kinesis.coordinator.Worker.WorkerThreadPoolExecutor;
+import software.amazon.kinesis.coordinator.WorkerStateChangeListener.WorkerState;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.KinesisClientLeaseBuilder;
+import software.amazon.kinesis.leases.KinesisClientLeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseManager;
+import software.amazon.kinesis.leases.NoOpShardPrioritization;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.ShardObjectHelper;
+import software.amazon.kinesis.leases.ShardPrioritization;
+import software.amazon.kinesis.leases.ShardSequenceVerifier;
+import software.amazon.kinesis.leases.ShardSyncer;
+import software.amazon.kinesis.lifecycle.BlockOnParentShardTask;
+import software.amazon.kinesis.lifecycle.ITask;
+import software.amazon.kinesis.lifecycle.InitializationInput;
+import software.amazon.kinesis.lifecycle.InitializeTask;
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.ShardConsumer;
+import software.amazon.kinesis.lifecycle.ShutdownInput;
+import software.amazon.kinesis.lifecycle.ShutdownNotificationTask;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
+import software.amazon.kinesis.lifecycle.ShutdownTask;
+import software.amazon.kinesis.lifecycle.TaskResult;
+import software.amazon.kinesis.lifecycle.TaskType;
+import software.amazon.kinesis.metrics.CWMetricsFactory;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
+import software.amazon.kinesis.processor.IRecordProcessorFactory;
+import software.amazon.kinesis.retrieval.GetRecordsCache;
+import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
+import software.amazon.kinesis.retrieval.IKinesisProxy;
+import software.amazon.kinesis.retrieval.KinesisProxy;
+import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
+import software.amazon.kinesis.retrieval.SimpleRecordsFetcherFactory;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.utils.TestStreamlet;
 import software.amazon.kinesis.utils.TestStreamletFactory;
 
@@ -211,37 +210,38 @@ public class WorkerTest {
 
         @Override
         public software.amazon.kinesis.processor.IRecordProcessor createProcessor() {
-            return new software.amazon.kinesis.processor.IRecordProcessor() {
+            return new IRecordProcessor() {
 
                 @Override
-                public void shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason) {
-                    if (reason == ShutdownReason.TERMINATE) {
-                        try {
-                            checkpointer.checkpoint();
-                        } catch (KinesisClientLibNonRetryableException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
+                public void initialize(final InitializationInput initializationInput) {
+
                 }
 
                 @Override
-                public void processRecords(List<Record> dataRecords, IRecordProcessorCheckpointer checkpointer) {
+                public void processRecords(final ProcessRecordsInput processRecordsInput) {
                     try {
-                        checkpointer.checkpoint();
+                        processRecordsInput.getCheckpointer().checkpoint();
                     } catch (KinesisClientLibNonRetryableException e) {
                         throw new RuntimeException(e);
                     }
                 }
 
                 @Override
-                public void initialize(String shardId) {
+                public void shutdown(final ShutdownInput shutdownInput) {
+                    if (shutdownInput.getShutdownReason() == ShutdownReason.TERMINATE) {
+                        try {
+                            shutdownInput.getCheckpointer().checkpoint();
+                        } catch (KinesisClientLibNonRetryableException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
                 }
+
             };
         }
     };
 
-    private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 =
-            new V1ToV2RecordProcessorFactoryAdapter(SAMPLE_RECORD_PROCESSOR_FACTORY);
+    private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 = SAMPLE_RECORD_PROCESSOR_FACTORY;
 
 
     /**
