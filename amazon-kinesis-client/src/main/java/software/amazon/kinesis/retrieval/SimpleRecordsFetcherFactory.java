@@ -32,20 +32,15 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     @Override
     public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId,
                                                 IMetricsFactory metricsFactory, int maxRecords) {
-        if(dataFetchingStrategy.equals(DataFetchingStrategy.DEFAULT)) {
-            return new BlockingGetRecordsCache(maxRecords, getRecordsRetrievalStrategy);
-        } else {
-            return new PrefetchGetRecordsCache(maxPendingProcessRecordsInput, maxByteSize, maxRecordsCount, maxRecords,
-                    getRecordsRetrievalStrategy,
-                    Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
-                            .setDaemon(true)
-                            .setNameFormat("prefetch-cache-" + shardId + "-%04d")
-                            .build()),
-                            idleMillisBetweenCalls,
-                    metricsFactory,
-                    "ProcessTask",
-                    shardId);
-        }
+
+        return new PrefetchGetRecordsCache(maxPendingProcessRecordsInput, maxByteSize, maxRecordsCount, maxRecords,
+                getRecordsRetrievalStrategy,
+                Executors
+                        .newFixedThreadPool(1,
+                                new ThreadFactoryBuilder().setDaemon(true)
+                                        .setNameFormat("prefetch-cache-" + shardId + "-%04d").build()),
+                idleMillisBetweenCalls, metricsFactory, "ProcessTask", shardId);
+
     }
 
     @Override

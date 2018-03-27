@@ -15,27 +15,31 @@
 package software.amazon.kinesis.lifecycle;
 
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
-import software.amazon.kinesis.checkpoint.Checkpoint;
-import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.coordinator.StreamConfig;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.ILeaseManager;
-import software.amazon.kinesis.metrics.IMetricsFactory;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
+import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.coordinator.StreamConfig;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.retrieval.AsynchronousGetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -49,6 +53,7 @@ import software.amazon.kinesis.retrieval.SynchronousGetRecordsRetrievalStrategy;
  */
 @Slf4j
 public class ShardConsumer {
+    //<editor-fold desc="Class Variables">
     private final StreamConfig streamConfig;
     private final IRecordProcessor recordProcessor;
     private final KinesisClientLibConfiguration config;
@@ -68,7 +73,11 @@ public class ShardConsumer {
     private ITask currentTask;
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
-    
+    private boolean started = false;
+    private Instant taskDispatchedAt;
+    //</editor-fold>
+
+    //<editor-fold desc="Cache Management">
     @Getter
     private final GetRecordsCache getRecordsCache;
 
@@ -82,6 +91,7 @@ public class ShardConsumer {
 
         return getRecordsRetrievalStrategy.orElse(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
     }
+    //</editor-fold>
 
     /*
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
@@ -95,6 +105,7 @@ public class ShardConsumer {
     private volatile ShutdownReason shutdownReason;
     private volatile ShutdownNotification shutdownNotification;
 
+    //<editor-fold desc="Constructors">
     /**
      * @param shardInfo Shard information
      * @param streamConfig Stream configuration to use
@@ -245,22 +256,49 @@ public class ShardConsumer {
                 makeStrategy(this.dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, this.shardInfo),
                 this.getShardInfo().getShardId(), this.metricsFactory, this.config.getMaxRecords());
     }
+    //</editor-fold>
 
+    //<editor-fold desc="Dispatch">
+
+    private void start() {
+        started = true;
+        getRecordsCache.addDataArrivedListener(this::checkAndSubmitNextTask);
+        checkAndSubmitNextTask();
+    }
     /**
      * No-op if current task is pending, otherwise submits next task for this shard.
      * This method should NOT be called if the ShardConsumer is already in SHUTDOWN_COMPLETED state.
      * 
      * @return true if a new process task was submitted, false otherwise
      */
-    public synchronized boolean consumeShard() {
-        return checkAndSubmitNextTask();
+    @Synchronized
+    public boolean consumeShard() {
+        if (!started) {
+            start();
+        }
+        if (taskDispatchedAt != null) {
+            Duration taken = Duration.between(taskDispatchedAt, Instant.now());
+            String commonMessage = String.format("Previous %s task still pending for shard %s since %s ago. ",
+                    currentTask.getTaskType(), shardInfo.getShardId(), taken);
+            if (log.isDebugEnabled()) {
+                log.debug("{} Not submitting new task.", commonMessage);
+            }
+            config.getLogWarningForTaskAfterMillis().ifPresent(value -> {
+                if (taken.toMillis() > value) {
+                    log.warn(commonMessage);
+                }
+            });
+        }
+
+        return true;
     }
 
     private boolean readyForNextTask() {
         return future == null || future.isCancelled() || future.isDone();
     }
 
-    private synchronized boolean checkAndSubmitNextTask() {
+    @Synchronized
+    private boolean checkAndSubmitNextTask() {
         boolean submittedNewTask = false;
         if (readyForNextTask()) {
             TaskOutcome taskOutcome = TaskOutcome.NOT_COMPLETE;
@@ -271,9 +309,11 @@ public class ShardConsumer {
             updateState(taskOutcome);
             ITask nextTask = getNextTask();
             if (nextTask != null) {
+                nextTask.addTaskCompletedListener(this::handleTaskCompleted);
                 currentTask = nextTask;
                 try {
                     future = executorService.submit(currentTask);
+                    taskDispatchedAt = Instant.now();
                     currentTaskSubmitTime = System.currentTimeMillis();
                     submittedNewTask = true;
                     log.debug("Submitted new {} task for shard {}", currentTask.getTaskType(), shardInfo.getShardId());
@@ -306,12 +346,47 @@ public class ShardConsumer {
         return submittedNewTask;
     }
 
+    private boolean shouldDispatchNextTask() {
+        return !isShutdown() || shutdownReason != null || getRecordsCache.hasResultAvailable();
+    }
+
+    @Synchronized
+    private void handleTaskCompleted(ITask task) {
+        if (future != null) {
+            executorService.submit(() -> {
+                //
+                // Determine task outcome will wait on the future for us.  The value of the future
+                //
+                resolveFuture();
+                if (shouldDispatchNextTask()) {
+                    checkAndSubmitNextTask();
+                }
+            });
+        } else {
+            log.error("Future wasn't set.  This shouldn't happen as polling should be disabled.  " +
+                    "Will trigger next task check just in case");
+            if (shouldDispatchNextTask()) {
+                checkAndSubmitNextTask();
+            }
+
+        }
+
+    }
+
     public boolean isSkipShardSyncAtWorkerInitializationIfLeasesExist() {
         return skipShardSyncAtWorkerInitializationIfLeasesExist;
     }
 
     private enum TaskOutcome {
         SUCCESSFUL, END_OF_SHARD, NOT_COMPLETE, FAILURE
+    }
+
+    private void resolveFuture() {
+        try {
+            future.get();
+        } catch (Exception e) {
+            log.info("Ignoring caught exception '{}' exception during resolve.", e.getMessage());
+        }
     }
 
     private TaskOutcome determineTaskOutcome() {
@@ -346,56 +421,8 @@ public class ShardConsumer {
     }
 
     /**
-     * Requests the shutdown of the this ShardConsumer. This should give the record processor a chance to checkpoint
-     * before being shutdown.
-     * 
-     * @param shutdownNotification used to signal that the record processor has been given the chance to shutdown.
-     */
-    public void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
-        this.shutdownNotification = shutdownNotification;
-        markForShutdown(ShutdownReason.REQUESTED);
-    }
-
-    /**
-     * Shutdown this ShardConsumer (including invoking the RecordProcessor shutdown API).
-     * This is called by Worker when it loses responsibility for a shard.
-     * 
-     * @return true if shutdown is complete (false if shutdown is still in progress)
-     */
-    public synchronized boolean beginShutdown() {
-        markForShutdown(ShutdownReason.ZOMBIE);
-        checkAndSubmitNextTask();
-
-        return isShutdown();
-    }
-
-    synchronized void markForShutdown(ShutdownReason reason) {
-        // ShutdownReason.ZOMBIE takes precedence over TERMINATE (we won't be able to save checkpoint at end of shard)
-        if (shutdownReason == null || shutdownReason.canTransitionTo(reason)) {
-            shutdownReason = reason;
-        }
-    }
-
-    /**
-     * Used (by Worker) to check if this ShardConsumer instance has been shutdown
-     * RecordProcessor shutdown() has been invoked, as appropriate.
-     * 
-     * @return true if shutdown is complete
-     */
-    public boolean isShutdown() {
-        return currentState.isTerminal();
-    }
-
-    /**
-     * @return the shutdownReason
-     */
-    public ShutdownReason getShutdownReason() {
-        return shutdownReason;
-    }
-
-    /**
      * Figure out next task to run based on current state, task, and shutdown context.
-     * 
+     *
      * @return Return next task to run
      */
     private ITask getNextTask() {
@@ -411,7 +438,7 @@ public class ShardConsumer {
     /**
      * Note: This is a private/internal method with package level access solely for testing purposes.
      * Update state based on information about: task success, current state, and shutdown info.
-     * 
+     *
      * @param taskOutcome The outcome of the last task
      */
     void updateState(TaskOutcome taskOutcome) {
@@ -435,11 +462,66 @@ public class ShardConsumer {
 
     }
 
+    //</editor-fold>
+
+    //<editor-fold desc="Shutdown">
+    /**
+     * Requests the shutdown of the this ShardConsumer. This should give the record processor a chance to checkpoint
+     * before being shutdown.
+     *
+     * @param shutdownNotification used to signal that the record processor has been given the chance to shutdown.
+     */
+    public void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
+        this.shutdownNotification = shutdownNotification;
+        markForShutdown(ShutdownReason.REQUESTED);
+    }
+
+    /**
+     * Shutdown this ShardConsumer (including invoking the RecordProcessor shutdown API).
+     * This is called by Worker when it loses responsibility for a shard.
+     *
+     * @return true if shutdown is complete (false if shutdown is still in progress)
+     */
+    @Synchronized
+    public boolean beginShutdown() {
+        markForShutdown(ShutdownReason.ZOMBIE);
+        checkAndSubmitNextTask();
+
+        return isShutdown();
+    }
+
+    synchronized void markForShutdown(ShutdownReason reason) {
+        // ShutdownReason.ZOMBIE takes precedence over TERMINATE (we won't be able to save checkpoint at end of shard)
+        if (shutdownReason == null || shutdownReason.canTransitionTo(reason)) {
+            shutdownReason = reason;
+        }
+    }
+
+    /**
+     * Used (by Worker) to check if this ShardConsumer instance has been shutdown
+     * RecordProcessor shutdown() has been invoked, as appropriate.
+     *
+     * @return true if shutdown is complete
+     */
+    public boolean isShutdown() {
+        return currentState.isTerminal();
+    }
+
+    /**
+     * @return the shutdownReason
+     */
+    public ShutdownReason getShutdownReason() {
+        return shutdownReason;
+    }
+
     @VisibleForTesting
     public boolean isShutdownRequested() {
         return shutdownReason != null;
     }
 
+    //</editor-fold>
+
+    //<editor-fold desc="State Creation Accessors">
     /**
      * Private/Internal method - has package level access solely for testing purposes.
      * 
@@ -504,4 +586,6 @@ public class ShardConsumer {
     ShutdownNotification getShutdownNotification() {
         return shutdownNotification;
     }
+    //</editor-fold>
+
 }

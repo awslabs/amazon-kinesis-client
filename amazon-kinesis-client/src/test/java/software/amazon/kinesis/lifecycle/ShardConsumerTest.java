@@ -112,12 +112,14 @@ public class ShardConsumerTest {
     // Use Executors.newFixedThreadPool since it returns ThreadPoolExecutor, which is
     // ... a non-final public class, and so can be mocked and spied.
     private final ExecutorService executorService = Executors.newFixedThreadPool(1);
-    private RecordsFetcherFactory recordsFetcherFactory;
-    
+
+
     private GetRecordsCache getRecordsCache;
     
     private KinesisDataFetcher dataFetcher;
-    
+
+    @Mock
+    private RecordsFetcherFactory recordsFetcherFactory;
     @Mock
     private IRecordProcessor processor;
     @Mock
@@ -136,7 +138,7 @@ public class ShardConsumerTest {
         getRecordsCache = null;
         dataFetcher = null;
         
-        recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory());
+        //recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory());
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
         when(config.getLogWarningForTaskAfterMillis()).thenReturn(Optional.empty());
     }
@@ -382,6 +384,8 @@ public class ShardConsumerTest {
                         Optional.empty(),
                         Optional.empty(),
                         config);
+
+        consumer.consumeShard(); // check on parent shards
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
@@ -639,7 +643,7 @@ public class ShardConsumerTest {
         );
 
         dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
-        
+
         getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords,
                 new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
         when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),

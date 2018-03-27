@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.lifecycle;
 
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.IRecordProcessor;
@@ -22,12 +23,14 @@ import software.amazon.kinesis.processor.IShutdownNotificationAware;
 /**
  * Notifies record processor of incoming shutdown request, and gives them a chance to checkpoint.
  */
+@Slf4j
 public class ShutdownNotificationTask implements ITask {
 
     private final IRecordProcessor recordProcessor;
     private final IRecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ShutdownNotification shutdownNotification;
     private final ShardInfo shardInfo;
+    private TaskCompletedListener listener;
 
     ShutdownNotificationTask(IRecordProcessor recordProcessor, IRecordProcessorCheckpointer recordProcessorCheckpointer, ShutdownNotification shutdownNotification, ShardInfo shardInfo) {
         this.recordProcessor = recordProcessor;
@@ -56,5 +59,13 @@ public class ShutdownNotificationTask implements ITask {
     @Override
     public TaskType getTaskType() {
         return TaskType.SHUTDOWN_NOTIFICATION;
+    }
+
+    @Override
+    public void addTaskCompletedListener(TaskCompletedListener taskCompletedListener) {
+        if (listener != null) {
+            log.warn("Listener is being reset, this shouldn't happen");
+        }
+        listener = taskCompletedListener;
     }
 }

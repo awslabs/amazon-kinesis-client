@@ -14,7 +14,9 @@
  */
 package software.amazon.kinesis.metrics;
 
+import lombok.RequiredArgsConstructor;
 import software.amazon.kinesis.lifecycle.ITask;
+import software.amazon.kinesis.lifecycle.TaskCompletedListener;
 import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.lifecycle.TaskType;
 import software.amazon.kinesis.metrics.MetricsHelper;
@@ -28,6 +30,7 @@ public class MetricsCollectingTaskDecorator implements ITask {
 
     private final ITask other;
     private final IMetricsFactory factory;
+    private DelegateTaskCompletedListener delegateTaskCompletedListener;
 
     /**
      * Constructor.
@@ -45,17 +48,23 @@ public class MetricsCollectingTaskDecorator implements ITask {
      */
     @Override
     public TaskResult call() {
-        MetricsHelper.startScope(factory, other.getClass().getSimpleName());
-        TaskResult result = null;
-        final long startTimeMillis = System.currentTimeMillis();
         try {
-            result = other.call();
+            MetricsHelper.startScope(factory, other.getClass().getSimpleName());
+            TaskResult result = null;
+            final long startTimeMillis = System.currentTimeMillis();
+            try {
+                result = other.call();
+            } finally {
+                MetricsHelper.addSuccessAndLatency(startTimeMillis, result != null && result.getException() == null,
+                        MetricsLevel.SUMMARY);
+                MetricsHelper.endScope();
+            }
+            return result;
         } finally {
-            MetricsHelper.addSuccessAndLatency(startTimeMillis, result != null && result.getException() == null,
-                    MetricsLevel.SUMMARY);
-            MetricsHelper.endScope();
+            if (delegateTaskCompletedListener != null) {
+                delegateTaskCompletedListener.dispatchIfNeeded();
+            }
         }
-        return result;
     }
 
     /**
@@ -64,6 +73,31 @@ public class MetricsCollectingTaskDecorator implements ITask {
     @Override
     public TaskType getTaskType() {
         return other.getTaskType();
+    }
+
+    @Override
+    public void addTaskCompletedListener(TaskCompletedListener taskCompletedListener) {
+        delegateTaskCompletedListener = new DelegateTaskCompletedListener(taskCompletedListener);
+        other.addTaskCompletedListener(delegateTaskCompletedListener);
+    }
+
+    @RequiredArgsConstructor
+    private class DelegateTaskCompletedListener implements TaskCompletedListener {
+
+        private final TaskCompletedListener delegate;
+        private boolean taskCompleted = false;
+
+        @Override
+        public void taskCompleted(ITask task) {
+            delegate.taskCompleted(task);
+            taskCompleted = true;
+        }
+
+        public void dispatchIfNeeded() {
+            if (!taskCompleted) {
+                delegate.taskCompleted(MetricsCollectingTaskDecorator.this);
+            }
+        }
     }
 
     @Override

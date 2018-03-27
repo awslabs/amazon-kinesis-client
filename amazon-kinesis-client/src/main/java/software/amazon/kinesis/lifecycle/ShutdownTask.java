@@ -49,6 +49,7 @@ public class ShutdownTask implements ITask {
     private final TaskType taskType = TaskType.SHUTDOWN;
     private final long backoffTimeMillis;
     private final GetRecordsCache getRecordsCache;
+    private TaskCompletedListener listener;
 
     /**
      * Constructor.
@@ -86,73 +87,79 @@ public class ShutdownTask implements ITask {
      */
     @Override
     public TaskResult call() {
-        Exception exception;
-        boolean applicationException = false;
-
         try {
-            // If we reached end of the shard, set sequence number to SHARD_END.
-            if (reason == ShutdownReason.TERMINATE) {
-                recordProcessorCheckpointer.setSequenceNumberAtShardEnd(
-                        recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
-                recordProcessorCheckpointer.setLargestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
-            }
+            Exception exception;
+            boolean applicationException = false;
 
-            log.debug("Invoking shutdown() for shard {}, concurrencyToken {}. Shutdown reason: {}",
-                    shardInfo.getShardId(), shardInfo.getConcurrencyToken(), reason);
-            final ShutdownInput shutdownInput = new ShutdownInput()
-                    .withShutdownReason(reason)
-                    .withCheckpointer(recordProcessorCheckpointer);
-            final long recordProcessorStartTimeMillis = System.currentTimeMillis();
             try {
-                recordProcessor.shutdown(shutdownInput);
-                ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
+                // If we reached end of the shard, set sequence number to SHARD_END.
+                if (reason == ShutdownReason.TERMINATE) {
+                    recordProcessorCheckpointer.setSequenceNumberAtShardEnd(
+                            recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
+                    recordProcessorCheckpointer.setLargestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
+                }
+
+                log.debug("Invoking shutdown() for shard {}, concurrencyToken {}. Shutdown reason: {}",
+                        shardInfo.getShardId(), shardInfo.getConcurrencyToken(), reason);
+                final ShutdownInput shutdownInput = new ShutdownInput()
+                        .withShutdownReason(reason)
+                        .withCheckpointer(recordProcessorCheckpointer);
+                final long recordProcessorStartTimeMillis = System.currentTimeMillis();
+                try {
+                    recordProcessor.shutdown(shutdownInput);
+                    ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
+
+                    if (reason == ShutdownReason.TERMINATE) {
+                        if ((lastCheckpointValue == null)
+                                || (!lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END))) {
+                            throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
+                                    + shardInfo.getShardId());
+                        }
+                    }
+                    log.debug("Shutting down retrieval strategy.");
+                    getRecordsCache.shutdown();
+                    log.debug("Record processor completed shutdown() for shard {}", shardInfo.getShardId());
+                } catch (Exception e) {
+                    applicationException = true;
+                    throw e;
+                } finally {
+                    MetricsHelper.addLatency(RECORD_PROCESSOR_SHUTDOWN_METRIC, recordProcessorStartTimeMillis,
+                            MetricsLevel.SUMMARY);
+                }
 
                 if (reason == ShutdownReason.TERMINATE) {
-                    if ((lastCheckpointValue == null)
-                            || (!lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END))) {
-                        throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
-                                + shardInfo.getShardId());
-                    }
+                    log.debug("Looking for child shards of shard {}", shardInfo.getShardId());
+                    // create leases for the child shards
+                    ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
+                            leaseManager,
+                            initialPositionInStream,
+                            cleanupLeasesOfCompletedShards,
+                            ignoreUnexpectedChildShards);
+                    log.debug("Finished checking for child shards of shard {}", shardInfo.getShardId());
                 }
-                log.debug("Shutting down retrieval strategy.");
-                getRecordsCache.shutdown();
-                log.debug("Record processor completed shutdown() for shard {}", shardInfo.getShardId());
+
+                return new TaskResult(null);
             } catch (Exception e) {
-                applicationException = true;
-                throw e;
-            } finally {
-                MetricsHelper.addLatency(RECORD_PROCESSOR_SHUTDOWN_METRIC, recordProcessorStartTimeMillis,
-                        MetricsLevel.SUMMARY);
+                if (applicationException) {
+                    log.error("Application exception. ", e);
+                } else {
+                    log.error("Caught exception: ", e);
+                }
+                exception = e;
+                // backoff if we encounter an exception.
+                try {
+                    Thread.sleep(this.backoffTimeMillis);
+                } catch (InterruptedException ie) {
+                    log.debug("Interrupted sleep", ie);
+                }
             }
 
-            if (reason == ShutdownReason.TERMINATE) {
-                log.debug("Looking for child shards of shard {}", shardInfo.getShardId());
-                // create leases for the child shards
-                ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
-                        leaseManager,
-                        initialPositionInStream,
-                        cleanupLeasesOfCompletedShards,
-                        ignoreUnexpectedChildShards);
-                log.debug("Finished checking for child shards of shard {}", shardInfo.getShardId());
-            }
-
-            return new TaskResult(null);
-        } catch (Exception e) {
-            if (applicationException) {
-                log.error("Application exception. ", e);
-            } else {
-                log.error("Caught exception: ", e);
-            }
-            exception = e;
-            // backoff if we encounter an exception.
-            try {
-                Thread.sleep(this.backoffTimeMillis);
-            } catch (InterruptedException ie) {
-                log.debug("Interrupted sleep", ie);
+            return new TaskResult(exception);
+        } finally {
+            if (listener != null) {
+                listener.taskCompleted(this);
             }
         }
-
-        return new TaskResult(exception);
     }
 
     /*
@@ -163,6 +170,14 @@ public class ShutdownTask implements ITask {
     @Override
     public TaskType getTaskType() {
         return taskType;
+    }
+
+    @Override
+    public void addTaskCompletedListener(TaskCompletedListener taskCompletedListener) {
+        if (listener != null) {
+            log.warn("Listener is being reset, this shouldn't happen");
+        }
+        listener = taskCompletedListener;
     }
 
     @VisibleForTesting

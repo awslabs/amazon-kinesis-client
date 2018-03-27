@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
+import lombok.AllArgsConstructor;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.model.Record;
 
@@ -29,11 +30,14 @@ import software.amazon.kinesis.processor.IRecordProcessor;
  * {@link IRecordProcessor#processRecords(
  * ProcessRecordsInput processRecordsInput) processRecords} method.
  */
+@AllArgsConstructor
 public class ProcessRecordsInput {
     @Getter
     private Instant cacheEntryTime;
     @Getter
     private Instant cacheExitTime;
+    @Getter
+    private boolean isAtShardEnd;
     private List<Record> records;
     private IRecordProcessorCheckpointer checkpointer;
     private Long millisBehindLatest;

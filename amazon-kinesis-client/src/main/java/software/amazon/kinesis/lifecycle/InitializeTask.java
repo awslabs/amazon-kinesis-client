@@ -134,4 +134,9 @@ public class InitializeTask implements ITask {
         return taskType;
     }
 
+    @Override
+    public void addTaskCompletedListener(TaskCompletedListener taskCompletedListener) {
+
+    }
+
 }

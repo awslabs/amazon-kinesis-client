@@ -15,12 +15,12 @@
 package software.amazon.kinesis.lifecycle;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
-import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.ILeaseManager;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * Task to block until processing of all data records in the parent shard(s) is completed.
@@ -38,6 +38,8 @@ public class BlockOnParentShardTask implements ITask {
     private final TaskType taskType = TaskType.BLOCK_ON_PARENT_SHARDS;
     // Sleep for this duration if the parent shards have not completed processing, or we encounter an exception.
     private final long parentShardPollIntervalMillis;
+
+    private TaskCompletedListener listener;
     
     /**
      * @param shardInfo Information about the shard we are working on
@@ -57,43 +59,49 @@ public class BlockOnParentShardTask implements ITask {
      */
     @Override
     public TaskResult call() {
-        Exception exception = null;
-        
         try {
-            boolean blockedOnParentShard = false;
-            for (String shardId : shardInfo.getParentShardIds()) {
-                KinesisClientLease lease = leaseManager.getLease(shardId);
-                if (lease != null) {
-                    ExtendedSequenceNumber checkpoint = lease.getCheckpoint();
-                    if ((checkpoint == null) || (!checkpoint.equals(ExtendedSequenceNumber.SHARD_END))) {
-                        log.debug("Shard {} is not yet done. Its current checkpoint is {}", shardId, checkpoint);
-                        blockedOnParentShard = true;
-                        exception = new BlockedOnParentShardException("Parent shard not yet done");
-                        break;
+            Exception exception = null;
+
+            try {
+                boolean blockedOnParentShard = false;
+                for (String shardId : shardInfo.getParentShardIds()) {
+                    KinesisClientLease lease = leaseManager.getLease(shardId);
+                    if (lease != null) {
+                        ExtendedSequenceNumber checkpoint = lease.getCheckpoint();
+                        if ((checkpoint == null) || (!checkpoint.equals(ExtendedSequenceNumber.SHARD_END))) {
+                            log.debug("Shard {} is not yet done. Its current checkpoint is {}", shardId, checkpoint);
+                            blockedOnParentShard = true;
+                            exception = new BlockedOnParentShardException("Parent shard not yet done");
+                            break;
+                        } else {
+                            log.debug("Shard {} has been completely processed.", shardId);
+                        }
                     } else {
-                        log.debug("Shard {} has been completely processed.", shardId);
+                        log.info("No lease found for shard {}. Not blocking on completion of this shard.", shardId);
                     }
-                } else {
-                    log.info("No lease found for shard {}. Not blocking on completion of this shard.", shardId);
                 }
+
+                if (!blockedOnParentShard) {
+                    log.info("No need to block on parents {} of shard {}", shardInfo.getParentShardIds(),
+                            shardInfo.getShardId());
+                    return new TaskResult(null);
+                }
+            } catch (Exception e) {
+                log.error("Caught exception when checking for parent shard checkpoint", e);
+                exception = e;
             }
-            
-            if (!blockedOnParentShard) {
-                log.info("No need to block on parents {} of shard {}", shardInfo.getParentShardIds(),
-                        shardInfo.getShardId());
-                return new TaskResult(null);
+            try {
+                Thread.sleep(parentShardPollIntervalMillis);
+            } catch (InterruptedException e) {
+                log.error("Sleep interrupted when waiting on parent shard(s) of {}", shardInfo.getShardId(), e);
             }
-        } catch (Exception e) {
-            log.error("Caught exception when checking for parent shard checkpoint", e);
-            exception = e;
+
+            return new TaskResult(exception);
+        } finally {
+            if (listener != null) {
+                listener.taskCompleted(this);
+            }
         }
-        try {
-            Thread.sleep(parentShardPollIntervalMillis);
-        } catch (InterruptedException e) {
-            log.error("Sleep interrupted when waiting on parent shard(s) of {}", shardInfo.getShardId(), e);
-        }
-        
-        return new TaskResult(exception);
     }
 
     /* (non-Javadoc)
@@ -102,6 +110,14 @@ public class BlockOnParentShardTask implements ITask {
     @Override
     public TaskType getTaskType() {
         return taskType;
+    }
+
+    @Override
+    public void addTaskCompletedListener(TaskCompletedListener taskCompletedListener) {
+        if (listener != null) {
+            log.warn("Listener is being reset, this shouldn't happen");
+        }
+        listener = taskCompletedListener;
     }
 
 }
