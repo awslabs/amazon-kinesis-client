@@ -25,7 +25,7 @@ public interface RecordProcessorLifecycle {
     void started(Started started);
     void recordsReceived(RecordsReceived records);
     void leaseLost(LeaseLost leaseLost);
-    void shardCompleted(ShardCompleted shardCompletedInput);
+    void shardCompleted(ShardCompleted shardCompleted);
     void shutdownRequested(ShutdownRequested shutdownRequested);
 
 

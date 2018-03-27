@@ -14,5 +14,10 @@
  */
 package software.amazon.kinesis.lifecycle.events;
 
+import lombok.Data;
+import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
+
+@Data
 public class ShutdownRequested {
+    private final IRecordProcessorCheckpointer checkpointer;
 }

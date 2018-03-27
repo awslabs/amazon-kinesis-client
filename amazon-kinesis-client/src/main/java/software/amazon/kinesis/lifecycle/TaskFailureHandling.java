@@ -12,12 +12,8 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.lifecycle.events;
+package software.amazon.kinesis.lifecycle;
 
-import lombok.Data;
-import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-
-@Data
-public class ShardCompleted {
-    private final IRecordProcessorCheckpointer checkpointer;
+public enum TaskFailureHandling {
+    STOP, CONTINUE
 }

@@ -15,18 +15,22 @@
 package software.amazon.kinesis.lifecycle;
 
 
+import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
+import lombok.Data;
+import lombok.Synchronized;
+import org.apache.commons.lang3.StringUtils;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.lifecycle.events.LeaseLost;
+import software.amazon.kinesis.lifecycle.events.RecordsReceived;
 import software.amazon.kinesis.lifecycle.events.ShardCompleted;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequested;
 import software.amazon.kinesis.lifecycle.events.Started;
@@ -528,41 +532,92 @@ public class ShardConsumer implements RecordProcessorLifecycle {
     //</editor-fold>
 
 
-    ExecutorService executor = Executors.newSingleThreadExecutor();
-    Future<?> taskResult = null;
+    private enum LifecycleStates {
+        STARTED, PROCESSING, SHUTDOWN, FAILED
+    }
 
-    //<editor-fold desc="RecordProcessorLifecycle">
-    @Override
-    public void started(Started started) {
-        if (taskResult != null) {
+    private EnumSet<LifecycleStates> allowedStates = EnumSet.of(LifecycleStates.STARTED);
+    private TaskFailedListener listener;
+    public void addTaskFailedListener(TaskFailedListener listener) {
+        this.listener = listener;
+    }
+
+    private TaskFailureHandling taskFailed(Throwable t) {
+        //
+        // TODO: What should we do if there is no listener.  I intend to require the scheduler to always register
+        //
+        if (listener != null) {
+            return listener.taskFailed(new TaskFailed(t));
+        }
+        return TaskFailureHandling.STOP;
+    }
+
+    @Data
+    private class TaskExecution {
+        private final Instant started;
+        private final Future<?> future;
+    }
+
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    TaskExecution taskExecution = null;
+
+    private void awaitAvailable() {
+        if (taskExecution != null) {
             try {
-                taskResult.get();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } catch (ExecutionException e) {
-                e.printStackTrace();
+                taskExecution.getFuture().get();
+            } catch (Throwable t) {
+                TaskFailureHandling handling = taskFailed(t);
+                if (handling == TaskFailureHandling.STOP) {
+                    allowedStates = EnumSet.of(LifecycleStates.FAILED);
+                }
             }
         }
+    }
 
-        taskResult = executor.submit(() -> recordProcessorLifecycle.started(started));
+    private void checkState(LifecycleStates current) {
+        if (!allowedStates.contains(current)) {
+            throw new IllegalStateException("State " + current + " isn't allowed.  Allowed: (" + StringUtils.join(allowedStates) + ")");
+        }
+    }
+
+    //<editor-fold desc="RecordProcessorLifecycle">
+
+    private void executeTask(LifecycleStates current, Runnable task) {
+        awaitAvailable();
+        checkState(current);
+        Future<?> future = executor.submit(task);
+        taskExecution = new TaskExecution(Instant.now(), future);
     }
 
     @Override
-    public void recordsReceived(ProcessRecordsInput records) {
-
+    @Synchronized
+    public void started(Started started) {
+        executeTask(LifecycleStates.STARTED, () -> recordProcessorLifecycle.started(started));
+        allowedStates = EnumSet.of(LifecycleStates.PROCESSING, LifecycleStates.SHUTDOWN);
     }
 
     @Override
+    @Synchronized
+    public void recordsReceived(RecordsReceived records) {
+        executeTask(LifecycleStates.PROCESSING, () -> recordProcessorLifecycle.recordsReceived(records));
+    }
+
+    @Override
+    @Synchronized
     public void leaseLost(LeaseLost leaseLost) {
+        executeTask(LifecycleStates.SHUTDOWN, () -> recordProcessorLifecycle.leaseLost(leaseLost));
+        allowedStates = EnumSet.of(LifecycleStates.SHUTDOWN);
+    }
+
+    @Override
+    @Synchronized
+    public void shardCompleted(ShardCompleted shardCompleted) {
+        executeTask(LifecycleStates.SHUTDOWN, () -> recordProcessorLifecycle.shardCompleted(shardCompleted));
 
     }
 
     @Override
-    public void shardCompleted(ShardCompleted shardCompletedInput) {
-
-    }
-
-    @Override
+    @Synchronized
     public void shutdownRequested(ShutdownRequested shutdownRequested) {
 
     }

@@ -14,9 +14,29 @@
  */
 package software.amazon.kinesis.lifecycle.events;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+import com.amazonaws.services.kinesis.model.Record;
+
 import lombok.Data;
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 
 @Data
 public class RecordsReceived {
+
+    private final Instant cacheEntryTime;
+    private final Instant cacheExitTime;
+    private final boolean isAtShardEnd;
+    private final List<Record> records;
+    private final IRecordProcessorCheckpointer checkpointer;
+    private Duration timeBehindLatest;
+
+    public ProcessRecordsInput toProcessRecordsInput() {
+        return new ProcessRecordsInput(cacheEntryTime, cacheExitTime, isAtShardEnd, records, checkpointer,
+                timeBehindLatest.toMillis());
+    }
 
 }
