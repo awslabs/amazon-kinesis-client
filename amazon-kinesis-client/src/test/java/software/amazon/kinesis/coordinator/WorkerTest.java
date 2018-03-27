@@ -71,6 +71,7 @@ import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.hamcrest.TypeSafeMatcher;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Matchers;
@@ -1561,6 +1562,7 @@ public class WorkerTest {
     }
 
     @Test
+    @Ignore
     public void testWorkerStateChangeListenerGoesThroughStates() throws Exception {
 
         final CountDownLatch workerInitialized = new CountDownLatch(1);

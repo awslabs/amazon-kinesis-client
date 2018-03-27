@@ -53,6 +53,7 @@ public class ProcessTask implements ITask {
     private final ThrottlingReporter throttlingReporter;
 
     private final ProcessRecordsInput processRecordsInput;
+    private TaskCompletedListener listener;
 
     @RequiredArgsConstructor
     public static class RecordsFetcher {
@@ -141,43 +142,49 @@ public class ProcessTask implements ITask {
      */
     @Override
     public TaskResult call() {
-        long startTimeMillis = System.currentTimeMillis();
-        IMetricsScope scope = MetricsHelper.getMetricsScope();
-        scope.addDimension(MetricsHelper.SHARD_ID_DIMENSION_NAME, shardInfo.getShardId());
-        scope.addData(RECORDS_PROCESSED_METRIC, 0, StandardUnit.Count, MetricsLevel.SUMMARY);
-        scope.addData(DATA_BYTES_PROCESSED_METRIC, 0, StandardUnit.Bytes, MetricsLevel.SUMMARY);
-        Exception exception = null;
-
         try {
-            if (processRecordsInput.isAtShardEnd()) {
-                log.info("Reached end of shard {}", shardInfo.getShardId());
-                return new TaskResult(null, true);
+            long startTimeMillis = System.currentTimeMillis();
+            IMetricsScope scope = MetricsHelper.getMetricsScope();
+            scope.addDimension(MetricsHelper.SHARD_ID_DIMENSION_NAME, shardInfo.getShardId());
+            scope.addData(RECORDS_PROCESSED_METRIC, 0, StandardUnit.Count, MetricsLevel.SUMMARY);
+            scope.addData(DATA_BYTES_PROCESSED_METRIC, 0, StandardUnit.Bytes, MetricsLevel.SUMMARY);
+            Exception exception = null;
+
+            try {
+                if (processRecordsInput.isAtShardEnd()) {
+                    log.info("Reached end of shard {}", shardInfo.getShardId());
+                    return new TaskResult(null, true);
+                }
+
+                throttlingReporter.success();
+                List<Record> records = processRecordsInput.getRecords();
+
+                if (!records.isEmpty()) {
+                    scope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.Count, MetricsLevel.SUMMARY);
+                } else {
+                    handleNoRecords(startTimeMillis);
+                }
+                records = deaggregateRecords(records);
+
+                recordProcessorCheckpointer.setLargestPermittedCheckpointValue(filterAndGetMaxExtendedSequenceNumber(
+                        scope, records, recordProcessorCheckpointer.getLastCheckpointValue(),
+                        recordProcessorCheckpointer.getLargestPermittedCheckpointValue()));
+
+                if (shouldCallProcessRecords(records)) {
+                    callProcessRecords(processRecordsInput, records);
+                }
+            } catch (RuntimeException e) {
+                log.error("ShardId {}: Caught exception: ", shardInfo.getShardId(), e);
+                exception = e;
+                backoff();
             }
 
-            throttlingReporter.success();
-            List<Record> records = processRecordsInput.getRecords();
-
-            if (!records.isEmpty()) {
-                scope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.Count, MetricsLevel.SUMMARY);
-            } else {
-                handleNoRecords(startTimeMillis);
+            return new TaskResult(exception);
+        } finally {
+            if (listener != null) {
+                listener.taskCompleted(this);
             }
-            records = deaggregateRecords(records);
-
-            recordProcessorCheckpointer.setLargestPermittedCheckpointValue(filterAndGetMaxExtendedSequenceNumber(scope,
-                    records, recordProcessorCheckpointer.getLastCheckpointValue(),
-                    recordProcessorCheckpointer.getLargestPermittedCheckpointValue()));
-
-            if (shouldCallProcessRecords(records)) {
-                callProcessRecords(processRecordsInput, records);
-            }
-        } catch (RuntimeException e) {
-            log.error("ShardId {}: Caught exception: ", shardInfo.getShardId(), e);
-            exception = e;
-            backoff();
         }
-
-        return new TaskResult(exception);
     }
 
     /**
@@ -279,6 +286,14 @@ public class ProcessTask implements ITask {
     @Override
     public TaskType getTaskType() {
         return taskType;
+    }
+
+    @Override
+    public void addTaskCompletedListener(TaskCompletedListener taskCompletedListener) {
+        if (listener != null) {
+            log.warn("Listener is being reset, this shouldn't happen");
+        }
+        listener = taskCompletedListener;
     }
 
     /**

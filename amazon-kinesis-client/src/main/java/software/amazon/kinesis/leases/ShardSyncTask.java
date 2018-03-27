@@ -15,12 +15,13 @@
 package software.amazon.kinesis.leases;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.lifecycle.ITask;
+import software.amazon.kinesis.lifecycle.TaskCompletedListener;
 import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.lifecycle.TaskType;
 import software.amazon.kinesis.retrieval.IKinesisProxy;
-
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * This task syncs leases/activies with shards of the stream.
@@ -37,6 +38,8 @@ public class ShardSyncTask implements ITask {
     private final boolean ignoreUnexpectedChildShards;
     private final long shardSyncTaskIdleTimeMillis;
     private final TaskType taskType = TaskType.SHARDSYNC;
+
+    private TaskCompletedListener listener;
 
     /**
      * @param kinesisProxy Used to fetch information about the stream (e.g. shard list)
@@ -64,23 +67,26 @@ public class ShardSyncTask implements ITask {
      */
     @Override
     public TaskResult call() {
-        Exception exception = null;
-
         try {
-            ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
-                    leaseManager,
-                    initialPosition,
-                    cleanupLeasesUponShardCompletion,
-                    ignoreUnexpectedChildShards);
-            if (shardSyncTaskIdleTimeMillis > 0) {
-                Thread.sleep(shardSyncTaskIdleTimeMillis);
-            }
-        } catch (Exception e) {
-            log.error("Caught exception while sync'ing Kinesis shards and leases", e);
-            exception = e;
-        }
+            Exception exception = null;
 
-        return new TaskResult(exception);
+            try {
+                ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, initialPosition,
+                        cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards);
+                if (shardSyncTaskIdleTimeMillis > 0) {
+                    Thread.sleep(shardSyncTaskIdleTimeMillis);
+                }
+            } catch (Exception e) {
+                log.error("Caught exception while sync'ing Kinesis shards and leases", e);
+                exception = e;
+            }
+
+            return new TaskResult(exception);
+        } finally {
+            if (listener != null) {
+                listener.taskCompleted(this);
+            }
+        }
     }
 
 
@@ -90,6 +96,14 @@ public class ShardSyncTask implements ITask {
     @Override
     public TaskType getTaskType() {
         return taskType;
+    }
+
+    @Override
+    public void addTaskCompletedListener(TaskCompletedListener taskCompletedListener) {
+        if (listener != null) {
+            log.warn("Listener is being reset, this shouldn't happen");
+        }
+        listener = taskCompletedListener;
     }
 
 }

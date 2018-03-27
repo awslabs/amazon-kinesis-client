@@ -56,4 +56,14 @@ public class BlockingGetRecordsCache implements GetRecordsCache {
     public void shutdown() {
         getRecordsRetrievalStrategy.shutdown();
     }
+
+    @Override
+    public void addDataArrivedListener(DataArrivedListener dataArrivedListener) {
+
+    }
+
+    @Override
+    public boolean hasResultAvailable() {
+        return true;
+    }
 }

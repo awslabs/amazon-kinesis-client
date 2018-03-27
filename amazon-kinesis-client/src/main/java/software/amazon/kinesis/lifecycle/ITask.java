@@ -14,9 +14,6 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import software.amazon.kinesis.lifecycle.TaskResult;
-import software.amazon.kinesis.lifecycle.TaskType;
-
 import java.util.concurrent.Callable;
 
 /**
@@ -37,5 +34,13 @@ public interface ITask extends Callable<TaskResult> {
      * @return TaskType
      */
     TaskType getTaskType();
+
+    /**
+     * Adds a listener that will be notified once the task is completed.
+     * 
+     * @param taskCompletedListener
+     *            the listener to call once the task has been completed
+     */
+    void addTaskCompletedListener(TaskCompletedListener taskCompletedListener);
 
 }

@@ -51,6 +51,6 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
 
     @Override
     public GetRecordsCache createGetRecordsCache(@NonNull final ShardInfo shardInfo) {
-        return new BlockingGetRecordsCache(maxRecords, createGetRecordsRetrievalStrategy(shardInfo));
+        throw new UnsupportedOperationException();
     }
 }

@@ -62,6 +62,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     private final String operation;
     private final KinesisDataFetcher dataFetcher;
     private final String shardId;
+    private DataArrivedListener dataArrivedListener;
 
     /**
      * Constructor for the PrefetchGetRecordsCache. This cache prefetches records from Kinesis and stores them in a
@@ -147,6 +148,19 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         started = false;
     }
 
+    @Override
+    public void addDataArrivedListener(DataArrivedListener dataArrivedListener) {
+        if (dataArrivedListener != null) {
+            log.warn("Attempting to reset the data arrived listener for {}.  This shouldn't happen", shardId);
+        }
+        this.dataArrivedListener = dataArrivedListener;
+    }
+
+    @Override
+    public boolean hasResultAvailable() {
+        return !getRecordsResultQueue.isEmpty();
+    }
+
     private class DefaultGetRecordsCacheDaemon implements Runnable {
         volatile boolean isShutdown = false;
         
@@ -169,6 +183,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                                 .withCacheEntryTime(lastSuccessfulCall);
                         getRecordsResultQueue.put(processRecordsInput);
                         prefetchCounters.added(processRecordsInput);
+                        dataArrivedListener.dataArrived();
                     } catch (InterruptedException e) {
                         log.info("Thread was interrupted, indicating shutdown was called on the cache.");
                     } catch (ExpiredIteratorException e) {

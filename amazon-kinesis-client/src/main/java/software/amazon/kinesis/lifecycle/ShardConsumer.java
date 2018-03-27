@@ -15,38 +15,31 @@
 package software.amazon.kinesis.lifecycle;
 
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.EnumSet;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
-import lombok.Data;
-import lombok.Synchronized;
-import org.apache.commons.lang3.StringUtils;
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
-import software.amazon.kinesis.checkpoint.Checkpoint;
-import software.amazon.kinesis.lifecycle.events.LeaseLost;
-import software.amazon.kinesis.lifecycle.events.RecordsReceived;
-import software.amazon.kinesis.lifecycle.events.ShardCompleted;
-import software.amazon.kinesis.lifecycle.events.ShutdownRequested;
-import software.amazon.kinesis.lifecycle.events.Started;
-import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.coordinator.StreamConfig;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.ILeaseManager;
-import software.amazon.kinesis.metrics.IMetricsFactory;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
+import lombok.Synchronized;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.coordinator.StreamConfig;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
+import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.retrieval.AsynchronousGetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -59,11 +52,10 @@ import software.amazon.kinesis.retrieval.SynchronousGetRecordsRetrievalStrategy;
  * A new instance should be created if the primary responsibility is reassigned back to this process.
  */
 @Slf4j
-public class ShardConsumer implements RecordProcessorLifecycle {
+public class ShardConsumer {
     //<editor-fold desc="Class Variables">
     private final StreamConfig streamConfig;
     private final IRecordProcessor recordProcessor;
-    private RecordProcessorLifecycle recordProcessorLifecycle;
     private final KinesisClientLibConfiguration config;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ExecutorService executorService;
@@ -81,6 +73,8 @@ public class ShardConsumer implements RecordProcessorLifecycle {
     private ITask currentTask;
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
+    private boolean started = false;
+    private Instant taskDispatchedAt;
     //</editor-fold>
 
     //<editor-fold desc="Cache Management">
@@ -265,21 +259,46 @@ public class ShardConsumer implements RecordProcessorLifecycle {
     //</editor-fold>
 
     //<editor-fold desc="Dispatch">
+
+    private void start() {
+        started = true;
+        getRecordsCache.addDataArrivedListener(this::checkAndSubmitNextTask);
+        checkAndSubmitNextTask();
+    }
     /**
      * No-op if current task is pending, otherwise submits next task for this shard.
      * This method should NOT be called if the ShardConsumer is already in SHUTDOWN_COMPLETED state.
      * 
      * @return true if a new process task was submitted, false otherwise
      */
-    public synchronized boolean consumeShard() {
-        return checkAndSubmitNextTask();
+    @Synchronized
+    public boolean consumeShard() {
+        if (!started) {
+            start();
+        }
+        if (taskDispatchedAt != null) {
+            Duration taken = Duration.between(taskDispatchedAt, Instant.now());
+            String commonMessage = String.format("Previous %s task still pending for shard %s since %s ago. ",
+                    currentTask.getTaskType(), shardInfo.getShardId(), taken);
+            if (log.isDebugEnabled()) {
+                log.debug("{} Not submitting new task.", commonMessage);
+            }
+            config.getLogWarningForTaskAfterMillis().ifPresent(value -> {
+                if (taken.toMillis() > value) {
+                    log.warn(commonMessage);
+                }
+            });
+        }
+
+        return true;
     }
 
     private boolean readyForNextTask() {
         return future == null || future.isCancelled() || future.isDone();
     }
 
-    private synchronized boolean checkAndSubmitNextTask() {
+    @Synchronized
+    private boolean checkAndSubmitNextTask() {
         boolean submittedNewTask = false;
         if (readyForNextTask()) {
             TaskOutcome taskOutcome = TaskOutcome.NOT_COMPLETE;
@@ -290,9 +309,11 @@ public class ShardConsumer implements RecordProcessorLifecycle {
             updateState(taskOutcome);
             ITask nextTask = getNextTask();
             if (nextTask != null) {
+                nextTask.addTaskCompletedListener(this::handleTaskCompleted);
                 currentTask = nextTask;
                 try {
                     future = executorService.submit(currentTask);
+                    taskDispatchedAt = Instant.now();
                     currentTaskSubmitTime = System.currentTimeMillis();
                     submittedNewTask = true;
                     log.debug("Submitted new {} task for shard {}", currentTask.getTaskType(), shardInfo.getShardId());
@@ -325,12 +346,47 @@ public class ShardConsumer implements RecordProcessorLifecycle {
         return submittedNewTask;
     }
 
+    private boolean shouldDispatchNextTask() {
+        return !isShutdown() || shutdownReason != null || getRecordsCache.hasResultAvailable();
+    }
+
+    @Synchronized
+    private void handleTaskCompleted(ITask task) {
+        if (future != null) {
+            executorService.submit(() -> {
+                //
+                // Determine task outcome will wait on the future for us.  The value of the future
+                //
+                resolveFuture();
+                if (shouldDispatchNextTask()) {
+                    checkAndSubmitNextTask();
+                }
+            });
+        } else {
+            log.error("Future wasn't set.  This shouldn't happen as polling should be disabled.  " +
+                    "Will trigger next task check just in case");
+            if (shouldDispatchNextTask()) {
+                checkAndSubmitNextTask();
+            }
+
+        }
+
+    }
+
     public boolean isSkipShardSyncAtWorkerInitializationIfLeasesExist() {
         return skipShardSyncAtWorkerInitializationIfLeasesExist;
     }
 
     private enum TaskOutcome {
         SUCCESSFUL, END_OF_SHARD, NOT_COMPLETE, FAILURE
+    }
+
+    private void resolveFuture() {
+        try {
+            future.get();
+        } catch (Exception e) {
+            log.info("Ignoring caught exception '{}' exception during resolve.", e.getMessage());
+        }
     }
 
     private TaskOutcome determineTaskOutcome() {
@@ -426,7 +482,8 @@ public class ShardConsumer implements RecordProcessorLifecycle {
      *
      * @return true if shutdown is complete (false if shutdown is still in progress)
      */
-    public synchronized boolean beginShutdown() {
+    @Synchronized
+    public boolean beginShutdown() {
         markForShutdown(ShutdownReason.ZOMBIE);
         checkAndSubmitNextTask();
 
@@ -531,95 +588,4 @@ public class ShardConsumer implements RecordProcessorLifecycle {
     }
     //</editor-fold>
 
-
-    private enum LifecycleStates {
-        STARTED, PROCESSING, SHUTDOWN, FAILED
-    }
-
-    private EnumSet<LifecycleStates> allowedStates = EnumSet.of(LifecycleStates.STARTED);
-    private TaskFailedListener listener;
-    public void addTaskFailedListener(TaskFailedListener listener) {
-        this.listener = listener;
-    }
-
-    private TaskFailureHandling taskFailed(Throwable t) {
-        //
-        // TODO: What should we do if there is no listener.  I intend to require the scheduler to always register
-        //
-        if (listener != null) {
-            return listener.taskFailed(new TaskFailed(t));
-        }
-        return TaskFailureHandling.STOP;
-    }
-
-    @Data
-    private class TaskExecution {
-        private final Instant started;
-        private final Future<?> future;
-    }
-
-    ExecutorService executor = Executors.newSingleThreadExecutor();
-    TaskExecution taskExecution = null;
-
-    private void awaitAvailable() {
-        if (taskExecution != null) {
-            try {
-                taskExecution.getFuture().get();
-            } catch (Throwable t) {
-                TaskFailureHandling handling = taskFailed(t);
-                if (handling == TaskFailureHandling.STOP) {
-                    allowedStates = EnumSet.of(LifecycleStates.FAILED);
-                }
-            }
-        }
-    }
-
-    private void checkState(LifecycleStates current) {
-        if (!allowedStates.contains(current)) {
-            throw new IllegalStateException("State " + current + " isn't allowed.  Allowed: (" + StringUtils.join(allowedStates) + ")");
-        }
-    }
-
-    //<editor-fold desc="RecordProcessorLifecycle">
-
-    private void executeTask(LifecycleStates current, Runnable task) {
-        awaitAvailable();
-        checkState(current);
-        Future<?> future = executor.submit(task);
-        taskExecution = new TaskExecution(Instant.now(), future);
-    }
-
-    @Override
-    @Synchronized
-    public void started(Started started) {
-        executeTask(LifecycleStates.STARTED, () -> recordProcessorLifecycle.started(started));
-        allowedStates = EnumSet.of(LifecycleStates.PROCESSING, LifecycleStates.SHUTDOWN);
-    }
-
-    @Override
-    @Synchronized
-    public void recordsReceived(RecordsReceived records) {
-        executeTask(LifecycleStates.PROCESSING, () -> recordProcessorLifecycle.recordsReceived(records));
-    }
-
-    @Override
-    @Synchronized
-    public void leaseLost(LeaseLost leaseLost) {
-        executeTask(LifecycleStates.SHUTDOWN, () -> recordProcessorLifecycle.leaseLost(leaseLost));
-        allowedStates = EnumSet.of(LifecycleStates.SHUTDOWN);
-    }
-
-    @Override
-    @Synchronized
-    public void shardCompleted(ShardCompleted shardCompleted) {
-        executeTask(LifecycleStates.SHUTDOWN, () -> recordProcessorLifecycle.shardCompleted(shardCompleted));
-
-    }
-
-    @Override
-    @Synchronized
-    public void shutdownRequested(ShutdownRequested shutdownRequested) {
-
-    }
-    //</editor-fold>
 }
