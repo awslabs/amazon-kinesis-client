@@ -113,10 +113,6 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
                     + subSequenceNumber);
         }
 
-        if (log.isDebugEnabled()) {
-            log.debug("Validated checkpoint sequence number {} for {}, token {}", sequenceNumber,
-                    shardInfo.shardId(), shardInfo.concurrencyToken());
-        }
         /*
          * If there isn't a last checkpoint value, we only care about checking the upper bound.
          * If there is a last checkpoint value, we want to check both the lower and upper bound.
