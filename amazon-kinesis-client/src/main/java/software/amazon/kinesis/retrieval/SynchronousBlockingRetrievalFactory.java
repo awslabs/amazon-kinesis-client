@@ -39,14 +39,9 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
     private final int maxRecords;
 
     @Override
-    public IKinesisProxyExtended createKinesisProxy() {
-        return new KinesisProxy(streamName, amazonKinesis, DESCRIBE_STREAM_BACKOFF_TIME_IN_MILLIS,
-                MAX_DESCRIBE_STREAM_RETRY_ATTEMPTS, listShardsBackoffTimeInMillis, maxListShardsRetryAttempts);
-    }
-
-    @Override
     public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo) {
-        return new SynchronousGetRecordsRetrievalStrategy(new KinesisDataFetcher(createKinesisProxy(), shardInfo));
+        return new SynchronousGetRecordsRetrievalStrategy(new KinesisDataFetcher(amazonKinesis, streamName,
+                shardInfo.shardId(), maxRecords));
     }
 
     @Override

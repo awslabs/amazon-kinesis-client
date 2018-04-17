@@ -14,14 +14,13 @@
  */
 package software.amazon.kinesis.lifecycle;
 
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.coordinator.StreamConfig;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.checkpoint.Checkpoint;
-import software.amazon.kinesis.retrieval.GetRecordsCache;
-import software.amazon.kinesis.retrieval.KinesisDataFetcher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
@@ -31,41 +30,23 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Task for initializing shard position and invoking the RecordProcessor initialize() API.
  */
+@RequiredArgsConstructor
 @Slf4j
 public class InitializeTask implements ITask {
     private static final String RECORD_PROCESSOR_INITIALIZE_METRIC = "RecordProcessor.initialize";
 
+    @NonNull
     private final ShardInfo shardInfo;
+    @NonNull
     private final IRecordProcessor recordProcessor;
-    private final KinesisDataFetcher dataFetcher;
-    private final TaskType taskType = TaskType.INITIALIZE;
+    @NonNull
     private final ICheckpoint checkpoint;
+    @NonNull
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     // Back off for this interval if we encounter a problem (exception)
     private final long backoffTimeMillis;
-    private final StreamConfig streamConfig;
-    private final GetRecordsCache getRecordsCache;
 
-    /**
-     * Constructor.
-     */
-    InitializeTask(ShardInfo shardInfo,
-                   IRecordProcessor recordProcessor,
-                   ICheckpoint checkpoint,
-                   RecordProcessorCheckpointer recordProcessorCheckpointer,
-                   KinesisDataFetcher dataFetcher,
-                   long backoffTimeMillis,
-                   StreamConfig streamConfig,
-                   GetRecordsCache getRecordsCache) {
-        this.shardInfo = shardInfo;
-        this.recordProcessor = recordProcessor;
-        this.checkpoint = checkpoint;
-        this.recordProcessorCheckpointer = recordProcessorCheckpointer;
-        this.dataFetcher = dataFetcher;
-        this.backoffTimeMillis = backoffTimeMillis;
-        this.streamConfig = streamConfig;
-        this.getRecordsCache = getRecordsCache;
-    }
+    private final TaskType taskType = TaskType.INITIALIZE;
 
     /*
      * Initializes the data fetcher (position in shard) and invokes the RecordProcessor initialize() API.
@@ -79,18 +60,16 @@ public class InitializeTask implements ITask {
         Exception exception = null;
 
         try {
-            log.debug("Initializing ShardId {}", shardInfo.getShardId());
-            Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.getShardId());
+            log.debug("Initializing ShardId {}", shardInfo);
+            Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.shardId());
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.getCheckpoint();
 
-            dataFetcher.initialize(initialCheckpoint.getSequenceNumber(), streamConfig.getInitialPositionInStream());
-            getRecordsCache.start();
-            recordProcessorCheckpointer.setLargestPermittedCheckpointValue(initialCheckpoint);
+            recordProcessorCheckpointer.largestPermittedCheckpointValue(initialCheckpoint);
             recordProcessorCheckpointer.setInitialCheckpointValue(initialCheckpoint);
 
             log.debug("Calling the record processor initialize().");
             final InitializationInput initializationInput = new InitializationInput()
-                .withShardId(shardInfo.getShardId())
+                .withShardId(shardInfo.shardId())
                 .withExtendedSequenceNumber(initialCheckpoint)
                 .withPendingCheckpointSequenceNumber(initialCheckpointObject.getPendingCheckpoint());
             final long recordProcessorStartTimeMillis = System.currentTimeMillis();
@@ -127,16 +106,16 @@ public class InitializeTask implements ITask {
     /*
      * (non-Javadoc)
      *
-     * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#getTaskType()
+     * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#taskType()
      */
     @Override
-    public TaskType getTaskType() {
+    public TaskType taskType() {
         return taskType;
     }
 
     @Override
     public void addTaskCompletedListener(TaskCompletedListener taskCompletedListener) {
-
+        // Do nothing.
     }
 
 }

@@ -14,37 +14,34 @@
  */
 package software.amazon.kinesis.lifecycle;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Collections;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.utils.TestStreamlet;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
-
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.retrieval.GetRecordsCache;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.KinesisClientLeaseManager;
-import software.amazon.kinesis.leases.ILeaseManager;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.retrieval.GetRecordsCache;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.utils.TestStreamlet;
 
 /**
  *
@@ -54,46 +51,36 @@ public class ShutdownTaskTest {
     private static final long TASK_BACKOFF_TIME_MILLIS = 1L;
     private static final InitialPositionInStreamExtended INITIAL_POSITION_TRIM_HORIZON =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final ShutdownReason TERMINATE_SHUTDOWN_REASON = ShutdownReason.TERMINATE;
 
-    Set<String> defaultParentShardIds = new HashSet<>();
-    String defaultConcurrencyToken = "testToken4398";
-    String defaultShardId = "shardId-0000397840";
-    ShardInfo defaultShardInfo = new ShardInfo(defaultShardId,
-            defaultConcurrencyToken,
-            defaultParentShardIds,
-            ExtendedSequenceNumber.LATEST);
-    IRecordProcessor defaultRecordProcessor = new TestStreamlet();
+    private final String concurrencyToken = "testToken4398";
+    private final String shardId = "shardId-0000397840";
+    private boolean cleanupLeasesOfCompletedShards = false;
+    private boolean ignoreUnexpectedChildShards = false;
+    private IRecordProcessor recordProcessor;
+    private ShardInfo shardInfo;
+    private ShutdownTask task;
     
     @Mock
     private GetRecordsCache getRecordsCache;
+    @Mock
+    private RecordProcessorCheckpointer checkpointer;
+    @Mock
+    private ILeaseManager<KinesisClientLease> leaseManager;
+    @Mock
+    private LeaseManagerProxy leaseManagerProxy;
 
-    /**
-     * @throws java.lang.Exception
-     */
-    @BeforeClass
-    public static void setUpBeforeClass() throws Exception {
-    }
-
-    /**
-     * @throws java.lang.Exception
-     */
-    @AfterClass
-    public static void tearDownAfterClass() throws Exception {
-    }
-
-    /**
-     * @throws java.lang.Exception
-     */
     @Before
     public void setUp() throws Exception {
         doNothing().when(getRecordsCache).shutdown();
-    }
 
-    /**
-     * @throws java.lang.Exception
-     */
-    @After
-    public void tearDown() throws Exception {
+        shardInfo = new ShardInfo(shardId, concurrencyToken, Collections.emptySet(),
+                ExtendedSequenceNumber.LATEST);
+        recordProcessor = new TestStreamlet();
+
+        task = new ShutdownTask(shardInfo, leaseManagerProxy, recordProcessor, checkpointer,
+                TERMINATE_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards, leaseManager, TASK_BACKOFF_TIME_MILLIS, getRecordsCache);
     }
 
     /**
@@ -101,26 +88,10 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testCallWhenApplicationDoesNotCheckpoint() {
-        RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
-        when(checkpointer.getLastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("3298"));
-        IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
-        ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
-        boolean cleanupLeasesOfCompletedShards = false;
-        boolean ignoreUnexpectedChildShards = false;
-        ShutdownTask task = new ShutdownTask(defaultShardInfo,
-                defaultRecordProcessor,
-                checkpointer,
-                ShutdownReason.TERMINATE,
-                kinesisProxy,
-                INITIAL_POSITION_TRIM_HORIZON,
-                cleanupLeasesOfCompletedShards,
-                ignoreUnexpectedChildShards,
-                leaseManager,
-                TASK_BACKOFF_TIME_MILLIS,
-                getRecordsCache);
-        TaskResult result = task.call();
-        Assert.assertNotNull(result.getException());
-        Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
+        when(checkpointer.lastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("3298"));
+        final TaskResult result = task.call();
+        assertNotNull(result.getException());
+        assertTrue(result.getException() instanceof IllegalArgumentException);
     }
 
     /**
@@ -128,37 +99,21 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testCallWhenSyncingShardsThrows() {
-        RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
-        when(checkpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
-        IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
-        when(kinesisProxy.getShardList()).thenReturn(null);
-        ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
-        boolean cleanupLeasesOfCompletedShards = false;
-        boolean ignoreUnexpectedChildShards = false;
-        ShutdownTask task = new ShutdownTask(defaultShardInfo,
-                defaultRecordProcessor,
-                checkpointer,
-                ShutdownReason.TERMINATE,
-                kinesisProxy,
-                INITIAL_POSITION_TRIM_HORIZON,
-                cleanupLeasesOfCompletedShards,
-                ignoreUnexpectedChildShards,
-                leaseManager,
-                TASK_BACKOFF_TIME_MILLIS,
-                getRecordsCache);
+        when(checkpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        when(leaseManagerProxy.listShards()).thenReturn(null);
+
         TaskResult result = task.call();
-        Assert.assertNotNull(result.getException());
-        Assert.assertTrue(result.getException() instanceof KinesisClientLibIOException);
+        assertNotNull(result.getException());
+        assertTrue(result.getException() instanceof KinesisClientLibIOException);
         verify(getRecordsCache).shutdown();
     }
 
     /**
-     * Test method for {@link ShutdownTask#getTaskType()}.
+     * Test method for {@link ShutdownTask#taskType()}.
      */
     @Test
     public final void testGetTaskType() {
-        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache);
-        Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
+        assertEquals(TaskType.SHUTDOWN, task.taskType());
     }
 
 }

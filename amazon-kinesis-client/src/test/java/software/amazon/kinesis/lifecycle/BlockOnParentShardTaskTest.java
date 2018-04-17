@@ -14,26 +14,25 @@
  */
 package software.amazon.kinesis.lifecycle;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import software.amazon.kinesis.leases.ShardInfo;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  *
@@ -43,34 +42,11 @@ public class BlockOnParentShardTaskTest {
     private final String shardId = "shardId-97";
     private final String concurrencyToken = "testToken";
     private final List<String> emptyParentShardIds = new ArrayList<String>();
-    ShardInfo defaultShardInfo = new ShardInfo(shardId, concurrencyToken, emptyParentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
+    private ShardInfo shardInfo;
 
-    /**
-     * @throws java.lang.Exception
-     */
-    @BeforeClass
-    public static void setUpBeforeClass() throws Exception {
-    }
-
-    /**
-     * @throws java.lang.Exception
-     */
-    @AfterClass
-    public static void tearDownAfterClass() throws Exception {
-    }
-
-    /**
-     * @throws java.lang.Exception
-     */
     @Before
-    public void setUp() throws Exception {
-    }
-
-    /**
-     * @throws java.lang.Exception
-     */
-    @After
-    public void tearDown() throws Exception {
+    public void setup() {
+        shardInfo = new ShardInfo(shardId, concurrencyToken, emptyParentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
     }
 
     /**
@@ -85,9 +61,9 @@ public class BlockOnParentShardTaskTest {
         ILeaseManager<KinesisClientLease> leaseManager = mock(ILeaseManager.class);
         when(leaseManager.getLease(shardId)).thenReturn(null);
 
-        BlockOnParentShardTask task = new BlockOnParentShardTask(defaultShardInfo, leaseManager, backoffTimeInMillis);
+        BlockOnParentShardTask task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         TaskResult result = task.call();
-        Assert.assertNull(result.getException());
+        assertNull(result.getException());
     }
 
     /**
@@ -121,14 +97,14 @@ public class BlockOnParentShardTaskTest {
         shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
-        Assert.assertNull(result.getException());
+        assertNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
         shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
-        Assert.assertNull(result.getException());
+        assertNull(result.getException());
     }
 
     /**
@@ -163,14 +139,14 @@ public class BlockOnParentShardTaskTest {
         shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
-        Assert.assertNotNull(result.getException());
+        assertNotNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
         shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
-        Assert.assertNotNull(result.getException());
+        assertNotNull(result.getException());
     }
 
     /**
@@ -197,13 +173,13 @@ public class BlockOnParentShardTaskTest {
         parentLease.setCheckpoint(new ExtendedSequenceNumber("98182584034"));
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
-        Assert.assertNotNull(result.getException());
+        assertNotNull(result.getException());
 
         // test when parent has been fully processed
         parentLease.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
         task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
         result = task.call();
-        Assert.assertNull(result.getException());
+        assertNull(result.getException());
     }
 
     /**
@@ -211,8 +187,8 @@ public class BlockOnParentShardTaskTest {
      */
     @Test
     public final void testGetTaskType() {
-        BlockOnParentShardTask task = new BlockOnParentShardTask(defaultShardInfo, null, backoffTimeInMillis);
-        Assert.assertEquals(TaskType.BLOCK_ON_PARENT_SHARDS, task.getTaskType());
+        BlockOnParentShardTask task = new BlockOnParentShardTask(shardInfo, null, backoffTimeInMillis);
+        assertEquals(TaskType.BLOCK_ON_PARENT_SHARDS, task.taskType());
     }
 
 }

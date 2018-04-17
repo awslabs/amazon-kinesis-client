@@ -16,6 +16,7 @@ package software.amazon.kinesis.metrics;
 
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -161,6 +162,18 @@ public class MetricsHelper {
                 currentScope.remove();
             }
         }
+    }
+
+    public static void addSuccessAndLatency(@NonNull final IMetricsScope metricsScope,
+                                             @NonNull final String dimension,
+                                             final boolean success,
+                                             final long latency,
+                                             @NonNull final MetricsLevel metricsLevel) {
+        final String successPrefix = String.format("%s.%s", dimension, MetricsHelper.SUCCESS);
+        final String latencyPrefix = String.format("%s.%s", dimension, MetricsHelper.TIME);
+
+        metricsScope.addData(successPrefix, success ? 1 : 0, StandardUnit.Count, metricsLevel);
+        metricsScope.addData(latencyPrefix, latency, StandardUnit.Milliseconds, metricsLevel);
     }
 
 }

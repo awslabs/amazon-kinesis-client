@@ -26,19 +26,18 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.metrics.LogMetricsFactory;
-import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.IMetricsScope;
+import software.amazon.kinesis.metrics.LogMetricsFactory;
+import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * LeaseCoordinator abstracts away LeaseTaker and LeaseRenewer from the application code that's using leasing. It owns
@@ -111,7 +110,7 @@ public class LeaseCoordinator<T extends Lease> {
             IMetricsFactory metricsFactory) {
         this(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis,
                 DEFAULT_MAX_LEASES_FOR_WORKER, DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME,
-                KinesisClientLibConfiguration.DEFAULT_MAX_LEASE_RENEWAL_THREADS, metricsFactory);
+                LeaseManagementConfig.DEFAULT_MAX_LEASE_RENEWAL_THREADS, metricsFactory);
     }
 
     /**

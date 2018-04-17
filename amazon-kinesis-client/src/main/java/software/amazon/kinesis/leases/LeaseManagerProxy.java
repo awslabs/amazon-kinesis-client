@@ -12,23 +12,17 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.retrieval;
 
-/** 
- * Interface for a KinesisProxyFactory.
+package software.amazon.kinesis.leases;
+
+import com.amazonaws.services.kinesis.model.Shard;
+
+import java.util.List;
+
+/**
  *
- * @deprecated Deprecating since KinesisProxy is just created once, there is no use of a factory. There is no
- * replacement for this class. This class will be removed in the next major/minor release.
- * 
  */
-@Deprecated
-public interface IKinesisProxyFactory {
-
-    /**
-     * Return an IKinesisProxy object for the specified stream.
-     * @param streamName Stream from which data is consumed.
-     * @return IKinesisProxy object.
-     */
-    IKinesisProxy getProxy(String streamName);
+public interface LeaseManagerProxy {
+    List<Shard> listShards();
 
 }

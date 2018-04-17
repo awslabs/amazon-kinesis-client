@@ -42,19 +42,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import com.amazonaws.services.kinesis.model.Record;
 import com.google.protobuf.ByteString;
 
 import lombok.Data;
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
-import software.amazon.kinesis.coordinator.StreamConfig;
+import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.retrieval.GetRecordsCache;
-import software.amazon.kinesis.retrieval.KinesisDataFetcher;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.retrieval.kpl.Messages;
@@ -63,12 +58,16 @@ import software.amazon.kinesis.retrieval.kpl.UserRecord;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ProcessTaskTest {
+    private static final long IDLE_TIME_IN_MILLISECONDS = 100L;
 
-    private StreamConfig config;
+    private boolean shouldCallProcessRecordsEvenForEmptyRecordList = true;
+    private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist = true;
     private ShardInfo shardInfo;
 
     @Mock
     private ProcessRecordsInput processRecordsInput;
+    @Mock
+    private LeaseManagerProxy leaseManagerProxy;
 
     @SuppressWarnings("serial")
     private static class RecordSubclass extends Record {
@@ -76,42 +75,28 @@ public class ProcessTaskTest {
 
     private static final byte[] TEST_DATA = new byte[] { 1, 2, 3, 4 };
 
-    private final int maxRecords = 100;
     private final String shardId = "shard-test";
-    private final long idleTimeMillis = 1000L;
     private final long taskBackoffTimeMillis = 1L;
-    private final boolean callProcessRecordsForEmptyRecordList = true;
-    // We don't want any of these tests to run checkpoint validation
-    private final boolean skipCheckpointValidationValue = false;
-    private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST = InitialPositionInStreamExtended
-            .newInitialPosition(InitialPositionInStream.LATEST);
 
     @Mock
-    private KinesisDataFetcher mockDataFetcher;
+    private IRecordProcessor recordProcessor;
     @Mock
-    private IRecordProcessor mockRecordProcessor;
-    @Mock
-    private RecordProcessorCheckpointer mockCheckpointer;
+    private RecordProcessorCheckpointer checkpointer;
     @Mock
     private ThrottlingReporter throttlingReporter;
-    @Mock
-    private GetRecordsCache getRecordsCache;
 
     private ProcessTask processTask;
 
     @Before
     public void setUpProcessTask() {
-        // Set up process task
-        config = new StreamConfig(null, maxRecords, idleTimeMillis, callProcessRecordsForEmptyRecordList,
-                skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
         shardInfo = new ShardInfo(shardId, null, null, null);
 
     }
 
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput) {
-        return new ProcessTask(shardInfo, config, mockRecordProcessor, mockCheckpointer, taskBackoffTimeMillis,
-                KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST, throttlingReporter,
-                processRecordsInput);
+        return new ProcessTask(shardInfo, recordProcessor, checkpointer, taskBackoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist, leaseManagerProxy, throttlingReporter,
+                processRecordsInput, shouldCallProcessRecordsEvenForEmptyRecordList, IDLE_TIME_IN_MILLISECONDS);
     }
 
     @Test
@@ -300,18 +285,18 @@ public class ProcessTaskTest {
 
     private RecordProcessorOutcome testWithRecords(List<Record> records, ExtendedSequenceNumber lastCheckpointValue,
             ExtendedSequenceNumber largestPermittedCheckpointValue) {
-        when(mockCheckpointer.getLastCheckpointValue()).thenReturn(lastCheckpointValue);
-        when(mockCheckpointer.getLargestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
+        when(checkpointer.lastCheckpointValue()).thenReturn(lastCheckpointValue);
+        when(checkpointer.largestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
         when(processRecordsInput.getRecords()).thenReturn(records);
         processTask = makeProcessTask(processRecordsInput);
         processTask.call();
         verify(throttlingReporter).success();
         verify(throttlingReporter, never()).throttled();
         ArgumentCaptor<ProcessRecordsInput> recordsCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
-        verify(mockRecordProcessor).processRecords(recordsCaptor.capture());
+        verify(recordProcessor).processRecords(recordsCaptor.capture());
 
         ArgumentCaptor<ExtendedSequenceNumber> esnCaptor = ArgumentCaptor.forClass(ExtendedSequenceNumber.class);
-        verify(mockCheckpointer).setLargestPermittedCheckpointValue(esnCaptor.capture());
+        verify(checkpointer).largestPermittedCheckpointValue(esnCaptor.capture());
 
         return new RecordProcessorOutcome(recordsCaptor.getValue(), esnCaptor.getValue());
 

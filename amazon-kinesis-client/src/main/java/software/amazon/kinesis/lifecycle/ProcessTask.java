@@ -10,23 +10,23 @@ package software.amazon.kinesis.lifecycle;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Optional;
 
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.model.Record;
 import com.amazonaws.services.kinesis.model.Shard;
 
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
-import software.amazon.kinesis.coordinator.StreamConfig;
+import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsScope;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.retrieval.IKinesisProxyExtended;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.retrieval.kpl.UserRecord;
@@ -36,21 +36,20 @@ import software.amazon.kinesis.retrieval.kpl.UserRecord;
  */
 @Slf4j
 public class ProcessTask implements ITask {
-    private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     private static final String DATA_BYTES_PROCESSED_METRIC = "DataBytesProcessed";
     private static final String RECORDS_PROCESSED_METRIC = "RecordsProcessed";
     private static final String MILLIS_BEHIND_LATEST_METRIC = "MillisBehindLatest";
     private static final String RECORD_PROCESSOR_PROCESS_RECORDS_METRIC = "RecordProcessor.processRecords";
-    private static final int MAX_CONSECUTIVE_THROTTLES = 5;
 
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final TaskType taskType = TaskType.PROCESS;
-    private final StreamConfig streamConfig;
     private final long backoffTimeMillis;
     private final Shard shard;
     private final ThrottlingReporter throttlingReporter;
+    private final boolean shouldCallProcessRecordsEvenForEmptyRecordList;
+    private final long idleTimeInMilliseconds;
 
     private final ProcessRecordsInput processRecordsInput;
     private TaskCompletedListener listener;
@@ -73,62 +72,33 @@ public class ProcessTask implements ITask {
 
     }
 
-    /**
-     * @param shardInfo
-     *            contains information about the shard
-     * @param streamConfig
-     *            Stream configuration
-     * @param recordProcessor
-     *            Record processor used to process the data records for the shard
-     * @param recordProcessorCheckpointer
-     *            Passed to the RecordProcessor so it can checkpoint progress
-     * @param backoffTimeMillis
-     *            backoff time when catching exceptions
-     */
-    public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-            RecordProcessorCheckpointer recordProcessorCheckpointer, long backoffTimeMillis,
-            boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ProcessRecordsInput processRecordsInput) {
-        this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new ThrottlingReporter(MAX_CONSECUTIVE_THROTTLES, shardInfo.getShardId()), processRecordsInput);
-    }
-
-    /**
-     * @param shardInfo
-     *            contains information about the shard
-     * @param streamConfig
-     *            Stream configuration
-     * @param recordProcessor
-     *            Record processor used to process the data records for the shard
-     * @param recordProcessorCheckpointer
-     *            Passed to the RecordProcessor so it can checkpoint progress
-     * @param backoffTimeMillis
-     *            backoff time when catching exceptions
-     * @param throttlingReporter
-     *            determines how throttling events should be reported in the log.
-     */
-    public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-            RecordProcessorCheckpointer recordProcessorCheckpointer, long backoffTimeMillis,
-            boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ThrottlingReporter throttlingReporter,
-            ProcessRecordsInput processRecordsInput) {
-        super();
+    public ProcessTask(@NonNull final ShardInfo shardInfo,
+                       @NonNull final IRecordProcessor recordProcessor,
+                       @NonNull final RecordProcessorCheckpointer recordProcessorCheckpointer,
+                       final long backoffTimeMillis,
+                       final boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+                       final LeaseManagerProxy leaseManagerProxy,
+                       @NonNull final ThrottlingReporter throttlingReporter,
+                       final ProcessRecordsInput processRecordsInput,
+                       final boolean shouldCallProcessRecordsEvenForEmptyRecordList,
+                       final long idleTimeInMilliseconds) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
-        this.streamConfig = streamConfig;
         this.backoffTimeMillis = backoffTimeMillis;
         this.throttlingReporter = throttlingReporter;
-        IKinesisProxy kinesisProxy = this.streamConfig.getStreamProxy();
         this.processRecordsInput = processRecordsInput;
-        // If skipShardSyncAtWorkerInitializationIfLeasesExist is set, we will not get the shard for
-        // this ProcessTask. In this case, duplicate KPL user records in the event of resharding will
-        // not be dropped during deaggregation of Amazon Kinesis records. This is only applicable if
-        // KPL is used for ingestion and KPL's aggregation feature is used.
-        if (!skipShardSyncAtWorkerInitializationIfLeasesExist && kinesisProxy instanceof IKinesisProxyExtended) {
-            this.shard = ((IKinesisProxyExtended) kinesisProxy).getShard(this.shardInfo.getShardId());
-        } else {
-            this.shard = null;
+        this.shouldCallProcessRecordsEvenForEmptyRecordList = shouldCallProcessRecordsEvenForEmptyRecordList;
+        this.idleTimeInMilliseconds = idleTimeInMilliseconds;
+
+        Optional<Shard> currentShard = Optional.empty();
+        if (!skipShardSyncAtWorkerInitializationIfLeasesExist) {
+            currentShard = leaseManagerProxy.listShards().stream()
+                    .filter(shard -> shardInfo.shardId().equals(shard.getShardId()))
+                    .findFirst();
         }
+        this.shard = currentShard.orElse(null);
+
         if (this.shard == null && !skipShardSyncAtWorkerInitializationIfLeasesExist) {
             log.warn("Cannot get the shard for this ProcessTask, so duplicate KPL user records "
                     + "in the event of resharding will not be dropped during deaggregation of Amazon "
@@ -145,14 +115,14 @@ public class ProcessTask implements ITask {
         try {
             long startTimeMillis = System.currentTimeMillis();
             IMetricsScope scope = MetricsHelper.getMetricsScope();
-            scope.addDimension(MetricsHelper.SHARD_ID_DIMENSION_NAME, shardInfo.getShardId());
+            scope.addDimension(MetricsHelper.SHARD_ID_DIMENSION_NAME, shardInfo.shardId());
             scope.addData(RECORDS_PROCESSED_METRIC, 0, StandardUnit.Count, MetricsLevel.SUMMARY);
             scope.addData(DATA_BYTES_PROCESSED_METRIC, 0, StandardUnit.Bytes, MetricsLevel.SUMMARY);
             Exception exception = null;
 
             try {
                 if (processRecordsInput.isAtShardEnd()) {
-                    log.info("Reached end of shard {}", shardInfo.getShardId());
+                    log.info("Reached end of shard {}", shardInfo.shardId());
                     return new TaskResult(null, true);
                 }
 
@@ -166,15 +136,15 @@ public class ProcessTask implements ITask {
                 }
                 records = deaggregateRecords(records);
 
-                recordProcessorCheckpointer.setLargestPermittedCheckpointValue(filterAndGetMaxExtendedSequenceNumber(
-                        scope, records, recordProcessorCheckpointer.getLastCheckpointValue(),
-                        recordProcessorCheckpointer.getLargestPermittedCheckpointValue()));
+                recordProcessorCheckpointer.largestPermittedCheckpointValue(filterAndGetMaxExtendedSequenceNumber(
+                        scope, records, recordProcessorCheckpointer.lastCheckpointValue(),
+                        recordProcessorCheckpointer.largestPermittedCheckpointValue()));
 
                 if (shouldCallProcessRecords(records)) {
                     callProcessRecords(processRecordsInput, records);
                 }
             } catch (RuntimeException e) {
-                log.error("ShardId {}: Caught exception: ", shardInfo.getShardId(), e);
+                log.error("ShardId {}: Caught exception: ", shardInfo.shardId(), e);
                 exception = e;
                 backoff();
             }
@@ -195,7 +165,7 @@ public class ProcessTask implements ITask {
         try {
             Thread.sleep(this.backoffTimeMillis);
         } catch (InterruptedException ie) {
-            log.debug("{}: Sleep was interrupted", shardInfo.getShardId(), ie);
+            log.debug("{}: Sleep was interrupted", shardInfo.shardId(), ie);
         }
     }
 
@@ -209,7 +179,7 @@ public class ProcessTask implements ITask {
      */
     private void callProcessRecords(ProcessRecordsInput input, List<Record> records) {
         log.debug("Calling application processRecords() with {} records from {}", records.size(),
-                shardInfo.getShardId());
+                shardInfo.shardId());
         final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput().withRecords(records)
                 .withCheckpointer(recordProcessorCheckpointer).withMillisBehindLatest(input.getMillisBehindLatest());
 
@@ -218,10 +188,10 @@ public class ProcessTask implements ITask {
             recordProcessor.processRecords(processRecordsInput);
         } catch (Exception e) {
             log.error("ShardId {}: Application processRecords() threw an exception when processing shard ",
-                    shardInfo.getShardId(), e);
-            log.error("ShardId {}: Skipping over the following data records: {}", shardInfo.getShardId(), records);
+                    shardInfo.shardId(), e);
+            log.error("ShardId {}: Skipping over the following data records: {}", shardInfo.shardId(), records);
         } finally {
-            MetricsHelper.addLatencyPerShard(shardInfo.getShardId(), RECORD_PROCESSOR_PROCESS_RECORDS_METRIC,
+            MetricsHelper.addLatencyPerShard(shardInfo.shardId(), RECORD_PROCESSOR_PROCESS_RECORDS_METRIC,
                     recordProcessorStartTimeMillis, MetricsLevel.SUMMARY);
         }
     }
@@ -234,7 +204,7 @@ public class ProcessTask implements ITask {
      * @return true if the set of records should be dispatched to the record process, false if they should not.
      */
     private boolean shouldCallProcessRecords(List<Record> records) {
-        return (!records.isEmpty()) || streamConfig.shouldCallProcessRecordsEvenForEmptyRecordList();
+        return (!records.isEmpty()) || shouldCallProcessRecordsEvenForEmptyRecordList;
     }
 
     /**
@@ -267,24 +237,23 @@ public class ProcessTask implements ITask {
      *            the time when the task started
      */
     private void handleNoRecords(long startTimeMillis) {
-        log.debug("Kinesis didn't return any records for shard {}", shardInfo.getShardId());
+        log.debug("Kinesis didn't return any records for shard {}", shardInfo.shardId());
 
-        long sleepTimeMillis = streamConfig.getIdleTimeInMilliseconds()
-                - (System.currentTimeMillis() - startTimeMillis);
+        long sleepTimeMillis = idleTimeInMilliseconds - (System.currentTimeMillis() - startTimeMillis);
         if (sleepTimeMillis > 0) {
-            sleepTimeMillis = Math.max(sleepTimeMillis, streamConfig.getIdleTimeInMilliseconds());
+            sleepTimeMillis = Math.max(sleepTimeMillis, idleTimeInMilliseconds);
             try {
                 log.debug("Sleeping for {} ms since there were no new records in shard {}", sleepTimeMillis,
-                        shardInfo.getShardId());
+                        shardInfo.shardId());
                 Thread.sleep(sleepTimeMillis);
             } catch (InterruptedException e) {
-                log.debug("ShardId {}: Sleep was interrupted", shardInfo.getShardId());
+                log.debug("ShardId {}: Sleep was interrupted", shardInfo.shardId());
             }
         }
     }
 
     @Override
-    public TaskType getTaskType() {
+    public TaskType taskType() {
         return taskType;
     }
 

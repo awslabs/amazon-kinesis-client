@@ -28,7 +28,7 @@ public class SynchronousGetRecordsRetrievalStrategy implements GetRecordsRetriev
 
     @Override
     public GetRecordsResult getRecords(final int maxRecords) {
-        return dataFetcher.getRecords(maxRecords).accept();
+        return dataFetcher.getRecords().accept();
     }
 
     @Override

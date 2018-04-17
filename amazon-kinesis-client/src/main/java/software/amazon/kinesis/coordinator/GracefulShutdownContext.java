@@ -22,12 +22,12 @@ import java.util.concurrent.CountDownLatch;
 class GracefulShutdownContext {
     private final CountDownLatch shutdownCompleteLatch;
     private final CountDownLatch notificationCompleteLatch;
-    private final Worker worker;
+    private final Scheduler scheduler;
 
     static GracefulShutdownContext SHUTDOWN_ALREADY_COMPLETED = new GracefulShutdownContext(null, null, null);
 
     boolean isShutdownAlreadyCompleted() {
-        return shutdownCompleteLatch == null && notificationCompleteLatch == null && worker == null;
+        return shutdownCompleteLatch == null && notificationCompleteLatch == null && scheduler == null;
     }
 
 }

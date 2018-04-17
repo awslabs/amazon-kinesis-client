@@ -21,8 +21,6 @@ import software.amazon.kinesis.leases.ShardInfo;
  *
  */
 public interface RetrievalFactory {
-    IKinesisProxyExtended createKinesisProxy();
-
     GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(ShardInfo shardInfo);
 
     GetRecordsCache createGetRecordsCache(ShardInfo shardInfo);

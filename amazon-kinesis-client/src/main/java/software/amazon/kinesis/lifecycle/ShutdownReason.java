@@ -14,6 +14,9 @@
  */
 package software.amazon.kinesis.lifecycle;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import software.amazon.kinesis.processor.IRecordProcessor;
 
 import static software.amazon.kinesis.lifecycle.ConsumerStates.ConsumerState;
@@ -53,6 +56,8 @@ public enum ShutdownReason {
     REQUESTED(1, ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState());
 
     private final int rank;
+    @Getter(AccessLevel.PACKAGE)
+    @Accessors(fluent = true)
     private final ConsumerState shutdownState;
 
     ShutdownReason(int rank, ConsumerState shutdownState) {
@@ -71,9 +76,5 @@ public enum ShutdownReason {
             return false;
         }
         return reason.rank > this.rank;
-    }
-
-    ConsumerState getShutdownState() {
-        return shutdownState;
     }
 }

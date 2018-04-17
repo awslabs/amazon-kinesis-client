@@ -23,14 +23,13 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import software.amazon.kinesis.processor.IRecordProcessorFactory;
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
-import software.amazon.kinesis.coordinator.Worker;
-
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
+import software.amazon.kinesis.coordinator.Scheduler;
+import software.amazon.kinesis.processor.IRecordProcessorFactory;
 
 /**
- * Main app that launches the worker that runs the multi-language record processor.
+ * Main app that launches the scheduler that runs the multi-language record processor.
  *
  * Requires a properties file containing configuration for this daemon and the KCL. A properties file should at minimum
  * define these properties:
@@ -58,7 +57,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class MultiLangDaemon implements Callable<Integer> {
-    private Worker worker;
+    private Scheduler scheduler;
 
     /**
      * Constructor.
@@ -74,18 +73,17 @@ public class MultiLangDaemon implements Callable<Integer> {
         this(buildWorker(recordProcessorFactory, configuration, workerThreadPool));
     }
 
-    private static Worker buildWorker(IRecordProcessorFactory recordProcessorFactory,
+    private static Scheduler buildWorker(IRecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration configuration, ExecutorService workerThreadPool) {
-        return new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(configuration)
-                .execService(workerThreadPool).build();
+        return null;
     }
 
     /**
      * 
-     * @param worker A worker to use instead of the default worker.
+     * @param scheduler A scheduler to use instead of the default scheduler.
      */
-    public MultiLangDaemon(Worker worker) {
-        this.worker = worker;
+    public MultiLangDaemon(Scheduler scheduler) {
+        this.scheduler = scheduler;
     }
 
     /**
@@ -107,7 +105,7 @@ public class MultiLangDaemon implements Callable<Integer> {
     public Integer call() throws Exception {
         int exitCode = 0;
         try {
-            worker.run();
+            scheduler.run();
         } catch (Throwable t) {
             log.error("Caught throwable while processing data.", t);
             exitCode = 1;
@@ -150,7 +148,7 @@ public class MultiLangDaemon implements Callable<Integer> {
             public void run() {
                 log.info("Process terminanted, will initiate shutdown.");
                 try {
-                    Future<Void> fut = daemon.worker.requestShutdown();
+                    Future<Void> fut = daemon.scheduler.requestShutdown();
                     fut.get(shutdownGraceMillis, TimeUnit.MILLISECONDS);
                     log.info("Process shutdown is complete.");
                 } catch (InterruptedException | ExecutionException | TimeoutException e) {

@@ -33,7 +33,7 @@ public interface ITask extends Callable<TaskResult> {
     /**
      * @return TaskType
      */
-    TaskType getTaskType();
+    TaskType taskType();
 
     /**
      * Adds a listener that will be notified once the task is completed.

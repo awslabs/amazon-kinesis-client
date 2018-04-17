@@ -17,6 +17,11 @@ package software.amazon.kinesis.coordinator;
 
 import java.util.concurrent.ExecutorService;
 
+import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.processor.ICheckpoint;
+
 /**
  *
  */
@@ -26,4 +31,7 @@ public interface CoordinatorFactory {
     GracefulShutdownCoordinator createGracefulShutdownCoordinator();
 
     WorkerStateChangeListener createWorkerStateChangeListener();
+
+    RecordProcessorCheckpointer createRecordProcessorCheckpointer(ShardInfo shardInfo, ICheckpoint checkpoint,
+                                                                  IMetricsFactory metricsFactory);
 }

@@ -206,7 +206,7 @@ public class StreamingRecordProcessorTest {
         recordProcessor.initialize(new InitializationInput().withShardId(shardId));
         recordProcessor.processRecords(new ProcessRecordsInput().withRecords(testRecords).withCheckpointer(unimplementedCheckpointer));
         recordProcessor.processRecords(new ProcessRecordsInput().withRecords(testRecords).withCheckpointer(unimplementedCheckpointer));
-        recordProcessor.shutdown(new ShutdownInput().withCheckpointer(unimplementedCheckpointer).withShutdownReason(ShutdownReason.ZOMBIE));
+        recordProcessor.shutdown(new ShutdownInput().checkpointer(unimplementedCheckpointer).shutdownReason(ShutdownReason.ZOMBIE));
     }
 
     @Test

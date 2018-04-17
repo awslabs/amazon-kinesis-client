@@ -88,7 +88,7 @@ class CheckpointValueComparator implements Comparator<String>, Serializable {
      * @return a BigInteger value representation of the checkpointValue
      */
     private static BigInteger bigIntegerValue(String checkpointValue) {
-        if (Checkpoint.SequenceNumberValidator.isDigits(checkpointValue)) {
+        if (isDigits(checkpointValue)) {
             return new BigInteger(checkpointValue);
         } else if (SentinelCheckpoint.LATEST.toString().equals(checkpointValue)) {
             return LATEST_BIG_INTEGER_VALUE;
@@ -107,7 +107,7 @@ class CheckpointValueComparator implements Comparator<String>, Serializable {
      * @return true if and only if the string is all digits or one of the SentinelCheckpoint values
      */
     private static boolean isDigitsOrSentinelValue(String string) {
-        return Checkpoint.SequenceNumberValidator.isDigits(string) || isSentinelValue(string);
+        return isDigits(string) || isSentinelValue(string);
     }
 
     /**
@@ -123,5 +123,23 @@ class CheckpointValueComparator implements Comparator<String>, Serializable {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * Checks if the string is composed of only digits.
+     *
+     * @param string
+     * @return true for a string of all digits, false otherwise (including false for null and empty string)
+     */
+    private static boolean isDigits(String string) {
+        if (string == null || string.length() == 0) {
+            return false;
+        }
+        for (int i = 0; i < string.length(); i++) {
+            if (!Character.isDigit(string.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 }

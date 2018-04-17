@@ -44,7 +44,7 @@ class GracefulShutdownCoordinator {
         }
 
         private boolean isWorkerShutdownComplete(GracefulShutdownContext context) {
-            return context.getWorker().isShutdownComplete() || context.getWorker().getShardInfoShardConsumerMap().isEmpty();
+            return context.getScheduler().shutdownComplete() || context.getScheduler().shardInfoShardConsumerMap().isEmpty();
         }
 
         private String awaitingLogMessage(GracefulShutdownContext context) {
@@ -94,7 +94,7 @@ class GracefulShutdownCoordinator {
             // Once all record processors have been notified of the shutdown it is safe to allow the worker to
             // start its shutdown behavior. Once shutdown starts it will stop renewer, and drop any remaining leases.
             //
-            context.getWorker().shutdown();
+            context.getScheduler().shutdown();
 
             if (Thread.interrupted()) {
                 log.warn("Interrupted after worker shutdown, terminating shutdown");
@@ -137,8 +137,8 @@ class GracefulShutdownCoordinator {
                 if (outstanding != 0) {
                     log.info("Shutdown completed, but shutdownCompleteLatch still had outstanding {} with a current"
                             + " value of {}. shutdownComplete: {} -- Consumer Map: {}", outstanding,
-                            context.getShutdownCompleteLatch().getCount(), context.getWorker().isShutdownComplete(),
-                            context.getWorker().getShardInfoShardConsumerMap().size());
+                            context.getShutdownCompleteLatch().getCount(), context.getScheduler().shutdownComplete(),
+                            context.getScheduler().shardInfoShardConsumerMap().size());
                     return true;
                 }
             }

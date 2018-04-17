@@ -24,6 +24,11 @@ import java.util.concurrent.TimeUnit;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.Data;
+import lombok.NonNull;
+import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.processor.ICheckpoint;
 
 /**
  *
@@ -52,5 +57,12 @@ public class SchedulerCoordinatorFactory implements CoordinatorFactory {
             super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE, TimeUnit.SECONDS, new SynchronousQueue<>(),
                     threadFactory);
         }
+    }
+
+    @Override
+    public RecordProcessorCheckpointer createRecordProcessorCheckpointer(@NonNull final ShardInfo shardInfo,
+                                                                         @NonNull final ICheckpoint checkpoint,
+                                                                         @NonNull final IMetricsFactory metricsFactory) {
+        return new RecordProcessorCheckpointer(shardInfo, checkpoint, metricsFactory);
     }
 }

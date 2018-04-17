@@ -14,64 +14,35 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
+import lombok.Data;
+import lombok.experimental.Accessors;
 import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 
 /**
  * Container for the parameters to the IRecordProcessor's
  * {@link IRecordProcessor#shutdown(ShutdownInput
  * shutdownInput) shutdown} method.
  */
+@Data
+@Accessors(fluent = true)
 public class ShutdownInput {
-    
-    private ShutdownReason shutdownReason;
-    private IRecordProcessorCheckpointer checkpointer;
-
-    /**
-     * Default constructor.
-     */
-    public ShutdownInput() {
-    }
 
     /**
      * Get shutdown reason.
      *
+     * -- GETTER --
      * @return Reason for the shutdown (ShutdownReason.TERMINATE indicates the shard is closed and there are no
      *         more records to process. Shutdown.ZOMBIE indicates a fail over has occurred).
      */
-    public ShutdownReason getShutdownReason() {
-        return shutdownReason;
-    }
-
-    /**
-     * Set shutdown reason.
-     *
-     * @param shutdownReason Reason for the shutdown
-     * @return A reference to this updated object so that method calls can be chained together.
-     */
-    public ShutdownInput withShutdownReason(ShutdownReason shutdownReason) {
-        this.shutdownReason = shutdownReason;
-        return this;
-    }
+    private ShutdownReason shutdownReason;
 
     /**
      * Get Checkpointer.
      *
+     * -- GETTER --
      * @return The checkpointer object that the record processor should use to checkpoint
      */
-    public IRecordProcessorCheckpointer getCheckpointer() {
-        return checkpointer;
-    }
-
-    /**
-     * Set the checkpointer.
-     *
-     * @param checkpointer The checkpointer object that the record processor should use to checkpoint
-     * @return A reference to this updated object so that method calls can be chained together.
-     */
-    public ShutdownInput withCheckpointer(IRecordProcessorCheckpointer checkpointer) {
-        this.checkpointer = checkpointer;
-        return this;
-    }
+    private IRecordProcessorCheckpointer checkpointer;
 
 }

@@ -20,6 +20,7 @@ import java.util.Optional;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
@@ -31,6 +32,11 @@ import software.amazon.kinesis.lifecycle.ShardConsumer;
 @Data
 @Accessors(fluent = true)
 public class RetrievalConfig {
+    /**
+     * User agent set when Amazon Kinesis Client Library makes AWS requests.
+     */
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java-1.9.0";
+
     /**
      * Name of the Kinesis stream.
      *
@@ -103,7 +109,8 @@ public class RetrievalConfig {
      *
      * <p>Default value: {@link InitialPositionInStream#LATEST}</p>
      */
-    private InitialPositionInStream initialPositionInStream = InitialPositionInStream.LATEST;
+    private InitialPositionInStreamExtended initialPositionInStreamExtended =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
 
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
 

@@ -14,7 +14,7 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import software.amazon.kinesis.lifecycle.events.LeaseLost;
 import software.amazon.kinesis.lifecycle.events.RecordsReceived;
 import software.amazon.kinesis.lifecycle.events.ShardCompleted;
@@ -24,7 +24,7 @@ import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.IShutdownNotificationAware;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class RecordProcessorShim implements RecordProcessorLifecycle {
 
     private final IRecordProcessor delegate;
@@ -43,18 +43,18 @@ public class RecordProcessorShim implements RecordProcessorLifecycle {
     public void leaseLost(LeaseLost leaseLost) {
         ShutdownInput shutdownInput = new ShutdownInput() {
             @Override
-            public IRecordProcessorCheckpointer getCheckpointer() {
+            public IRecordProcessorCheckpointer checkpointer() {
                 throw new UnsupportedOperationException("Cannot checkpoint when the lease is lost");
             }
-        }.withShutdownReason(ShutdownReason.ZOMBIE);
+        }.shutdownReason(ShutdownReason.ZOMBIE);
 
         delegate.shutdown(shutdownInput);
     }
 
     @Override
     public void shardCompleted(ShardCompleted shardCompleted) {
-        ShutdownInput shutdownInput = new ShutdownInput().withCheckpointer(shardCompleted.getCheckpointer())
-                .withShutdownReason(ShutdownReason.TERMINATE);
+        ShutdownInput shutdownInput = new ShutdownInput().checkpointer(shardCompleted.getCheckpointer())
+                .shutdownReason(ShutdownReason.TERMINATE);
         delegate.shutdown(shutdownInput);
     }
 

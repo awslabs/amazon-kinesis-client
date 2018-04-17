@@ -26,23 +26,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import org.apache.commons.lang.StringUtils;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+import com.amazonaws.services.kinesis.model.Shard;
+
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
-import com.amazonaws.services.kinesis.model.Shard;
-
-import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * Helper class to sync leases with shards of the Kinesis stream.
@@ -59,20 +57,19 @@ public class ShardSyncer {
     private ShardSyncer() {
     }
 
-    static synchronized void bootstrapShardLeases(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
-                        ignoreUnexpectedChildShards);
+    static synchronized void bootstrapShardLeases(@NonNull final LeaseManagerProxy leaseManagerProxy,
+                                                  @NonNull final ILeaseManager<KinesisClientLease> leaseManager,
+                                                  @NonNull final InitialPositionInStreamExtended initialPositionInStream,
+                                                  final boolean cleanupLeasesOfCompletedShards,
+                                                  final boolean ignoreUnexpectedChildShards)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+        syncShardLeases(leaseManagerProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards);
     }
 
     /**
      * Check and create leases for any new shards (e.g. following a reshard operation).
      * 
-     * @param kinesisProxy
      * @param leaseManager
      * @param initialPositionInStream
      * @param cleanupLeasesOfCompletedShards
@@ -82,27 +79,28 @@ public class ShardSyncer {
      * @throws ProvisionedThroughputException
      * @throws KinesisClientLibIOException
      */
-    public static synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards);
+    public static synchronized void checkAndCreateLeasesForNewShards(@NonNull final LeaseManagerProxy leaseManagerProxy,
+                                                                     @NonNull final ILeaseManager<KinesisClientLease> leaseManager,
+                                                                     @NonNull final InitialPositionInStreamExtended initialPositionInStream,
+                                                                     final boolean cleanupLeasesOfCompletedShards,
+                                                                     final boolean ignoreUnexpectedChildShards)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+        syncShardLeases(leaseManagerProxy, leaseManager, initialPositionInStream,
+                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards);
     }
 
-    static synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-        checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, false);
+    static synchronized void checkAndCreateLeasesForNewShards(@NonNull final LeaseManagerProxy leaseManagerProxy,
+                                                              @NonNull final ILeaseManager<KinesisClientLease> leaseManager,
+                                                              @NonNull final InitialPositionInStreamExtended initialPositionInStream,
+                                                              final boolean cleanupLeasesOfCompletedShards)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+        checkAndCreateLeasesForNewShards(leaseManagerProxy, leaseManager, initialPositionInStream,
+                cleanupLeasesOfCompletedShards, false);
     }
 
     /**
      * Sync leases with Kinesis shards (e.g. at startup, or when we reach end of a shard).
      * 
-     * @param kinesisProxy
      * @param leaseManager
      * @param initialPosition
      * @param cleanupLeasesOfCompletedShards
@@ -113,13 +111,13 @@ public class ShardSyncer {
      * @throws KinesisClientLibIOException
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
-    private static synchronized void syncShardLeases(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPosition,
-            boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
+    private static synchronized void syncShardLeases(@NonNull final LeaseManagerProxy leaseManagerProxy,
+                                                     final ILeaseManager<KinesisClientLease> leaseManager,
+                                                     final InitialPositionInStreamExtended initialPosition,
+                                                     final boolean cleanupLeasesOfCompletedShards,
+                                                     final boolean ignoreUnexpectedChildShards)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-        List<Shard> shards = getShardList(kinesisProxy);
+        List<Shard> shards = getShardList(leaseManagerProxy);
         log.debug("Num shards: {}", shards.size());
 
         Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(shards);
@@ -150,7 +148,7 @@ public class ShardSyncer {
             trackedLeases.addAll(currentLeases);            
         }
         trackedLeases.addAll(newLeasesToCreate);
-        cleanupGarbageLeases(shards, trackedLeases, kinesisProxy, leaseManager);
+        cleanupGarbageLeases(leaseManagerProxy, shards, trackedLeases, leaseManager);
         if (cleanupLeasesOfCompletedShards) {
             cleanupLeasesOfFinishedShards(currentLeases,
                     shardIdToShardMap,
@@ -215,7 +213,6 @@ public class ShardSyncer {
      * Useful for asserting that we don't have an incomplete shard list following a reshard operation.
      * We verify that if the shard is present in the shard list, it is closed and its hash key range
      *     is covered by its child shards.
-     * @param shards List of all Kinesis shards
      * @param shardIdsOfClosedShards Id of the shard which is expected to be closed
      * @return ShardIds of child shards (children of the expectedClosedShard)
      * @throws KinesisClientLibIOException
@@ -316,8 +313,8 @@ public class ShardSyncer {
         return shardIdToChildShardIdsMap;
     }
 
-    private static List<Shard> getShardList(IKinesisProxy kinesisProxy) throws KinesisClientLibIOException {
-        List<Shard> shards = kinesisProxy.getShardList();
+    private static List<Shard> getShardList(@NonNull final LeaseManagerProxy leaseManagerProxy) throws KinesisClientLibIOException {
+        List<Shard> shards = leaseManagerProxy.listShards();
         if (shards == null) {
             throw new KinesisClientLibIOException(
                     "Stream is not in ACTIVE OR UPDATING state - will retry getting the shard list.");
@@ -587,17 +584,16 @@ public class ShardSyncer {
      *   * the parentShardIds listed in the lease are also not present in the list of Kinesis shards.
      * @param shards List of all Kinesis shards (assumed to be a consistent snapshot - when stream is in Active state).
      * @param trackedLeases List of 
-     * @param kinesisProxy Kinesis proxy (used to get shard list)
      * @param leaseManager 
      * @throws KinesisClientLibIOException Thrown if we couldn't get a fresh shard list from Kinesis.
      * @throws ProvisionedThroughputException 
      * @throws InvalidStateException 
      * @throws DependencyException 
      */
-    private static void cleanupGarbageLeases(List<Shard> shards,
-            List<KinesisClientLease> trackedLeases,
-            IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager)
+    private static void cleanupGarbageLeases(@NonNull final LeaseManagerProxy leaseManagerProxy,
+                                             final List<Shard> shards,
+                                             final List<KinesisClientLease> trackedLeases,
+                                             final ILeaseManager<KinesisClientLease> leaseManager)
         throws KinesisClientLibIOException, DependencyException, InvalidStateException, ProvisionedThroughputException {
         Set<String> kinesisShards = new HashSet<>();
         for (Shard shard : shards) {
@@ -615,7 +611,7 @@ public class ShardSyncer {
         if (!garbageLeases.isEmpty()) {
             log.info("Found {} candidate leases for cleanup. Refreshing list of" 
                     + " Kinesis shards to pick up recent/latest shards", garbageLeases.size());
-            List<Shard> currentShardList = getShardList(kinesisProxy);
+            List<Shard> currentShardList = getShardList(leaseManagerProxy);
             Set<String> currentKinesisShardIds = new HashSet<>();
             for (Shard shard : currentShardList) {
                 currentKinesisShardIds.add(shard.getShardId());

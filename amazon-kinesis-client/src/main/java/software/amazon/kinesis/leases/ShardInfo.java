@@ -19,6 +19,10 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.ToString;
+import lombok.experimental.Accessors;
 import org.apache.commons.lang.builder.EqualsBuilder;
 import org.apache.commons.lang.builder.HashCodeBuilder;
 
@@ -27,6 +31,9 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 /**
  * Used to pass shard related info among different classes and as a key to the map of shard consumers.
  */
+@Getter
+@Accessors(fluent = true)
+@ToString
 public class ShardInfo {
 
     private final String shardId;
@@ -47,13 +54,14 @@ public class ShardInfo {
      * @param checkpoint
      *            the latest checkpoint from lease
      */
-    public ShardInfo(String shardId,
-            String concurrencyToken,
-            Collection<String> parentShardIds,
-            ExtendedSequenceNumber checkpoint) {
+    // TODO: check what values can be null
+    public ShardInfo(@NonNull final String shardId,
+            final String concurrencyToken,
+            final Collection<String> parentShardIds,
+            final ExtendedSequenceNumber checkpoint) {
         this.shardId = shardId;
         this.concurrencyToken = concurrencyToken;
-        this.parentShardIds = new LinkedList<String>();
+        this.parentShardIds = new LinkedList<>();
         if (parentShardIds != null) {
             this.parentShardIds.addAll(parentShardIds);
         }
@@ -64,30 +72,12 @@ public class ShardInfo {
     }
 
     /**
-     * The shardId that this ShardInfo contains data about
-     * 
-     * @return the shardId
-     */
-    public String getShardId() {
-        return shardId;
-    }
-
-    /**
-     * Concurrency token for the lease that this shard is part of
-     *
-     * @return the concurrencyToken
-     */
-    public String getConcurrencyToken() {
-        return concurrencyToken;
-    }
-
-    /**
      * A list of shards that are parents of this shard. This may be empty if the shard has no parents.
      * 
      * @return a list of shardId's that are parents of this shard, or empty if the shard has no parents.
      */
-    public List<String> getParentShardIds() {
-        return new LinkedList<String>(parentShardIds);
+    public List<String> parentShardIds() {
+        return new LinkedList<>(parentShardIds);
     }
 
     /**
@@ -131,14 +121,5 @@ public class ShardInfo {
                 .append(parentShardIds, other.parentShardIds).append(shardId, other.shardId).isEquals();
 
     }
-
-
-    @Override
-    public String toString() {
-        return "ShardInfo [shardId=" + shardId + ", concurrencyToken=" + concurrencyToken + ", parentShardIds="
-                + parentShardIds + ", checkpoint=" + checkpoint + "]";
-    }
-
-
 
 }

@@ -14,20 +14,14 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.proxies;
 
-import java.io.File;
 import java.io.IOException;
-import java.math.BigInteger;
-
-import com.amazonaws.services.kinesis.clientlibrary.proxies.util.KinesisLocalFileDataCreator;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.retrieval.IKinesisProxyFactory;
 
 /** Factory for KinesisProxy objects that use a local file for data. Useful for testing purposes.
  *
  */
-public class KinesisLocalFileProxyFactory implements IKinesisProxyFactory {
+public class KinesisLocalFileProxyFactory {
     
-    private static final int DEFAULT_NUM_SHARDS = 3;
+    /*private static final int DEFAULT_NUM_SHARDS = 3;
     private static final String DEFAULT_SHARD_ID_PREFIX = "ShardId-";
     private static final int DEFAULT_NUM_RECORDS_PER_SHARD = 10;
     private static final BigInteger DEFAULT_STARTING_SEQUENCE_NUMBER = BigInteger.ZERO;
@@ -36,14 +30,14 @@ public class KinesisLocalFileProxyFactory implements IKinesisProxyFactory {
     
     private IKinesisProxy testKinesisProxy;
 
-    /** 
+    *//**
      * @param fileName File to be used for stream data.
      * If the file exists then it is expected to contain information for creating a test proxy object.
      * If the file does not exist then a temporary file containing default values for a test proxy object
      * will be created and used.
 
      * @throws IOException This will be thrown if we can't read/create the data file.
-     */
+     *//*
     public KinesisLocalFileProxyFactory(String fileName) throws IOException {
         File f = new File(fileName);
         if (!f.exists()) {
@@ -54,11 +48,11 @@ public class KinesisLocalFileProxyFactory implements IKinesisProxyFactory {
         testKinesisProxy = new KinesisLocalFileProxy(f.getAbsolutePath());
     }
 
-    /* (non-Javadoc)
+    *//* (non-Javadoc)
      * @see com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxyFactory#getProxy(java.lang.String)
-     */
+     *//*
     @Override
     public IKinesisProxy getProxy(String streamARN) {
         return testKinesisProxy;
-    }
+    }*/
 }

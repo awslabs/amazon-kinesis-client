@@ -14,140 +14,16 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import static org.hamcrest.CoreMatchers.both;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.isA;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.argThat;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
-import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.io.File;
-import java.lang.Thread.State;
-import java.lang.reflect.Field;
-import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.hamcrest.Condition;
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-import org.hamcrest.TypeSafeDiagnosingMatcher;
-import org.hamcrest.TypeSafeMatcher;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Matchers;
-import org.mockito.Mock;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.runners.MockitoJUnitRunner;
-import org.mockito.stubbing.Answer;
-
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.util.KinesisLocalFileDataCreator;
-import com.amazonaws.services.kinesis.model.HashKeyRange;
-import com.amazonaws.services.kinesis.model.Record;
-import com.amazonaws.services.kinesis.model.SequenceNumberRange;
-import com.amazonaws.services.kinesis.model.Shard;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.coordinator.Worker.WorkerCWMetricsFactory;
-import software.amazon.kinesis.coordinator.Worker.WorkerThreadPoolExecutor;
-import software.amazon.kinesis.coordinator.WorkerStateChangeListener.WorkerState;
-import software.amazon.kinesis.leases.ILeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.KinesisClientLeaseBuilder;
-import software.amazon.kinesis.leases.KinesisClientLeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.NoOpShardPrioritization;
-import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.leases.ShardObjectHelper;
-import software.amazon.kinesis.leases.ShardPrioritization;
-import software.amazon.kinesis.leases.ShardSequenceVerifier;
-import software.amazon.kinesis.leases.ShardSyncer;
-import software.amazon.kinesis.lifecycle.BlockOnParentShardTask;
-import software.amazon.kinesis.lifecycle.ITask;
-import software.amazon.kinesis.lifecycle.InitializationInput;
-import software.amazon.kinesis.lifecycle.InitializeTask;
-import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
-import software.amazon.kinesis.lifecycle.ShardConsumer;
-import software.amazon.kinesis.lifecycle.ShutdownInput;
-import software.amazon.kinesis.lifecycle.ShutdownNotificationTask;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
-import software.amazon.kinesis.lifecycle.ShutdownTask;
-import software.amazon.kinesis.lifecycle.TaskResult;
-import software.amazon.kinesis.lifecycle.TaskType;
-import software.amazon.kinesis.metrics.CWMetricsFactory;
-import software.amazon.kinesis.metrics.IMetricsFactory;
-import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
-import software.amazon.kinesis.metrics.NullMetricsFactory;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.IRecordProcessorFactory;
-import software.amazon.kinesis.retrieval.GetRecordsCache;
-import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.retrieval.KinesisProxy;
-import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
-import software.amazon.kinesis.retrieval.SimpleRecordsFetcherFactory;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.utils.TestStreamlet;
-import software.amazon.kinesis.utils.TestStreamletFactory;
 
 /**
  * Unit tests of Worker.
  */
-@RunWith(MockitoJUnitRunner.class)
 @Slf4j
 public class WorkerTest {
-    // @Rule
+    /*// @Rule
     // public Timeout timeout = new Timeout((int)TimeUnit.SECONDS.toMillis(30));
 
     private final NullMetricsFactory nullMetricsFactory = new NullMetricsFactory();
@@ -229,9 +105,9 @@ public class WorkerTest {
 
                 @Override
                 public void shutdown(final ShutdownInput shutdownInput) {
-                    if (shutdownInput.getShutdownReason() == ShutdownReason.TERMINATE) {
+                    if (shutdownInput.shutdownReason() == ShutdownReason.TERMINATE) {
                         try {
-                            shutdownInput.getCheckpointer().checkpoint();
+                            shutdownInput.checkpointer().checkpoint();
                         } catch (KinesisClientLibNonRetryableException e) {
                             throw new RuntimeException(e);
                         }
@@ -245,9 +121,9 @@ public class WorkerTest {
     private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 = SAMPLE_RECORD_PROCESSOR_FACTORY;
 
 
-    /**
+    *//**
      * Test method for {@link Worker#getApplicationName()}.
-     */
+     *//*
     @Test
     public final void testGetStageName() {
         final String stageName = "testStageName";
@@ -275,7 +151,7 @@ public class WorkerTest {
         final String dummyKinesisShardId = "kinesis-0-0";
         ExecutorService execService = null;
 
-        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.leaseManager()).thenReturn(leaseManager);
 
         Worker worker =
                 new Worker(stageName,
@@ -319,7 +195,7 @@ public class WorkerTest {
 
         ExecutorService execService = null;
 
-        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.leaseManager()).thenReturn(leaseManager);
 
         List<ShardInfo> initialState = createShardInfoList(ExtendedSequenceNumber.TRIM_HORIZON);
         List<ShardInfo> firstCheckpoint = createShardInfoList(new ExtendedSequenceNumber("1000"));
@@ -347,14 +223,14 @@ public class WorkerTest {
 
         Worker workerSpy = spy(worker);
 
-        doReturn(shardConsumer).when(workerSpy).buildConsumer(eq(initialState.get(0)), any(IRecordProcessorFactory.class));
+        doReturn(shardConsumer).when(workerSpy).buildConsumer(eq(initialState.get(0)));
         workerSpy.runProcessLoop();
         workerSpy.runProcessLoop();
         workerSpy.runProcessLoop();
 
-        verify(workerSpy).buildConsumer(same(initialState.get(0)), any(IRecordProcessorFactory.class));
-        verify(workerSpy, never()).buildConsumer(same(firstCheckpoint.get(0)), any(IRecordProcessorFactory.class));
-        verify(workerSpy, never()).buildConsumer(same(secondCheckpoint.get(0)), any(IRecordProcessorFactory.class));
+        verify(workerSpy).buildConsumer(same(initialState.get(0)));
+        verify(workerSpy, never()).buildConsumer(same(firstCheckpoint.get(0)));
+        verify(workerSpy, never()).buildConsumer(same(secondCheckpoint.get(0)));
 
     }
 
@@ -394,7 +270,7 @@ public class WorkerTest {
         final String dummyKinesisShardId = "kinesis-0-0";
         final String anotherDummyKinesisShardId = "kinesis-0-1";
         ExecutorService execService = null;
-        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.leaseManager()).thenReturn(leaseManager);
 
         Worker worker =
                 new Worker(stageName,
@@ -449,7 +325,7 @@ public class WorkerTest {
                         maxRecords,
                         idleTimeInMilliseconds,
                         callProcessRecordsForEmptyRecordList, skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
-        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.leaseManager()).thenReturn(leaseManager);
         ExecutorService execService = Executors.newSingleThreadExecutor();
         long shardPollInterval = 0L;
         Worker worker =
@@ -472,10 +348,10 @@ public class WorkerTest {
         Assert.assertTrue(count > 0);
     }
 
-    /**
+    *//**
      * Runs worker with threadPoolSize == numShards
      * Test method for {@link Worker#run()}.
-     */
+     *//*
     @Test
     public final void testRunWithThreadPoolSizeEqualToNumShards() throws Exception {
         final int numShards = 1;
@@ -483,10 +359,10 @@ public class WorkerTest {
         runAndTestWorker(numShards, threadPoolSize);
     }
 
-    /**
+    *//**
      * Runs worker with threadPoolSize < numShards
      * Test method for {@link Worker#run()}.
-     */
+     *//*
     @Test
     public final void testRunWithThreadPoolSizeLessThanNumShards() throws Exception {
         final int numShards = 3;
@@ -494,10 +370,10 @@ public class WorkerTest {
         runAndTestWorker(numShards, threadPoolSize);
     }
 
-    /**
+    *//**
      * Runs worker with threadPoolSize > numShards
      * Test method for {@link Worker#run()}.
-     */
+     *//*
     @Test
     public final void testRunWithThreadPoolSizeMoreThanNumShards() throws Exception {
         final int numShards = 3;
@@ -505,10 +381,10 @@ public class WorkerTest {
         runAndTestWorker(numShards, threadPoolSize);
     }
 
-    /**
+    *//**
      * Runs worker with threadPoolSize < numShards
      * Test method for {@link Worker#run()}.
-     */
+     *//*
     @Test
     public final void testOneSplitShard2Threads() throws Exception {
         final int threadPoolSize = 2;
@@ -521,10 +397,10 @@ public class WorkerTest {
         runAndTestWorker(shardList, threadPoolSize, initialLeases, callProcessRecordsForEmptyRecordList, numberOfRecordsPerShard, config);
     }
 
-    /**
+    *//**
      * Runs worker with threadPoolSize < numShards
      * Test method for {@link Worker#run()}.
-     */
+     *//*
     @Test
     public final void testOneSplitShard2ThreadsWithCallsForEmptyRecords() throws Exception {
         final int threadPoolSize = 2;
@@ -683,13 +559,13 @@ public class WorkerTest {
         verify(v2RecordProcessor, times(1)).shutdown(any(ShutdownInput.class));
     }
 
-    /**
+    *//**
      * This test is testing the {@link Worker}'s shutdown behavior and by extension the behavior of
      * {@link ThreadPoolExecutor#shutdownNow()}. It depends on the thread pool sending an interrupt to the pool threads.
      * This behavior makes the test a bit racy, since we need to ensure a specific order of events.
      *
      * @throws Exception
-     */
+     *//*
     @Test
     public final void testWorkerForcefulShutdown() throws Exception {
         final List<Shard> shardList = createShardListWithOneShard();
@@ -1637,7 +1513,7 @@ public class WorkerTest {
                 .config(config)
                 .build();
 
-        Assert.assertNotNull(worker.getLeaseCoordinator().getLeaseManager());
+        Assert.assertNotNull(worker.getLeaseCoordinator().leaseManager());
     }
 
     @SuppressWarnings("unchecked")
@@ -1652,7 +1528,7 @@ public class WorkerTest {
                 .leaseManager(leaseManager)
                 .build();
 
-        Assert.assertSame(leaseManager, worker.getLeaseCoordinator().getLeaseManager());
+        Assert.assertSame(leaseManager, worker.getLeaseCoordinator().leaseManager());
     }
 
     private abstract class InjectableWorker extends Worker {
@@ -1770,7 +1646,7 @@ public class WorkerTest {
 
         @Override
         protected boolean matchesSafely(MetricsCollectingTaskDecorator item) {
-            return expectedTaskType.matches(item.getTaskType());
+            return expectedTaskType.matches(item.taskType());
         }
 
         @Override
@@ -1860,12 +1736,12 @@ public class WorkerTest {
             return new ReflectionFieldMatcher<>(itemClass, fieldName, fieldMatcher);
         }
     }
-    /**
+    *//**
      * Returns executor service that will be owned by the worker. This is useful to test the scenario
      * where worker shuts down the executor service also during shutdown flow.
      *
      * @return Executor service that will be owned by the worker.
-     */
+     *//*
     private WorkerThreadPoolExecutor getWorkerThreadPoolExecutor() {
         ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("RecordProcessor-%04d").build();
         return new WorkerThreadPoolExecutor(threadFactory);
@@ -1882,9 +1758,9 @@ public class WorkerTest {
         return shards;
     }
 
-    /**
+    *//**
      * @return
-     */
+     *//*
     private List<Shard> createShardListWithOneSplit() {
         List<Shard> shards = new ArrayList<Shard>();
         SequenceNumberRange range0 = ShardObjectHelper.newSequenceNumberRange("39428", "987324");
@@ -2197,5 +2073,5 @@ public class WorkerTest {
         public Worker getWorker() {
             return worker;
         }
-    }
+    }*/
 }

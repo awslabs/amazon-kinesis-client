@@ -23,7 +23,9 @@ public interface LeaseManagementFactory {
 
     ShardSyncTaskManager createShardSyncTaskManager();
 
-    LeaseManager createLeaseManager();
+    LeaseManager<KinesisClientLease> createLeaseManager();
 
     KinesisClientLibLeaseCoordinator createKinesisClientLibLeaseCoordinator();
+
+    LeaseManagerProxy createLeaseManagerProxy();
 }

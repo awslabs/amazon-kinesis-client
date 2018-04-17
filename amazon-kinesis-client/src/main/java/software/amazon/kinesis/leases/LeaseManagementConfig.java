@@ -32,7 +32,6 @@ import lombok.NonNull;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
-import software.amazon.kinesis.retrieval.IKinesisProxyExtended;
 
 /**
  * Used by the KCL to configure lease management.
@@ -40,7 +39,7 @@ import software.amazon.kinesis.retrieval.IKinesisProxyExtended;
 @Data
 @Accessors(fluent = true)
 public class LeaseManagementConfig {
-    public static final long EPSILON_MS = 25L;
+    public static final int DEFAULT_MAX_LEASE_RENEWAL_THREADS = 20;
 
     /**
      * Name of the table to use in DynamoDB
@@ -52,12 +51,22 @@ public class LeaseManagementConfig {
     /**
      * Client to be used to access DynamoDB service.
      *
-     * @return AmazonDynamoDB
+     * @return {@link AmazonDynamoDB}
      */
     @NonNull
     private final AmazonDynamoDB amazonDynamoDB;
+    /**
+     * Client to be used to access Kinesis Data Streams service.
+     *
+     * @return {@link AmazonKinesis}
+     */
     @NonNull
     private final AmazonKinesis amazonKinesis;
+    /**
+     * Name of the Kinesis Data Stream to read records from.
+     */
+    @NonNull
+    private final String streamName;
     /**
      * Used to distinguish different workers/processes of a KCL application.
      *
@@ -144,10 +153,11 @@ public class LeaseManagementConfig {
      */
     private boolean consistentReads = false;
 
-    /**
-     *
-     */
-    private IKinesisProxyExtended kinesisProxy;
+    private long listShardsBackoffTimeInMillis = 1500L;
+
+    private int maxListShardsRetryAttempts = 50;
+
+    public long epsilonMillis = 25L;
 
     /**
      * The initial position for getting records from Kinesis streams.
@@ -183,11 +193,25 @@ public class LeaseManagementConfig {
 
     public LeaseManagementFactory leaseManagementFactory() {
         if (leaseManagementFactory == null) {
-            leaseManagementFactory = new DynamoDBLeaseManagementFactory(workerIdentifier(), failoverTimeMillis(),
-                    EPSILON_MS, maxLeasesForWorker(), maxLeasesToStealAtOneTime(), maxLeaseRenewalThreads(),
-                    kinesisProxy(), initialPositionInStream(), cleanupLeasesUponShardCompletion(),
-                    ignoreUnexpectedChildShards(), shardSyncIntervalMillis(), metricsFactory(), executorService(),
-                    tableName(), amazonDynamoDB(), consistentReads());
+            leaseManagementFactory = new DynamoDBLeaseManagementFactory(amazonKinesis(),
+                    streamName(),
+                    amazonDynamoDB(),
+                    tableName(),
+                    workerIdentifier(),
+                    executorService(),
+                    initialPositionInStream(),
+                    failoverTimeMillis(),
+                    epsilonMillis(),
+                    maxLeasesForWorker(),
+                    maxLeasesToStealAtOneTime(),
+                    maxLeaseRenewalThreads(),
+                    cleanupLeasesUponShardCompletion(),
+                    ignoreUnexpectedChildShards(),
+                    shardSyncIntervalMillis(),
+                    consistentReads(),
+                    listShardsBackoffTimeInMillis(),
+                    maxListShardsRetryAttempts(),
+                    metricsFactory());
         }
         return leaseManagementFactory;
     }

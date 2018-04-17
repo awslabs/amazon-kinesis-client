@@ -27,6 +27,8 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibE
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -45,6 +47,14 @@ public class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisCl
     private static final long DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
     private static final long DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
 
+    /**
+     * Used to get information about leases for Kinesis shards (e.g. sync shards and leases, check on parent shard
+     * completion).
+     *
+     * @return LeaseManager
+     */
+    @Getter
+    @Accessors(fluent = true)
     private final ILeaseManager<KinesisClientLease> leaseManager;
 
     private long initialLeaseTableReadCapacity = DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY;
@@ -133,7 +143,7 @@ public class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisCl
      * 
      * @param shardId shardId to update the checkpoint for
      * @param checkpoint checkpoint value to set
-     * @param concurrencyToken obtained by calling Lease.getConcurrencyToken for a currently held lease
+     * @param concurrencyToken obtained by calling Lease.concurrencyToken for a currently held lease
      * 
      * @return true if checkpoint update succeeded, false otherwise
      * 
@@ -198,7 +208,7 @@ public class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisCl
      *
      * @param shardId shardId to update the checkpoint for
      * @param pendingCheckpoint pending checkpoint value to set, not null
-     * @param concurrencyToken obtained by calling Lease.getConcurrencyToken for a currently held lease
+     * @param concurrencyToken obtained by calling Lease.concurrencyToken for a currently held lease
      *
      * @return true if setting the pending checkpoint succeeded, false otherwise
      *
@@ -326,16 +336,6 @@ public class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisCl
      */
     public void runLeaseRenewer() throws DependencyException, InvalidStateException {
         super.runRenewer();
-    }
-
-    /**
-     * Used to get information about leases for Kinesis shards (e.g. sync shards and leases, check on parent shard
-     * completion).
-     * 
-     * @return LeaseManager
-     */
-    public ILeaseManager<KinesisClientLease> getLeaseManager() {
-        return leaseManager;
     }
 
 }

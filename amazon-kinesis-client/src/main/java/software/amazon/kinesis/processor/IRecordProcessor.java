@@ -50,7 +50,7 @@ public interface IRecordProcessor {
      *
      * <h2><b>Warning</b></h2>
      *
-     * When the value of {@link ShutdownInput#getShutdownReason()} is
+     * When the value of {@link ShutdownInput#shutdownReason()} is
      * {@link ShutdownReason#TERMINATE} it is required that you
      * checkpoint. Failure to do so will result in an IllegalArgumentException, and the KCL no longer making progress.
      *
