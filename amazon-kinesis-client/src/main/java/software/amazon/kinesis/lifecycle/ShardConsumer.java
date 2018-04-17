@@ -18,80 +18,85 @@ package software.amazon.kinesis.lifecycle;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
+import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import com.google.common.annotations.VisibleForTesting;
 
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.Synchronized;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.checkpoint.Checkpoint;
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
-import software.amazon.kinesis.coordinator.StreamConfig;
 import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.LeaseManager;
+import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.retrieval.AsynchronousGetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
-import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
-import software.amazon.kinesis.retrieval.KinesisDataFetcher;
-import software.amazon.kinesis.retrieval.SynchronousGetRecordsRetrievalStrategy;
 
 /**
  * Responsible for consuming data records of a (specified) shard.
  * The instance should be shutdown when we lose the primary responsibility for a shard.
  * A new instance should be created if the primary responsibility is reassigned back to this process.
  */
+@RequiredArgsConstructor
+@Getter(AccessLevel.PACKAGE)
+@Accessors(fluent = true)
 @Slf4j
 public class ShardConsumer {
-    //<editor-fold desc="Class Variables">
-    private final StreamConfig streamConfig;
-    private final IRecordProcessor recordProcessor;
-    private final KinesisClientLibConfiguration config;
-    private final RecordProcessorCheckpointer recordProcessorCheckpointer;
-    private final ExecutorService executorService;
+    @NonNull
     private final ShardInfo shardInfo;
-    private final KinesisDataFetcher dataFetcher;
-    private final IMetricsFactory metricsFactory;
+    @NonNull
+    private final String streamName;
+    @NonNull
     private final ILeaseManager<KinesisClientLease> leaseManager;
-    private ICheckpoint checkpoint;
-    // Backoff time when polling to check if application has finished processing parent shards
+    @NonNull
+    private final ExecutorService executorService;
+    @NonNull
+    private final GetRecordsCache getRecordsCache;
+    @NonNull
+    private final IRecordProcessor recordProcessor;
+    @NonNull
+    private final ICheckpoint checkpoint;
+    @NonNull
+    private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final long parentShardPollIntervalMillis;
-    private final boolean cleanupLeasesOfCompletedShards;
     private final long taskBackoffTimeMillis;
+    @NonNull
+    private final Optional<Long> logWarningForTaskAfterMillis;
+    @NonNull
+    private final AmazonKinesis amazonKinesis;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
+    private final long listShardsBackoffTimeInMillis;
+    private final int maxListShardsRetryAttempts;
+    private final boolean shouldCallProcessRecordsEvenForEmptyRecordList;
+    private final long idleTimeInMilliseconds;
+    @NonNull
+    private final InitialPositionInStreamExtended initialPositionInStream;
+    private final boolean cleanupLeasesOfCompletedShards;
+    private final boolean ignoreUnexpectedChildShards;
+    @NonNull
+    private final LeaseManagerProxy leaseManagerProxy;
+    @NonNull
+    private final IMetricsFactory metricsFactory;
 
     private ITask currentTask;
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
     private boolean started = false;
     private Instant taskDispatchedAt;
-    //</editor-fold>
-
-    //<editor-fold desc="Cache Management">
-    @Getter
-    private final GetRecordsCache getRecordsCache;
-
-    private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
-                                                                  Optional<Integer> retryGetRecordsInSeconds,
-                                                                  Optional<Integer> maxGetRecordsThreadPool,
-                                                                  ShardInfo shardInfo) {
-        Optional<GetRecordsRetrievalStrategy> getRecordsRetrievalStrategy = retryGetRecordsInSeconds.flatMap(retry ->
-                maxGetRecordsThreadPool.map(max ->
-                        new AsynchronousGetRecordsRetrievalStrategy(dataFetcher, retry, max, shardInfo.getShardId())));
-
-        return getRecordsRetrievalStrategy.orElse(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
-    }
-    //</editor-fold>
 
     /*
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
@@ -102,163 +107,9 @@ public class ShardConsumer {
      * Used to track if we lost the primary responsibility. Once set to true, we will start shutting down.
      * If we regain primary responsibility before shutdown is complete, Worker should create a new ShardConsumer object.
      */
+    @Getter(AccessLevel.PUBLIC)
     private volatile ShutdownReason shutdownReason;
     private volatile ShutdownNotification shutdownNotification;
-
-    //<editor-fold desc="Constructors">
-    /**
-     * @param shardInfo Shard information
-     * @param streamConfig Stream configuration to use
-     * @param checkpoint Checkpoint tracker
-     * @param recordProcessor Record processor used to process the data records for the shard
-     * @param config Kinesis library configuration
-     * @param leaseManager Used to create leases for new shards
-     * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
-     * @param executorService ExecutorService used to execute process tasks for this shard
-     * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
-     * @param backoffTimeMillis backoff interval when we encounter exceptions
-     */
-    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
-    ShardConsumer(ShardInfo shardInfo,
-                  StreamConfig streamConfig,
-                  ICheckpoint checkpoint,
-                  IRecordProcessor recordProcessor,
-                  ILeaseManager<KinesisClientLease> leaseManager,
-                  long parentShardPollIntervalMillis,
-                  boolean cleanupLeasesOfCompletedShards,
-                  ExecutorService executorService,
-                  IMetricsFactory metricsFactory,
-                  long backoffTimeMillis,
-                  boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                  KinesisClientLibConfiguration config) {
-        this(shardInfo,
-                streamConfig,
-                checkpoint,
-                recordProcessor,
-                leaseManager,
-                parentShardPollIntervalMillis,
-                cleanupLeasesOfCompletedShards,
-                executorService,
-                metricsFactory,
-                backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist,
-                Optional.empty(),
-                Optional.empty(),
-                config);
-    }
-
-    /**
-     * @param shardInfo Shard information
-     * @param streamConfig Stream configuration to use
-     * @param checkpoint Checkpoint tracker
-     * @param recordProcessor Record processor used to process the data records for the shard
-     * @param leaseManager Used to create leases for new shards
-     * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
-     * @param executorService ExecutorService used to execute process tasks for this shard
-     * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
-     * @param backoffTimeMillis backoff interval when we encounter exceptions
-     * @param retryGetRecordsInSeconds time in seconds to wait before the worker retries to get a record.
-     * @param maxGetRecordsThreadPool max number of threads in the getRecords thread pool.
-     * @param config Kinesis library configuration
-     */
-    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
-    public ShardConsumer(ShardInfo shardInfo,
-                         StreamConfig streamConfig,
-                         ICheckpoint checkpoint,
-                         IRecordProcessor recordProcessor,
-                         ILeaseManager<KinesisClientLease> leaseManager,
-                         long parentShardPollIntervalMillis,
-                         boolean cleanupLeasesOfCompletedShards,
-                         ExecutorService executorService,
-                         IMetricsFactory metricsFactory,
-                         long backoffTimeMillis,
-                         boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                         Optional<Integer> retryGetRecordsInSeconds,
-                         Optional<Integer> maxGetRecordsThreadPool,
-                         KinesisClientLibConfiguration config) {
-        
-        this(
-                shardInfo,
-                streamConfig,
-                checkpoint,
-                recordProcessor,
-                new RecordProcessorCheckpointer(
-                        shardInfo,
-                        checkpoint,
-                        new Checkpoint.SequenceNumberValidator(
-                                streamConfig.getStreamProxy(),
-                                shardInfo.getShardId(),
-                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
-                        metricsFactory),
-                leaseManager,
-                parentShardPollIntervalMillis,
-                cleanupLeasesOfCompletedShards,
-                executorService,
-                metricsFactory,
-                backoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo),
-                retryGetRecordsInSeconds,
-                maxGetRecordsThreadPool,
-                config
-        );
-    }
-
-    /**
-     * @param shardInfo Shard information
-     * @param streamConfig Stream Config to use
-     * @param checkpoint Checkpoint tracker
-     * @param recordProcessor Record processor used to process the data records for the shard
-     * @param recordProcessorCheckpointer RecordProcessorCheckpointer to use to checkpoint progress
-     * @param leaseManager Used to create leases for new shards
-     * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
-     * @param cleanupLeasesOfCompletedShards  clean up the leases of completed shards
-     * @param executorService ExecutorService used to execute process tasks for this shard
-     * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
-     * @param backoffTimeMillis backoff interval when we encounter exceptions
-     * @param skipShardSyncAtWorkerInitializationIfLeasesExist Skip sync at init if lease exists
-     * @param kinesisDataFetcher KinesisDataFetcher to fetch data from Kinesis streams.
-     * @param retryGetRecordsInSeconds time in seconds to wait before the worker retries to get a record
-     * @param maxGetRecordsThreadPool max number of threads in the getRecords thread pool
-     * @param config Kinesis library configuration
-     */
-    ShardConsumer(ShardInfo shardInfo,
-                  StreamConfig streamConfig,
-                  ICheckpoint checkpoint,
-                  IRecordProcessor recordProcessor,
-                  RecordProcessorCheckpointer recordProcessorCheckpointer,
-                  ILeaseManager<KinesisClientLease> leaseManager,
-                  long parentShardPollIntervalMillis,
-                  boolean cleanupLeasesOfCompletedShards,
-                  ExecutorService executorService,
-                  IMetricsFactory metricsFactory,
-                  long backoffTimeMillis,
-                  boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                  KinesisDataFetcher kinesisDataFetcher,
-                  Optional<Integer> retryGetRecordsInSeconds,
-                  Optional<Integer> maxGetRecordsThreadPool,
-                  KinesisClientLibConfiguration config) {
-        this.shardInfo = shardInfo;
-        this.streamConfig = streamConfig;
-        this.checkpoint = checkpoint;
-        this.recordProcessor = recordProcessor;
-        this.recordProcessorCheckpointer = recordProcessorCheckpointer;
-        this.leaseManager = leaseManager;
-        this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
-        this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
-        this.executorService = executorService;
-        this.metricsFactory = metricsFactory;
-        this.taskBackoffTimeMillis = backoffTimeMillis;
-        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
-        this.config = config;
-        this.dataFetcher = kinesisDataFetcher;
-        this.getRecordsCache = config.getRecordsFetcherFactory().createRecordsFetcher(
-                makeStrategy(this.dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, this.shardInfo),
-                this.getShardInfo().getShardId(), this.metricsFactory, this.config.getMaxRecords());
-    }
-    //</editor-fold>
-
-    //<editor-fold desc="Dispatch">
 
     private void start() {
         started = true;
@@ -279,11 +130,11 @@ public class ShardConsumer {
         if (taskDispatchedAt != null) {
             Duration taken = Duration.between(taskDispatchedAt, Instant.now());
             String commonMessage = String.format("Previous %s task still pending for shard %s since %s ago. ",
-                    currentTask.getTaskType(), shardInfo.getShardId(), taken);
+                    currentTask.taskType(), shardInfo.shardId(), taken);
             if (log.isDebugEnabled()) {
                 log.debug("{} Not submitting new task.", commonMessage);
             }
-            config.getLogWarningForTaskAfterMillis().ifPresent(value -> {
+            logWarningForTaskAfterMillis().ifPresent(value -> {
                 if (taken.toMillis() > value) {
                     log.warn(commonMessage);
                 }
@@ -316,27 +167,27 @@ public class ShardConsumer {
                     taskDispatchedAt = Instant.now();
                     currentTaskSubmitTime = System.currentTimeMillis();
                     submittedNewTask = true;
-                    log.debug("Submitted new {} task for shard {}", currentTask.getTaskType(), shardInfo.getShardId());
+                    log.debug("Submitted new {} task for shard {}", currentTask.taskType(), shardInfo.shardId());
                 } catch (RejectedExecutionException e) {
-                    log.info("{} task was not accepted for execution.", currentTask.getTaskType(), e);
+                    log.info("{} task was not accepted for execution.", currentTask.taskType(), e);
                 } catch (RuntimeException e) {
-                    log.info("{} task encountered exception ", currentTask.getTaskType(), e);
+                    log.info("{} task encountered exception ", currentTask.taskType(), e);
                 }
             } else {
                 if (log.isDebugEnabled()) {
                     log.debug("No new task to submit for shard {}, currentState {}",
-                            shardInfo.getShardId(),
+                            shardInfo.shardId(),
                             currentState.toString());
                 }
             }
         } else {
             final long timeElapsed = System.currentTimeMillis() - currentTaskSubmitTime;
-            final String commonMessage = String.format("Previous %s task still pending for shard %s since %d ms ago. ",
-                    currentTask.getTaskType(), shardInfo.getShardId(), timeElapsed);
+            final String commonMessage = String.format("Previous %s task still pending for shard %s since %d ms ago.",
+                    currentTask.taskType(), shardInfo.shardId(), timeElapsed);
             if (log.isDebugEnabled()) {
                 log.debug("{} Not submitting new task.", commonMessage);
             }
-            config.getLogWarningForTaskAfterMillis().ifPresent(value -> {
+            logWarningForTaskAfterMillis().ifPresent(value -> {
                 if (timeElapsed > value) {
                     log.warn(commonMessage);
                 }
@@ -354,9 +205,6 @@ public class ShardConsumer {
     private void handleTaskCompleted(ITask task) {
         if (future != null) {
             executorService.submit(() -> {
-                //
-                // Determine task outcome will wait on the future for us.  The value of the future
-                //
                 resolveFuture();
                 if (shouldDispatchNextTask()) {
                     checkAndSubmitNextTask();
@@ -371,10 +219,6 @@ public class ShardConsumer {
 
         }
 
-    }
-
-    public boolean isSkipShardSyncAtWorkerInitializationIfLeasesExist() {
-        return skipShardSyncAtWorkerInitializationIfLeasesExist;
     }
 
     private enum TaskOutcome {
@@ -413,9 +257,9 @@ public class ShardConsumer {
             Exception taskException = taskResult.getException();
             if (taskException instanceof BlockedOnParentShardException) {
                 // No need to log the stack trace for this exception (it is very specific).
-                log.debug("Shard {} is blocked on completion of parent shard.", shardInfo.getShardId());
+                log.debug("Shard {} is blocked on completion of parent shard.", shardInfo.shardId());
             } else {
-                log.debug("Caught exception running {} task: ", currentTask.getTaskType(), taskResult.getException());
+                log.debug("Caught exception running {} task: ", currentTask.taskType(), taskResult.getException());
             }
         }
     }
@@ -448,12 +292,12 @@ public class ShardConsumer {
         if (isShutdownRequested() && taskOutcome != TaskOutcome.FAILURE) {
             currentState = currentState.shutdownTransition(shutdownReason);
         } else if (taskOutcome == TaskOutcome.SUCCESSFUL) {
-            if (currentState.getTaskType() == currentTask.getTaskType()) {
+            if (currentState.getTaskType() == currentTask.taskType()) {
                 currentState = currentState.successTransition();
             } else {
                 log.error("Current State task type of '{}' doesn't match the current tasks type of '{}'.  This"
                         + " shouldn't happen, and indicates a programming error. Unable to safely transition to the"
-                        + " next state.", currentState.getTaskType(), currentTask.getTaskType());
+                        + " next state.", currentState.getTaskType(), currentTask.taskType());
             }
         }
         //
@@ -462,9 +306,6 @@ public class ShardConsumer {
 
     }
 
-    //</editor-fold>
-
-    //<editor-fold desc="Shutdown">
     /**
      * Requests the shutdown of the this ShardConsumer. This should give the record processor a chance to checkpoint
      * before being shutdown.
@@ -507,21 +348,11 @@ public class ShardConsumer {
         return currentState.isTerminal();
     }
 
-    /**
-     * @return the shutdownReason
-     */
-    public ShutdownReason getShutdownReason() {
-        return shutdownReason;
-    }
-
     @VisibleForTesting
     public boolean isShutdownRequested() {
         return shutdownReason != null;
     }
 
-    //</editor-fold>
-
-    //<editor-fold desc="State Creation Accessors">
     /**
      * Private/Internal method - has package level access solely for testing purposes.
      * 
@@ -530,62 +361,4 @@ public class ShardConsumer {
     ConsumerStates.ShardConsumerState getCurrentState() {
         return currentState.getState();
     }
-
-    StreamConfig getStreamConfig() {
-        return streamConfig;
-    }
-
-    IRecordProcessor getRecordProcessor() {
-        return recordProcessor;
-    }
-
-    RecordProcessorCheckpointer getRecordProcessorCheckpointer() {
-        return recordProcessorCheckpointer;
-    }
-
-    ExecutorService getExecutorService() {
-        return executorService;
-    }
-
-    ShardInfo getShardInfo() {
-        return shardInfo;
-    }
-
-    KinesisDataFetcher getDataFetcher() {
-        return dataFetcher;
-    }
-
-    ILeaseManager<KinesisClientLease> getLeaseManager() {
-        return leaseManager;
-    }
-
-    ICheckpoint getCheckpoint() {
-        return checkpoint;
-    }
-
-    long getParentShardPollIntervalMillis() {
-        return parentShardPollIntervalMillis;
-    }
-
-    boolean isCleanupLeasesOfCompletedShards() {
-        return cleanupLeasesOfCompletedShards;
-    }
-
-    boolean isIgnoreUnexpectedChildShards() {
-        return config.shouldIgnoreUnexpectedChildShards();
-    }
-
-    long getTaskBackoffTimeMillis() {
-        return taskBackoffTimeMillis;
-    }
-
-    Future<TaskResult> getFuture() {
-        return future;
-    }
-
-    ShutdownNotification getShutdownNotification() {
-        return shutdownNotification;
-    }
-    //</editor-fold>
-
 }

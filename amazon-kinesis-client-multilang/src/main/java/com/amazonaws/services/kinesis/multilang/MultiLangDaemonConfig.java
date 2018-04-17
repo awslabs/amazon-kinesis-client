@@ -24,6 +24,7 @@ import com.amazonaws.services.kinesis.multilang.config.KinesisClientLibConfigura
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.retrieval.RetrievalConfig;
 
 /**
  * This class captures the configuration needed to run the MultiLangDaemon.
@@ -115,7 +116,7 @@ public class MultiLangDaemonConfig {
         log.info("Using credentials with access key id: {}",
                 kinesisClientLibConfig.getKinesisCredentialsProvider().getCredentials().getAWSAccessKeyId());
 
-        StringBuilder userAgent = new StringBuilder(KinesisClientLibConfiguration.KINESIS_CLIENT_LIB_USER_AGENT);
+        StringBuilder userAgent = new StringBuilder(RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT);
         userAgent.append(" ");
         userAgent.append(USER_AGENT);
         userAgent.append("/");

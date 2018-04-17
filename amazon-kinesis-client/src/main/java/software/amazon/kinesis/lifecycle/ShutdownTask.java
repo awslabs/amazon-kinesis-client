@@ -15,69 +15,53 @@
 package software.amazon.kinesis.lifecycle;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.leases.ShardSyncer;
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.retrieval.GetRecordsCache;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.ILeaseManager;
-import software.amazon.kinesis.metrics.MetricsHelper;
-import software.amazon.kinesis.metrics.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.ShardSyncer;
+import software.amazon.kinesis.metrics.MetricsHelper;
+import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.retrieval.GetRecordsCache;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * Task for invoking the RecordProcessor shutdown() callback.
  */
+@RequiredArgsConstructor
 @Slf4j
 public class ShutdownTask implements ITask {
     private static final String RECORD_PROCESSOR_SHUTDOWN_METRIC = "RecordProcessor.shutdown";
 
+    @NonNull
     private final ShardInfo shardInfo;
+    @NonNull
+    private final LeaseManagerProxy leaseManagerProxy;
+    @NonNull
     private final IRecordProcessor recordProcessor;
+    @NonNull
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
+    @NonNull
     private final ShutdownReason reason;
-    private final IKinesisProxy kinesisProxy;
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
     private final boolean ignoreUnexpectedChildShards;
-    private final TaskType taskType = TaskType.SHUTDOWN;
+    @NonNull
+    private final ILeaseManager<KinesisClientLease> leaseManager;
     private final long backoffTimeMillis;
+    @NonNull
     private final GetRecordsCache getRecordsCache;
-    private TaskCompletedListener listener;
 
-    /**
-     * Constructor.
-     */
-    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
-    ShutdownTask(ShardInfo shardInfo,
-                 IRecordProcessor recordProcessor,
-                 RecordProcessorCheckpointer recordProcessorCheckpointer,
-                 ShutdownReason reason,
-                 IKinesisProxy kinesisProxy,
-                 InitialPositionInStreamExtended initialPositionInStream,
-                 boolean cleanupLeasesOfCompletedShards,
-                 boolean ignoreUnexpectedChildShards,
-                 ILeaseManager<KinesisClientLease> leaseManager,
-                 long backoffTimeMillis, 
-                 GetRecordsCache getRecordsCache) {
-        this.shardInfo = shardInfo;
-        this.recordProcessor = recordProcessor;
-        this.recordProcessorCheckpointer = recordProcessorCheckpointer;
-        this.reason = reason;
-        this.kinesisProxy = kinesisProxy;
-        this.initialPositionInStream = initialPositionInStream;
-        this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
-        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
-        this.leaseManager = leaseManager;
-        this.backoffTimeMillis = backoffTimeMillis;
-        this.getRecordsCache = getRecordsCache;
-    }
+    private final TaskType taskType = TaskType.SHUTDOWN;
+    private TaskCompletedListener listener;
 
     /*
      * Invokes RecordProcessor shutdown() API.
@@ -94,31 +78,31 @@ public class ShutdownTask implements ITask {
             try {
                 // If we reached end of the shard, set sequence number to SHARD_END.
                 if (reason == ShutdownReason.TERMINATE) {
-                    recordProcessorCheckpointer.setSequenceNumberAtShardEnd(
-                            recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
-                    recordProcessorCheckpointer.setLargestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
+                    recordProcessorCheckpointer.sequenceNumberAtShardEnd(
+                            recordProcessorCheckpointer.largestPermittedCheckpointValue());
+                    recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
                 }
 
                 log.debug("Invoking shutdown() for shard {}, concurrencyToken {}. Shutdown reason: {}",
-                        shardInfo.getShardId(), shardInfo.getConcurrencyToken(), reason);
+                        shardInfo.shardId(), shardInfo.concurrencyToken(), reason);
                 final ShutdownInput shutdownInput = new ShutdownInput()
-                        .withShutdownReason(reason)
-                        .withCheckpointer(recordProcessorCheckpointer);
+                        .shutdownReason(reason)
+                        .checkpointer(recordProcessorCheckpointer);
                 final long recordProcessorStartTimeMillis = System.currentTimeMillis();
                 try {
                     recordProcessor.shutdown(shutdownInput);
-                    ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
+                    ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.lastCheckpointValue();
 
                     if (reason == ShutdownReason.TERMINATE) {
                         if ((lastCheckpointValue == null)
                                 || (!lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END))) {
                             throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
-                                    + shardInfo.getShardId());
+                                    + shardInfo.shardId());
                         }
                     }
                     log.debug("Shutting down retrieval strategy.");
                     getRecordsCache.shutdown();
-                    log.debug("Record processor completed shutdown() for shard {}", shardInfo.getShardId());
+                    log.debug("Record processor completed shutdown() for shard {}", shardInfo.shardId());
                 } catch (Exception e) {
                     applicationException = true;
                     throw e;
@@ -128,14 +112,14 @@ public class ShutdownTask implements ITask {
                 }
 
                 if (reason == ShutdownReason.TERMINATE) {
-                    log.debug("Looking for child shards of shard {}", shardInfo.getShardId());
+                    log.debug("Looking for child shards of shard {}", shardInfo.shardId());
                     // create leases for the child shards
-                    ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
+                    ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy,
                             leaseManager,
                             initialPositionInStream,
                             cleanupLeasesOfCompletedShards,
                             ignoreUnexpectedChildShards);
-                    log.debug("Finished checking for child shards of shard {}", shardInfo.getShardId());
+                    log.debug("Finished checking for child shards of shard {}", shardInfo.shardId());
                 }
 
                 return new TaskResult(null);
@@ -165,10 +149,10 @@ public class ShutdownTask implements ITask {
     /*
      * (non-Javadoc)
      * 
-     * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#getTaskType()
+     * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#taskType()
      */
     @Override
-    public TaskType getTaskType() {
+    public TaskType taskType() {
         return taskType;
     }
 

@@ -15,25 +15,35 @@
 
 package software.amazon.kinesis.coordinator;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
+import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
+import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.leases.ShardSyncTask;
@@ -41,25 +51,29 @@ import software.amazon.kinesis.leases.ShardSyncTaskManager;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
+import software.amazon.kinesis.lifecycle.ShardConsumerShutdownNotification;
+import software.amazon.kinesis.lifecycle.ShutdownNotification;
 import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.metrics.CWMetricsFactory;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.metrics.MetricsConfig;
+import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.IShutdownNotificationAware;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ProcessorFactory;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
 /**
  *
  */
 @Getter
+@Accessors(fluent = true)
 @Slf4j
 public class Scheduler implements Runnable {
-    private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
+    static final int MAX_INITIALIZATION_ATTEMPTS = 20;
     private WorkerLog wlog = new WorkerLog();
 
     private final CheckpointConfig checkpointConfig;
@@ -69,8 +83,6 @@ public class Scheduler implements Runnable {
     private final MetricsConfig metricsConfig;
     private final ProcessorConfig processorConfig;
     private final RetrievalConfig retrievalConfig;
-    // TODO: Should be removed.
-    private final KinesisClientLibConfiguration config;
 
     private final String applicationName;
     private final ICheckpoint checkpoint;
@@ -81,7 +93,7 @@ public class Scheduler implements Runnable {
     private final ExecutorService executorService;
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final KinesisClientLibLeaseCoordinator leaseCoordinator;
-    private final ShardSyncTaskManager controlServer;
+    private final ShardSyncTaskManager shardSyncTaskManager;
     private final ShardPrioritization shardPrioritization;
     private final boolean cleanupLeasesUponShardCompletion;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -90,16 +102,20 @@ public class Scheduler implements Runnable {
     private final InitialPositionInStreamExtended initialPosition;
     private final IMetricsFactory metricsFactory;
     private final long failoverTimeMillis;
-    private final ProcessorFactory processorFactory;
     private final long taskBackoffTimeMillis;
     private final Optional<Integer> retryGetRecordsInSeconds;
     private final Optional<Integer> maxGetRecordsThreadPool;
-
-    private final StreamConfig streamConfig;
+    private final AmazonKinesis amazonKinesis;
+    private final String streamName;
+    private final long listShardsBackoffTimeMillis;
+    private final int maxListShardsRetryAttempts;
+    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseManagerProxy leaseManagerProxy;
+    private final boolean ignoreUnexpetedChildShards;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
-    private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap = new ConcurrentHashMap<ShardInfo, ShardConsumer>();
+    private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap = new ConcurrentHashMap<>();
 
     private volatile boolean shutdown;
     private volatile long shutdownStartTimeMillis;
@@ -118,8 +134,7 @@ public class Scheduler implements Runnable {
                      @NonNull final LifecycleConfig lifecycleConfig,
                      @NonNull final MetricsConfig metricsConfig,
                      @NonNull final ProcessorConfig processorConfig,
-                     @NonNull final RetrievalConfig retrievalConfig,
-                     @NonNull final KinesisClientLibConfiguration config) {
+                     @NonNull final RetrievalConfig retrievalConfig) {
         this.checkpointConfig = checkpointConfig;
         this.coordinatorConfig = coordinatorConfig;
         this.leaseManagementConfig = leaseManagementConfig;
@@ -127,7 +142,6 @@ public class Scheduler implements Runnable {
         this.metricsConfig = metricsConfig;
         this.processorConfig = processorConfig;
         this.retrievalConfig = retrievalConfig;
-        this.config = config;
 
         this.applicationName = this.coordinatorConfig.applicationName();
         this.checkpoint = this.checkpointConfig.checkpointFactory().createCheckpoint();
@@ -136,7 +150,7 @@ public class Scheduler implements Runnable {
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
         this.leaseCoordinator =
                 this.leaseManagementConfig.leaseManagementFactory().createKinesisClientLibLeaseCoordinator();
-        this.controlServer = this.leaseManagementConfig.leaseManagementFactory().createShardSyncTaskManager();
+        this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory().createShardSyncTaskManager();
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
@@ -144,21 +158,19 @@ public class Scheduler implements Runnable {
         this.gracefulShutdownCoordinator =
                 this.coordinatorConfig.coordinatorFactory().createGracefulShutdownCoordinator();
         this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory().createWorkerStateChangeListener();
-        this.initialPosition =
-                InitialPositionInStreamExtended.newInitialPosition(this.retrievalConfig.initialPositionInStream());
+        this.initialPosition = retrievalConfig.initialPositionInStreamExtended();
         this.metricsFactory = this.coordinatorConfig.metricsFactory();
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
-        this.processorFactory = this.processorConfig.processorFactory();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
         this.retryGetRecordsInSeconds = this.retrievalConfig.retryGetRecordsInSeconds();
         this.maxGetRecordsThreadPool = this.retrievalConfig.maxGetRecordsThreadPool();
-
-        this.streamConfig = createStreamConfig(this.retrievalConfig.retrievalFactory().createKinesisProxy(),
-                this.retrievalConfig.maxRecords(),
-                this.idleTimeInMilliseconds,
-                this.processorConfig.callProcessRecordsEvenForEmptyRecordList(),
-                this.checkpointConfig.validateSequenceNumberBeforeCheckpointing(),
-                this.initialPosition);
+        this.amazonKinesis = this.retrievalConfig.amazonKinesis();
+        this.streamName = this.retrievalConfig.streamName();
+        this.listShardsBackoffTimeMillis = this.retrievalConfig.listShardsBackoffTimeInMillis();
+        this.maxListShardsRetryAttempts = this.retrievalConfig.maxListShardsRetryAttempts();
+        this.leaseManager = this.leaseCoordinator.leaseManager();
+        this.leaseManagerProxy = this.shardSyncTaskManager.leaseManagerProxy();
+        this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
     }
 
     /**
@@ -173,8 +185,8 @@ public class Scheduler implements Runnable {
         try {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
-        } catch (RuntimeException e1) {
-            log.error("Unable to initialize after {} attempts. Shutting down.", MAX_INITIALIZATION_ATTEMPTS, e1);
+        } catch (RuntimeException e) {
+            log.error("Unable to initialize after {} attempts. Shutting down.", MAX_INITIALIZATION_ATTEMPTS, e);
             shutdown();
         }
 
@@ -199,14 +211,13 @@ public class Scheduler implements Runnable {
 
                 TaskResult result = null;
                 if (!skipShardSyncAtWorkerInitializationIfLeasesExist
-                        || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
+                        || leaseManager.isLeaseTableEmpty()) {
                     log.info("Syncing Kinesis shard info");
-                    ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
-                            leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
-                            leaseManagementConfig.ignoreUnexpectedChildShards(), 0L);
+                    ShardSyncTask shardSyncTask = new ShardSyncTask(leaseManagerProxy, leaseManager, initialPosition,
+                            cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
-                    log.info("Skipping shard sync per config setting (and lease table is not empty)");
+                    log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
                 }
 
                 if (result == null || result.getException() == null) {
@@ -246,8 +257,8 @@ public class Scheduler implements Runnable {
             boolean foundCompletedShard = false;
             Set<ShardInfo> assignedShards = new HashSet<>();
             for (ShardInfo shardInfo : getShardInfoForAssignments()) {
-                ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, processorFactory);
-                if (shardConsumer.isShutdown() && shardConsumer.getShutdownReason().equals(ShutdownReason.TERMINATE)) {
+                ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, processorConfig.processorFactory());
+                if (shardConsumer.isShutdown() && shardConsumer.shutdownReason().equals(ShutdownReason.TERMINATE)) {
                     foundCompletedShard = true;
                 } else {
                     shardConsumer.consumeShard();
@@ -256,7 +267,7 @@ public class Scheduler implements Runnable {
             }
 
             if (foundCompletedShard) {
-                controlServer.syncShardAndLeaseInfo(null);
+                shardSyncTaskManager.syncShardAndLeaseInfo();
             }
 
             // clean up shard consumers for unassigned shards
@@ -302,6 +313,117 @@ public class Scheduler implements Runnable {
     }
 
     /**
+     * Requests a graceful shutdown of the worker, notifying record processors, that implement
+     * {@link IShutdownNotificationAware}, of the impending shutdown. This gives the record processor a final chance to
+     * checkpoint.
+     *
+     * This will only create a single shutdown future. Additional attempts to start a graceful shutdown will return the
+     * previous future.
+     *
+     * <b>It's possible that a record processor won't be notify before being shutdown. This can occur if the lease is
+     * lost after requesting shutdown, but before the notification is dispatched.</b>
+     *
+     * <h2>Requested Shutdown Process</h2> When a shutdown process is requested it operates slightly differently to
+     * allow the record processors a chance to checkpoint a final time.
+     * <ol>
+     * <li>Call to request shutdown invoked.</li>
+     * <li>Worker stops attempting to acquire new leases</li>
+     * <li>Record Processor Shutdown Begins
+     * <ol>
+     * <li>Record processor is notified of the impending shutdown, and given a final chance to checkpoint</li>
+     * <li>The lease for the record processor is then dropped.</li>
+     * <li>The record processor enters into an idle state waiting for the worker to complete final termination</li>
+     * <li>The worker will detect a record processor that has lost it's lease, and will terminate the record processor
+     * with {@link ShutdownReason#ZOMBIE}</li>
+     * </ol>
+     * </li>
+     * <li>The worker will shutdown all record processors.</li>
+     * <li>Once all record processors have been terminated, the worker will terminate all owned resources.</li>
+     * <li>Once the worker shutdown is complete, the returned future is completed.</li>
+     * </ol>
+     *
+     * @return a future that will be set once the shutdown has completed. True indicates that the graceful shutdown
+     *         completed successfully. A false value indicates that a non-exception case caused the shutdown process to
+     *         terminate early.
+     */
+    public Future<Boolean> startGracefulShutdown() {
+        synchronized (this) {
+            if (gracefulShutdownFuture == null) {
+                gracefulShutdownFuture = gracefulShutdownCoordinator
+                        .startGracefulShutdown(createGracefulShutdownCallable());
+            }
+        }
+        return gracefulShutdownFuture;
+    }
+
+    /**
+     * Creates a callable that will execute the graceful shutdown process. This callable can be used to execute graceful
+     * shutdowns in your own executor, or execute the shutdown synchronously.
+     *
+     * @return a callable that run the graceful shutdown process. This may return a callable that return true if the
+     *         graceful shutdown has already been completed.
+     * @throws IllegalStateException
+     *             thrown by the callable if another callable has already started the shutdown process.
+     */
+    public Callable<Boolean> createGracefulShutdownCallable() {
+        if (shutdownComplete()) {
+            return () -> true;
+        }
+        Callable<GracefulShutdownContext> startShutdown = createWorkerShutdownCallable();
+        return gracefulShutdownCoordinator.createGracefulShutdownCallable(startShutdown);
+    }
+
+    public boolean hasGracefulShutdownStarted() {
+        return gracefuleShutdownStarted;
+    }
+
+    @VisibleForTesting
+    Callable<GracefulShutdownContext> createWorkerShutdownCallable() {
+        return () -> {
+            synchronized (this) {
+                if (this.gracefuleShutdownStarted) {
+                    throw new IllegalStateException("Requested shutdown has already been started");
+                }
+                this.gracefuleShutdownStarted = true;
+            }
+            //
+            // Stop accepting new leases. Once we do this we can be sure that
+            // no more leases will be acquired.
+            //
+            leaseCoordinator.stopLeaseTaker();
+
+            Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
+            if (leases == null || leases.isEmpty()) {
+                //
+                // If there are no leases notification is already completed, but we still need to shutdown the worker.
+                //
+                this.shutdown();
+                return GracefulShutdownContext.SHUTDOWN_ALREADY_COMPLETED;
+            }
+            CountDownLatch shutdownCompleteLatch = new CountDownLatch(leases.size());
+            CountDownLatch notificationCompleteLatch = new CountDownLatch(leases.size());
+            for (KinesisClientLease lease : leases) {
+                ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(leaseCoordinator,
+                        lease, notificationCompleteLatch, shutdownCompleteLatch);
+                ShardInfo shardInfo = KinesisClientLibLeaseCoordinator.convertLeaseToAssignment(lease);
+                ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
+                if (consumer != null) {
+                    consumer.notifyShutdownRequested(shutdownNotification);
+                } else {
+                    //
+                    // There is a race condition between retrieving the current assignments, and creating the
+                    // notification. If the a lease is lost in between these two points, we explicitly decrement the
+                    // notification latches to clear the shutdown.
+                    //
+                    notificationCompleteLatch.countDown();
+                    shutdownCompleteLatch.countDown();
+                }
+            }
+            return new GracefulShutdownContext(shutdownCompleteLatch, notificationCompleteLatch, this);
+        };
+    }
+
+    /**
      * Signals worker to shutdown. Worker will try initiating shutdown of all record processors. Note that if executor
      * services were passed to the worker by the user, worker will not attempt to shutdown those resources.
      *
@@ -341,11 +463,11 @@ public class Scheduler implements Runnable {
     private void finalShutdown() {
         log.info("Starting worker's final shutdown.");
 
-        if (executorService instanceof Worker.WorkerThreadPoolExecutor) {
+        if (executorService instanceof SchedulerCoordinatorFactory.SchedulerThreadPoolExecutor) {
             // This should interrupt all active record processor tasks.
             executorService.shutdownNow();
         }
-        if (metricsFactory instanceof Worker.WorkerCWMetricsFactory) {
+        if (metricsFactory instanceof SchedulerCWMetricsFactory) {
             ((CWMetricsFactory) metricsFactory).shutdown();
         }
         shutdownComplete = true;
@@ -363,7 +485,7 @@ public class Scheduler implements Runnable {
                     if (!firstItem) {
                         builder.append(", ");
                     }
-                    builder.append(shardInfo.getShardId());
+                    builder.append(shardInfo.shardId());
                     firstItem = false;
                 }
                 wlog.info("Current stream shard assignments: " + builder.toString());
@@ -380,11 +502,10 @@ public class Scheduler implements Runnable {
      *
      * @param shardInfo
      *            Kinesis shard info
-     * @param processorFactory
-     *            RecordProcessor factory
      * @return ShardConsumer for the shard
      */
-    ShardConsumer createOrGetShardConsumer(ShardInfo shardInfo, ProcessorFactory processorFactory) {
+    ShardConsumer createOrGetShardConsumer(@NonNull final ShardInfo shardInfo,
+                                           @NonNull final ProcessorFactory processorFactory) {
         ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
         // Instantiate a new consumer if we don't have one, or the one we
         // had was from an earlier
@@ -392,7 +513,7 @@ public class Scheduler implements Runnable {
         // one if the shard has been
         // completely processed (shutdown reason terminate).
         if ((consumer == null)
-                || (consumer.isShutdown() && consumer.getShutdownReason().equals(ShutdownReason.ZOMBIE))) {
+                || (consumer.isShutdown() && consumer.shutdownReason().equals(ShutdownReason.ZOMBIE))) {
             consumer = buildConsumer(shardInfo, processorFactory);
             shardInfoShardConsumerMap.put(shardInfo, consumer);
             wlog.infoForce("Created new shardConsumer for : " + shardInfo);
@@ -400,33 +521,32 @@ public class Scheduler implements Runnable {
         return consumer;
     }
 
-    private static StreamConfig createStreamConfig(@NonNull final IKinesisProxy kinesisProxy,
-                                                   final int maxRecords,
-                                                   final long idleTimeInMilliseconds,
-                                                   final boolean shouldCallProcessRecordsEvenForEmptyRecordList,
-                                                   final boolean validateSequenceNumberBeforeCheckpointing,
-                                                   @NonNull final InitialPositionInStreamExtended initialPosition) {
-        return new StreamConfig(kinesisProxy, maxRecords, idleTimeInMilliseconds,
-                shouldCallProcessRecordsEvenForEmptyRecordList, validateSequenceNumberBeforeCheckpointing,
-                initialPosition);
-    }
-
-    protected ShardConsumer buildConsumer(ShardInfo shardInfo, ProcessorFactory processorFactory) {
+    protected ShardConsumer buildConsumer(@NonNull final ShardInfo shardInfo,
+                                          @NonNull final ProcessorFactory processorFactory) {
         return new ShardConsumer(shardInfo,
-                streamConfig,
-                checkpoint,
-                processorFactory.createRecordProcessor(),
-                leaseCoordinator.getLeaseManager(),
-                parentShardPollIntervalMillis,
-                cleanupLeasesUponShardCompletion,
+                streamName,
+                leaseManager,
                 executorService,
-                metricsFactory,
+                retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo),
+                processorFactory.createRecordProcessor(),
+                checkpoint,
+                coordinatorConfig.coordinatorFactory().createRecordProcessorCheckpointer(shardInfo,
+                        checkpoint,
+                        metricsFactory),
+                parentShardPollIntervalMillis,
                 taskBackoffTimeMillis,
+                lifecycleConfig.logWarningForTaskAfterMillis(),
+                amazonKinesis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
-                retryGetRecordsInSeconds,
-                maxGetRecordsThreadPool,
-                config);
-
+                listShardsBackoffTimeMillis,
+                maxListShardsRetryAttempts,
+                processorConfig.callProcessRecordsEvenForEmptyRecordList(),
+                idleTimeInMilliseconds,
+                initialPosition,
+                cleanupLeasesUponShardCompletion,
+                ignoreUnexpetedChildShards,
+                leaseManagerProxy,
+                metricsFactory);
     }
 
     /**
@@ -505,6 +625,23 @@ public class Scheduler implements Runnable {
             } else if (nextReportTime <= System.currentTimeMillis()) {
                 infoReporting = true;
             }
+        }
+    }
+
+    @Deprecated
+    public Future<Void> requestShutdown() {
+        return null;
+    }
+
+    /**
+     * Extension to CWMetricsFactory, so worker can identify whether it owns the metrics factory instance or not.
+     * Visible and non-final only for testing.
+     */
+    static class SchedulerCWMetricsFactory extends CWMetricsFactory {
+
+        SchedulerCWMetricsFactory(AmazonCloudWatch cloudWatchClient, String namespace, long bufferTimeMillis,
+                                  int maxQueueSize, MetricsLevel metricsLevel, Set<String> metricsEnabledDimensions) {
+            super(cloudWatchClient, namespace, bufferTimeMillis, maxQueueSize, metricsLevel, metricsEnabledDimensions);
         }
     }
 }

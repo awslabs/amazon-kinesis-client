@@ -16,6 +16,9 @@ package software.amazon.kinesis.lifecycle;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
 
+import lombok.AccessLevel;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
@@ -30,29 +33,19 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * If we don't find a checkpoint for the parent shard(s), we assume they have been trimmed and directly
  * proceed with processing data from the shard.
  */
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 @Slf4j
+// TODO: Check for non null values
 public class BlockOnParentShardTask implements ITask {
+    @NonNull
     private final ShardInfo shardInfo;
     private final ILeaseManager<KinesisClientLease> leaseManager;
-    
-    private final TaskType taskType = TaskType.BLOCK_ON_PARENT_SHARDS;
     // Sleep for this duration if the parent shards have not completed processing, or we encounter an exception.
     private final long parentShardPollIntervalMillis;
 
+    private final TaskType taskType = TaskType.BLOCK_ON_PARENT_SHARDS;
+
     private TaskCompletedListener listener;
-    
-    /**
-     * @param shardInfo Information about the shard we are working on
-     * @param leaseManager Used to fetch the lease and checkpoint info for parent shards
-     * @param parentShardPollIntervalMillis Sleep time if the parent shard has not completed processing
-     */
-    BlockOnParentShardTask(ShardInfo shardInfo,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            long parentShardPollIntervalMillis) {
-        this.shardInfo = shardInfo;
-        this.leaseManager = leaseManager;
-        this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
-    }
 
     /* (non-Javadoc)
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
@@ -64,7 +57,7 @@ public class BlockOnParentShardTask implements ITask {
 
             try {
                 boolean blockedOnParentShard = false;
-                for (String shardId : shardInfo.getParentShardIds()) {
+                for (String shardId : shardInfo.parentShardIds()) {
                     KinesisClientLease lease = leaseManager.getLease(shardId);
                     if (lease != null) {
                         ExtendedSequenceNumber checkpoint = lease.getCheckpoint();
@@ -82,8 +75,8 @@ public class BlockOnParentShardTask implements ITask {
                 }
 
                 if (!blockedOnParentShard) {
-                    log.info("No need to block on parents {} of shard {}", shardInfo.getParentShardIds(),
-                            shardInfo.getShardId());
+                    log.info("No need to block on parents {} of shard {}", shardInfo.parentShardIds(),
+                            shardInfo.shardId());
                     return new TaskResult(null);
                 }
             } catch (Exception e) {
@@ -93,7 +86,7 @@ public class BlockOnParentShardTask implements ITask {
             try {
                 Thread.sleep(parentShardPollIntervalMillis);
             } catch (InterruptedException e) {
-                log.error("Sleep interrupted when waiting on parent shard(s) of {}", shardInfo.getShardId(), e);
+                log.error("Sleep interrupted when waiting on parent shard(s) of {}", shardInfo.shardId(), e);
             }
 
             return new TaskResult(exception);
@@ -105,10 +98,10 @@ public class BlockOnParentShardTask implements ITask {
     }
 
     /* (non-Javadoc)
-     * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#getTaskType()
+     * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#taskType()
      */
     @Override
-    public TaskType getTaskType() {
+    public TaskType taskType() {
         return taskType;
     }
 

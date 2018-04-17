@@ -117,8 +117,8 @@ public class TestStreamlet implements IRecordProcessor, IShutdownNotificationAwa
 
     @Override
     public void shutdown(ShutdownInput input) {
-        ShutdownReason reason = input.getShutdownReason();
-        IRecordProcessorCheckpointer checkpointer = input.getCheckpointer();
+        ShutdownReason reason = input.shutdownReason();
+        IRecordProcessorCheckpointer checkpointer = input.checkpointer();
         if (shardSequenceVerifier != null) {
             shardSequenceVerifier.registerShutdown(shardId, reason);
         }

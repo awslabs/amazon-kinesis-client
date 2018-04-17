@@ -18,12 +18,12 @@ package software.amazon.kinesis.leases;
 import java.util.concurrent.ExecutorService;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 
 import lombok.Data;
 import lombok.NonNull;
 import software.amazon.kinesis.metrics.IMetricsFactory;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
 
 /**
  *
@@ -31,28 +31,32 @@ import software.amazon.kinesis.retrieval.IKinesisProxy;
 @Data
 public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     @NonNull
+    private final AmazonKinesis amazonKinesis;
+    @NonNull
+    private final String streamName;
+    @NonNull
+    private final AmazonDynamoDB amazonDynamoDB;
+    @NonNull
+    private final String tableName;
+    @NonNull
     private final String workerIdentifier;
+    @NonNull
+    private final ExecutorService executorService;
+    @NonNull
+    private final InitialPositionInStreamExtended initialPositionInStream;
     private final long failoverTimeMillis;
     private final long epsilonMillis;
     private final int maxLeasesForWorker;
     private final int maxLeasesToStealAtOneTime;
     private final int maxLeaseRenewalThreads;
-    @NonNull
-    private final IKinesisProxy kinesisProxy;
-    @NonNull
-    private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesUponShardCompletion;
     private final boolean ignoreUnexpectedChildShards;
     private final long shardSyncIntervalMillis;
+    private final boolean consistentReads;
+    private final long listShardsBackoffTimeMillis;
+    private final int maxListShardsRetryAttempts;
     @NonNull
     private final IMetricsFactory metricsFactory;
-    @NonNull
-    private final ExecutorService executorService;
-    @NonNull
-    private final String tableName;
-    @NonNull
-    private final AmazonDynamoDB amazonDynamoDB;
-    private final boolean consistentReads;
 
     @Override
     public LeaseCoordinator createLeaseCoordinator() {
@@ -61,18 +65,18 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
 
     @Override
     public ShardSyncTaskManager createShardSyncTaskManager() {
-        return new ShardSyncTaskManager(kinesisProxy,
+        return new ShardSyncTaskManager(this.createLeaseManagerProxy(),
                 this.createLeaseManager(),
                 initialPositionInStream,
                 cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards,
                 shardSyncIntervalMillis,
-                metricsFactory,
-                executorService);
+                executorService,
+                metricsFactory);
     }
 
     @Override
-    public LeaseManager createLeaseManager() {
+    public LeaseManager<KinesisClientLease> createLeaseManager() {
         return new KinesisClientLeaseManager(tableName, amazonDynamoDB, consistentReads);
     }
 
@@ -86,5 +90,11 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 maxLeasesToStealAtOneTime,
                 maxLeaseRenewalThreads,
                 metricsFactory);
+    }
+
+    @Override
+    public LeaseManagerProxy createLeaseManagerProxy() {
+        return new KinesisLeaseManagerProxy(amazonKinesis, streamName, listShardsBackoffTimeMillis,
+                maxListShardsRetryAttempts);
     }
 }

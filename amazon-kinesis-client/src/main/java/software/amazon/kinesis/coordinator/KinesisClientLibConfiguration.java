@@ -18,27 +18,26 @@ import java.util.Date;
 import java.util.Optional;
 import java.util.Set;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import org.apache.commons.lang.Validate;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.RegionUtils;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+import com.google.common.collect.ImmutableSet;
+
+import lombok.Getter;
 import software.amazon.kinesis.leases.NoOpShardPrioritization;
 import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.ProcessTask;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
-import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.IMetricsScope;
+import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
-import com.google.common.collect.ImmutableSet;
-
-import lombok.Getter;
 import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.retrieval.DataFetchingStrategy;
-import software.amazon.kinesis.retrieval.KinesisProxy;
 import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.SimpleRecordsFetcherFactory;
 
@@ -1419,7 +1418,7 @@ public class KinesisClientLibConfiguration {
 
     /**
      * @param listShardsBackoffTimeInMillis Max sleep between two listShards call when throttled
-     *                                     in {@link KinesisProxy}.
+     *                                     in KinesisProxy.
      * @return
      */
     public KinesisClientLibConfiguration withListShardsBackoffTimeInMillis(long listShardsBackoffTimeInMillis) {
@@ -1430,7 +1429,7 @@ public class KinesisClientLibConfiguration {
 
     /**
      * @param maxListShardsRetryAttempts Max number of retries for listShards when throttled
-     *                                   in {@link KinesisProxy}.
+     *                                   in KinesisProxy.
      * @return
      */
     public KinesisClientLibConfiguration withMaxListShardsRetryAttempts(int maxListShardsRetryAttempts) {

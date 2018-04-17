@@ -122,7 +122,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNoti
 
         try {
             if (ProcessState.ACTIVE.equals(this.state)) {
-                if (!protocol.shutdown(shutdownInput.getCheckpointer(), shutdownInput.getShutdownReason())) {
+                if (!protocol.shutdown(shutdownInput.checkpointer(), shutdownInput.shutdownReason())) {
                     throw new RuntimeException("Child process failed to shutdown");
                 }
 

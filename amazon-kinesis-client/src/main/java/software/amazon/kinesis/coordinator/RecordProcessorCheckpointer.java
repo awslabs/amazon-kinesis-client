@@ -19,59 +19,47 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibD
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingException;
-import software.amazon.kinesis.checkpoint.Checkpoint;
+import com.amazonaws.services.kinesis.model.Record;
+
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.checkpoint.DoesNothingPreparedCheckpointer;
 import software.amazon.kinesis.checkpoint.PreparedCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.metrics.MetricsHelper;
+import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingScope;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.IPreparedCheckpointer;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.retrieval.kpl.UserRecord;
-import software.amazon.kinesis.metrics.MetricsHelper;
-import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingScope;
-import software.amazon.kinesis.metrics.IMetricsFactory;
-import com.amazonaws.services.kinesis.model.Record;
-
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * This class is used to enable RecordProcessors to checkpoint their progress.
  * The Amazon Kinesis Client Library will instantiate an object and provide a reference to the application
  * RecordProcessor instance. Amazon Kinesis Client Library will create one instance per shard assignment.
  */
+@RequiredArgsConstructor
 @Slf4j
 public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
-    private ICheckpoint checkpoint;
+    @NonNull
+    private final ShardInfo shardInfo;
+    @NonNull
+    private final ICheckpoint checkpoint;
+    @NonNull
+    private final IMetricsFactory metricsFactory;
 
-    private ExtendedSequenceNumber largestPermittedCheckpointValue;
     // Set to the last value set via checkpoint().
     // Sample use: verify application shutdown() invoked checkpoint() at the end of a shard.
+    @Getter @Accessors(fluent = true)
     private ExtendedSequenceNumber lastCheckpointValue;
-
-    private ShardInfo shardInfo;
-
-    private Checkpoint.SequenceNumberValidator sequenceNumberValidator;
-
+    @Getter @Accessors(fluent = true)
+    private ExtendedSequenceNumber largestPermittedCheckpointValue;
     private ExtendedSequenceNumber sequenceNumberAtShardEnd;
-    
-    private IMetricsFactory metricsFactory;
-
-    /**
-     * Only has package level access, since only the Amazon Kinesis Client Library should be creating these.
-     *
-     * @param checkpoint Used to checkpoint progress of a RecordProcessor
-     * @param validator Used for validating sequence numbers
-     */
-    public RecordProcessorCheckpointer(ShardInfo shardInfo,
-                                       ICheckpoint checkpoint,
-                                       Checkpoint.SequenceNumberValidator validator,
-                                       IMetricsFactory metricsFactory) {
-        this.shardInfo = shardInfo;
-        this.checkpoint = checkpoint;
-        this.sequenceNumberValidator = validator;
-        this.metricsFactory = metricsFactory;
-    }
 
     /**
      * {@inheritDoc}
@@ -80,8 +68,8 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
     public synchronized void checkpoint()
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
         if (log.isDebugEnabled()) {
-            log.debug("Checkpointing {}, token {} at largest permitted value {}", shardInfo.getShardId(),
-                    shardInfo.getConcurrencyToken(), this.largestPermittedCheckpointValue);
+            log.debug("Checkpointing {}, token {} at largest permitted value {}", shardInfo.shardId(),
+                    shardInfo.concurrencyToken(), this.largestPermittedCheckpointValue);
         }
         advancePosition(this.largestPermittedCheckpointValue);
     }
@@ -125,11 +113,9 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
                     + subSequenceNumber);
         }
 
-        // throws exception if sequence number shouldn't be checkpointed for this shard
-        sequenceNumberValidator.validateSequenceNumber(sequenceNumber);
         if (log.isDebugEnabled()) {
             log.debug("Validated checkpoint sequence number {} for {}, token {}", sequenceNumber,
-                    shardInfo.getShardId(), shardInfo.getConcurrencyToken());
+                    shardInfo.shardId(), shardInfo.concurrencyToken());
         }
         /*
          * If there isn't a last checkpoint value, we only care about checking the upper bound.
@@ -140,8 +126,8 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
                 && newCheckpoint.compareTo(largestPermittedCheckpointValue) <= 0) {
 
             if (log.isDebugEnabled()) {
-                log.debug("Checkpointing {}, token {} at specific extended sequence number {}", shardInfo.getShardId(),
-                        shardInfo.getConcurrencyToken(), newCheckpoint);
+                log.debug("Checkpointing {}, token {} at specific extended sequence number {}", shardInfo.shardId(),
+                        shardInfo.concurrencyToken(), newCheckpoint);
             }
             this.advancePosition(newCheckpoint);
         } else {
@@ -200,11 +186,9 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
                     + subSequenceNumber);
         }
 
-        // throws exception if sequence number shouldn't be checkpointed for this shard
-        sequenceNumberValidator.validateSequenceNumber(sequenceNumber);
         if (log.isDebugEnabled()) {
             log.debug("Validated prepareCheckpoint sequence number {} for {}, token {}", sequenceNumber,
-                    shardInfo.getShardId(), shardInfo.getConcurrencyToken());
+                    shardInfo.shardId(), shardInfo.concurrencyToken());
         }
         /*
          * If there isn't a last checkpoint value, we only care about checking the upper bound.
@@ -216,7 +200,7 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
 
             if (log.isDebugEnabled()) {
                 log.debug("Preparing checkpoint {}, token {} at specific extended sequence number {}",
-                        shardInfo.getShardId(), shardInfo.getConcurrencyToken(), pendingCheckpoint);
+                        shardInfo.shardId(), shardInfo.concurrencyToken(), pendingCheckpoint);
             }
             return doPrepareCheckpoint(pendingCheckpoint);
         } else {
@@ -228,30 +212,14 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
         }
     }
 
-    /**
-     * @return the lastCheckpointValue
-     */
-    public ExtendedSequenceNumber getLastCheckpointValue() {
-        return lastCheckpointValue;
-    }
-
     public synchronized void setInitialCheckpointValue(ExtendedSequenceNumber initialCheckpoint) {
         lastCheckpointValue = initialCheckpoint;
     }
 
     /**
-     * Used for testing.
-     *
-     * @return the largest permitted checkpoint
-     */
-    public synchronized ExtendedSequenceNumber getLargestPermittedCheckpointValue() {
-        return largestPermittedCheckpointValue;
-    }
-
-    /**
      * @param largestPermittedCheckpointValue the largest permitted checkpoint
      */
-    public synchronized void setLargestPermittedCheckpointValue(ExtendedSequenceNumber largestPermittedCheckpointValue) {
+    public synchronized void largestPermittedCheckpointValue(ExtendedSequenceNumber largestPermittedCheckpointValue) {
         this.largestPermittedCheckpointValue = largestPermittedCheckpointValue;
     }
 
@@ -262,7 +230,7 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
      *
      * @param extendedSequenceNumber
      */
-    public synchronized void setSequenceNumberAtShardEnd(ExtendedSequenceNumber extendedSequenceNumber) {
+    public synchronized void sequenceNumberAtShardEnd(ExtendedSequenceNumber extendedSequenceNumber) {
         this.sequenceNumberAtShardEnd = extendedSequenceNumber;
     }
 
@@ -301,10 +269,10 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
             if (extendedSequenceNumber != null && !extendedSequenceNumber.equals(lastCheckpointValue)) {
                 try {
                     if (log.isDebugEnabled()) {
-                        log.debug("Setting {}, token {} checkpoint to {}", shardInfo.getShardId(),
-                                shardInfo.getConcurrencyToken(), checkpointToRecord);
+                        log.debug("Setting {}, token {} checkpoint to {}", shardInfo.shardId(),
+                                shardInfo.concurrencyToken(), checkpointToRecord);
                     }
-                    checkpoint.setCheckpoint(shardInfo.getShardId(), checkpointToRecord, shardInfo.getConcurrencyToken());
+                    checkpoint.setCheckpoint(shardInfo.shardId(), checkpointToRecord, shardInfo.concurrencyToken());
                     lastCheckpointValue = checkpointToRecord;
                 } catch (ThrottlingException | ShutdownException | InvalidStateException
                         | KinesisClientLibDependencyException e) {
@@ -362,7 +330,7 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
         }
 
         try {
-            checkpoint.prepareCheckpoint(shardInfo.getShardId(), newPrepareCheckpoint, shardInfo.getConcurrencyToken());
+            checkpoint.prepareCheckpoint(shardInfo.shardId(), newPrepareCheckpoint, shardInfo.concurrencyToken());
         } catch (ThrottlingException | ShutdownException | InvalidStateException
                 | KinesisClientLibDependencyException e) {
             throw e;

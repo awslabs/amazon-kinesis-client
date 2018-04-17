@@ -14,6 +14,8 @@
  */
 package software.amazon.kinesis.lifecycle;
 
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
+
 /**
  * Top level container for all the possible states a {@link ShardConsumer} can be in. The logic for creation of tasks,
  * and state transitions is contained within the {@link ConsumerState} objects.
@@ -188,8 +190,9 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new BlockOnParentShardTask(consumer.getShardInfo(), consumer.getLeaseManager(),
-                    consumer.getParentShardPollIntervalMillis());
+            return new BlockOnParentShardTask(consumer.shardInfo(),
+                    consumer.leaseManager(),
+                    consumer.parentShardPollIntervalMillis());
         }
 
         @Override
@@ -251,14 +254,11 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new InitializeTask(consumer.getShardInfo(),
-                    consumer.getRecordProcessor(),
-                    consumer.getCheckpoint(),
-                    consumer.getRecordProcessorCheckpointer(),
-                    consumer.getDataFetcher(),
-                    consumer.getTaskBackoffTimeMillis(),
-                    consumer.getStreamConfig(),
-                    consumer.getGetRecordsCache());
+            return new InitializeTask(consumer.shardInfo(),
+                    consumer.recordProcessor(),
+                    consumer.checkpoint(),
+                    consumer.recordProcessorCheckpointer(),
+                    consumer.taskBackoffTimeMillis());
         }
 
         @Override
@@ -268,7 +268,7 @@ class ConsumerStates {
 
         @Override
         public ConsumerState shutdownTransition(ShutdownReason shutdownReason) {
-            return shutdownReason.getShutdownState();
+            return shutdownReason.shutdownState();
         }
 
         @Override
@@ -312,13 +312,18 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            ProcessTask.RecordsFetcher recordsFetcher = new ProcessTask.RecordsFetcher(consumer.getGetRecordsCache());
-            return new ProcessTask(consumer.getShardInfo(),
-                    consumer.getStreamConfig(),
-                    consumer.getRecordProcessor(),
-                    consumer.getRecordProcessorCheckpointer(),
-                    consumer.getTaskBackoffTimeMillis(),
-                    consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist(), recordsFetcher.getRecords());
+            ProcessTask.RecordsFetcher recordsFetcher = new ProcessTask.RecordsFetcher(consumer.getRecordsCache());
+            ThrottlingReporter throttlingReporter = new ThrottlingReporter(5, consumer.shardInfo().shardId());
+            return new ProcessTask(consumer.shardInfo(),
+                    consumer.recordProcessor(),
+                    consumer.recordProcessorCheckpointer(),
+                    consumer.taskBackoffTimeMillis(),
+                    consumer.skipShardSyncAtWorkerInitializationIfLeasesExist(),
+                    consumer.leaseManagerProxy(),
+                    throttlingReporter,
+                    recordsFetcher.getRecords(),
+                    consumer.shouldCallProcessRecordsEvenForEmptyRecordList(),
+                    consumer.idleTimeInMilliseconds());
         }
 
         @Override
@@ -328,7 +333,7 @@ class ConsumerStates {
 
         @Override
         public ConsumerState shutdownTransition(ShutdownReason shutdownReason) {
-            return shutdownReason.getShutdownState();
+            return shutdownReason.shutdownState();
         }
 
         @Override
@@ -377,10 +382,11 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new ShutdownNotificationTask(consumer.getRecordProcessor(),
-                    consumer.getRecordProcessorCheckpointer(),
-                    consumer.getShutdownNotification(),
-                    consumer.getShardInfo());
+            // TODO: notify shutdownrequested
+            return new ShutdownNotificationTask(consumer.recordProcessor(),
+                    consumer.recordProcessorCheckpointer(),
+                    consumer.shutdownNotification(),
+                    consumer.shardInfo());
         }
 
         @Override
@@ -393,7 +399,7 @@ class ConsumerStates {
             if (shutdownReason == ShutdownReason.REQUESTED) {
                 return SHUTDOWN_REQUEST_COMPLETION_STATE;
             }
-            return shutdownReason.getShutdownState();
+            return shutdownReason.shutdownState();
         }
 
         @Override
@@ -458,7 +464,7 @@ class ConsumerStates {
         @Override
         public ConsumerState shutdownTransition(ShutdownReason shutdownReason) {
             if (shutdownReason != ShutdownReason.REQUESTED) {
-                return shutdownReason.getShutdownState();
+                return shutdownReason.shutdownState();
             }
             return this;
         }
@@ -519,17 +525,18 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new ShutdownTask(consumer.getShardInfo(),
-                    consumer.getRecordProcessor(),
-                    consumer.getRecordProcessorCheckpointer(),
-                    consumer.getShutdownReason(),
-                    consumer.getStreamConfig().getStreamProxy(),
-                    consumer.getStreamConfig().getInitialPositionInStream(),
-                    consumer.isCleanupLeasesOfCompletedShards(),
-                    consumer.isIgnoreUnexpectedChildShards(),
-                    consumer.getLeaseManager(),
-                    consumer.getTaskBackoffTimeMillis(),
-                    consumer.getGetRecordsCache());
+            // TODO: set shutdown reason
+            return new ShutdownTask(consumer.shardInfo(),
+                    consumer.leaseManagerProxy(),
+                    consumer.recordProcessor(),
+                    consumer.recordProcessorCheckpointer(),
+                    consumer.shutdownReason(),
+                    consumer.initialPositionInStream(),
+                    consumer.cleanupLeasesOfCompletedShards(),
+                    consumer.ignoreUnexpectedChildShards(),
+                    consumer.leaseManager(),
+                    consumer.taskBackoffTimeMillis(),
+                    consumer.getRecordsCache());
         }
 
         @Override
@@ -597,8 +604,8 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            if (consumer.getShutdownNotification() != null) {
-                consumer.getShutdownNotification().shutdownComplete();
+            if (consumer.shutdownNotification() != null) {
+                consumer.shutdownNotification().shutdownComplete();
             }
             return null;
         }

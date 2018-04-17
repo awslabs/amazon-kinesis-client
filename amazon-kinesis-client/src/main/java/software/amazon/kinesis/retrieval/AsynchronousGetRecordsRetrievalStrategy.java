@@ -80,7 +80,7 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
         GetRecordsResult result = null;
         CompletionService<DataFetcherResult> completionService = completionServiceSupplier.get();
         Set<Future<DataFetcherResult>> futures = new HashSet<>();
-        Callable<DataFetcherResult> retrieverCall = createRetrieverCallable(maxRecords);
+        Callable<DataFetcherResult> retrieverCall = createRetrieverCallable();
         try {
             while (true) {
                 try {
@@ -117,12 +117,12 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
         return result;
     }
 
-    private Callable<DataFetcherResult> createRetrieverCallable(int maxRecords) {
+    private Callable<DataFetcherResult> createRetrieverCallable() {
         ThreadSafeMetricsDelegatingScope metricsScope = new ThreadSafeMetricsDelegatingScope(MetricsHelper.getMetricsScope());
         return () -> {
             try {
                 MetricsHelper.setMetricsScope(metricsScope);
-                return dataFetcher.getRecords(maxRecords);
+                return dataFetcher.getRecords();
             } finally {
                 MetricsHelper.unsetMetricsScope();
             }

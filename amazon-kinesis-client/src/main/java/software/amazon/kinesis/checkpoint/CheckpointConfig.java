@@ -65,6 +65,8 @@ public class CheckpointConfig {
 
     private CheckpointFactory checkpointFactory;
 
+    private long epsilonMillis = 25L;
+
     public ILeaseManager leaseManager() {
         if (leaseManager == null) {
             leaseManager = new KinesisClientLeaseManager(tableName, amazonDynamoDB, consistentReads);
@@ -77,7 +79,7 @@ public class CheckpointConfig {
             checkpointFactory = new DynamoDBCheckpointFactory(leaseManager(),
                     workerIdentifier(),
                     failoverTimeMillis(),
-                    LeaseManagementConfig.EPSILON_MS,
+                    epsilonMillis(),
                     maxLeasesForWorker(),
                     maxLeasesToStealAtOneTime(),
                     maxLeaseRenewalThreads(),

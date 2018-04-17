@@ -34,7 +34,6 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
-import software.amazon.kinesis.coordinator.Worker;
 import software.amazon.kinesis.processor.IRecordProcessorFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
@@ -42,7 +41,7 @@ import com.google.common.collect.ImmutableSet;
 import junit.framework.Assert;
 
 public class KinesisClientLibConfigurationTest {
-    private static final long INVALID_LONG = 0L;
+    /*private static final long INVALID_LONG = 0L;
     private static final int INVALID_INT = 0;
 
     private static final long TEST_VALUE_LONG = 1000L;
@@ -420,5 +419,5 @@ public class KinesisClientLibConfigurationTest {
         assertFalse(config.shouldIgnoreUnexpectedChildShards());
         config = config.withIgnoreUnexpectedChildShards(true);
         assertTrue(config.shouldIgnoreUnexpectedChildShards());
-    }
+    }*/
 }

@@ -67,7 +67,7 @@ public class ParentsFirstShardPrioritizationUnitTest {
         assertEquals(numberOfShards, ordered.size());
         for (int shardNumber = 0; shardNumber < numberOfShards; shardNumber++) {
             String shardId = shardId(shardNumber);
-            assertEquals(shardId, ordered.get(shardNumber).getShardId());
+            assertEquals(shardId, ordered.get(shardNumber).shardId());
         }
     }
 
@@ -97,7 +97,7 @@ public class ParentsFirstShardPrioritizationUnitTest {
 
         for (int shardNumber = 0; shardNumber < maxDepth; shardNumber++) {
             String shardId = shardId(shardNumber);
-            assertEquals(shardId, ordered.get(shardNumber).getShardId());
+            assertEquals(shardId, ordered.get(shardNumber).shardId());
         }
     }
 
@@ -122,7 +122,7 @@ public class ParentsFirstShardPrioritizationUnitTest {
         assertEquals(numberOfShards, ordered.size());
         for (int shardNumber = 0; shardNumber < numberOfShards; shardNumber++) {
             String shardId = shardId(shardNumber);
-            assertEquals(shardId, ordered.get(shardNumber).getShardId());
+            assertEquals(shardId, ordered.get(shardNumber).shardId());
         }
     }
 

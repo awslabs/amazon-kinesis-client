@@ -47,7 +47,7 @@ public class CoordinatorConfig {
     private long parentShardPollIntervalMillis = 10000L;
 
     /**
-     * The Worker will skip shard sync during initialization if there are one or more leases in the lease table. This
+     * The Scheduler will skip shard sync during initialization if there are one or more leases in the lease table. This
      * assumes that the shards and leases are in-sync. This enables customers to choose faster startup times (e.g.
      * during incremental deployments of an application).
      *

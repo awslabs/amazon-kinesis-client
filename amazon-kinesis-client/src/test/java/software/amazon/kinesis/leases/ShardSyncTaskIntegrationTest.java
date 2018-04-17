@@ -17,9 +17,8 @@ package software.amazon.kinesis.leases;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -28,50 +27,47 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.amazonaws.AmazonServiceException;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.kinesis.AmazonKinesis;
-import com.amazonaws.services.kinesis.AmazonKinesisClient;
-import software.amazon.kinesis.leases.ShardSyncTask;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import software.amazon.kinesis.retrieval.KinesisProxy;
+import com.amazonaws.services.kinesis.AmazonKinesisClientBuilder;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+import com.amazonaws.services.kinesis.model.DescribeStreamSummaryRequest;
+import com.amazonaws.services.kinesis.model.Shard;
+import com.amazonaws.services.kinesis.model.StreamStatus;
+
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.KinesisClientLeaseManager;
-import software.amazon.kinesis.leases.IKinesisClientLeaseManager;
-import com.amazonaws.services.kinesis.model.StreamStatus;
 
 /**
  * WARN: to run this integration test you'll have to provide a AwsCredentials.properties file on the classpath.
  */
 public class ShardSyncTaskIntegrationTest {
-
     private static final String STREAM_NAME = "IntegrationTestStream02";
-    private static final String KINESIS_ENDPOINT = "https://kinesis.us-east-1.amazonaws.com";
+    private static AmazonKinesis amazonKinesis;
 
-    private static AWSCredentialsProvider credentialsProvider;
     private IKinesisClientLeaseManager leaseManager;
-    private IKinesisProxy kinesisProxy;
+    private LeaseManagerProxy leaseManagerProxy;
 
     /**
      * @throws java.lang.Exception
      */
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
-        credentialsProvider = new DefaultAWSCredentialsProviderChain();
-        AmazonKinesis kinesis = new AmazonKinesisClient(credentialsProvider);
+        amazonKinesis = AmazonKinesisClientBuilder.standard().withRegion(Regions.US_EAST_1).build();
 
         try {
-            kinesis.createStream(STREAM_NAME, 1);
+            amazonKinesis.createStream(STREAM_NAME, 1);
         } catch (AmazonServiceException ase) {
 
         }
         StreamStatus status;
         do {
-            status = StreamStatus.fromValue(kinesis.describeStream(STREAM_NAME).getStreamDescription().getStreamStatus());
+            status = StreamStatus.fromValue(amazonKinesis.describeStreamSummary(
+                    new DescribeStreamSummaryRequest().withStreamName(STREAM_NAME))
+                    .getStreamDescriptionSummary().getStreamStatus());
         } while (status != StreamStatus.ACTIVE);
 
     }
@@ -91,13 +87,10 @@ public class ShardSyncTaskIntegrationTest {
         boolean useConsistentReads = true;
         leaseManager =
                 new KinesisClientLeaseManager("ShardSyncTaskIntegrationTest",
-                        new AmazonDynamoDBClient(credentialsProvider),
+                        AmazonDynamoDBClientBuilder.standard().withRegion(Regions.US_EAST_1).build(),
                         useConsistentReads);
 
-        kinesisProxy =
-                new KinesisProxy(STREAM_NAME,
-                        new DefaultAWSCredentialsProviderChain(),
-                        KINESIS_ENDPOINT);
+        leaseManagerProxy = new KinesisLeaseManagerProxy(amazonKinesis, STREAM_NAME, 500L, 50);
     }
 
     /**
@@ -122,8 +115,8 @@ public class ShardSyncTaskIntegrationTest {
             leaseManager.createLeaseTableIfNotExists(readCapacity, writeCapacity);
         }
         leaseManager.deleteAll();
-        Set<String> shardIds = kinesisProxy.getAllShardIds();
-        ShardSyncTask syncTask = new ShardSyncTask(kinesisProxy,
+        Set<String> shardIds = leaseManagerProxy.listShards().stream().map(Shard::getShardId).collect(Collectors.toSet());
+        ShardSyncTask syncTask = new ShardSyncTask(leaseManagerProxy,
                 leaseManager,
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST),
                 false,

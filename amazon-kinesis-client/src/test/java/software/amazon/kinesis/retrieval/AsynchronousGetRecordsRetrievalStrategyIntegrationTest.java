@@ -38,6 +38,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import com.amazonaws.services.kinesis.AmazonKinesis;
 import software.amazon.kinesis.leases.ShardInfo;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import org.junit.After;
@@ -55,23 +56,23 @@ import org.mockito.stubbing.Answer;
 
 @RunWith(MockitoJUnitRunner.class)
 public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
-
     private static final int CORE_POOL_SIZE = 1;
     private static final int MAX_POOL_SIZE = 2;
     private static final int TIME_TO_LIVE = 5;
     private static final int RETRY_GET_RECORDS_IN_SECONDS = 2;
     private static final int SLEEP_GET_RECORDS_IN_SECONDS = 10;
 
-    @Mock
-    private IKinesisProxy mockKinesisProxy;
-    @Mock
-    private ShardInfo mockShardInfo;
+    private final String streamName = "testStream";
+    private final String shardId = "shardId-000000000000";
+
     @Mock
     private Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
     @Mock
     private DataFetcherResult result;
     @Mock
     private GetRecordsResult recordsResult;
+    @Mock
+    private AmazonKinesis amazonKinesis;
 
     private CompletionService<DataFetcherResult> completionService;
 
@@ -84,7 +85,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
 
     @Before
     public void setup() {
-        dataFetcher = spy(new KinesisDataFetcherForTests(mockKinesisProxy, mockShardInfo));
+        dataFetcher = spy(new KinesisDataFetcherForTests(amazonKinesis, streamName, shardId, numberOfRecords));
         rejectedExecutionHandler = spy(new ThreadPoolExecutor.AbortPolicy());
         executorService = spy(new ThreadPoolExecutor(
                 CORE_POOL_SIZE,
@@ -104,7 +105,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     public void oneRequestMultithreadTest() {
         when(result.accept()).thenReturn(null);
         GetRecordsResult getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
-        verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords(eq(numberOfRecords));
+        verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords();
         verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
         assertNull(getRecordsResult);
     }
@@ -114,7 +115,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
         ExecutorCompletionService<DataFetcherResult> completionService1 = spy(new ExecutorCompletionService<DataFetcherResult>(executorService));
         when(completionServiceSupplier.get()).thenReturn(completionService1);
         GetRecordsResult getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
-        verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords(numberOfRecords);
+        verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords();
         verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
         assertThat(getRecordsResult, equalTo(recordsResult));
 
@@ -125,21 +126,9 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
         assertThat(getRecordsResult, nullValue(GetRecordsResult.class));
     }
 
-    @Test
-    @Ignore
-    public void testInterrupted() throws InterruptedException, ExecutionException {
-        Future<DataFetcherResult> mockFuture = mock(Future.class);
-        when(completionService.submit(any())).thenReturn(mockFuture);
-        when(completionService.poll()).thenReturn(mockFuture);
-        doThrow(InterruptedException.class).when(mockFuture).get();
-        GetRecordsResult getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
-        verify(mockFuture).get();
-        assertNull(getRecordsResult);
-    }
-    
     @Test (expected = ExpiredIteratorException.class)
     public void testExpiredIteratorExcpetion() throws InterruptedException {
-        when(dataFetcher.getRecords(eq(numberOfRecords))).thenAnswer(new Answer<DataFetcherResult>() {
+        when(dataFetcher.getRecords()).thenAnswer(new Answer<DataFetcherResult>() {
             @Override
             public DataFetcherResult answer(final InvocationOnMock invocationOnMock) throws Throwable {
                 Thread.sleep(SLEEP_GET_RECORDS_IN_SECONDS * 1000);
@@ -150,7 +139,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
         try {
             getRecordsRetrivalStrategy.getRecords(numberOfRecords);
         } finally {
-            verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords(eq(numberOfRecords));
+            verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords();
             verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
         }
     }
@@ -173,12 +162,13 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     }
 
     private class KinesisDataFetcherForTests extends KinesisDataFetcher {
-        public KinesisDataFetcherForTests(final IKinesisProxy kinesisProxy, final ShardInfo shardInfo) {
-            super(kinesisProxy, shardInfo);
+        public KinesisDataFetcherForTests(final AmazonKinesis amazonKinesis, final String streamName,
+                                          final String shardId, final int maxRecords) {
+            super(amazonKinesis, streamName, shardId, maxRecords);
         }
 
         @Override
-        public DataFetcherResult getRecords(final int maxRecords) {
+        public DataFetcherResult getRecords() {
             try {
                 Thread.sleep(SLEEP_GET_RECORDS_IN_SECONDS * 1000);
             } catch (InterruptedException e) {

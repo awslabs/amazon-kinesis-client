@@ -14,108 +14,94 @@
  */
 package software.amazon.kinesis.checkpoint;
 
-import junit.framework.Assert;
-
-import org.junit.Test;
-import org.mockito.Mockito;
-
-import static org.junit.Assert.fail;
-
-import software.amazon.kinesis.checkpoint.Checkpoint;
-import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
-import software.amazon.kinesis.retrieval.IKinesisProxy;
-import com.amazonaws.services.kinesis.model.InvalidArgumentException;
-import com.amazonaws.services.kinesis.model.ShardIteratorType;
-
+//@RunWith(MockitoJUnitRunner.class)
 public class SequenceNumberValidatorTest {
-
+    /*private final String streamName = "testStream";
     private final boolean validateWithGetIterator = true;
     private final String shardId = "shardid-123";
 
-    @Test
+    @Mock
+    private AmazonKinesis amazonKinesis;
+
+    @Test (expected = IllegalArgumentException.class)
     public final void testSequenceNumberValidator() {
-
-        IKinesisProxy proxy = Mockito.mock(IKinesisProxy.class);
-
-        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(proxy, shardId, validateWithGetIterator);
+        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(amazonKinesis, streamName,
+                shardId, validateWithGetIterator);
 
         String goodSequence = "456";
         String iterator = "happyiterator";
         String badSequence = "789";
-        Mockito.doReturn(iterator)
-                .when(proxy)
-                .getIterator(shardId, ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(), goodSequence);
-        Mockito.doThrow(new InvalidArgumentException(""))
-                .when(proxy)
-                .getIterator(shardId, ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(), badSequence);
+
+        ArgumentCaptor<GetShardIteratorRequest> requestCaptor = ArgumentCaptor.forClass(GetShardIteratorRequest.class);
+
+        when(amazonKinesis.getShardIterator(requestCaptor.capture()))
+                .thenReturn(new GetShardIteratorResult().withShardIterator(iterator))
+                .thenThrow(new InvalidArgumentException(""));
 
         validator.validateSequenceNumber(goodSequence);
-        Mockito.verify(proxy, Mockito.times(1)).getIterator(shardId,
-                ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(),
-                goodSequence);
-
         try {
             validator.validateSequenceNumber(badSequence);
-            fail("Bad sequence number did not cause the validator to throw an exception");
-        } catch (IllegalArgumentException e) {
-            Mockito.verify(proxy, Mockito.times(1)).getIterator(shardId,
-                    ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(),
-                    badSequence);
-        }
+        } finally {
+            final List<GetShardIteratorRequest> requests = requestCaptor.getAllValues();
+            assertEquals(2, requests.size());
 
-        nonNumericValueValidationTest(validator, proxy, validateWithGetIterator);
+            final GetShardIteratorRequest goodRequest = requests.get(0);
+            final GetShardIteratorRequest badRequest = requests.get(0);
+
+            assertEquals(streamName, goodRequest.getStreamName());
+            assertEquals(shardId, goodRequest.getShardId());
+            assertEquals(ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(), goodRequest.getShardIteratorType());
+            assertEquals(goodSequence, goodRequest.getStartingSequenceNumber());
+
+            assertEquals(streamName, badRequest.getStreamName());
+            assertEquals(shardId, badRequest.getShardId());
+            assertEquals(ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(), badRequest.getShardIteratorType());
+            assertEquals(goodSequence, badRequest.getStartingSequenceNumber());
+        }
     }
 
     @Test
     public final void testNoValidation() {
-        IKinesisProxy proxy = Mockito.mock(IKinesisProxy.class);
-        String shardId = "shardid-123";
-        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(proxy, shardId, !validateWithGetIterator);
-        String goodSequence = "456";
+        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(amazonKinesis, streamName,
+                shardId, !validateWithGetIterator);
+        String sequenceNumber = "456";
 
         // Just checking that the false flag for validating against getIterator is honored
-        validator.validateSequenceNumber(goodSequence);
-        Mockito.verify(proxy, Mockito.times(0)).getIterator(shardId,
-                ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(),
-                goodSequence);
+        validator.validateSequenceNumber(sequenceNumber);
 
-        // Validator should still validate sentinel values
-        nonNumericValueValidationTest(validator, proxy, !validateWithGetIterator);
+        verify(amazonKinesis, never()).getShardIterator(any(GetShardIteratorRequest.class));
     }
 
-    private void nonNumericValueValidationTest(Checkpoint.SequenceNumberValidator validator,
-            IKinesisProxy proxy,
-            boolean validateWithGetIterator) {
+    @Test
+    public void nonNumericValueValidationTest() {
+        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(amazonKinesis, streamName,
+                shardId, validateWithGetIterator);
 
-        String[] nonNumericStrings = { null, "bogus-sequence-number", SentinelCheckpoint.LATEST.toString(),
+        String[] nonNumericStrings = {null,
+                "bogus-sequence-number",
+                SentinelCheckpoint.LATEST.toString(),
                 SentinelCheckpoint.TRIM_HORIZON.toString(),
-                SentinelCheckpoint.AT_TIMESTAMP.toString() };
+                SentinelCheckpoint.AT_TIMESTAMP.toString()};
 
-        for (String nonNumericString : nonNumericStrings) {
+        Arrays.stream(nonNumericStrings).forEach(sequenceNumber -> {
             try {
-                validator.validateSequenceNumber(nonNumericString);
-                fail("Validator should not consider " + nonNumericString + " a valid sequence number");
+                validator.validateSequenceNumber(sequenceNumber);
+                fail("Validator should not consider " + sequenceNumber + " a valid sequence number");
             } catch (IllegalArgumentException e) {
-                // Non-numeric strings should always be rejected by the validator before the proxy can be called so we
-                // check that the proxy was not called at all
-                Mockito.verify(proxy, Mockito.times(0)).getIterator(shardId,
-                        ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(),
-                        nonNumericString);
+                // Do nothing
             }
-        }
+        });
+
+        verify(amazonKinesis, never()).getShardIterator(any(GetShardIteratorRequest.class));
     }
 
     @Test
     public final void testIsDigits() {
         // Check things that are all digits
-        String[] stringsOfDigits = {
-                "0",
-                "12",
-                "07897803434",
-                "12324456576788",
-        };
+        String[] stringsOfDigits = {"0", "12", "07897803434", "12324456576788"};
+
         for (String digits : stringsOfDigits) {
-            Assert.assertTrue("Expected that " + digits + " would be considered a string of digits.",
+            assertTrue("Expected that " + digits + " would be considered a string of digits.",
                     Checkpoint.SequenceNumberValidator.isDigits(digits));
         }
         // Check things that are not all digits
@@ -133,8 +119,8 @@ public class SequenceNumberValidatorTest {
                 "no-digits",
         };
         for (String notAllDigits : stringsWithNonDigits) {
-            Assert.assertFalse("Expected that " + notAllDigits + " would not be considered a string of digits.",
+            assertFalse("Expected that " + notAllDigits + " would not be considered a string of digits.",
                     Checkpoint.SequenceNumberValidator.isDigits(notAllDigits));
         }
-    }
+    }*/
 }

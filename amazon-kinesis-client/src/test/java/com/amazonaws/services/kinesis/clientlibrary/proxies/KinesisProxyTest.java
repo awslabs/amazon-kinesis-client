@@ -14,65 +14,8 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.proxies;
 
-import static org.hamcrest.Matchers.both;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasProperty;
-import static org.hamcrest.Matchers.isA;
-import static org.hamcrest.Matchers.nullValue;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.argThat;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient;
-import com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClientChild;
-import com.amazonaws.services.kinesis.AmazonKinesis;
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
-import com.amazonaws.services.kinesis.model.ListShardsRequest;
-import com.amazonaws.services.kinesis.model.ListShardsResult;
-import com.amazonaws.services.kinesis.model.ResourceInUseException;
-import lombok.AllArgsConstructor;
-import org.apache.commons.lang.StringUtils;
-import org.hamcrest.Description;
-import org.hamcrest.TypeSafeDiagnosingMatcher;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentMatcher;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.services.kinesis.model.DescribeStreamRequest;
-import com.amazonaws.services.kinesis.model.DescribeStreamResult;
-import com.amazonaws.services.kinesis.model.GetShardIteratorRequest;
-import com.amazonaws.services.kinesis.model.GetShardIteratorResult;
-import com.amazonaws.services.kinesis.model.LimitExceededException;
-import com.amazonaws.services.kinesis.model.Shard;
-import com.amazonaws.services.kinesis.model.ShardIteratorType;
-import com.amazonaws.services.kinesis.model.StreamDescription;
-import com.amazonaws.services.kinesis.model.StreamStatus;
-import software.amazon.kinesis.retrieval.KinesisProxy;
-
-@RunWith(MockitoJUnitRunner.class)
 public class KinesisProxyTest {
-    private static final String TEST_STRING = "TestString";
+    /*private static final String TEST_STRING = "TestString";
     private static final long DESCRIBE_STREAM_BACKOFF_TIME = 10L;
     private static final long LIST_SHARDS_BACKOFF_TIME = 10L;
     private static final int DESCRIBE_STREAM_RETRY_TIMES = 3;
@@ -460,6 +403,6 @@ public class KinesisProxyTest {
             description.appendText("A ListShardsRequest with a shardId: ").appendValue(shardId)
                     .appendText(" and empty nextToken");
         }
-    }
+    }*/
 
 }

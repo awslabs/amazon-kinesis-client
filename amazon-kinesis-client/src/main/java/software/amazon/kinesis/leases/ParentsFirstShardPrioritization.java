@@ -51,14 +51,14 @@ public class ParentsFirstShardPrioritization implements
     public List<ShardInfo> prioritize(List<ShardInfo> original) {
         Map<String, ShardInfo> shards = new HashMap<>();
         for (ShardInfo shardInfo : original) {
-            shards.put(shardInfo.getShardId(),
+            shards.put(shardInfo.shardId(),
                     shardInfo);
         }
 
         Map<String, SortingNode> processedNodes = new HashMap<>();
 
         for (ShardInfo shardInfo : original) {
-            populateDepth(shardInfo.getShardId(),
+            populateDepth(shardInfo.shardId(),
                     shards,
                     processedNodes);
         }
@@ -104,7 +104,7 @@ public class ParentsFirstShardPrioritization implements
         processedNodes.put(shardId, PROCESSING_NODE);
 
         int maxParentDepth = 0;
-        for (String parentId : shardInfo.getParentShardIds()) {
+        for (String parentId : shardInfo.parentShardIds()) {
             maxParentDepth = Math.max(maxParentDepth,
                     populateDepth(parentId,
                             shards,
