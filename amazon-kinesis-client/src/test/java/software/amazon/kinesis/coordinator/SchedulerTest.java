@@ -50,6 +50,7 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibN
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.CheckpointFactory;
+import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseCoordinator;
@@ -458,7 +459,8 @@ public class SchedulerTest {
 
     private class TestKinesisCheckpointFactory implements CheckpointFactory {
         @Override
-        public Checkpointer createCheckpoint() {
+        public Checkpointer createCheckpointer(final LeaseCoordinator<KinesisClientLease> leaseCoordinator,
+                                               final ILeaseManager<KinesisClientLease> leaseManager) {
             return checkpoint;
         }
     }
