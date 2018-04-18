@@ -143,14 +143,15 @@ public class Scheduler implements Runnable {
         this.retrievalConfig = retrievalConfig;
 
         this.applicationName = this.coordinatorConfig.applicationName();
-
         this.leaseCoordinator =
                 this.leaseManagementConfig.leaseManagementFactory().createKinesisClientLibLeaseCoordinator();
+        this.leaseManager = this.leaseCoordinator.leaseManager();
 
         //
         // TODO: Figure out what to do with lease manage <=> checkpoint relationship
         //
-        this.checkpoint = this.checkpointConfig.checkpointFactory().createCheckpoint(this.leaseCoordinator);
+        this.checkpoint = this.checkpointConfig.checkpointFactory().createCheckpointer(this.leaseCoordinator,
+                this.leaseManager);
 
         this.idleTimeInMilliseconds = this.retrievalConfig.idleTimeBetweenReadsInMillis();
         this.parentShardPollIntervalMillis = this.coordinatorConfig.parentShardPollIntervalMillis();
@@ -174,7 +175,6 @@ public class Scheduler implements Runnable {
         this.streamName = this.retrievalConfig.streamName();
         this.listShardsBackoffTimeMillis = this.retrievalConfig.listShardsBackoffTimeInMillis();
         this.maxListShardsRetryAttempts = this.retrievalConfig.maxListShardsRetryAttempts();
-        this.leaseManager = this.leaseCoordinator.leaseManager();
         this.leaseManagerProxy = this.shardSyncTaskManager.leaseManagerProxy();
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
     }
