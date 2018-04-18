@@ -168,7 +168,8 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
                         // Don't renew expired lease during regular renewals. getCopyOfHeldLease may have returned null
                         // triggering the application processing to treat this as a lost lease (fail checkpoint with
                         // ShutdownException).
-                        if (renewEvenIfExpired || (!lease.isExpired(leaseDurationNanos, System.nanoTime()))) {
+                        boolean isLeaseExpired = lease.isExpired(leaseDurationNanos, System.nanoTime());
+                        if (renewEvenIfExpired || !isLeaseExpired) {
                             renewedLease = leaseManager.renewLease(lease);
                         }
                         if (renewedLease) {

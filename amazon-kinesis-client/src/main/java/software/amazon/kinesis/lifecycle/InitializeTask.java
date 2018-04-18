@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.lifecycle;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
@@ -21,6 +22,7 @@ import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.IRecordProcessor;
 import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
@@ -43,6 +45,11 @@ public class InitializeTask implements ITask {
     private final ICheckpoint checkpoint;
     @NonNull
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
+    @NonNull
+    private final InitialPositionInStreamExtended initialPositionInStream;
+    @NonNull
+    private final GetRecordsCache cache;
+
     // Back off for this interval if we encounter a problem (exception)
     private final long backoffTimeMillis;
 
@@ -63,6 +70,8 @@ public class InitializeTask implements ITask {
             log.debug("Initializing ShardId {}", shardInfo);
             Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.shardId());
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.getCheckpoint();
+
+            cache.start(initialCheckpoint, initialPositionInStream);
 
             recordProcessorCheckpointer.largestPermittedCheckpointValue(initialCheckpoint);
             recordProcessorCheckpointer.setInitialCheckpointValue(initialCheckpoint);

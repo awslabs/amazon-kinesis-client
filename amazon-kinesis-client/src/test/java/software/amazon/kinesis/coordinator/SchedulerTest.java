@@ -65,6 +65,7 @@ import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.lifecycle.ShutdownInput;
 import software.amazon.kinesis.lifecycle.ShutdownReason;
+import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.ICheckpoint;
 import software.amazon.kinesis.processor.IRecordProcessor;
@@ -131,7 +132,7 @@ public class SchedulerTest {
 
         when(leaseCoordinator.leaseManager()).thenReturn(leaseManager);
         when(shardSyncTaskManager.leaseManagerProxy()).thenReturn(leaseManagerProxy);
-        when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class))).thenReturn(getRecordsCache);
+        when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(IMetricsFactory.class))).thenReturn(getRecordsCache);
 
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
@@ -457,7 +458,7 @@ public class SchedulerTest {
 
     private class TestKinesisCheckpointFactory implements CheckpointFactory {
         @Override
-        public ICheckpoint createCheckpoint() {
+        public ICheckpoint createCheckpoint(KinesisClientLibLeaseCoordinator leaseCoordinator) {
             return checkpoint;
         }
     }

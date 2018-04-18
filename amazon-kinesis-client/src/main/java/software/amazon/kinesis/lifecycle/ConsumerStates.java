@@ -257,7 +257,8 @@ class ConsumerStates {
             return new InitializeTask(consumer.shardInfo(),
                     consumer.recordProcessor(),
                     consumer.checkpoint(),
-                    consumer.recordProcessorCheckpointer(),
+                    consumer.recordProcessorCheckpointer(), consumer.initialPositionInStream(),
+                    consumer.getRecordsCache(),
                     consumer.taskBackoffTimeMillis());
         }
 

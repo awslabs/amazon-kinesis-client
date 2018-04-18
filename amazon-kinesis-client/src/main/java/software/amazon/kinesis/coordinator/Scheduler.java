@@ -37,7 +37,6 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
@@ -144,12 +143,19 @@ public class Scheduler implements Runnable {
         this.retrievalConfig = retrievalConfig;
 
         this.applicationName = this.coordinatorConfig.applicationName();
-        this.checkpoint = this.checkpointConfig.checkpointFactory().createCheckpoint();
+
+        this.leaseCoordinator =
+                this.leaseManagementConfig.leaseManagementFactory().createKinesisClientLibLeaseCoordinator();
+
+        //
+        // TODO: Figure out what to do with lease manage <=> checkpoint relationship
+        //
+        this.checkpoint = this.checkpointConfig.checkpointFactory().createCheckpoint(this.leaseCoordinator);
+
         this.idleTimeInMilliseconds = this.retrievalConfig.idleTimeBetweenReadsInMillis();
         this.parentShardPollIntervalMillis = this.coordinatorConfig.parentShardPollIntervalMillis();
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
-        this.leaseCoordinator =
-                this.leaseManagementConfig.leaseManagementFactory().createKinesisClientLibLeaseCoordinator();
+
         this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory().createShardSyncTaskManager();
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
@@ -527,7 +533,7 @@ public class Scheduler implements Runnable {
                 streamName,
                 leaseManager,
                 executorService,
-                retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo),
+                retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, metricsFactory),
                 processorFactory.createRecordProcessor(),
                 checkpoint,
                 coordinatorConfig.coordinatorFactory().createRecordProcessorCheckpointer(shardInfo,

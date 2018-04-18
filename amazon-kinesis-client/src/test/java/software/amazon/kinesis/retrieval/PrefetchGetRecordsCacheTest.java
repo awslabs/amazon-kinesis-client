@@ -37,6 +37,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.IntStream;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,6 +53,7 @@ import com.amazonaws.services.kinesis.model.Record;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisDataFetcher;
 import software.amazon.kinesis.retrieval.PrefetchGetRecordsCache;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * Test class for the PrefetchGetRecordsCache class.
@@ -73,12 +75,17 @@ public class PrefetchGetRecordsCacheTest {
     private Record record;
     @Mock
     private KinesisDataFetcher dataFetcher;
+    @Mock
+    private InitialPositionInStreamExtended initialPosition;
+    @Mock
+    private ExtendedSequenceNumber sequenceNumber;
 
     private List<Record> records;
     private ExecutorService executorService;
     private LinkedBlockingQueue<ProcessRecordsInput> spyQueue;
     private PrefetchGetRecordsCache getRecordsCache;
     private String operation = "ProcessTask";
+
 
     @Before
     public void setup() {
@@ -114,7 +121,7 @@ public class PrefetchGetRecordsCacheTest {
         records.add(record);
         records.add(record);
 
-        getRecordsCache.start();
+        getRecordsCache.start(sequenceNumber, initialPosition);
         ProcessRecordsInput result = getRecordsCache.getNextResult();
 
         assertEquals(result.getRecords(), records);
@@ -130,7 +137,7 @@ public class PrefetchGetRecordsCacheTest {
 
         records.add(record);
 
-        getRecordsCache.start();
+        getRecordsCache.start(sequenceNumber, initialPosition);
 
         // Sleep for a few seconds for the cache to fill up.
         sleep(2000);
@@ -144,7 +151,7 @@ public class PrefetchGetRecordsCacheTest {
         int recordsSize = 4500;
         when(records.size()).thenReturn(recordsSize);
 
-        getRecordsCache.start();
+        getRecordsCache.start(sequenceNumber, initialPosition);
 
         sleep(2000);
 
@@ -159,7 +166,7 @@ public class PrefetchGetRecordsCacheTest {
         int recordsSize = 200;
         when(records.size()).thenReturn(recordsSize);
 
-        getRecordsCache.start();
+        getRecordsCache.start(sequenceNumber, initialPosition);
 
         // Sleep for a few seconds for the cache to fill up.
         sleep(2000);
@@ -175,7 +182,7 @@ public class PrefetchGetRecordsCacheTest {
 
         IntStream.range(0, recordsSize).forEach(i -> records.add(record));
 
-        getRecordsCache.start();
+        getRecordsCache.start(sequenceNumber, initialPosition);
         ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult();
 
         verify(executorService).execute(any());
@@ -207,7 +214,7 @@ public class PrefetchGetRecordsCacheTest {
     
     @Test
     public void testExpiredIteratorException() {
-        getRecordsCache.start();
+        getRecordsCache.start(sequenceNumber, initialPosition);
         
         when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL)).thenThrow(ExpiredIteratorException.class).thenReturn(getRecordsResult);
         doNothing().when(dataFetcher).restartIterator();

@@ -15,7 +15,9 @@
 
 package software.amazon.kinesis.retrieval;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * This class is used as a cache for Prefetching data from Kinesis.
@@ -24,7 +26,7 @@ public interface GetRecordsCache {
     /**
      * This method calls the start behavior on the cache, if available.
      */
-    void start();
+    void start(ExtendedSequenceNumber extendedSequenceNumber, InitialPositionInStreamExtended initialPositionInStreamExtended);
     
     /**
      * This method returns the next set of records from the Cache if present, or blocks the request till it gets the

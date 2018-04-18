@@ -308,7 +308,7 @@ public class ShardConsumerTest {
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         processor.getInitializeLatch().await(5, TimeUnit.SECONDS);
-        verify(getRecordsCache).start();
+        verify(getRecordsCache).start(any(ExtendedSequenceNumber.class), any(InitialPositionInStreamExtended.class));
 
         // We expect to process all records in numRecs calls
         for (int i = 0; i < numRecs;) {
@@ -410,7 +410,7 @@ public class ShardConsumerTest {
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         processor.getInitializeLatch().await(5, TimeUnit.SECONDS);
-        verify(getRecordsCache).start();
+        verify(getRecordsCache).start(any(ExtendedSequenceNumber.class), any(InitialPositionInStreamExtended.class));
 
         // We expect to process all records in numRecs calls
         for (int i = 0; i < numRecs;) {

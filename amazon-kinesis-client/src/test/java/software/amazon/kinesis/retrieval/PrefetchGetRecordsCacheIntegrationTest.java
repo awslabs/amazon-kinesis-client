@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -50,6 +51,7 @@ import com.amazonaws.services.kinesis.model.Record;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * These are the integration tests for the PrefetchGetRecordsCache class. 
@@ -74,6 +76,10 @@ public class PrefetchGetRecordsCacheIntegrationTest {
 
     @Mock
     private AmazonKinesis amazonKinesis;
+    @Mock
+    private ExtendedSequenceNumber extendedSequenceNumber;
+    @Mock
+    private InitialPositionInStreamExtended initialPosition;
 
     @Before
     public void setup() {
@@ -95,7 +101,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
 
     @Test
     public void testRollingCache() {
-        getRecordsCache.start();
+        getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
         ProcessRecordsInput processRecordsInput1 = getRecordsCache.getNextResult();
@@ -111,7 +117,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
 
     @Test
     public void testFullCache() {
-        getRecordsCache.start();
+        getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(MAX_SIZE * IDLE_MILLIS_BETWEEN_CALLS);
 
         assertEquals(getRecordsCache.getRecordsResultQueue.size(), MAX_SIZE);
@@ -141,7 +147,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
                 operation,
                 "test-shard-2");
 
-        getRecordsCache.start();
+        getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
         final Record record = mock(Record.class);
@@ -152,7 +158,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
         records.add(record);
         records.add(record);
         records.add(record);
-        getRecordsCache2.start();
+        getRecordsCache2.start(extendedSequenceNumber, initialPosition);
 
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
@@ -181,7 +187,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
         }).thenCallRealMethod();
         doNothing().when(dataFetcher).restartIterator();
 
-        getRecordsCache.start();
+        getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
         ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult();
