@@ -16,6 +16,7 @@
 package software.amazon.kinesis.retrieval;
 
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.metrics.IMetricsFactory;
 
 /**
  *
@@ -23,5 +24,5 @@ import software.amazon.kinesis.leases.ShardInfo;
 public interface RetrievalFactory {
     GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(ShardInfo shardInfo);
 
-    GetRecordsCache createGetRecordsCache(ShardInfo shardInfo);
+    GetRecordsCache createGetRecordsCache(ShardInfo shardInfo, IMetricsFactory metricsFactory);
 }

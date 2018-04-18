@@ -19,6 +19,7 @@ import com.amazonaws.services.kinesis.AmazonKinesis;
 import lombok.Data;
 import lombok.NonNull;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.metrics.IMetricsFactory;
 
 /**
  *
@@ -34,6 +35,8 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
     private final String streamName;
     @NonNull
     private final AmazonKinesis amazonKinesis;
+    private final RecordsFetcherFactory recordsFetcherFactory;
+
     private final long listShardsBackoffTimeInMillis;
     private final int maxListShardsRetryAttempts;
     private final int maxRecords;
@@ -45,7 +48,7 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
     }
 
     @Override
-    public GetRecordsCache createGetRecordsCache(@NonNull final ShardInfo shardInfo) {
-        throw new UnsupportedOperationException();
+    public GetRecordsCache createGetRecordsCache(@NonNull final ShardInfo shardInfo, IMetricsFactory metricsFactory) {
+        return recordsFetcherFactory.createRecordsFetcher(createGetRecordsRetrievalStrategy(shardInfo), shardInfo.shardId(), metricsFactory, maxRecords);
     }
 }

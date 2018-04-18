@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import org.apache.commons.lang.Validate;
 
 import com.amazonaws.SdkClientException;
@@ -34,6 +35,7 @@ import com.amazonaws.services.kinesis.model.GetRecordsResult;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * This is the prefetch caching class, this class spins up a thread if prefetching is enabled. That thread fetches the
@@ -105,10 +107,12 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     }
 
     @Override
-    public void start() {
+    public void start(ExtendedSequenceNumber extendedSequenceNumber, InitialPositionInStreamExtended initialPositionInStreamExtended) {
         if (executorService.isShutdown()) {
             throw new IllegalStateException("ExecutorService has been shutdown.");
         }
+
+        dataFetcher.initialize(extendedSequenceNumber, initialPositionInStreamExtended);
         
         if (!started) {
             log.info("Starting prefetching thread.");
@@ -150,7 +154,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
 
     @Override
     public void addDataArrivedListener(DataArrivedListener dataArrivedListener) {
-        if (dataArrivedListener != null) {
+        if (this.dataArrivedListener != null) {
             log.warn("Attempting to reset the data arrived listener for {}.  This shouldn't happen", shardId);
         }
         this.dataArrivedListener = dataArrivedListener;

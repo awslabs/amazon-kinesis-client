@@ -15,8 +15,11 @@
 
 package software.amazon.kinesis.retrieval;
 
-import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
+
+import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * This is the BlockingGetRecordsCache class. This class blocks any calls to the getRecords on the
@@ -33,7 +36,8 @@ public class BlockingGetRecordsCache implements GetRecordsCache {
     }
 
     @Override
-    public void start() {
+    public void start(ExtendedSequenceNumber extendedSequenceNumber,
+            InitialPositionInStreamExtended initialPositionInStreamExtended) {
         //
         // Nothing to do here
         //

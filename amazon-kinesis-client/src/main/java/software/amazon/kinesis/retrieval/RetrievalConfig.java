@@ -19,8 +19,8 @@ import java.util.Optional;
 
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
+
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
@@ -119,6 +119,7 @@ public class RetrievalConfig {
     public RetrievalFactory retrievalFactory() {
         if (retrievalFactory == null) {
             retrievalFactory = new SynchronousBlockingRetrievalFactory(streamName(), amazonKinesis(),
+                    recordsFetcherFactory,
                     listShardsBackoffTimeInMillis(), maxListShardsRetryAttempts(), maxRecords());
         }
         return retrievalFactory;

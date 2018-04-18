@@ -40,14 +40,7 @@ public class DynamoDBCheckpointFactory implements CheckpointFactory {
     private final IMetricsFactory metricsFactory;
 
     @Override
-    public ICheckpoint createCheckpoint() {
-        return new KinesisClientLibLeaseCoordinator(leaseManager,
-                workerIdentifier,
-                failoverTimeMillis,
-                epsilonMillis,
-                maxLeasesForWorker,
-                maxLeasesToStealAtOneTime,
-                maxLeaseRenewalThreads,
-                metricsFactory);
+    public ICheckpoint createCheckpoint(KinesisClientLibLeaseCoordinator leaseCoordinator) {
+        return leaseCoordinator;
     }
 }
