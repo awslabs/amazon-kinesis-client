@@ -14,12 +14,12 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * Container for the parameters to the IRecordProcessor's
- * {@link IRecordProcessor#initialize(InitializationInput
+ * {@link RecordProcessor#initialize(InitializationInput
  * initializationInput) initialize} method.
  */
 public class InitializationInput {

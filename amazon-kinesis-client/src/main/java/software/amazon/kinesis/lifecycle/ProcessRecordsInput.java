@@ -23,11 +23,11 @@ import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import com.amazonaws.services.kinesis.model.Record;
 
 import lombok.Getter;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 
 /**
  * Container for the parameters to the IRecordProcessor's
- * {@link IRecordProcessor#processRecords(
+ * {@link RecordProcessor#processRecords(
  * ProcessRecordsInput processRecordsInput) processRecords} method.
  */
 @AllArgsConstructor

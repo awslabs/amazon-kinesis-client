@@ -18,7 +18,7 @@ import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import org.junit.Assert;
 import org.junit.Test;
 
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
@@ -32,7 +32,7 @@ public class StreamingRecordProcessorFactoryTest {
     @Test
     public void createProcessorTest() {
         MultiLangRecordProcessorFactory factory = new MultiLangRecordProcessorFactory("somecommand", null, configuration);
-        IRecordProcessor processor = factory.createProcessor();
+        RecordProcessor processor = factory.createProcessor();
 
         Assert.assertEquals("Should have constructed a StreamingRecordProcessor", MultiLangRecordProcessor.class,
                 processor.getClass());

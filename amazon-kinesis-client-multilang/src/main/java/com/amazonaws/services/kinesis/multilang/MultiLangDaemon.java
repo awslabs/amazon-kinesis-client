@@ -26,7 +26,7 @@ import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.coordinator.Scheduler;
-import software.amazon.kinesis.processor.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.RecordProcessorFactory;
 
 /**
  * Main app that launches the scheduler that runs the multi-language record processor.
@@ -73,7 +73,7 @@ public class MultiLangDaemon implements Callable<Integer> {
         this(buildWorker(recordProcessorFactory, configuration, workerThreadPool));
     }
 
-    private static Scheduler buildWorker(IRecordProcessorFactory recordProcessorFactory,
+    private static Scheduler buildWorker(RecordProcessorFactory recordProcessorFactory,
             KinesisClientLibConfiguration configuration, ExecutorService workerThreadPool) {
         return null;
     }

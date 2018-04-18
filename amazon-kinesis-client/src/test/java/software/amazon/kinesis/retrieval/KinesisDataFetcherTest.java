@@ -56,7 +56,7 @@ import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
 import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
-import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -134,7 +134,7 @@ public class KinesisDataFetcherTest {
 
     @Test
     public void testadvanceIteratorTo() throws KinesisClientLibException {
-        final ICheckpoint checkpoint = mock(ICheckpoint.class);
+        final Checkpointer checkpoint = mock(Checkpointer.class);
         final String iteratorA = "foo";
         final String iteratorB = "bar";
         final String seqA = "123";
@@ -398,7 +398,7 @@ public class KinesisDataFetcherTest {
         when(amazonKinesis.getRecords(recordsCaptor.capture()))
                 .thenReturn(new GetRecordsResult().withRecords(expectedRecords));
 
-        ICheckpoint checkpoint = mock(ICheckpoint.class);
+        Checkpointer checkpoint = mock(Checkpointer.class);
         when(checkpoint.getCheckpoint(SHARD_ID)).thenReturn(new ExtendedSequenceNumber(seqNo));
 
         final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy =

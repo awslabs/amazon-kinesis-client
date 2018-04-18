@@ -20,11 +20,11 @@ import org.junit.Before;
 /**
  * Test the InMemoryCheckpointImplTest class.
  */
-public class InMemoryCheckpointImplTest extends CheckpointImplTestBase {
+public class InMemoryCheckpointerTest extends CheckpointImplTestBase {
     /**
      * Constructor.
      */
-    public InMemoryCheckpointImplTest() {
+    public InMemoryCheckpointerTest() {
         super();
     }
     /**
@@ -32,7 +32,7 @@ public class InMemoryCheckpointImplTest extends CheckpointImplTestBase {
      */
     @Before
     public void setUp() throws Exception {
-        checkpoint = new InMemoryCheckpointImpl(startingSequenceNumber);
+        checkpoint = new InMemoryCheckpointer(startingSequenceNumber);
     }
 
 }

@@ -12,7 +12,7 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-package software.amazon.kinesis.coordinator;
+package software.amazon.kinesis.checkpoint;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibDependencyException;
@@ -32,7 +32,7 @@ import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingScope;
-import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.IPreparedCheckpointer;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -49,7 +49,7 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
     @NonNull
     private final ShardInfo shardInfo;
     @NonNull
-    private final ICheckpoint checkpoint;
+    private final Checkpointer checkpoint;
     @NonNull
     private final IMetricsFactory metricsFactory;
 

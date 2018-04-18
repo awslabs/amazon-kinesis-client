@@ -21,8 +21,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.processor.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.RecordProcessor;
+import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.lifecycle.InitializationInput;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
@@ -39,7 +39,7 @@ import lombok.extern.slf4j.Slf4j;
  * called.
  */
 @Slf4j
-public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNotificationAware {
+public class MultiLangRecordProcessor implements RecordProcessor, ShutdownNotificationAware {
     private static final int EXIT_VALUE = 1;
 
     /** Whether or not record processor initialization is successful. Defaults to false. */

@@ -66,7 +66,7 @@ public class LeaseCoordinator<T extends Lease> {
             .setNameFormat("LeaseRenewer-%04d").setDaemon(true).build();
 
     private final ILeaseRenewer<T> leaseRenewer;
-    private final ILeaseTaker<T> leaseTaker;
+    private final LeaseTaker<T> leaseTaker;
     private final long renewerIntervalMillis;
     private final long takerIntervalMillis;
 
@@ -133,7 +133,7 @@ public class LeaseCoordinator<T extends Lease> {
             int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
         this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
-        this.leaseTaker = new LeaseTaker<T>(leaseManager, workerIdentifier, leaseDurationMillis)
+        this.leaseTaker = new DynamoDBLeaseTaker<T>(leaseManager, workerIdentifier, leaseDurationMillis)
                 .withMaxLeasesForWorker(maxLeasesForWorker)
                 .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
         this.leaseRenewer = new LeaseRenewer<T>(

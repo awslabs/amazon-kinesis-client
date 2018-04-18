@@ -28,6 +28,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionIn
 import com.google.common.collect.ImmutableSet;
 
 import lombok.Getter;
+import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.NoOpShardPrioritization;
 import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
@@ -36,7 +37,7 @@ import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.metrics.IMetricsScope;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.DataFetchingStrategy;
 import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.SimpleRecordsFetcherFactory;
@@ -1005,7 +1006,7 @@ public class KinesisClientLibConfiguration {
      * <p>
      * This value is only used when no records are returned; if records are returned, the {@link ProcessTask} will
      * immediately retrieve the next set of records after the call to
-     * {@link IRecordProcessor#processRecords(ProcessRecordsInput)}
+     * {@link RecordProcessor#processRecords(ProcessRecordsInput)}
      * has returned. Setting this value to high may result in the KCL being unable to catch up. If you are changing this
      * value it's recommended that you enable {@link #withCallProcessRecordsEvenForEmptyRecordList(boolean)}, and
      * monitor how far behind the records retrieved are by inspecting

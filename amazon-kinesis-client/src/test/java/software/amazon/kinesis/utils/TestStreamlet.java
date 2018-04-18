@@ -29,8 +29,8 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.ThrottlingExcepti
 import software.amazon.kinesis.leases.ShardSequenceVerifier;
 import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.processor.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.RecordProcessor;
+import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.lifecycle.InitializationInput;
 import software.amazon.kinesis.lifecycle.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.ShutdownInput;
@@ -42,7 +42,7 @@ import lombok.extern.slf4j.Slf4j;
  * Streamlet that tracks records it's seen - useful for testing.
  */
 @Slf4j
-public class TestStreamlet implements IRecordProcessor, IShutdownNotificationAware {
+public class TestStreamlet implements RecordProcessor, ShutdownNotificationAware {
     private List<Record> records = new ArrayList<Record>();
 
     private Set<String> processedSeqNums = new HashSet<String>(); // used for deduping

@@ -21,7 +21,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
@@ -34,7 +34,7 @@ public abstract class CheckpointImplTestBase {
 
     protected final String startingSequenceNumber = "0001000";
     protected final String testConcurrencyToken = "testToken";
-    protected ICheckpoint checkpoint;
+    protected Checkpointer checkpoint;
 
     /**
      * @throws java.lang.Exception
@@ -107,8 +107,8 @@ public abstract class CheckpointImplTestBase {
     	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(checkpointValue);
         checkpoint.setCheckpoint(shardId, new ExtendedSequenceNumber(checkpointValue), concurrencyToken);
         Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpoint(shardId));
-        Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-        Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
+        Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).checkpoint());
+        Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).pendingCheckpoint());
     }
 
     @Test
@@ -123,8 +123,8 @@ public abstract class CheckpointImplTestBase {
         checkpoint.prepareCheckpoint(shardId, new ExtendedSequenceNumber(pendingCheckpointValue), testConcurrencyToken);
 
         Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpoint(shardId));
-        Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-        Assert.assertEquals(extendedPendingCheckpointNumber, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
+        Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpointObject(shardId).checkpoint());
+        Assert.assertEquals(extendedPendingCheckpointNumber, checkpoint.getCheckpointObject(shardId).pendingCheckpoint());
     }
 
     @Test
@@ -139,8 +139,8 @@ public abstract class CheckpointImplTestBase {
             ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(sequenceNumber);
             checkpoint.prepareCheckpoint(shardId, new ExtendedSequenceNumber(sequenceNumber), testConcurrencyToken);
             Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpoint(shardId));
-            Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-            Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
+            Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpointObject(shardId).checkpoint());
+            Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).pendingCheckpoint());
         }
     }
 
@@ -155,20 +155,20 @@ public abstract class CheckpointImplTestBase {
         ExtendedSequenceNumber extendedCheckpointNumber = new ExtendedSequenceNumber(checkpointValue);
         checkpoint.setCheckpoint(shardId, new ExtendedSequenceNumber(checkpointValue), concurrencyToken);
         Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpoint(shardId));
-        Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-        Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
+        Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpointObject(shardId).checkpoint());
+        Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).pendingCheckpoint());
 
         // prepare checkpoint
         ExtendedSequenceNumber extendedPendingCheckpointNumber = new ExtendedSequenceNumber(pendingCheckpointValue);
         checkpoint.prepareCheckpoint(shardId, new ExtendedSequenceNumber(pendingCheckpointValue), concurrencyToken);
         Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpoint(shardId));
-        Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-        Assert.assertEquals(extendedPendingCheckpointNumber, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
+        Assert.assertEquals(extendedCheckpointNumber, checkpoint.getCheckpointObject(shardId).checkpoint());
+        Assert.assertEquals(extendedPendingCheckpointNumber, checkpoint.getCheckpointObject(shardId).pendingCheckpoint());
 
         // do checkpoint
         checkpoint.setCheckpoint(shardId, new ExtendedSequenceNumber(pendingCheckpointValue), concurrencyToken);
         Assert.assertEquals(extendedPendingCheckpointNumber, checkpoint.getCheckpoint(shardId));
-        Assert.assertEquals(extendedPendingCheckpointNumber, checkpoint.getCheckpointObject(shardId).getCheckpoint());
-        Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).getPendingCheckpoint());
+        Assert.assertEquals(extendedPendingCheckpointNumber, checkpoint.getCheckpointObject(shardId).checkpoint());
+        Assert.assertEquals(null, checkpoint.getCheckpointObject(shardId).pendingCheckpoint());
     }
 }

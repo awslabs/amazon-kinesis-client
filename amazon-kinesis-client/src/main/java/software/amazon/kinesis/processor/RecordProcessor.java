@@ -23,7 +23,7 @@ import software.amazon.kinesis.lifecycle.ShutdownReason;
  * The Amazon Kinesis Client Library will instantiate record processors to process data records fetched from Amazon
  * Kinesis.
  */
-public interface IRecordProcessor {
+public interface RecordProcessor {
 
     /**
      * Invoked by the Amazon Kinesis Client Library before data records are delivered to the RecordProcessor instance

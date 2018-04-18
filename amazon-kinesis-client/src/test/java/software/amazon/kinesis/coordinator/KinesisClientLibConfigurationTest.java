@@ -20,26 +20,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
-import java.util.Date;
-
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
-import org.junit.Test;
-import org.mockito.Mockito;
-
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.regions.Region;
-import com.amazonaws.regions.RegionUtils;
-import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.kinesis.AmazonKinesisClient;
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
-import software.amazon.kinesis.processor.IRecordProcessorFactory;
-import software.amazon.kinesis.metrics.MetricsLevel;
-import com.google.common.collect.ImmutableSet;
-
-import junit.framework.Assert;
-
 public class KinesisClientLibConfigurationTest {
     /*private static final long INVALID_LONG = 0L;
     private static final int INVALID_INT = 0;

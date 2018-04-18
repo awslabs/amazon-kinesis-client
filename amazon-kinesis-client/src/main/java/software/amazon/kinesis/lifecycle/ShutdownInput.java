@@ -16,12 +16,12 @@ package software.amazon.kinesis.lifecycle;
 
 import lombok.Data;
 import lombok.experimental.Accessors;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 
 /**
  * Container for the parameters to the IRecordProcessor's
- * {@link IRecordProcessor#shutdown(ShutdownInput
+ * {@link RecordProcessor#shutdown(ShutdownInput
  * shutdownInput) shutdown} method.
  */
 @Data

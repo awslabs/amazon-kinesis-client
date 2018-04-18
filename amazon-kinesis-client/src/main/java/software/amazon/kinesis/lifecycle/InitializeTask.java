@@ -17,10 +17,10 @@ package software.amazon.kinesis.lifecycle;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.Checkpointer;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -40,9 +40,9 @@ public class InitializeTask implements ITask {
     @NonNull
     private final ShardInfo shardInfo;
     @NonNull
-    private final IRecordProcessor recordProcessor;
+    private final RecordProcessor recordProcessor;
     @NonNull
-    private final ICheckpoint checkpoint;
+    private final Checkpointer checkpoint;
     @NonNull
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     @NonNull
@@ -69,7 +69,7 @@ public class InitializeTask implements ITask {
         try {
             log.debug("Initializing ShardId {}", shardInfo);
             Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.shardId());
-            ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.getCheckpoint();
+            ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.checkpoint();
 
             cache.start(initialCheckpoint, initialPositionInStream);
 
@@ -80,7 +80,7 @@ public class InitializeTask implements ITask {
             final InitializationInput initializationInput = new InitializationInput()
                 .withShardId(shardInfo.shardId())
                 .withExtendedSequenceNumber(initialCheckpoint)
-                .withPendingCheckpointSequenceNumber(initialCheckpointObject.getPendingCheckpoint());
+                .withPendingCheckpointSequenceNumber(initialCheckpointObject.pendingCheckpoint());
             final long recordProcessorStartTimeMillis = System.currentTimeMillis();
             try {
                 recordProcessor.initialize(initializationInput);

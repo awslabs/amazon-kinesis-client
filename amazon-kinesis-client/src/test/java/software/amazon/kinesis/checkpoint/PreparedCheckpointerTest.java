@@ -14,8 +14,6 @@
  */
 package software.amazon.kinesis.checkpoint;
 
-import software.amazon.kinesis.checkpoint.DoesNothingPreparedCheckpointer;
-import software.amazon.kinesis.checkpoint.PreparedCheckpointer;
 import software.amazon.kinesis.processor.IPreparedCheckpointer;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -26,13 +24,13 @@ import org.mockito.Mockito;
 public class PreparedCheckpointerTest {
 
     /**
-     * This test verifies the relationship between the constructor and getPendingCheckpoint.
+     * This test verifies the relationship between the constructor and pendingCheckpoint.
      */
     @Test
     public void testGetSequenceNumber() {
         ExtendedSequenceNumber sn = new ExtendedSequenceNumber("sn");
         IPreparedCheckpointer checkpointer = new PreparedCheckpointer(sn, null);
-        Assert.assertEquals(sn, checkpointer.getPendingCheckpoint());
+        Assert.assertEquals(sn, checkpointer.pendingCheckpoint());
     }
 
     /**
@@ -58,7 +56,7 @@ public class PreparedCheckpointerTest {
     public void testDoesNothingPreparedCheckpoint() throws Exception {
         ExtendedSequenceNumber sn = new ExtendedSequenceNumber("sn");
         IPreparedCheckpointer checkpointer = new DoesNothingPreparedCheckpointer(sn);
-        Assert.assertEquals(sn, checkpointer.getPendingCheckpoint());
+        Assert.assertEquals(sn, checkpointer.pendingCheckpoint());
         // nothing happens here
         checkpointer.checkpoint();
     }

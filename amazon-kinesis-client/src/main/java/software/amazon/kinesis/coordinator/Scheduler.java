@@ -59,8 +59,8 @@ import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.metrics.MetricsLevel;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.Checkpointer;
+import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ProcessorFactory;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
@@ -84,7 +84,7 @@ public class Scheduler implements Runnable {
     private final RetrievalConfig retrievalConfig;
 
     private final String applicationName;
-    private final ICheckpoint checkpoint;
+    private final Checkpointer checkpoint;
     private final long idleTimeInMilliseconds;
     // Backoff time when polling to check if application has finished processing
     // parent shards
@@ -320,7 +320,7 @@ public class Scheduler implements Runnable {
 
     /**
      * Requests a graceful shutdown of the worker, notifying record processors, that implement
-     * {@link IShutdownNotificationAware}, of the impending shutdown. This gives the record processor a final chance to
+     * {@link ShutdownNotificationAware}, of the impending shutdown. This gives the record processor a final chance to
      * checkpoint.
      *
      * This will only create a single shutdown future. Additional attempts to start a graceful shutdown will return the

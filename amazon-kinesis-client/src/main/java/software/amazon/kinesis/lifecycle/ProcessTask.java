@@ -19,13 +19,13 @@ import com.amazonaws.services.kinesis.model.Shard;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsScope;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -42,7 +42,7 @@ public class ProcessTask implements ITask {
     private static final String RECORD_PROCESSOR_PROCESS_RECORDS_METRIC = "RecordProcessor.processRecords";
 
     private final ShardInfo shardInfo;
-    private final IRecordProcessor recordProcessor;
+    private final RecordProcessor recordProcessor;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final TaskType taskType = TaskType.PROCESS;
     private final long backoffTimeMillis;
@@ -73,7 +73,7 @@ public class ProcessTask implements ITask {
     }
 
     public ProcessTask(@NonNull final ShardInfo shardInfo,
-                       @NonNull final IRecordProcessor recordProcessor,
+                       @NonNull final RecordProcessor recordProcessor,
                        @NonNull final RecordProcessorCheckpointer recordProcessorCheckpointer,
                        final long backoffTimeMillis,
                        final boolean skipShardSyncAtWorkerInitializationIfLeasesExist,

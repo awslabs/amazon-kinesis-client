@@ -19,7 +19,7 @@ import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 /**
  * Allows a record processor to indicate it's aware of requested shutdowns, and handle the request.
  */
-public interface IShutdownNotificationAware {
+public interface ShutdownNotificationAware {
 
     /**
      * Called when the worker has been requested to shutdown, and gives the record processor a chance to checkpoint.

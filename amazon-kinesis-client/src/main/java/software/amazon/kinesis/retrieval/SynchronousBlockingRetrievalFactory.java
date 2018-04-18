@@ -26,11 +26,6 @@ import software.amazon.kinesis.metrics.IMetricsFactory;
  */
 @Data
 public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
-//    Need to remove this. Has no use any longer.
-    private static final long DESCRIBE_STREAM_BACKOFF_TIME_IN_MILLIS = 1500L;
-//    Need to remove this. Has no use any longer.
-    private static final int MAX_DESCRIBE_STREAM_RETRY_ATTEMPTS = 50;
-
     @NonNull
     private final String streamName;
     @NonNull

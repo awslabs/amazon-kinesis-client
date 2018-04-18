@@ -67,8 +67,8 @@ import software.amazon.kinesis.lifecycle.ShutdownInput;
 import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.Checkpointer;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ProcessorFactory;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
@@ -114,7 +114,7 @@ public class SchedulerTest {
     @Mock
     private LeaseManagerProxy leaseManagerProxy;
     @Mock
-    private ICheckpoint checkpoint;
+    private Checkpointer checkpoint;
 
     @Before
     public void setup() {
@@ -399,8 +399,8 @@ public class SchedulerTest {
 
     private static class TestRecordProcessorFactory implements ProcessorFactory {
         @Override
-        public IRecordProcessor createRecordProcessor() {
-            return new IRecordProcessor() {
+        public RecordProcessor createRecordProcessor() {
+            return new RecordProcessor() {
                 @Override
                 public void initialize(final InitializationInput initializationInput) {
                     // Do nothing.
@@ -458,7 +458,7 @@ public class SchedulerTest {
 
     private class TestKinesisCheckpointFactory implements CheckpointFactory {
         @Override
-        public ICheckpoint createCheckpoint(KinesisClientLibLeaseCoordinator leaseCoordinator) {
+        public Checkpointer createCheckpoint() {
             return checkpoint;
         }
     }

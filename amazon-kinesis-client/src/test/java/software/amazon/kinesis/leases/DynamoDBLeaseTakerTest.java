@@ -24,12 +24,11 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import software.amazon.kinesis.leases.LeaseTaker;
 
 /**
  *
  */
-public class LeaseTakerTest {
+public class DynamoDBLeaseTakerTest {
 
     /**
      * @throws java.lang.Exception
@@ -60,17 +59,17 @@ public class LeaseTakerTest {
     }
 
     /**
-     * Test method for {@link LeaseTaker#stringJoin(java.util.Collection, java.lang.String)}.
+     * Test method for {@link DynamoDBLeaseTaker#stringJoin(java.util.Collection, java.lang.String)}.
      */
     @Test
     public final void testStringJoin() {
         List<String> strings = new ArrayList<>();
         
         strings.add("foo");
-        Assert.assertEquals("foo", LeaseTaker.stringJoin(strings, ", "));
+        Assert.assertEquals("foo", DynamoDBLeaseTaker.stringJoin(strings, ", "));
         
         strings.add("bar");
-        Assert.assertEquals("foo, bar", LeaseTaker.stringJoin(strings, ", "));        
+        Assert.assertEquals("foo, bar", DynamoDBLeaseTaker.stringJoin(strings, ", "));
     }
 
 }

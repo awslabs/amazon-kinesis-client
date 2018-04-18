@@ -18,9 +18,10 @@ package software.amazon.kinesis.checkpoint;
 import lombok.Data;
 import lombok.NonNull;
 import software.amazon.kinesis.leases.ILeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
+import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.metrics.IMetricsFactory;
-import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.Checkpointer;
 
 /**
  *
@@ -28,19 +29,15 @@ import software.amazon.kinesis.processor.ICheckpoint;
 @Data
 public class DynamoDBCheckpointFactory implements CheckpointFactory {
     @NonNull
-    private final ILeaseManager leaseManager;
+    private final LeaseCoordinator<KinesisClientLease> leaseLeaseCoordinator;
     @NonNull
-    private final String workerIdentifier;
-    private final long failoverTimeMillis;
-    private final long epsilonMillis;
-    private final int maxLeasesForWorker;
-    private final int maxLeasesToStealAtOneTime;
-    private final int maxLeaseRenewalThreads;
+    private final ILeaseManager<KinesisClientLease> leaseManager;
     @NonNull
     private final IMetricsFactory metricsFactory;
 
     @Override
-    public ICheckpoint createCheckpoint(KinesisClientLibLeaseCoordinator leaseCoordinator) {
-        return leaseCoordinator;
+    public Checkpointer createCheckpoint() {
+        return new DynamoDBCheckpointer(leaseLeaseCoordinator, leaseManager, metricsFactory);
     }
+
 }

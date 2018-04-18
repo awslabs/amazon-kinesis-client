@@ -25,10 +25,10 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.Data;
 import lombok.NonNull;
-import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsFactory;
-import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.Checkpointer;
 
 /**
  *
@@ -61,7 +61,7 @@ public class SchedulerCoordinatorFactory implements CoordinatorFactory {
 
     @Override
     public RecordProcessorCheckpointer createRecordProcessorCheckpointer(@NonNull final ShardInfo shardInfo,
-                                                                         @NonNull final ICheckpoint checkpoint,
+                                                                         @NonNull final Checkpointer checkpoint,
                                                                          @NonNull final IMetricsFactory metricsFactory) {
         return new RecordProcessorCheckpointer(shardInfo, checkpoint, metricsFactory);
     }

@@ -15,12 +15,14 @@
 package software.amazon.kinesis.checkpoint;
 
 import lombok.Data;
+import lombok.experimental.Accessors;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * A class encapsulating the 2 pieces of state stored in a checkpoint.
  */
 @Data
+@Accessors(fluent = true)
 public class Checkpoint {
     private final ExtendedSequenceNumber checkpoint;
     private final ExtendedSequenceNumber pendingCheckpoint;
