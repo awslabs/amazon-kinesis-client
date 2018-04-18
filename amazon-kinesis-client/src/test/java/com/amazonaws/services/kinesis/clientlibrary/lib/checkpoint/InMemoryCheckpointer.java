@@ -19,7 +19,7 @@ import java.util.Map;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.checkpoint.Checkpoint;
-import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
  * Everything is stored in memory and there is no fault-tolerance.
  */
 @Slf4j
-public class InMemoryCheckpointImpl implements ICheckpoint {
+public class InMemoryCheckpointer implements Checkpointer {
     private Map<String, ExtendedSequenceNumber> checkpoints = new HashMap<>();
     private Map<String, ExtendedSequenceNumber> flushpoints = new HashMap<>();
     private Map<String, ExtendedSequenceNumber> pendingCheckpoints = new HashMap<>();
@@ -39,7 +39,7 @@ public class InMemoryCheckpointImpl implements ICheckpoint {
      *
      * @param startingSequenceNumber Initial checkpoint will be set to this sequenceNumber (for all shards).
      */
-    public InMemoryCheckpointImpl(String startingSequenceNumber) {
+    public InMemoryCheckpointer(String startingSequenceNumber) {
         super();
         this.startingSequenceNumber = startingSequenceNumber;
     }

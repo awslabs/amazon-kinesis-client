@@ -44,14 +44,14 @@ import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsFactory;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.Checkpointer;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 
@@ -64,7 +64,7 @@ public class ConsumerStatesTest {
     private ShardConsumer consumer;
 
     @Mock
-    private IRecordProcessor recordProcessor;
+    private RecordProcessor recordProcessor;
     @Mock
     private RecordProcessorCheckpointer recordProcessorCheckpointer;
     @Mock
@@ -74,7 +74,7 @@ public class ConsumerStatesTest {
     @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
     @Mock
-    private ICheckpoint checkpoint;
+    private Checkpointer checkpoint;
     @Mock
     private ShutdownNotification shutdownNotification;
     @Mock
@@ -144,8 +144,8 @@ public class ConsumerStatesTest {
         ITask task = state.createTask(consumer);
 
         assertThat(task, initTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
-        assertThat(task, initTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
-        assertThat(task, initTask(ICheckpoint.class, "checkpoint", equalTo(checkpoint)));
+        assertThat(task, initTask(RecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, initTask(Checkpointer.class, "checkpoint", equalTo(checkpoint)));
         assertThat(task, initTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, initTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
@@ -171,7 +171,7 @@ public class ConsumerStatesTest {
         ITask task = state.createTask(consumer);
 
         assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
-        assertThat(task, procTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, procTask(RecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
         assertThat(task, procTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
@@ -198,7 +198,7 @@ public class ConsumerStatesTest {
         ITask task = state.createTask(consumer);
 
         assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
-        assertThat(task, procTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, procTask(RecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
         assertThat(task, procTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
@@ -225,7 +225,7 @@ public class ConsumerStatesTest {
         ITask task = state.createTask(consumer);
 
         assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
-        assertThat(task, procTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, procTask(RecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
         assertThat(task, procTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, procTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
@@ -250,7 +250,7 @@ public class ConsumerStatesTest {
         consumer.notifyShutdownRequested(shutdownNotification);
         ITask task = state.createTask(consumer);
 
-        assertThat(task, shutdownReqTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, shutdownReqTask(RecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
         assertThat(task, shutdownReqTask(IRecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, shutdownReqTask(ShutdownNotification.class, "shutdownNotification", equalTo(shutdownNotification)));
@@ -296,7 +296,7 @@ public class ConsumerStatesTest {
         ITask task = state.createTask(consumer);
 
         assertThat(task, shutdownTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
-        assertThat(task, shutdownTask(IRecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
+        assertThat(task, shutdownTask(RecordProcessor.class, "recordProcessor", equalTo(recordProcessor)));
         assertThat(task, shutdownTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, shutdownTask(ShutdownReason.class, "reason", equalTo(reason)));

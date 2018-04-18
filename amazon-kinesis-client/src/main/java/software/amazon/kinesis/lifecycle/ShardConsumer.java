@@ -34,16 +34,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.Synchronized;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.LeaseManager;
 import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.Checkpointer;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 
 /**
@@ -67,9 +66,9 @@ public class ShardConsumer {
     @NonNull
     private final GetRecordsCache getRecordsCache;
     @NonNull
-    private final IRecordProcessor recordProcessor;
+    private final RecordProcessor recordProcessor;
     @NonNull
-    private final ICheckpoint checkpoint;
+    private final Checkpointer checkpoint;
     @NonNull
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final long parentShardPollIntervalMillis;

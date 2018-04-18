@@ -48,7 +48,7 @@ public class PreparedCheckpointer implements IPreparedCheckpointer {
      * {@inheritDoc}
      */
     @Override
-    public ExtendedSequenceNumber getPendingCheckpoint() {
+    public ExtendedSequenceNumber pendingCheckpoint() {
         return pendingCheckpointSequenceNumber;
     }
 

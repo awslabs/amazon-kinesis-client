@@ -33,12 +33,12 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisC
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.utils.TestStreamlet;
@@ -57,7 +57,7 @@ public class ShutdownTaskTest {
     private final String shardId = "shardId-0000397840";
     private boolean cleanupLeasesOfCompletedShards = false;
     private boolean ignoreUnexpectedChildShards = false;
-    private IRecordProcessor recordProcessor;
+    private RecordProcessor recordProcessor;
     private ShardInfo shardInfo;
     private ShutdownTask task;
     

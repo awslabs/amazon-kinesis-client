@@ -30,7 +30,7 @@ public interface IPreparedCheckpointer {
     /**
      * @return sequence number of pending checkpoint
      */
-    ExtendedSequenceNumber getPendingCheckpoint();
+    ExtendedSequenceNumber pendingCheckpoint();
 
     /**
      * This method will record a pending checkpoint.

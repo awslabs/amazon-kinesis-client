@@ -20,14 +20,14 @@ import software.amazon.kinesis.lifecycle.events.RecordsReceived;
 import software.amazon.kinesis.lifecycle.events.ShardCompleted;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequested;
 import software.amazon.kinesis.lifecycle.events.Started;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.ShutdownNotificationAware;
 
 @RequiredArgsConstructor
 public class RecordProcessorShim implements RecordProcessorLifecycle {
 
-    private final IRecordProcessor delegate;
+    private final RecordProcessor delegate;
 
     @Override
     public void started(Started started) {
@@ -60,8 +60,8 @@ public class RecordProcessorShim implements RecordProcessorLifecycle {
 
     @Override
     public void shutdownRequested(ShutdownRequested shutdownRequested) {
-        if (delegate instanceof IShutdownNotificationAware) {
-            IShutdownNotificationAware aware = (IShutdownNotificationAware)delegate;
+        if (delegate instanceof ShutdownNotificationAware) {
+            ShutdownNotificationAware aware = (ShutdownNotificationAware)delegate;
             aware.shutdownRequested(shutdownRequested.getCheckpointer());
         }
     }

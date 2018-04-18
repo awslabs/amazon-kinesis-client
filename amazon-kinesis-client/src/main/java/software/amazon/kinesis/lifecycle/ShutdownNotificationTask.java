@@ -19,8 +19,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.processor.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.RecordProcessor;
+import software.amazon.kinesis.processor.ShutdownNotificationAware;
 
 /**
  * Notifies record processor of incoming shutdown request, and gives them a chance to checkpoint.
@@ -28,7 +28,7 @@ import software.amazon.kinesis.processor.IShutdownNotificationAware;
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 @Slf4j
 public class ShutdownNotificationTask implements ITask {
-    private final IRecordProcessor recordProcessor;
+    private final RecordProcessor recordProcessor;
     private final IRecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ShutdownNotification shutdownNotification;
 //    TODO: remove if not used
@@ -38,8 +38,8 @@ public class ShutdownNotificationTask implements ITask {
     @Override
     public TaskResult call() {
         try {
-            if (recordProcessor instanceof IShutdownNotificationAware) {
-                IShutdownNotificationAware shutdownNotificationAware = (IShutdownNotificationAware) recordProcessor;
+            if (recordProcessor instanceof ShutdownNotificationAware) {
+                ShutdownNotificationAware shutdownNotificationAware = (ShutdownNotificationAware) recordProcessor;
                 try {
                     shutdownNotificationAware.shutdownRequested(recordProcessorCheckpointer);
                 } catch (Exception ex) {

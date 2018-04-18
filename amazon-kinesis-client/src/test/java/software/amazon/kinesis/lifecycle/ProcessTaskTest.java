@@ -46,10 +46,10 @@ import com.amazonaws.services.kinesis.model.Record;
 import com.google.protobuf.ByteString;
 
 import lombok.Data;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.retrieval.kpl.Messages;
@@ -79,7 +79,7 @@ public class ProcessTaskTest {
     private final long taskBackoffTimeMillis = 1L;
 
     @Mock
-    private IRecordProcessor recordProcessor;
+    private RecordProcessor recordProcessor;
     @Mock
     private RecordProcessorCheckpointer checkpointer;
     @Mock

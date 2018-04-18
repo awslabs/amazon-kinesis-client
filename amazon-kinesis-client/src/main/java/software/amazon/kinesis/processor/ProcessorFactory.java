@@ -19,5 +19,5 @@ package software.amazon.kinesis.processor;
  *
  */
 public interface ProcessorFactory {
-    IRecordProcessor createRecordProcessor();
+    RecordProcessor createRecordProcessor();
 }

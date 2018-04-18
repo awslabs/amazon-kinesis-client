@@ -17,7 +17,7 @@ package software.amazon.kinesis.lifecycle;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 
 import static software.amazon.kinesis.lifecycle.ConsumerStates.ConsumerState;
 import static software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerState;
@@ -50,7 +50,7 @@ public enum ShutdownReason {
     /**
      * Indicates that the entire application is being shutdown, and if desired the record processor will be given a
      * final chance to checkpoint. This state will not trigger a direct call to
-     * {@link IRecordProcessor#shutdown(ShutdownInput)}, but
+     * {@link RecordProcessor#shutdown(ShutdownInput)}, but
      * instead depend on a different interface for backward compatibility.
      */
     REQUESTED(1, ShardConsumerState.SHUTDOWN_REQUESTED.getConsumerState());

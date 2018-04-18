@@ -16,7 +16,7 @@ package software.amazon.kinesis.lifecycle;
 
 import java.util.concurrent.CountDownLatch;
 
-import software.amazon.kinesis.processor.IShutdownNotificationAware;
+import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 
@@ -43,7 +43,7 @@ public class ShardConsumerShutdownNotification implements ShutdownNotification {
      *            the lease that this shutdown request will free once initial shutdown is complete
      * @param notificationCompleteLatch
      *            used to inform the caller once the
-     *            {@link IShutdownNotificationAware} object has been
+     *            {@link ShutdownNotificationAware} object has been
      *            notified of the shutdown request.
      * @param shutdownCompleteLatch
      *            used to inform the caller once the record processor is fully shutdown

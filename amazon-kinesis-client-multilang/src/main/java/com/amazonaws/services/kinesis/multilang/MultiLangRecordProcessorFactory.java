@@ -16,8 +16,8 @@ package com.amazonaws.services.kinesis.multilang;
 
 import java.util.concurrent.ExecutorService;
 
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.processor.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.RecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessorFactory;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
  * Creates {@link MultiLangRecordProcessor}'s.
  */
 @Slf4j
-public class MultiLangRecordProcessorFactory implements IRecordProcessorFactory {
+public class MultiLangRecordProcessorFactory implements RecordProcessorFactory {
     private static final String COMMAND_DELIMETER_REGEX = " +";
 
     private final String command;
@@ -63,7 +63,7 @@ public class MultiLangRecordProcessorFactory implements IRecordProcessorFactory 
     }
 
     @Override
-    public IRecordProcessor createProcessor() {
+    public RecordProcessor createProcessor() {
         log.debug("Creating new record processor for client executable: {}", command);
         /*
          * Giving ProcessBuilder the command as an array of Strings allows users to specify command line arguments.

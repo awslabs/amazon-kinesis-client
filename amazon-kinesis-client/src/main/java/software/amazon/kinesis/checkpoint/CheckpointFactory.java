@@ -16,11 +16,11 @@
 package software.amazon.kinesis.checkpoint;
 
 import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
-import software.amazon.kinesis.processor.ICheckpoint;
+import software.amazon.kinesis.processor.Checkpointer;
 
 /**
  *
  */
 public interface CheckpointFactory {
-    ICheckpoint createCheckpoint(KinesisClientLibLeaseCoordinator leaseCoordinator);
+    Checkpointer createCheckpoint(KinesisClientLibLeaseCoordinator leaseCoordinator);
 }

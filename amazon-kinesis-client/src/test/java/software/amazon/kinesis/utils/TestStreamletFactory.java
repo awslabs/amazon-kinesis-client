@@ -19,13 +19,13 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 
 import software.amazon.kinesis.leases.ShardSequenceVerifier;
-import software.amazon.kinesis.processor.IRecordProcessor;
-import software.amazon.kinesis.processor.IRecordProcessorFactory;
+import software.amazon.kinesis.processor.RecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessorFactory;
 
 /**
  * Factory for TestStreamlet record processors.
  */
-public class TestStreamletFactory implements IRecordProcessorFactory {
+public class TestStreamletFactory implements RecordProcessorFactory {
 
     // Will be passed to the TestStreamlet. Can be used to check if all records have been processed.
     private Semaphore semaphore;
@@ -41,7 +41,7 @@ public class TestStreamletFactory implements IRecordProcessorFactory {
     }
 
     @Override
-    public synchronized IRecordProcessor createProcessor() {
+    public synchronized RecordProcessor createProcessor() {
         TestStreamlet processor = new TestStreamlet(semaphore, shardSequenceVerifier);
         testStreamlets.add(processor);
         return processor;

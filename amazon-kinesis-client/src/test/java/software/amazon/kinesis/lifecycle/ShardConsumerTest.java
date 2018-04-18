@@ -62,7 +62,7 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.services.kinesis.AmazonKinesis;
-import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.InMemoryCheckpointImpl;
+import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.InMemoryCheckpointer;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
@@ -74,15 +74,15 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
+import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ILeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
-import software.amazon.kinesis.processor.ICheckpoint;
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.Checkpointer;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.AsynchronousGetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.BlockingGetRecordsCache;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
@@ -135,13 +135,13 @@ public class ShardConsumerTest {
     @Mock
     private RecordsFetcherFactory recordsFetcherFactory;
     @Mock
-    private IRecordProcessor recordProcessor;
+    private RecordProcessor recordProcessor;
     @Mock
     private KinesisClientLibConfiguration config;
     @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
     @Mock
-    private ICheckpoint checkpoint;
+    private Checkpointer checkpoint;
     @Mock
     private ShutdownNotification shutdownNotification;
     @Mock
@@ -287,7 +287,7 @@ public class ShardConsumerTest {
         IKinesisProxy fileBasedProxy = new KinesisLocalFileProxy(file.getAbsolutePath());
 
         final int maxRecords = 2;
-        ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
+        Checkpointer checkpoint = new InMemoryCheckpointer(startSeqNum.toString());
         checkpoint.setCheckpoint(shardId, ExtendedSequenceNumber.TRIM_HORIZON, concurrencyToken);
         when(leaseManager.getLease(anyString())).thenReturn(null);
         TestStreamlet processor = new TestStreamlet();
@@ -390,7 +390,7 @@ public class ShardConsumerTest {
         IKinesisProxy fileBasedProxy = new KinesisLocalFileProxy(file.getAbsolutePath());
 
         final int maxRecords = 2;
-        ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
+        Checkpointer checkpoint = new InMemoryCheckpointer(startSeqNum.toString());
         checkpoint.setCheckpoint(shardId, ExtendedSequenceNumber.TRIM_HORIZON, concurrencyToken);
         when(leaseManager.getLease(anyString())).thenReturn(null);
 
@@ -485,7 +485,7 @@ public class ShardConsumerTest {
         IKinesisProxy fileBasedProxy = new KinesisLocalFileProxy(file.getAbsolutePath());
 
         final int maxRecords = 2;
-        ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
+        Checkpointer checkpoint = new InMemoryCheckpointer(startSeqNum.toString());
         checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.AT_TIMESTAMP, testConcurrencyToken);
         when(leaseManager.getLease(anyString())).thenReturn(null);
         TestStreamlet processor = new TestStreamlet();

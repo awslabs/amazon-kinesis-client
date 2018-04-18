@@ -51,7 +51,6 @@ public class MetricsConfig {
      *
      * @return {@link AmazonCloudWatch}
      */
-    @NonNull
     private final AmazonCloudWatch amazonCloudWatch;
 
     /**

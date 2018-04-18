@@ -21,7 +21,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 /**
  * Interface for checkpoint trackers.
  */
-public interface ICheckpoint {
+public interface Checkpointer {
 
     /**
      * Record a checkpoint for a shard (e.g. sequence and subsequence numbers of last record processed 

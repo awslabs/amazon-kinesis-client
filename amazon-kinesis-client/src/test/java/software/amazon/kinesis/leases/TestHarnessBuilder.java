@@ -91,7 +91,7 @@ public class TestHarnessBuilder {
         currentTimeNanos += millis * 1000000;
     }
 
-    public Map<String, KinesisClientLease> takeMutateAssert(LeaseTaker<KinesisClientLease> taker, int numToTake)
+    public Map<String, KinesisClientLease> takeMutateAssert(DynamoDBLeaseTaker<KinesisClientLease> taker, int numToTake)
         throws LeasingException {
         Map<String, KinesisClientLease> result = taker.takeLeases(timeProvider);
         Assert.assertEquals(numToTake, result.size());
@@ -106,7 +106,7 @@ public class TestHarnessBuilder {
         return result;
     }
 
-    public Map<String, KinesisClientLease> takeMutateAssert(LeaseTaker<KinesisClientLease> taker, String... takenShardIds)
+    public Map<String, KinesisClientLease> takeMutateAssert(DynamoDBLeaseTaker<KinesisClientLease> taker, String... takenShardIds)
         throws LeasingException {
         Map<String, KinesisClientLease> result = taker.takeLeases(timeProvider);
         Assert.assertEquals(takenShardIds.length, result.size());

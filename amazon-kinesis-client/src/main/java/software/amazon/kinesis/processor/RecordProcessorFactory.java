@@ -19,13 +19,13 @@ package software.amazon.kinesis.processor;
  * The Amazon Kinesis Client Library will use this to instantiate a record processor per shard.
  * Clients may choose to create separate instantiations, or re-use instantiations.
  */
-public interface IRecordProcessorFactory {
+public interface RecordProcessorFactory {
 
     /**
      * Returns a record processor to be used for processing data records for a (assigned) shard.
      * 
      * @return Returns a processor object.
      */
-    IRecordProcessor createProcessor();
+    RecordProcessor createProcessor();
 
 }

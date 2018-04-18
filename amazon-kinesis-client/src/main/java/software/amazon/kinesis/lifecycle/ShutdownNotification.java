@@ -14,7 +14,7 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import software.amazon.kinesis.processor.IRecordProcessor;
+import software.amazon.kinesis.processor.RecordProcessor;
 
 /**
  * A shutdown request to the ShardConsumer
@@ -29,7 +29,7 @@ public interface ShutdownNotification {
 
     /**
      * Used to indicate that the record processor has completed the call to
-     * {@link IRecordProcessor#shutdown(ShutdownInput)} has
+     * {@link RecordProcessor#shutdown(ShutdownInput)} has
      * completed.
      */
     void shutdownComplete();

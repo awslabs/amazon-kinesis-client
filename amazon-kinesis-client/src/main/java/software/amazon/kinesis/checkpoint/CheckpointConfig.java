@@ -16,13 +16,15 @@
 package software.amazon.kinesis.checkpoint;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
-import software.amazon.kinesis.coordinator.RecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.KinesisClientLeaseManager;
-import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
@@ -53,7 +55,7 @@ public class CheckpointConfig {
 
     private long failoverTimeMillis = 10000L;
 
-    private ILeaseManager leaseManager;
+    private ILeaseManager<KinesisClientLease> leaseManager;
 
     private int maxLeasesForWorker = Integer.MAX_VALUE;
 
@@ -67,7 +69,9 @@ public class CheckpointConfig {
 
     private long epsilonMillis = 25L;
 
-    public ILeaseManager leaseManager() {
+    private LeaseCoordinator<KinesisClientLease> leaseCoordinator;
+
+    public ILeaseManager<KinesisClientLease> leaseManager() {
         if (leaseManager == null) {
             leaseManager = new KinesisClientLeaseManager(tableName, amazonDynamoDB, consistentReads);
         }
@@ -76,7 +80,14 @@ public class CheckpointConfig {
 
     public CheckpointFactory checkpointFactory() {
         if (checkpointFactory == null) {
-            checkpointFactory = new DynamoDBCheckpointFactory(leaseManager(),
+            checkpointFactory = new DynamoDBCheckpointFactory(leaseCoordinator(), leaseManager(), metricsFactory());
+        }
+        return checkpointFactory;
+    }
+
+    public LeaseCoordinator<KinesisClientLease> leaseCoordinator() {
+        if (leaseCoordinator == null) {
+            leaseCoordinator = new KinesisClientLibLeaseCoordinator(leaseManager(),
                     workerIdentifier(),
                     failoverTimeMillis(),
                     epsilonMillis(),
@@ -85,6 +96,6 @@ public class CheckpointConfig {
                     maxLeaseRenewalThreads(),
                     metricsFactory());
         }
-        return checkpointFactory;
+        return leaseCoordinator;
     }
 }

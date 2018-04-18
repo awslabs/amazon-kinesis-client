@@ -22,14 +22,14 @@ import org.junit.Test;
 
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 
-public class LeaseTakerIntegrationTest extends LeaseIntegrationTest {
+public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
     private static final long LEASE_DURATION_MILLIS = 1000L;
-    private LeaseTaker<KinesisClientLease> taker;
+    private DynamoDBLeaseTaker<KinesisClientLease> taker;
 
     @Before
     public void setUp() {
-        taker = new LeaseTaker<KinesisClientLease>(leaseManager, "foo", LEASE_DURATION_MILLIS);
+        taker = new DynamoDBLeaseTaker<KinesisClientLease>(leaseManager, "foo", LEASE_DURATION_MILLIS);
     }
 
     @Test
