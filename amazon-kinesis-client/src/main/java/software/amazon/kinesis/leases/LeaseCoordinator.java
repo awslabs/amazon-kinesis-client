@@ -65,7 +65,7 @@ public class LeaseCoordinator<T extends Lease> {
     private static final ThreadFactory LEASE_RENEWAL_THREAD_FACTORY = new ThreadFactoryBuilder()
             .setNameFormat("LeaseRenewer-%04d").setDaemon(true).build();
 
-    private final ILeaseRenewer<T> leaseRenewer;
+    private final LeaseRenewer<T> leaseRenewer;
     private final LeaseTaker<T> leaseTaker;
     private final long renewerIntervalMillis;
     private final long takerIntervalMillis;
@@ -87,7 +87,7 @@ public class LeaseCoordinator<T extends Lease> {
      * @param leaseDurationMillis Duration of a lease
      * @param epsilonMillis Allow for some variance when calculating lease expirations
      */
-    public LeaseCoordinator(ILeaseManager<T> leaseManager,
+    public LeaseCoordinator(LeaseManager<T> leaseManager,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis) {
@@ -103,7 +103,7 @@ public class LeaseCoordinator<T extends Lease> {
      * @param epsilonMillis Allow for some variance when calculating lease expirations
      * @param metricsFactory Used to publish metrics about lease operations
      */
-    public LeaseCoordinator(ILeaseManager<T> leaseManager,
+    public LeaseCoordinator(LeaseManager<T> leaseManager,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
@@ -124,7 +124,7 @@ public class LeaseCoordinator<T extends Lease> {
      * @param maxLeasesToStealAtOneTime Steal up to these many leases at a time (for load balancing)
      * @param metricsFactory Used to publish metrics about lease operations
      */
-    public LeaseCoordinator(ILeaseManager<T> leaseManager,
+    public LeaseCoordinator(LeaseManager<T> leaseManager,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
@@ -136,7 +136,7 @@ public class LeaseCoordinator<T extends Lease> {
         this.leaseTaker = new DynamoDBLeaseTaker<T>(leaseManager, workerIdentifier, leaseDurationMillis)
                 .withMaxLeasesForWorker(maxLeasesForWorker)
                 .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
-        this.leaseRenewer = new LeaseRenewer<T>(
+        this.leaseRenewer = new DynamoDBLeaseRenewer<T>(
                 leaseManager, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool);
         this.renewerIntervalMillis = leaseDurationMillis / 3 - epsilonMillis;
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;

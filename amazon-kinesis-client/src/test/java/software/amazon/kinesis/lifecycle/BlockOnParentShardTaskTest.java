@@ -26,7 +26,7 @@ import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 
-import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.LeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -58,7 +58,7 @@ public class BlockOnParentShardTaskTest {
     @Test
     public final void testCallNoParents()
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        ILeaseManager<KinesisClientLease> leaseManager = mock(ILeaseManager.class);
+        LeaseManager<KinesisClientLease> leaseManager = mock(LeaseManager.class);
         when(leaseManager.getLease(shardId)).thenReturn(null);
 
         BlockOnParentShardTask task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
@@ -88,7 +88,7 @@ public class BlockOnParentShardTaskTest {
         KinesisClientLease parent2Lease = new KinesisClientLease();
         parent2Lease.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
 
-        ILeaseManager<KinesisClientLease> leaseManager = mock(ILeaseManager.class);
+        LeaseManager<KinesisClientLease> leaseManager = mock(LeaseManager.class);
         when(leaseManager.getLease(parent1ShardId)).thenReturn(parent1Lease);
         when(leaseManager.getLease(parent2ShardId)).thenReturn(parent2Lease);
 
@@ -130,7 +130,7 @@ public class BlockOnParentShardTaskTest {
         // mock a sequence number checkpoint
         parent2Lease.setCheckpoint(new ExtendedSequenceNumber("98182584034"));
 
-        ILeaseManager<KinesisClientLease> leaseManager = mock(ILeaseManager.class);
+        LeaseManager<KinesisClientLease> leaseManager = mock(LeaseManager.class);
         when(leaseManager.getLease(parent1ShardId)).thenReturn(parent1Lease);
         when(leaseManager.getLease(parent2ShardId)).thenReturn(parent2Lease);
 
@@ -166,7 +166,7 @@ public class BlockOnParentShardTaskTest {
         ShardInfo shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         TaskResult result = null;
         KinesisClientLease parentLease = new KinesisClientLease();
-        ILeaseManager<KinesisClientLease> leaseManager = mock(ILeaseManager.class);
+        LeaseManager<KinesisClientLease> leaseManager = mock(LeaseManager.class);
         when(leaseManager.getLease(parentShardId)).thenReturn(parentLease);
 
         // test when parent shard has not yet been fully processed

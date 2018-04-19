@@ -38,7 +38,7 @@ import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
-import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.LeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -108,7 +108,7 @@ public class Scheduler implements Runnable {
     private final String streamName;
     private final long listShardsBackoffTimeMillis;
     private final int maxListShardsRetryAttempts;
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseManager<KinesisClientLease> leaseManager;
     private final LeaseManagerProxy leaseManagerProxy;
     private final boolean ignoreUnexpetedChildShards;
 

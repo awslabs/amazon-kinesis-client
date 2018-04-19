@@ -41,7 +41,7 @@ public class ShardSyncTaskManager {
     @NonNull
     private final LeaseManagerProxy leaseManagerProxy;
     @NonNull
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseManager<KinesisClientLease> leaseManager;
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesUponShardCompletion;

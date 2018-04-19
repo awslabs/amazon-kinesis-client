@@ -34,7 +34,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionIn
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.LeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -66,7 +66,7 @@ public class ShutdownTaskTest {
     @Mock
     private RecordProcessorCheckpointer checkpointer;
     @Mock
-    private ILeaseManager<KinesisClientLease> leaseManager;
+    private LeaseManager<KinesisClientLease> leaseManager;
     @Mock
     private LeaseManagerProxy leaseManagerProxy;
 

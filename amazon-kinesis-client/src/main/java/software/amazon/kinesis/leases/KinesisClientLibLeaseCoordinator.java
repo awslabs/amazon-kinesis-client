@@ -20,11 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -42,12 +38,12 @@ public class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisCl
 
     @Getter
     @Accessors(fluent = true)
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseManager<KinesisClientLease> leaseManager;
 
     private long initialLeaseTableReadCapacity = DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY;
     private long initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
 
-    public KinesisClientLibLeaseCoordinator(final ILeaseManager<KinesisClientLease> leaseManager,
+    public KinesisClientLibLeaseCoordinator(final LeaseManager<KinesisClientLease> leaseManager,
                                             final String workerIdentifier,
                                             final long leaseDurationMillis,
                                             final long epsilonMillis,

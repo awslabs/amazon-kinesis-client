@@ -52,7 +52,7 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
     }
 
     @Override
-    public GetRecordsCache createGetRecordsCache(final ShardInfo shardInfo) {
+    public GetRecordsCache createGetRecordsCache(final ShardInfo shardInfo, final IMetricsFactory metricsFactory) {
         return new PrefetchGetRecordsCache(maxPendingProcessRecordsInput, maxByteSize, maxRecordsCount,
                 maxRecordsPerCall, createGetRecordsRetrievalStrategy(shardInfo), executorService,
                 idleMillisBetweenCalls, metricsFactory, "Prefetching", shardInfo.shardId());

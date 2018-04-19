@@ -53,7 +53,7 @@ public class DynamoDBLeaseTaker<T extends Lease> implements LeaseTaker<T> {
         }
     };
 
-    private final ILeaseManager<T> leaseManager;
+    private final LeaseManager<T> leaseManager;
     private final String workerIdentifier;
     private final Map<String, T> allLeases = new HashMap<String, T>();
     private final long leaseDurationNanos;
@@ -62,7 +62,7 @@ public class DynamoDBLeaseTaker<T extends Lease> implements LeaseTaker<T> {
 
     private long lastScanTimeNanos = 0L;
 
-    public DynamoDBLeaseTaker(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis) {
+    public DynamoDBLeaseTaker(LeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis) {
         this.leaseManager = leaseManager;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);

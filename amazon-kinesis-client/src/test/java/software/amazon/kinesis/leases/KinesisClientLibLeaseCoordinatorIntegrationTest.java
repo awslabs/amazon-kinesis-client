@@ -53,7 +53,7 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
     private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
     private static final int MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
     private static final int MAX_LEASE_RENEWER_THREAD_COUNT = 20;
-    private static KinesisClientLeaseManager leaseManager;
+    private static KinesisClientDynamoDBLeaseManager leaseManager;
     private static DynamoDBCheckpointer dynamoDBCheckpointer;
 
     private KinesisClientLibLeaseCoordinator coordinator;
@@ -66,7 +66,7 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
         if (leaseManager == null) {
             AmazonDynamoDBClient ddb = new AmazonDynamoDBClient(new DefaultAWSCredentialsProviderChain());
             leaseManager =
-                    new KinesisClientLeaseManager(TABLE_NAME, ddb, useConsistentReads);
+                    new KinesisClientDynamoDBLeaseManager(TABLE_NAME, ddb, useConsistentReads);
         }
         leaseManager.createLeaseTableIfNotExists(10L, 10L);
         leaseManager.deleteAll();
@@ -220,7 +220,7 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
             assertEquals(original, actual); // Assert the contents of the lease
         }
 
-        public void addLeasesToRenew(ILeaseRenewer<KinesisClientLease> renewer, String... shardIds)
+        public void addLeasesToRenew(LeaseRenewer<KinesisClientLease> renewer, String... shardIds)
             throws DependencyException, InvalidStateException {
             List<KinesisClientLease> leasesToRenew = new ArrayList<KinesisClientLease>();
 
@@ -233,7 +233,7 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
             renewer.addLeasesToRenew(leasesToRenew);
         }
 
-        public Map<String, KinesisClientLease> renewMutateAssert(ILeaseRenewer<KinesisClientLease> renewer,
+        public Map<String, KinesisClientLease> renewMutateAssert(LeaseRenewer<KinesisClientLease> renewer,
                 String... renewedShardIds) throws DependencyException, InvalidStateException {
             renewer.renewLeases();
 

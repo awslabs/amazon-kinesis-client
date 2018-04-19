@@ -72,7 +72,7 @@ public class ShardSyncerTest {
             InitialPositionInStreamExtended.newInitialPositionAtTimestamp(new Date(1000L));
     private final boolean cleanupLeasesOfCompletedShards = true;
     private AmazonDynamoDB ddbClient = DynamoDBEmbedded.create().amazonDynamoDB();
-    private LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("tempTestTable", ddbClient);
+    private DynamoDBLeaseManager<KinesisClientLease> dynamoDBLeaseManager = new KinesisClientDynamoDBLeaseManager("tempTestTable", ddbClient);
     private static final int EXPONENT = 128;
     /**
      * Old/Obsolete max value of a sequence number (2^128 -1).
@@ -84,16 +84,16 @@ public class ShardSyncerTest {
 
     @Before
     public void setUp() throws Exception {
-        boolean created = leaseManager.createLeaseTableIfNotExists(1L, 1L);
+        boolean created = dynamoDBLeaseManager.createLeaseTableIfNotExists(1L, 1L);
         if (created) {
             log.info("New table created.");
         }
-        leaseManager.deleteAll();
+        dynamoDBLeaseManager.deleteAll();
     }
 
     @After
     public void tearDown() throws Exception {
-        leaseManager.deleteAll();
+        dynamoDBLeaseManager.deleteAll();
     }
 
     /**
@@ -213,9 +213,9 @@ public class ShardSyncerTest {
 
         when(leaseManagerProxy.listShards()).thenReturn(shards);
 
-        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, leaseManager, INITIAL_POSITION_LATEST,
+        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, dynamoDBLeaseManager, INITIAL_POSITION_LATEST,
                 cleanupLeasesOfCompletedShards);
-        List<KinesisClientLease> newLeases = leaseManager.listLeases();
+        List<KinesisClientLease> newLeases = dynamoDBLeaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<>();
         expectedLeaseShardIds.add("shardId-4");
         expectedLeaseShardIds.add("shardId-8");
@@ -245,9 +245,9 @@ public class ShardSyncerTest {
 
         when(leaseManagerProxy.listShards()).thenReturn(shards);
 
-        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
+        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, dynamoDBLeaseManager, INITIAL_POSITION_TRIM_HORIZON,
                 cleanupLeasesOfCompletedShards);
-        List<KinesisClientLease> newLeases = leaseManager.listLeases();
+        List<KinesisClientLease> newLeases = dynamoDBLeaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<>();
         for (int i = 0; i < 11; i++) {
             expectedLeaseShardIds.add("shardId-" + i);
@@ -274,9 +274,9 @@ public class ShardSyncerTest {
 
         when(leaseManagerProxy.listShards()).thenReturn(shards);
 
-        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, leaseManager, INITIAL_POSITION_AT_TIMESTAMP,
+        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, dynamoDBLeaseManager, INITIAL_POSITION_AT_TIMESTAMP,
                 cleanupLeasesOfCompletedShards);
-        List<KinesisClientLease> newLeases = leaseManager.listLeases();
+        List<KinesisClientLease> newLeases = dynamoDBLeaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<>();
         for (int i = 0; i < 11; i++) {
             expectedLeaseShardIds.add("shardId-" + i);
@@ -306,7 +306,7 @@ public class ShardSyncerTest {
 
         when(leaseManagerProxy.listShards()).thenReturn(shards);
 
-        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
+        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, dynamoDBLeaseManager, INITIAL_POSITION_TRIM_HORIZON,
                 cleanupLeasesOfCompletedShards);
     }
 
@@ -330,9 +330,9 @@ public class ShardSyncerTest {
 
         when(leaseManagerProxy.listShards()).thenReturn(shards);
 
-        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, leaseManager, INITIAL_POSITION_LATEST,
+        ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, dynamoDBLeaseManager, INITIAL_POSITION_LATEST,
                                                      cleanupLeasesOfCompletedShards, true);
-        List<KinesisClientLease> newLeases = leaseManager.listLeases();
+        List<KinesisClientLease> newLeases = dynamoDBLeaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<>();
         expectedLeaseShardIds.add("shardId-4");
         expectedLeaseShardIds.add("shardId-5");
@@ -379,7 +379,7 @@ public class ShardSyncerTest {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.DELETELEASE, c, INITIAL_POSITION_TRIM_HORIZON);
             // Need to clean up lease manager every time after calling ShardSyncer
-            leaseManager.deleteAll();
+            dynamoDBLeaseManager.deleteAll();
         }
     }
 
@@ -403,7 +403,7 @@ public class ShardSyncerTest {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.LISTLEASES, c, INITIAL_POSITION_TRIM_HORIZON);
             // Need to clean up lease manager every time after calling ShardSyncer
-            leaseManager.deleteAll();
+            dynamoDBLeaseManager.deleteAll();
         }
     }
 
@@ -427,7 +427,7 @@ public class ShardSyncerTest {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.CREATELEASEIFNOTEXISTS, c,INITIAL_POSITION_TRIM_HORIZON);
             // Need to clean up lease manager every time after calling ShardSyncer
-            leaseManager.deleteAll();
+            dynamoDBLeaseManager.deleteAll();
         }
     }
 
@@ -440,7 +440,7 @@ public class ShardSyncerTest {
         throws KinesisClientLibIOException, DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (exceptionMethod != null) {
             ExceptionThrowingLeaseManager exceptionThrowingLeaseManager =
-                    new ExceptionThrowingLeaseManager(leaseManager);
+                    new ExceptionThrowingLeaseManager(dynamoDBLeaseManager);
             // Set exception and throwing time for exceptionThrowingManager.
             exceptionThrowingLeaseManager.setLeaseLeaseManagerThrowingExceptionScenario(exceptionMethod, exceptionTime);
             // Only need to try two times.
@@ -459,7 +459,7 @@ public class ShardSyncerTest {
             }
         } else {
             ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy,
-                    leaseManager,
+                    dynamoDBLeaseManager,
                     position,
                     cleanupLeasesOfCompletedShards);
         }
@@ -501,7 +501,7 @@ public class ShardSyncerTest {
                     ExceptionThrowingLeaseManagerMethods.DELETELEASE,
                     c, INITIAL_POSITION_AT_TIMESTAMP);
             // Need to clean up lease manager every time after calling ShardSyncer
-            leaseManager.deleteAll();
+            dynamoDBLeaseManager.deleteAll();
         }
     }
 
@@ -524,7 +524,7 @@ public class ShardSyncerTest {
                     ExceptionThrowingLeaseManagerMethods.LISTLEASES,
                     c, INITIAL_POSITION_AT_TIMESTAMP);
             // Need to clean up lease manager every time after calling ShardSyncer
-            leaseManager.deleteAll();
+            dynamoDBLeaseManager.deleteAll();
         }
     }
 
@@ -547,7 +547,7 @@ public class ShardSyncerTest {
                     ExceptionThrowingLeaseManagerMethods.CREATELEASEIFNOTEXISTS,
                     c, INITIAL_POSITION_AT_TIMESTAMP);
             // Need to clean up lease manager every time after calling ShardSyncer
-            leaseManager.deleteAll();
+            dynamoDBLeaseManager.deleteAll();
         }
     }
 
@@ -566,7 +566,7 @@ public class ShardSyncerTest {
 
         retryCheckAndCreateLeaseForNewShards(exceptionMethod, exceptionTime, position);
 
-        List<KinesisClientLease> newLeases = leaseManager.listLeases();
+        List<KinesisClientLease> newLeases = dynamoDBLeaseManager.listLeases();
         Map<String, ExtendedSequenceNumber> expectedShardIdToCheckpointMap = new HashMap<>();
         for (int i = 0; i < 11; i++) {
             expectedShardIdToCheckpointMap.put("shardId-" + i, extendedSequenceNumber);
@@ -578,18 +578,18 @@ public class ShardSyncerTest {
             assertEquals(expectedCheckpoint, lease1.getCheckpoint());
         }
 
-        KinesisClientLease closedShardLease = leaseManager.getLease("shardId-0");
+        KinesisClientLease closedShardLease = dynamoDBLeaseManager.getLease("shardId-0");
         closedShardLease.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
-        leaseManager.updateLease(closedShardLease);
+        dynamoDBLeaseManager.updateLease(closedShardLease);
         expectedShardIdToCheckpointMap.remove(closedShardLease.getLeaseKey());
-        KinesisClientLease childShardLease = leaseManager.getLease("shardId-6");
+        KinesisClientLease childShardLease = dynamoDBLeaseManager.getLease("shardId-6");
         childShardLease.setCheckpoint(new ExtendedSequenceNumber("34290"));
-        leaseManager.updateLease(childShardLease);
+        dynamoDBLeaseManager.updateLease(childShardLease);
         expectedShardIdToCheckpointMap.put(childShardLease.getLeaseKey(), new ExtendedSequenceNumber("34290"));
 
         retryCheckAndCreateLeaseForNewShards(exceptionMethod, exceptionTime, position);
 
-        newLeases = leaseManager.listLeases();
+        newLeases = dynamoDBLeaseManager.listLeases();
         assertEquals(expectedShardIdToCheckpointMap.size(), newLeases.size());
         for (KinesisClientLease lease1 : newLeases) {
             ExtendedSequenceNumber expectedCheckpoint = expectedShardIdToCheckpointMap.get(lease1.getLeaseKey());
@@ -617,10 +617,10 @@ public class ShardSyncerTest {
                 null,
                 ShardObjectHelper.newSequenceNumberRange("101", null)));
         garbageLease.setCheckpoint(new ExtendedSequenceNumber("999"));
-        leaseManager.createLeaseIfNotExists(garbageLease);
-        assertEquals(garbageShardId, leaseManager.getLease(garbageShardId).getLeaseKey());
+        dynamoDBLeaseManager.createLeaseIfNotExists(garbageLease);
+        assertEquals(garbageShardId, dynamoDBLeaseManager.getLease(garbageShardId).getLeaseKey());
         testBootstrapShardLeasesAtStartingPosition(INITIAL_POSITION_LATEST);
-        assertNull(leaseManager.getLease(garbageShardId));
+        assertNull(dynamoDBLeaseManager.getLease(garbageShardId));
     }
 
     private void testBootstrapShardLeasesAtStartingPosition(InitialPositionInStreamExtended initialPosition)
@@ -636,9 +636,9 @@ public class ShardSyncerTest {
 
         when(leaseManagerProxy.listShards()).thenReturn(shards);
 
-        ShardSyncer.bootstrapShardLeases(leaseManagerProxy, leaseManager, initialPosition, cleanupLeasesOfCompletedShards,
+        ShardSyncer.bootstrapShardLeases(leaseManagerProxy, dynamoDBLeaseManager, initialPosition, cleanupLeasesOfCompletedShards,
                                          false);
-        List<KinesisClientLease> newLeases = leaseManager.listLeases();
+        List<KinesisClientLease> newLeases = dynamoDBLeaseManager.listLeases();
         assertEquals(2, newLeases.size());
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         expectedLeaseShardIds.add(shardId0);
@@ -1446,7 +1446,7 @@ public class ShardSyncerTest {
         String closedShardId = "shardId-2";
         KinesisClientLease leaseForClosedShard = newLease(closedShardId);
         leaseForClosedShard.setCheckpoint(new ExtendedSequenceNumber("1234"));
-        leaseManager.createLeaseIfNotExists(leaseForClosedShard);
+        dynamoDBLeaseManager.createLeaseIfNotExists(leaseForClosedShard);
 
         Set<String> childShardIds = new HashSet<>();
         List<KinesisClientLease> trackedLeases = new ArrayList<>();
@@ -1463,49 +1463,49 @@ public class ShardSyncerTest {
         Map<String, KinesisClientLease> trackedLeaseMap = ShardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
 
         // empty list of leases
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        assertNotNull(leaseManager.getLease(closedShardId));
+        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, dynamoDBLeaseManager);
+        assertNotNull(dynamoDBLeaseManager.getLease(closedShardId));
 
         // closed shard has not been fully processed yet (checkpoint != SHARD_END)
         trackedLeases.add(leaseForClosedShard);
         trackedLeaseMap = ShardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        assertNotNull(leaseManager.getLease(closedShardId));
+        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, dynamoDBLeaseManager);
+        assertNotNull(dynamoDBLeaseManager.getLease(closedShardId));
 
         // closed shard has been fully processed yet (checkpoint == SHARD_END)
         leaseForClosedShard.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
-        leaseManager.updateLease(leaseForClosedShard);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        assertNull(leaseManager.getLease(closedShardId));
+        dynamoDBLeaseManager.updateLease(leaseForClosedShard);
+        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, dynamoDBLeaseManager);
+        assertNull(dynamoDBLeaseManager.getLease(closedShardId));
 
         // lease for only one child exists
         childShardIds.add(childShardId1);
         childShardIds.add(childShardId2);
-        leaseManager.createLeaseIfNotExists(leaseForClosedShard);
-        leaseManager.createLeaseIfNotExists(childLease1);
+        dynamoDBLeaseManager.createLeaseIfNotExists(leaseForClosedShard);
+        dynamoDBLeaseManager.createLeaseIfNotExists(childLease1);
         trackedLeases.add(childLease1);
         trackedLeaseMap = ShardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        assertNotNull(leaseManager.getLease(closedShardId));
+        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, dynamoDBLeaseManager);
+        assertNotNull(dynamoDBLeaseManager.getLease(closedShardId));
 
         // leases for both children exists, but they are both at TRIM_HORIZON
-        leaseManager.createLeaseIfNotExists(childLease2);
+        dynamoDBLeaseManager.createLeaseIfNotExists(childLease2);
         trackedLeases.add(childLease2);
         trackedLeaseMap = ShardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        assertNotNull(leaseManager.getLease(closedShardId));
+        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, dynamoDBLeaseManager);
+        assertNotNull(dynamoDBLeaseManager.getLease(closedShardId));
 
         // leases for both children exists, one is at TRIM_HORIZON
         childLease1.setCheckpoint(new ExtendedSequenceNumber("34890"));
-        leaseManager.updateLease(childLease1);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        assertNotNull(leaseManager.getLease(closedShardId));
+        dynamoDBLeaseManager.updateLease(childLease1);
+        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, dynamoDBLeaseManager);
+        assertNotNull(dynamoDBLeaseManager.getLease(closedShardId));
 
         // leases for both children exists, NONE of them are at TRIM_HORIZON
         childLease2.setCheckpoint(new ExtendedSequenceNumber("43789"));
-        leaseManager.updateLease(childLease2);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        assertNull(leaseManager.getLease(closedShardId));
+        dynamoDBLeaseManager.updateLease(childLease2);
+        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, dynamoDBLeaseManager);
+        assertNull(dynamoDBLeaseManager.getLease(closedShardId));
     }
 
     /**

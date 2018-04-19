@@ -20,11 +20,6 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
-import software.amazon.kinesis.leases.ILeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.KinesisClientLeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
-import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
@@ -55,8 +50,6 @@ public class CheckpointConfig {
 
     private long failoverTimeMillis = 10000L;
 
-    private ILeaseManager<KinesisClientLease> leaseManager;
-
     private int maxLeasesForWorker = Integer.MAX_VALUE;
 
     private int maxLeasesToStealAtOneTime = 1;
@@ -69,33 +62,10 @@ public class CheckpointConfig {
 
     private long epsilonMillis = 25L;
 
-    private LeaseCoordinator<KinesisClientLease> leaseCoordinator;
-
-    public ILeaseManager<KinesisClientLease> leaseManager() {
-        if (leaseManager == null) {
-            leaseManager = new KinesisClientLeaseManager(tableName, amazonDynamoDB, consistentReads);
-        }
-        return leaseManager;
-    }
-
     public CheckpointFactory checkpointFactory() {
         if (checkpointFactory == null) {
-            checkpointFactory = new DynamoDBCheckpointFactory(leaseCoordinator(), leaseManager(), metricsFactory());
+            checkpointFactory = new DynamoDBCheckpointFactory(metricsFactory());
         }
         return checkpointFactory;
-    }
-
-    public LeaseCoordinator<KinesisClientLease> leaseCoordinator() {
-        if (leaseCoordinator == null) {
-            leaseCoordinator = new KinesisClientLibLeaseCoordinator(leaseManager(),
-                    workerIdentifier(),
-                    failoverTimeMillis(),
-                    epsilonMillis(),
-                    maxLeasesForWorker(),
-                    maxLeasesToStealAtOneTime(),
-                    maxLeaseRenewalThreads(),
-                    metricsFactory());
-        }
-        return leaseCoordinator;
     }
 }

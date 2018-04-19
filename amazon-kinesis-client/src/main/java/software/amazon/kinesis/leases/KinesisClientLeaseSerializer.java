@@ -29,7 +29,7 @@ import com.google.common.base.Strings;
 /**
  * An implementation of ILeaseSerializer for KinesisClientLease objects.
  */
-public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisClientLease> {
+public class KinesisClientLeaseSerializer implements LeaseSerializer<KinesisClientLease> {
 
     private static final String OWNER_SWITCHES_KEY = "ownerSwitchesSinceCheckpoint";
     private static final String CHECKPOINT_SEQUENCE_NUMBER_KEY = "checkpoint";
@@ -38,7 +38,7 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
     private static final String PENDING_CHECKPOINT_SUBSEQUENCE_KEY = "pendingCheckpointSubSequenceNumber";
     public final String PARENT_SHARD_ID_KEY = "parentShardId";
 
-    private final LeaseSerializer baseSerializer = new LeaseSerializer(KinesisClientLease.class);
+    private final DynamoDBLeaseSerializer baseSerializer = new DynamoDBLeaseSerializer(KinesisClientLease.class);
 
     @Override
     public Map<String, AttributeValue> toDynamoRecord(KinesisClientLease lease) {

@@ -45,7 +45,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionIn
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.LeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -72,7 +72,7 @@ public class ConsumerStatesTest {
     @Mock
     private ShardInfo shardInfo;
     @Mock
-    private ILeaseManager<KinesisClientLease> leaseManager;
+    private LeaseManager<KinesisClientLease> leaseManager;
     @Mock
     private Checkpointer checkpoint;
     @Mock
@@ -113,7 +113,7 @@ public class ConsumerStatesTest {
         when(shardInfo.shardId()).thenReturn("shardId-000000000000");
     }
 
-    private static final Class<ILeaseManager<KinesisClientLease>> LEASE_MANAGER_CLASS = (Class<ILeaseManager<KinesisClientLease>>) (Class<?>) ILeaseManager.class;
+    private static final Class<LeaseManager<KinesisClientLease>> LEASE_MANAGER_CLASS = (Class<LeaseManager<KinesisClientLease>>) (Class<?>) LeaseManager.class;
 
     @Test
     public void blockOnParentStateTest() {

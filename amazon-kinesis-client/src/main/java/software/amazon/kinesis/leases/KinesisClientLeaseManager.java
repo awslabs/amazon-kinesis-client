@@ -14,66 +14,27 @@
  */
 package software.amazon.kinesis.leases;
 
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
- * An implementation of LeaseManager for the KinesisClientLibrary - takeLease updates the ownerSwitchesSinceCheckpoint field.
+ * A decoration of ILeaseManager that adds methods to get/update checkpoints.
  */
-public class KinesisClientLeaseManager extends LeaseManager<KinesisClientLease> implements IKinesisClientLeaseManager {
+public interface KinesisClientLeaseManager extends LeaseManager<KinesisClientLease> {
+
     /**
-     * Constructor.
+     * Gets the current checkpoint of the shard. This is useful in the resharding use case
+     * where we will wait for the parent shard to complete before starting on the records from a child shard.
      * 
-     * @param table Leases table
-     * @param dynamoDBClient DynamoDB client to use
-     */
-    public KinesisClientLeaseManager(String table, AmazonDynamoDB dynamoDBClient) {
-        this(table, dynamoDBClient, false);
-    }
-
-    /**
-     * Constructor for integration tests - see comment on superclass for documentation on setting the consistentReads
-     * flag.
+     * @param shardId Checkpoint of this shard will be returned
+     * @return Checkpoint of this shard, or null if the shard record doesn't exist.
      * 
-     * @param table leases table
-     * @param dynamoDBClient DynamoDB client to use
-     * @param consistentReads true if we want consistent reads for testing purposes.
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws InvalidStateException if lease table does not exist
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    public KinesisClientLeaseManager(String table, AmazonDynamoDB dynamoDBClient, boolean consistentReads) {
-        super(table, dynamoDBClient, new KinesisClientLeaseSerializer(), consistentReads);
-    }
+    ExtendedSequenceNumber getCheckpoint(String shardId) throws ProvisionedThroughputException, InvalidStateException, DependencyException;
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean takeLease(KinesisClientLease lease, String newOwner)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        String oldOwner = lease.getLeaseOwner();
-
-        boolean result = super.takeLease(lease, newOwner);
-
-        if (oldOwner != null && !oldOwner.equals(newOwner)) {
-            lease.setOwnerSwitchesSinceCheckpoint(lease.getOwnerSwitchesSinceCheckpoint() + 1);
-        }
-
-        return result;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public ExtendedSequenceNumber getCheckpoint(String shardId)
-        throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-    	ExtendedSequenceNumber checkpoint = null;
-        KinesisClientLease lease = getLease(shardId);
-        if (lease != null) {
-            checkpoint = lease.getCheckpoint();
-        }
-        return checkpoint;
-    }
 }

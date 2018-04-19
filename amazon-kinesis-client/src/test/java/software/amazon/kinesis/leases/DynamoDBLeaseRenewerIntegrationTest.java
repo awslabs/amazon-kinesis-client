@@ -24,16 +24,16 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
-public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
+public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
 
     // This test case's leases last 2 seconds
     private static final long LEASE_DURATION_MILLIS = 2000L;
 
-    private ILeaseRenewer<KinesisClientLease> renewer;
+    private LeaseRenewer<KinesisClientLease> renewer;
 
     @Before
     public void setUp() {
-        renewer = new LeaseRenewer<KinesisClientLease>(
+        renewer = new DynamoDBLeaseRenewer<KinesisClientLease>(
                 leaseManager, "foo", LEASE_DURATION_MILLIS, Executors.newCachedThreadPool());
     }
 
@@ -242,7 +242,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
         builder.withLease(shardId, owner);
         Map<String, KinesisClientLease> leases = builder.build();
-        LeaseRenewer<KinesisClientLease> renewer =new LeaseRenewer<KinesisClientLease>(
+        DynamoDBLeaseRenewer<KinesisClientLease> renewer =new DynamoDBLeaseRenewer<KinesisClientLease>(
                 leaseManager, owner, 30000L, Executors.newCachedThreadPool());
         renewer.initialize();
         Map<String, KinesisClientLease> heldLeases = renewer.getCurrentlyHeldLeases();

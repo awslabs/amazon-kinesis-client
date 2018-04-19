@@ -28,7 +28,7 @@ import software.amazon.kinesis.leases.Lease;
  * LeaseCoordinator instance corresponds to one worker, and uses exactly one ILeaseRenewer to manage lease renewal for
  * that worker.
  */
-public interface ILeaseRenewer<T extends Lease> {
+public interface LeaseRenewer<T extends Lease> {
     
     /**
      * Bootstrap initial set of leases from the LeaseManager (e.g. upon process restart, pick up leases we own)

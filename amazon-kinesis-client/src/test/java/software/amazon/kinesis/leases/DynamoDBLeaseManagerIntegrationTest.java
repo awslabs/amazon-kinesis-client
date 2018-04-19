@@ -24,7 +24,7 @@ import org.junit.Test;
 
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 
-public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
+public class DynamoDBLeaseManagerIntegrationTest extends LeaseIntegrationTest {
 
     /**
      * Test listLeases when no records are present.
@@ -233,7 +233,7 @@ public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
 
     @Test
     public void testWaitUntilLeaseTableExists() throws LeasingException {
-        KinesisClientLeaseManager manager = new KinesisClientLeaseManager("nagl_ShardProgress", ddbClient, true) {
+        KinesisClientDynamoDBLeaseManager manager = new KinesisClientDynamoDBLeaseManager("nagl_ShardProgress", ddbClient, true) {
 
             @Override
             long sleep(long timeToSleepMillis) {
@@ -252,7 +252,7 @@ public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
          * Just using AtomicInteger for the indirection it provides.
          */
         final AtomicInteger sleepCounter = new AtomicInteger(0);
-        KinesisClientLeaseManager manager = new KinesisClientLeaseManager("nonexistentTable", ddbClient, true) {
+        KinesisClientDynamoDBLeaseManager manager = new KinesisClientDynamoDBLeaseManager("nonexistentTable", ddbClient, true) {
 
             @Override
             long sleep(long timeToSleepMillis) {

@@ -30,17 +30,14 @@ import org.mockito.Mockito;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.leases.ILeaseManager;
-import software.amazon.kinesis.leases.Lease;
-import software.amazon.kinesis.leases.LeaseRenewer;
 
-public class LeaseRenewerTest {
+public class DynamoDBLeaseRenewerTest {
 
-    ILeaseManager<Lease> leaseManager;
+    LeaseManager<Lease> leaseManager;
     String workerIdentifier;
     long leaseDurationMillis;
     ExecutorService leaseRenewalExecService;
-    LeaseRenewer<Lease> renewer;
+    DynamoDBLeaseRenewer<Lease> renewer;
     List<Lease> leasesToRenew;
 
     private static Lease newLease(String leaseKey,
@@ -64,12 +61,12 @@ public class LeaseRenewerTest {
     @SuppressWarnings("unchecked")
     @Before
     public void before() {
-        leaseManager = Mockito.mock(ILeaseManager.class);
+        leaseManager = Mockito.mock(LeaseManager.class);
         workerIdentifier = "workerId";
         leaseDurationMillis = 10000;
         leaseRenewalExecService = Executors.newSingleThreadExecutor();
         leasesToRenew = null;
-        renewer = new LeaseRenewer<>(leaseManager,
+        renewer = new DynamoDBLeaseRenewer<>(leaseManager,
                 workerIdentifier,
                 leaseDurationMillis,
                 Executors.newCachedThreadPool());
