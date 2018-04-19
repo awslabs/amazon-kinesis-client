@@ -20,8 +20,6 @@ import java.util.List;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.ILeaseManager;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -30,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
  * 
  */
 @Slf4j
-public class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease> {
+public class ExceptionThrowingLeaseManager implements LeaseManager<KinesisClientLease> {
     private static final Throwable EXCEPTION_MSG = new Throwable("Test Exception");
 
     // Use array below to control in what situations we want to throw exceptions.
@@ -70,14 +68,14 @@ public class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClien
     private int timeThrowingException = Integer.MAX_VALUE;
 
     // The real local lease manager which would do the real implementations.
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseManager<KinesisClientLease> leaseManager;
 
     /**
      * Constructor accepts lease manager as only argument.
      * 
      * @param leaseManager which will do the real implementations
      */
-    ExceptionThrowingLeaseManager(ILeaseManager<KinesisClientLease> leaseManager) {
+    ExceptionThrowingLeaseManager(LeaseManager<KinesisClientLease> leaseManager) {
         this.leaseManager = leaseManager;
         this.leaseManagerMethodCallingCount = new int[ExceptionThrowingLeaseManagerMethods.values().length];
     }

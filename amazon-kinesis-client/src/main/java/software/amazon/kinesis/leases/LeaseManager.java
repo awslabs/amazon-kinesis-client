@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  *  Licensed under the Amazon Software License (the "License").
  *  You may not use this file except in compliance with the License.
@@ -14,580 +14,181 @@
  */
 package software.amazon.kinesis.leases;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
-import com.amazonaws.services.dynamodbv2.model.AttributeValueUpdate;
-import com.amazonaws.services.dynamodbv2.model.ConditionalCheckFailedException;
-import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
-import com.amazonaws.services.dynamodbv2.model.DeleteItemRequest;
-import com.amazonaws.services.dynamodbv2.model.DescribeTableRequest;
-import com.amazonaws.services.dynamodbv2.model.DescribeTableResult;
-import com.amazonaws.services.dynamodbv2.model.GetItemRequest;
-import com.amazonaws.services.dynamodbv2.model.GetItemResult;
-import com.amazonaws.services.dynamodbv2.model.LimitExceededException;
-import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
-import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughputExceededException;
-import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
-import com.amazonaws.services.dynamodbv2.model.ResourceInUseException;
-import com.amazonaws.services.dynamodbv2.model.ResourceNotFoundException;
-import com.amazonaws.services.dynamodbv2.model.ScanRequest;
-import com.amazonaws.services.dynamodbv2.model.ScanResult;
-import com.amazonaws.services.dynamodbv2.model.TableStatus;
-import com.amazonaws.services.dynamodbv2.model.UpdateItemRequest;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-
-import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.leases.Lease;
 
 /**
- * An implementation of ILeaseManager that uses DynamoDB.
+ * Supports basic CRUD operations for Leases.
+ * 
+ * @param <T> Lease subclass, possibly Lease itself.
  */
-@Slf4j
-public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
-    protected String table;
-    protected AmazonDynamoDB dynamoDBClient;
-    protected ILeaseSerializer<T> serializer;
-    protected boolean consistentReads;
+public interface LeaseManager<T extends Lease> {
 
     /**
-     * Constructor.
+     * Creates the table that will store leases. Succeeds if table already exists.
      * 
-     * @param table leases table
-     * @param dynamoDBClient DynamoDB client to use
-     * @param serializer LeaseSerializer to use to convert to/from DynamoDB objects.
-     */
-    public LeaseManager(String table, AmazonDynamoDB dynamoDBClient, ILeaseSerializer<T> serializer) {
-        this(table, dynamoDBClient, serializer, false);
-    }
-
-    /**
-     * Constructor for test cases - allows control of consistent reads. Consistent reads should only be used for testing
-     * - our code is meant to be resilient to inconsistent reads. Using consistent reads during testing speeds up
-     * execution of simple tests (you don't have to wait out the consistency window). Test cases that want to experience
-     * eventual consistency should not set consistentReads=true.
+     * @param readCapacity
+     * @param writeCapacity
      * 
-     * @param table leases table
-     * @param dynamoDBClient DynamoDB client to use
-     * @param serializer lease serializer to use
-     * @param consistentReads true if we want consistent reads for testing purposes.
+     * @return true if we created a new table (table didn't exist before)
+     * 
+     * @throws ProvisionedThroughputException if we cannot create the lease table due to per-AWS-account capacity
+     *         restrictions.
+     * @throws DependencyException if DynamoDB createTable fails in an unexpected way
      */
-    public LeaseManager(String table, AmazonDynamoDB dynamoDBClient, ILeaseSerializer<T> serializer, boolean consistentReads) {
-        verifyNotNull(table, "Table name cannot be null");
-        verifyNotNull(dynamoDBClient, "dynamoDBClient cannot be null");
-        verifyNotNull(serializer, "ILeaseSerializer cannot be null");
-
-        this.table = table;
-        this.dynamoDBClient = dynamoDBClient;
-        this.consistentReads = consistentReads;
-        this.serializer = serializer;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
-        throws ProvisionedThroughputException, DependencyException {
-        verifyNotNull(readCapacity, "readCapacity cannot be null");
-        verifyNotNull(writeCapacity, "writeCapacity cannot be null");
-
-        try {
-            if (tableStatus() != null) {
-                return false;
-            }
-        } catch (DependencyException de) {
-            //
-            // Something went wrong with DynamoDB
-            //
-            log.error("Failed to get table status for {}", table, de);
-        }
-        CreateTableRequest request = new CreateTableRequest();
-        request.setTableName(table);
-        request.setKeySchema(serializer.getKeySchema());
-        request.setAttributeDefinitions(serializer.getAttributeDefinitions());
-
-        ProvisionedThroughput throughput = new ProvisionedThroughput();
-        throughput.setReadCapacityUnits(readCapacity);
-        throughput.setWriteCapacityUnits(writeCapacity);
-        request.setProvisionedThroughput(throughput);
-
-        try {
-            dynamoDBClient.createTable(request);
-        } catch (ResourceInUseException e) {
-            log.info("Table {} already exists.", table);
-            return false;
-        } catch (LimitExceededException e) {
-            throw new ProvisionedThroughputException("Capacity exceeded when creating table " + table, e);
-        } catch (AmazonClientException e) {
-            throw new DependencyException(e);
-        }
-        return true;
-    }
+        throws ProvisionedThroughputException, DependencyException;
 
     /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean leaseTableExists() throws DependencyException {
-        return TableStatus.ACTIVE == tableStatus();
-    }
-
-    private TableStatus tableStatus() throws DependencyException {
-        DescribeTableRequest request = new DescribeTableRequest();
-
-        request.setTableName(table);
-
-        DescribeTableResult result;
-        try {
-            result = dynamoDBClient.describeTable(request);
-        } catch (ResourceNotFoundException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Got ResourceNotFoundException for table {} in leaseTableExists, returning false.", table);
-            }
-            return null;
-        } catch (AmazonClientException e) {
-            throw new DependencyException(e);
-        }
-
-        TableStatus tableStatus = TableStatus.fromValue(result.getTable().getTableStatus());
-        if (log.isDebugEnabled()) {
-            log.debug("Lease table exists and is in status {}", tableStatus);
-        }
-
-        return tableStatus;
-    }
-
-    @Override
-    public boolean waitUntilLeaseTableExists(long secondsBetweenPolls, long timeoutSeconds) throws DependencyException {
-        long sleepTimeRemaining = TimeUnit.SECONDS.toMillis(timeoutSeconds);
-
-        while (!leaseTableExists()) {
-            if (sleepTimeRemaining <= 0) {
-                return false;
-            }
-
-            long timeToSleepMillis = Math.min(TimeUnit.SECONDS.toMillis(secondsBetweenPolls), sleepTimeRemaining);
-
-            sleepTimeRemaining -= sleep(timeToSleepMillis);
-        }
-
-        return true;
-    }
-
-    /**
-     * Exposed for testing purposes.
+     * @return true if the lease table already exists.
      * 
-     * @param timeToSleepMillis time to sleep in milliseconds
+     * @throws DependencyException if DynamoDB describeTable fails in an unexpected way
+     */
+    public boolean leaseTableExists() throws DependencyException;
+
+    /**
+     * Blocks until the lease table exists by polling leaseTableExists.
      * 
-     * @return actual time slept in millis
-     */
-    long sleep(long timeToSleepMillis) {
-        long startTime = System.currentTimeMillis();
-
-        try {
-            Thread.sleep(timeToSleepMillis);
-        } catch (InterruptedException e) {
-            log.debug("Interrupted while sleeping");
-        }
-
-        return System.currentTimeMillis() - startTime;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public List<T> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return list(null);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean isLeaseTableEmpty() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return list(1).isEmpty();
-    }
-
-    /**
-     * List with the given page size. Package access for integration testing.
+     * @param secondsBetweenPolls time to wait between polls in seconds
+     * @param timeoutSeconds total time to wait in seconds
      * 
-     * @param limit number of items to consider at a time - used by integration tests to force paging.
+     * @return true if table exists, false if timeout was reached
+     * 
+     * @throws DependencyException if DynamoDB describeTable fails in an unexpected way
+     */
+    public boolean waitUntilLeaseTableExists(long secondsBetweenPolls, long timeoutSeconds) throws DependencyException;
+
+    /**
+     * List all objects in table synchronously.
+     * 
+     * @throws DependencyException if DynamoDB scan fails in an unexpected way
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
+     * 
      * @return list of leases
-     * @throws InvalidStateException if table does not exist
-     * @throws DependencyException if DynamoDB scan fail in an unexpected way
-     * @throws ProvisionedThroughputException if DynamoDB scan fail due to exceeded capacity
      */
-    List<T> list(Integer limit) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        if (log.isDebugEnabled()) {
-            log.debug("Listing leases from table {}", table);
-        }
-
-        ScanRequest scanRequest = new ScanRequest();
-        scanRequest.setTableName(table);
-        if (limit != null) {
-            scanRequest.setLimit(limit);
-        }
-
-        try {
-            ScanResult scanResult = dynamoDBClient.scan(scanRequest);
-            List<T> result = new ArrayList<T>();
-
-            while (scanResult != null) {
-                for (Map<String, AttributeValue> item : scanResult.getItems()) {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Got item {} from DynamoDB.", item.toString());
-                    }
-
-                    result.add(serializer.fromDynamoRecord(item));
-                }
-
-                Map<String, AttributeValue> lastEvaluatedKey = scanResult.getLastEvaluatedKey();
-                if (lastEvaluatedKey == null) {
-                    // Signify that we're done.
-                    scanResult = null;
-                    if (log.isDebugEnabled()) {
-                        log.debug("lastEvaluatedKey was null - scan finished.");
-                    }
-                } else {
-                    // Make another request, picking up where we left off.
-                    scanRequest.setExclusiveStartKey(lastEvaluatedKey);
-
-                    if (log.isDebugEnabled()) {
-                        log.debug("lastEvaluatedKey was {}, continuing scan.", lastEvaluatedKey);
-                    }
-
-                    scanResult = dynamoDBClient.scan(scanRequest);
-                }
-            }
-
-            if (log.isDebugEnabled()) {
-                log.debug("Listed {} leases from table {}", result.size(), table);
-            }
-
-            return result;
-        } catch (ResourceNotFoundException e) {
-            throw new InvalidStateException("Cannot scan lease table " + table + " because it does not exist.", e);
-        } catch (ProvisionedThroughputExceededException e) {
-            throw new ProvisionedThroughputException(e);
-        } catch (AmazonClientException e) {
-            throw new DependencyException(e);
-        }
-    }
+    public List<T> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * {@inheritDoc}
+     * Create a new lease. Conditional on a lease not already existing with this shardId.
+     * 
+     * @param lease the lease to create
+     * 
+     * @return true if lease was created, false if lease already exists
+     * 
+     * @throws DependencyException if DynamoDB put fails in an unexpected way
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB put fails due to lack of capacity
      */
-    @Override
     public boolean createLeaseIfNotExists(T lease)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-
-        if (log.isDebugEnabled()) {
-            log.debug("Creating lease {}", lease);
-        }
-
-        PutItemRequest request = new PutItemRequest();
-        request.setTableName(table);
-        request.setItem(serializer.toDynamoRecord(lease));
-        request.setExpected(serializer.getDynamoNonexistantExpectation());
-
-        try {
-            dynamoDBClient.putItem(request);
-        } catch (ConditionalCheckFailedException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Did not create lease {} because it already existed", lease);
-            }
-
-            return false;
-        } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("create", lease.getLeaseKey(), e);
-        }
-
-        return true;
-    }
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * {@inheritDoc}
+     * @param shardId Get the lease for this shardId
+     * 
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB get fails due to lack of capacity
+     * @throws DependencyException if DynamoDB get fails in an unexpected way
+     * 
+     * @return lease for the specified shardId, or null if one doesn't exist
      */
-    @Override
-    public T getLease(String leaseKey)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(leaseKey, "leaseKey cannot be null");
-
-        if (log.isDebugEnabled()) {
-            log.debug("Getting lease with key {}", leaseKey);
-        }
-
-        GetItemRequest request = new GetItemRequest();
-        request.setTableName(table);
-        request.setKey(serializer.getDynamoHashKey(leaseKey));
-        request.setConsistentRead(consistentReads);
-
-        try {
-            GetItemResult result = dynamoDBClient.getItem(request);
-
-            Map<String, AttributeValue> dynamoRecord = result.getItem();
-            if (dynamoRecord == null) {
-                if (log.isDebugEnabled()) {
-                    log.debug("No lease found with key {}, returning null.", leaseKey);
-                }
-
-                return null;
-            } else {
-                T lease = serializer.fromDynamoRecord(dynamoRecord);
-                if (log.isDebugEnabled()) {
-                    log.debug("Got lease {}", lease);
-                }
-
-                return lease;
-            }
-        } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("get", leaseKey, e);
-        }
-    }
+    public T getLease(String shardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * {@inheritDoc}
+     * Renew a lease by incrementing the lease counter. Conditional on the leaseCounter in DynamoDB matching the leaseCounter
+     * of the input. Mutates the leaseCounter of the passed-in lease object after updating the record in DynamoDB.
+     * 
+     * @param lease the lease to renew
+     * 
+     * @return true if renewal succeeded, false otherwise
+     * 
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    @Override
     public boolean renewLease(T lease)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-
-        if (log.isDebugEnabled()) {
-            log.debug("Renewing lease with key {}", lease.getLeaseKey());
-        }
-
-        UpdateItemRequest request = new UpdateItemRequest();
-        request.setTableName(table);
-        request.setKey(serializer.getDynamoHashKey(lease));
-        request.setExpected(serializer.getDynamoLeaseCounterExpectation(lease));
-        request.setAttributeUpdates(serializer.getDynamoLeaseCounterUpdate(lease));
-
-        try {
-            dynamoDBClient.updateItem(request);
-        } catch (ConditionalCheckFailedException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Lease renewal failed for lease with key {} because the lease counter was not {}",
-                        lease.getLeaseKey(), lease.getLeaseCounter());
-            }
-
-            // If we had a spurious retry during the Dynamo update, then this conditional PUT failure
-            // might be incorrect. So, we get the item straight away and check if the lease owner + lease counter
-            // are what we expected.
-            String expectedOwner = lease.getLeaseOwner();
-            Long expectedCounter = lease.getLeaseCounter() + 1;
-            T updatedLease = getLease(lease.getLeaseKey());
-            if (updatedLease == null || !expectedOwner.equals(updatedLease.getLeaseOwner()) ||
-                    !expectedCounter.equals(updatedLease.getLeaseCounter())) {
-                return false;
-            }
-
-            log.info("Detected spurious renewal failure for lease with key {}, but recovered", lease.getLeaseKey());
-        } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("renew", lease.getLeaseKey(), e);
-        }
-
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
-        return true;
-    }
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * {@inheritDoc}
+     * Take a lease for the given owner by incrementing its leaseCounter and setting its owner field. Conditional on
+     * the leaseCounter in DynamoDB matching the leaseCounter of the input. Mutates the leaseCounter and owner of the
+     * passed-in lease object after updating DynamoDB.
+     * 
+     * @param lease the lease to take
+     * @param owner the new owner
+     * 
+     * @return true if lease was successfully taken, false otherwise
+     * 
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    @Override
     public boolean takeLease(T lease, String owner)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-        verifyNotNull(owner, "owner cannot be null");
-
-        if (log.isDebugEnabled()) {
-            log.debug("Taking lease with leaseKey {} from {} to {}",
-                    lease.getLeaseKey(),
-                    lease.getLeaseOwner() == null ? "nobody" : lease.getLeaseOwner(),
-                    owner);
-        }
-
-        UpdateItemRequest request = new UpdateItemRequest();
-        request.setTableName(table);
-        request.setKey(serializer.getDynamoHashKey(lease));
-        request.setExpected(serializer.getDynamoLeaseCounterExpectation(lease));
-
-        Map<String, AttributeValueUpdate> updates = serializer.getDynamoLeaseCounterUpdate(lease);
-        updates.putAll(serializer.getDynamoTakeLeaseUpdate(lease, owner));
-        request.setAttributeUpdates(updates);
-
-        try {
-            dynamoDBClient.updateItem(request);
-        } catch (ConditionalCheckFailedException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Lease renewal failed for lease with key {} because the lease counter was not {}",
-                        lease.getLeaseKey(), lease.getLeaseCounter());
-            }
-
-            return false;
-        } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("take", lease.getLeaseKey(), e);
-        }
-
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
-        lease.setLeaseOwner(owner);
-
-        return true;
-    }
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * {@inheritDoc}
+     * Evict the current owner of lease by setting owner to null. Conditional on the owner in DynamoDB matching the owner of
+     * the input. Mutates the lease counter and owner of the passed-in lease object after updating the record in DynamoDB.
+     * 
+     * @param lease the lease to void
+     * 
+     * @return true if eviction succeeded, false otherwise
+     * 
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    @Override
     public boolean evictLease(T lease)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-
-        if (log.isDebugEnabled()) {
-            log.debug("Evicting lease with leaseKey {} owned by {}",
-                    lease.getLeaseKey(),
-                    lease.getLeaseOwner());
-        }
-
-        UpdateItemRequest request = new UpdateItemRequest();
-        request.setTableName(table);
-        request.setKey(serializer.getDynamoHashKey(lease));
-        request.setExpected(serializer.getDynamoLeaseOwnerExpectation(lease));
-
-        Map<String, AttributeValueUpdate> updates = serializer.getDynamoLeaseCounterUpdate(lease);
-        updates.putAll(serializer.getDynamoEvictLeaseUpdate(lease));
-        request.setAttributeUpdates(updates);
-
-        try {
-            dynamoDBClient.updateItem(request);
-        } catch (ConditionalCheckFailedException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Lease eviction failed for lease with key {} because the lease owner was not {}",
-                        lease.getLeaseKey(), lease.getLeaseOwner());
-            }
-
-            return false;
-        } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("evict", lease.getLeaseKey(), e);
-        }
-
-        lease.setLeaseOwner(null);
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
-        return true;
-    }
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * {@inheritDoc}
+     * Delete the given lease from DynamoDB. Does nothing when passed a lease that does not exist in DynamoDB.
+     * 
+     * @param lease the lease to delete
+     * 
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB delete fails due to lack of capacity
+     * @throws DependencyException if DynamoDB delete fails in an unexpected way
      */
-    public void deleteAll() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        List<T> allLeases = listLeases();
-
-        log.warn("Deleting {} items from table {}", allLeases.size(), table);
-
-        for (T lease : allLeases) {
-            DeleteItemRequest deleteRequest = new DeleteItemRequest();
-            deleteRequest.setTableName(table);
-            deleteRequest.setKey(serializer.getDynamoHashKey(lease));
-
-            dynamoDBClient.deleteItem(deleteRequest);
-        }
-    }
+    public void deleteLease(T lease) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * {@inheritDoc}
+     * Delete all leases from DynamoDB. Useful for tools/utils and testing.
+     * 
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan or delete fail due to lack of capacity
+     * @throws DependencyException if DynamoDB scan or delete fail in an unexpected way
      */
-    @Override
-    public void deleteLease(T lease) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-
-        if (log.isDebugEnabled()) {
-            log.debug("Deleting lease with leaseKey {}", lease.getLeaseKey());
-        }
-
-        DeleteItemRequest deleteRequest = new DeleteItemRequest();
-        deleteRequest.setTableName(table);
-        deleteRequest.setKey(serializer.getDynamoHashKey(lease));
-
-        try {
-            dynamoDBClient.deleteItem(deleteRequest);
-        } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("delete", lease.getLeaseKey(), e);
-        }
-    }
+    public void deleteAll() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * {@inheritDoc}
+     * Update application-specific fields of the given lease in DynamoDB. Does not update fields managed by the leasing
+     * library such as leaseCounter, leaseOwner, or leaseKey. Conditional on the leaseCounter in DynamoDB matching the
+     * leaseCounter of the input. Increments the lease counter in DynamoDB so that updates can be contingent on other
+     * updates. Mutates the lease counter of the passed-in lease object.
+     * 
+     * @return true if update succeeded, false otherwise
+     * 
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    @Override
     public boolean updateLease(T lease)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
-        if (log.isDebugEnabled()) {
-            log.debug("Updating lease {}", lease);
-        }
-
-        UpdateItemRequest request = new UpdateItemRequest();
-        request.setTableName(table);
-        request.setKey(serializer.getDynamoHashKey(lease));
-        request.setExpected(serializer.getDynamoLeaseCounterExpectation(lease));
-
-        Map<String, AttributeValueUpdate> updates = serializer.getDynamoLeaseCounterUpdate(lease);
-        updates.putAll(serializer.getDynamoUpdateLeaseUpdate(lease));
-        request.setAttributeUpdates(updates);
-
-        try {
-            dynamoDBClient.updateItem(request);
-        } catch (ConditionalCheckFailedException e) {
-            if (log.isDebugEnabled()) {
-                log.debug("Lease update failed for lease with key {} because the lease counter was not {}",
-                        lease.getLeaseKey(), lease.getLeaseCounter());
-            }
-
-            return false;
-        } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("update", lease.getLeaseKey(), e);
-        }
-
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
-        return true;
-    }
-
-    /*
-     * This method contains boilerplate exception handling - it throws or returns something to be thrown. The
-     * inconsistency there exists to satisfy the compiler when this method is used at the end of non-void methods.
+    /**
+     * Check (synchronously) if there are any leases in the lease table.
+     * 
+     * @return true if there are no leases in the lease table
+     * 
+     * @throws DependencyException if DynamoDB scan fails in an unexpected way
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
      */
-    protected DependencyException convertAndRethrowExceptions(String operation, String leaseKey, AmazonClientException e)
-        throws ProvisionedThroughputException, InvalidStateException {
-        if (e instanceof ProvisionedThroughputExceededException) {
-            log.warn("Provisioned Throughput on the lease table has been exceeded. It's recommended that you increase the IOPs on the table. Failure to increase the IOPs may cause the application to not make progress.");
-            throw new ProvisionedThroughputException(e);
-        } else if (e instanceof ResourceNotFoundException) {
-            // @formatter:on
-            throw new InvalidStateException(String.format("Cannot %s lease with key %s because table %s does not exist.",
-                    operation,
-                    leaseKey,
-                    table),
-                    e);
-            //@formatter:off
-        } else {
-            return new DependencyException(e);
-        }
-    }
-    
-    private void verifyNotNull(Object object, String message) {
-        if (object == null) {
-            throw new IllegalArgumentException(message);
-        }
-    }
+    public boolean isLeaseTableEmpty() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
 }

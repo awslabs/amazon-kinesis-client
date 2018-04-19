@@ -44,10 +44,10 @@ import lombok.extern.slf4j.Slf4j;
  * An implementation of ILeaseRenewer that uses DynamoDB via LeaseManager.
  */
 @Slf4j
-public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
+public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
     private static final int RENEWAL_RETRIES = 2;
 
-    private final ILeaseManager<T> leaseManager;
+    private final LeaseManager<T> leaseManager;
     private final ConcurrentNavigableMap<String, T> ownedLeases = new ConcurrentSkipListMap<String, T>();
     private final String workerIdentifier;
     private final long leaseDurationNanos;
@@ -61,8 +61,8 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
      * @param leaseDurationMillis duration of a lease in milliseconds
      * @param executorService ExecutorService to use for renewing leases in parallel
      */
-    public LeaseRenewer(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis,
-            ExecutorService executorService) {
+    public DynamoDBLeaseRenewer(LeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis,
+                                ExecutorService executorService) {
         this.leaseManager = leaseManager;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);

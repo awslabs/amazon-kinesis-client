@@ -14,181 +14,103 @@
  */
 package software.amazon.kinesis.leases;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import com.amazonaws.services.dynamodbv2.model.AttributeAction;
 import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.dynamodbv2.model.AttributeValueUpdate;
 import com.amazonaws.services.dynamodbv2.model.ExpectedAttributeValue;
 import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
-import com.amazonaws.services.dynamodbv2.model.KeyType;
-import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
+import software.amazon.kinesis.leases.Lease;
 
 /**
- * An implementation of ILeaseSerializer for basic Lease objects. Can also instantiate subclasses of Lease so that
- * LeaseSerializer can be decorated by other classes if you need to add fields to leases.
+ * Utility class that manages the mapping of Lease objects/operations to records in DynamoDB.
+ * 
+ * @param <T> Lease subclass, possibly Lease itself
  */
-public class LeaseSerializer implements ILeaseSerializer<Lease> {
+public interface LeaseSerializer<T extends Lease> {
 
-    public final String LEASE_KEY_KEY = "leaseKey";
-    public final String LEASE_OWNER_KEY = "leaseOwner";
-    public final String LEASE_COUNTER_KEY = "leaseCounter";
-    public final Class<? extends Lease> clazz;
+    /**
+     * Construct a DynamoDB record out of a Lease object
+     * 
+     * @param lease lease object to serialize
+     * @return an attribute value map representing the lease object
+     */
+    public Map<String, AttributeValue> toDynamoRecord(T lease);
 
-    public LeaseSerializer() {
-        this.clazz = Lease.class;
-    }
+    /**
+     * Construct a Lease object out of a DynamoDB record.
+     * 
+     * @param dynamoRecord attribute value map from DynamoDB
+     * @return a deserialized lease object representing the attribute value map
+     */
+    public T fromDynamoRecord(Map<String, AttributeValue> dynamoRecord);
 
-    public LeaseSerializer(Class<? extends Lease> clazz) {
-        this.clazz = clazz;
-    }
+    /**
+     * @param lease
+     * @return the attribute value map representing a Lease's hash key given a Lease object.
+     */
+    public Map<String, AttributeValue> getDynamoHashKey(T lease);
 
-    @Override
-    public Map<String, AttributeValue> toDynamoRecord(Lease lease) {
-        Map<String, AttributeValue> result = new HashMap<String, AttributeValue>();
+    /**
+     * Special getDynamoHashKey implementation used by ILeaseManager.getLease().
+     * 
+     * @param leaseKey
+     * @return the attribute value map representing a Lease's hash key given a string.
+     */
+    public Map<String, AttributeValue> getDynamoHashKey(String leaseKey);
 
-        result.put(LEASE_KEY_KEY, DynamoUtils.createAttributeValue(lease.getLeaseKey()));
-        result.put(LEASE_COUNTER_KEY, DynamoUtils.createAttributeValue(lease.getLeaseCounter()));
+    /**
+     * @param lease
+     * @return the attribute value map asserting that a lease counter is what we expect.
+     */
+    public Map<String, ExpectedAttributeValue> getDynamoLeaseCounterExpectation(T lease);
 
-        if (lease.getLeaseOwner() != null) {
-            result.put(LEASE_OWNER_KEY, DynamoUtils.createAttributeValue(lease.getLeaseOwner()));
-        }
+    /**
+     * @param lease
+     * @return the attribute value map asserting that the lease owner is what we expect.
+     */
+    public Map<String, ExpectedAttributeValue> getDynamoLeaseOwnerExpectation(T lease);
 
-        return result;
-    }
+    /**
+     * @return the attribute value map asserting that a lease does not exist.
+     */
+    public Map<String, ExpectedAttributeValue> getDynamoNonexistantExpectation();
 
-    @Override
-    public Lease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord) {
-        Lease result;
-        try {
-            result = clazz.newInstance();
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
+    /**
+     * @param lease
+     * @return the attribute value map that increments a lease counter
+     */
+    public Map<String, AttributeValueUpdate> getDynamoLeaseCounterUpdate(T lease);
 
-        result.setLeaseKey(DynamoUtils.safeGetString(dynamoRecord, LEASE_KEY_KEY));
-        result.setLeaseOwner(DynamoUtils.safeGetString(dynamoRecord, LEASE_OWNER_KEY));
-        result.setLeaseCounter(DynamoUtils.safeGetLong(dynamoRecord, LEASE_COUNTER_KEY));
+    /**
+     * @param lease
+     * @param newOwner
+     * @return the attribute value map that takes a lease for a new owner
+     */
+    public Map<String, AttributeValueUpdate> getDynamoTakeLeaseUpdate(T lease, String newOwner);
 
-        return result;
-    }
+    /**
+     * @param lease
+     * @return the attribute value map that voids a lease
+     */
+    public Map<String, AttributeValueUpdate> getDynamoEvictLeaseUpdate(T lease);
 
-    @Override
-    public Map<String, AttributeValue> getDynamoHashKey(String leaseKey) {
-        Map<String, AttributeValue> result = new HashMap<String, AttributeValue>();
+    /**
+     * @param lease
+     * @return the attribute value map that updates application-specific data for a lease and increments the lease
+     *         counter
+     */
+    public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(T lease);
 
-        result.put(LEASE_KEY_KEY, DynamoUtils.createAttributeValue(leaseKey));
+    /**
+     * @return the key schema for creating a DynamoDB table to store leases
+     */
+    public Collection<KeySchemaElement> getKeySchema();
 
-        return result;
-    }
-
-    @Override
-    public Map<String, AttributeValue> getDynamoHashKey(Lease lease) {
-        return getDynamoHashKey(lease.getLeaseKey());
-    }
-
-    @Override
-    public Map<String, ExpectedAttributeValue> getDynamoLeaseCounterExpectation(Lease lease) {
-        return getDynamoLeaseCounterExpectation(lease.getLeaseCounter());
-    }
-
-    public Map<String, ExpectedAttributeValue> getDynamoLeaseCounterExpectation(Long leaseCounter) {
-        Map<String, ExpectedAttributeValue> result = new HashMap<String, ExpectedAttributeValue>();
-
-        ExpectedAttributeValue eav = new ExpectedAttributeValue(DynamoUtils.createAttributeValue(leaseCounter));
-        result.put(LEASE_COUNTER_KEY, eav);
-
-        return result;
-    }
-
-    @Override
-    public Map<String, ExpectedAttributeValue> getDynamoLeaseOwnerExpectation(Lease lease) {
-        Map<String, ExpectedAttributeValue> result = new HashMap<String, ExpectedAttributeValue>();
-
-        ExpectedAttributeValue eav = null;
-        
-        if (lease.getLeaseOwner() == null) {
-            eav = new ExpectedAttributeValue(false);
-        } else {
-            eav = new ExpectedAttributeValue(DynamoUtils.createAttributeValue(lease.getLeaseOwner()));
-        }
-        
-        result.put(LEASE_OWNER_KEY, eav);
-
-        return result;
-    }
-
-    @Override
-    public Map<String, ExpectedAttributeValue> getDynamoNonexistantExpectation() {
-        Map<String, ExpectedAttributeValue> result = new HashMap<String, ExpectedAttributeValue>();
-
-        ExpectedAttributeValue expectedAV = new ExpectedAttributeValue(false);
-        result.put(LEASE_KEY_KEY, expectedAV);
-
-        return result;
-    }
-
-    @Override
-    public Map<String, AttributeValueUpdate> getDynamoLeaseCounterUpdate(Lease lease) {
-        return getDynamoLeaseCounterUpdate(lease.getLeaseCounter());
-    }
-
-    public Map<String, AttributeValueUpdate> getDynamoLeaseCounterUpdate(Long leaseCounter) {
-        Map<String, AttributeValueUpdate> result = new HashMap<String, AttributeValueUpdate>();
-
-        AttributeValueUpdate avu =
-                new AttributeValueUpdate(DynamoUtils.createAttributeValue(leaseCounter + 1), AttributeAction.PUT);
-        result.put(LEASE_COUNTER_KEY, avu);
-
-        return result;
-    }
-
-    @Override
-    public Map<String, AttributeValueUpdate> getDynamoTakeLeaseUpdate(Lease lease, String owner) {
-        Map<String, AttributeValueUpdate> result = new HashMap<String, AttributeValueUpdate>();
-
-        result.put(LEASE_OWNER_KEY, new AttributeValueUpdate(DynamoUtils.createAttributeValue(owner),
-                AttributeAction.PUT));
-
-        return result;
-    }
-
-    @Override
-    public Map<String, AttributeValueUpdate> getDynamoEvictLeaseUpdate(Lease lease) {
-        Map<String, AttributeValueUpdate> result = new HashMap<String, AttributeValueUpdate>();
-
-        result.put(LEASE_OWNER_KEY, new AttributeValueUpdate(null, AttributeAction.DELETE));
-
-        return result;
-    }
-
-    @Override
-    public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease) {
-        // There is no application-specific data in Lease - just return a map that increments the counter.
-        return new HashMap<String, AttributeValueUpdate>();
-    }
-
-    @Override
-    public Collection<KeySchemaElement> getKeySchema() {
-        List<KeySchemaElement> keySchema = new ArrayList<KeySchemaElement>();
-        keySchema.add(new KeySchemaElement().withAttributeName(LEASE_KEY_KEY).withKeyType(KeyType.HASH));
-
-        return keySchema;
-    }
-
-    @Override
-    public Collection<AttributeDefinition> getAttributeDefinitions() {
-        List<AttributeDefinition> definitions = new ArrayList<AttributeDefinition>();
-        definitions.add(new AttributeDefinition().withAttributeName(LEASE_KEY_KEY)
-                .withAttributeType(ScalarAttributeType.S));
-
-        return definitions;
-    }
+    /**
+     * @return attribute definitions for creating a DynamoDB table to store leases
+     */
+    public Collection<AttributeDefinition> getAttributeDefinitions();
 }

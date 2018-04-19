@@ -36,7 +36,7 @@ public class ShardSyncTask implements ITask {
     @NonNull
     private final LeaseManagerProxy leaseManagerProxy;
     @NonNull
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseManager<KinesisClientLease> leaseManager;
     @NonNull
     private final InitialPositionInStreamExtended initialPosition;
     private final boolean cleanupLeasesUponShardCompletion;

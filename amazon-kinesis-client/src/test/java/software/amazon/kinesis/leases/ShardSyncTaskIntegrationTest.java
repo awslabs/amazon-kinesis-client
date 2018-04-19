@@ -48,7 +48,7 @@ public class ShardSyncTaskIntegrationTest {
     private static final String STREAM_NAME = "IntegrationTestStream02";
     private static AmazonKinesis amazonKinesis;
 
-    private IKinesisClientLeaseManager leaseManager;
+    private KinesisClientLeaseManager leaseManager;
     private LeaseManagerProxy leaseManagerProxy;
 
     /**
@@ -86,7 +86,7 @@ public class ShardSyncTaskIntegrationTest {
     public void setUp() throws Exception {
         boolean useConsistentReads = true;
         leaseManager =
-                new KinesisClientLeaseManager("ShardSyncTaskIntegrationTest",
+                new KinesisClientDynamoDBLeaseManager("ShardSyncTaskIntegrationTest",
                         AmazonDynamoDBClientBuilder.standard().withRegion(Regions.US_EAST_1).build(),
                         useConsistentReads);
 

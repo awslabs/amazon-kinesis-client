@@ -55,7 +55,7 @@ public class LeaseCoordinatorExerciser {
                 new DefaultAWSCredentialsProviderChain();
         AmazonDynamoDBClient ddb = new AmazonDynamoDBClient(creds);
 
-        ILeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("nagl_ShardProgress", ddb);
+        LeaseManager<KinesisClientLease> leaseManager = new KinesisClientDynamoDBLeaseManager("nagl_ShardProgress", ddb);
 
         if (leaseManager.createLeaseTableIfNotExists(10L, 50L)) {
             log.info("Waiting for newly created lease table");

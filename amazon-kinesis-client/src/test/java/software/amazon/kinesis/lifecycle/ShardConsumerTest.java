@@ -75,7 +75,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.LeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.LeaseManagerProxy;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -139,7 +139,7 @@ public class ShardConsumerTest {
     @Mock
     private KinesisClientLibConfiguration config;
     @Mock
-    private ILeaseManager<KinesisClientLease> leaseManager;
+    private LeaseManager<KinesisClientLease> leaseManager;
     @Mock
     private Checkpointer checkpoint;
     @Mock

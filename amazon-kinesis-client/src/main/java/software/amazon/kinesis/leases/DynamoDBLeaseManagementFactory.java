@@ -76,8 +76,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     }
 
     @Override
-    public LeaseManager<KinesisClientLease> createLeaseManager() {
-        return new KinesisClientLeaseManager(tableName, amazonDynamoDB, consistentReads);
+    public DynamoDBLeaseManager<KinesisClientLease> createLeaseManager() {
+        return new KinesisClientDynamoDBLeaseManager(tableName, amazonDynamoDB, consistentReads);
     }
 
     @Override

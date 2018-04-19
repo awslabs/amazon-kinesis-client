@@ -20,7 +20,7 @@ import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.LeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -39,7 +39,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 public class BlockOnParentShardTask implements ITask {
     @NonNull
     private final ShardInfo shardInfo;
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseManager<KinesisClientLease> leaseManager;
     // Sleep for this duration if the parent shards have not completed processing, or we encounter an exception.
     private final long parentShardPollIntervalMillis;
 

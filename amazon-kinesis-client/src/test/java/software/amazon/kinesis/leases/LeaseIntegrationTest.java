@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class LeaseIntegrationTest {
 
-    protected static KinesisClientLeaseManager leaseManager;
+    protected static KinesisClientDynamoDBLeaseManager leaseManager;
     protected static AmazonDynamoDBClient ddbClient =
             new AmazonDynamoDBClient(new DefaultAWSCredentialsProviderChain());
 
@@ -42,7 +42,7 @@ public class LeaseIntegrationTest {
             if (leaseManager == null) {
                 // Do some static setup once per class.
 
-                leaseManager = new KinesisClientLeaseManager("nagl_ShardProgress", ddbClient, true);
+                leaseManager = new KinesisClientDynamoDBLeaseManager("nagl_ShardProgress", ddbClient, true);
 
                 MetricsHelper.startScope(new NullMetricsFactory());
             }

@@ -28,7 +28,7 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.leases.ILeaseManager;
+import software.amazon.kinesis.leases.LeaseManager;
 import software.amazon.kinesis.leases.KinesisClientLease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -47,7 +47,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
     @NonNull
     private final LeaseCoordinator<KinesisClientLease> leaseCoordinator;
     @NonNull
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseManager<KinesisClientLease> leaseManager;
     @NonNull
     private final IMetricsFactory metricsFactory;
 

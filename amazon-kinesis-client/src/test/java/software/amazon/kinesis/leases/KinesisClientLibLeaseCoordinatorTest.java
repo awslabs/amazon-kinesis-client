@@ -44,7 +44,7 @@ public class KinesisClientLibLeaseCoordinatorTest {
     private static final UUID TEST_UUID = UUID.randomUUID();
 
     @Mock
-    private ILeaseManager<KinesisClientLease> leaseManager;
+    private LeaseManager<KinesisClientLease> leaseManager;
     @Mock
     private LeaseCoordinator<KinesisClientLease> leaseCoordinator;
     @Mock
