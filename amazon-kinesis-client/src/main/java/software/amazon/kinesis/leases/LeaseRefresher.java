@@ -19,14 +19,12 @@ import java.util.List;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * Supports basic CRUD operations for Leases.
- * 
- * @param <T> Lease subclass, possibly Lease itself.
  */
-public interface LeaseManager<T extends Lease> {
+public interface LeaseRefresher {
 
     /**
      * Creates the table that will store leases. Succeeds if table already exists.
@@ -40,7 +38,7 @@ public interface LeaseManager<T extends Lease> {
      *         restrictions.
      * @throws DependencyException if DynamoDB createTable fails in an unexpected way
      */
-    public boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
+    boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
         throws ProvisionedThroughputException, DependencyException;
 
     /**
@@ -48,7 +46,7 @@ public interface LeaseManager<T extends Lease> {
      * 
      * @throws DependencyException if DynamoDB describeTable fails in an unexpected way
      */
-    public boolean leaseTableExists() throws DependencyException;
+    boolean leaseTableExists() throws DependencyException;
 
     /**
      * Blocks until the lease table exists by polling leaseTableExists.
@@ -60,7 +58,7 @@ public interface LeaseManager<T extends Lease> {
      * 
      * @throws DependencyException if DynamoDB describeTable fails in an unexpected way
      */
-    public boolean waitUntilLeaseTableExists(long secondsBetweenPolls, long timeoutSeconds) throws DependencyException;
+    boolean waitUntilLeaseTableExists(long secondsBetweenPolls, long timeoutSeconds) throws DependencyException;
 
     /**
      * List all objects in table synchronously.
@@ -71,7 +69,7 @@ public interface LeaseManager<T extends Lease> {
      * 
      * @return list of leases
      */
-    public List<T> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    List<Lease> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
      * Create a new lease. Conditional on a lease not already existing with this shardId.
@@ -84,7 +82,7 @@ public interface LeaseManager<T extends Lease> {
      * @throws InvalidStateException if lease table does not exist
      * @throws ProvisionedThroughputException if DynamoDB put fails due to lack of capacity
      */
-    public boolean createLeaseIfNotExists(T lease)
+    boolean createLeaseIfNotExists(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
@@ -96,7 +94,7 @@ public interface LeaseManager<T extends Lease> {
      * 
      * @return lease for the specified shardId, or null if one doesn't exist
      */
-    public T getLease(String shardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    Lease getLease(String shardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
      * Renew a lease by incrementing the lease counter. Conditional on the leaseCounter in DynamoDB matching the leaseCounter
@@ -110,7 +108,7 @@ public interface LeaseManager<T extends Lease> {
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    public boolean renewLease(T lease)
+    boolean renewLease(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
@@ -127,7 +125,7 @@ public interface LeaseManager<T extends Lease> {
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    public boolean takeLease(T lease, String owner)
+    boolean takeLease(Lease lease, String owner)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
@@ -142,7 +140,7 @@ public interface LeaseManager<T extends Lease> {
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    public boolean evictLease(T lease)
+    boolean evictLease(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
@@ -154,7 +152,7 @@ public interface LeaseManager<T extends Lease> {
      * @throws ProvisionedThroughputException if DynamoDB delete fails due to lack of capacity
      * @throws DependencyException if DynamoDB delete fails in an unexpected way
      */
-    public void deleteLease(T lease) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    void deleteLease(Lease lease) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
      * Delete all leases from DynamoDB. Useful for tools/utils and testing.
@@ -163,7 +161,7 @@ public interface LeaseManager<T extends Lease> {
      * @throws ProvisionedThroughputException if DynamoDB scan or delete fail due to lack of capacity
      * @throws DependencyException if DynamoDB scan or delete fail in an unexpected way
      */
-    public void deleteAll() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    void deleteAll() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
      * Update application-specific fields of the given lease in DynamoDB. Does not update fields managed by the leasing
@@ -177,7 +175,7 @@ public interface LeaseManager<T extends Lease> {
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    public boolean updateLease(T lease)
+    boolean updateLease(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
@@ -189,6 +187,20 @@ public interface LeaseManager<T extends Lease> {
      * @throws InvalidStateException if lease table does not exist
      * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
      */
-    public boolean isLeaseTableEmpty() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    boolean isLeaseTableEmpty() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+
+    /**
+     * Gets the current checkpoint of the shard. This is useful in the resharding use case
+     * where we will wait for the parent shard to complete before starting on the records from a child shard.
+     *
+     * @param shardId Checkpoint of this shard will be returned
+     * @return Checkpoint of this shard, or null if the shard record doesn't exist.
+     *
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws InvalidStateException if lease table does not exist
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
+     */
+    ExtendedSequenceNumber getCheckpoint(String shardId)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException;
 
 }

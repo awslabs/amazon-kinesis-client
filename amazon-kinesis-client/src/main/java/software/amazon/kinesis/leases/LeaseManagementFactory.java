@@ -15,6 +15,8 @@
 
 package software.amazon.kinesis.leases;
 
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
+
 /**
  *
  */
@@ -23,9 +25,7 @@ public interface LeaseManagementFactory {
 
     ShardSyncTaskManager createShardSyncTaskManager();
 
-    DynamoDBLeaseManager<KinesisClientLease> createLeaseManager();
+    DynamoDBLeaseRefresher createLeaseRefresher();
 
-    KinesisClientLibLeaseCoordinator createKinesisClientLibLeaseCoordinator();
-
-    LeaseManagerProxy createLeaseManagerProxy();
+    ShardDetector createShardDetector();
 }

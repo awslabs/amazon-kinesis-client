@@ -17,27 +17,27 @@ package software.amazon.kinesis.leases;
 import java.util.Arrays;
 import java.util.List;
 
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-
-import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
- * Mock Lease Manager by randomly throwing Leasing Exceptions.
+ * Mock LeaseRefresher by randomly throwing Leasing Exceptions.
  * 
  */
 @Slf4j
-public class ExceptionThrowingLeaseManager implements LeaseManager<KinesisClientLease> {
+public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     private static final Throwable EXCEPTION_MSG = new Throwable("Test Exception");
 
     // Use array below to control in what situations we want to throw exceptions.
-    private int[] leaseManagerMethodCallingCount;
+    private int[] leaseRefresherMethodCallingCount;
 
     /**
      * Methods which we support (simulate exceptions).
      */
-    public enum ExceptionThrowingLeaseManagerMethods {
+    public enum ExceptionThrowingLeaseRefresherMethods {
         CREATELEASETABLEIFNOTEXISTS(0),
         LEASETABLEEXISTS(1),
         WAITUNTILLEASETABLEEXISTS(2),
@@ -54,7 +54,7 @@ public class ExceptionThrowingLeaseManager implements LeaseManager<KinesisClient
 
         private Integer index;
 
-        ExceptionThrowingLeaseManagerMethods(Integer index) {
+        ExceptionThrowingLeaseRefresherMethods(Integer index) {
             this.index = index;
         }
 
@@ -64,20 +64,20 @@ public class ExceptionThrowingLeaseManager implements LeaseManager<KinesisClient
     }
 
     // Define which method should throw exception and when it should throw exception.
-    private ExceptionThrowingLeaseManagerMethods methodThrowingException = ExceptionThrowingLeaseManagerMethods.NONE;
+    private ExceptionThrowingLeaseRefresherMethods methodThrowingException = ExceptionThrowingLeaseRefresherMethods.NONE;
     private int timeThrowingException = Integer.MAX_VALUE;
 
-    // The real local lease manager which would do the real implementations.
-    private final LeaseManager<KinesisClientLease> leaseManager;
+    // The real local lease refresher which would do the real implementations.
+    private final LeaseRefresher leaseRefresher;
 
     /**
-     * Constructor accepts lease manager as only argument.
+     * Constructor accepts lease refresher as only argument.
      * 
-     * @param leaseManager which will do the real implementations
+     * @param leaseRefresher which will do the real implementations
      */
-    ExceptionThrowingLeaseManager(LeaseManager<KinesisClientLease> leaseManager) {
-        this.leaseManager = leaseManager;
-        this.leaseManagerMethodCallingCount = new int[ExceptionThrowingLeaseManagerMethods.values().length];
+    ExceptionThrowingLeaseRefresher(LeaseRefresher leaseRefresher) {
+        this.leaseRefresher = leaseRefresher;
+        this.leaseRefresherMethodCallingCount = new int[ExceptionThrowingLeaseRefresherMethods.values().length];
     }
 
     /**
@@ -86,7 +86,7 @@ public class ExceptionThrowingLeaseManager implements LeaseManager<KinesisClient
      * @param method which would throw exception
      * @param throwingTime defines what time to throw exception
      */
-    void setLeaseLeaseManagerThrowingExceptionScenario(ExceptionThrowingLeaseManagerMethods method, int throwingTime) {
+    void leaseRefresherThrowingExceptionScenario(ExceptionThrowingLeaseRefresherMethods method, int throwingTime) {
         this.methodThrowingException = method;
         this.timeThrowingException = throwingTime;
     }
@@ -94,21 +94,21 @@ public class ExceptionThrowingLeaseManager implements LeaseManager<KinesisClient
     /**
      * Reset all parameters used for throwing exception.
      */
-    void clearLeaseManagerThrowingExceptionScenario() {
-        Arrays.fill(leaseManagerMethodCallingCount, 0);
-        this.methodThrowingException = ExceptionThrowingLeaseManagerMethods.NONE;
+    void clearLeaseRefresherThrowingExceptionScenario() {
+        Arrays.fill(leaseRefresherMethodCallingCount, 0);
+        this.methodThrowingException = ExceptionThrowingLeaseRefresherMethods.NONE;
         this.timeThrowingException = Integer.MAX_VALUE;
     }
 
     // Throw exception when the conditions are satisfied :
     // 1). method equals to methodThrowingException
     // 2). method calling count equals to what we want
-    private void throwExceptions(String methodName, ExceptionThrowingLeaseManagerMethods method)
+    private void throwExceptions(String methodName, ExceptionThrowingLeaseRefresherMethods method)
         throws DependencyException {
         // Increase calling count for this method
-        leaseManagerMethodCallingCount[method.getIndex()]++;
+        leaseRefresherMethodCallingCount[method.getIndex()]++;
         if (method.equals(methodThrowingException)
-                && (leaseManagerMethodCallingCount[method.getIndex()] == timeThrowingException)) {
+                && (leaseRefresherMethodCallingCount[method.getIndex()] == timeThrowingException)) {
             // Throw Dependency Exception if all conditions are satisfied.
             log.debug("Throwing DependencyException in {}", methodName);
             throw new DependencyException(EXCEPTION_MSG);
@@ -119,94 +119,94 @@ public class ExceptionThrowingLeaseManager implements LeaseManager<KinesisClient
     public boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
         throws ProvisionedThroughputException, DependencyException {
         throwExceptions("createLeaseTableIfNotExists",
-                ExceptionThrowingLeaseManagerMethods.CREATELEASETABLEIFNOTEXISTS);
+                ExceptionThrowingLeaseRefresherMethods.CREATELEASETABLEIFNOTEXISTS);
 
-        return leaseManager.createLeaseTableIfNotExists(readCapacity, writeCapacity);
+        return leaseRefresher.createLeaseTableIfNotExists(readCapacity, writeCapacity);
     }
 
     @Override
     public boolean leaseTableExists() throws DependencyException {
-        throwExceptions("leaseTableExists", ExceptionThrowingLeaseManagerMethods.LEASETABLEEXISTS);
+        throwExceptions("leaseTableExists", ExceptionThrowingLeaseRefresherMethods.LEASETABLEEXISTS);
 
-        return leaseManager.leaseTableExists();
+        return leaseRefresher.leaseTableExists();
     }
 
     @Override
     public boolean waitUntilLeaseTableExists(long secondsBetweenPolls, long timeoutSeconds) throws DependencyException {
-        throwExceptions("waitUntilLeaseTableExists", ExceptionThrowingLeaseManagerMethods.WAITUNTILLEASETABLEEXISTS);
+        throwExceptions("waitUntilLeaseTableExists", ExceptionThrowingLeaseRefresherMethods.WAITUNTILLEASETABLEEXISTS);
 
-        return leaseManager.waitUntilLeaseTableExists(secondsBetweenPolls, timeoutSeconds);
+        return leaseRefresher.waitUntilLeaseTableExists(secondsBetweenPolls, timeoutSeconds);
     }
 
     @Override
-    public List<KinesisClientLease> listLeases()
+    public List<Lease> listLeases()
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        throwExceptions("listLeases", ExceptionThrowingLeaseManagerMethods.LISTLEASES);
+        throwExceptions("listLeases", ExceptionThrowingLeaseRefresherMethods.LISTLEASES);
 
-        return leaseManager.listLeases();
+        return leaseRefresher.listLeases();
     }
 
     @Override
-    public boolean createLeaseIfNotExists(KinesisClientLease lease)
+    public boolean createLeaseIfNotExists(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        throwExceptions("createLeaseIfNotExists", ExceptionThrowingLeaseManagerMethods.CREATELEASEIFNOTEXISTS);
+        throwExceptions("createLeaseIfNotExists", ExceptionThrowingLeaseRefresherMethods.CREATELEASEIFNOTEXISTS);
 
-        return leaseManager.createLeaseIfNotExists(lease);
+        return leaseRefresher.createLeaseIfNotExists(lease);
     }
 
     @Override
-    public boolean renewLease(KinesisClientLease lease)
+    public boolean renewLease(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        throwExceptions("renewLease", ExceptionThrowingLeaseManagerMethods.RENEWLEASE);
+        throwExceptions("renewLease", ExceptionThrowingLeaseRefresherMethods.RENEWLEASE);
 
-        return leaseManager.renewLease(lease);
+        return leaseRefresher.renewLease(lease);
     }
 
     @Override
-    public boolean takeLease(KinesisClientLease lease, String owner)
+    public boolean takeLease(Lease lease, String owner)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        throwExceptions("takeLease", ExceptionThrowingLeaseManagerMethods.TAKELEASE);
+        throwExceptions("takeLease", ExceptionThrowingLeaseRefresherMethods.TAKELEASE);
 
-        return leaseManager.takeLease(lease, owner);
+        return leaseRefresher.takeLease(lease, owner);
     }
 
     @Override
-    public boolean evictLease(KinesisClientLease lease)
+    public boolean evictLease(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        throwExceptions("evictLease", ExceptionThrowingLeaseManagerMethods.EVICTLEASE);
+        throwExceptions("evictLease", ExceptionThrowingLeaseRefresherMethods.EVICTLEASE);
 
-        return leaseManager.evictLease(lease);
+        return leaseRefresher.evictLease(lease);
     }
 
     @Override
-    public void deleteLease(KinesisClientLease lease)
+    public void deleteLease(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        throwExceptions("deleteLease", ExceptionThrowingLeaseManagerMethods.DELETELEASE);
+        throwExceptions("deleteLease", ExceptionThrowingLeaseRefresherMethods.DELETELEASE);
 
-        leaseManager.deleteLease(lease);
+        leaseRefresher.deleteLease(lease);
     }
 
     @Override
-    public boolean updateLease(KinesisClientLease lease)
+    public boolean updateLease(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        throwExceptions("updateLease", ExceptionThrowingLeaseManagerMethods.UPDATELEASE);
+        throwExceptions("updateLease", ExceptionThrowingLeaseRefresherMethods.UPDATELEASE);
 
-        return leaseManager.updateLease(lease);
+        return leaseRefresher.updateLease(lease);
     }
 
     @Override
-    public KinesisClientLease getLease(String shardId)
+    public Lease getLease(String shardId)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        throwExceptions("getLease", ExceptionThrowingLeaseManagerMethods.GETLEASE);
+        throwExceptions("getLease", ExceptionThrowingLeaseRefresherMethods.GETLEASE);
 
-        return leaseManager.getLease(shardId);
+        return leaseRefresher.getLease(shardId);
     }
 
     @Override
     public void deleteAll() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        throwExceptions("deleteAll", ExceptionThrowingLeaseManagerMethods.DELETEALL);
+        throwExceptions("deleteAll", ExceptionThrowingLeaseRefresherMethods.DELETEALL);
 
-        leaseManager.deleteAll();
+        leaseRefresher.deleteAll();
     }
 
     @Override
@@ -215,4 +215,9 @@ public class ExceptionThrowingLeaseManager implements LeaseManager<KinesisClient
         return false;
     }
 
+    @Override
+    public ExtendedSequenceNumber getCheckpoint(final String shardId)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        return null;
+    }
 }

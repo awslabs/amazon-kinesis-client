@@ -13,7 +13,7 @@
  *  permissions and limitations under the License.
  */
 
-package software.amazon.kinesis.leases;
+package software.amazon.kinesis.leases.dynamodb;
 
 import java.util.concurrent.ExecutorService;
 
@@ -23,6 +23,11 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionIn
 
 import lombok.Data;
 import lombok.NonNull;
+import software.amazon.kinesis.leases.KinesisShardDetector;
+import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseManagementFactory;
+import software.amazon.kinesis.leases.ShardDetector;
+import software.amazon.kinesis.leases.ShardSyncTaskManager;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 
 /**
@@ -60,29 +65,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
 
     @Override
     public LeaseCoordinator createLeaseCoordinator() {
-        return createKinesisClientLibLeaseCoordinator();
-    }
-
-    @Override
-    public ShardSyncTaskManager createShardSyncTaskManager() {
-        return new ShardSyncTaskManager(this.createLeaseManagerProxy(),
-                this.createLeaseManager(),
-                initialPositionInStream,
-                cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
-                shardSyncIntervalMillis,
-                executorService,
-                metricsFactory);
-    }
-
-    @Override
-    public DynamoDBLeaseManager<KinesisClientLease> createLeaseManager() {
-        return new KinesisClientDynamoDBLeaseManager(tableName, amazonDynamoDB, consistentReads);
-    }
-
-    @Override
-    public KinesisClientLibLeaseCoordinator createKinesisClientLibLeaseCoordinator() {
-        return new KinesisClientLibLeaseCoordinator(this.createLeaseManager(),
+        return new DynamoDBLeaseCoordinator(this.createLeaseRefresher(),
                 workerIdentifier,
                 failoverTimeMillis,
                 epsilonMillis,
@@ -93,8 +76,25 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     }
 
     @Override
-    public LeaseManagerProxy createLeaseManagerProxy() {
-        return new KinesisLeaseManagerProxy(amazonKinesis, streamName, listShardsBackoffTimeMillis,
+    public ShardSyncTaskManager createShardSyncTaskManager() {
+        return new ShardSyncTaskManager(this.createShardDetector(),
+                this.createLeaseRefresher(),
+                initialPositionInStream,
+                cleanupLeasesUponShardCompletion,
+                ignoreUnexpectedChildShards,
+                shardSyncIntervalMillis,
+                executorService,
+                metricsFactory);
+    }
+
+    @Override
+    public DynamoDBLeaseRefresher createLeaseRefresher() {
+        return new DynamoDBLeaseRefresher(tableName, amazonDynamoDB, new DynamoDBLeaseSerializer(), consistentReads);
+    }
+
+    @Override
+    public ShardDetector createShardDetector() {
+        return new KinesisShardDetector(amazonKinesis, streamName, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts);
     }
 }

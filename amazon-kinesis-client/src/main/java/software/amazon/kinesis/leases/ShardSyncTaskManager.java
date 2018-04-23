@@ -39,9 +39,9 @@ import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 @Slf4j
 public class ShardSyncTaskManager {
     @NonNull
-    private final LeaseManagerProxy leaseManagerProxy;
+    private final ShardDetector shardDetector;
     @NonNull
-    private final LeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseRefresher leaseRefresher;
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesUponShardCompletion;
@@ -76,8 +76,8 @@ public class ShardSyncTaskManager {
 
             currentTask =
                     new MetricsCollectingTaskDecorator(
-                            new ShardSyncTask(leaseManagerProxy,
-                                    leaseManager,
+                            new ShardSyncTask(shardDetector,
+                                    leaseRefresher,
                                     initialPositionInStream,
                                     cleanupLeasesUponShardCompletion,
                                     ignoreUnexpectedChildShards,

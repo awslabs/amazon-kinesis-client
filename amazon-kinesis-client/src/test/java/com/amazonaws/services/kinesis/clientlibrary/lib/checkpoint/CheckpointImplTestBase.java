@@ -95,7 +95,7 @@ public abstract class CheckpointImplTestBase {
     }
 
     /**
-     * Test method to verify setCheckpoint and getCheckpoint methods.
+     * Test method to verify checkpoint and checkpoint methods.
      *
      * @throws Exception
      */

@@ -22,7 +22,7 @@ import java.util.List;
 /**
  *
  */
-public interface LeaseManagerProxy {
+public interface ShardDetector {
     List<Shard> listShards();
 
 }

@@ -34,9 +34,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionIn
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
@@ -66,9 +65,9 @@ public class ShutdownTaskTest {
     @Mock
     private RecordProcessorCheckpointer checkpointer;
     @Mock
-    private LeaseManager<KinesisClientLease> leaseManager;
+    private LeaseRefresher leaseRefresher;
     @Mock
-    private LeaseManagerProxy leaseManagerProxy;
+    private ShardDetector shardDetector;
 
     @Before
     public void setUp() throws Exception {
@@ -78,9 +77,9 @@ public class ShutdownTaskTest {
                 ExtendedSequenceNumber.LATEST);
         recordProcessor = new TestStreamlet();
 
-        task = new ShutdownTask(shardInfo, leaseManagerProxy, recordProcessor, checkpointer,
+        task = new ShutdownTask(shardInfo, shardDetector, recordProcessor, checkpointer,
                 TERMINATE_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
-                ignoreUnexpectedChildShards, leaseManager, TASK_BACKOFF_TIME_MILLIS, getRecordsCache);
+                ignoreUnexpectedChildShards, leaseRefresher, TASK_BACKOFF_TIME_MILLIS, getRecordsCache);
     }
 
     /**
@@ -100,7 +99,7 @@ public class ShutdownTaskTest {
     @Test
     public final void testCallWhenSyncingShardsThrows() {
         when(checkpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
-        when(leaseManagerProxy.listShards()).thenReturn(null);
+        when(shardDetector.listShards()).thenReturn(null);
 
         TaskResult result = task.call();
         assertNotNull(result.getException());

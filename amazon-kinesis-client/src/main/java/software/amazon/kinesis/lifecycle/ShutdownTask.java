@@ -21,9 +21,8 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardSyncer;
 import software.amazon.kinesis.metrics.MetricsHelper;
@@ -43,7 +42,7 @@ public class ShutdownTask implements ITask {
     @NonNull
     private final ShardInfo shardInfo;
     @NonNull
-    private final LeaseManagerProxy leaseManagerProxy;
+    private final ShardDetector shardDetector;
     @NonNull
     private final RecordProcessor recordProcessor;
     @NonNull
@@ -55,7 +54,7 @@ public class ShutdownTask implements ITask {
     private final boolean cleanupLeasesOfCompletedShards;
     private final boolean ignoreUnexpectedChildShards;
     @NonNull
-    private final LeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseRefresher leaseRefresher;
     private final long backoffTimeMillis;
     @NonNull
     private final GetRecordsCache getRecordsCache;
@@ -114,8 +113,8 @@ public class ShutdownTask implements ITask {
                 if (reason == ShutdownReason.TERMINATE) {
                     log.debug("Looking for child shards of shard {}", shardInfo.shardId());
                     // create leases for the child shards
-                    ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy,
-                            leaseManager,
+                    ShardSyncer.checkAndCreateLeasesForNewShards(shardDetector,
+                            leaseRefresher,
                             initialPositionInStream,
                             cleanupLeasesOfCompletedShards,
                             ignoreUnexpectedChildShards);

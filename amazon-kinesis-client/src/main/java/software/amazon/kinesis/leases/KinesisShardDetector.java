@@ -36,7 +36,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @RequiredArgsConstructor
 @Slf4j
-public class KinesisLeaseManagerProxy implements LeaseManagerProxy {
+public class KinesisShardDetector implements ShardDetector {
     @NonNull
     private final AmazonKinesis amazonKinesis;
     @NonNull

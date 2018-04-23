@@ -45,14 +45,13 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionIn
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStreamExtended;
 
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
-import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.processor.IRecordProcessorCheckpointer;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -72,7 +71,7 @@ public class ConsumerStatesTest {
     @Mock
     private ShardInfo shardInfo;
     @Mock
-    private LeaseManager<KinesisClientLease> leaseManager;
+    private LeaseRefresher leaseRefresher;
     @Mock
     private Checkpointer checkpoint;
     @Mock
@@ -84,7 +83,7 @@ public class ConsumerStatesTest {
     @Mock
     private AmazonKinesis amazonKinesis;
     @Mock
-    private LeaseManagerProxy leaseManagerProxy;
+    private ShardDetector shardDetector;
     @Mock
     private IMetricsFactory metricsFactory;
 
@@ -102,18 +101,18 @@ public class ConsumerStatesTest {
 
     @Before
     public void setup() {
-        consumer = spy(new ShardConsumer(shardInfo, STREAM_NAME, leaseManager, executorService, getRecordsCache,
+        consumer = spy(new ShardConsumer(shardInfo, STREAM_NAME, leaseRefresher, executorService, getRecordsCache,
                 recordProcessor, checkpoint, recordProcessorCheckpointer, parentShardPollIntervalMillis,
                 taskBackoffTimeMillis, Optional.empty(), amazonKinesis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist, listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,
                 INITIAL_POSITION_IN_STREAM, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
-                leaseManagerProxy, metricsFactory));
+                shardDetector, metricsFactory));
 
         when(shardInfo.shardId()).thenReturn("shardId-000000000000");
     }
 
-    private static final Class<LeaseManager<KinesisClientLease>> LEASE_MANAGER_CLASS = (Class<LeaseManager<KinesisClientLease>>) (Class<?>) LeaseManager.class;
+    private static final Class<LeaseRefresher> LEASE_REFRESHER_CLASS = (Class<LeaseRefresher>) (Class<?>) LeaseRefresher.class;
 
     @Test
     public void blockOnParentStateTest() {
@@ -123,7 +122,7 @@ public class ConsumerStatesTest {
 
         assertThat(task, taskWith(BlockOnParentShardTask.class, ShardInfo.class, "shardInfo", equalTo(shardInfo)));
         assertThat(task,
-                taskWith(BlockOnParentShardTask.class, LEASE_MANAGER_CLASS, "leaseManager", equalTo(leaseManager)));
+                taskWith(BlockOnParentShardTask.class, LEASE_REFRESHER_CLASS, "leaseRefresher", equalTo(leaseRefresher)));
         assertThat(task, taskWith(BlockOnParentShardTask.class, Long.class, "parentShardPollIntervalMillis",
                 equalTo(parentShardPollIntervalMillis)));
 
@@ -300,7 +299,7 @@ public class ConsumerStatesTest {
         assertThat(task, shutdownTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, shutdownTask(ShutdownReason.class, "reason", equalTo(reason)));
-        assertThat(task, shutdownTask(LEASE_MANAGER_CLASS, "leaseManager", equalTo(leaseManager)));
+        assertThat(task, shutdownTask(LEASE_REFRESHER_CLASS, "leaseRefresher", equalTo(leaseRefresher)));
         assertThat(task, shutdownTask(InitialPositionInStreamExtended.class, "initialPositionInStream",
                 equalTo(initialPositionInStream)));
         assertThat(task,

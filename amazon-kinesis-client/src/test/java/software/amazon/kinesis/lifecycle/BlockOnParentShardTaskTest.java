@@ -26,8 +26,8 @@ import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
@@ -58,10 +58,10 @@ public class BlockOnParentShardTaskTest {
     @Test
     public final void testCallNoParents()
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        LeaseManager<KinesisClientLease> leaseManager = mock(LeaseManager.class);
-        when(leaseManager.getLease(shardId)).thenReturn(null);
+        LeaseRefresher leaseRefresher = mock(LeaseRefresher.class);
+        when(leaseRefresher.getLease(shardId)).thenReturn(null);
 
-        BlockOnParentShardTask task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
+        BlockOnParentShardTask task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         TaskResult result = task.call();
         assertNull(result.getException());
     }
@@ -83,26 +83,26 @@ public class BlockOnParentShardTaskTest {
         List<String> parentShardIds = new ArrayList<>();
         TaskResult result = null;
 
-        KinesisClientLease parent1Lease = new KinesisClientLease();
-        parent1Lease.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
-        KinesisClientLease parent2Lease = new KinesisClientLease();
-        parent2Lease.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
+        Lease parent1Lease = new Lease();
+        parent1Lease.checkpoint(ExtendedSequenceNumber.SHARD_END);
+        Lease parent2Lease = new Lease();
+        parent2Lease.checkpoint(ExtendedSequenceNumber.SHARD_END);
 
-        LeaseManager<KinesisClientLease> leaseManager = mock(LeaseManager.class);
-        when(leaseManager.getLease(parent1ShardId)).thenReturn(parent1Lease);
-        when(leaseManager.getLease(parent2ShardId)).thenReturn(parent2Lease);
+        LeaseRefresher leaseRefresher = mock(LeaseRefresher.class);
+        when(leaseRefresher.getLease(parent1ShardId)).thenReturn(parent1Lease);
+        when(leaseRefresher.getLease(parent2ShardId)).thenReturn(parent2Lease);
 
         // test single parent
         parentShardIds.add(parent1ShardId);
         shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
-        task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
+        task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
         shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
-        task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
+        task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNull(result.getException());
     }
@@ -124,27 +124,27 @@ public class BlockOnParentShardTaskTest {
         List<String> parentShardIds = new ArrayList<>();
         TaskResult result = null;
 
-        KinesisClientLease parent1Lease = new KinesisClientLease();
-        parent1Lease.setCheckpoint(ExtendedSequenceNumber.LATEST);
-        KinesisClientLease parent2Lease = new KinesisClientLease();
+        Lease parent1Lease = new Lease();
+        parent1Lease.checkpoint(ExtendedSequenceNumber.LATEST);
+        Lease parent2Lease = new Lease();
         // mock a sequence number checkpoint
-        parent2Lease.setCheckpoint(new ExtendedSequenceNumber("98182584034"));
+        parent2Lease.checkpoint(new ExtendedSequenceNumber("98182584034"));
 
-        LeaseManager<KinesisClientLease> leaseManager = mock(LeaseManager.class);
-        when(leaseManager.getLease(parent1ShardId)).thenReturn(parent1Lease);
-        when(leaseManager.getLease(parent2ShardId)).thenReturn(parent2Lease);
+        LeaseRefresher leaseRefresher = mock(LeaseRefresher.class);
+        when(leaseRefresher.getLease(parent1ShardId)).thenReturn(parent1Lease);
+        when(leaseRefresher.getLease(parent2ShardId)).thenReturn(parent2Lease);
 
         // test single parent
         parentShardIds.add(parent1ShardId);
         shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
-        task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
+        task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNotNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
         shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
-        task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
+        task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNotNull(result.getException());
     }
@@ -165,19 +165,19 @@ public class BlockOnParentShardTaskTest {
         parentShardIds.add(parentShardId);
         ShardInfo shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         TaskResult result = null;
-        KinesisClientLease parentLease = new KinesisClientLease();
-        LeaseManager<KinesisClientLease> leaseManager = mock(LeaseManager.class);
-        when(leaseManager.getLease(parentShardId)).thenReturn(parentLease);
+        Lease parentLease = new Lease();
+        LeaseRefresher leaseRefresher = mock(LeaseRefresher.class);
+        when(leaseRefresher.getLease(parentShardId)).thenReturn(parentLease);
 
         // test when parent shard has not yet been fully processed
-        parentLease.setCheckpoint(new ExtendedSequenceNumber("98182584034"));
-        task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
+        parentLease.checkpoint(new ExtendedSequenceNumber("98182584034"));
+        task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNotNull(result.getException());
 
         // test when parent has been fully processed
-        parentLease.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
-        task = new BlockOnParentShardTask(shardInfo, leaseManager, backoffTimeInMillis);
+        parentLease.checkpoint(ExtendedSequenceNumber.SHARD_END);
+        task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNull(result.getException());
     }

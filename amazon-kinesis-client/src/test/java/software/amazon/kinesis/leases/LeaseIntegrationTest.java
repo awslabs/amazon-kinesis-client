@@ -21,16 +21,19 @@ import org.junit.runner.Description;
 
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
-import lombok.extern.slf4j.Slf4j;
-
-@Ignore
 @Slf4j
+@Ignore
 public class LeaseIntegrationTest {
+    private LeaseSerializer leaseSerializer = new DynamoDBLeaseSerializer();
 
-    protected static KinesisClientDynamoDBLeaseManager leaseManager;
+    protected static DynamoDBLeaseRefresher leaseRefresher;
     protected static AmazonDynamoDBClient ddbClient =
             new AmazonDynamoDBClient(new DefaultAWSCredentialsProviderChain());
 
@@ -39,25 +42,25 @@ public class LeaseIntegrationTest {
 
         @Override
         protected void starting(Description description) {
-            if (leaseManager == null) {
+            if (leaseRefresher == null) {
                 // Do some static setup once per class.
 
-                leaseManager = new KinesisClientDynamoDBLeaseManager("nagl_ShardProgress", ddbClient, true);
+                leaseRefresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", ddbClient, leaseSerializer, true);
 
                 MetricsHelper.startScope(new NullMetricsFactory());
             }
 
             try {
-                if (!leaseManager.leaseTableExists()) {
+                if (!leaseRefresher.leaseTableExists()) {
                     log.info("Creating lease table");
-                    leaseManager.createLeaseTableIfNotExists(10L, 10L);
+                    leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
 
-                    leaseManager.waitUntilLeaseTableExists(10, 500);
+                    leaseRefresher.waitUntilLeaseTableExists(10, 500);
                 }
 
                 log.info("Beginning test case {}", description.getMethodName());
-                for (KinesisClientLease lease : leaseManager.listLeases()) {
-                    leaseManager.deleteLease(lease);
+                for (Lease lease : leaseRefresher.listLeases()) {
+                    leaseRefresher.deleteLease(lease);
                 }
             } catch (Exception e) {
                 String message =
@@ -69,3 +72,4 @@ public class LeaseIntegrationTest {
     };
 
 }
+

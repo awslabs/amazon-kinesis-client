@@ -50,7 +50,7 @@ public class WorkerTest {
     @Mock
     private KinesisClientLibLeaseCoordinator leaseCoordinator;
     @Mock
-    private ILeaseManager<KinesisClientLease> leaseManager;
+    private ILeaseManager<KinesisClientLease> leaseRefresher;
     @Mock
     private software.amazon.kinesis.processor.IRecordProcessorFactory v1RecordProcessorFactory;
     @Mock
@@ -151,7 +151,7 @@ public class WorkerTest {
         final String dummyKinesisShardId = "kinesis-0-0";
         ExecutorService execService = null;
 
-        when(leaseCoordinator.leaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         Worker worker =
                 new Worker(stageName,
@@ -195,7 +195,7 @@ public class WorkerTest {
 
         ExecutorService execService = null;
 
-        when(leaseCoordinator.leaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         List<ShardInfo> initialState = createShardInfoList(ExtendedSequenceNumber.TRIM_HORIZON);
         List<ShardInfo> firstCheckpoint = createShardInfoList(new ExtendedSequenceNumber("1000"));
@@ -270,7 +270,7 @@ public class WorkerTest {
         final String dummyKinesisShardId = "kinesis-0-0";
         final String anotherDummyKinesisShardId = "kinesis-0-1";
         ExecutorService execService = null;
-        when(leaseCoordinator.leaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         Worker worker =
                 new Worker(stageName,
@@ -325,7 +325,7 @@ public class WorkerTest {
                         maxRecords,
                         idleTimeInMilliseconds,
                         callProcessRecordsForEmptyRecordList, skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
-        when(leaseCoordinator.leaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
         ExecutorService execService = Executors.newSingleThreadExecutor();
         long shardPollInterval = 0L;
         Worker worker =
@@ -392,7 +392,7 @@ public class WorkerTest {
         List<Shard> shardList = createShardListWithOneSplit();
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         KinesisClientLease lease = ShardSyncer.newKCLLease(shardList.get(0));
-        lease.setCheckpoint(new ExtendedSequenceNumber("2"));
+        lease.checkpoint(new ExtendedSequenceNumber("2"));
         initialLeases.add(lease);
         runAndTestWorker(shardList, threadPoolSize, initialLeases, callProcessRecordsForEmptyRecordList, numberOfRecordsPerShard, config);
     }
@@ -408,7 +408,7 @@ public class WorkerTest {
         List<Shard> shardList = createShardListWithOneSplit();
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         KinesisClientLease lease = ShardSyncer.newKCLLease(shardList.get(0));
-        lease.setCheckpoint(new ExtendedSequenceNumber("2"));
+        lease.checkpoint(new ExtendedSequenceNumber("2"));
         initialLeases.add(lease);
         boolean callProcessRecordsForEmptyRecordList = true;
         RecordsFetcherFactory recordsFetcherFactory = new SimpleRecordsFetcherFactory();
@@ -500,7 +500,7 @@ public class WorkerTest {
         final List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
             KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
-            lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+            lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             initialLeases.add(lease);
         }
 
@@ -576,7 +576,7 @@ public class WorkerTest {
         final List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
             KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
-            lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+            lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             initialLeases.add(lease);
         }
 
@@ -674,16 +674,16 @@ public class WorkerTest {
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
-        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
-                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
-                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().checkpoint(checkpoint)
+                .concurrencyToken(UUID.randomUUID()).lastCounterIncrementNanos(0L).leaseCounter(0L)
+                .ownerSwitchesSinceCheckpoint(0L).leaseOwner("Self");
 
         final List<KinesisClientLease> leases = new ArrayList<>();
         final List<ShardInfo> currentAssignments = new ArrayList<>();
-        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        KinesisClientLease lease = builder.leaseKey(String.format("shardId-%03d", 1)).build();
         leases.add(lease);
-        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
-                lease.getParentShardIds(), lease.getCheckpoint()));
+        currentAssignments.add(new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(),
+                lease.parentShardIds(), lease.checkpoint()));
 
 
         when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
@@ -762,16 +762,16 @@ public class WorkerTest {
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
-        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
-                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
-                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().checkpoint(checkpoint)
+                .concurrencyToken(UUID.randomUUID()).lastCounterIncrementNanos(0L).leaseCounter(0L)
+                .ownerSwitchesSinceCheckpoint(0L).leaseOwner("Self");
 
         final List<KinesisClientLease> leases = new ArrayList<>();
         final List<ShardInfo> currentAssignments = new ArrayList<>();
-        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        KinesisClientLease lease = builder.leaseKey(String.format("shardId-%03d", 1)).build();
         leases.add(lease);
-        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
-                lease.getParentShardIds(), lease.getCheckpoint()));
+        currentAssignments.add(new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(),
+                lease.parentShardIds(), lease.checkpoint()));
 
         when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
             @Override
@@ -827,16 +827,16 @@ public class WorkerTest {
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
-        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
-                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
-                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().checkpoint(checkpoint)
+                .concurrencyToken(UUID.randomUUID()).lastCounterIncrementNanos(0L).leaseCounter(0L)
+                .ownerSwitchesSinceCheckpoint(0L).leaseOwner("Self");
 
         final List<KinesisClientLease> leases = new ArrayList<>();
         final List<ShardInfo> currentAssignments = new ArrayList<>();
-        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        KinesisClientLease lease = builder.leaseKey(String.format("shardId-%03d", 1)).build();
         leases.add(lease);
-        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
-                lease.getParentShardIds(), lease.getCheckpoint()));
+        currentAssignments.add(new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(),
+                lease.parentShardIds(), lease.checkpoint()));
 
         when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
             @Override
@@ -1220,16 +1220,16 @@ public class WorkerTest {
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
-        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
-                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
-                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().checkpoint(checkpoint)
+                .concurrencyToken(UUID.randomUUID()).lastCounterIncrementNanos(0L).leaseCounter(0L)
+                .ownerSwitchesSinceCheckpoint(0L).leaseOwner("Self");
 
         final List<KinesisClientLease> leases = new ArrayList<>();
         final List<ShardInfo> currentAssignments = new ArrayList<>();
-        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        KinesisClientLease lease = builder.leaseKey(String.format("shardId-%03d", 1)).build();
         leases.add(lease);
-        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
-                lease.getParentShardIds(), lease.getCheckpoint()));
+        currentAssignments.add(new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(),
+                lease.parentShardIds(), lease.checkpoint()));
 
         when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
             @Override
@@ -1304,16 +1304,16 @@ public class WorkerTest {
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
-        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
-                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
-                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().checkpoint(checkpoint)
+                .concurrencyToken(UUID.randomUUID()).lastCounterIncrementNanos(0L).leaseCounter(0L)
+                .ownerSwitchesSinceCheckpoint(0L).leaseOwner("Self");
 
         final List<KinesisClientLease> leases = new ArrayList<>();
         final List<ShardInfo> currentAssignments = new ArrayList<>();
-        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        KinesisClientLease lease = builder.leaseKey(String.format("shardId-%03d", 1)).build();
         leases.add(lease);
-        currentAssignments.add(new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(),
-                lease.getParentShardIds(), lease.getCheckpoint()));
+        currentAssignments.add(new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(),
+                lease.parentShardIds(), lease.checkpoint()));
 
         when(leaseCoordinator.getAssignments()).thenAnswer(new Answer<List<KinesisClientLease>>() {
             @Override
@@ -1447,11 +1447,11 @@ public class WorkerTest {
         final IRecordProcessor processor = mock(IRecordProcessor.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
-        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().withCheckpoint(checkpoint)
-                .withConcurrencyToken(UUID.randomUUID()).withLastCounterIncrementNanos(0L).withLeaseCounter(0L)
-                .withOwnerSwitchesSinceCheckpoint(0L).withLeaseOwner("Self");
+        KinesisClientLeaseBuilder builder = new KinesisClientLeaseBuilder().checkpoint(checkpoint)
+                .concurrencyToken(UUID.randomUUID()).lastCounterIncrementNanos(0L).leaseCounter(0L)
+                .ownerSwitchesSinceCheckpoint(0L).leaseOwner("Self");
         final List<KinesisClientLease> leases = new ArrayList<>();
-        KinesisClientLease lease = builder.withLeaseKey(String.format("shardId-%03d", 1)).build();
+        KinesisClientLease lease = builder.leaseKey(String.format("shardId-%03d", 1)).build();
         leases.add(lease);
 
         doAnswer(new Answer<Boolean>() {
@@ -1460,7 +1460,7 @@ public class WorkerTest {
                 workerInitialized.countDown();
                 return true;
             }
-        }).when(leaseManager).waitUntilLeaseTableExists(anyLong(), anyLong());
+        }).when(leaseRefresher).waitUntilLeaseTableExists(anyLong(), anyLong());
         doAnswer(new Answer<IRecordProcessor>() {
             @Override
             public IRecordProcessor answer(InvocationOnMock invocation) throws Throwable {
@@ -1469,9 +1469,9 @@ public class WorkerTest {
             }
         }).when(recordProcessorFactory).createProcessor();
 
-        when(config.getWorkerIdentifier()).thenReturn("Self");
-        when(leaseManager.listLeases()).thenReturn(leases);
-        when(leaseManager.renewLease(leases.get(0))).thenReturn(true);
+        when(config.workerIdentifier()).thenReturn("Self");
+        when(leaseRefresher.listLeases()).thenReturn(leases);
+        when(leaseRefresher.renewLease(leases.get(0))).thenReturn(true);
         when(executorService.submit(Matchers.<Callable<TaskResult>> any()))
                 .thenAnswer(new ShutdownHandlingAnswer(taskFuture));
         when(taskFuture.isDone()).thenReturn(true);
@@ -1481,7 +1481,7 @@ public class WorkerTest {
         Worker worker = new Worker.Builder()
                 .recordProcessorFactory(recordProcessorFactory)
                 .config(config)
-                .leaseManager(leaseManager)
+                .leaseRefresher(leaseRefresher)
                 .kinesisProxy(kinesisProxy)
                 .execService(executorService)
                 .workerStateChangeListener(workerStateChangeListener)
@@ -1513,7 +1513,7 @@ public class WorkerTest {
                 .config(config)
                 .build();
 
-        Assert.assertNotNull(worker.getLeaseCoordinator().leaseManager());
+        Assert.assertNotNull(worker.getLeaseCoordinator().leaseRefresher());
     }
 
     @SuppressWarnings("unchecked")
@@ -1521,14 +1521,14 @@ public class WorkerTest {
     public void testBuilderWhenLeaseManagerIsSet()  {
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
         // Create an instance of ILeaseManager for injection and validation
-        ILeaseManager<KinesisClientLease> leaseManager = (ILeaseManager<KinesisClientLease>) mock(ILeaseManager.class);
+        ILeaseManager<KinesisClientLease> leaseRefresher = (ILeaseManager<KinesisClientLease>) mock(ILeaseManager.class);
         Worker worker = new Worker.Builder()
                 .recordProcessorFactory(recordProcessorFactory)
                 .config(config)
-                .leaseManager(leaseManager)
+                .leaseRefresher(leaseRefresher)
                 .build();
 
-        Assert.assertSame(leaseManager, worker.getLeaseCoordinator().leaseManager());
+        Assert.assertSame(leaseRefresher, worker.getLeaseCoordinator().leaseRefresher());
     }
 
     private abstract class InjectableWorker extends Worker {
@@ -1563,14 +1563,14 @@ public class WorkerTest {
     }
 
     private KinesisClientLease makeLease(ExtendedSequenceNumber checkpoint, int shardId) {
-        return new KinesisClientLeaseBuilder().withCheckpoint(checkpoint).withConcurrencyToken(UUID.randomUUID())
-                .withLastCounterIncrementNanos(0L).withLeaseCounter(0L).withOwnerSwitchesSinceCheckpoint(0L)
-                .withLeaseOwner("Self").withLeaseKey(String.format("shardId-%03d", shardId)).build();
+        return new KinesisClientLeaseBuilder().checkpoint(checkpoint).concurrencyToken(UUID.randomUUID())
+                .lastCounterIncrementNanos(0L).leaseCounter(0L).ownerSwitchesSinceCheckpoint(0L)
+                .leaseOwner("Self").leaseKey(String.format("shardId-%03d", shardId)).build();
     }
 
     private ShardInfo makeShardInfo(KinesisClientLease lease) {
-        return new ShardInfo(lease.getLeaseKey(), lease.getConcurrencyToken().toString(), lease.getParentShardIds(),
-                lease.getCheckpoint());
+        return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
+                lease.checkpoint());
     }
 
     private static class ShutdownReasonMatcher extends TypeSafeDiagnosingMatcher<MetricsCollectingTaskDecorator> {
@@ -1785,7 +1785,7 @@ public class WorkerTest {
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
             KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
-            lease.setCheckpoint(ExtendedSequenceNumber.AT_TIMESTAMP);
+            lease.checkpoint(ExtendedSequenceNumber.AT_TIMESTAMP);
             initialLeases.add(lease);
         }
         runAndTestWorker(shardList, threadPoolSize, initialLeases, callProcessRecordsForEmptyRecordList, numberOfRecordsPerShard, config);
@@ -1842,14 +1842,14 @@ public class WorkerTest {
         final long idleTimeInMilliseconds = 2L;
 
         AmazonDynamoDB ddbClient = DynamoDBEmbedded.create().amazonDynamoDB();
-        LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("foo", ddbClient);
-        leaseManager.createLeaseTableIfNotExists(1L, 1L);
+        LeaseManager<KinesisClientLease> leaseRefresher = new KinesisClientLeaseManager("foo", ddbClient);
+        leaseRefresher.createLeaseTableIfNotExists(1L, 1L);
         for (KinesisClientLease initialLease : initialLeases) {
-            leaseManager.createLeaseIfNotExists(initialLease);
+            leaseRefresher.createLeaseIfNotExists(initialLease);
         }
 
         KinesisClientLibLeaseCoordinator leaseCoordinator =
-                new KinesisClientLibLeaseCoordinator(leaseManager,
+                new KinesisClientLibLeaseCoordinator(leaseRefresher,
                         stageName,
                         leaseDurationMillis,
                         epsilonMillis,

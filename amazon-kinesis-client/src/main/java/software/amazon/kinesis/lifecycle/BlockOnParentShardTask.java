@@ -20,8 +20,8 @@ import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -39,7 +39,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 public class BlockOnParentShardTask implements ITask {
     @NonNull
     private final ShardInfo shardInfo;
-    private final LeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseRefresher leaseRefresher;
     // Sleep for this duration if the parent shards have not completed processing, or we encounter an exception.
     private final long parentShardPollIntervalMillis;
 
@@ -58,9 +58,9 @@ public class BlockOnParentShardTask implements ITask {
             try {
                 boolean blockedOnParentShard = false;
                 for (String shardId : shardInfo.parentShardIds()) {
-                    KinesisClientLease lease = leaseManager.getLease(shardId);
+                    Lease lease = leaseRefresher.getLease(shardId);
                     if (lease != null) {
-                        ExtendedSequenceNumber checkpoint = lease.getCheckpoint();
+                        ExtendedSequenceNumber checkpoint = lease.checkpoint();
                         if ((checkpoint == null) || (!checkpoint.equals(ExtendedSequenceNumber.SHARD_END))) {
                             log.debug("Shard {} is not yet done. Its current checkpoint is {}", shardId, checkpoint);
                             blockedOnParentShard = true;

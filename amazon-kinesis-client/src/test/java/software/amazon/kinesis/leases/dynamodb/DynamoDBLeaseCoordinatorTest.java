@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.leases;
+package software.amazon.kinesis.leases.dynamodb;
 
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.verify;
@@ -24,29 +24,31 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
-import org.mockito.runners.MockitoJUnitRunner;
+
 import software.amazon.kinesis.checkpoint.DynamoDBCheckpointer;
-import software.amazon.kinesis.metrics.IMetricsFactory;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.metrics.IMetricsFactory;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @RunWith(MockitoJUnitRunner.class)
-public class KinesisClientLibLeaseCoordinatorTest {
+public class DynamoDBLeaseCoordinatorTest {
     private static final String SHARD_ID = "shardId-test";
-    private static final String WORK_ID = "workId-test";
-    private static final long TEST_LONG = 1000L;
     private static final ExtendedSequenceNumber TEST_CHKPT = new ExtendedSequenceNumber("string-test");
     private static final UUID TEST_UUID = UUID.randomUUID();
 
     @Mock
-    private LeaseManager<KinesisClientLease> leaseManager;
+    private LeaseRefresher leaseRefresher;
     @Mock
-    private LeaseCoordinator<KinesisClientLease> leaseCoordinator;
+    private LeaseCoordinator leaseCoordinator;
     @Mock
     private IMetricsFactory metricsFactory;
 
@@ -55,18 +57,18 @@ public class KinesisClientLibLeaseCoordinatorTest {
     @SuppressWarnings("unchecked")
     @Before
     public void setUpLeaseCoordinator() throws ProvisionedThroughputException, DependencyException {
-        dynamoDBCheckpointer = new DynamoDBCheckpointer(leaseCoordinator, leaseManager, metricsFactory);
+        dynamoDBCheckpointer = new DynamoDBCheckpointer(leaseCoordinator, leaseRefresher, metricsFactory);
     }
 
     @Test(expected = ShutdownException.class)
     public void testSetCheckpointWithUnownedShardId() throws KinesisClientLibException, DependencyException, InvalidStateException, ProvisionedThroughputException {
-        final KinesisClientLease lease = new KinesisClientLease();
-        when(leaseManager.getLease(eq(SHARD_ID))).thenReturn(lease);
+        final Lease lease = new Lease();
+        when(leaseRefresher.getLease(eq(SHARD_ID))).thenReturn(lease);
         when(leaseCoordinator.updateLease(eq(lease), eq(TEST_UUID))).thenReturn(false);
 
         dynamoDBCheckpointer.setCheckpoint(SHARD_ID, TEST_CHKPT, TEST_UUID.toString());
 
-        verify(leaseManager).getLease(eq(SHARD_ID));
+        verify(leaseRefresher).getLease(eq(SHARD_ID));
         verify(leaseCoordinator).updateLease(eq(lease), eq(TEST_UUID));
     }
 
@@ -74,7 +76,7 @@ public class KinesisClientLibLeaseCoordinatorTest {
 //    public void testWaitLeaseTableTimeout()
 //        throws DependencyException, ProvisionedThroughputException, IllegalStateException {
 //         Set mock lease manager to return false in waiting
-//        doReturn(false).when(leaseManager).waitUntilLeaseTableExists(anyLong(), anyLong());
+//        doReturn(false).when(leaseRefresher).waitUntilLeaseTableExists(anyLong(), anyLong());
 //        leaseCoordinator.initialize();
 //    }
 }

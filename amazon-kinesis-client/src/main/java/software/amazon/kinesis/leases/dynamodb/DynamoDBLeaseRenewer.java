@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.leases;
+package software.amazon.kinesis.leases.dynamodb;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,25 +30,28 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
+
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.LeaseRenewer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.metrics.MetricsHelper;
-import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingScope;
 import software.amazon.kinesis.metrics.IMetricsScope;
+import software.amazon.kinesis.metrics.MetricsHelper;
 import software.amazon.kinesis.metrics.MetricsLevel;
-
-import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingScope;
 
 /**
- * An implementation of ILeaseRenewer that uses DynamoDB via LeaseManager.
+ * An implementation of {@link LeaseRenewer} that uses DynamoDB via {@link LeaseRefresher}.
  */
 @Slf4j
-public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
+public class DynamoDBLeaseRenewer implements LeaseRenewer {
     private static final int RENEWAL_RETRIES = 2;
 
-    private final LeaseManager<T> leaseManager;
-    private final ConcurrentNavigableMap<String, T> ownedLeases = new ConcurrentSkipListMap<String, T>();
+    private final LeaseRefresher leaseRefresher;
+    private final ConcurrentNavigableMap<String, Lease> ownedLeases = new ConcurrentSkipListMap<>();
     private final String workerIdentifier;
     private final long leaseDurationNanos;
     private final ExecutorService executorService;
@@ -56,14 +59,14 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
     /**
      * Constructor.
      * 
-     * @param leaseManager LeaseManager to use
+     * @param leaseRefresher LeaseRefresher to use
      * @param workerIdentifier identifier of this worker
      * @param leaseDurationMillis duration of a lease in milliseconds
      * @param executorService ExecutorService to use for renewing leases in parallel
      */
-    public DynamoDBLeaseRenewer(LeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis,
-                                ExecutorService executorService) {
-        this.leaseManager = leaseManager;
+    public DynamoDBLeaseRenewer(final LeaseRefresher leaseRefresher, final String workerIdentifier,
+                                final long leaseDurationMillis, final ExecutorService executorService) {
+        this.leaseRefresher = leaseRefresher;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
         this.executorService = executorService;
@@ -77,10 +80,7 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
         if (log.isDebugEnabled()) {
             // Due to the eventually consistent nature of ConcurrentNavigableMap iterators, this log entry may become
             // inaccurate during iteration.
-            log.debug("Worker {} holding %d leases: {}",
-                    workerIdentifier,
-                    ownedLeases.size(),
-                    ownedLeases);
+            log.debug("Worker {} holding {} leases: {}", workerIdentifier, ownedLeases.size(), ownedLeases);
         }
 
         /*
@@ -96,8 +96,8 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
          * to getCurrentlyHeldLeases. They'll still cross paths, but they won't interleave their executions.
          */
         int lostLeases = 0;
-        List<Future<Boolean>> renewLeaseTasks = new ArrayList<Future<Boolean>>();
-        for (T lease : ownedLeases.descendingMap().values()) {
+        List<Future<Boolean>> renewLeaseTasks = new ArrayList<>();
+        for (Lease lease : ownedLeases.descendingMap().values()) {
             renewLeaseTasks.add(executorService.submit(new RenewLeaseTask(lease, renewLeaseTaskMetricsScope)));
         }
         int leasesInUnknownState = 0;
@@ -132,10 +132,10 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
 
     private class RenewLeaseTask implements Callable<Boolean> {
 
-        private final T lease;
+        private final Lease lease;
         private final IMetricsScope metricsScope;
 
-        public RenewLeaseTask(T lease, IMetricsScope metricsScope) {
+        public RenewLeaseTask(Lease lease, IMetricsScope metricsScope) {
             this.lease = lease;
             this.metricsScope = metricsScope;
         }
@@ -151,12 +151,12 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
         }
     }
 
-    private boolean renewLease(T lease) throws DependencyException, InvalidStateException {
+    private boolean renewLease(Lease lease) throws DependencyException, InvalidStateException {
         return renewLease(lease, false);
     }
 
-    private boolean renewLease(T lease, boolean renewEvenIfExpired) throws DependencyException, InvalidStateException {
-        String leaseKey = lease.getLeaseKey();
+    private boolean renewLease(Lease lease, boolean renewEvenIfExpired) throws DependencyException, InvalidStateException {
+        String leaseKey = lease.leaseKey();
 
         boolean success = false;
         boolean renewedLease = false;
@@ -170,10 +170,10 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
                         // ShutdownException).
                         boolean isLeaseExpired = lease.isExpired(leaseDurationNanos, System.nanoTime());
                         if (renewEvenIfExpired || !isLeaseExpired) {
-                            renewedLease = leaseManager.renewLease(lease);
+                            renewedLease = leaseRefresher.renewLease(lease);
                         }
                         if (renewedLease) {
-                            lease.setLastCounterIncrementNanos(System.nanoTime());
+                            lease.lastCounterIncrementNanos(System.nanoTime());
                         }
                     }
 
@@ -209,14 +209,14 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
      * {@inheritDoc}
      */
     @Override
-    public Map<String, T> getCurrentlyHeldLeases() {
-        Map<String, T> result = new HashMap<String, T>();
+    public Map<String, Lease> getCurrentlyHeldLeases() {
+        Map<String, Lease> result = new HashMap<>();
         long now = System.nanoTime();
 
         for (String leaseKey : ownedLeases.keySet()) {
-            T copy = getCopyOfHeldLease(leaseKey, now);
+            Lease copy = getCopyOfHeldLease(leaseKey, now);
             if (copy != null) {
-                result.put(copy.getLeaseKey(), copy);
+                result.put(copy.leaseKey(), copy);
             }
         }
 
@@ -227,7 +227,7 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
      * {@inheritDoc}
      */
     @Override
-    public T getCurrentlyHeldLease(String leaseKey) {
+    public Lease getCurrentlyHeldLease(String leaseKey) {
         return getCopyOfHeldLease(leaseKey, System.nanoTime());
     }
 
@@ -238,19 +238,19 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
      * @param now current timestamp for old-ness checking
      * @return non-authoritative copy of the held lease, or null if we don't currently hold it
      */
-    private T getCopyOfHeldLease(String leaseKey, long now) {
-        T authoritativeLease = ownedLeases.get(leaseKey);
+    private Lease getCopyOfHeldLease(String leaseKey, long now) {
+        Lease authoritativeLease = ownedLeases.get(leaseKey);
         if (authoritativeLease == null) {
             return null;
         } else {
-            T copy = null;
+            Lease copy = null;
             synchronized (authoritativeLease) {
                 copy = authoritativeLease.copy();
             }
 
             if (copy.isExpired(leaseDurationNanos, now)) {
                 log.info("getCurrentlyHeldLease not returning lease with key {} because it is expired",
-                        copy.getLeaseKey());
+                        copy.leaseKey());
                 return null;
             } else {
                 return copy;
@@ -262,14 +262,14 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
      * {@inheritDoc}
      */
     @Override
-    public boolean updateLease(T lease, UUID concurrencyToken)
+    public boolean updateLease(Lease lease, UUID concurrencyToken)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(lease, "lease cannot be null");
-        verifyNotNull(lease.getLeaseKey(), "leaseKey cannot be null");
+        verifyNotNull(lease.leaseKey(), "leaseKey cannot be null");
         verifyNotNull(concurrencyToken, "concurrencyToken cannot be null");
 
-        String leaseKey = lease.getLeaseKey();
-        T authoritativeLease = ownedLeases.get(leaseKey);
+        String leaseKey = lease.leaseKey();
+        Lease authoritativeLease = ownedLeases.get(leaseKey);
 
         if (authoritativeLease == null) {
             log.info("Worker {} could not update lease with key {} because it does not hold it",
@@ -283,7 +283,7 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
          * the lease was lost and regained between when the caller acquired his concurrency token and when the caller
          * called update.
          */
-        if (!authoritativeLease.getConcurrencyToken().equals(concurrencyToken)) {
+        if (!authoritativeLease.concurrencyToken().equals(concurrencyToken)) {
             log.info("Worker {} refusing to update lease with key {} because"
                     + " concurrency tokens don't match", workerIdentifier, leaseKey);
             return false;
@@ -294,10 +294,10 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
         try {
             synchronized (authoritativeLease) {
                 authoritativeLease.update(lease);
-                boolean updatedLease = leaseManager.updateLease(authoritativeLease);
+                boolean updatedLease = leaseRefresher.updateLease(authoritativeLease);
                 if (updatedLease) {
                     // Updates increment the counter
-                    authoritativeLease.setLastCounterIncrementNanos(System.nanoTime());
+                    authoritativeLease.lastCounterIncrementNanos(System.nanoTime());
                 } else {
                     /*
                      * If updateLease returns false, it means someone took the lease from us. Remove the lease
@@ -313,7 +313,7 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
                      * 
                      * 1) Concurrency token check passes
                      * 2) Pause. Lose lease, re-acquire lease. This requires at least one lease counter update.
-                     * 3) Unpause. leaseManager.updateLease fails conditional write due to counter updates, returns
+                     * 3) Unpause. leaseRefresher.updateLease fails conditional write due to counter updates, returns
                      * false.
                      * 4) ownedLeases.remove(key, value) doesn't do anything because authoritativeLease does not
                      * .equals() the re-acquired version in the map on the basis of lease counter. This is what we want.
@@ -337,24 +337,24 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
      * {@inheritDoc}
      */
     @Override
-    public void addLeasesToRenew(Collection<T> newLeases) {
+    public void addLeasesToRenew(Collection<Lease> newLeases) {
         verifyNotNull(newLeases, "newLeases cannot be null");
 
-        for (T lease : newLeases) {
-            if (lease.getLastCounterIncrementNanos() == null) {
+        for (Lease lease : newLeases) {
+            if (lease.lastCounterIncrementNanos() == null) {
                 log.info("addLeasesToRenew ignoring lease with key {} because it does not have lastRenewalNanos set",
-                        lease.getLeaseKey());
+                        lease.leaseKey());
                 continue;
             }
 
-            T authoritativeLease = lease.copy();
+            Lease authoritativeLease = lease.copy();
 
             /*
              * Assign a concurrency token when we add this to the set of currently owned leases. This ensures that
              * every time we acquire a lease, it gets a new concurrency token.
              */
-            authoritativeLease.setConcurrencyToken(UUID.randomUUID());
-            ownedLeases.put(authoritativeLease.getLeaseKey(), authoritativeLease);
+            authoritativeLease.concurrencyToken(UUID.randomUUID());
+            ownedLeases.put(authoritativeLease.leaseKey(), authoritativeLease);
         }
     }
 
@@ -371,8 +371,8 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
      * @param lease the lease to drop.
      */
     @Override
-    public void dropLease(T lease) {
-        ownedLeases.remove(lease.getLeaseKey());
+    public void dropLease(Lease lease) {
+        ownedLeases.remove(lease.leaseKey());
     }
 
     /**
@@ -380,12 +380,12 @@ public class DynamoDBLeaseRenewer<T extends Lease> implements LeaseRenewer<T> {
      */
     @Override
     public void initialize() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        Collection<T> leases = leaseManager.listLeases();
-        List<T> myLeases = new LinkedList<T>();
+        Collection<Lease> leases = leaseRefresher.listLeases();
+        List<Lease> myLeases = new LinkedList<>();
         boolean renewEvenIfExpired = true;
 
-        for (T lease : leases) {
-            if (workerIdentifier.equals(lease.getLeaseOwner())) {
+        for (Lease lease : leases) {
+            if (workerIdentifier.equals(lease.leaseOwner())) {
                 log.info(" Worker {} found lease {}", workerIdentifier, lease);
                 // Okay to renew even if lease is expired, because we start with an empty list and we add the lease to
                 // our list only after a successful renew. So we don't need to worry about the edge case where we could

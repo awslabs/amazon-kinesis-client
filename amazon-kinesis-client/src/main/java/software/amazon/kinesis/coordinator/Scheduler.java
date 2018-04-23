@@ -38,11 +38,12 @@ import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
-import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.leases.ShardSyncTask;
@@ -60,9 +61,9 @@ import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.processor.Checkpointer;
-import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ProcessorFactory;
+import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
 /**
@@ -91,7 +92,7 @@ public class Scheduler implements Runnable {
     private final long parentShardPollIntervalMillis;
     private final ExecutorService executorService;
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
-    private final KinesisClientLibLeaseCoordinator leaseCoordinator;
+    private final LeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager shardSyncTaskManager;
     private final ShardPrioritization shardPrioritization;
     private final boolean cleanupLeasesUponShardCompletion;
@@ -108,8 +109,8 @@ public class Scheduler implements Runnable {
     private final String streamName;
     private final long listShardsBackoffTimeMillis;
     private final int maxListShardsRetryAttempts;
-    private final LeaseManager<KinesisClientLease> leaseManager;
-    private final LeaseManagerProxy leaseManagerProxy;
+    private final LeaseRefresher leaseRefresher;
+    private final ShardDetector shardDetector;
     private final boolean ignoreUnexpetedChildShards;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
@@ -143,15 +144,14 @@ public class Scheduler implements Runnable {
         this.retrievalConfig = retrievalConfig;
 
         this.applicationName = this.coordinatorConfig.applicationName();
-        this.leaseCoordinator =
-                this.leaseManagementConfig.leaseManagementFactory().createKinesisClientLibLeaseCoordinator();
-        this.leaseManager = this.leaseCoordinator.leaseManager();
+        this.leaseCoordinator = this.leaseManagementConfig.leaseManagementFactory().createLeaseCoordinator();
+        this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
         //
         // TODO: Figure out what to do with lease manage <=> checkpoint relationship
         //
         this.checkpoint = this.checkpointConfig.checkpointFactory().createCheckpointer(this.leaseCoordinator,
-                this.leaseManager);
+                this.leaseRefresher);
 
         this.idleTimeInMilliseconds = this.retrievalConfig.idleTimeBetweenReadsInMillis();
         this.parentShardPollIntervalMillis = this.coordinatorConfig.parentShardPollIntervalMillis();
@@ -175,7 +175,7 @@ public class Scheduler implements Runnable {
         this.streamName = this.retrievalConfig.streamName();
         this.listShardsBackoffTimeMillis = this.retrievalConfig.listShardsBackoffTimeInMillis();
         this.maxListShardsRetryAttempts = this.retrievalConfig.maxListShardsRetryAttempts();
-        this.leaseManagerProxy = this.shardSyncTaskManager.leaseManagerProxy();
+        this.shardDetector = this.shardSyncTaskManager.shardDetector();
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
     }
 
@@ -217,9 +217,9 @@ public class Scheduler implements Runnable {
 
                 TaskResult result = null;
                 if (!skipShardSyncAtWorkerInitializationIfLeasesExist
-                        || leaseManager.isLeaseTableEmpty()) {
+                        || leaseRefresher.isLeaseTableEmpty()) {
                     log.info("Syncing Kinesis shard info");
-                    ShardSyncTask shardSyncTask = new ShardSyncTask(leaseManagerProxy, leaseManager, initialPosition,
+                    ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetector, leaseRefresher, initialPosition,
                             cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
@@ -398,7 +398,7 @@ public class Scheduler implements Runnable {
             //
             leaseCoordinator.stopLeaseTaker();
 
-            Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
+            Collection<Lease> leases = leaseCoordinator.getAssignments();
             if (leases == null || leases.isEmpty()) {
                 //
                 // If there are no leases notification is already completed, but we still need to shutdown the worker.
@@ -408,10 +408,10 @@ public class Scheduler implements Runnable {
             }
             CountDownLatch shutdownCompleteLatch = new CountDownLatch(leases.size());
             CountDownLatch notificationCompleteLatch = new CountDownLatch(leases.size());
-            for (KinesisClientLease lease : leases) {
+            for (Lease lease : leases) {
                 ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(leaseCoordinator,
                         lease, notificationCompleteLatch, shutdownCompleteLatch);
-                ShardInfo shardInfo = KinesisClientLibLeaseCoordinator.convertLeaseToAssignment(lease);
+                ShardInfo shardInfo = DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease);
                 ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
                 if (consumer != null) {
                     consumer.notifyShutdownRequested(shutdownNotification);
@@ -531,7 +531,7 @@ public class Scheduler implements Runnable {
                                           @NonNull final ProcessorFactory processorFactory) {
         return new ShardConsumer(shardInfo,
                 streamName,
-                leaseManager,
+                leaseRefresher,
                 executorService,
                 retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, metricsFactory),
                 processorFactory.createRecordProcessor(),
@@ -551,7 +551,7 @@ public class Scheduler implements Runnable {
                 initialPosition,
                 cleanupLeasesUponShardCompletion,
                 ignoreUnexpetedChildShards,
-                leaseManagerProxy,
+                shardDetector,
                 metricsFactory);
     }
 

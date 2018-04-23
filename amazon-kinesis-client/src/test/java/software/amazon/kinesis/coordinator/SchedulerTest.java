@@ -50,14 +50,12 @@ import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibN
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.CheckpointFactory;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.KinesisClientLibLeaseCoordinator;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseManagementFactory;
-import software.amazon.kinesis.leases.DynamoDBLeaseManager;
-import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
 import software.amazon.kinesis.lifecycle.InitializationInput;
@@ -69,9 +67,9 @@ import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.Checkpointer;
-import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ProcessorFactory;
+import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.GetRecordsCache;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
@@ -107,13 +105,13 @@ public class SchedulerTest {
     @Mock
     private GetRecordsCache getRecordsCache;
     @Mock
-    private KinesisClientLibLeaseCoordinator leaseCoordinator;
+    private LeaseCoordinator leaseCoordinator;
     @Mock
     private ShardSyncTaskManager shardSyncTaskManager;
     @Mock
-    private DynamoDBLeaseManager<KinesisClientLease> dynamoDBLeaseManager;
+    private DynamoDBLeaseRefresher dynamoDBLeaseRefresher;
     @Mock
-    private LeaseManagerProxy leaseManagerProxy;
+    private ShardDetector shardDetector;
     @Mock
     private Checkpointer checkpoint;
 
@@ -131,8 +129,8 @@ public class SchedulerTest {
         processorConfig = new ProcessorConfig(processorFactory);
         retrievalConfig = new RetrievalConfig(streamName, amazonKinesis).retrievalFactory(retrievalFactory);
 
-        when(leaseCoordinator.leaseManager()).thenReturn(dynamoDBLeaseManager);
-        when(shardSyncTaskManager.leaseManagerProxy()).thenReturn(leaseManagerProxy);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
+        when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
         when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(IMetricsFactory.class))).thenReturn(getRecordsCache);
 
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
@@ -236,11 +234,11 @@ public class SchedulerTest {
     @Test
     public final void testInitializationFailureWithRetries() throws Exception {
         doNothing().when(leaseCoordinator).initialize();
-        when(leaseManagerProxy.listShards()).thenThrow(new RuntimeException());
+        when(shardDetector.listShards()).thenThrow(new RuntimeException());
 
         scheduler.run();
 
-        verify(leaseManagerProxy, times(Scheduler.MAX_INITIALIZATION_ATTEMPTS)).listShards();
+        verify(shardDetector, times(Scheduler.MAX_INITIALIZATION_ATTEMPTS)).listShards();
     }
 
 
@@ -250,9 +248,9 @@ public class SchedulerTest {
         final BigInteger startSeqNum = BigInteger.ONE;
         List<Shard> shardList = KinesisLocalFileDataCreator.createShardList(numShards, kinesisShardPrefix, startSeqNum);
         Assert.assertEquals(numShards, shardList.size());
-        List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
+        List<Lease> initialLeases = new ArrayList<Lease>();
         for (Shard shard : shardList) {
-            KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
+            Lease lease = ShardSyncer.newKCLLease(shard);
             lease.setCheckpoint(ExtendedSequenceNumber.AT_TIMESTAMP);
             initialLeases.add(lease);
         }
@@ -261,7 +259,7 @@ public class SchedulerTest {
 
     private void runAndTestWorker(List<Shard> shardList,
                                   int threadPoolSize,
-                                  List<KinesisClientLease> initialLeases,
+                                  List<Lease> initialLeases,
                                   int numberOfRecordsPerShard) throws Exception {
         File file = KinesisLocalFileDataCreator.generateTempDataFile(shardList, numberOfRecordsPerShard, "unitTestWT001");
         IKinesisProxy fileBasedProxy = new KinesisLocalFileProxy(file.getAbsolutePath());
@@ -288,7 +286,7 @@ public class SchedulerTest {
         file.delete();
     }
 
-    private SchedulerThread runWorker(final List<KinesisClientLease> initialLeases) throws Exception {
+    private SchedulerThread runWorker(final List<Lease> initialLeases) throws Exception {
         final int maxRecords = 2;
 
         final long leaseDurationMillis = 10000L;
@@ -296,16 +294,16 @@ public class SchedulerTest {
         final long idleTimeInMilliseconds = 2L;
 
         AmazonDynamoDB ddbClient = DynamoDBEmbedded.create().amazonDynamoDB();
-        LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("foo", ddbClient);
-        leaseManager.createLeaseTableIfNotExists(1L, 1L);
-        for (KinesisClientLease initialLease : initialLeases) {
-            leaseManager.createLeaseIfNotExists(initialLease);
+        LeaseManager<Lease> leaseRefresher = new LeaseManager("foo", ddbClient);
+        leaseRefresher.createLeaseTableIfNotExists(1L, 1L);
+        for (Lease initialLease : initialLeases) {
+            leaseRefresher.createLeaseIfNotExists(initialLease);
         }
 
         checkpointConfig = new CheckpointConfig("foo", ddbClient, workerIdentifier)
                 .failoverTimeMillis(leaseDurationMillis)
                 .epsilonMillis(epsilonMillis)
-                .leaseManager(leaseManager);
+                .leaseRefresher(leaseRefresher);
         leaseManagementConfig = new LeaseManagementConfig("foo", ddbClient, amazonKinesis, streamName, workerIdentifier)
                 .failoverTimeMillis(leaseDurationMillis)
                 .epsilonMillis(epsilonMillis);
@@ -323,7 +321,7 @@ public class SchedulerTest {
 
     private void testWorker(List<Shard> shardList,
                             int threadPoolSize,
-                            List<KinesisClientLease> initialLeases,
+                            List<Lease> initialLeases,
                             int numberOfRecordsPerShard,
                             IKinesisProxy kinesisProxy,
                             TestStreamletFactory recordProcessorFactory) throws Exception {
@@ -442,25 +440,20 @@ public class SchedulerTest {
         }
 
         @Override
-        public DynamoDBLeaseManager<KinesisClientLease> createLeaseManager() {
-            return dynamoDBLeaseManager;
+        public DynamoDBLeaseRefresher createLeaseRefresher() {
+            return dynamoDBLeaseRefresher;
         }
 
         @Override
-        public KinesisClientLibLeaseCoordinator createKinesisClientLibLeaseCoordinator() {
-            return leaseCoordinator;
-        }
-
-        @Override
-        public LeaseManagerProxy createLeaseManagerProxy() {
-            return leaseManagerProxy;
+        public ShardDetector createShardDetector() {
+            return shardDetector;
         }
     }
 
     private class TestKinesisCheckpointFactory implements CheckpointFactory {
         @Override
-        public Checkpointer createCheckpointer(final LeaseCoordinator<KinesisClientLease> leaseCoordinator,
-                                               final LeaseManager<KinesisClientLease> leaseManager) {
+        public Checkpointer createCheckpointer(final LeaseCoordinator leaseCoordinator,
+                                               final LeaseRefresher leaseRefresher) {
             return checkpoint;
         }
     }

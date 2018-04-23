@@ -16,9 +16,9 @@ package software.amazon.kinesis.lifecycle;
 
 import java.util.concurrent.CountDownLatch;
 
-import software.amazon.kinesis.processor.ShutdownNotificationAware;
-import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.processor.ShutdownNotificationAware;
 
 /**
  * Contains callbacks for completion of stages in a requested record processor shutdown.
@@ -26,8 +26,8 @@ import software.amazon.kinesis.leases.LeaseCoordinator;
  */
 public class ShardConsumerShutdownNotification implements ShutdownNotification {
 
-    private final LeaseCoordinator<KinesisClientLease> leaseCoordinator;
-    private final KinesisClientLease lease;
+    private final LeaseCoordinator leaseCoordinator;
+    private final Lease lease;
     private final CountDownLatch shutdownCompleteLatch;
     private final CountDownLatch notificationCompleteLatch;
 
@@ -48,8 +48,10 @@ public class ShardConsumerShutdownNotification implements ShutdownNotification {
      * @param shutdownCompleteLatch
      *            used to inform the caller once the record processor is fully shutdown
      */
-    public ShardConsumerShutdownNotification(LeaseCoordinator<KinesisClientLease> leaseCoordinator, KinesisClientLease lease,
-                                             CountDownLatch notificationCompleteLatch, CountDownLatch shutdownCompleteLatch) {
+    public ShardConsumerShutdownNotification(final LeaseCoordinator leaseCoordinator,
+                                             final Lease lease,
+                                             final CountDownLatch notificationCompleteLatch,
+                                             final CountDownLatch shutdownCompleteLatch) {
         this.leaseCoordinator = leaseCoordinator;
         this.lease = lease;
         this.notificationCompleteLatch = notificationCompleteLatch;

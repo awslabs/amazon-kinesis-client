@@ -73,11 +73,10 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.checkpoint.Checkpoint;
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
@@ -139,7 +138,7 @@ public class ShardConsumerTest {
     @Mock
     private KinesisClientLibConfiguration config;
     @Mock
-    private LeaseManager<KinesisClientLease> leaseManager;
+    private LeaseRefresher leaseRefresher;
     @Mock
     private Checkpointer checkpoint;
     @Mock
@@ -149,7 +148,7 @@ public class ShardConsumerTest {
     @Mock
     private RecordProcessorCheckpointer recordProcessorCheckpointer;
     @Mock
-    private LeaseManagerProxy leaseManagerProxy;
+    private ShardDetector shardDetector;
 
     @Before
     public void setup() {
@@ -225,7 +224,7 @@ public class ShardConsumerTest {
 
         final ExtendedSequenceNumber checkpointSequenceNumber = new ExtendedSequenceNumber("123");
         final ExtendedSequenceNumber pendingCheckpointSequenceNumber = null;
-        when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseRefresher.getLease(anyString())).thenReturn(null);
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(
                 new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));
 
@@ -289,7 +288,7 @@ public class ShardConsumerTest {
         final int maxRecords = 2;
         Checkpointer checkpoint = new InMemoryCheckpointer(startSeqNum.toString());
         checkpoint.setCheckpoint(shardId, ExtendedSequenceNumber.TRIM_HORIZON, concurrencyToken);
-        when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseRefresher.getLease(anyString())).thenReturn(null);
         TestStreamlet processor = new TestStreamlet();
         shardInfo = new ShardInfo(shardId, concurrencyToken, null, null);
 
@@ -392,7 +391,7 @@ public class ShardConsumerTest {
         final int maxRecords = 2;
         Checkpointer checkpoint = new InMemoryCheckpointer(startSeqNum.toString());
         checkpoint.setCheckpoint(shardId, ExtendedSequenceNumber.TRIM_HORIZON, concurrencyToken);
-        when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseRefresher.getLease(anyString())).thenReturn(null);
 
         TransientShutdownErrorTestStreamlet processor = new TransientShutdownErrorTestStreamlet();
         shardInfo = new ShardInfo(shardId, concurrencyToken, null, null);
@@ -487,7 +486,7 @@ public class ShardConsumerTest {
         final int maxRecords = 2;
         Checkpointer checkpoint = new InMemoryCheckpointer(startSeqNum.toString());
         checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.AT_TIMESTAMP, testConcurrencyToken);
-        when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseRefresher.getLease(anyString())).thenReturn(null);
         TestStreamlet processor = new TestStreamlet();
 
         when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),
@@ -548,7 +547,7 @@ public class ShardConsumerTest {
 
         final ExtendedSequenceNumber checkpointSequenceNumber = new ExtendedSequenceNumber("123");
         final ExtendedSequenceNumber pendingCheckpointSequenceNumber = new ExtendedSequenceNumber("999");
-        when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseRefresher.getLease(anyString())).thenReturn(null);
         when(config.getRecordsFetcherFactory()).thenReturn(new SimpleRecordsFetcherFactory());
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(
                 new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));
@@ -642,7 +641,7 @@ public class ShardConsumerTest {
                                               final Optional<Long> logWarningForTaskAfterMillis) {
         return new ShardConsumer(shardInfo,
                 streamName,
-                leaseManager,
+                leaseRefresher,
                 executorService,
                 getRecordsCache,
                 recordProcessor,
@@ -660,7 +659,7 @@ public class ShardConsumerTest {
                 initialPositionLatest,
                 cleanupLeasesOfCompletedShards,
                 ignoreUnexpectedChildShards,
-                leaseManagerProxy,
+                shardDetector,
                 metricsFactory);
     }
 

@@ -18,13 +18,12 @@ import java.util.Map;
 
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
-import software.amazon.kinesis.leases.Lease;
 
 /**
  * ILeaseTaker is used by LeaseCoordinator to take new leases, or leases that other workers fail to renew. Each
  * LeaseCoordinator instance corresponds to one worker and uses exactly one ILeaseTaker to take leases for that worker.
  */
-public interface LeaseTaker<T extends Lease> {
+public interface LeaseTaker {
 
     /**
      * Compute the set of leases available to be taken and attempt to take them. Lease taking rules are:
@@ -39,11 +38,11 @@ public interface LeaseTaker<T extends Lease> {
      * @throws DependencyException on unexpected DynamoDB failures
      * @throws InvalidStateException if lease table does not exist
      */
-    public abstract Map<String, T> takeLeases() throws DependencyException, InvalidStateException;
+    Map<String, Lease> takeLeases() throws DependencyException, InvalidStateException;
 
     /**
      * @return workerIdentifier for this LeaseTaker
      */
-    public abstract String getWorkerIdentifier();
+    String getWorkerIdentifier();
 
 }

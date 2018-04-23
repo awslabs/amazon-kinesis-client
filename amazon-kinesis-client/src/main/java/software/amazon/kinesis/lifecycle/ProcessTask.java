@@ -20,7 +20,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsScope;
 import software.amazon.kinesis.metrics.MetricsHelper;
@@ -77,7 +77,7 @@ public class ProcessTask implements ITask {
                        @NonNull final RecordProcessorCheckpointer recordProcessorCheckpointer,
                        final long backoffTimeMillis,
                        final boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       final LeaseManagerProxy leaseManagerProxy,
+                       final ShardDetector shardDetector,
                        @NonNull final ThrottlingReporter throttlingReporter,
                        final ProcessRecordsInput processRecordsInput,
                        final boolean shouldCallProcessRecordsEvenForEmptyRecordList,
@@ -93,7 +93,7 @@ public class ProcessTask implements ITask {
 
         Optional<Shard> currentShard = Optional.empty();
         if (!skipShardSyncAtWorkerInitializationIfLeasesExist) {
-            currentShard = leaseManagerProxy.listShards().stream()
+            currentShard = shardDetector.listShards().stream()
                     .filter(shard -> shardInfo.shardId().equals(shard.getShardId()))
                     .findFirst();
         }

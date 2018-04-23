@@ -37,6 +37,8 @@ import com.amazonaws.services.kinesis.model.DescribeStreamSummaryRequest;
 import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.StreamStatus;
 
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -48,8 +50,8 @@ public class ShardSyncTaskIntegrationTest {
     private static final String STREAM_NAME = "IntegrationTestStream02";
     private static AmazonKinesis amazonKinesis;
 
-    private KinesisClientLeaseManager leaseManager;
-    private LeaseManagerProxy leaseManagerProxy;
+    private LeaseRefresher leaseRefresher;
+    private ShardDetector shardDetector;
 
     /**
      * @throws java.lang.Exception
@@ -85,12 +87,13 @@ public class ShardSyncTaskIntegrationTest {
     @Before
     public void setUp() throws Exception {
         boolean useConsistentReads = true;
-        leaseManager =
-                new KinesisClientDynamoDBLeaseManager("ShardSyncTaskIntegrationTest",
+        leaseRefresher =
+                new DynamoDBLeaseRefresher("ShardSyncTaskIntegrationTest",
                         AmazonDynamoDBClientBuilder.standard().withRegion(Regions.US_EAST_1).build(),
+                        new DynamoDBLeaseSerializer(),
                         useConsistentReads);
 
-        leaseManagerProxy = new KinesisLeaseManagerProxy(amazonKinesis, STREAM_NAME, 500L, 50);
+        shardDetector = new KinesisShardDetector(amazonKinesis, STREAM_NAME, 500L, 50);
     }
 
     /**
@@ -109,24 +112,24 @@ public class ShardSyncTaskIntegrationTest {
      */
     @Test
     public final void testCall() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        if (!leaseManager.leaseTableExists()) {
+        if (!leaseRefresher.leaseTableExists()) {
             final Long readCapacity = 10L;
             final Long writeCapacity = 10L;
-            leaseManager.createLeaseTableIfNotExists(readCapacity, writeCapacity);
+            leaseRefresher.createLeaseTableIfNotExists(readCapacity, writeCapacity);
         }
-        leaseManager.deleteAll();
-        Set<String> shardIds = leaseManagerProxy.listShards().stream().map(Shard::getShardId).collect(Collectors.toSet());
-        ShardSyncTask syncTask = new ShardSyncTask(leaseManagerProxy,
-                leaseManager,
+        leaseRefresher.deleteAll();
+        Set<String> shardIds = shardDetector.listShards().stream().map(Shard::getShardId).collect(Collectors.toSet());
+        ShardSyncTask syncTask = new ShardSyncTask(shardDetector,
+                leaseRefresher,
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST),
                 false,
                 false,
                 0L);
         syncTask.call();
-        List<KinesisClientLease> leases = leaseManager.listLeases();
-        Set<String> leaseKeys = new HashSet<String>();
-        for (KinesisClientLease lease : leases) {
-            leaseKeys.add(lease.getLeaseKey());
+        List<Lease> leases = leaseRefresher.listLeases();
+        Set<String> leaseKeys = new HashSet<>();
+        for (Lease lease : leases) {
+            leaseKeys.add(lease.leaseKey());
         }
 
         // Verify that all shardIds had leases for them

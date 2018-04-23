@@ -34,9 +34,9 @@ import software.amazon.kinesis.lifecycle.TaskType;
 @Slf4j
 public class ShardSyncTask implements ITask {
     @NonNull
-    private final LeaseManagerProxy leaseManagerProxy;
+    private final ShardDetector shardDetector;
     @NonNull
-    private final LeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseRefresher leaseRefresher;
     @NonNull
     private final InitialPositionInStreamExtended initialPosition;
     private final boolean cleanupLeasesUponShardCompletion;
@@ -56,7 +56,7 @@ public class ShardSyncTask implements ITask {
             Exception exception = null;
 
             try {
-                ShardSyncer.checkAndCreateLeasesForNewShards(leaseManagerProxy, leaseManager, initialPosition,
+                ShardSyncer.checkAndCreateLeasesForNewShards(shardDetector, leaseRefresher, initialPosition,
                         cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards);
                 if (shardSyncTaskIdleTimeMillis > 0) {
                     Thread.sleep(shardSyncTaskIdleTimeMillis);

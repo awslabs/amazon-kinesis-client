@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.leases;
+package software.amazon.kinesis.leases.dynamodb;
 
 import java.util.Map;
 
@@ -20,21 +20,23 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 
 public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
     private static final long LEASE_DURATION_MILLIS = 1000L;
-    private DynamoDBLeaseTaker<KinesisClientLease> taker;
+    private DynamoDBLeaseTaker taker;
 
     @Before
     public void setUp() {
-        taker = new DynamoDBLeaseTaker<KinesisClientLease>(leaseManager, "foo", LEASE_DURATION_MILLIS);
+        taker = new DynamoDBLeaseTaker(leaseRefresher, "foo", LEASE_DURATION_MILLIS);
     }
 
     @Test
     public void testSimpleLeaseTake() throws LeasingException {
-        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         builder.withLease("1", null).build();
 
@@ -43,7 +45,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
     @Test
     public void testNotTakeUpdatedLease() throws LeasingException {
-        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         builder.withLease("1", "bar").build();
 
@@ -56,7 +58,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
     @Test
     public void testTakeOwnLease() throws LeasingException {
-        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         builder.withLease("1", taker.getWorkerIdentifier()).build();
 
@@ -67,7 +69,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
     @Test
     public void testNotTakeNewOwnedLease() throws LeasingException, InterruptedException {
-        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         builder.withLease("1", "bar").build();
 
@@ -85,7 +87,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
      */
     @Test
     public void testNonGreedyTake() throws LeasingException {
-        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         for (int i = 0; i < 3; i++) {
             builder.withLease(Integer.toString(i), null);
@@ -103,7 +105,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
      */
     @Test
     public void testNoStealWhenOffByOne() throws LeasingException {
-        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         builder.withLease("1", "bar")
                 .withLease("2", "bar")
@@ -124,7 +126,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
      */
     @Test
     public void testSteal() throws LeasingException {
-        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         builder.withLease("1", "bar");
         for (int i = 2; i <= 6; i++) {
@@ -135,7 +137,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
         builder.build();
 
         // Assert that one lease was stolen from baz.
-        Map<String, KinesisClientLease> takenLeases = builder.takeMutateAssert(taker, 1);
+        Map<String, Lease> takenLeases = builder.takeMutateAssert(taker, 1);
 
         // Assert that it was one of baz's leases (shardId != 1)
         String shardIdStolen = takenLeases.keySet().iterator().next();
@@ -148,7 +150,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
      */
     @Test
     public void testNoStealWhenExpiredLeases() throws LeasingException {
-        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         builder.withLease("1", null);
         for (int i = 2; i <= 4; i++) {

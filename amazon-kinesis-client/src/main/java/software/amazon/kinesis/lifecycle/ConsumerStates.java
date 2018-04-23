@@ -191,7 +191,7 @@ class ConsumerStates {
         @Override
         public ITask createTask(ShardConsumer consumer) {
             return new BlockOnParentShardTask(consumer.shardInfo(),
-                    consumer.leaseManager(),
+                    consumer.leaseRefresher(),
                     consumer.parentShardPollIntervalMillis());
         }
 
@@ -320,7 +320,7 @@ class ConsumerStates {
                     consumer.recordProcessorCheckpointer(),
                     consumer.taskBackoffTimeMillis(),
                     consumer.skipShardSyncAtWorkerInitializationIfLeasesExist(),
-                    consumer.leaseManagerProxy(),
+                    consumer.shardDetector(),
                     throttlingReporter,
                     recordsFetcher.getRecords(),
                     consumer.shouldCallProcessRecordsEvenForEmptyRecordList(),
@@ -528,14 +528,14 @@ class ConsumerStates {
         public ITask createTask(ShardConsumer consumer) {
             // TODO: set shutdown reason
             return new ShutdownTask(consumer.shardInfo(),
-                    consumer.leaseManagerProxy(),
+                    consumer.shardDetector(),
                     consumer.recordProcessor(),
                     consumer.recordProcessorCheckpointer(),
                     consumer.shutdownReason(),
                     consumer.initialPositionInStream(),
                     consumer.cleanupLeasesOfCompletedShards(),
                     consumer.ignoreUnexpectedChildShards(),
-                    consumer.leaseManager(),
+                    consumer.leaseRefresher(),
                     consumer.taskBackoffTimeMillis(),
                     consumer.getRecordsCache());
         }

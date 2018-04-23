@@ -108,7 +108,7 @@ public class InMemoryCheckpointer implements Checkpointer {
     @Override
     public ExtendedSequenceNumber getCheckpoint(String shardId) throws KinesisClientLibException {
         ExtendedSequenceNumber checkpoint = flushpoints.get(shardId);
-        log.debug("getCheckpoint shardId: {} checkpoint: {}",  shardId, checkpoint);
+        log.debug("checkpoint shardId: {} checkpoint: {}",  shardId, checkpoint);
         return checkpoint;
     }
 

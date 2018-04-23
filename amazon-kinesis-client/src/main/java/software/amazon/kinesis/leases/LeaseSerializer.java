@@ -26,10 +26,8 @@ import software.amazon.kinesis.leases.Lease;
 
 /**
  * Utility class that manages the mapping of Lease objects/operations to records in DynamoDB.
- * 
- * @param <T> Lease subclass, possibly Lease itself
  */
-public interface LeaseSerializer<T extends Lease> {
+public interface LeaseSerializer {
 
     /**
      * Construct a DynamoDB record out of a Lease object
@@ -37,7 +35,7 @@ public interface LeaseSerializer<T extends Lease> {
      * @param lease lease object to serialize
      * @return an attribute value map representing the lease object
      */
-    public Map<String, AttributeValue> toDynamoRecord(T lease);
+    Map<String, AttributeValue> toDynamoRecord(Lease lease);
 
     /**
      * Construct a Lease object out of a DynamoDB record.
@@ -45,72 +43,72 @@ public interface LeaseSerializer<T extends Lease> {
      * @param dynamoRecord attribute value map from DynamoDB
      * @return a deserialized lease object representing the attribute value map
      */
-    public T fromDynamoRecord(Map<String, AttributeValue> dynamoRecord);
+    Lease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord);
 
     /**
      * @param lease
      * @return the attribute value map representing a Lease's hash key given a Lease object.
      */
-    public Map<String, AttributeValue> getDynamoHashKey(T lease);
+    Map<String, AttributeValue> getDynamoHashKey(Lease lease);
 
     /**
-     * Special getDynamoHashKey implementation used by ILeaseManager.getLease().
+     * Special getDynamoHashKey implementation used by {@link LeaseRefresher#getLease(String)}.
      * 
      * @param leaseKey
      * @return the attribute value map representing a Lease's hash key given a string.
      */
-    public Map<String, AttributeValue> getDynamoHashKey(String leaseKey);
+    Map<String, AttributeValue> getDynamoHashKey(String leaseKey);
 
     /**
      * @param lease
      * @return the attribute value map asserting that a lease counter is what we expect.
      */
-    public Map<String, ExpectedAttributeValue> getDynamoLeaseCounterExpectation(T lease);
+    Map<String, ExpectedAttributeValue> getDynamoLeaseCounterExpectation(Lease lease);
 
     /**
      * @param lease
      * @return the attribute value map asserting that the lease owner is what we expect.
      */
-    public Map<String, ExpectedAttributeValue> getDynamoLeaseOwnerExpectation(T lease);
+    Map<String, ExpectedAttributeValue> getDynamoLeaseOwnerExpectation(Lease lease);
 
     /**
      * @return the attribute value map asserting that a lease does not exist.
      */
-    public Map<String, ExpectedAttributeValue> getDynamoNonexistantExpectation();
+    Map<String, ExpectedAttributeValue> getDynamoNonexistantExpectation();
 
     /**
      * @param lease
      * @return the attribute value map that increments a lease counter
      */
-    public Map<String, AttributeValueUpdate> getDynamoLeaseCounterUpdate(T lease);
+    Map<String, AttributeValueUpdate> getDynamoLeaseCounterUpdate(Lease lease);
 
     /**
      * @param lease
      * @param newOwner
      * @return the attribute value map that takes a lease for a new owner
      */
-    public Map<String, AttributeValueUpdate> getDynamoTakeLeaseUpdate(T lease, String newOwner);
+    Map<String, AttributeValueUpdate> getDynamoTakeLeaseUpdate(Lease lease, String newOwner);
 
     /**
      * @param lease
      * @return the attribute value map that voids a lease
      */
-    public Map<String, AttributeValueUpdate> getDynamoEvictLeaseUpdate(T lease);
+    Map<String, AttributeValueUpdate> getDynamoEvictLeaseUpdate(Lease lease);
 
     /**
      * @param lease
      * @return the attribute value map that updates application-specific data for a lease and increments the lease
      *         counter
      */
-    public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(T lease);
+    Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease);
 
     /**
      * @return the key schema for creating a DynamoDB table to store leases
      */
-    public Collection<KeySchemaElement> getKeySchema();
+    Collection<KeySchemaElement> getKeySchema();
 
     /**
      * @return attribute definitions for creating a DynamoDB table to store leases
      */
-    public Collection<AttributeDefinition> getAttributeDefinitions();
+    Collection<AttributeDefinition> getAttributeDefinitions();
 }

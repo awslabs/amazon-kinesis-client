@@ -30,6 +30,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 

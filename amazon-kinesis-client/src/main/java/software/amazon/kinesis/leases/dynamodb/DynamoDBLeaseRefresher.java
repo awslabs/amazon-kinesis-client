@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.leases;
+package software.amazon.kinesis.leases.dynamodb;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,32 +40,26 @@ import com.amazonaws.services.dynamodbv2.model.ScanRequest;
 import com.amazonaws.services.dynamodbv2.model.ScanResult;
 import com.amazonaws.services.dynamodbv2.model.TableStatus;
 import com.amazonaws.services.dynamodbv2.model.UpdateItemRequest;
+
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.LeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-
-import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
- * An implementation of ILeaseManager that uses DynamoDB.
+ * An implementation of {@link LeaseRefresher} that uses DynamoDB.
  */
 @Slf4j
-public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
+public class DynamoDBLeaseRefresher implements LeaseRefresher {
     protected String table;
     protected AmazonDynamoDB dynamoDBClient;
-    protected LeaseSerializer<T> serializer;
+    protected LeaseSerializer serializer;
     protected boolean consistentReads;
-
-    /**
-     * Constructor.
-     * 
-     * @param table leases table
-     * @param dynamoDBClient DynamoDB client to use
-     * @param serializer LeaseSerializer to use to convert to/from DynamoDB objects.
-     */
-    public DynamoDBLeaseManager(String table, AmazonDynamoDB dynamoDBClient, LeaseSerializer<T> serializer) {
-        this(table, dynamoDBClient, serializer, false);
-    }
 
     /**
      * Constructor for test cases - allows control of consistent reads. Consistent reads should only be used for testing
@@ -78,11 +72,8 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * @param serializer lease serializer to use
      * @param consistentReads true if we want consistent reads for testing purposes.
      */
-    public DynamoDBLeaseManager(String table, AmazonDynamoDB dynamoDBClient, LeaseSerializer<T> serializer, boolean consistentReads) {
-        verifyNotNull(table, "Table name cannot be null");
-        verifyNotNull(dynamoDBClient, "dynamoDBClient cannot be null");
-        verifyNotNull(serializer, "ILeaseSerializer cannot be null");
-
+    public DynamoDBLeaseRefresher(@NonNull final String table, @NonNull final AmazonDynamoDB dynamoDBClient,
+                                  @NonNull final LeaseSerializer serializer, boolean consistentReads) {
         this.table = table;
         this.dynamoDBClient = dynamoDBClient;
         this.consistentReads = consistentReads;
@@ -93,11 +84,8 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
-        throws ProvisionedThroughputException, DependencyException {
-        verifyNotNull(readCapacity, "readCapacity cannot be null");
-        verifyNotNull(writeCapacity, "writeCapacity cannot be null");
-
+    public boolean createLeaseTableIfNotExists(@NonNull final Long readCapacity, @NonNull final Long writeCapacity)
+            throws ProvisionedThroughputException, DependencyException {
         try {
             if (tableStatus() != null) {
                 return false;
@@ -204,7 +192,7 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public List<T> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public List<Lease> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         return list(null);
     }
 
@@ -212,7 +200,8 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public boolean isLeaseTableEmpty() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public boolean isLeaseTableEmpty()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         return list(1).isEmpty();
     }
 
@@ -225,7 +214,7 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * @throws DependencyException if DynamoDB scan fail in an unexpected way
      * @throws ProvisionedThroughputException if DynamoDB scan fail due to exceeded capacity
      */
-    List<T> list(Integer limit) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    List<Lease> list(Integer limit) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (log.isDebugEnabled()) {
             log.debug("Listing leases from table {}", table);
         }
@@ -238,7 +227,7 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
 
         try {
             ScanResult scanResult = dynamoDBClient.scan(scanRequest);
-            List<T> result = new ArrayList<T>();
+            List<Lease> result = new ArrayList<>();
 
             while (scanResult != null) {
                 for (Map<String, AttributeValue> item : scanResult.getItems()) {
@@ -286,10 +275,8 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public boolean createLeaseIfNotExists(T lease)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-
+    public boolean createLeaseIfNotExists(@NonNull final Lease lease)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (log.isDebugEnabled()) {
             log.debug("Creating lease {}", lease);
         }
@@ -308,7 +295,7 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
 
             return false;
         } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("create", lease.getLeaseKey(), e);
+            throw convertAndRethrowExceptions("create", lease.leaseKey(), e);
         }
 
         return true;
@@ -318,10 +305,8 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public T getLease(String leaseKey)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(leaseKey, "leaseKey cannot be null");
-
+    public Lease getLease(@NonNull final String leaseKey)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (log.isDebugEnabled()) {
             log.debug("Getting lease with key {}", leaseKey);
         }
@@ -342,7 +327,7 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
 
                 return null;
             } else {
-                T lease = serializer.fromDynamoRecord(dynamoRecord);
+                final Lease lease = serializer.fromDynamoRecord(dynamoRecord);
                 if (log.isDebugEnabled()) {
                     log.debug("Got lease {}", lease);
                 }
@@ -358,12 +343,10 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public boolean renewLease(T lease)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-
+    public boolean renewLease(@NonNull final Lease lease)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (log.isDebugEnabled()) {
-            log.debug("Renewing lease with key {}", lease.getLeaseKey());
+            log.debug("Renewing lease with key {}", lease.leaseKey());
         }
 
         UpdateItemRequest request = new UpdateItemRequest();
@@ -377,26 +360,26 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
         } catch (ConditionalCheckFailedException e) {
             if (log.isDebugEnabled()) {
                 log.debug("Lease renewal failed for lease with key {} because the lease counter was not {}",
-                        lease.getLeaseKey(), lease.getLeaseCounter());
+                        lease.leaseKey(), lease.leaseCounter());
             }
 
             // If we had a spurious retry during the Dynamo update, then this conditional PUT failure
             // might be incorrect. So, we get the item straight away and check if the lease owner + lease counter
             // are what we expected.
-            String expectedOwner = lease.getLeaseOwner();
-            Long expectedCounter = lease.getLeaseCounter() + 1;
-            T updatedLease = getLease(lease.getLeaseKey());
-            if (updatedLease == null || !expectedOwner.equals(updatedLease.getLeaseOwner()) ||
-                    !expectedCounter.equals(updatedLease.getLeaseCounter())) {
+            String expectedOwner = lease.leaseOwner();
+            Long expectedCounter = lease.leaseCounter() + 1;
+            final Lease updatedLease = getLease(lease.leaseKey());
+            if (updatedLease == null || !expectedOwner.equals(updatedLease.leaseOwner()) ||
+                    !expectedCounter.equals(updatedLease.leaseCounter())) {
                 return false;
             }
 
-            log.info("Detected spurious renewal failure for lease with key {}, but recovered", lease.getLeaseKey());
+            log.info("Detected spurious renewal failure for lease with key {}, but recovered", lease.leaseKey());
         } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("renew", lease.getLeaseKey(), e);
+            throw convertAndRethrowExceptions("renew", lease.leaseKey(), e);
         }
 
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
+        lease.leaseCounter(lease.leaseCounter() + 1);
         return true;
     }
 
@@ -404,15 +387,14 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public boolean takeLease(T lease, String owner)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-        verifyNotNull(owner, "owner cannot be null");
+    public boolean takeLease(@NonNull final Lease lease, @NonNull final String owner)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        final String oldOwner = lease.leaseOwner();
 
         if (log.isDebugEnabled()) {
             log.debug("Taking lease with leaseKey {} from {} to {}",
-                    lease.getLeaseKey(),
-                    lease.getLeaseOwner() == null ? "nobody" : lease.getLeaseOwner(),
+                    lease.leaseKey(),
+                    lease.leaseOwner() == null ? "nobody" : lease.leaseOwner(),
                     owner);
         }
 
@@ -430,16 +412,20 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
         } catch (ConditionalCheckFailedException e) {
             if (log.isDebugEnabled()) {
                 log.debug("Lease renewal failed for lease with key {} because the lease counter was not {}",
-                        lease.getLeaseKey(), lease.getLeaseCounter());
+                        lease.leaseKey(), lease.leaseCounter());
             }
 
             return false;
         } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("take", lease.getLeaseKey(), e);
+            throw convertAndRethrowExceptions("take", lease.leaseKey(), e);
         }
 
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
-        lease.setLeaseOwner(owner);
+        lease.leaseCounter(lease.leaseCounter() + 1);
+        lease.leaseOwner(owner);
+
+        if (oldOwner != null && !oldOwner.equals(owner)) {
+            lease.ownerSwitchesSinceCheckpoint(lease.ownerSwitchesSinceCheckpoint() + 1);
+        }
 
         return true;
     }
@@ -448,14 +434,10 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public boolean evictLease(T lease)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-
+    public boolean evictLease(@NonNull final Lease lease)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (log.isDebugEnabled()) {
-            log.debug("Evicting lease with leaseKey {} owned by {}",
-                    lease.getLeaseKey(),
-                    lease.getLeaseOwner());
+            log.debug("Evicting lease with leaseKey {} owned by {}", lease.leaseKey(), lease.leaseOwner());
         }
 
         UpdateItemRequest request = new UpdateItemRequest();
@@ -472,16 +454,16 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
         } catch (ConditionalCheckFailedException e) {
             if (log.isDebugEnabled()) {
                 log.debug("Lease eviction failed for lease with key {} because the lease owner was not {}",
-                        lease.getLeaseKey(), lease.getLeaseOwner());
+                        lease.leaseKey(), lease.leaseOwner());
             }
 
             return false;
         } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("evict", lease.getLeaseKey(), e);
+            throw convertAndRethrowExceptions("evict", lease.leaseKey(), e);
         }
 
-        lease.setLeaseOwner(null);
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
+        lease.leaseOwner(null);
+        lease.leaseCounter(lease.leaseCounter() + 1);
         return true;
     }
 
@@ -489,11 +471,11 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     public void deleteAll() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        List<T> allLeases = listLeases();
+        List<Lease> allLeases = listLeases();
 
         log.warn("Deleting {} items from table {}", allLeases.size(), table);
 
-        for (T lease : allLeases) {
+        for (final Lease lease : allLeases) {
             DeleteItemRequest deleteRequest = new DeleteItemRequest();
             deleteRequest.setTableName(table);
             deleteRequest.setKey(serializer.getDynamoHashKey(lease));
@@ -506,11 +488,10 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public void deleteLease(T lease) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-
+    public void deleteLease(@NonNull final Lease lease)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (log.isDebugEnabled()) {
-            log.debug("Deleting lease with leaseKey {}", lease.getLeaseKey());
+            log.debug("Deleting lease with leaseKey {}", lease.leaseKey());
         }
 
         DeleteItemRequest deleteRequest = new DeleteItemRequest();
@@ -520,7 +501,7 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
         try {
             dynamoDBClient.deleteItem(deleteRequest);
         } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("delete", lease.getLeaseKey(), e);
+            throw convertAndRethrowExceptions("delete", lease.leaseKey(), e);
         }
     }
 
@@ -528,10 +509,8 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
      * {@inheritDoc}
      */
     @Override
-    public boolean updateLease(T lease)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        verifyNotNull(lease, "lease cannot be null");
-
+    public boolean updateLease(@NonNull final Lease lease)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (log.isDebugEnabled()) {
             log.debug("Updating lease {}", lease);
         }
@@ -550,44 +529,53 @@ public class DynamoDBLeaseManager<T extends Lease> implements LeaseManager<T> {
         } catch (ConditionalCheckFailedException e) {
             if (log.isDebugEnabled()) {
                 log.debug("Lease update failed for lease with key {} because the lease counter was not {}",
-                        lease.getLeaseKey(), lease.getLeaseCounter());
+                        lease.leaseKey(), lease.leaseCounter());
             }
 
             return false;
         } catch (AmazonClientException e) {
-            throw convertAndRethrowExceptions("update", lease.getLeaseKey(), e);
+            throw convertAndRethrowExceptions("update", lease.leaseKey(), e);
         }
 
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
+        lease.leaseCounter(lease.leaseCounter() + 1);
         return true;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public ExtendedSequenceNumber getCheckpoint(String shardId)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        ExtendedSequenceNumber checkpoint = null;
+        Lease lease = getLease(shardId);
+        if (lease != null) {
+            checkpoint = lease.checkpoint();
+        }
+        return checkpoint;
     }
 
     /*
      * This method contains boilerplate exception handling - it throws or returns something to be thrown. The
      * inconsistency there exists to satisfy the compiler when this method is used at the end of non-void methods.
      */
-    protected DependencyException convertAndRethrowExceptions(String operation, String leaseKey, AmazonClientException e)
+    protected DependencyException convertAndRethrowExceptions(String operation, String leaseKey,
+                                                              AmazonClientException e)
         throws ProvisionedThroughputException, InvalidStateException {
         if (e instanceof ProvisionedThroughputExceededException) {
-            log.warn("Provisioned Throughput on the lease table has been exceeded. It's recommended that you increase the IOPs on the table. Failure to increase the IOPs may cause the application to not make progress.");
+            log.warn("Provisioned Throughput on the lease table has been exceeded. It's recommended that you increase" +
+                    " the IOPs on the table. Failure to increase the IOPs may cause the application to not make" +
+                    " progress.");
             throw new ProvisionedThroughputException(e);
         } else if (e instanceof ResourceNotFoundException) {
             // @formatter:on
-            throw new InvalidStateException(String.format("Cannot %s lease with key %s because table %s does not exist.",
-                    operation,
-                    leaseKey,
-                    table),
+            throw new InvalidStateException(
+                    String.format("Cannot %s lease with key %s because table %s does not exist.", operation, leaseKey,
+                            table),
                     e);
             //@formatter:off
         } else {
             return new DependencyException(e);
         }
     }
-    
-    private void verifyNotNull(Object object, String message) {
-        if (object == null) {
-            throw new IllegalArgumentException(message);
-        }
-    }
-
 }

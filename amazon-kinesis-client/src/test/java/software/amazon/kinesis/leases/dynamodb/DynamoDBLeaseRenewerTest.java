@@ -12,61 +12,56 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.leases;
+package software.amazon.kinesis.leases.dynamodb;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mockito;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRenewer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 
+@RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseRenewerTest {
+    private final String workerIdentifier = "WorkerId";
+    private final long leaseDurationMillis = 10000;
+    private DynamoDBLeaseRenewer renewer;
+    private List<Lease> leasesToRenew;
 
-    LeaseManager<Lease> leaseManager;
-    String workerIdentifier;
-    long leaseDurationMillis;
-    ExecutorService leaseRenewalExecService;
-    DynamoDBLeaseRenewer<Lease> renewer;
-    List<Lease> leasesToRenew;
-
-    private static Lease newLease(String leaseKey,
-            String leaseOwner,
-            Long leaseCounter,
-            UUID concurrencyToken,
-            Long lastCounterIncrementNanos) {
-        Lease lease = new Lease();
-        lease.setLeaseKey(leaseKey);
-        lease.setLeaseOwner(leaseOwner);
-        lease.setLeaseCounter(leaseCounter);
-        lease.setConcurrencyToken(concurrencyToken);
-        lease.setLastCounterIncrementNanos(lastCounterIncrementNanos);
-        return lease;
-    }
+    @Mock
+    private LeaseRefresher leaseRefresher;
 
     private static Lease newLease(String leaseKey) {
-        return newLease(leaseKey, "leaseOwner", 0L, UUID.randomUUID(), System.nanoTime());
+        return new Lease(leaseKey, "LeaseOwner", 0L, UUID.randomUUID(), System.nanoTime(), null, null, null, new HashSet<>());
     }
 
-    @SuppressWarnings("unchecked")
     @Before
     public void before() {
-        leaseManager = Mockito.mock(LeaseManager.class);
-        workerIdentifier = "workerId";
-        leaseDurationMillis = 10000;
-        leaseRenewalExecService = Executors.newSingleThreadExecutor();
         leasesToRenew = null;
-        renewer = new DynamoDBLeaseRenewer<>(leaseManager,
+        renewer = new DynamoDBLeaseRenewer(leaseRefresher,
                 workerIdentifier,
                 leaseDurationMillis,
                 Executors.newCachedThreadPool());
@@ -77,8 +72,8 @@ public class DynamoDBLeaseRenewerTest {
         if (leasesToRenew == null) {
             return;
         }
-        for (Lease l : leasesToRenew) {
-            Mockito.verify(leaseManager, Mockito.times(1)).renewLease(l);
+        for (Lease lease : leasesToRenew) {
+            verify(leaseRefresher, times(1)).renewLease(eq(lease));
         }
     }
 
@@ -91,16 +86,15 @@ public class DynamoDBLeaseRenewerTest {
          */
         Lease lease1 = newLease("1");
         Lease lease2 = newLease("2");
-        leasesToRenew =
-                Arrays.asList(lease1,lease2);
+        leasesToRenew = Arrays.asList(lease1,lease2);
         renewer.addLeasesToRenew(leasesToRenew);
 
-        Mockito.doReturn(true).when(leaseManager).renewLease(lease1);
-        Mockito.doReturn(true).when(leaseManager).renewLease(lease2);
+        doReturn(true).when(leaseRefresher).renewLease(lease1);
+        doReturn(true).when(leaseRefresher).renewLease(lease2);
 
         renewer.renewLeases();
 
-        Assert.assertEquals(2, renewer.getCurrentlyHeldLeases().size());
+        assertEquals(2, renewer.getCurrentlyHeldLeases().size());
     }
 
     @Test
@@ -108,19 +102,19 @@ public class DynamoDBLeaseRenewerTest {
         String leaseKey = "expiredLease";
         long initialCounterIncrementNanos = 5L; // "expired" time.
         Lease lease1 = newLease(leaseKey);
-        lease1.setLastCounterIncrementNanos(initialCounterIncrementNanos);
+        lease1.lastCounterIncrementNanos(initialCounterIncrementNanos);
 
         leasesToRenew = new ArrayList<>();
         leasesToRenew.add(lease1);
-        Mockito.doReturn(true).when(leaseManager).renewLease(lease1);
+        doReturn(true).when(leaseRefresher).renewLease(lease1);
         renewer.addLeasesToRenew(leasesToRenew);
 
-        Assert.assertTrue(lease1.isExpired(1, System.nanoTime()));
-        Assert.assertNull(renewer.getCurrentlyHeldLease(leaseKey));
+        assertTrue(lease1.isExpired(1, System.nanoTime()));
+        assertNull(renewer.getCurrentlyHeldLease(leaseKey));
         renewer.renewLeases();
         // Don't renew lease(s) with same key if getCurrentlyHeldLease returned null previously
-        Assert.assertNull(renewer.getCurrentlyHeldLease(leaseKey));
-        Assert.assertFalse(renewer.getCurrentlyHeldLeases().containsKey(leaseKey));
+        assertNull(renewer.getCurrentlyHeldLease(leaseKey));
+        assertFalse(renewer.getCurrentlyHeldLeases().containsKey(leaseKey));
 
         // Clear the list to avoid triggering expectation mismatch in after().
         leasesToRenew.clear();

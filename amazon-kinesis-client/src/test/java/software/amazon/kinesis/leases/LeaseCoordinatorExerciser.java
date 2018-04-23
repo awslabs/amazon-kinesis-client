@@ -30,17 +30,23 @@ import javax.swing.*;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.CWMetricsFactory;
-
-import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @Slf4j
 public class LeaseCoordinatorExerciser {
+    private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
+    private static final int MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
+    private static final int MAX_LEASE_RENEWER_THREAD_COUNT = 20;
 
     public static void main(String[] args)
         throws InterruptedException, DependencyException, InvalidStateException, ProvisionedThroughputException,
@@ -55,38 +61,40 @@ public class LeaseCoordinatorExerciser {
                 new DefaultAWSCredentialsProviderChain();
         AmazonDynamoDBClient ddb = new AmazonDynamoDBClient(creds);
 
-        LeaseManager<KinesisClientLease> leaseManager = new KinesisClientDynamoDBLeaseManager("nagl_ShardProgress", ddb);
+        LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", ddb, new DynamoDBLeaseSerializer(), true);
 
-        if (leaseManager.createLeaseTableIfNotExists(10L, 50L)) {
+        if (leaseRefresher.createLeaseTableIfNotExists(10L, 50L)) {
             log.info("Waiting for newly created lease table");
-            if (!leaseManager.waitUntilLeaseTableExists(10, 300)) {
+            if (!leaseRefresher.waitUntilLeaseTableExists(10, 300)) {
                 log.error("Table was not created in time");
                 return;
             }
         }
 
         CWMetricsFactory metricsFactory = new CWMetricsFactory(creds, "testNamespace", 30 * 1000, 1000);
-        final List<LeaseCoordinator<KinesisClientLease>> coordinators =
-                new ArrayList<LeaseCoordinator<KinesisClientLease>>();
+        final List<LeaseCoordinator> coordinators = new ArrayList<>();
         for (int i = 0; i < numCoordinators; i++) {
             String workerIdentifier = "worker-" + Integer.toString(i);
 
-            LeaseCoordinator<KinesisClientLease> coord = new LeaseCoordinator<KinesisClientLease>(leaseManager,
+            LeaseCoordinator coord = new DynamoDBLeaseCoordinator(leaseRefresher,
                     workerIdentifier,
                     leaseDurationMillis,
                     epsilonMillis,
+                    MAX_LEASES_FOR_WORKER,
+                    MAX_LEASES_TO_STEAL_AT_ONE_TIME,
+                    MAX_LEASE_RENEWER_THREAD_COUNT,
                     metricsFactory);
 
             coordinators.add(coord);
         }
 
-        leaseManager.deleteAll();
+        leaseRefresher.deleteAll();
 
         for (int i = 0; i < numLeases; i++) {
-            KinesisClientLease lease = new KinesisClientLease();
-            lease.setLeaseKey(Integer.toString(i));
-            lease.setCheckpoint(new ExtendedSequenceNumber("checkpoint"));
-            leaseManager.createLeaseIfNotExists(lease);
+            Lease lease = new Lease();
+            lease.leaseKey(Integer.toString(i));
+            lease.checkpoint(new ExtendedSequenceNumber("checkpoint"));
+            leaseRefresher.createLeaseIfNotExists(lease);
         }
 
         final JFrame frame = new JFrame("Test Visualizer");
@@ -97,10 +105,10 @@ public class LeaseCoordinatorExerciser {
         frame.getContentPane().add(panel);
 
         final Map<String, JLabel> labels = new HashMap<String, JLabel>();
-        for (final LeaseCoordinator<KinesisClientLease> coord : coordinators) {
+        for (final LeaseCoordinator coord : coordinators) {
             JPanel coordPanel = new JPanel();
             coordPanel.setLayout(new BoxLayout(coordPanel, BoxLayout.X_AXIS));
-            final Button button = new Button("Stop " + coord.getWorkerIdentifier());
+            final Button button = new Button("Stop " + coord.workerIdentifier());
             button.setMaximumSize(new Dimension(200, 50));
             button.addActionListener(new ActionListener() {
 
@@ -108,14 +116,14 @@ public class LeaseCoordinatorExerciser {
                 public void actionPerformed(ActionEvent arg0) {
                     if (coord.isRunning()) {
                         coord.stop();
-                        button.setLabel("Start " + coord.getWorkerIdentifier());
+                        button.setLabel("Start " + coord.workerIdentifier());
                     } else {
                         try {
                             coord.start();
                         } catch (LeasingException e) {
                             log.error("{}", e);
                         }
-                        button.setLabel("Stop " + coord.getWorkerIdentifier());
+                        button.setLabel("Stop " + coord.workerIdentifier());
                     }
                 }
 
@@ -124,7 +132,7 @@ public class LeaseCoordinatorExerciser {
 
             JLabel label = new JLabel();
             coordPanel.add(label);
-            labels.put(coord.getWorkerIdentifier(), label);
+            labels.put(coord.workerIdentifier(), label);
             panel.add(coordPanel);
         }
 
@@ -141,17 +149,17 @@ public class LeaseCoordinatorExerciser {
             @Override
             public void run() {
                 while (true) {
-                    for (LeaseCoordinator<KinesisClientLease> coord : coordinators) {
-                        String workerIdentifier = coord.getWorkerIdentifier();
+                    for (LeaseCoordinator coord : coordinators) {
+                        String workerIdentifier = coord.workerIdentifier();
 
                         JLabel label = labels.get(workerIdentifier);
 
-                        List<KinesisClientLease> asgn = new ArrayList<KinesisClientLease>(coord.getAssignments());
-                        Collections.sort(asgn, new Comparator<KinesisClientLease>() {
+                        List<Lease> asgn = new ArrayList<>(coord.getAssignments());
+                        Collections.sort(asgn, new Comparator<Lease>() {
 
                             @Override
-                            public int compare(KinesisClientLease arg0, KinesisClientLease arg1) {
-                                return arg0.getLeaseKey().compareTo(arg1.getLeaseKey());
+                            public int compare(final Lease arg0, final Lease arg1) {
+                                return arg0.leaseKey().compareTo(arg1.leaseKey());
                             }
 
                         });
@@ -160,19 +168,19 @@ public class LeaseCoordinatorExerciser {
                         builder.append("<html>");
                         builder.append(workerIdentifier).append(":").append(asgn.size()).append("          ");
 
-                        for (KinesisClientLease lease : asgn) {
-                            String leaseKey = lease.getLeaseKey();
+                        for (Lease lease : asgn) {
+                            String leaseKey = lease.leaseKey();
                             String lastOwner = lastOwners.get(leaseKey);
 
                             // Color things green when they switch owners, decay the green-ness over time.
                             Integer greenNess = greenNesses.get(leaseKey);
-                            if (greenNess == null || lastOwner == null || !lastOwner.equals(lease.getLeaseOwner())) {
+                            if (greenNess == null || lastOwner == null || !lastOwner.equals(lease.leaseOwner())) {
                                 greenNess = 200;
                             } else {
                                 greenNess = Math.max(0, greenNess - 20);
                             }
                             greenNesses.put(leaseKey, greenNess);
-                            lastOwners.put(leaseKey, lease.getLeaseOwner());
+                            lastOwners.put(leaseKey, lease.leaseOwner());
 
                             builder.append(String.format("<font color=\"%s\">%03d</font>",
                                     String.format("#00%02x00", greenNess),
@@ -203,7 +211,7 @@ public class LeaseCoordinatorExerciser {
         frame.pack();
         frame.setVisible(true);
 
-        for (LeaseCoordinator<KinesisClientLease> coord : coordinators) {
+        for (LeaseCoordinator coord : coordinators) {
             coord.start();
         }
     }

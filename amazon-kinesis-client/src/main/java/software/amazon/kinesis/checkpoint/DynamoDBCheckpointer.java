@@ -28,9 +28,9 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
+import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -45,9 +45,9 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @Slf4j
 public class DynamoDBCheckpointer implements Checkpointer {
     @NonNull
-    private final LeaseCoordinator<KinesisClientLease> leaseCoordinator;
+    private final LeaseCoordinator leaseCoordinator;
     @NonNull
-    private final LeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseRefresher leaseRefresher;
     @NonNull
     private final IMetricsFactory metricsFactory;
 
@@ -73,7 +73,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
     @Override
     public ExtendedSequenceNumber getCheckpoint(final String shardId) throws KinesisClientLibException {
         try {
-            return leaseManager.getLease(shardId).getCheckpoint();
+            return leaseRefresher.getLease(shardId).checkpoint();
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
             String message = "Unable to fetch checkpoint for shardId " + shardId;
             log.error(message, e);
@@ -84,8 +84,8 @@ public class DynamoDBCheckpointer implements Checkpointer {
     @Override
     public Checkpoint getCheckpointObject(final String shardId) throws KinesisClientLibException {
         try {
-            KinesisClientLease lease = leaseManager.getLease(shardId);
-            return new Checkpoint(lease.getCheckpoint(), lease.getPendingCheckpoint());
+            Lease lease = leaseRefresher.getLease(shardId);
+            return new Checkpoint(lease.checkpoint(), lease.pendingCheckpoint());
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
             String message = "Unable to fetch checkpoint for shardId " + shardId;
             log.error(message, e);
@@ -117,30 +117,30 @@ public class DynamoDBCheckpointer implements Checkpointer {
     @VisibleForTesting
     public boolean setCheckpoint(String shardId, ExtendedSequenceNumber checkpoint, UUID concurrencyToken)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        KinesisClientLease lease = leaseCoordinator.getCurrentlyHeldLease(shardId);
+        Lease lease = leaseCoordinator.getCurrentlyHeldLease(shardId);
         if (lease == null) {
             log.info("Worker {} could not update checkpoint for shard {} because it does not hold the lease",
-                    leaseCoordinator.getWorkerIdentifier(), shardId);
+                    leaseCoordinator.workerIdentifier(), shardId);
             return false;
         }
 
-        lease.setCheckpoint(checkpoint);
-        lease.setPendingCheckpoint(null);
-        lease.setOwnerSwitchesSinceCheckpoint(0L);
+        lease.checkpoint(checkpoint);
+        lease.pendingCheckpoint(null);
+        lease.ownerSwitchesSinceCheckpoint(0L);
 
         return leaseCoordinator.updateLease(lease, concurrencyToken);
     }
 
     boolean prepareCheckpoint(String shardId, ExtendedSequenceNumber pendingCheckpoint, UUID concurrencyToken)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        KinesisClientLease lease = leaseCoordinator.getCurrentlyHeldLease(shardId);
+        Lease lease = leaseCoordinator.getCurrentlyHeldLease(shardId);
         if (lease == null) {
             log.info("Worker {} could not prepare checkpoint for shard {} because it does not hold the lease",
-                    leaseCoordinator.getWorkerIdentifier(), shardId);
+                    leaseCoordinator.workerIdentifier(), shardId);
             return false;
         }
 
-        lease.setPendingCheckpoint(Objects.requireNonNull(pendingCheckpoint, "pendingCheckpoint should not be null"));
+        lease.pendingCheckpoint(Objects.requireNonNull(pendingCheckpoint, "pendingCheckpoint should not be null"));
         return leaseCoordinator.updateLease(lease, concurrencyToken);
     }
 }

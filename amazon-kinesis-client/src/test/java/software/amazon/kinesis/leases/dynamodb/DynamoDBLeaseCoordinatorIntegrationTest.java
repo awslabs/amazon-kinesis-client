@@ -12,7 +12,7 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.leases;
+package software.amazon.kinesis.leases.dynamodb;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -36,6 +36,9 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 
 import software.amazon.kinesis.checkpoint.DynamoDBCheckpointer;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseRenewer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
@@ -45,35 +48,35 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @RunWith(MockitoJUnitRunner.class)
-public class KinesisClientLibLeaseCoordinatorIntegrationTest {
-    private static final String TABLE_NAME = KinesisClientLibLeaseCoordinatorIntegrationTest.class.getSimpleName();
+public class DynamoDBLeaseCoordinatorIntegrationTest {
+    private static final String TABLE_NAME = DynamoDBLeaseCoordinatorIntegrationTest.class.getSimpleName();
     private static final String WORKER_ID = UUID.randomUUID().toString();
     private static final long LEASE_DURATION_MILLIS = 5000L;
     private static final long EPSILON_MILLIS = 25L;
     private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
     private static final int MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
     private static final int MAX_LEASE_RENEWER_THREAD_COUNT = 20;
-    private static KinesisClientDynamoDBLeaseManager leaseManager;
+    private static DynamoDBLeaseRefresher leaseRefresher;
     private static DynamoDBCheckpointer dynamoDBCheckpointer;
 
-    private KinesisClientLibLeaseCoordinator coordinator;
+    private LeaseCoordinator coordinator;
     private final String leaseKey = "shd-1";
     private final IMetricsFactory metricsFactory = new NullMetricsFactory();
 
     @Before
     public void setUp() throws ProvisionedThroughputException, DependencyException, InvalidStateException {
         final boolean useConsistentReads = true;
-        if (leaseManager == null) {
+        if (leaseRefresher == null) {
             AmazonDynamoDBClient ddb = new AmazonDynamoDBClient(new DefaultAWSCredentialsProviderChain());
-            leaseManager =
-                    new KinesisClientDynamoDBLeaseManager(TABLE_NAME, ddb, useConsistentReads);
+            leaseRefresher =
+                    new DynamoDBLeaseRefresher(TABLE_NAME, ddb, new DynamoDBLeaseSerializer(), useConsistentReads);
         }
-        leaseManager.createLeaseTableIfNotExists(10L, 10L);
-        leaseManager.deleteAll();
-        coordinator = new KinesisClientLibLeaseCoordinator(leaseManager, WORKER_ID, LEASE_DURATION_MILLIS,
+        leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
+        leaseRefresher.deleteAll();
+        coordinator = new DynamoDBLeaseCoordinator(leaseRefresher, WORKER_ID, LEASE_DURATION_MILLIS,
                 EPSILON_MILLIS, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
                 metricsFactory);
-        dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseManager, metricsFactory);
+        dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseRefresher, metricsFactory);
 
         coordinator.start();
     }
@@ -86,14 +89,14 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
         TestHarnessBuilder builder = new TestHarnessBuilder();
         builder.withLease(leaseKey, null).build();
 
-        // Run the taker and renewer in-between getting the Lease object and calling setCheckpoint
+        // Run the taker and renewer in-between getting the Lease object and calling checkpoint
         coordinator.runLeaseTaker();
         coordinator.runLeaseRenewer();
 
-        KinesisClientLease lease = coordinator.getCurrentlyHeldLease(leaseKey);
+        Lease lease = coordinator.getCurrentlyHeldLease(leaseKey);
         if (lease == null) {
-            List<KinesisClientLease> leases = leaseManager.listLeases();
-            for (KinesisClientLease kinesisClientLease : leases) {
+            List<Lease> leases = leaseRefresher.listLeases();
+            for (Lease kinesisClientLease : leases) {
                 System.out.println(kinesisClientLease);
             }
         }
@@ -101,13 +104,13 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
         assertNotNull(lease);
         ExtendedSequenceNumber newCheckpoint = new ExtendedSequenceNumber("newCheckpoint");
         // lease's leaseCounter is wrong at this point, but it shouldn't matter.
-        assertTrue(dynamoDBCheckpointer.setCheckpoint(lease.getLeaseKey(), newCheckpoint, lease.getConcurrencyToken()));
+        assertTrue(dynamoDBCheckpointer.setCheckpoint(lease.leaseKey(), newCheckpoint, lease.concurrencyToken()));
 
-        Lease fromDynamo = leaseManager.getLease(lease.getLeaseKey());
+        Lease fromDynamo = leaseRefresher.getLease(lease.leaseKey());
 
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
-        lease.setCheckpoint(newCheckpoint);
-        lease.setLeaseOwner(coordinator.getWorkerIdentifier());
+        lease.leaseCounter(lease.leaseCounter() + 1);
+        lease.checkpoint(newCheckpoint);
+        lease.leaseOwner(coordinator.workerIdentifier());
         assertEquals(lease, fromDynamo);
     }
 
@@ -121,19 +124,19 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
 
         coordinator.runLeaseTaker();
         coordinator.runLeaseRenewer();
-        KinesisClientLease lease = coordinator.getCurrentlyHeldLease(leaseKey);
+        Lease lease = coordinator.getCurrentlyHeldLease(leaseKey);
 
         assertNotNull(lease);
-        leaseManager.renewLease(coordinator.getCurrentlyHeldLease(leaseKey));
+        leaseRefresher.renewLease(coordinator.getCurrentlyHeldLease(leaseKey));
 
         ExtendedSequenceNumber newCheckpoint = new ExtendedSequenceNumber("newCheckpoint");
-        assertFalse(dynamoDBCheckpointer.setCheckpoint(lease.getLeaseKey(), newCheckpoint, lease.getConcurrencyToken()));
+        assertFalse(dynamoDBCheckpointer.setCheckpoint(lease.leaseKey(), newCheckpoint, lease.concurrencyToken()));
 
-        Lease fromDynamo = leaseManager.getLease(lease.getLeaseKey());
+        Lease fromDynamo = leaseRefresher.getLease(lease.leaseKey());
 
-        lease.setLeaseCounter(lease.getLeaseCounter() + 1);
+        lease.leaseCounter(lease.leaseCounter() + 1);
         // Counter and owner changed, but checkpoint did not.
-        lease.setLeaseOwner(coordinator.getWorkerIdentifier());
+        lease.leaseOwner(coordinator.workerIdentifier());
         assertEquals(lease, fromDynamo);
     }
 
@@ -147,17 +150,17 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
 
         coordinator.runLeaseTaker();
         coordinator.runLeaseRenewer();
-        KinesisClientLease lease = coordinator.getCurrentlyHeldLease(leaseKey);
+        Lease lease = coordinator.getCurrentlyHeldLease(leaseKey);
 
         assertNotNull(lease);
 
         ExtendedSequenceNumber newCheckpoint = new ExtendedSequenceNumber("newCheckpoint");
-        assertFalse(dynamoDBCheckpointer.setCheckpoint(lease.getLeaseKey(), newCheckpoint, UUID.randomUUID()));
+        assertFalse(dynamoDBCheckpointer.setCheckpoint(lease.leaseKey(), newCheckpoint, UUID.randomUUID()));
 
-        Lease fromDynamo = leaseManager.getLease(lease.getLeaseKey());
+        Lease fromDynamo = leaseRefresher.getLease(lease.leaseKey());
 
         // Owner should be the only thing that changed.
-        lease.setLeaseOwner(coordinator.getWorkerIdentifier());
+        lease.leaseOwner(coordinator.workerIdentifier());
         assertEquals(lease, fromDynamo);
     }
 
@@ -165,7 +168,7 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
 
         private long currentTimeNanos;
 
-        private Map<String, KinesisClientLease> leases = new HashMap<String, KinesisClientLease>();
+        private Map<String, Lease> leases = new HashMap<String, Lease>();
 
         private Callable<Long> timeProvider = new Callable<Long>() {
 
@@ -181,23 +184,23 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
         }
 
         public TestHarnessBuilder withLease(String shardId, String owner) {
-            KinesisClientLease lease = new KinesisClientLease();
-            lease.setCheckpoint(new ExtendedSequenceNumber("checkpoint"));
-            lease.setOwnerSwitchesSinceCheckpoint(0L);
-            lease.setLeaseCounter(0L);
-            lease.setLeaseOwner(owner);
-            lease.setParentShardIds(Collections.singleton("parentShardId"));
-            lease.setLeaseKey(shardId);
+            Lease lease = new Lease();
+            lease.checkpoint(new ExtendedSequenceNumber("checkpoint"));
+            lease.ownerSwitchesSinceCheckpoint(0L);
+            lease.leaseCounter(0L);
+            lease.leaseOwner(owner);
+            lease.parentShardIds(Collections.singleton("parentShardId"));
+            lease.leaseKey(shardId);
 
             leases.put(shardId, lease);
             return this;
         }
 
-        public Map<String, KinesisClientLease> build() throws LeasingException {
-            for (KinesisClientLease lease : leases.values()) {
-                leaseManager.createLeaseIfNotExists(lease);
-                if (lease.getLeaseOwner() != null) {
-                    lease.setLastCounterIncrementNanos(System.nanoTime());
+        public Map<String, Lease> build() throws LeasingException {
+            for (Lease lease : leases.values()) {
+                leaseRefresher.createLeaseIfNotExists(lease);
+                if (lease.leaseOwner() != null) {
+                    lease.lastCounterIncrementNanos(System.nanoTime());
                 }
             }
 
@@ -210,22 +213,22 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
             currentTimeNanos += millis * 1000000;
         }
 
-        private void mutateAssert(String newWorkerIdentifier, KinesisClientLease original, KinesisClientLease actual) {
-            original.setLeaseCounter(original.getLeaseCounter() + 1);
-            if (original.getLeaseOwner() != null && !newWorkerIdentifier.equals(original.getLeaseOwner())) {
-                original.setOwnerSwitchesSinceCheckpoint(original.getOwnerSwitchesSinceCheckpoint() + 1);
+        private void mutateAssert(String newWorkerIdentifier, Lease original, Lease actual) {
+            original.leaseCounter(original.leaseCounter() + 1);
+            if (original.leaseOwner() != null && !newWorkerIdentifier.equals(original.leaseOwner())) {
+                original.ownerSwitchesSinceCheckpoint(original.ownerSwitchesSinceCheckpoint() + 1);
             }
-            original.setLeaseOwner(newWorkerIdentifier);
+            original.leaseOwner(newWorkerIdentifier);
 
             assertEquals(original, actual); // Assert the contents of the lease
         }
 
-        public void addLeasesToRenew(LeaseRenewer<KinesisClientLease> renewer, String... shardIds)
+        public void addLeasesToRenew(LeaseRenewer renewer, String... shardIds)
             throws DependencyException, InvalidStateException {
-            List<KinesisClientLease> leasesToRenew = new ArrayList<KinesisClientLease>();
+            List<Lease> leasesToRenew = new ArrayList<>();
 
             for (String shardId : shardIds) {
-                KinesisClientLease lease = leases.get(shardId);
+                Lease lease = leases.get(shardId);
                 assertNotNull(lease);
                 leasesToRenew.add(lease);
             }
@@ -233,21 +236,21 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
             renewer.addLeasesToRenew(leasesToRenew);
         }
 
-        public Map<String, KinesisClientLease> renewMutateAssert(LeaseRenewer<KinesisClientLease> renewer,
+        public Map<String, Lease> renewMutateAssert(LeaseRenewer renewer,
                 String... renewedShardIds) throws DependencyException, InvalidStateException {
             renewer.renewLeases();
 
-            Map<String, KinesisClientLease> heldLeases = renewer.getCurrentlyHeldLeases();
+            Map<String, Lease> heldLeases = renewer.getCurrentlyHeldLeases();
             assertEquals(renewedShardIds.length, heldLeases.size());
 
             for (String shardId : renewedShardIds) {
-                KinesisClientLease original = leases.get(shardId);
+                Lease original = leases.get(shardId);
                 assertNotNull(original);
 
-                KinesisClientLease actual = heldLeases.get(shardId);
+                Lease actual = heldLeases.get(shardId);
                 assertNotNull(actual);
 
-                original.setLeaseCounter(original.getLeaseCounter() + 1);
+                original.leaseCounter(original.leaseCounter() + 1);
                 assertEquals(original, actual);
             }
 
@@ -255,8 +258,8 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
         }
 
         public void renewAllLeases() throws LeasingException {
-            for (KinesisClientLease lease : leases.values()) {
-                leaseManager.renewLease(lease);
+            for (Lease lease : leases.values()) {
+                leaseRefresher.renewLease(lease);
             }
         }
     }

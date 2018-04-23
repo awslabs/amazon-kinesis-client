@@ -35,9 +35,8 @@ import lombok.Synchronized;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.LeaseManager;
-import software.amazon.kinesis.leases.KinesisClientLease;
-import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.IMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
@@ -60,7 +59,7 @@ public class ShardConsumer {
     @NonNull
     private final String streamName;
     @NonNull
-    private final LeaseManager<KinesisClientLease> leaseManager;
+    private final LeaseRefresher leaseRefresher;
     @NonNull
     private final ExecutorService executorService;
     @NonNull
@@ -87,7 +86,7 @@ public class ShardConsumer {
     private final boolean cleanupLeasesOfCompletedShards;
     private final boolean ignoreUnexpectedChildShards;
     @NonNull
-    private final LeaseManagerProxy leaseManagerProxy;
+    private final ShardDetector shardDetector;
     @NonNull
     private final IMetricsFactory metricsFactory;
 

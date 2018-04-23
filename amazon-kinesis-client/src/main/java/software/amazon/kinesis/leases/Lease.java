@@ -14,10 +14,20 @@
  */
 package software.amazon.kinesis.leases;
 
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.util.json.Jackson;
+import com.amazonaws.util.CollectionUtils;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.NonNull;
+import lombok.ToString;
+import lombok.experimental.Accessors;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * This class contains data pertaining to a Lease. Distributed systems may use leases to partition work across a
@@ -26,6 +36,11 @@ import com.amazonaws.util.json.Jackson;
  * processing the corresponding unit of work, or until it fails. When the worker stops holding the lease, another worker will
  * take and hold the lease.
  */
+@NoArgsConstructor
+@Getter
+@Accessors(fluent = true)
+@EqualsAndHashCode(exclude = {"concurrencyToken", "lastCounterIncrementNanos"})
+@ToString
 public class Lease {
     /*
      * See javadoc for System.nanoTime - summary:
@@ -35,8 +50,17 @@ public class Lease {
      */
     private static final long MAX_ABS_AGE_NANOS = TimeUnit.DAYS.toNanos(365);
 
+    /**
+     * @return leaseKey - identifies the unit of work associated with this lease.
+     */
     private String leaseKey;
+    /**
+     * @return current owner of the lease, may be null.
+     */
     private String leaseOwner;
+    /**
+     * @return leaseCounter is incremented periodically by the holder of the lease. Used for optimistic locking.
+     */
     private Long leaseCounter = 0L;
 
     /*
@@ -50,12 +74,20 @@ public class Lease {
      * deliberately not persisted in DynamoDB and excluded from hashCode and equals.
      */
     private Long lastCounterIncrementNanos;
-
     /**
-     * Constructor.
+     * @return most recently application-supplied checkpoint value. During fail over, the new worker will pick up after
+     *         the old worker's last checkpoint.
      */
-    public Lease() {
-    }
+    private ExtendedSequenceNumber checkpoint;
+    /**
+     * @return pending checkpoint, possibly null.
+     */
+    private ExtendedSequenceNumber pendingCheckpoint;
+    /**
+     * @return count of distinct lease holders between checkpoints.
+     */
+    private Long ownerSwitchesSinceCheckpoint = 0L;
+    private Set<String> parentShardIds = new HashSet<>();
 
     /**
      * Copy constructor, used by clone().
@@ -63,62 +95,46 @@ public class Lease {
      * @param lease lease to copy
      */
     protected Lease(Lease lease) {
-        this(lease.getLeaseKey(), lease.getLeaseOwner(), lease.getLeaseCounter(), lease.getConcurrencyToken(),
-                lease.getLastCounterIncrementNanos());
+        this(lease.leaseKey(), lease.leaseOwner(), lease.leaseCounter(), lease.concurrencyToken(),
+                lease.lastCounterIncrementNanos(), lease.checkpoint(), lease.pendingCheckpoint(),
+                lease.ownerSwitchesSinceCheckpoint(), lease.parentShardIds());
     }
 
-    protected Lease(String leaseKey, String leaseOwner, Long leaseCounter, UUID concurrencyToken,
-            Long lastCounterIncrementNanos) {
+    public Lease(final String leaseKey, final String leaseOwner, final Long leaseCounter,
+                    final UUID concurrencyToken, final Long lastCounterIncrementNanos,
+                    final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint,
+                    final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds) {
         this.leaseKey = leaseKey;
         this.leaseOwner = leaseOwner;
         this.leaseCounter = leaseCounter;
         this.concurrencyToken = concurrencyToken;
         this.lastCounterIncrementNanos = lastCounterIncrementNanos;
+        this.checkpoint = checkpoint;
+        this.pendingCheckpoint = pendingCheckpoint;
+        this.ownerSwitchesSinceCheckpoint = ownerSwitchesSinceCheckpoint;
+        if (!CollectionUtils.isNullOrEmpty(parentShardIds)) {
+            this.parentShardIds.addAll(parentShardIds);
+        }
+    }
+
+    /**
+     * @return shardIds that parent this lease. Used for resharding.
+     */
+    public Set<String> parentShardIds() {
+        return new HashSet<>(parentShardIds);
     }
 
     /**
      * Updates this Lease's mutable, application-specific fields based on the passed-in lease object. Does not update
      * fields that are internal to the leasing library (leaseKey, leaseOwner, leaseCounter).
      * 
-     * @param other
+     * @param lease
      */
-    public <T extends Lease> void update(T other) {
-        // The default implementation (no application-specific fields) has nothing to do.
-    }
-
-    /**
-     * @return leaseKey - identifies the unit of work associated with this lease.
-     */
-    public String getLeaseKey() {
-        return leaseKey;
-    }
-
-    /**
-     * @return leaseCounter is incremented periodically by the holder of the lease. Used for optimistic locking.
-     */
-    public Long getLeaseCounter() {
-        return leaseCounter;
-    }
-
-    /**
-     * @return current owner of the lease, may be null.
-     */
-    public String getLeaseOwner() {
-        return leaseOwner;
-    }
-
-    /**
-     * @return concurrency token
-     */
-    public UUID getConcurrencyToken() {
-        return concurrencyToken;
-    }
-
-    /**
-     * @return last update in nanoseconds since the epoch
-     */
-    public Long getLastCounterIncrementNanos() {
-        return lastCounterIncrementNanos;
+    public void update(final Lease lease) {
+        ownerSwitchesSinceCheckpoint(lease.ownerSwitchesSinceCheckpoint());
+        checkpoint(lease.checkpoint);
+        pendingCheckpoint(lease.pendingCheckpoint);
+        parentShardIds(lease.parentShardIds);
     }
 
     /**
@@ -145,7 +161,7 @@ public class Lease {
      * 
      * @param lastCounterIncrementNanos last renewal in nanoseconds since the epoch
      */
-    public void setLastCounterIncrementNanos(Long lastCounterIncrementNanos) {
+    public void lastCounterIncrementNanos(Long lastCounterIncrementNanos) {
         this.lastCounterIncrementNanos = lastCounterIncrementNanos;
     }
 
@@ -154,8 +170,7 @@ public class Lease {
      * 
      * @param concurrencyToken may not be null
      */
-    public void setConcurrencyToken(UUID concurrencyToken) {
-        verifyNotNull(concurrencyToken, "concurencyToken cannot be null");
+    public void concurrencyToken(@NonNull final UUID concurrencyToken) {
         this.concurrencyToken = concurrencyToken;
     }
 
@@ -164,12 +179,10 @@ public class Lease {
      * 
      * @param leaseKey may not be null.
      */
-    public void setLeaseKey(String leaseKey) {
+    public void leaseKey(@NonNull final String leaseKey) {
         if (this.leaseKey != null) {
             throw new IllegalArgumentException("LeaseKey is immutable once set");
         }
-        verifyNotNull(leaseKey, "LeaseKey cannot be set to null");
-
         this.leaseKey = leaseKey;
     }
 
@@ -178,10 +191,45 @@ public class Lease {
      * 
      * @param leaseCounter may not be null
      */
-    public void setLeaseCounter(Long leaseCounter) {
-        verifyNotNull(leaseCounter, "leaseCounter must not be null");
-
+    public void leaseCounter(@NonNull final Long leaseCounter) {
         this.leaseCounter = leaseCounter;
+    }
+
+    /**
+     * Sets checkpoint.
+     *
+     * @param checkpoint may not be null
+     */
+    public void checkpoint(@NonNull final ExtendedSequenceNumber checkpoint) {
+        this.checkpoint = checkpoint;
+    }
+
+    /**
+     * Sets pending checkpoint.
+     *
+     * @param pendingCheckpoint can be null
+     */
+    public void pendingCheckpoint(ExtendedSequenceNumber pendingCheckpoint) {
+        this.pendingCheckpoint = pendingCheckpoint;
+    }
+
+    /**
+     * Sets ownerSwitchesSinceCheckpoint.
+     *
+     * @param ownerSwitchesSinceCheckpoint may not be null
+     */
+    public void ownerSwitchesSinceCheckpoint(@NonNull final Long ownerSwitchesSinceCheckpoint) {
+        this.ownerSwitchesSinceCheckpoint = ownerSwitchesSinceCheckpoint;
+    }
+
+    /**
+     * Sets parentShardIds.
+     *
+     * @param parentShardIds may not be null
+     */
+    public void parentShardIds(@NonNull final Collection<String> parentShardIds) {
+        this.parentShardIds.clear();
+        this.parentShardIds.addAll(parentShardIds);
     }
 
     /**
@@ -189,50 +237,8 @@ public class Lease {
      * 
      * @param leaseOwner may be null.
      */
-    public void setLeaseOwner(String leaseOwner) {
+    public void leaseOwner(String leaseOwner) {
         this.leaseOwner = leaseOwner;
-    }
-
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((leaseCounter == null) ? 0 : leaseCounter.hashCode());
-        result = prime * result + ((leaseOwner == null) ? 0 : leaseOwner.hashCode());
-        result = prime * result + ((leaseKey == null) ? 0 : leaseKey.hashCode());
-        return result;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
-        Lease other = (Lease) obj;
-        if (leaseCounter == null) {
-            if (other.leaseCounter != null)
-                return false;
-        } else if (!leaseCounter.equals(other.leaseCounter))
-            return false;
-        if (leaseOwner == null) {
-            if (other.leaseOwner != null)
-                return false;
-        } else if (!leaseOwner.equals(other.leaseOwner))
-            return false;
-        if (leaseKey == null) {
-            if (other.leaseKey != null)
-                return false;
-        } else if (!leaseKey.equals(other.leaseKey))
-            return false;
-        return true;
-    }
-
-    @Override
-    public String toString() {
-        return Jackson.toJsonPrettyString(this);
     }
 
     /**
@@ -240,15 +246,7 @@ public class Lease {
      * 
      * @return A deep copy of this object.
      */
-    @SuppressWarnings("unchecked")
-    public <T extends Lease> T copy() {
-        return (T) new Lease(this);
+    public Lease copy() {
+        return new Lease(this);
     }
-    
-    private void verifyNotNull(Object object, String message) {
-        if (object == null) {
-            throw new IllegalArgumentException(message);
-        }
-    }
-
 }

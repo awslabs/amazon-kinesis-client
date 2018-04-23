@@ -47,7 +47,7 @@ import com.google.protobuf.ByteString;
 
 import lombok.Data;
 import software.amazon.kinesis.checkpoint.RecordProcessorCheckpointer;
-import software.amazon.kinesis.leases.LeaseManagerProxy;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.RecordProcessor;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
@@ -67,7 +67,7 @@ public class ProcessTaskTest {
     @Mock
     private ProcessRecordsInput processRecordsInput;
     @Mock
-    private LeaseManagerProxy leaseManagerProxy;
+    private ShardDetector shardDetector;
 
     @SuppressWarnings("serial")
     private static class RecordSubclass extends Record {
@@ -95,7 +95,7 @@ public class ProcessTaskTest {
 
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput) {
         return new ProcessTask(shardInfo, recordProcessor, checkpointer, taskBackoffTimeMillis,
-                skipShardSyncAtWorkerInitializationIfLeasesExist, leaseManagerProxy, throttlingReporter,
+                skipShardSyncAtWorkerInitializationIfLeasesExist, shardDetector, throttlingReporter,
                 processRecordsInput, shouldCallProcessRecordsEvenForEmptyRecordList, IDLE_TIME_IN_MILLISECONDS);
     }
 
