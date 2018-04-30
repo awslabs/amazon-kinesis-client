@@ -30,25 +30,15 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.9.0)
-* Introducing support for ListShards API. This API is used in place of DescribeStream API to provide more throughput during ShardSyncTask. Please consult the [AWS Documentation for ListShards](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListShards.html) for more information.
-  * ListShards supports higher call rate, which should reduce instances of throttling when attempting to synchronize the shard list.
-  * __WARNING: `ListShards` is a new API, and may require updating any explicit IAM policies__
-  * Added configuration parameters for ListShards usage  
-  
-    | Name | Default | Description |
-    | ---- | ------- | ----------- |
-    | [listShardsBackoffTimeInMillis](https://github.com/awslabs/amazon-kinesis-client/blob/3ae916c5fcdccd6b835c86ba7f6f53dd5b4c8b04/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1412) | 1500 ms | This is the default backoff time between 2 ListShards calls when throttled. |
-    | [listShardsRetryAttempts](https://github.com/awslabs/amazon-kinesis-client/blob/3ae916c5fcdccd6b835c86ba7f6f53dd5b4c8b04/src/main/java/com/amazonaws/services/kinesis/clientlibrary/lib/worker/KinesisClientLibConfiguration.java#L1423) | 50 | This is the maximum number of times the KinesisProxy will retry to make ListShards calls on being throttled. |
-  
-* Updating the version of AWS Java SDK to 1.11.272.
-  * Version 1.11.272 is now the minimum support version of the SDK.
-* Deprecating the following methods, and classes. These methods, and classes will be removed in a future release.
-  * Deprecated [IKinesisProxy#getStreamInfo](https://github.com/awslabs/amazon-kinesis-client/blob/3ae916c5fcdccd6b835c86ba7f6f53dd5b4c8b04/src/main/java/com/amazonaws/services/kinesis/clientlibrary/proxies/IKinesisProxy.java#L48-L62).
-  * Deprecated [IKinesisProxyFactory](https://github.com/awslabs/amazon-kinesis-client/blob/3ae916c5fcdccd6b835c86ba7f6f53dd5b4c8b04/src/main/java/com/amazonaws/services/kinesis/clientlibrary/proxies/IKinesisProxyFactory.java).
-  * Deprecated [KinesisProxyFactory](https://github.com/awslabs/amazon-kinesis-client/blob/3ae916c5fcdccd6b835c86ba7f6f53dd5b4c8b04/src/main/java/com/amazonaws/services/kinesis/clientlibrary/proxies/KinesisProxyFactory.java).
-  * Deprecated certain [KinesisProxy](https://github.com/awslabs/amazon-kinesis-client/blob/3ae916c5fcdccd6b835c86ba7f6f53dd5b4c8b04/src/main/java/com/amazonaws/services/kinesis/clientlibrary/proxies/KinesisProxy.java) constructors.
-    * [PR #293](https://github.com/awslabs/amazon-kinesis-client/pull/293)
+### Latest Release (1.9.1)
+* Added the ability to create a prepared checkpoint when at `SHARD_END`.
+  * [PR #301](https://github.com/awslabs/amazon-kinesis-client/pull/301)
+* Added the ability to subscribe to worker state change events.  
+  * [PR #291](https://github.com/awslabs/amazon-kinesis-client/pull/291)
+* Added support for custom lease managers.  
+  A custom `LeaseManager` can be provided to `Worker.Builder` that will be used to provide lease services. 
+  This makes it possible to implement custom lease management systems in addition to the default DynamoDB system.  
+  * [PR #297](https://github.com/awslabs/amazon-kinesis-client/pull/297)
   
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
