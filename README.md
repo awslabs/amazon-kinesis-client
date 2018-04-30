@@ -39,7 +39,8 @@ To make it easier for developers to write record processors in other languages, 
   A custom `LeaseManager` can be provided to `Worker.Builder` that will be used to provide lease services. 
   This makes it possible to implement custom lease management systems in addition to the default DynamoDB system.  
   * [PR #297](https://github.com/awslabs/amazon-kinesis-client/pull/297)
-  
+* Updated the version of the AWS Java SDK to 1.11.219
+
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
 [kinesis]: http://aws.amazon.com/kinesis
