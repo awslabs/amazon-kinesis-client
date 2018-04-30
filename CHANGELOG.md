@@ -1,5 +1,16 @@
 # Changelog
 
+## Release 1.9.1 (April 30, 2018)
+* Added the ability to create a prepared checkpoint when at `SHARD_END`.
+  * [PR #301](https://github.com/awslabs/amazon-kinesis-client/pull/301)
+* Added the ability to subscribe to worker state change events.  
+  * [PR #291](https://github.com/awslabs/amazon-kinesis-client/pull/291)
+* Added support for custom lease managers.  
+  A custom `LeaseManager` can be provided to `Worker.Builder` that will be used to provide lease services. 
+  This makes it possible to implement custom lease management systems in addition to the default DynamoDB system.  
+  * [PR #297](https://github.com/awslabs/amazon-kinesis-client/pull/297)
+* Updated the version of the AWS Java SDK to 1.11.219
+
 ## Release 1.9.0 (February 6, 2018)
 * Introducing support for ListShards API. This API is used in place of DescribeStream API to provide more throughput during ShardSyncTask. Please consult the [AWS Documentation for ListShards](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ListShards.html) for more information.
   * ListShards supports higher call rate, which should reduce instances of throttling when attempting to synchronize the shard list.
