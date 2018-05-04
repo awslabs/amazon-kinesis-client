@@ -31,18 +31,27 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.regions.Region;
+import com.amazonaws.AmazonWebServiceClient;
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.RegionUtils;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
+import com.amazonaws.services.kinesis.AmazonKinesisClientBuilder;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
@@ -60,6 +69,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import lombok.NonNull;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
@@ -399,28 +409,16 @@ public class Worker implements Runnable {
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
-            Region region = RegionUtils.getRegion(config.getRegionName());
-            kinesisClient.setRegion(region);
-            LOG.debug("The region of Amazon Kinesis client has been set to " + config.getRegionName());
-            dynamoDBClient.setRegion(region);
-            LOG.debug("The region of Amazon DynamoDB client has been set to " + config.getRegionName());
+            setField(kinesisClient, "region", kinesisClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
+            setField(dynamoDBClient, "region", dynamoDBClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
         }
         // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
         if (config.getDynamoDBEndpoint() != null) {
-            dynamoDBClient.setEndpoint(config.getDynamoDBEndpoint());
-            LOG.debug("The endpoint of Amazon DynamoDB client has been set to " + config.getDynamoDBEndpoint());
+            setField(dynamoDBClient, "endpoint", dynamoDBClient::setEndpoint, config.getDynamoDBEndpoint());
         }
         // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
         if (config.getKinesisEndpoint() != null) {
-            kinesisClient.setEndpoint(config.getKinesisEndpoint());
-            if (config.getRegionName() != null) {
-                LOG.warn("Received configuration for both region name as " + config.getRegionName()
-                        + ", and Amazon Kinesis endpoint as " + config.getKinesisEndpoint()
-                        + ". Amazon Kinesis endpoint will overwrite region name.");
-                LOG.debug("The region of Amazon Kinesis client has been overwritten to " + config.getKinesisEndpoint());
-            } else {
-                LOG.debug("The region of Amazon Kinesis client has been set to " + config.getKinesisEndpoint());
-            }
+            setField(kinesisClient, "endpoint", kinesisClient::setEndpoint, config.getKinesisEndpoint());
         }
     }
 
@@ -1080,9 +1078,7 @@ public class Worker implements Runnable {
             metricsFactory = new NullMetricsFactory();
         } else {
             if (config.getRegionName() != null) {
-                Region region = RegionUtils.getRegion(config.getRegionName());
-                cloudWatchClient.setRegion(region);
-                LOG.debug("The region of Amazon CloudWatch client has been set to " + config.getRegionName());
+                setField(cloudWatchClient, "region", cloudWatchClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
             }
             metricsFactory = new WorkerCWMetricsFactory(cloudWatchClient, config.getApplicationName(),
                     config.getMetricsBufferTimeMillis(), config.getMetricsMaxQueueSize(), config.getMetricsLevel(),
@@ -1099,6 +1095,15 @@ public class Worker implements Runnable {
     private static ExecutorService getExecutorService() {
         ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("RecordProcessor-%04d").build();
         return new WorkerThreadPoolExecutor(threadFactory);
+    }
+
+    private static <S, T> void setField(final S source, final String field, final Consumer<T> t, T value) {
+        try {
+            t.accept(value);
+        } catch (UnsupportedOperationException e) {
+            LOG.debug("Exception thrown while trying to set " + field + ", indicating that "
+                    + source.getClass().getSimpleName() + "is immutable.", e);
+        }
     }
 
     /**
@@ -1154,6 +1159,21 @@ public class Worker implements Runnable {
         @Setter @Accessors(fluent = true)
         private WorkerStateChangeListener workerStateChangeListener;
 
+        @VisibleForTesting
+        AmazonKinesis getKinesisClient() {
+            return kinesisClient;
+        }
+
+        @VisibleForTesting
+        AmazonDynamoDB getDynamoDBClient() {
+            return dynamoDBClient;
+        }
+
+        @VisibleForTesting
+        AmazonCloudWatch getCloudWatchClient() {
+            return cloudWatchClient;
+        }
+
         /**
          * Provide a V1 {@link com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor
          * IRecordProcessor}.
@@ -1201,44 +1221,39 @@ public class Worker implements Runnable {
                 execService = getExecutorService();
             }
             if (kinesisClient == null) {
-                kinesisClient = new AmazonKinesisClient(config.getKinesisCredentialsProvider(),
-                        config.getKinesisClientConfiguration());
+                kinesisClient = createClient(AmazonKinesisClientBuilder.standard(),
+                        config.getKinesisCredentialsProvider(),
+                        config.getKinesisClientConfiguration(),
+                        config.getKinesisEndpoint(),
+                        config.getRegionName());
             }
             if (dynamoDBClient == null) {
-                dynamoDBClient = new AmazonDynamoDBClient(config.getDynamoDBCredentialsProvider(),
-                        config.getDynamoDBClientConfiguration());
+                dynamoDBClient = createClient(AmazonDynamoDBClientBuilder.standard(),
+                        config.getDynamoDBCredentialsProvider(),
+                        config.getDynamoDBClientConfiguration(),
+                        config.getDynamoDBEndpoint(),
+                        config.getRegionName());
             }
             if (cloudWatchClient == null) {
-                cloudWatchClient = new AmazonCloudWatchClient(config.getCloudWatchCredentialsProvider(),
-                        config.getCloudWatchClientConfiguration());
+                cloudWatchClient = createClient(AmazonCloudWatchClientBuilder.standard(),
+                        config.getCloudWatchCredentialsProvider(),
+                        config.getCloudWatchClientConfiguration(),
+                        null,
+                        config.getRegionName());
             }
             // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
             if (config.getRegionName() != null) {
-                Region region = RegionUtils.getRegion(config.getRegionName());
-                cloudWatchClient.setRegion(region);
-                LOG.debug("The region of Amazon CloudWatch client has been set to " + config.getRegionName());
-                kinesisClient.setRegion(region);
-                LOG.debug("The region of Amazon Kinesis client has been set to " + config.getRegionName());
-                dynamoDBClient.setRegion(region);
-                LOG.debug("The region of Amazon DynamoDB client has been set to " + config.getRegionName());
+                setField(cloudWatchClient, "region", cloudWatchClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
+                setField(kinesisClient, "region", kinesisClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
+                setField(dynamoDBClient, "region", dynamoDBClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
             }
             // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
             if (config.getDynamoDBEndpoint() != null) {
-                dynamoDBClient.setEndpoint(config.getDynamoDBEndpoint());
-                LOG.debug("The endpoint of Amazon DynamoDB client has been set to " + config.getDynamoDBEndpoint());
+                setField(dynamoDBClient, "endpoint", dynamoDBClient::setEndpoint, config.getDynamoDBEndpoint());
             }
             // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
             if (config.getKinesisEndpoint() != null) {
-                kinesisClient.setEndpoint(config.getKinesisEndpoint());
-                if (config.getRegionName() != null) {
-                    LOG.warn("Received configuration for both region name as " + config.getRegionName()
-                            + ", and Amazon Kinesis endpoint as " + config.getKinesisEndpoint()
-                            + ". Amazon Kinesis endpoint will overwrite region name.");
-                    LOG.debug("The region of Amazon Kinesis client has been overwritten to "
-                            + config.getKinesisEndpoint());
-                } else {
-                    LOG.debug("The region of Amazon Kinesis client has been set to " + config.getKinesisEndpoint());
-                }
+                setField(kinesisClient, "endpoint", kinesisClient::setEndpoint, config.getKinesisEndpoint());
             }
             if (metricsFactory == null) {
                 metricsFactory = getMetricsFactory(cloudWatchClient, config);
@@ -1292,5 +1307,29 @@ public class Worker implements Runnable {
                     workerStateChangeListener);
         }
 
+        <R, T extends AwsClientBuilder<T, R>> R createClient(final T builder,
+                                                             final AWSCredentialsProvider credentialsProvider,
+                                                             final ClientConfiguration clientConfiguration,
+                                                             final String endpointUrl,
+                                                             final String region) {
+            if (credentialsProvider != null) {
+                builder.withCredentials(credentialsProvider);
+            }
+            if (clientConfiguration != null) {
+                builder.withClientConfiguration(clientConfiguration);
+            }
+            if (StringUtils.isNotEmpty(endpointUrl)) {
+                LOG.warn("Received configuration for endpoint as " + endpointUrl + ", and region as "
+                        + region + ".");
+                builder.withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(endpointUrl, region));
+            } else if (StringUtils.isNotEmpty(region)) {
+                LOG.warn("Received configuration for region as " + region + ".");
+                builder.withRegion(region);
+            } else {
+                LOG.warn("No configuration received for endpoint and region, will default region to us-east-1");
+                builder.withRegion(Regions.US_EAST_1);
+            }
+            return builder.build();
+        }
     }
 }

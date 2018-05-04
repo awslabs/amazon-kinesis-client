@@ -19,6 +19,8 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
@@ -75,14 +77,24 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.regions.RegionUtils;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
+import com.amazonaws.services.kinesis.AmazonKinesis;
+import com.amazonaws.services.kinesis.AmazonKinesisClientBuilder;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
@@ -92,8 +104,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerCWMe
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker.WorkerThreadPoolExecutor;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.WorkerStateChangeListener.WorkerState;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
-import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisLocalFileProxy;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.util.KinesisLocalFileDataCreator;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
@@ -1628,6 +1640,124 @@ public class WorkerTest {
                 .build();
 
         Assert.assertSame(leaseManager, worker.getLeaseCoordinator().getLeaseManager());
+    }
+
+    @Test
+    public void testBuilderSetRegionAndEndpointToClient() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        final String endpoint = "TestEndpoint";
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null)
+                .withRegionName(Regions.US_WEST_2.getName())
+                .withKinesisEndpoint(endpoint)
+                .withDynamoDBEndpoint(endpoint);
+
+        AmazonKinesis kinesisClient = spy(AmazonKinesisClientBuilder.standard().withRegion(Regions.US_WEST_2).build());
+        AmazonDynamoDB dynamoDBClient = spy(AmazonDynamoDBClientBuilder.standard().withRegion(Regions.US_WEST_2).build());
+        AmazonCloudWatch cloudWatchClient = spy(AmazonCloudWatchClientBuilder.standard().withRegion(Regions.US_WEST_2).build());
+
+        new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(config)
+                .kinesisClient(kinesisClient)
+                .dynamoDBClient(dynamoDBClient)
+                .cloudWatchClient(cloudWatchClient)
+                .build();
+
+        verify(kinesisClient, times(1)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
+        verify(dynamoDBClient, times(1)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
+        verify(cloudWatchClient, times(2)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
+
+        verify(kinesisClient, times(1)).setEndpoint(eq(endpoint));
+        verify(dynamoDBClient, times(1)).setEndpoint(eq(endpoint));
+        verify(cloudWatchClient, never()).setEndpoint(anyString());
+    }
+
+    @Test
+    public void testBuilderSetRegionToClient() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        String region = Regions.US_WEST_2.getName();
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null)
+                .withRegionName(region);
+
+        Worker.Builder builder = new Worker.Builder();
+
+        AmazonKinesis kinesisClient = spy(AmazonKinesisClientBuilder.standard().withRegion(Regions.US_WEST_2).build());
+        AmazonDynamoDB dynamoDBClient = spy(AmazonDynamoDBClientBuilder.standard().withRegion(Regions.US_WEST_2).build());
+        AmazonCloudWatch cloudWatchClient = spy(AmazonCloudWatchClientBuilder.standard().withRegion(Regions.US_WEST_2).build());
+
+        builder.recordProcessorFactory(recordProcessorFactory).config(config)
+                .kinesisClient(kinesisClient)
+                .dynamoDBClient(dynamoDBClient)
+                .cloudWatchClient(cloudWatchClient)
+                .build();
+
+        verify(kinesisClient, times(1)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
+        verify(dynamoDBClient, times(1)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
+        verify(cloudWatchClient, times(2)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
+
+        verify(kinesisClient, never()).setEndpoint(any());
+        verify(dynamoDBClient, never()).setEndpoint(any());
+        verify(cloudWatchClient, never()).setEndpoint(any());
+    }
+
+    @Test
+    public void testBuilderGenerateClients() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null);
+        Worker.Builder builder = spy(new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(config));
+        ArgumentCaptor<AwsClientBuilder> builderCaptor = ArgumentCaptor.forClass(AwsClientBuilder.class);
+
+        assertNull(builder.getKinesisClient());
+        assertNull(builder.getDynamoDBClient());
+        assertNull(builder.getCloudWatchClient());
+
+        builder.build();
+
+        assertTrue(builder.getKinesisClient() instanceof AmazonKinesis);
+        assertTrue(builder.getDynamoDBClient() instanceof AmazonDynamoDB);
+        assertTrue(builder.getCloudWatchClient() instanceof AmazonCloudWatch);
+
+        verify(builder, times(3)).createClient(
+                builderCaptor.capture(), eq(null), any(ClientConfiguration.class), eq(null), eq(null));
+
+        builderCaptor.getAllValues().forEach(clientBuilder -> {
+            assertTrue(clientBuilder.getRegion().equals(Regions.US_EAST_1.getName()));
+        });
+    }
+
+    @Test
+    public void testBuilderGenerateClientsWithRegion() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        String region = Regions.US_WEST_2.getName();
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null)
+                .withRegionName(region);
+        ArgumentCaptor<AwsClientBuilder> builderCaptor = ArgumentCaptor.forClass(AwsClientBuilder.class);
+
+        Worker.Builder builder = spy(new Worker.Builder());
+
+        builder.recordProcessorFactory(recordProcessorFactory).config(config).build();
+
+        verify(builder, times(3)).createClient(
+                builderCaptor.capture(), eq(null), any(ClientConfiguration.class), eq(null), eq(region));
+        builderCaptor.getAllValues().forEach(clientBuilder -> {
+            assertTrue(clientBuilder.getRegion().equals(region));
+        });
+    }
+
+    @Test
+    public void testBuilderGenerateClientsWithEndpoint() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        String region = Regions.US_WEST_2.getName();
+        String endpointUrl = "TestEndpoint";
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null)
+                .withRegionName(region).withKinesisEndpoint(endpointUrl).withDynamoDBEndpoint(endpointUrl);
+
+        Worker.Builder builder = spy(new Worker.Builder());
+
+        builder.recordProcessorFactory(recordProcessorFactory).config(config).build();
+
+        verify(builder, times(2)).createClient(
+                any(AwsClientBuilder.class), eq(null), any(ClientConfiguration.class), eq(endpointUrl), eq(region));
+        verify(builder, times(1)).createClient(
+                any(AwsClientBuilder.class), eq(null), any(ClientConfiguration.class), eq(null), eq(region));
     }
 
     private abstract class InjectableWorker extends Worker {
