@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -35,7 +35,11 @@ class DatePropertyValueDecoder implements IPropertyValueDecoder<Date> {
      */
     @Override
     public Date decodeValue(String value) {
-        return new Date(Long.parseLong(value) * 1000L);
+        try {
+            return new Date(Long.parseLong(value) * 1000L);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Date property value must be numeric.");
+        }
     }
 
     /**
