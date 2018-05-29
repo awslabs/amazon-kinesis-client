@@ -22,6 +22,7 @@ import static org.junit.Assert.fail;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.Date;
 import java.util.Optional;
 import java.util.Set;
 
@@ -144,6 +145,20 @@ public class KinesisClientLibConfiguratorTest {
     }
 
     @Test
+    public void testWithDateVariables() {
+        KinesisClientLibConfiguration config =
+                getConfiguration(StringUtils.join(new String[] {
+                        "streamName = a",
+                        "applicationName = b",
+                        "AWSCredentialsProvider = ABCD, " + credentialName1,
+                        "timestampAtInitialPositionInStream = 1527267472"
+                }, '\n'));
+
+        assertEquals(config.getTimestampAtInitialPositionInStream(), 
+                new Date(1527267472 * 1000L));
+    }
+
+    @Test
     public void testWithStringVariables() {
         KinesisClientLibConfiguration config =
                 getConfiguration(StringUtils.join(new String[] {
@@ -189,6 +204,49 @@ public class KinesisClientLibConfiguratorTest {
                 }, '\n'));
 
         assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.TRIM_HORIZON);
+    }    
+
+    @Test
+    public void testWithTimestampAtInitialPositionInStreamVariables() {
+        KinesisClientLibConfiguration config =
+                getConfiguration(StringUtils.join(new String[] {
+                        "streamName = a",
+                        "applicationName = b",
+                        "AWSCredentialsProvider = ABCD," + credentialName1,
+                        "timestampAtInitialPositionInStream = 1527267472"
+                }, '\n'));
+
+        assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.AT_TIMESTAMP);
+        assertEquals(config.getTimestampAtInitialPositionInStream(), 
+                new Date(1527267472 * 1000L));
+    }
+
+    @Test
+    public void testWithEmptyTimestampAtInitialPositionInStreamVariables() {
+        KinesisClientLibConfiguration config =
+                getConfiguration(StringUtils.join(new String[] {
+                        "streamName = a",
+                        "applicationName = b",
+                        "AWSCredentialsProvider = ABCD," + credentialName1,
+                        "timestampAtInitialPositionInStream = "
+                }, '\n'));
+
+        assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.LATEST);
+        assertEquals(config.getTimestampAtInitialPositionInStream(), null);
+    }
+
+    @Test
+    public void testWithNonNumericTimestampAtInitialPositionInStreamVariables() {
+        KinesisClientLibConfiguration config =
+                getConfiguration(StringUtils.join(new String[] {
+                        "streamName = a",
+                        "applicationName = b",
+                        "AWSCredentialsProvider = ABCD," + credentialName1,
+                        "timestampAtInitialPositionInStream = 123abc"
+                }, '\n'));
+
+        assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.LATEST);
+        assertEquals(config.getTimestampAtInitialPositionInStream(), null);
     }
 
     @Test
