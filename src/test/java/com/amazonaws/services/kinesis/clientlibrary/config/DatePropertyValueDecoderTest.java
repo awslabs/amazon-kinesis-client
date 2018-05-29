@@ -36,33 +36,18 @@ public class DatePropertyValueDecoderTest {
         assertEquals(timestamp, new Date(Long.parseLong(TEST_VALUE) * 1000L));
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testEmptyValue() {
-        try {
-          Date timestamp = decoder.decodeValue("");
-          fail("Expect IllegalArgumentException on empty value");
-        } catch (IllegalArgumentException e) {
-          // success
-        }
+        Date timestamp = decoder.decodeValue("");
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testNullValue() {
-        try {
-          Date timestamp = decoder.decodeValue(null);
-          fail("Expect IllegalArgumentException on null value");
-        } catch (IllegalArgumentException e) {
-          // success
-        }
+        Date timestamp = decoder.decodeValue(null);
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testNonNumericValue() {
-        try {
-          Date timestamp = decoder.decodeValue("123abc");
-          fail("Expect IllegalArgumentException on non numeric value");
-        } catch (IllegalArgumentException e) {
-          // success
-        }
+        Date timestamp = decoder.decodeValue("123abc");
     }
 }
