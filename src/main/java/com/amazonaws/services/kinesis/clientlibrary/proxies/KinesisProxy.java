@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  *  Licensed under the Amazon Software License (the "License").
  *  You may not use this file except in compliance with the License.
@@ -15,13 +15,19 @@
 package com.amazonaws.services.kinesis.clientlibrary.proxies;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
@@ -50,7 +56,10 @@ import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamStatus;
 
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * Kinesis proxy - used to make calls to Amazon Kinesis (e.g. fetch data records and list of shards).
@@ -61,14 +70,25 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
     private static final EnumSet<ShardIteratorType> EXPECTED_ITERATOR_TYPES = EnumSet
             .of(ShardIteratorType.AT_SEQUENCE_NUMBER, ShardIteratorType.AFTER_SEQUENCE_NUMBER);
+    public static final int MAX_CACHE_MISSES_BEFORE_RELOAD = 1000;
+    public static final Duration CACHE_MAX_ALLOWED_AGE = Duration.of(30, ChronoUnit.SECONDS);
 
     private static String defaultServiceName = "kinesis";
     private static String defaultRegionId = "us-east-1";;
 
     private AmazonKinesis client;
     private AWSCredentialsProvider credentialsProvider;
-    private AtomicReference<List<Shard>> listOfShardsSinceLastGet = new AtomicReference<>();
+
     private ShardIterationState shardIterationState = null;
+
+    @Setter(AccessLevel.PACKAGE)
+    private volatile Map<String, Shard> cachedShardMap = null;
+    @Setter(AccessLevel.PACKAGE)
+    @Getter(AccessLevel.PACKAGE)
+    private volatile Instant lastCacheUpdateTime = null;
+    @Setter(AccessLevel.PACKAGE)
+    @Getter(AccessLevel.PACKAGE)
+    private AtomicInteger cacheMisses = new AtomicInteger(0);
 
     private final String streamName;
 
@@ -333,19 +353,63 @@ public class KinesisProxy implements IKinesisProxyExtended {
      */
     @Override
     public Shard getShard(String shardId) {
-        if (this.listOfShardsSinceLastGet.get() == null) {
-            //Update this.listOfShardsSinceLastGet as needed.
-            this.getShardList();
-        }
-
-        for (Shard shard : listOfShardsSinceLastGet.get()) {
-            if (shard.getShardId().equals(shardId))  {
-                return shard;
+        if (this.cachedShardMap == null) {
+            synchronized (this) {
+                if (this.cachedShardMap == null) {
+                    this.getShardList();
+                }
             }
         }
-        
-        LOG.warn("Cannot find the shard given the shardId " + shardId);
-        return null;
+
+        Shard shard = cachedShardMap.get(shardId);
+        if (shard == null) {
+            if (cacheMisses.incrementAndGet() > MAX_CACHE_MISSES_BEFORE_RELOAD || cacheNeedsTimeUpdate()) {
+                LOG.info("To many shard map cache misses or cache is out of date -- forcing a refresh");
+                synchronized (this) {
+                    shard = cachedShardMap.get(shardId);
+                    if (shard == null) {
+                        this.getShardList();
+                        shard = verifyAndLogShardAfterCacheUpdate(shardId);
+                        cacheMisses.set(0);
+                    }
+                }
+            }
+        }
+
+        if (shard == null) {
+            String message = "Cannot find the shard given the shardId " + shardId + ".  Cache misses: " + cacheMisses;
+            if (cacheMisses.get() % 1000 == 0) {
+                LOG.warn(message);
+            } else {
+                LOG.debug(message);
+            }
+        }
+        return shard;
+    }
+
+    private Shard verifyAndLogShardAfterCacheUpdate(String shardId) {
+        Shard shard = cachedShardMap.get(shardId);
+        if (shard == null) {
+            LOG.warn("Even after cache refresh shard '" + shardId + "' wasn't found.  "
+                    + "This could indicate a bigger problem");
+        }
+        return shard;
+    }
+
+    private boolean cacheNeedsTimeUpdate() {
+        if (lastCacheUpdateTime == null) {
+            return true;
+        }
+        Instant now = Instant.now();
+        Duration cacheAge = Duration.between(lastCacheUpdateTime, now);
+
+        String baseMessage = "Shard map cache is " + cacheAge + " > " + CACHE_MAX_ALLOWED_AGE + ". ";
+        if (cacheAge.compareTo(CACHE_MAX_ALLOWED_AGE) > 0) {
+            LOG.info(baseMessage + "Age exceeds limit -- Refreshing.");
+            return true;
+        }
+        LOG.debug(baseMessage + "Age doesn't exceed limit.");
+        return false;
     }
 
     /**
@@ -393,9 +457,12 @@ public class KinesisProxy implements IKinesisProxyExtended {
                 }
             } while (response.getStreamDescription().isHasMoreShards());
         }
-        this.listOfShardsSinceLastGet.set(shardIterationState.getShards());
+        List<Shard> shards = shardIterationState.getShards();
+        this.cachedShardMap = shards.stream().collect(Collectors.toMap(Shard::getShardId, Function.identity()));
+        this.lastCacheUpdateTime = Instant.now();
+
         shardIterationState = new ShardIterationState();
-        return listOfShardsSinceLastGet.get();
+        return shards;
     }
 
     /**
