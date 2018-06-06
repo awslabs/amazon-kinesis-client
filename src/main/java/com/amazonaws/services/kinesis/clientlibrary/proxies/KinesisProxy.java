@@ -72,6 +72,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
             .of(ShardIteratorType.AT_SEQUENCE_NUMBER, ShardIteratorType.AFTER_SEQUENCE_NUMBER);
     public static final int MAX_CACHE_MISSES_BEFORE_RELOAD = 1000;
     public static final Duration CACHE_MAX_ALLOWED_AGE = Duration.of(30, ChronoUnit.SECONDS);
+    public static final int CACHE_MISS_WARNING_MODULUS = 250;
 
     private static String defaultServiceName = "kinesis";
     private static String defaultRegionId = "us-east-1";;
@@ -364,21 +365,31 @@ public class KinesisProxy implements IKinesisProxyExtended {
         Shard shard = cachedShardMap.get(shardId);
         if (shard == null) {
             if (cacheMisses.incrementAndGet() > MAX_CACHE_MISSES_BEFORE_RELOAD || cacheNeedsTimeUpdate()) {
-                LOG.info("To many shard map cache misses or cache is out of date -- forcing a refresh");
                 synchronized (this) {
                     shard = cachedShardMap.get(shardId);
+
+                    //
+                    // If after synchronizing we resolve the shard, it means someone else already got it for us.
+                    //
                     if (shard == null) {
+                        LOG.info("To many shard map cache misses or cache is out of date -- forcing a refresh");
                         this.getShardList();
                         shard = verifyAndLogShardAfterCacheUpdate(shardId);
                         cacheMisses.set(0);
+                    } else {
+                        //
+                        // If someone else got us the shard go ahead and zero cache misses
+                        //
+                        cacheMisses.set(0);
                     }
+
                 }
             }
         }
 
         if (shard == null) {
             String message = "Cannot find the shard given the shardId " + shardId + ".  Cache misses: " + cacheMisses;
-            if (cacheMisses.get() % 1000 == 0) {
+            if (cacheMisses.get() % CACHE_MISS_WARNING_MODULUS == 0) {
                 LOG.warn(message);
             } else {
                 LOG.debug(message);
