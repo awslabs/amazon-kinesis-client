@@ -881,4 +881,17 @@ public class RecordProcessorCheckpointerTest {
             MetricsHelper.unsetMetricsScope();
         }
     }
+
+    @Test
+    public final void testCheckpointingAtShardEnd() throws Exception {
+        RecordProcessorCheckpointer processingCheckpointer =
+                new RecordProcessorCheckpointer(shardInfo, checkpoint, sequenceNumberValidator, metricsFactory);
+        String sequenceNumber = "5019";
+        ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(sequenceNumber);
+        processingCheckpointer.setLargestPermittedCheckpointValue(extendedSequenceNumber);
+        processingCheckpointer.checkpoint(sequenceNumber);
+        processingCheckpointer.setSequenceNumberAtShardEnd(extendedSequenceNumber);
+        processingCheckpointer.checkpoint(sequenceNumber);
+        assertEquals(ExtendedSequenceNumber.SHARD_END, processingCheckpointer.getLastCheckpointValue());
+    }
 }
