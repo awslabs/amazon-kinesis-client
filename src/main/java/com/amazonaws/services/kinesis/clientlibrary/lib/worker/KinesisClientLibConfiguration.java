@@ -458,7 +458,6 @@ public class KinesisClientLibConfiguration {
         checkIsValuePositive("MetricsBufferTimeMills", metricsBufferTimeMillis);
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
         checkIsValuePositive("ShutdownGraceMillis", shutdownGraceMillis);
-        checkIsRegionNameValid(regionName);
         this.applicationName = applicationName;
         this.tableName = applicationName;
         this.streamName = streamName;
@@ -567,7 +566,6 @@ public class KinesisClientLibConfiguration {
         checkIsValuePositive("TaskBackoffTimeMillis", taskBackoffTimeMillis);
         checkIsValuePositive("MetricsBufferTimeMills", metricsBufferTimeMillis);
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
-        checkIsRegionNameValid(regionName);
         this.applicationName = applicationName;
         this.tableName = applicationName;
         this.streamName = streamName;
@@ -628,12 +626,6 @@ public class KinesisClientLibConfiguration {
         }
         config.setUserAgent(existingUserAgent);
         return config;
-    }
-
-    private void checkIsRegionNameValid(String regionNameToCheck) {
-        if (regionNameToCheck != null && RegionUtils.getRegion(regionNameToCheck) == null) {
-            throw new IllegalArgumentException("The specified region name is not valid");
-        }
     }
 
     /**
@@ -1214,7 +1206,6 @@ public class KinesisClientLibConfiguration {
      */
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 2 LINES
     public KinesisClientLibConfiguration withRegionName(String regionName) {
-        checkIsRegionNameValid(regionName);
         this.regionName = regionName;
         return this;
     }
