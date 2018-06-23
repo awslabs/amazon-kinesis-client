@@ -369,4 +369,25 @@ public class KinesisClientLibConfigurationTest {
         config = config.withIgnoreUnexpectedChildShards(true);
         assertTrue(config.shouldIgnoreUnexpectedChildShards());
     }
+    
+    /**
+     * Test testDefaultWorkerInitRetry() default value of 20
+     */
+    @Test
+    public final void testDefaultWorkerInitRetry() {
+        final String stageName = "testStageName";
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration(stageName, null, null, null);
+        Assert.assertEquals(config.getMaxWorkerInitializationRetryAttempts(), 20);
+    }
+    
+    /**
+     * Test testDefaultWorkerInitRetry() custom value of 10
+     */
+    @Test
+    public final void testCustomWorkerInitRetry() {
+        final String stageName = "testStageName";
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration(stageName, null, null, null).withMaxWorkerInitializationRetryAttempts(10);
+        Assert.assertEquals(config.getMaxWorkerInitializationRetryAttempts(), 10);
+    }
+
 }
