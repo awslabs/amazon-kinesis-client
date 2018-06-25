@@ -20,7 +20,7 @@ import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import org.apache.commons.lang.Validate;
+import org.apache.commons.lang3.Validate;
 
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.cloudwatch.model.StandardUnit;
