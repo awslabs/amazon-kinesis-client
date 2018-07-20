@@ -14,24 +14,18 @@
  */
 package com.amazonaws.services.kinesis.multilang;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Properties;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfigurator;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import java.io.*;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Properties;
+import java.util.concurrent.*;
 
 /**
  * This class captures the configuration needed to run the MultiLangDaemon.
@@ -97,14 +91,63 @@ public class MultiLangDaemonConfig {
 
         String executableName = properties.getProperty(PROP_EXECUTABLE_NAME);
         String processingLanguage = properties.getProperty(PROP_PROCESSING_LANGUAGE);
+        ClientConfiguration clientConfig = buildClientConfig(properties);
 
-        kinesisClientLibConfig = configurator.getConfiguration(properties);
+        kinesisClientLibConfig = configurator.getConfiguration(properties)
+                                             .withKinesisClientConfig(clientConfig)
+                                             .withCloudWatchClientConfig(clientConfig)
+                                             .withDynamoDBClientConfig(clientConfig);
+
         executorService = buildExecutorService(properties);
         recordProcessorFactory = new MultiLangRecordProcessorFactory(executableName, executorService, kinesisClientLibConfig);
 
         LOG.info("Running " + kinesisClientLibConfig.getApplicationName() + " to process stream "
                 + kinesisClientLibConfig.getStreamName() + " with executable " + executableName);
         prepare(processingLanguage);
+    }
+
+    private ClientConfiguration buildClientConfig(Properties properties)
+    {
+        ClientConfiguration clientConfig = new ClientConfiguration();
+        String proxyHost = "";
+        int proxyPort = 0;
+
+        if( properties.getProperty( "http.proxyHost" ) != null )
+        {
+            LOG.info( "Getting proxy info from properties file." );
+
+            proxyHost = properties.getProperty( "http.proxyHost" );
+            proxyPort = Integer.parseInt( properties.getProperty( "http.proxyPort" ) );
+        }
+        else if( System.getProperty( "http.proxyHost" ) != null )
+        {
+            LOG.info( "Getting proxy info from java system properties" );
+
+            proxyHost = System.getProperty( "http.proxyHost" );
+            proxyPort = Integer.parseInt( System.getProperty( "http.proxyPort" ) );
+        }
+        else if( System.getenv("http_proxy") != null )
+        {
+            LOG.info( "Getting proxy info environment settings" );
+
+            try {
+                URI proxyAddr = new URI(System.getenv("http_proxy"));
+
+                proxyHost = proxyAddr.getHost();
+                proxyPort = proxyAddr.getPort();
+            }
+            catch( URISyntaxException e )
+            {
+                LOG.error( "System proxy not set correctly" );
+            }
+        }
+
+        if( !proxyHost.equals( "" ) && proxyPort > 0 )
+            clientConfig = clientConfig.withProxyHost( proxyHost ).withProxyPort( proxyPort );
+        else
+            LOG.info( "Not configuring proxy as none specified" );
+
+        return clientConfig;
     }
 
     private void prepare(String processingLanguage) {
