@@ -114,6 +114,7 @@ public class Worker implements Runnable {
     private volatile boolean shutdown;
     private volatile long shutdownStartTimeMillis;
     private volatile boolean shutdownComplete = false;
+    private volatile Exception lastException = null;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -615,7 +616,6 @@ public class Worker implements Runnable {
     private void initialize() {
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.INITIALIZING);
         boolean isDone = false;
-        Exception lastException = null;
 
         for (int i = 0; (!isDone) && (i < MAX_INITIALIZATION_ATTEMPTS); i++) {
             try {
@@ -878,6 +878,14 @@ public class Worker implements Runnable {
 
     WorkerStateChangeListener getWorkerStateChangeListener() {
         return workerStateChangeListener;
+    }
+    
+    /**
+     * The last of any exception encountered during initialize() will be available here
+     */
+    public Exception getLastException()
+    {
+    	return lastException;
     }
 
     /**
