@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Amazon Kinesis Client Library for Java
 Bundle-SymbolicName: com.amazonaws.kinesisclientlibrary;singleton:=true
-Bundle-Version: 1.9.1
+Bundle-Version: 2.0.0
 Bundle-Vendor: Amazon Technologies, Inc
 Bundle-RequiredExecutionEnvironment: JavaSE-1.8
 Require-Bundle: org.apache.commons.codec;bundle-version="1.6",
@@ -15,13 +15,13 @@ Require-Bundle: org.apache.commons.codec;bundle-version="1.6",
  com.amazonaws.sdk;bundle-version="1.11.319",
 Export-Package: com.amazonaws.services.kinesis,
  com.amazonaws.services.kinesis.clientlibrary,
- com.amazonaws.services.kinesis.clientlibrary.config,
+ com.amazonaws.services.kinesis.clientlibrary.kinesisClientLibConfiguration,
  com.amazonaws.services.kinesis.clientlibrary.exceptions,
  com.amazonaws.services.kinesis.clientlibrary.exceptions.internal,
  com.amazonaws.services.kinesis.clientlibrary.interfaces,
  com.amazonaws.services.kinesis.clientlibrary.lib,
  com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint,
- com.amazonaws.services.kinesis.clientlibrary.lib.worker,
+ com.amazonaws.services.kinesis.clientlibrary.lib.scheduler,
  com.amazonaws.services.kinesis.clientlibrary.proxies,
  com.amazonaws.services.kinesis.clientlibrary.types,
  com.amazonaws.services.kinesis.leases,

@@ -30,16 +30,46 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.9.1)
-* Added the ability to create a prepared checkpoint when at `SHARD_END`.
-  * [PR #301](https://github.com/awslabs/amazon-kinesis-client/pull/301)
-* Added the ability to subscribe to worker state change events.  
-  * [PR #291](https://github.com/awslabs/amazon-kinesis-client/pull/291)
-* Added support for custom lease managers.  
-  A custom `LeaseManager` can be provided to `Worker.Builder` that will be used to provide lease services. 
-  This makes it possible to implement custom lease management systems in addition to the default DynamoDB system.  
-  * [PR #297](https://github.com/awslabs/amazon-kinesis-client/pull/297)
-* Updated the version of the AWS Java SDK to 1.11.219
+### Latest Release (2.0.0)
+* Added support for Enhanced Fan Out.  
+  Enhanced Fan Out provides for lower end to end latency, and increased number of consumers per stream. 
+  * Records are now delivered via streaming, reducing end-to-end latency.
+  * The Amazon Kinesis Client will automatically register a new consumer if required.  
+    When registering a new consumer, the Kinesis Client will default to the application name unless configured otherwise.
+  * New configuration options are available to configure Enhanced Fan Out. 
+  * `SubscribeToShard` maintains long lived connections with Kinesis, which in the AWS Java SDK 2.0 is limited by default.  
+    The `KinesisClientUtil` has been added to assist configuring the `maxConcurrency` of the `KinesisAsyncClient`.   
+    __WARNING: The Amazon Kinesis Client may see significantly increased latency, unless the `KinesisAsyncClient` is configured to have a `maxConcurrency` high enough to allow all leases plus additional usages of the `KinesisAsyncClient`.__  
+  
+  | Name            | Default | Description                                                                                                         |
+  |-----------------|---------|---------------------------------------------------------------------------------------------------------------------|
+  | consumerArn     | Unset   | The ARN for an already created consumer.  If this is set, the Kinesis Client will not attempt to create a consumer. |
+  | streamName      | Unset   | The name of the stream that a consumer should be create for if necessary                                            |
+  | consumerName    | Unset   | The name of the consumer to create.  If this is not set the applicationName will be used instead.                   |
+  | applicationName | Unset   | The name of the application.  This is used as the name of the consumer unless consumerName is set.                  |
+
+* Modular Configuration of the Kinesis Client
+  The Kinesis Client has migrated to a modular configuration system, and the `KinesisClientLibConfiguration` class has been removed.  
+  Configuration has been split into 7 classes.  Default versions of the configuration can be created from the `ConfigsBuilder`.  
+  Please [see the migration guide for more information][migration-guide].
+  * `CheckpointConfig`
+  * `CoordinatorConfig`
+  * `LeaseManagementConfig`
+  * `LifecycleConfig`
+  * `MetricsConfig`
+  * `ProcessorConfig`
+  * `RetrievalConfig`
+
+* Upgraded to AWS Java SDK 2.0  
+  The Kinesis Client now uses the AWS Java SDK 2.0.  The dependency on AWS Java SDK 1.11 has been removed. 
+  All configurations will only accept 2.0 clients.  
+  * When configuring the `KinesisAsyncClient` the `KinesisClientUtil#createKinesisAsyncClient` can be used to configure the Kinesis Client 
+  * __If you need support for AWS Java SDK 1.11 you will need to add a direct dependency.__  
+    __When adding a dependency you must ensure that the 1.11 versions of Jackson dependencies are excluded__  
+    [Please see the migration guide for more information][migration-guide]
+    
+* MultiLangDaemon is now a separate module  
+  The MultiLangDaemon has been separated to its own Maven module and is no longer available in `amazon-kinesis-client`.  To include the MultiLangDaemon, add a dependency on `amazon-kinesis-client-multilang`.
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
