@@ -87,3 +87,4 @@ To make it easier for developers to write record processors in other languages, 
 [kclpy]: https://github.com/awslabs/amazon-kinesis-client-python
 [multi-lang-protocol]: https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/multilang/package-info.java
 [changelog-md]: https://github.com/awslabs/amazon-kinesis-client/blob/master/CHANGELOG.md
+[migration-guide]: https://docs.aws.amazon.com/streams/latest/dev/kcl-migration.html
