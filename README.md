@@ -31,15 +31,30 @@ To make it easier for developers to write record processors in other languages, 
 ## Release Notes
 
 ### Latest Release (2.0.0)
+* The Maven `groupId`, along with the `version`, for the Amazon Kinesis Client has changed from `com.amazonaws` to `software.amazon.kinesis`.  
+  To add a dependency on the new version of the Amazon Kinesis Client:  
+  ``` xml
+  <dependency>
+      <groupId>software.amazon.kinesis</groupId>
+      <artifactId>amazon-kinesis-client</artifactId>
+      <version>2.0.0</version>
+  </dependency>
+  ```
 * Added support for Enhanced Fan Out.  
   Enhanced Fan Out provides for lower end to end latency, and increased number of consumers per stream. 
   * Records are now delivered via streaming, reducing end-to-end latency.
   * The Amazon Kinesis Client will automatically register a new consumer if required.  
     When registering a new consumer, the Kinesis Client will default to the application name unless configured otherwise.
-  * New configuration options are available to configure Enhanced Fan Out. 
   * `SubscribeToShard` maintains long lived connections with Kinesis, which in the AWS Java SDK 2.0 is limited by default.  
     The `KinesisClientUtil` has been added to assist configuring the `maxConcurrency` of the `KinesisAsyncClient`.   
-    __WARNING: The Amazon Kinesis Client may see significantly increased latency, unless the `KinesisAsyncClient` is configured to have a `maxConcurrency` high enough to allow all leases plus additional usages of the `KinesisAsyncClient`.__  
+    __WARNING: The Amazon Kinesis Client may see significantly increased latency, unless the `KinesisAsyncClient` is configured to have a `maxConcurrency` high enough to allow all leases plus additional usages of the `KinesisAsyncClient`.__
+  * The Amazon Kinesis Client now uses 3 additional Kinesis API's:  
+    __WARNING: If using a restrictive Kinesis IAM policy you may need to add the following API methods to the policy.__  
+    * [`SubscribeToShard`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_SubscribeToShard.html)
+    * [`DescribeStreamSummary`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_DescribeStreamSummary.html)
+    * [`DescribeStreamConsumer`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_DescribeStreamConsumer.html)
+    * [`RegisterStreamConsumer`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_RegisterStreamConsumer.html)
+  * New configuration options are available to configure Enhanced Fan Out.  
   
   | Name            | Default | Description                                                                                                         |
   |-----------------|---------|---------------------------------------------------------------------------------------------------------------------|
