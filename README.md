@@ -31,6 +31,15 @@ To make it easier for developers to write record processors in other languages, 
 ## Release Notes
 
 ### Latest Release (2.0.0)
+* The Maven `groupId`, along with the `version`, for the Amazon Kinesis Client has changed from `com.amazonaws` to `software.amazon.kinesis`.  
+  To add a dependency on the new version of the Amazon Kinesis Client:  
+  ``` xml
+  <dependency>
+      <groupId>software.amazon.kinesis</groupId>
+      <artifactId>amazon-kinesis-client</artifactId>
+      <version>2.0.0</version>
+  </dependency>
+  ```
 * Added support for Enhanced Fan Out.  
   Enhanced Fan Out provides for lower end to end latency, and increased number of consumers per stream. 
   * Records are now delivered via streaming, reducing end-to-end latency.
