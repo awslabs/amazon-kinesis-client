@@ -18,6 +18,7 @@ package software.amazon.kinesis.lifecycle;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -33,6 +34,7 @@ import java.util.concurrent.ExecutorService;
 
 @Data
 @Accessors(fluent = true)
+@KinesisClientInternalApi
 public class ShardConsumerArgument {
     @NonNull
     private final ShardInfo shardInfo;

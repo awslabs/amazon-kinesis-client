@@ -25,11 +25,13 @@ import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
 /**
  *
  */
+@KinesisClientInternalApi
 public class KinesisRequestsBuilder {
     public static ListShardsRequest.Builder listShardsRequestBuilder() {
         return appendUserAgent(ListShardsRequest.builder());

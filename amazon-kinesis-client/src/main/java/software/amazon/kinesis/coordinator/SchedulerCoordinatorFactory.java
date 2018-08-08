@@ -25,6 +25,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.Data;
 import lombok.NonNull;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.Checkpointer;
@@ -33,6 +34,7 @@ import software.amazon.kinesis.processor.Checkpointer;
  *
  */
 @Data
+@KinesisClientInternalApi
 public class SchedulerCoordinatorFactory implements CoordinatorFactory {
     @Override
     public ExecutorService createExecutorService() {

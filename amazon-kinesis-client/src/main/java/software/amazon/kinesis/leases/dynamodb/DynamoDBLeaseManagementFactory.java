@@ -21,6 +21,7 @@ import lombok.Data;
 import lombok.NonNull;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.KinesisShardDetector;
 import software.amazon.kinesis.leases.LeaseCoordinator;
@@ -33,6 +34,7 @@ import software.amazon.kinesis.metrics.MetricsFactory;
  *
  */
 @Data
+@KinesisClientInternalApi
 public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     @NonNull
     private final KinesisAsyncClient kinesisClient;

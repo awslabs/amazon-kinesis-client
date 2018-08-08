@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseTaker;
@@ -43,6 +44,7 @@ import software.amazon.kinesis.metrics.MetricsUtil;
  * An implementation of {@link LeaseTaker} that uses DynamoDB via {@link LeaseRefresher}.
  */
 @Slf4j
+@KinesisClientInternalApi
 public class DynamoDBLeaseTaker implements LeaseTaker {
     private static final int TAKE_RETRIES = 3;
     private static final int SCAN_RETRIES = 1;

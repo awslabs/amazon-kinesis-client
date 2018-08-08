@@ -19,6 +19,7 @@ import java.util.concurrent.Executors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.DataFetchingStrategy;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -26,6 +27,7 @@ import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 
 @Slf4j
+@KinesisClientInternalApi
 public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private int maxPendingProcessRecordsInput = 3;
     private int maxByteSize = 8 * 1024 * 1024;

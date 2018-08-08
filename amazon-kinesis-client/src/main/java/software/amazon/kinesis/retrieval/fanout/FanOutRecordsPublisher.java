@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -42,6 +43,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @RequiredArgsConstructor
 @Slf4j
+@KinesisClientInternalApi
 public class FanOutRecordsPublisher implements RecordsPublisher {
 
     private final KinesisAsyncClient kinesis;

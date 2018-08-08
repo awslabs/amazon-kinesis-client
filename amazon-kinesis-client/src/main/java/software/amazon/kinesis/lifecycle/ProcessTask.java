@@ -61,8 +61,6 @@ public class ProcessTask implements ConsumerTask {
     private final MetricsFactory metricsFactory;
     private final AggregatorUtil aggregatorUtil;
 
-    private TaskCompletedListener listener;
-
     public ProcessTask(@NonNull ShardInfo shardInfo,
                        @NonNull ShardRecordProcessor shardRecordProcessor,
                        @NonNull ShardRecordProcessorCheckpointer recordProcessorCheckpointer,
@@ -157,9 +155,6 @@ public class ProcessTask implements ConsumerTask {
         } finally {
             MetricsUtil.addSuccessAndLatency(scope, success, startTimeMillis, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(scope);
-            if (listener != null) {
-                listener.taskCompleted(this);
-            }
         }
     }
 

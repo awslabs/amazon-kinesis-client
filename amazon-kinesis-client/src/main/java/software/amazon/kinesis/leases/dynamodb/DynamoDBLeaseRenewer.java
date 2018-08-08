@@ -35,6 +35,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseRenewer;
@@ -50,6 +51,7 @@ import software.amazon.kinesis.metrics.MetricsUtil;
  * An implementation of {@link LeaseRenewer} that uses DynamoDB via {@link LeaseRefresher}.
  */
 @Slf4j
+@KinesisClientInternalApi
 public class DynamoDBLeaseRenewer implements LeaseRenewer {
     private static final int RENEWAL_RETRIES = 2;
     private static final String RENEW_ALL_LEASES_DIMENSION = "RenewAllLeases";

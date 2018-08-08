@@ -34,6 +34,7 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 
@@ -41,6 +42,7 @@ import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
  *
  */
 @Slf4j
+@KinesisClientInternalApi
 public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrievalStrategy {
     private static final int TIME_TO_KEEP_ALIVE = 5;
     private static final int CORE_THREAD_POOL_COUNT = 1;

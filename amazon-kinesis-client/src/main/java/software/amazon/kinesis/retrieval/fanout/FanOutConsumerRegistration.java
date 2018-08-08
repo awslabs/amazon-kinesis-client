@@ -29,6 +29,7 @@ import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerReque
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
@@ -40,6 +41,7 @@ import software.amazon.kinesis.retrieval.ConsumerRegistration;
 @RequiredArgsConstructor
 @Slf4j
 @Accessors(fluent = true)
+@KinesisClientInternalApi
 public class FanOutConsumerRegistration implements ConsumerRegistration {
     @NonNull
     private final KinesisAsyncClient kinesisClient;

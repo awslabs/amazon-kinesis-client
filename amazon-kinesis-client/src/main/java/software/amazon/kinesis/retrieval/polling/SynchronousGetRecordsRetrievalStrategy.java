@@ -17,12 +17,14 @@ package software.amazon.kinesis.retrieval.polling;
 import lombok.Data;
 import lombok.NonNull;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 
 /**
  *
  */
 @Data
+@KinesisClientInternalApi
 public class SynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrievalStrategy {
     @NonNull
     private final KinesisDataFetcher dataFetcher;

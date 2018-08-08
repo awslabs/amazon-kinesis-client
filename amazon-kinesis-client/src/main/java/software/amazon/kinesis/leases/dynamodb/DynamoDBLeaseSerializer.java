@@ -30,6 +30,7 @@ import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
 import software.amazon.awssdk.services.dynamodb.model.KeyType;
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.DynamoUtils;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseSerializer;
@@ -39,6 +40,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * An implementation of ILeaseSerializer for basic Lease objects. Can also instantiate subclasses of Lease so that
  * LeaseSerializer can be decorated by other classes if you need to add fields to leases.
  */
+@KinesisClientInternalApi
 public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String LEASE_KEY_KEY = "leaseKey";
     private static final String LEASE_OWNER_KEY = "leaseOwner";

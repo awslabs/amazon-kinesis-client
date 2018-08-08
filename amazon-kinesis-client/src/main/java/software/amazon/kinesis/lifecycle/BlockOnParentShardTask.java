@@ -18,6 +18,7 @@ import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -34,6 +35,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  */
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 @Slf4j
+@KinesisClientInternalApi
 // TODO: Check for non null values
 public class BlockOnParentShardTask implements ConsumerTask {
     @NonNull

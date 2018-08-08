@@ -9,9 +9,11 @@ import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 
+@KinesisClientInternalApi
 public class IteratorBuilder {
 
     public static SubscribeToShardRequest.Builder request(SubscribeToShardRequest.Builder builder,

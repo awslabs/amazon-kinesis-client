@@ -23,6 +23,7 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.exceptions.KinesisClientLibDependencyException;
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
@@ -43,6 +44,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  */
 @RequiredArgsConstructor
 @Slf4j
+@KinesisClientInternalApi
 public class DynamoDBCheckpointer implements Checkpointer {
     @NonNull
     private final LeaseCoordinator leaseCoordinator;

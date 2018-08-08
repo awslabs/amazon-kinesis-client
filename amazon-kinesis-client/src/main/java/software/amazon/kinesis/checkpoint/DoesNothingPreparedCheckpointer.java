@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.checkpoint;
 
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.InvalidStateException;
 import software.amazon.kinesis.exceptions.KinesisClientLibDependencyException;
 import software.amazon.kinesis.exceptions.ShutdownException;
@@ -32,6 +33,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * initialized, processes 0 records, then calls prepareCheckpoint(). The value in the table is the same, so there's
  * no reason to overwrite it with another copy of itself.
  */
+@KinesisClientInternalApi
 public class DoesNothingPreparedCheckpointer implements PreparedCheckpointer {
 
     private final ExtendedSequenceNumber sequenceNumber;
