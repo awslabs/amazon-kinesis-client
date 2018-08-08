@@ -48,7 +48,7 @@ To make it easier for developers to write record processors in other languages, 
   * `SubscribeToShard` maintains long lived connections with Kinesis, which in the AWS Java SDK 2.0 is limited by default.  
     The `KinesisClientUtil` has been added to assist configuring the `maxConcurrency` of the `KinesisAsyncClient`.   
     __WARNING: The Amazon Kinesis Client may see significantly increased latency, unless the `KinesisAsyncClient` is configured to have a `maxConcurrency` high enough to allow all leases plus additional usages of the `KinesisAsyncClient`.__
-  * The Amazon Kinesis Client now uses 3 additional Kinesis API's:  
+  * The Amazon Kinesis Client now uses additional Kinesis API's:  
     __WARNING: If using a restrictive Kinesis IAM policy you may need to add the following API methods to the policy.__  
     * [`SubscribeToShard`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_SubscribeToShard.html)
     * [`DescribeStreamSummary`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_DescribeStreamSummary.html)
