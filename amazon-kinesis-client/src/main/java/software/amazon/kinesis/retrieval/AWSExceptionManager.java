@@ -23,10 +23,12 @@ import java.util.function.Function;
 import lombok.NonNull;
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
 /**
  *
  */
+@KinesisClientInternalApi
 public class AWSExceptionManager {
     private final Map<Class<? extends Throwable>, Function<? extends Throwable, RuntimeException>> map = new HashMap<>();
 

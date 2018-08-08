@@ -17,6 +17,7 @@ package software.amazon.kinesis.leases;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.ConsumerTask;
 import software.amazon.kinesis.lifecycle.TaskResult;
@@ -33,6 +34,7 @@ import software.amazon.kinesis.metrics.MetricsUtil;
  */
 @RequiredArgsConstructor
 @Slf4j
+@KinesisClientInternalApi
 public class ShardSyncTask implements ConsumerTask {
     private final String SHARD_SYNC_TASK_OPERATION = "ShardSyncTask";
 

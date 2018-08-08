@@ -43,6 +43,7 @@ import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.utils.CollectionUtils;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 
@@ -52,6 +53,7 @@ import software.amazon.kinesis.retrieval.AWSExceptionManager;
 @RequiredArgsConstructor
 @Slf4j
 @Accessors(fluent = true)
+@KinesisClientInternalApi
 public class KinesisShardDetector implements ShardDetector {
     @NonNull
     private final KinesisAsyncClient kinesisClient;

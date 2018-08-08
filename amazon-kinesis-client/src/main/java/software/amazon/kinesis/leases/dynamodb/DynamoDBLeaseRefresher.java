@@ -45,6 +45,7 @@ import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.utils.CollectionUtils;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseSerializer;
@@ -59,6 +60,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  */
 @AllArgsConstructor
 @Slf4j
+@KinesisClientInternalApi
 public class DynamoDBLeaseRefresher implements LeaseRefresher {
     protected final String table;
     protected final DynamoDbAsyncClient dynamoDBClient;

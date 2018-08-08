@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -54,6 +55,7 @@ import software.amazon.kinesis.metrics.MetricsUtil;
  *
  */
 @Slf4j
+@KinesisClientInternalApi
 public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     // Time to wait for in-flight Runnables to finish when calling .stop();
     private static final long STOP_WAIT_TIME_MILLIS = 2000L;

@@ -11,6 +11,7 @@ package software.amazon.kinesis.retrieval.polling;
 import lombok.Data;
 import lombok.NonNull;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -22,6 +23,7 @@ import software.amazon.kinesis.retrieval.RetrievalFactory;
  *
  */
 @Data
+@KinesisClientInternalApi
 public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
     @NonNull
     private final String streamName;

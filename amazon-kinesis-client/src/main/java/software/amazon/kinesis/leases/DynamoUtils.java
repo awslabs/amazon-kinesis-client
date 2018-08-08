@@ -15,6 +15,7 @@
 package software.amazon.kinesis.leases;
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -24,6 +25,7 @@ import java.util.Map;
 /**
  * Static utility functions used by our LeaseSerializers.
  */
+@KinesisClientInternalApi
 public class DynamoUtils {
 
     public static AttributeValue createAttributeValue(Collection<String> collectionValue) {

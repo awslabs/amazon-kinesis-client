@@ -16,6 +16,7 @@ package software.amazon.kinesis.lifecycle;
 
 import java.util.concurrent.CountDownLatch;
 
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.processor.ShutdownNotificationAware;
@@ -24,6 +25,7 @@ import software.amazon.kinesis.processor.ShutdownNotificationAware;
  * Contains callbacks for completion of stages in a requested record processor shutdown.
  *
  */
+@KinesisClientInternalApi
 public class ShardConsumerShutdownNotification implements ShutdownNotification {
 
     private final LeaseCoordinator leaseCoordinator;

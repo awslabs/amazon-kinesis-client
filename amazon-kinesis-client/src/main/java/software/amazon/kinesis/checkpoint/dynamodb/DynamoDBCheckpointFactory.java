@@ -16,6 +16,7 @@
 package software.amazon.kinesis.checkpoint.dynamodb;
 
 import lombok.Data;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.CheckpointFactory;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -25,6 +26,7 @@ import software.amazon.kinesis.processor.Checkpointer;
  *
  */
 @Data
+@KinesisClientInternalApi
 public class DynamoDBCheckpointFactory implements CheckpointFactory {
     @Override
     public Checkpointer createCheckpointer(final LeaseCoordinator leaseLeaseCoordinator,

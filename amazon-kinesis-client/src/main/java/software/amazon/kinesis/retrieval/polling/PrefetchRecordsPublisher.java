@@ -33,6 +33,7 @@ import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -54,6 +55,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * the record processor is blocked till records are retrieved from Kinesis.
  */
 @Slf4j
+@KinesisClientInternalApi
 public class PrefetchRecordsPublisher implements RecordsPublisher {
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     LinkedBlockingQueue<ProcessRecordsInput> getRecordsResultQueue;

@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.reactivestreams.Subscriber;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
@@ -32,6 +33,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * This is the BlockingRecordsPublisher class. This class blocks any calls to the records on the
  * GetRecordsRetrievalStrategy class.
  */
+@KinesisClientInternalApi
 public class BlockingRecordsPublisher implements RecordsPublisher {
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;

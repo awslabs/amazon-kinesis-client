@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.metrics;
 
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.lifecycle.ConsumerTask;
 import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.lifecycle.TaskType;
@@ -21,6 +22,7 @@ import software.amazon.kinesis.lifecycle.TaskType;
 /**
  * Decorates an ConsumerTask and reports metrics about its timing and success/failure.
  */
+@KinesisClientInternalApi
 public class MetricsCollectingTaskDecorator implements ConsumerTask {
 
     private final ConsumerTask other;
