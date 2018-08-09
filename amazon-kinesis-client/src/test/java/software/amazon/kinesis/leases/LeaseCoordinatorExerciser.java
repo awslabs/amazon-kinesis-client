@@ -50,6 +50,8 @@ public class LeaseCoordinatorExerciser {
     private static final int MAX_LEASE_RENEWER_THREAD_COUNT = 20;
     private static final MetricsLevel METRICS_LEVEL = MetricsLevel.DETAILED;
     private static final int FLUSH_SIZE = 200;
+    private static final long INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
+    private static final long INITIAL_LEASE_TABLE_WRITE_CAPACITY = 50L;
 
     public static void main(String[] args) throws InterruptedException, DependencyException, InvalidStateException,
             ProvisionedThroughputException, IOException {
@@ -65,7 +67,8 @@ public class LeaseCoordinatorExerciser {
         LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", dynamoDBClient,
                 new DynamoDBLeaseSerializer(), true);
 
-        if (leaseRefresher.createLeaseTableIfNotExists(10L, 50L)) {
+        if (leaseRefresher.createLeaseTableIfNotExists(INITIAL_LEASE_TABLE_READ_CAPACITY,
+                INITIAL_LEASE_TABLE_WRITE_CAPACITY)) {
             log.info("Waiting for newly created lease table");
             if (!leaseRefresher.waitUntilLeaseTableExists(10, 300)) {
                 log.error("Table was not created in time");
@@ -83,7 +86,8 @@ public class LeaseCoordinatorExerciser {
 
             LeaseCoordinator coord = new DynamoDBLeaseCoordinator(leaseRefresher, workerIdentifier, leaseDurationMillis,
                     epsilonMillis, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME,
-                    MAX_LEASE_RENEWER_THREAD_COUNT, metricsFactory);
+                    MAX_LEASE_RENEWER_THREAD_COUNT, INITIAL_LEASE_TABLE_READ_CAPACITY,
+                    INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
 
             coordinators.add(coord);
         }

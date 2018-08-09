@@ -44,8 +44,8 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.MetricsFactory;
-import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
 /**
@@ -59,8 +59,6 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     // Time to wait for in-flight Runnables to finish when calling .stop();
     private static final long STOP_WAIT_TIME_MILLIS = 2000L;
-    private static final long DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
-    private static final long DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
     private static final ThreadFactory LEASE_COORDINATOR_THREAD_FACTORY = new ThreadFactoryBuilder()
             .setNameFormat("LeaseCoordinator-%04d").setDaemon(true).build();
     private static final ThreadFactory LEASE_RENEWAL_THREAD_FACTORY = new ThreadFactoryBuilder()
@@ -72,11 +70,12 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     private final long takerIntervalMillis;
     private final ExecutorService leaseRenewalThreadpool;
     private final LeaseRefresher leaseRefresher;
-    private final Object shutdownLock = new Object();
+    private final long initialLeaseTableReadCapacity;
+    private final long initialLeaseTableWriteCapacity;
     protected final MetricsFactory metricsFactory;
 
-    private long initialLeaseTableReadCapacity = DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY;
-    private long initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
+    private final Object shutdownLock = new Object();
+
     private ScheduledExecutorService leaseCoordinatorThreadPool;
     private ScheduledFuture<?> takerFuture;
 
@@ -85,13 +84,24 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     /**
      * Constructor.
      *
-     * @param leaseRefresher LeaseRefresher instance to use
-     * @param workerIdentifier Identifies the worker (e.g. useful to track lease ownership)
-     * @param leaseDurationMillis Duration of a lease
-     * @param epsilonMillis Allow for some variance when calculating lease expirations
-     * @param maxLeasesForWorker Max leases this Worker can handle at a time
-     * @param maxLeasesToStealAtOneTime Steal up to these many leases at a time (for load balancing)
-     * @param metricsFactory Used to publish metrics about lease operations
+     * @param leaseRefresher
+     *            LeaseRefresher instance to use
+     * @param workerIdentifier
+     *            Identifies the worker (e.g. useful to track lease ownership)
+     * @param leaseDurationMillis
+     *            Duration of a lease
+     * @param epsilonMillis
+     *            Allow for some variance when calculating lease expirations
+     * @param maxLeasesForWorker
+     *            Max leases this Worker can handle at a time
+     * @param maxLeasesToStealAtOneTime
+     *            Steal up to these many leases at a time (for load balancing)
+     * @param initialLeaseTableReadCapacity
+     *            Initial dynamodb lease table read iops if creating the lease table
+     * @param initialLeaseTableWriteCapacity
+     *            Initial dynamodb lease table write iops if creating the lease table
+     * @param metricsFactory
+     *            Used to publish metrics about lease operations
      */
     public DynamoDBLeaseCoordinator(final LeaseRefresher leaseRefresher,
                                     final String workerIdentifier,
@@ -100,6 +110,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                                     final int maxLeasesForWorker,
                                     final int maxLeasesToStealAtOneTime,
                                     final int maxLeaseRenewerThreadCount,
+                                    final long initialLeaseTableReadCapacity,
+                                    final long initialLeaseTableWriteCapacity,
                                     final MetricsFactory metricsFactory) {
         this.leaseRefresher = leaseRefresher;
         this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
@@ -110,6 +122,14 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 leaseRefresher, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool, metricsFactory);
         this.renewerIntervalMillis = leaseDurationMillis / 3 - epsilonMillis;
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
+        if (initialLeaseTableReadCapacity <= 0) {
+            throw new IllegalArgumentException("readCapacity should be >= 1");
+        }
+        this.initialLeaseTableReadCapacity = initialLeaseTableReadCapacity;
+        if (initialLeaseTableWriteCapacity <= 0) {
+            throw new IllegalArgumentException("writeCapacity should be >= 1");
+        }
+        this.initialLeaseTableWriteCapacity = initialLeaseTableWriteCapacity;
         this.metricsFactory = metricsFactory;
 
         log.info("With failover time {} ms and epsilon {} ms, LeaseCoordinator will renew leases every {} ms, take"
@@ -324,19 +344,11 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
     @Override
     public DynamoDBLeaseCoordinator initialLeaseTableReadCapacity(long readCapacity) {
-        if (readCapacity <= 0) {
-            throw new IllegalArgumentException("readCapacity should be >= 1");
-        }
-        this.initialLeaseTableReadCapacity = readCapacity;
-        return this;
+        throw new UnsupportedOperationException("Please set read capacity using the constructor");
     }
 
     @Override
     public DynamoDBLeaseCoordinator initialLeaseTableWriteCapacity(long writeCapacity) {
-        if (writeCapacity <= 0) {
-            throw new IllegalArgumentException("writeCapacity should be >= 1");
-        }
-        this.initialLeaseTableWriteCapacity = writeCapacity;
-        return this;
+        throw new UnsupportedOperationException("Please set write capacity using the constructor");
     }
 }

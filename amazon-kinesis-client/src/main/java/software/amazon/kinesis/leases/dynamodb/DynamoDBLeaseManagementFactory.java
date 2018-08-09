@@ -64,6 +64,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private final int maxCacheMissesBeforeReload;
     private final long listShardsCacheAllowedAgeInSeconds;
     private final int cacheMissWarningModulus;
+    private final long initialLeaseTableReadCapacity;
+    private final long initialLeaseTableWriteCapacity;
 
     @Override
     public LeaseCoordinator createLeaseCoordinator(@NonNull final MetricsFactory metricsFactory) {
@@ -74,6 +76,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 maxLeasesForWorker,
                 maxLeasesToStealAtOneTime,
                 maxLeaseRenewalThreads,
+                initialLeaseTableReadCapacity,
+                initialLeaseTableWriteCapacity,
                 metricsFactory);
     }
 

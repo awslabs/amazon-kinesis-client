@@ -56,6 +56,9 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
     private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
     private static final int MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
     private static final int MAX_LEASE_RENEWER_THREAD_COUNT = 20;
+    private static final long INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
+    private static final long INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
+
     private static DynamoDBLeaseRefresher leaseRefresher;
     private static DynamoDBCheckpointer dynamoDBCheckpointer;
 
@@ -93,7 +96,7 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
         leaseRefresher.deleteAll();
         coordinator = new DynamoDBLeaseCoordinator(leaseRefresher, WORKER_ID, LEASE_DURATION_MILLIS,
                 EPSILON_MILLIS, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
-                metricsFactory);
+                INITIAL_LEASE_TABLE_READ_CAPACITY, INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
         dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseRefresher);
         dynamoDBCheckpointer.operation(OPERATION);
 
