@@ -16,6 +16,7 @@
 package software.amazon.kinesis.retrieval.fanout;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -27,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
@@ -124,9 +126,19 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 outstandingRequests = 0;
 
                 try {
-                    subscriber.onError(t);
+                    if (t.getCause() instanceof ResourceNotFoundException) {
+                        log.warn(
+                                "{}: Could not call SubscribeToShard successfully because shard no longer exists. Marking shard for completion.",
+                                shardId);
+                        subscriber.onNext(ProcessRecordsInput.builder().records(Collections.emptyList())
+                                .isAtShardEnd(true).build());
+                        subscriber.onComplete();
+                    } else {
+                        subscriber.onError(t);
+                    }
+
                 } catch (Throwable innerThrowable) {
-                    log.warn("{}: Exception while calling subscriber.onError", innerThrowable);
+                    log.warn("{}: Exception while calling subscriber.onError", shardId, innerThrowable);
                 }
                 subscriber = null;
                 flow = null;

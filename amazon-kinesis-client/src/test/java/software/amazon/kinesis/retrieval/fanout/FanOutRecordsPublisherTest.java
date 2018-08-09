@@ -1,12 +1,16 @@
 package software.amazon.kinesis.retrieval.fanout;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -31,6 +35,7 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
@@ -188,6 +193,45 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
+    }
+
+    @Test
+    public void testResourceNotFoundForShard() {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        when(kinesisClient.subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture()))
+                .thenThrow(new RuntimeException(ResourceNotFoundException.builder().build()));
+
+        Subscriber<ProcessRecordsInput> subscriber = spy(new Subscriber<ProcessRecordsInput>() {
+            @Override
+            public void onSubscribe(final Subscription subscription) {
+                assertThat(subscription, notNullValue());
+            }
+
+            @Override
+            public void onNext(final ProcessRecordsInput processRecordsInput) {
+                assertThat(processRecordsInput.isAtShardEnd(), equalTo(true));
+                assertThat(processRecordsInput.records().isEmpty(), equalTo(true));
+            }
+
+            @Override
+            public void onError(final Throwable throwable) {
+            }
+
+            @Override
+            public void onComplete() {
+            }
+        });
+
+        source.subscribe(subscriber);
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        flowCaptor.getValue().onEventStream(publisher);
+        verify(subscriber).onComplete();
+        verify(subscriber, never()).onError(any());
     }
 
     private Record makeRecord(int sequenceNumber) {
