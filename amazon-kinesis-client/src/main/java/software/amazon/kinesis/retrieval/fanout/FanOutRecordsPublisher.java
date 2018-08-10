@@ -126,17 +126,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 outstandingRequests = 0;
 
                 try {
-                    if (t.getCause() instanceof ResourceNotFoundException) {
-                        log.warn(
-                                "{}: Could not call SubscribeToShard successfully because shard no longer exists. Marking shard for completion.",
-                                shardId);
-                        subscriber.onNext(ProcessRecordsInput.builder().records(Collections.emptyList())
-                                .isAtShardEnd(true).build());
-                        subscriber.onComplete();
-                    } else {
-                        subscriber.onError(t);
-                    }
-
+                    handleFlowError(t);
                 } catch (Throwable innerThrowable) {
                     log.warn("{}: Exception while calling subscriber.onError", shardId, innerThrowable);
                 }
@@ -151,6 +141,19 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 }
             }
 
+        }
+    }
+
+    private void handleFlowError(Throwable t) {
+        if (t.getCause() instanceof ResourceNotFoundException) {
+            log.debug(
+                    "{}: Could not call SubscribeToShard successfully because shard no longer exists. Marking shard for completion.",
+                    shardId);
+            subscriber
+                    .onNext(ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true).build());
+            subscriber.onComplete();
+        } else {
+            subscriber.onError(t);
         }
     }
 

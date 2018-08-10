@@ -5,8 +5,8 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -201,23 +201,7 @@ public class FanOutRecordsPublisherTest {
                 .forClass(FanOutRecordsPublisher.RecordFlow.class);
         ArgumentCaptor<ProcessRecordsInput> inputCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
 
-        Subscriber<ProcessRecordsInput> subscriber = spy(new Subscriber<ProcessRecordsInput>() {
-            @Override
-            public void onSubscribe(final Subscription subscription) {
-            }
-
-            @Override
-            public void onNext(final ProcessRecordsInput processRecordsInput) {
-            }
-
-            @Override
-            public void onError(final Throwable throwable) {
-            }
-
-            @Override
-            public void onComplete() {
-            }
-        });
+        Subscriber<ProcessRecordsInput> subscriber = mock(Subscriber.class);
 
         source.subscribe(subscriber);
 
