@@ -5,7 +5,6 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -56,6 +55,8 @@ public class FanOutRecordsPublisherTest {
     private SdkPublisher<SubscribeToShardEventStream> publisher;
     @Mock
     private Subscription subscription;
+    @Mock
+    private Subscriber<ProcessRecordsInput> subscriber;
 
     private SubscribeToShardEvent batchEvent;
 
@@ -200,8 +201,6 @@ public class FanOutRecordsPublisherTest {
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
                 .forClass(FanOutRecordsPublisher.RecordFlow.class);
         ArgumentCaptor<ProcessRecordsInput> inputCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
-
-        Subscriber<ProcessRecordsInput> subscriber = mock(Subscriber.class);
 
         source.subscribe(subscriber);
 
