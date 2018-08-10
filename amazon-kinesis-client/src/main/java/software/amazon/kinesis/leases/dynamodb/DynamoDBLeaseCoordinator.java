@@ -59,8 +59,6 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     // Time to wait for in-flight Runnables to finish when calling .stop();
     private static final long STOP_WAIT_TIME_MILLIS = 2000L;
-    private static final long DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
-    private static final long DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
     private static final ThreadFactory LEASE_COORDINATOR_THREAD_FACTORY = new ThreadFactoryBuilder()
             .setNameFormat("LeaseCoordinator-%04d").setDaemon(true).build();
     private static final ThreadFactory LEASE_RENEWAL_THREAD_FACTORY = new ThreadFactoryBuilder()
@@ -113,8 +111,9 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                                     final int maxLeaseRenewerThreadCount,
                                     final MetricsFactory metricsFactory) {
         this(leaseRefresher, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
-                maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY,
-                DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
+                maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount,
+                TableConstants.DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY,
+                TableConstants.DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
     }
 
     /**

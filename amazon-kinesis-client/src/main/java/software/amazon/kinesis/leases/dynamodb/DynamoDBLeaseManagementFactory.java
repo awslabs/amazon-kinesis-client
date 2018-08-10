@@ -67,6 +67,114 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private final long initialLeaseTableReadCapacity;
     private final long initialLeaseTableWriteCapacity;
 
+    /**
+     * Constructor.
+     *
+     * <p>NOTE: This constructor is deprecated and will be removed in a future release.</p>
+     *
+     * @param kinesisClient
+     * @param streamName
+     * @param dynamoDBClient
+     * @param tableName
+     * @param workerIdentifier
+     * @param executorService
+     * @param initialPositionInStream
+     * @param failoverTimeMillis
+     * @param epsilonMillis
+     * @param maxLeasesForWorker
+     * @param maxLeasesToStealAtOneTime
+     * @param maxLeaseRenewalThreads
+     * @param cleanupLeasesUponShardCompletion
+     * @param ignoreUnexpectedChildShards
+     * @param shardSyncIntervalMillis
+     * @param consistentReads
+     * @param listShardsBackoffTimeMillis
+     * @param maxListShardsRetryAttempts
+     * @param maxCacheMissesBeforeReload
+     * @param listShardsCacheAllowedAgeInSeconds
+     * @param cacheMissWarningModulus
+     */
+    @Deprecated
+    public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final String streamName,
+            final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
+            final ExecutorService executorService, final InitialPositionInStreamExtended initialPositionInStream,
+            final long failoverTimeMillis, final long epsilonMillis, final int maxLeasesForWorker,
+            final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
+            final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
+            final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
+            final int maxListShardsRetryAttempts, final int maxCacheMissesBeforeReload,
+            final long listShardsCacheAllowedAgeInSeconds, final int cacheMissWarningModulus) {
+        this(kinesisClient, streamName, dynamoDBClient, tableName, workerIdentifier, executorService,
+                initialPositionInStream, failoverTimeMillis, epsilonMillis, maxLeasesForWorker,
+                maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
+                ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
+                maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
+                cacheMissWarningModulus, TableConstants.DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY,
+                TableConstants.DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY);
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param kinesisClient
+     * @param streamName
+     * @param dynamoDBClient
+     * @param tableName
+     * @param workerIdentifier
+     * @param executorService
+     * @param initialPositionInStream
+     * @param failoverTimeMillis
+     * @param epsilonMillis
+     * @param maxLeasesForWorker
+     * @param maxLeasesToStealAtOneTime
+     * @param maxLeaseRenewalThreads
+     * @param cleanupLeasesUponShardCompletion
+     * @param ignoreUnexpectedChildShards
+     * @param shardSyncIntervalMillis
+     * @param consistentReads
+     * @param listShardsBackoffTimeMillis
+     * @param maxListShardsRetryAttempts
+     * @param maxCacheMissesBeforeReload
+     * @param listShardsCacheAllowedAgeInSeconds
+     * @param cacheMissWarningModulus
+     * @param initialLeaseTableReadCapacity
+     * @param initialLeaseTableWriteCapacity
+     */
+    public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final String streamName,
+            final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
+            final ExecutorService executorService, final InitialPositionInStreamExtended initialPositionInStream,
+            final long failoverTimeMillis, final long epsilonMillis, final int maxLeasesForWorker,
+            final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
+            final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
+            final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
+            final int maxListShardsRetryAttempts, final int maxCacheMissesBeforeReload,
+            final long listShardsCacheAllowedAgeInSeconds, final int cacheMissWarningModulus,
+            final long initialLeaseTableReadCapacity, final long initialLeaseTableWriteCapacity) {
+        this.kinesisClient = kinesisClient;
+        this.streamName = streamName;
+        this.dynamoDBClient = dynamoDBClient;
+        this.tableName = tableName;
+        this.workerIdentifier = workerIdentifier;
+        this.executorService = executorService;
+        this.initialPositionInStream = initialPositionInStream;
+        this.failoverTimeMillis = failoverTimeMillis;
+        this.epsilonMillis = epsilonMillis;
+        this.maxLeasesForWorker = maxLeasesForWorker;
+        this.maxLeasesToStealAtOneTime = maxLeasesToStealAtOneTime;
+        this.maxLeaseRenewalThreads = maxLeaseRenewalThreads;
+        this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
+        this.shardSyncIntervalMillis = shardSyncIntervalMillis;
+        this.consistentReads = consistentReads;
+        this.listShardsBackoffTimeMillis = listShardsBackoffTimeMillis;
+        this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
+        this.maxCacheMissesBeforeReload = maxCacheMissesBeforeReload;
+        this.listShardsCacheAllowedAgeInSeconds = listShardsCacheAllowedAgeInSeconds;
+        this.cacheMissWarningModulus = cacheMissWarningModulus;
+        this.initialLeaseTableReadCapacity = initialLeaseTableReadCapacity;
+        this.initialLeaseTableWriteCapacity = initialLeaseTableWriteCapacity;
+    }
+
     @Override
     public LeaseCoordinator createLeaseCoordinator(@NonNull final MetricsFactory metricsFactory) {
         return new DynamoDBLeaseCoordinator(this.createLeaseRefresher(),
