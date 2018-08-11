@@ -75,7 +75,7 @@ import software.amazon.kinesis.retrieval.RetrievalConfig;
 @Accessors(fluent = true)
 @Slf4j
 public class Scheduler implements Runnable {
-    static final int MAX_INITIALIZATION_ATTEMPTS = 20;
+
     private SchedulerLog slog = new SchedulerLog();
 
     private final CheckpointConfig checkpointConfig;
@@ -197,7 +197,7 @@ public class Scheduler implements Runnable {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e) {
-            log.error("Unable to initialize after {} attempts. Shutting down.", MAX_INITIALIZATION_ATTEMPTS, e);
+            log.error("Unable to initialize after {} attempts. Shutting down.", lifecycleConfig.maxInitializationAttempts(), e);
             shutdown();
         }
 
@@ -214,7 +214,7 @@ public class Scheduler implements Runnable {
         boolean isDone = false;
         Exception lastException = null;
 
-        for (int i = 0; (!isDone) && (i < MAX_INITIALIZATION_ATTEMPTS); i++) {
+        for (int i = 0; (!isDone) && (i < lifecycleConfig.maxInitializationAttempts()); i++) {
             try {
                 log.info("Initialization attempt {}", (i + 1));
                 log.info("Initializing LeaseCoordinator");
