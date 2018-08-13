@@ -5,6 +5,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -31,6 +32,7 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
@@ -53,6 +55,8 @@ public class FanOutRecordsPublisherTest {
     private SdkPublisher<SubscribeToShardEventStream> publisher;
     @Mock
     private Subscription subscription;
+    @Mock
+    private Subscriber<ProcessRecordsInput> subscriber;
 
     private SubscribeToShardEvent batchEvent;
 
@@ -188,6 +192,30 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
+    }
+
+    @Test
+    public void testResourceNotFoundForShard() {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+        ArgumentCaptor<ProcessRecordsInput> inputCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
+
+        source.subscribe(subscriber);
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        FanOutRecordsPublisher.RecordFlow recordFlow = flowCaptor.getValue();
+        recordFlow.exceptionOccurred(new RuntimeException(ResourceNotFoundException.builder().build()));
+
+        verify(subscriber).onSubscribe(any());
+        verify(subscriber, never()).onError(any());
+        verify(subscriber).onNext(inputCaptor.capture());
+        verify(subscriber).onComplete();
+
+        ProcessRecordsInput input = inputCaptor.getValue();
+        assertThat(input.isAtShardEnd(), equalTo(true));
+        assertThat(input.records().isEmpty(), equalTo(true));
     }
 
     private Record makeRecord(int sequenceNumber) {
