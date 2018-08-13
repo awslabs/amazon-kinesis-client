@@ -21,15 +21,15 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
-import software.amazon.kinesis.common.InitialPositionInStream;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
@@ -216,7 +216,9 @@ public class LeaseManagementConfig {
                     maxListShardsRetryAttempts(),
                     maxCacheMissesBeforeReload(),
                     listShardsCacheAllowedAgeInSeconds(),
-                    cacheMissWarningModulus());
+                    cacheMissWarningModulus(),
+                    initialLeaseTableReadCapacity(),
+                    initialLeaseTableWriteCapacity());
         }
         return leaseManagementFactory;
     }
