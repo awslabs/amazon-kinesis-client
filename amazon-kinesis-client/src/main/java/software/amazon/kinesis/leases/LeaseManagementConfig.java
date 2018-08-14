@@ -171,11 +171,6 @@ public class LeaseManagementConfig {
     private int cacheMissWarningModulus = 250;
 
     /**
-     *
-     */
-    private MetricsFactory metricsFactory = new NullMetricsFactory();
-
-    /**
      * The {@link ExecutorService} to be used by {@link ShardSyncTaskManager}.
      *
      * <p>Default value: {@link LeaseManagementThreadPool}</p>
