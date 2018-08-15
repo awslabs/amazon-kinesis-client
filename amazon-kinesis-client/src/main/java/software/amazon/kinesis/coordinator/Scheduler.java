@@ -87,6 +87,7 @@ public class Scheduler implements Runnable {
     private final RetrievalConfig retrievalConfig;
 
     private final String applicationName;
+    private final int maxInitializationAttempts;
     private final Checkpointer checkpoint;
     private final long shardConsumerDispatchPollIntervalMillis;
     // Backoff time when polling to check if application has finished processing
@@ -144,6 +145,7 @@ public class Scheduler implements Runnable {
         this.retrievalConfig = retrievalConfig;
 
         this.applicationName = this.coordinatorConfig.applicationName();
+        this.maxInitializationAttempts = this.coordinatorConfig.maxSchedulerInitializationAttempts();
         this.metricsFactory = this.metricsConfig.metricsFactory();
         this.leaseCoordinator = this.leaseManagementConfig.leaseManagementFactory()
                 .createLeaseCoordinator(this.metricsFactory);
@@ -197,7 +199,7 @@ public class Scheduler implements Runnable {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e) {
-            log.error("Unable to initialize after {} attempts. Shutting down.", lifecycleConfig.maxInitializationAttempts(), e);
+            log.error("Unable to initialize after {} attempts. Shutting down.", maxInitializationAttempts, e);
             shutdown();
         }
 
@@ -214,7 +216,7 @@ public class Scheduler implements Runnable {
         boolean isDone = false;
         Exception lastException = null;
 
-        for (int i = 0; (!isDone) && (i < lifecycleConfig.maxInitializationAttempts()); i++) {
+        for (int i = 0; (!isDone) && (i < maxInitializationAttempts); i++) {
             try {
                 log.info("Initialization attempt {}", (i + 1));
                 log.info("Initializing LeaseCoordinator");

@@ -46,8 +46,4 @@ public class LifecycleConfig {
      */
     private AggregatorUtil aggregatorUtil = new AggregatorUtil();
 
-    /**
-     * The maximum number of attempts to initialize the Scheduler
-     */
-    private int maxInitializationAttempts = 20;
 }
