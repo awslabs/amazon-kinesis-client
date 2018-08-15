@@ -97,6 +97,7 @@ public class Scheduler implements Runnable {
     private final LeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager shardSyncTaskManager;
     private final ShardPrioritization shardPrioritization;
+    private final CoordinatorExceptionHandler coordinatorExceptionHandler;
     private final boolean cleanupLeasesUponShardCompletion;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private final GracefulShutdownCoordinator gracefulShutdownCoordinator;
@@ -165,6 +166,7 @@ public class Scheduler implements Runnable {
         this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory()
                 .createShardSyncTaskManager(this.metricsFactory);
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
+        this.coordinatorExceptionHandler = this.coordinatorConfig.coordinatorExceptionHandler();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
                 this.coordinatorConfig.skipShardSyncAtWorkerInitializationIfLeasesExist();
@@ -193,20 +195,26 @@ public class Scheduler implements Runnable {
             return;
         }
 
+        Exception exceptionToThrow = null;
         try {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e) {
             log.error("Unable to initialize after {} attempts. Shutting down.", lifecycleConfig.maxInitializationAttempts(), e);
             shutdown();
+            exceptionToThrow = e;
         }
 
         while (!shouldShutdown()) {
+            exceptionToThrow = null;
             runProcessLoop();
         }
 
         finalShutdown();
         log.info("Worker loop is complete. Exiting from worker.");
+        if (exceptionToThrow != null) {
+            coordinatorExceptionHandler.propogate(exceptionToThrow);
+        }
     }
 
     private void initialize() {
