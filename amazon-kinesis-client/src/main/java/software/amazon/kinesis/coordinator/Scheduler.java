@@ -145,7 +145,7 @@ public class Scheduler implements Runnable {
         this.retrievalConfig = retrievalConfig;
 
         this.applicationName = this.coordinatorConfig.applicationName();
-        this.maxInitializationAttempts = this.coordinatorConfig.maxSchedulerInitializationAttempts();
+        this.maxInitializationAttempts = this.coordinatorConfig.maxInitializationAttempts();
         this.metricsFactory = this.metricsConfig.metricsFactory();
         this.leaseCoordinator = this.leaseManagementConfig.leaseManagementFactory()
                 .createLeaseCoordinator(this.metricsFactory);

@@ -40,7 +40,7 @@ public class CoordinatorConfig {
      *
      * <p>Default value: 20</p>
      */
-    private int maxSchedulerInitializationAttempts = 20;
+    private int maxInitializationAttempts = 20;
 
     /**
      * Interval in milliseconds between polling to check for parent shard completion.

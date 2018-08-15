@@ -240,13 +240,13 @@ public class SchedulerTest {
 
         scheduler.run();
 
-        verify(shardDetector, times(coordinatorConfig.maxSchedulerInitializationAttempts())).listShards();
+        verify(shardDetector, times(coordinatorConfig.maxInitializationAttempts())).listShards();
     }
 
     @Test
     public final void testInitializationFailureWithRetriesWithConfiguredMaxInitializationAttempts() throws Exception {
         final int maxInitializationAttempts = 5;
-        coordinatorConfig.maxSchedulerInitializationAttempts(maxInitializationAttempts);
+        coordinatorConfig.maxInitializationAttempts(maxInitializationAttempts);
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
 
