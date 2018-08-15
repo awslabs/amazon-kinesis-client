@@ -36,6 +36,13 @@ public class CoordinatorConfig {
     private final String applicationName;
 
     /**
+     * The maximum number of attempts to initialize the Scheduler
+     *
+     * <p>Default value: 20</p>
+     */
+    private int maxInitializationAttempts = 20;
+
+    /**
      * Interval in milliseconds between polling to check for parent shard completion.
      * Polling frequently will take up more DynamoDB IOPS (when there are leases for shards waiting on
      * completion of parent shards).
