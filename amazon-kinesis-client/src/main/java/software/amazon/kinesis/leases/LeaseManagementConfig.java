@@ -170,10 +170,38 @@ public class LeaseManagementConfig {
     private long listShardsCacheAllowedAgeInSeconds = 30;
     private int cacheMissWarningModulus = 250;
 
-    /**
-     *
-     */
     private MetricsFactory metricsFactory = new NullMetricsFactory();
+
+    /**
+     * Returns the metrics factory.
+     *
+     * <p>
+     * NOTE: This method is deprecated and will be removed in a future release. This metrics factory is not being used
+     * in the KCL.
+     * </p>
+     *
+     * @return
+     */
+    @Deprecated
+    public MetricsFactory metricsFactory() {
+        return metricsFactory;
+    }
+
+    /**
+     * Sets the metrics factory.
+     *
+     * <p>
+     * NOTE: This method is deprecated and will be removed in a future release. This metrics factory is not being used
+     * in the KCL.
+     * </p>
+     *
+     * @param metricsFactory
+     */
+    @Deprecated
+    public LeaseManagementConfig metricsFactory(final MetricsFactory metricsFactory) {
+        this.metricsFactory = metricsFactory;
+        return this;
+    }
 
     /**
      * The {@link ExecutorService} to be used by {@link ShardSyncTaskManager}.
