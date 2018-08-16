@@ -67,7 +67,12 @@ public class CoordinatorConfig {
      */
     private ShardPrioritization shardPrioritization = new NoOpShardPrioritization();
 
-    private CoordinatorExceptionHandler coordinatorExceptionHandler = new NoOpCoordinatorExceptionHandler();
+    /**
+     * Scheduler Initialization Exception Handler
+     *
+     * <p>Default value: {@link PassThroughCoordinatorExceptionHandler}</p>
+     */
+    private CoordinatorExceptionHandler coordinatorExceptionHandler = new PassThroughCoordinatorExceptionHandler();
 
     private CoordinatorFactory coordinatorFactory = new SchedulerCoordinatorFactory();
 

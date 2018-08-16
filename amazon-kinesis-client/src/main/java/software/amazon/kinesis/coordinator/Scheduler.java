@@ -206,14 +206,13 @@ public class Scheduler implements Runnable {
         }
 
         while (!shouldShutdown()) {
-            exceptionToThrow = null;
             runProcessLoop();
         }
 
         finalShutdown();
         log.info("Worker loop is complete. Exiting from worker.");
         if (exceptionToThrow != null) {
-            coordinatorExceptionHandler.propogate(exceptionToThrow);
+            coordinatorExceptionHandler.schedulerInitializationExceptionHandler(exceptionToThrow);
         }
     }
 

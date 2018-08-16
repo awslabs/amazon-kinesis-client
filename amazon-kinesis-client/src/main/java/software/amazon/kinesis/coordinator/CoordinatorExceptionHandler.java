@@ -16,8 +16,13 @@
 package software.amazon.kinesis.coordinator;
 
 /**
- *
+ * This class handles exceptions that occur during initialization of the Scheduler
  */
 public interface CoordinatorExceptionHandler {
-    void propogate(Exception e);
+
+    /**
+     * method to handle the exceptions thrown while initializing a scheduler
+     * @param e Exception
+     */
+    void schedulerInitializationExceptionHandler(Exception e);
 }

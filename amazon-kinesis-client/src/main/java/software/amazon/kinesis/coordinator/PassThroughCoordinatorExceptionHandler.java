@@ -15,16 +15,15 @@
 
 package software.amazon.kinesis.coordinator;
 
-public class NoOpCoordinatorExceptionHandler implements CoordinatorExceptionHandler {
+import lombok.NoArgsConstructor;
 
-    /**
-     * Empty constructor for NoOp Exception Handler
-     */
-    public NoOpCoordinatorExceptionHandler() {
-
-    }
+/**
+ * A NoOp implementation of CoordinatorExceptionHandler to pass through CoordinatorConfig as default
+ */
+@NoArgsConstructor
+public class PassThroughCoordinatorExceptionHandler implements CoordinatorExceptionHandler {
 
     @Override
-    public void propogate(Exception e) {
+    public void schedulerInitializationExceptionHandler(Exception e) {
     }
 }
