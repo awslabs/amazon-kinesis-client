@@ -4,8 +4,10 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -33,6 +35,8 @@ import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
+import software.amazon.awssdk.services.kinesis.model.StartingPosition;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
@@ -216,6 +220,116 @@ public class FanOutRecordsPublisherTest {
         ProcessRecordsInput input = inputCaptor.getValue();
         assertThat(input.isAtShardEnd(), equalTo(true));
         assertThat(input.records().isEmpty(), equalTo(true));
+    }
+
+    @Test
+    public void testContinuesAfterSequence() {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        doNothing().when(publisher).subscribe(captor.capture());
+
+        source.start(new ExtendedSequenceNumber("0"),
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
+
+        NonFailingSubscriber nonFailingSubscriber = new NonFailingSubscriber();
+
+        source.subscribe(nonFailingSubscriber);
+
+        SubscribeToShardRequest expected = SubscribeToShardRequest.builder().consumerARN(CONSUMER_ARN).shardId(SHARD_ID)
+                .startingPosition(StartingPosition.builder().sequenceNumber("0")
+                        .type(ShardIteratorType.AT_SEQUENCE_NUMBER).build())
+                .build();
+
+        verify(kinesisClient).subscribeToShard(eq(expected), flowCaptor.capture());
+
+        flowCaptor.getValue().onEventStream(publisher);
+        captor.getValue().onSubscribe(subscription);
+
+        List<Record> records = Stream.of(1, 2, 3).map(this::makeRecord).collect(Collectors.toList());
+        List<KinesisClientRecordMatcher> matchers = records.stream().map(KinesisClientRecordMatcher::new)
+                .collect(Collectors.toList());
+
+        batchEvent = SubscribeToShardEvent.builder().millisBehindLatest(100L).records(records)
+                .continuationSequenceNumber("3").build();
+
+        captor.getValue().onNext(batchEvent);
+        captor.getValue().onComplete();
+        flowCaptor.getValue().complete();
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> nextSubscribeCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> nextFlowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+
+        SubscribeToShardRequest nextExpected = SubscribeToShardRequest.builder().consumerARN(CONSUMER_ARN).shardId(SHARD_ID)
+                .startingPosition(StartingPosition.builder().sequenceNumber("3")
+                        .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER).build())
+                .build();
+
+        verify(kinesisClient).subscribeToShard(eq(nextExpected), nextFlowCaptor.capture());
+        reset(publisher);
+        doNothing().when(publisher).subscribe(nextSubscribeCaptor.capture());
+
+        nextFlowCaptor.getValue().onEventStream(publisher);
+        nextSubscribeCaptor.getValue().onSubscribe(subscription);
+
+
+        List<Record> nextRecords = Stream.of(4, 5, 6).map(this::makeRecord).collect(Collectors.toList());
+        List<KinesisClientRecordMatcher> nextMatchers = nextRecords.stream().map(KinesisClientRecordMatcher::new)
+                .collect(Collectors.toList());
+
+        batchEvent = SubscribeToShardEvent.builder().millisBehindLatest(100L).records(nextRecords)
+                .continuationSequenceNumber("6").build();
+        nextSubscribeCaptor.getValue().onNext(batchEvent);
+
+        verify(subscription, times(4)).request(1);
+
+        assertThat(nonFailingSubscriber.received.size(), equalTo(2));
+
+        verifyRecords(nonFailingSubscriber.received.get(0).records(), matchers);
+        verifyRecords(nonFailingSubscriber.received.get(1).records(), nextMatchers);
+
+    }
+
+    private void verifyRecords(List<KinesisClientRecord> clientRecordsList, List<KinesisClientRecordMatcher> matchers) {
+        assertThat(clientRecordsList.size(), equalTo(matchers.size()));
+        for (int i = 0; i < clientRecordsList.size(); ++i) {
+            assertThat(clientRecordsList.get(i), matchers.get(i));
+        }
+    }
+
+    private static class NonFailingSubscriber implements Subscriber<ProcessRecordsInput> {
+        final List<ProcessRecordsInput> received = new ArrayList<>();
+        Subscription subscription;
+
+        @Override
+        public void onSubscribe(Subscription s) {
+            subscription = s;
+            subscription.request(1);
+        }
+
+        @Override
+        public void onNext(ProcessRecordsInput input) {
+            received.add(input);
+            subscription.request(1);
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            log.error("Caught throwable in subscriber", t);
+            fail("Caught throwable in subscriber");
+        }
+
+        @Override
+        public void onComplete() {
+            fail("OnComplete called when not expected");
+        }
     }
 
     private Record makeRecord(int sequenceNumber) {

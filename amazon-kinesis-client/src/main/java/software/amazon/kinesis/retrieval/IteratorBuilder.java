@@ -21,16 +21,31 @@ public class IteratorBuilder {
         return builder.startingPosition(request(StartingPosition.builder(), sequenceNumber, initialPosition).build());
     }
 
+    public static SubscribeToShardRequest.Builder reconnectRequest(SubscribeToShardRequest.Builder builder,
+            String sequenceNumber, InitialPositionInStreamExtended initialPosition) {
+        return builder.startingPosition(
+                reconnectRequest(StartingPosition.builder(), sequenceNumber, initialPosition).build());
+    }
+
     public static StartingPosition.Builder request(StartingPosition.Builder builder, String sequenceNumber,
             InitialPositionInStreamExtended initialPosition) {
         return apply(builder, StartingPosition.Builder::type, StartingPosition.Builder::timestamp,
-                StartingPosition.Builder::sequenceNumber, initialPosition, sequenceNumber);
+                StartingPosition.Builder::sequenceNumber, initialPosition, sequenceNumber,
+                ShardIteratorType.AT_SEQUENCE_NUMBER);
+    }
+
+    public static StartingPosition.Builder reconnectRequest(StartingPosition.Builder builder, String sequenceNumber,
+            InitialPositionInStreamExtended initialPosition) {
+        return apply(builder, StartingPosition.Builder::type, StartingPosition.Builder::timestamp,
+                StartingPosition.Builder::sequenceNumber, initialPosition, sequenceNumber,
+                ShardIteratorType.AFTER_SEQUENCE_NUMBER);
     }
 
     public static GetShardIteratorRequest.Builder request(GetShardIteratorRequest.Builder builder,
             String sequenceNumber, InitialPositionInStreamExtended initialPosition) {
         return apply(builder, GetShardIteratorRequest.Builder::shardIteratorType, GetShardIteratorRequest.Builder::timestamp,
-                GetShardIteratorRequest.Builder::startingSequenceNumber, initialPosition, sequenceNumber);
+                GetShardIteratorRequest.Builder::startingSequenceNumber, initialPosition, sequenceNumber,
+                ShardIteratorType.AT_SEQUENCE_NUMBER);
     }
 
     private final static Map<String, ShardIteratorType> SHARD_ITERATOR_MAPPING;
@@ -51,15 +66,16 @@ public class IteratorBuilder {
 
     private static <R> R apply(R initial, UpdatingFunction<ShardIteratorType, R> shardIterFunc,
             UpdatingFunction<Instant, R> dateFunc, UpdatingFunction<String, R> sequenceFunction,
-            InitialPositionInStreamExtended initialPositionInStreamExtended,
-            String sequenceNumber) {
+            InitialPositionInStreamExtended initialPositionInStreamExtended, String sequenceNumber,
+            ShardIteratorType defaultIteratorType) {
         ShardIteratorType iteratorType = SHARD_ITERATOR_MAPPING.getOrDefault(
-                sequenceNumber, ShardIteratorType.AT_SEQUENCE_NUMBER);
+                sequenceNumber, defaultIteratorType);
         R result = shardIterFunc.apply(initial, iteratorType);
         switch (iteratorType) {
         case AT_TIMESTAMP:
             return dateFunc.apply(result, initialPositionInStreamExtended.getTimestamp().toInstant());
         case AT_SEQUENCE_NUMBER:
+        case AFTER_SEQUENCE_NUMBER:
             return sequenceFunction.apply(result, sequenceNumber);
         default:
             return result;

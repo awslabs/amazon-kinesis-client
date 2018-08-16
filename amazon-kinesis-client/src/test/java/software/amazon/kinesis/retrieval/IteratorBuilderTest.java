@@ -11,14 +11,12 @@ import java.util.function.Supplier;
 
 import org.junit.Test;
 
-import software.amazon.awssdk.services.kinesis.model.StartingPosition;
-import software.amazon.kinesis.common.InitialPositionInStream;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 
 public class IteratorBuilderTest {
 
@@ -54,6 +52,12 @@ public class IteratorBuilderTest {
     }
 
     @Test
+    public void subscribeReconnectTest() {
+        sequenceNumber(this::stsBase, this::verifyStsBase, IteratorBuilder::reconnectRequest, WrappedRequest::wrapped,
+                ShardIteratorType.AFTER_SEQUENCE_NUMBER);
+    }
+
+    @Test
     public void getShardSequenceNumberTest() {
         sequenceNumber(this::gsiBase, this::verifyGsiBase, IteratorBuilder::request, WrappedRequest::wrapped);
     }
@@ -67,6 +71,7 @@ public class IteratorBuilderTest {
     public void getShardTimestampTest() {
         timeStampTest(this::gsiBase, this::verifyGsiBase, IteratorBuilder::request, WrappedRequest::wrapped);
     }
+
 
     private interface IteratorApply<T> {
         T apply(T base, String sequenceNumber, InitialPositionInStreamExtended initialPositionInStreamExtended);
@@ -92,10 +97,15 @@ public class IteratorBuilderTest {
 
     private <T, R> void sequenceNumber(Supplier<T> supplier, Consumer<R> baseVerifier, IteratorApply<T> iteratorRequest,
             Function<T, WrappedRequest<R>> toRequest) {
+        sequenceNumber(supplier, baseVerifier, iteratorRequest, toRequest, ShardIteratorType.AT_SEQUENCE_NUMBER);
+    }
+
+    private <T, R> void sequenceNumber(Supplier<T> supplier, Consumer<R> baseVerifier, IteratorApply<T> iteratorRequest,
+            Function<T, WrappedRequest<R>> toRequest, ShardIteratorType shardIteratorType) {
         InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
                 .newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
         updateTest(supplier, baseVerifier, iteratorRequest, toRequest, SEQUENCE_NUMBER, initialPosition,
-                ShardIteratorType.AT_SEQUENCE_NUMBER, "1234", null);
+                shardIteratorType, "1234", null);
     }
 
     private <T, R> void timeStampTest(Supplier<T> supplier, Consumer<R> baseVerifier, IteratorApply<T> iteratorRequest,
