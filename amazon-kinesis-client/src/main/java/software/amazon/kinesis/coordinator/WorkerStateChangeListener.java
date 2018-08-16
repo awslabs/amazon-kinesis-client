@@ -17,14 +17,16 @@ package software.amazon.kinesis.coordinator;
 /**
  * A listener for callbacks on changes worker state
  */
-@FunctionalInterface
 public interface WorkerStateChangeListener {
 	enum WorkerState {
 		CREATED,
 		INITIALIZING,
+		INITIALIZATIONERROR,
 		STARTED,
 		SHUT_DOWN
 	}
 
 	void onWorkerStateChange(WorkerState newState);
+
+	void onInitializationError(WorkerState newState, Exception e);
 }
