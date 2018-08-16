@@ -60,6 +60,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     private String currentSequenceNumber;
     private InitialPositionInStreamExtended initialPositionInStreamExtended;
+    private boolean isFirstConnection = true;
 
     private Subscriber<? super ProcessRecordsInput> subscriber;
     private long outstandingRequests = 0;
@@ -70,6 +71,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         synchronized (lockObject) {
             this.initialPositionInStreamExtended = initialPositionInStreamExtended;
             this.currentSequenceNumber = extendedSequenceNumber.sequenceNumber();
+            this.isFirstConnection = true;
         }
 
     }
@@ -92,8 +94,13 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         synchronized (lockObject) {
             SubscribeToShardRequest.Builder builder = KinesisRequestsBuilder.subscribeToShardRequestBuilder()
                     .shardId(shardId).consumerARN(consumerArn);
-            SubscribeToShardRequest request = IteratorBuilder
-                    .request(builder, sequenceNumber, initialPositionInStreamExtended).build();
+            SubscribeToShardRequest request;
+            if (isFirstConnection) {
+                request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStreamExtended).build();
+            } else {
+                request = IteratorBuilder.reconnectRequest(builder, sequenceNumber, initialPositionInStreamExtended)
+                        .build();
+            }
 
             Instant connectionStart = Instant.now();
             int subscribeInvocationId = subscribeToShardId.incrementAndGet();
@@ -398,6 +405,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                             parent.shardId, connectionStartedAt, subscribeToShardId);
                     subscription = new RecordSubscription(parent, this, connectionStartedAt, subscribeToShardId);
                     publisher.subscribe(subscription);
+
+                    //
+                    // Only flip this once we succeed
+                    //
+                    parent.isFirstConnection = false;
                 } catch (Throwable t) {
                     log.debug(
                             "{}: [SubscriptionLifetime]: (RecordFlow#onEventStream) @ {} id: {} -- throwable during record subscription: {}",
