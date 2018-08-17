@@ -29,7 +29,7 @@ public class NoOpWorkerStateChangeListener implements WorkerStateChangeListener 
 	}
 
 	@Override
-	public void onInitializationError(WorkerState newState, Exception e) {
+	public void onInitializationError(Exception e) {
 
 	}
 }

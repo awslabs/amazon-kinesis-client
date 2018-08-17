@@ -21,12 +21,11 @@ public interface WorkerStateChangeListener {
 	enum WorkerState {
 		CREATED,
 		INITIALIZING,
-		INITIALIZATIONERROR,
 		STARTED,
 		SHUT_DOWN
 	}
 
 	void onWorkerStateChange(WorkerState newState);
 
-	void onInitializationError(WorkerState newState, Exception e);
+	void onInitializationError(Exception e);
 }
