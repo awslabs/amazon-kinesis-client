@@ -193,14 +193,13 @@ public class Scheduler implements Runnable {
             return;
         }
 
-        Exception exceptionToThrow = null;
         try {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e) {
             log.error("Unable to initialize after {} attempts. Shutting down.", lifecycleConfig.maxInitializationAttempts(), e);
             shutdown();
-            exceptionToThrow = e;
+            workerStateChangeListener.onInitializationFailure(e);
         }
 
         while (!shouldShutdown()) {
@@ -210,9 +209,6 @@ public class Scheduler implements Runnable {
         finalShutdown();
         log.info("Worker loop is complete. Exiting from worker.");
 
-        if (exceptionToThrow != null) {
-            workerStateChangeListener.onInitializationError(exceptionToThrow);
-        }
     }
 
     private void initialize() {
