@@ -37,17 +37,19 @@ To make it easier for developers to write record processors in other languages, 
 * Make the maximum number of Scheduler initialization attempts configurable.  
   The maximum number of `Scheduler` initialization attempts can be configured via `LifecycleConfig#maxInitializationAttempts`.
   * [PR #363](https://github.com/awslabs/amazon-kinesis-client/pull/363)
-* Fixed an issue where `ResourceNotFoundException` on subscription to a shard was not triggering end of shard handling.
+* Fixed an issue where `ResourceNotFoundException` on subscription to a shard was not triggering end of shard handling.  
   If a lease table contains a shard that is no longer present in the stream attempt to subscribe to that shard will trigger a `ResourceNotFoundException`. These exception are treated the same as reaching the end of a shard.
   * [PR #359](https://github.com/awslabs/amazon-kinesis-client/pull/359)
-* Fixed an issue where the KCL would not Use the configured DynamoDB IOPs when creating the lease table.
-  The KCL was not using the configured IOPs when creating the DynamoDB table.
+* Fixed an issue where the KCL would not Use the configured DynamoDB IOPs when creating the lease table.  
   * [PR #360](https://github.com/awslabs/amazon-kinesis-client/pull/360)
 * Upgraded to AWS SDK 2.0.1  
   * [PR #372](https://github.com/awslabs/amazon-kinesis-client/pull/372)
-* Fixed an issue where time based restart of the subscription wasn't resetting the `lastRequestTime`.
+* Fixed an issue where time based restart of the subscription wasn't resetting the `lastRequestTime`.  
   If a subscription hasn't delivered any data for more than 30 seconds it will be canceled and restarted.  This detection is based of the `lastRequestTime` which wasn't getting reset after the restart was triggered.
   * [PR #373](https://github.com/awslabs/amazon-kinesis-client/pull/373)
+* Fixed an issue where it was possible to get a duplicate record when resubscribing to a shard.  
+  Subscribe to shard requires periodic resubscribing, and uses a new concept of a continuation sequence number.  If the continuation sequence number was equal to the last record that record would be processed a second time.  Resubscribing now uses `AFTER_SEQUENCE_NUMBER` to ensure that only later records are returned.  
+  * [PR #371](https://github.com/awslabs/amazon-kinesis-client/pull/371)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
