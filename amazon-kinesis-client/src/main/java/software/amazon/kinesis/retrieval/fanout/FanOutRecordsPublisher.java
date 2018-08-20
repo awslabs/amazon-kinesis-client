@@ -306,16 +306,30 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 @Override
                 public void request(long n) {
                     synchronized (lockObject) {
+                        if (subscriber != s) {
+                            log.warn(
+                                    "{}: (FanOutRecordsPublisher/Subscription#request) - Rejected an attempt to request({}), because subscribers don't match.",
+                                    shardId, n);
+                            return;
+                        }
+                        if (flow == null) {
+                            //
+                            // Flow has been terminated, so we can't make any requests on it anymore.
+                            //
+                            log.debug(
+                                    "{}: (FanOutRecordsPublisher/Subscription#request) - Request called for a null flow.",
+                                    shardId);
+                            if (subscriber == s) {
+                                log.debug(
+                                        "{}: (FanOutRecordsPublisher/Subscription#request) - The active subscriber still matches triggering exception report",
+                                        shardId);
+                                errorOccurred(flow, new IllegalStateException("Attempted to request on a null flow."));
+                            }
+                            return;
+                        }
                         long previous = outstandingRequests;
                         outstandingRequests += n;
                         if (previous <= 0) {
-                            if (flow == null) {
-                                //
-                                // Flow has been terminated, so we can't may a request on it anymore
-                                //
-                                log.debug("{} Request called after flow has been terminated.  Ignoring request");
-                                return;
-                            }
                             flow.request(1);
                         }
                     }
@@ -324,8 +338,16 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 @Override
                 public void cancel() {
                     synchronized (lockObject) {
+                        if (subscriber != s) {
+                            log.warn(
+                                    "{}: (FanOutRecordsPublisher/Subscription#cancel) - Rejected attempt to cancel subscription, because subscribers don't match.",
+                                    shardId);
+                            return;
+                        }
                         if (!hasValidSubscriber()) {
-                            log.warn("{}: Cancelled called even with an invalid subscriber", shardId);
+                            log.warn(
+                                    "{}: (FanOutRecordsPublisher/Subscription#cancel) - Cancelled called even with an invalid subscriber",
+                                    shardId);
                         }
                         subscriber = null;
                         if (flow != null) {
