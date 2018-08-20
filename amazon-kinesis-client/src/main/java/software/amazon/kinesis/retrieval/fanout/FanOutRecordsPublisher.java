@@ -305,10 +305,19 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             subscriber.onSubscribe(new Subscription() {
                 @Override
                 public void request(long n) {
-                    long previous = outstandingRequests;
-                    outstandingRequests += n;
-                    if (previous <= 0) {
-                        flow.request(1);
+                    synchronized (lockObject) {
+                        long previous = outstandingRequests;
+                        outstandingRequests += n;
+                        if (previous <= 0) {
+                            if (flow == null) {
+                                //
+                                // Flow has been terminated, so we can't may a request on it anymore
+                                //
+                                log.debug("{} Request called after flow has been terminated.  Ignoring request");
+                                return;
+                            }
+                            flow.request(1);
+                        }
                     }
                 }
 
