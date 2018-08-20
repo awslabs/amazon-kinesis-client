@@ -319,12 +319,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                             log.debug(
                                     "{}: (FanOutRecordsPublisher/Subscription#request) - Request called for a null flow.",
                                     shardId);
-                            if (subscriber == s) {
-                                log.debug(
-                                        "{}: (FanOutRecordsPublisher/Subscription#request) - The active subscriber still matches triggering exception report",
-                                        shardId);
-                                errorOccurred(flow, new IllegalStateException("Attempted to request on a null flow."));
-                            }
+                            errorOccurred(flow, new IllegalStateException("Attempted to request on a null flow."));
                             return;
                         }
                         long previous = outstandingRequests;
