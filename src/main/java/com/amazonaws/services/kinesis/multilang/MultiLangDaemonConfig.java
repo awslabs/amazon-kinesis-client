@@ -21,7 +21,11 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.FileInputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Properties;
@@ -49,9 +53,9 @@ public class MultiLangDaemonConfig {
 
     /**
      * Constructor.
-     * 
+     *
      * @param propertiesFile The location of the properties file.
-     * @throws IOException Thrown when the properties file can't be accessed.
+     * @throws IOException              Thrown when the properties file can't be accessed.
      * @throws IllegalArgumentException Thrown when the contents of the properties file are not as expected.
      */
     public MultiLangDaemonConfig(String propertiesFile) throws IOException, IllegalArgumentException {
@@ -59,93 +63,81 @@ public class MultiLangDaemonConfig {
     }
 
     /**
-     * 
      * @param propertiesFile The location of the properties file.
-     * @param classLoader A classloader, useful if trying to programmatically configure with the daemon, such as in a
-     *        unit test.
-     * @throws IOException Thrown when the properties file can't be accessed.
+     * @param classLoader    A classloader, useful if trying to programmatically configure with the daemon, such as in a
+     *                       unit test.
+     * @throws IOException              Thrown when the properties file can't be accessed.
      * @throws IllegalArgumentException Thrown when the contents of the properties file are not as expected.
      */
-    public MultiLangDaemonConfig(String propertiesFile, ClassLoader classLoader) throws IOException,
-            IllegalArgumentException {
+    public MultiLangDaemonConfig(String propertiesFile, ClassLoader classLoader)
+            throws IOException, IllegalArgumentException {
         this(propertiesFile, classLoader, new KinesisClientLibConfigurator());
     }
 
     /**
-     * 
      * @param propertiesFile The location of the properties file.
-     * @param classLoader A classloader, useful if trying to programmatically configure with the daemon, such as in a
-     *        unit test.
-     * @param configurator A configurator to use.
-     * @throws IOException Thrown when the properties file can't be accessed.
+     * @param classLoader    A classloader, useful if trying to programmatically configure with the daemon, such as in a
+     *                       unit test.
+     * @param configurator   A configurator to use.
+     * @throws IOException              Thrown when the properties file can't be accessed.
      * @throws IllegalArgumentException Thrown when the contents of the properties file are not as expected.
      */
-    public MultiLangDaemonConfig(String propertiesFile,
-            ClassLoader classLoader,
+    public MultiLangDaemonConfig(String propertiesFile, ClassLoader classLoader,
             KinesisClientLibConfigurator configurator) throws IOException, IllegalArgumentException {
         Properties properties = loadProperties(classLoader, propertiesFile);
         if (!validateProperties(properties)) {
-            throw new IllegalArgumentException("Must provide an executable name in the properties file, "
-                    + "e.g. executableName = sampleapp.py");
+            throw new IllegalArgumentException(
+                    "Must provide an executable name in the properties file, " + "e.g. executableName = sampleapp.py");
         }
 
         String executableName = properties.getProperty(PROP_EXECUTABLE_NAME);
         String processingLanguage = properties.getProperty(PROP_PROCESSING_LANGUAGE);
         ClientConfiguration clientConfig = buildClientConfig(properties);
 
-        kinesisClientLibConfig = configurator.getConfiguration(properties)
-                                             .withKinesisClientConfig(clientConfig)
-                                             .withCloudWatchClientConfig(clientConfig)
-                                             .withDynamoDBClientConfig(clientConfig);
+        kinesisClientLibConfig = configurator.getConfiguration(properties).withKinesisClientConfig(clientConfig)
+                .withCloudWatchClientConfig(clientConfig).withDynamoDBClientConfig(clientConfig);
 
         executorService = buildExecutorService(properties);
-        recordProcessorFactory = new MultiLangRecordProcessorFactory(executableName, executorService, kinesisClientLibConfig);
+        recordProcessorFactory = new MultiLangRecordProcessorFactory(executableName, executorService,
+                kinesisClientLibConfig);
 
         LOG.info("Running " + kinesisClientLibConfig.getApplicationName() + " to process stream "
                 + kinesisClientLibConfig.getStreamName() + " with executable " + executableName);
         prepare(processingLanguage);
     }
 
-    private ClientConfiguration buildClientConfig(Properties properties)
-    {
+    private ClientConfiguration buildClientConfig(Properties properties) {
         ClientConfiguration clientConfig = new ClientConfiguration();
         String proxyHost = "";
         int proxyPort = 0;
 
-        if( properties.getProperty( "http.proxyHost" ) != null )
-        {
-            LOG.info( "Getting proxy info from properties file." );
+        if (properties.getProperty("http.proxyHost") != null) {
+            LOG.info("Getting proxy info from properties file.");
 
-            proxyHost = properties.getProperty( "http.proxyHost" );
-            proxyPort = Integer.parseInt( properties.getProperty( "http.proxyPort" ) );
-        }
-        else if( System.getProperty( "http.proxyHost" ) != null )
-        {
-            LOG.info( "Getting proxy info from java system properties" );
+            proxyHost = properties.getProperty("http.proxyHost");
+            proxyPort = Integer.parseInt(properties.getProperty("http.proxyPort"));
+        } else if (System.getProperty("http.proxyHost") != null) {
+            LOG.info("Getting proxy info from java system properties");
 
-            proxyHost = System.getProperty( "http.proxyHost" );
-            proxyPort = Integer.parseInt( System.getProperty( "http.proxyPort" ) );
-        }
-        else if( System.getenv("http_proxy") != null )
-        {
-            LOG.info( "Getting proxy info environment settings" );
+            proxyHost = System.getProperty("http.proxyHost");
+            proxyPort = Integer.parseInt(System.getProperty("http.proxyPort"));
+        } else if (System.getenv("http_proxy") != null) {
+            LOG.info("Getting proxy info environment settings");
 
             try {
                 URI proxyAddr = new URI(System.getenv("http_proxy"));
 
                 proxyHost = proxyAddr.getHost();
                 proxyPort = proxyAddr.getPort();
-            }
-            catch( URISyntaxException e )
-            {
-                LOG.error( "System proxy not set correctly" );
+            } catch (URISyntaxException e) {
+                LOG.error("System proxy not set correctly");
             }
         }
 
-        if( !proxyHost.equals( "" ) && proxyPort > 0 )
-            clientConfig = clientConfig.withProxyHost( proxyHost ).withProxyPort( proxyPort );
+        if (!proxyHost.equals("") && proxyPort > 0)
+            clientConfig = clientConfig.withProxyHost(proxyHost).withProxyPort(proxyPort);
         else
-            LOG.info( "Not configuring proxy as none specified" );
+            LOG.info("Not configuring proxy as none specified");
 
         return clientConfig;
     }
@@ -155,8 +147,8 @@ public class MultiLangDaemonConfig {
         java.security.Security.setProperty("networkaddress.cache.ttl", "60");
 
         LOG.info("Using workerId: " + kinesisClientLibConfig.getWorkerIdentifier());
-        LOG.info("Using credentials with access key id: "
-                + kinesisClientLibConfig.getKinesisCredentialsProvider().getCredentials().getAWSAccessKeyId());
+        LOG.info("Using credentials with access key id: " + kinesisClientLibConfig.getKinesisCredentialsProvider()
+                .getCredentials().getAWSAccessKeyId());
 
         StringBuilder userAgent = new StringBuilder(KinesisClientLibConfiguration.KINESIS_CLIENT_LIB_USER_AGENT);
         userAgent.append(" ");
@@ -230,7 +222,6 @@ public class MultiLangDaemonConfig {
     }
 
     /**
-     * 
      * @return A KinesisClientLibConfiguration object based on the properties file provided.
      */
     public KinesisClientLibConfiguration getKinesisClientLibConfiguration() {
@@ -238,7 +229,6 @@ public class MultiLangDaemonConfig {
     }
 
     /**
-     * 
      * @return An executor service based on the properties file provided.
      */
     public ExecutorService getExecutorService() {
@@ -246,7 +236,6 @@ public class MultiLangDaemonConfig {
     }
 
     /**
-     * 
      * @return A MultiLangRecordProcessorFactory based on the properties file provided.
      */
     public MultiLangRecordProcessorFactory getRecordProcessorFactory() {
