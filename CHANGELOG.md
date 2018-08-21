@@ -10,8 +10,9 @@
 * Fixed an issue where the KCL would not Use the configured DynamoDB IOPs when creating the lease table.  
   * [PR #360](https://github.com/awslabs/amazon-kinesis-client/pull/360)
 * Make the maximum number of Scheduler initialization attempts configurable.  
-  The maximum number of `Scheduler` initialization attempts can be configured via `LifecycleConfig#maxInitializationAttempts`.
+  The maximum number of `Scheduler` initialization attempts can be configured via `CoordinatorConfig#maxInitializationAttempts`.
   * [PR #363](https://github.com/awslabs/amazon-kinesis-client/pull/363)
+  * [PR #368](https://github.com/awslabs/amazon-kinesis-client/pull/368)
 * Fixed an issue where it was possible to get a duplicate record when resubscribing to a shard.  
   Subscribe to shard requires periodic resubscribing, and uses a new concept of a continuation sequence number.  If the continuation sequence number was equal to the last record that record would be processed a second time.  Resubscribing now uses `AFTER_SEQUENCE_NUMBER` to ensure that only later records are returned.  
   * [PR #371](https://github.com/awslabs/amazon-kinesis-client/pull/371)
