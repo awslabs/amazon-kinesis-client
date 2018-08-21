@@ -34,22 +34,29 @@ To make it easier for developers to write record processors in other languages, 
 * Mark certain internal components with `@KinesisClientInternalApi` attribute.  
   Components marked as internal may be deprecated at a faster rate than public components.  
   * [PR #358](https://github.com/awslabs/amazon-kinesis-client/pull/358)
-* Make the maximum number of Scheduler initialization attempts configurable.  
-  The maximum number of `Scheduler` initialization attempts can be configured via `LifecycleConfig#maxInitializationAttempts`.
-  * [PR #363](https://github.com/awslabs/amazon-kinesis-client/pull/363)
 * Fixed an issue where `ResourceNotFoundException` on subscription to a shard was not triggering end of shard handling.  
   If a lease table contains a shard that is no longer present in the stream attempt to subscribe to that shard will trigger a `ResourceNotFoundException`. These exception are treated the same as reaching the end of a shard.
   * [PR #359](https://github.com/awslabs/amazon-kinesis-client/pull/359)
 * Fixed an issue where the KCL would not Use the configured DynamoDB IOPs when creating the lease table.  
   * [PR #360](https://github.com/awslabs/amazon-kinesis-client/pull/360)
+* Make the maximum number of Scheduler initialization attempts configurable.  
+  The maximum number of `Scheduler` initialization attempts can be configured via `LifecycleConfig#maxInitializationAttempts`.
+  * [PR #363](https://github.com/awslabs/amazon-kinesis-client/pull/363)
+* Fixed an issue where it was possible to get a duplicate record when resubscribing to a shard.  
+  Subscribe to shard requires periodic resubscribing, and uses a new concept of a continuation sequence number.  If the continuation sequence number was equal to the last record that record would be processed a second time.  Resubscribing now uses `AFTER_SEQUENCE_NUMBER` to ensure that only later records are returned.  
+  * [PR #371](https://github.com/awslabs/amazon-kinesis-client/pull/371)
 * Upgraded to AWS SDK 2.0.1  
   * [PR #372](https://github.com/awslabs/amazon-kinesis-client/pull/372)
 * Fixed an issue where time based restart of the subscription wasn't resetting the `lastRequestTime`.  
   If a subscription hasn't delivered any data for more than 30 seconds it will be canceled and restarted.  This detection is based of the `lastRequestTime` which wasn't getting reset after the restart was triggered.
   * [PR #373](https://github.com/awslabs/amazon-kinesis-client/pull/373)
-* Fixed an issue where it was possible to get a duplicate record when resubscribing to a shard.  
-  Subscribe to shard requires periodic resubscribing, and uses a new concept of a continuation sequence number.  If the continuation sequence number was equal to the last record that record would be processed a second time.  Resubscribing now uses `AFTER_SEQUENCE_NUMBER` to ensure that only later records are returned.  
-  * [PR #371](https://github.com/awslabs/amazon-kinesis-client/pull/371)
+* Fixed an issue where requesting on the subscription from the `FanOutRecordsPublisher` could trigger an unexpected failure.  
+  Due to a race condition the underlying flow in the subscription could be set to something else.  The method is now synchronized, and verifies that the subscriber it was created with is still the subscriber in affect.  
+  This issue generally would only appear when multiple errors were occurring while connecting to Kinesis.
+  * [PR #374](https://github.com/awslabs/amazon-kinesis-client/pull/374)
+* Fixed an issue where the number of requested items could exceed the capacity of the RxJava queue.  
+  There was an off by one issue when determining whether to make a request to the SDK subscription.  This changes the calculation to represent the capacity as a queue.
+  * [PR #375](https://github.com/awslabs/amazon-kinesis-client/pull/375)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
