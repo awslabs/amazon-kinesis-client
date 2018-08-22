@@ -28,6 +28,28 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 ## Amazon KCL support for other languages
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
+## Using the KCL
+The recommended way to use the KCL for Java is to consume it from Maven.
+
+### Version 2.x
+  ``` xml
+  <dependency>
+      <groupId>software.amazon.kinesis</groupId>
+      <artifactId>amazon-kinesis-client</artifactId>
+      <version>2.0.1</version>
+  </dependency>
+  ```
+
+### Version 1.x
+  ``` xml
+  <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>amazon-kinesis-client</artifactId>
+      <version>1.9.1</version>
+  </dependency>
+  ```
+
+
 ## Release Notes
 
 ### Latest Release (2.0.1)
