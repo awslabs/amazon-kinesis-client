@@ -18,6 +18,7 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfigurator;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -29,7 +30,11 @@ import java.io.FileInputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Properties;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class captures the configuration needed to run the MultiLangDaemon.
@@ -108,21 +113,21 @@ public class MultiLangDaemonConfig {
 
     private ClientConfiguration buildClientConfig(Properties properties) {
         ClientConfiguration clientConfig = new ClientConfiguration();
-        String proxyHost = "";
+        String proxyHost = null;
         int proxyPort = 0;
 
         if (properties.getProperty("http.proxyHost") != null) {
-            LOG.info("Getting proxy info from properties file.");
+            LOG.debug("Getting proxy info from properties file.");
 
             proxyHost = properties.getProperty("http.proxyHost");
             proxyPort = Integer.parseInt(properties.getProperty("http.proxyPort"));
         } else if (System.getProperty("http.proxyHost") != null) {
-            LOG.info("Getting proxy info from java system properties");
+            LOG.debug("Getting proxy info from java system properties");
 
             proxyHost = System.getProperty("http.proxyHost");
             proxyPort = Integer.parseInt(System.getProperty("http.proxyPort"));
         } else if (System.getenv("http_proxy") != null) {
-            LOG.info("Getting proxy info environment settings");
+            LOG.debug("Getting proxy info environment settings");
 
             try {
                 URI proxyAddr = new URI(System.getenv("http_proxy"));
@@ -131,10 +136,11 @@ public class MultiLangDaemonConfig {
                 proxyPort = proxyAddr.getPort();
             } catch (URISyntaxException e) {
                 LOG.error("System proxy not set correctly");
+                LOG.error(e);
             }
         }
 
-        if (!proxyHost.equals("") && proxyPort > 0)
+        if (StringUtils.isNotEmpty(proxyHost) && proxyPort > 0)
             clientConfig = clientConfig.withProxyHost(proxyHost).withProxyPort(proxyPort);
         else
             LOG.info("Not configuring proxy as none specified");

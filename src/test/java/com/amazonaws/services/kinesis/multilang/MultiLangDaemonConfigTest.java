@@ -51,7 +51,7 @@ public class MultiLangDaemonConfigTest {
     }
 
     // Function to mock ENV variables
-    public static void setEnv(Map<String, String> newenv) throws Exception {
+    private void setEnv(Map<String, String> newenv) throws Exception {
         Class[] classes = Collections.class.getDeclaredClasses();
         Map<String, String> env = System.getenv();
         for (Class cl : classes) {
@@ -66,7 +66,8 @@ public class MultiLangDaemonConfigTest {
         }
     }
 
-    @Test public void constructorTest() throws IOException {
+    @Test
+    public void constructorTest() throws IOException {
         String PROPERTIES =
                 "executableName = randomEXE \n" + "applicationName = testApp \n" + "streamName = fakeStream \n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
@@ -83,7 +84,8 @@ public class MultiLangDaemonConfigTest {
         assertNotNull(deamonConfig.getRecordProcessorFactory());
     }
 
-    @Test public void propertyValidation() {
+    @Test
+    public void propertyValidation() {
         String PROPERTIES_NO_EXECUTABLE_NAME = "applicationName = testApp \n" + "streamName = fakeStream \n"
                 + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n" + "processingLanguage = malbolge";
         ClassLoader classLoader = Mockito.mock(ClassLoader.class);
@@ -102,7 +104,8 @@ public class MultiLangDaemonConfigTest {
         }
     }
 
-    @Test public void KinesisClientLibConfiguration_should_get_proxy_info_from_properties_file() {
+    @Test
+    public void testKinesisClientLibConfigurationShouldGetProxyInfoFromPropertiesFile() {
         String PROPERTIES =
                 "executableName = randomEXE \n" + "applicationName = testApp \n" + "streamName = fakeStream \n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
@@ -125,7 +128,8 @@ public class MultiLangDaemonConfigTest {
         }
     }
 
-    @Test public void KinesisClientLibConfiguration_should_get_proxy_info_from_system_properties() {
+    @Test
+    public void testKinesisClientLibConfigurationShouldGetProxyInfoFromSystemProperties() {
         String PROPERTIES =
                 "executableName = randomEXE \n" + "applicationName = testApp \n" + "streamName = fakeStream \n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
@@ -150,7 +154,8 @@ public class MultiLangDaemonConfigTest {
         }
     }
 
-    @Test public void KinesisClientLibConfiguration_should_get_proxy_info_from_env_vars() {
+    @Test
+    public void testKinesisClientLibConfigurationShouldGetProxyInfoFromEnvVars() {
         String PROPERTIES =
                 "executableName = randomEXE \n" + "applicationName = testApp \n" + "streamName = fakeStream \n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
@@ -183,7 +188,8 @@ public class MultiLangDaemonConfigTest {
         }
     }
 
-    @Test public void KinesisClientLibConfiguration_should_not_get_proxy_info() {
+    @Test
+    public void testKinesisClientLibConfigurationShouldNotGetProxyInfo() {
         String PROPERTIES =
                 "executableName = randomEXE \n" + "applicationName = testApp \n" + "streamName = fakeStream \n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
