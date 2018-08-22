@@ -50,6 +50,10 @@ public class MultiLangDaemonConfig {
     private static final String PROP_PROCESSING_LANGUAGE = "processingLanguage";
     private static final String PROP_MAX_ACTIVE_THREADS = "maxActiveThreads";
 
+    public static final String PROXY_HOST_PROP = "http.proxyHost";
+    public static final String PROXY_PORT_PROP = "http.proxyPort";
+    public static final String HTTP_PROXY_ENV_VAR = "HTTP_PROXY";
+
     private KinesisClientLibConfiguration kinesisClientLibConfig;
 
     private ExecutorService executorService;
@@ -116,21 +120,21 @@ public class MultiLangDaemonConfig {
         String proxyHost = null;
         int proxyPort = 0;
 
-        if (properties.getProperty("http.proxyHost") != null) {
+        if (properties.getProperty(PROXY_HOST_PROP) != null) {
             LOG.debug("Getting proxy info from properties file.");
 
-            proxyHost = properties.getProperty("http.proxyHost");
-            proxyPort = Integer.parseInt(properties.getProperty("http.proxyPort"));
-        } else if (System.getProperty("http.proxyHost") != null) {
+            proxyHost = properties.getProperty(PROXY_HOST_PROP);
+            proxyPort = Integer.parseInt(properties.getProperty(PROXY_PORT_PROP));
+        } else if (System.getProperty(PROXY_HOST_PROP) != null) {
             LOG.debug("Getting proxy info from java system properties");
 
-            proxyHost = System.getProperty("http.proxyHost");
-            proxyPort = Integer.parseInt(System.getProperty("http.proxyPort"));
-        } else if (System.getenv("HTTP_PROXY") != null) {
+            proxyHost = System.getProperty(PROXY_HOST_PROP);
+            proxyPort = Integer.parseInt(System.getProperty(PROXY_PORT_PROP));
+        } else if (System.getenv(HTTP_PROXY_ENV_VAR) != null) {
             LOG.debug("Getting proxy info environment settings");
 
             try {
-                URI proxyAddr = new URI(System.getenv("HTTP_PROXY"));
+                URI proxyAddr = new URI(System.getenv(HTTP_PROXY_ENV_VAR));
 
                 proxyHost = proxyAddr.getHost();
                 proxyPort = proxyAddr.getPort();
@@ -141,8 +145,7 @@ public class MultiLangDaemonConfig {
 
         if (StringUtils.isNotEmpty(proxyHost) && proxyPort > 0) {
             clientConfig = clientConfig.withProxyHost(proxyHost).withProxyPort(proxyPort);
-        }
-        else {
+        } else {
             LOG.debug("Not configuring proxy as none specified");
         }
 
