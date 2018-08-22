@@ -176,8 +176,7 @@ public class MultiLangDaemonConfigTest {
             try {
                 config = new MultiLangDaemonConfig(FILENAME, classLoader, buildMockConfigurator());
 
-                // host doesn't have protocol here because URI splits that into a separate piece
-                assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), "proxy.com", 1234);
+                assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), "http://proxy.com", 1234);
             } catch (IllegalArgumentException e) {
                 // Bad
             } catch (IOException e) {
