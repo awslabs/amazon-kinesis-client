@@ -126,7 +126,7 @@ public class MultiLangDaemonConfig {
 
             proxyHost = System.getProperty("http.proxyHost");
             proxyPort = Integer.parseInt(System.getProperty("http.proxyPort"));
-        } else if (System.getenv("http_proxy") != null) {
+        } else if (System.getenv("HTTP_PROXY") != null) {
             LOG.debug("Getting proxy info environment settings");
 
             try {
