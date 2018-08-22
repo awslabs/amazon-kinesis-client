@@ -130,20 +130,21 @@ public class MultiLangDaemonConfig {
             LOG.debug("Getting proxy info environment settings");
 
             try {
-                URI proxyAddr = new URI(System.getenv("http_proxy"));
+                URI proxyAddr = new URI(System.getenv("HTTP_PROXY"));
 
                 proxyHost = proxyAddr.getHost();
                 proxyPort = proxyAddr.getPort();
             } catch (URISyntaxException e) {
-                LOG.error("System proxy not set correctly");
-                LOG.error(e);
+                LOG.error("System proxy not set correctly", e);
             }
         }
 
-        if (StringUtils.isNotEmpty(proxyHost) && proxyPort > 0)
+        if (StringUtils.isNotEmpty(proxyHost) && proxyPort > 0) {
             clientConfig = clientConfig.withProxyHost(proxyHost).withProxyPort(proxyPort);
-        else
-            LOG.info("Not configuring proxy as none specified");
+        }
+        else {
+            LOG.debug("Not configuring proxy as none specified");
+        }
 
         return clientConfig;
     }

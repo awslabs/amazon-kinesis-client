@@ -105,7 +105,7 @@ public class MultiLangDaemonConfigTest {
     }
 
     @Test
-    public void testKinesisClientLibConfigurationShouldGetProxyInfoFromPropertiesFile() {
+    public void testKinesisClientLibConfigurationShouldGetProxyInfoFromPropertiesFile() throws Exception {
         String PROPERTIES =
                 "executableName = randomEXE \n" + "applicationName = testApp \n" + "streamName = fakeStream \n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
@@ -116,20 +116,12 @@ public class MultiLangDaemonConfigTest {
         Mockito.doReturn(new ByteArrayInputStream(PROPERTIES.getBytes())).when(classLoader)
                 .getResourceAsStream(FILENAME);
 
-        MultiLangDaemonConfig config;
-
-        try {
-            config = new MultiLangDaemonConfig(FILENAME, classLoader, buildMockConfigurator());
-            assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), "http://proxy.com", 1234);
-        } catch (IllegalArgumentException e) {
-            // Bad
-        } catch (IOException e) {
-            Assert.fail();
-        }
+        MultiLangDaemonConfig config = new MultiLangDaemonConfig(FILENAME, classLoader, buildMockConfigurator());
+        assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), "http://proxy.com", 1234);
     }
 
     @Test
-    public void testKinesisClientLibConfigurationShouldGetProxyInfoFromSystemProperties() {
+    public void testKinesisClientLibConfigurationShouldGetProxyInfoFromSystemProperties() throws Exception {
         String PROPERTIES =
                 "executableName = randomEXE \n" + "applicationName = testApp \n" + "streamName = fakeStream \n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
@@ -139,23 +131,15 @@ public class MultiLangDaemonConfigTest {
         Mockito.doReturn(new ByteArrayInputStream(PROPERTIES.getBytes())).when(classLoader)
                 .getResourceAsStream(FILENAME);
 
-        MultiLangDaemonConfig config;
-
         System.setProperty("http.proxyHost", "http://proxy.com");
         System.setProperty("http.proxyPort", "1234");
 
-        try {
-            config = new MultiLangDaemonConfig(FILENAME, classLoader, buildMockConfigurator());
-            assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), "http://proxy.com", 1234);
-        } catch (IllegalArgumentException e) {
-            // Bad
-        } catch (IOException e) {
-            Assert.fail();
-        }
+        MultiLangDaemonConfig config = new MultiLangDaemonConfig(FILENAME, classLoader, buildMockConfigurator());
+        assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), "http://proxy.com", 1234);
     }
 
     @Test
-    public void testKinesisClientLibConfigurationShouldGetProxyInfoFromEnvVars() {
+    public void testKinesisClientLibConfigurationShouldGetProxyInfoFromEnvVars() throws Exception {
         String PROPERTIES =
                 "executableName = randomEXE \n" + "applicationName = testApp \n" + "streamName = fakeStream \n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
@@ -163,32 +147,20 @@ public class MultiLangDaemonConfigTest {
         ClassLoader classLoader = Mockito.mock(ClassLoader.class);
 
         Map<String, String> env = new HashMap<>();
-        env.put("http_proxy", "http://proxy.com:1234");
+        env.put("HTTP_PROXY", "http://proxy.com:1234");
 
-        try {
-            setEnv(env);
+        setEnv(env);
 
-            Mockito.doReturn(new ByteArrayInputStream(PROPERTIES.getBytes())).when(classLoader)
-                    .getResourceAsStream(FILENAME);
+        Mockito.doReturn(new ByteArrayInputStream(PROPERTIES.getBytes())).when(classLoader)
+                .getResourceAsStream(FILENAME);
 
-            MultiLangDaemonConfig config;
+        MultiLangDaemonConfig config = new MultiLangDaemonConfig(FILENAME, classLoader, buildMockConfigurator());
 
-            try {
-                config = new MultiLangDaemonConfig(FILENAME, classLoader, buildMockConfigurator());
-
-                assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), "http://proxy.com", 1234);
-            } catch (IllegalArgumentException e) {
-                // Bad
-            } catch (IOException e) {
-                Assert.fail();
-            }
-        } catch (Exception e) {
-            Assert.fail();
-        }
+        assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), "http://proxy.com", 1234);
     }
 
     @Test
-    public void testKinesisClientLibConfigurationShouldNotGetProxyInfo() {
+    public void testKinesisClientLibConfigurationShouldNotGetProxyInfo() throws Exception {
         String PROPERTIES =
                 "executableName = randomEXE \n" + "applicationName = testApp \n" + "streamName = fakeStream \n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
@@ -197,28 +169,14 @@ public class MultiLangDaemonConfigTest {
 
         Map<String, String> env = new HashMap<>();
 
-        try {
-            //clear out any env vars loaded from system
-            setEnv(env);
+        //clear out any env vars loaded from system
+        setEnv(env);
 
-            Mockito.doReturn(new ByteArrayInputStream(PROPERTIES.getBytes())).when(classLoader)
-                    .getResourceAsStream(FILENAME);
+        Mockito.doReturn(new ByteArrayInputStream(PROPERTIES.getBytes())).when(classLoader)
+                .getResourceAsStream(FILENAME);
 
-            MultiLangDaemonConfig config;
-
-            try {
-                config = new MultiLangDaemonConfig(FILENAME, classLoader, buildMockConfigurator());
-
-                // host doesn't have protocol here because URI splits that into a separate piece
-                assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), null, -1);
-            } catch (IllegalArgumentException e) {
-                // Bad
-            } catch (IOException e) {
-                Assert.fail();
-            }
-        } catch (Exception e) {
-            Assert.fail();
-        }
+        MultiLangDaemonConfig config = new MultiLangDaemonConfig(FILENAME, classLoader, buildMockConfigurator());
+        assertAgainstKclConfig(config.getKinesisClientLibConfiguration(), null, -1);
     }
 
     private void assertAgainstKclConfig(KinesisClientLibConfiguration kclConfig, String host, int port) {
