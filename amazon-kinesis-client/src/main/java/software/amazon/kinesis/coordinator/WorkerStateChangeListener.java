@@ -28,6 +28,6 @@ public interface WorkerStateChangeListener {
 
 	void onWorkerStateChange(WorkerState newState);
 
-	default void onInitializationFailure(Exception e) {
+	default void onInitializationFailed(Throwable e) {
 	}
 }

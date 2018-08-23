@@ -27,5 +27,4 @@ public class NoOpWorkerStateChangeListener implements WorkerStateChangeListener 
 	public void onWorkerStateChange(WorkerState newState) {
 
 	}
-
 }
