@@ -299,7 +299,9 @@ public class ShardConsumer {
             if (lastDataArrival != null) {
                 Instant now = Instant.now();
                 Duration timeSince = Duration.between(subscriber.lastDataArrival, now);
-                log.warn("Last time data arrived: {} ({})", lastDataArrival, timeSince);
+                if (timeSince.toMillis() > value) {
+                    log.warn("Last time data arrived: {} ({})", lastDataArrival, timeSince);
+                }
             }
         });
     }
