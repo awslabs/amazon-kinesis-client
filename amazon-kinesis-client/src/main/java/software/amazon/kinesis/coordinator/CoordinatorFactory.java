@@ -25,11 +25,47 @@ import software.amazon.kinesis.processor.Checkpointer;
  *
  */
 public interface CoordinatorFactory {
+    /**
+     * Creates the executor service to be used by the Scheduler.
+     *
+     * @return ExecutorService
+     */
     ExecutorService createExecutorService();
 
+    /**
+     * Creates GracefulShutdownCoordinator to be used by the Scheduler.
+     *
+     * <p>
+     *     Note: This method has been deprecated, and will be removed in a future release. Use the configuration in
+     *     {@link CoordinatorConfig#gracefulShutdownCoordinator}. Set the
+     *     {@link CoordinatorConfig#gracefulShutdownCoordinator} to null in order to use this method.
+     * </p>
+     *
+     * @return GracefulShutdownCoordinator
+     */
+    @Deprecated
     GracefulShutdownCoordinator createGracefulShutdownCoordinator();
 
+    /**
+     * Creates a WorkerStateChangeListener to be used by the Scheduler.
+     *
+     * <p>
+     *     Note: This method has been deprecated, and will be removed in a future release. Use the configuration in
+     *     {@link CoordinatorConfig#workerStateChangeListener}. Set the
+     *     {@link CoordinatorConfig#workerStateChangeListener} to null in order to use this method.
+     * </p>
+     *
+     * @return
+     */
+    @Deprecated
     WorkerStateChangeListener createWorkerStateChangeListener();
 
+    /**
+     * Creates a RecordProcessorChedckpointer to be used by the Scheduler.
+     *
+     * @param shardInfo ShardInfo to be used in order to create the ShardRecordProcessorCheckpointer
+     * @param checkpoint Checkpointer to be used in order to create Shardthe RecordProcessorCheckpointer
+     * @return ShardRecordProcessorCheckpointer
+     */
     ShardRecordProcessorCheckpointer createRecordProcessorCheckpointer(ShardInfo shardInfo, Checkpointer checkpoint);
 }

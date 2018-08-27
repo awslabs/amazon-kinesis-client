@@ -74,6 +74,20 @@ public class CoordinatorConfig {
      */
     private ShardPrioritization shardPrioritization = new NoOpShardPrioritization();
 
+    /**
+     * WorkerStateChangeListener to be used by the Scheduler.
+     *
+     * <p>Default value: {@link NoOpWorkerStateChangeListener}</p>
+     */
+    private WorkerStateChangeListener workerStateChangeListener = new NoOpWorkerStateChangeListener();
+
+    /**
+     * GracefulShutdownCoordinator to be used by the Scheduler.
+     *
+     * <p>Default value: {@link GracefulShutdownCoordinator}</p>
+     */
+    private GracefulShutdownCoordinator gracefulShutdownCoordinator = new GracefulShutdownCoordinator();
+
     private CoordinatorFactory coordinatorFactory = new SchedulerCoordinatorFactory();
 
 }
