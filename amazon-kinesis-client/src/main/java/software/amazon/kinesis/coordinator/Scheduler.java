@@ -170,9 +170,18 @@ public class Scheduler implements Runnable {
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
                 this.coordinatorConfig.skipShardSyncAtWorkerInitializationIfLeasesExist();
-        this.gracefulShutdownCoordinator =
-                this.coordinatorConfig.coordinatorFactory().createGracefulShutdownCoordinator();
-        this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory().createWorkerStateChangeListener();
+        if (coordinatorConfig.gracefulShutdownCoordinator() != null) {
+            this.gracefulShutdownCoordinator = coordinatorConfig.gracefulShutdownCoordinator();
+        } else {
+            this.gracefulShutdownCoordinator = this.coordinatorConfig.coordinatorFactory()
+                    .createGracefulShutdownCoordinator();
+        }
+        if (coordinatorConfig.workerStateChangeListener() != null) {
+            this.workerStateChangeListener = coordinatorConfig.workerStateChangeListener();
+        } else {
+            this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory()
+                    .createWorkerStateChangeListener();
+        }
         this.initialPosition = retrievalConfig.initialPositionInStreamExtended();
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
