@@ -15,7 +15,7 @@
 
 package software.amazon.kinesis.common;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import lombok.Data;
 import lombok.NonNull;

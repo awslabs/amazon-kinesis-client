@@ -17,7 +17,7 @@ package software.amazon.kinesis.retrieval.polling;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import com.google.common.collect.Iterables;
 
