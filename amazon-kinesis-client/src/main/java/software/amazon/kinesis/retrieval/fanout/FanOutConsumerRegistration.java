@@ -10,7 +10,7 @@ package software.amazon.kinesis.retrieval.fanout;
 
 import java.util.concurrent.ExecutionException;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import lombok.AccessLevel;
 import lombok.NonNull;
