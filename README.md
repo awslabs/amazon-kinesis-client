@@ -30,16 +30,15 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.9.1)
-* Added the ability to create a prepared checkpoint when at `SHARD_END`.
-  * [PR #301](https://github.com/awslabs/amazon-kinesis-client/pull/301)
-* Added the ability to subscribe to worker state change events.  
-  * [PR #291](https://github.com/awslabs/amazon-kinesis-client/pull/291)
-* Added support for custom lease managers.  
-  A custom `LeaseManager` can be provided to `Worker.Builder` that will be used to provide lease services. 
-  This makes it possible to implement custom lease management systems in addition to the default DynamoDB system.  
-  * [PR #297](https://github.com/awslabs/amazon-kinesis-client/pull/297)
-* Updated the version of the AWS Java SDK to 1.11.219
+### Latest Release (1.9.2)
+* Allow use of Immutable Clients  
+  * [PR #305](https://github.com/awslabs/amazon-kinesis-client/pull/305)
+* Allow the use of `AT_TIMESTAMP ` for MultiLang Daemon Clients
+  * [PR #342](https://github.com/awslabs/amazon-kinesis-client/pull/342)
+* Update the cache for `KinesisProxy#getShard` on cache misses.
+  * [PR #344](https://github.com/awslabs/amazon-kinesis-client/pull/344)
+* Updated the version of the AWS Java SDK to 1.11.219  
+  * [PR #]()
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
