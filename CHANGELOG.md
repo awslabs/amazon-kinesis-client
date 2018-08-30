@@ -1,5 +1,14 @@
 # Changelog
 
+### Release 2.0.2 (August 30, 2018)
+[Milestone #22](https://github.com/awslabs/amazon-kinesis-client/milestone/22)
+* Fixed an issue where the a warning would be logged every second if `logWarningForTaskAfterMillis` was set.  
+  The logging for last time of data arrival now respects the value of `logWarningForTaskAfterMillis`.  
+  * [PR #383](https://github.com/awslabs/amazon-kinesis-client/pull/383)
+  * [Issue #381](https://github.com/awslabs/amazon-kinesis-client/issues/381)
+* Moved creation of `WorkerStateChangedListener` and `GracefulShutdownCoordinator` to the `CoordinatorConfig`.
+  Originally the `WorkerStateChangedListener` and `GracefulShutdownCoordinator` were defined as method created by the 
+
 ### Release 2.0.1 (August 21, 2018)
 * Mark certain internal components with `@KinesisClientInternalApi` attribute.  
   Components marked as internal may be deprecated at a faster rate than public components.  
