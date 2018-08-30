@@ -146,7 +146,7 @@ public class MultiLangDaemon implements Callable<Integer> {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                log.info("Process terminanted, will initiate shutdown.");
+                log.info("Process terminated, will initiate shutdown.");
                 try {
                     Future<Void> fut = daemon.scheduler.requestShutdown();
                     fut.get(shutdownGraceMillis, TimeUnit.MILLISECONDS);
