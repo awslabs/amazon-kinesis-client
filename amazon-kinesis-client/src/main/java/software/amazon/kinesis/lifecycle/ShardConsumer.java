@@ -265,6 +265,11 @@ public class ShardConsumer {
                     if (subscriber != null) {
                         subscriber.cancel();
                     }
+                    //
+                    // Set the last request time to now, we specifically don't null it out since we want it to trigger a
+                    // restart if the subscription still doesn't start producing.
+                    //
+                    lastRequestTime = Instant.now();
                     startSubscriptions();
                 }
             }
@@ -294,7 +299,9 @@ public class ShardConsumer {
             if (lastDataArrival != null) {
                 Instant now = Instant.now();
                 Duration timeSince = Duration.between(subscriber.lastDataArrival, now);
-                log.warn("Last time data arrived: {} ({})", lastDataArrival, timeSince);
+                if (timeSince.toMillis() > value) {
+                    log.warn("Last time data arrived: {} ({})", lastDataArrival, timeSince);
+                }
             }
         });
     }

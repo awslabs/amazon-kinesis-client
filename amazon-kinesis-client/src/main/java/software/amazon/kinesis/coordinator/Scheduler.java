@@ -87,6 +87,7 @@ public class Scheduler implements Runnable {
     private final RetrievalConfig retrievalConfig;
 
     private final String applicationName;
+    private final int maxInitializationAttempts;
     private final Checkpointer checkpoint;
     private final long shardConsumerDispatchPollIntervalMillis;
     // Backoff time when polling to check if application has finished processing
@@ -144,6 +145,7 @@ public class Scheduler implements Runnable {
         this.retrievalConfig = retrievalConfig;
 
         this.applicationName = this.coordinatorConfig.applicationName();
+        this.maxInitializationAttempts = this.coordinatorConfig.maxInitializationAttempts();
         this.metricsFactory = this.metricsConfig.metricsFactory();
         this.leaseCoordinator = this.leaseManagementConfig.leaseManagementFactory()
                 .createLeaseCoordinator(this.metricsFactory);
@@ -168,9 +170,18 @@ public class Scheduler implements Runnable {
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
                 this.coordinatorConfig.skipShardSyncAtWorkerInitializationIfLeasesExist();
-        this.gracefulShutdownCoordinator =
-                this.coordinatorConfig.coordinatorFactory().createGracefulShutdownCoordinator();
-        this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory().createWorkerStateChangeListener();
+        if (coordinatorConfig.gracefulShutdownCoordinator() != null) {
+            this.gracefulShutdownCoordinator = coordinatorConfig.gracefulShutdownCoordinator();
+        } else {
+            this.gracefulShutdownCoordinator = this.coordinatorConfig.coordinatorFactory()
+                    .createGracefulShutdownCoordinator();
+        }
+        if (coordinatorConfig.workerStateChangeListener() != null) {
+            this.workerStateChangeListener = coordinatorConfig.workerStateChangeListener();
+        } else {
+            this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory()
+                    .createWorkerStateChangeListener();
+        }
         this.initialPosition = retrievalConfig.initialPositionInStreamExtended();
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
@@ -196,8 +207,8 @@ public class Scheduler implements Runnable {
         try {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
-        } catch (RuntimeException e) {
-            log.error("Unable to initialize after {} attempts. Shutting down.", lifecycleConfig.maxInitializationAttempts(), e);
+        } catch (RuntimeException e) { 
+            log.error("Unable to initialize after {} attempts. Shutting down.", maxInitializationAttempts, e);
             workerStateChangeListener.onAllInitializationAttemptsFailed(e);
             shutdown();
         }
@@ -215,7 +226,7 @@ public class Scheduler implements Runnable {
         boolean isDone = false;
         Exception lastException = null;
 
-        for (int i = 0; (!isDone) && (i < lifecycleConfig.maxInitializationAttempts()); i++) {
+        for (int i = 0; (!isDone) && (i < maxInitializationAttempts); i++) {
             try {
                 log.info("Initialization attempt {}", (i + 1));
                 log.info("Initializing LeaseCoordinator");

@@ -36,20 +36,13 @@ import software.amazon.kinesis.processor.Checkpointer;
 @Data
 @KinesisClientInternalApi
 public class SchedulerCoordinatorFactory implements CoordinatorFactory {
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public ExecutorService createExecutorService() {
         return new SchedulerThreadPoolExecutor(
                 new ThreadFactoryBuilder().setNameFormat("ShardRecordProcessor-%04d").build());
-    }
-
-    @Override
-    public GracefulShutdownCoordinator createGracefulShutdownCoordinator() {
-        return new GracefulShutdownCoordinator();
-    }
-
-    @Override
-    public WorkerStateChangeListener createWorkerStateChangeListener() {
-        return new NoOpWorkerStateChangeListener();
     }
 
     static class SchedulerThreadPoolExecutor extends ThreadPoolExecutor {
@@ -60,6 +53,9 @@ public class SchedulerCoordinatorFactory implements CoordinatorFactory {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public ShardRecordProcessorCheckpointer createRecordProcessorCheckpointer(@NonNull final ShardInfo shardInfo,
                                                                               @NonNull final Checkpointer checkpoint) {
