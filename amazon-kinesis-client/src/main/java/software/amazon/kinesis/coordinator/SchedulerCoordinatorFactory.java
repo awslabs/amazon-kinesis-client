@@ -45,24 +45,6 @@ public class SchedulerCoordinatorFactory implements CoordinatorFactory {
                 new ThreadFactoryBuilder().setNameFormat("ShardRecordProcessor-%04d").build());
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    @Deprecated
-    @Override
-    public GracefulShutdownCoordinator createGracefulShutdownCoordinator() {
-        return new GracefulShutdownCoordinator();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Deprecated
-    @Override
-    public WorkerStateChangeListener createWorkerStateChangeListener() {
-        return new NoOpWorkerStateChangeListener();
-    }
-
     static class SchedulerThreadPoolExecutor extends ThreadPoolExecutor {
         private static final long DEFAULT_KEEP_ALIVE = 60L;
         SchedulerThreadPoolExecutor(ThreadFactory threadFactory) {
