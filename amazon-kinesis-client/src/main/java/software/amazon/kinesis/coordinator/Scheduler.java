@@ -207,8 +207,9 @@ public class Scheduler implements Runnable {
         try {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
-        } catch (RuntimeException e) {
+        } catch (RuntimeException e) { 
             log.error("Unable to initialize after {} attempts. Shutting down.", maxInitializationAttempts, e);
+            workerStateChangeListener.onAllInitializationAttemptsFailed(e);
             shutdown();
         }
 
