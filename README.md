@@ -30,15 +30,20 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.9.2)
+### Latest Release (1.9.2 - September 4, 2018)
 * Allow use of Immutable Clients  
+  * [Issue #280](https://github.com/awslabs/amazon-kinesis-client/issues/280)
   * [PR #305](https://github.com/awslabs/amazon-kinesis-client/pull/305)
-* Allow the use of `AT_TIMESTAMP ` for MultiLang Daemon Clients
+* Allow the use of `AT_TIMESTAMP` for MultiLang Daemon Clients.  
+  * [Issue #341)(https://github.com/awslabs/amazon-kinesis-client/issues/341)
   * [PR #342](https://github.com/awslabs/amazon-kinesis-client/pull/342)
-* Update the cache for `KinesisProxy#getShard` on cache misses.
+* Update the cache for `KinesisProxy#getShard` on cache misses.  
   * [PR #344](https://github.com/awslabs/amazon-kinesis-client/pull/344)
-* Updated the version of the AWS Java SDK to 1.11.219  
-  * [PR #]()
+* Changed release process to use a standard process.  
+  * [PR #389](https://github.com/awslabs/amazon-kinesis-client/pull/389)
+* Removed tests that expected a null region response for unknown regions.  
+  * [PR #346](https://github.com/awslabs/amazon-kinesis-client/pull/346)
+* Updated the version of the AWS Java SDK to 1.11.400  
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
