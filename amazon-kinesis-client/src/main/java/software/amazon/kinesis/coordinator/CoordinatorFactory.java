@@ -22,7 +22,7 @@ import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.Checkpointer;
 
 /**
- *
+ * Used in the process of configuring and providing instances to the {@link Scheduler}
  */
 public interface CoordinatorFactory {
     /**
@@ -35,30 +35,48 @@ public interface CoordinatorFactory {
     /**
      * Creates GracefulShutdownCoordinator to be used by the Scheduler.
      *
+     * <h3>Method Deprecated</h3>
      * <p>
-     *     Note: This method has been deprecated, and will be removed in a future release. Use the configuration in
+     *     <strong>Note: This method has been deprecated, and will be removed in a future release. Use the configuration in
      *     {@link CoordinatorConfig#gracefulShutdownCoordinator}. Set the
-     *     {@link CoordinatorConfig#gracefulShutdownCoordinator} to null in order to use this method.
+     *     {@link CoordinatorConfig#gracefulShutdownCoordinator} to null in order to use this method.</strong>
      * </p>
+     * <h4>Resolution Order</h3>
+     * <ol>
+     *     <li>{@link CoordinatorConfig#gracefulShutdownCoordinator()}</li>
+     *     <li>{@link CoordinatorFactory#createGracefulShutdownCoordinator()}</li>
+     * </ol>
      *
-     * @return GracefulShutdownCoordinator
+     *
+     * @return a {@link GracefulShutdownCoordinator} that manages the process of shutting down the scheduler.
      */
     @Deprecated
-    GracefulShutdownCoordinator createGracefulShutdownCoordinator();
+    default GracefulShutdownCoordinator createGracefulShutdownCoordinator() {
+        return new GracefulShutdownCoordinator();
+    }
 
     /**
      * Creates a WorkerStateChangeListener to be used by the Scheduler.
      *
+     * <h3>Method Deprecated</h3>
      * <p>
-     *     Note: This method has been deprecated, and will be removed in a future release. Use the configuration in
+     *     <strong>Note: This method has been deprecated, and will be removed in a future release. Use the configuration in
      *     {@link CoordinatorConfig#workerStateChangeListener}. Set the
-     *     {@link CoordinatorConfig#workerStateChangeListener} to null in order to use this method.
+     *     {@link CoordinatorConfig#workerStateChangeListener} to null in order to use this method.</strong>
      * </p>
      *
-     * @return
+     * <h4>Resolution Order</h3>
+     * <ol>
+     *     <li>{@link CoordinatorConfig#workerStateChangeListener()}</li>
+     *     <li>{@link CoordinatorFactory#createWorkerStateChangeListener()}</li>
+     * </ol>
+     *
+     * @return a {@link WorkerStateChangeListener} instance that will be notified for specific {@link Scheduler} steps.
      */
     @Deprecated
-    WorkerStateChangeListener createWorkerStateChangeListener();
+    default WorkerStateChangeListener createWorkerStateChangeListener() {
+        return new NoOpWorkerStateChangeListener();
+    }
 
     /**
      * Creates a RecordProcessorChedckpointer to be used by the Scheduler.
