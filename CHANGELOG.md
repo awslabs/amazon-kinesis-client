@@ -1,5 +1,26 @@
 # Changelog
 
+### Release 2.0.2 (September 4, 2018)
+[Milestone #22](https://github.com/awslabs/amazon-kinesis-client/milestone/22)
+* Fixed an issue where the a warning would be logged every second if `logWarningForTaskAfterMillis` was set.  
+  The logging for last time of data arrival now respects the value of `logWarningForTaskAfterMillis`.  
+  * [PR #383](https://github.com/awslabs/amazon-kinesis-client/pull/383)
+  * [Issue #381](https://github.com/awslabs/amazon-kinesis-client/issues/381)
+* Moved creation of `WorkerStateChangedListener` and `GracefulShutdownCoordinator` to the `CoordinatorConfig`.
+  Originally the `WorkerStateChangedListener` and `GracefulShutdownCoordinator` were created by methods on the `SchedulerCoordinatorFactory`, but they should have been configuration options.  
+  The original methods have been deprecated, and may be removed at a later date.  
+  * [PR #385](https://github.com/awslabs/amazon-kinesis-client/pull/385)
+  * [PR #388](https://github.com/awslabs/amazon-kinesis-client/pull/388)
+* Removed dependency on Apache Commons Lang 2.6.  
+  The dependency on Apache Commons Lang 2.6 has removed, and all usages updated to use Apache Commons Lang 3.7.  
+  * [PR #386](https://github.com/awslabs/amazon-kinesis-client/pull/386)
+  * [Issue #370](https://github.com/awslabs/amazon-kinesis-client/issues/370)
+* Fixed a typo in the MutliLang Daemon shutdown hook.  
+  * [PR #387](https://github.com/awslabs/amazon-kinesis-client/pull/387)
+* Added method `onAllInitializationAttemptsFailed(Throwable)` to `WorkerStateChangedListener` to report when all initialization attempts have failed.  
+  This method is a default method, and it isn't require to implement the method. This method is only called after all attempts to initialize the `Scheduler` have failed.
+  * [PR #369](https://github.com/awslabs/amazon-kinesis-client/pull/369)
+
 ### Release 2.0.1 (August 21, 2018)
 * Mark certain internal components with `@KinesisClientInternalApi` attribute.  
   Components marked as internal may be deprecated at a faster rate than public components.  
