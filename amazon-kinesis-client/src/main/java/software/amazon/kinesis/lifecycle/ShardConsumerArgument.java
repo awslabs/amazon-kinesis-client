@@ -24,6 +24,7 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.ShardSyncer;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
@@ -68,4 +69,5 @@ public class ShardConsumerArgument {
     @NonNull
     private final MetricsFactory metricsFactory;
     private final AggregatorUtil aggregatorUtil;
+    private final ShardSyncer shardSyncer;
 }

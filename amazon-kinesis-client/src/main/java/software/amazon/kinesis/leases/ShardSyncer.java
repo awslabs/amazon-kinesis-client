@@ -49,12 +49,12 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
- * Helper class to sync leases with shards of the Kinesis stream.
+ * Helper class per kcl scheduler instance to sync leases with shards of the Kinesis stream.
  * It will create new leases/activities when it discovers new Kinesis shards (bootstrap/resharding).
  * It deletes leases for shards that have been trimmed from Kinesis, or if we've completed processing it
  * and begun processing it's child shards.
  */
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@NoArgsConstructor(access = AccessLevel.PUBLIC)
 @Slf4j
 public class ShardSyncer {
     /**
@@ -71,7 +71,7 @@ public class ShardSyncer {
      * @throws KinesisClientLibIOException
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
-    public static synchronized void checkAndCreateLeasesForNewShards(@NonNull final ShardDetector shardDetector,
+    public synchronized void checkAndCreateLeasesForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
             final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
             final MetricsScope scope) throws DependencyException, InvalidStateException,
@@ -152,7 +152,7 @@ public class ShardSyncer {
      * @return ShardIds of child shards (children of the expectedClosedShard)
      * @throws KinesisClientLibIOException
      */
-    static synchronized void assertClosedShardsAreCoveredOrAbsent(final Map<String, Shard> shardIdToShardMap,
+    synchronized void assertClosedShardsAreCoveredOrAbsent(final Map<String, Shard> shardIdToShardMap,
             final Map<String, Set<String>> shardIdToChildShardIdsMap, final Set<String> shardIdsOfClosedShards)
             throws KinesisClientLibIOException {
         final String exceptionMessageSuffix = "This can happen if we constructed the list of shards "
@@ -181,7 +181,7 @@ public class ShardSyncer {
         }
     }
 
-    private static synchronized void assertHashRangeOfClosedShardIsCovered(final Shard closedShard,
+    private synchronized void assertHashRangeOfClosedShardIsCovered(final Shard closedShard,
             final Map<String, Shard> shardIdToShardMap, final Set<String> childShardIds)
             throws KinesisClientLibIOException {
         BigInteger minStartingHashKeyOfChildren = null;
@@ -583,7 +583,7 @@ public class ShardSyncer {
      * @throws ProvisionedThroughputException
      * @throws KinesisClientLibIOException
      */
-    private static synchronized void cleanupLeasesOfFinishedShards(final Collection<Lease> currentLeases,
+    private synchronized void cleanupLeasesOfFinishedShards(final Collection<Lease> currentLeases,
             final Map<String, Shard> shardIdToShardMap, final Map<String, Set<String>> shardIdToChildShardIdsMap,
             final List<Lease> trackedLeases, final LeaseRefresher leaseRefresher) throws DependencyException,
             InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
@@ -625,7 +625,7 @@ public class ShardSyncer {
      * @throws InvalidStateException 
      * @throws DependencyException 
      */
-    static synchronized void cleanupLeaseForClosedShard(final String closedShardId, final Set<String> childShardIds,
+    synchronized void cleanupLeaseForClosedShard(final String closedShardId, final Set<String> childShardIds,
             final Map<String, Lease> trackedLeases, final LeaseRefresher leaseRefresher)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final Lease leaseForClosedShard = trackedLeases.get(closedShardId);

@@ -46,6 +46,7 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.ShardSyncer;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
@@ -109,7 +110,7 @@ public class ConsumerStatesTest {
                 taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
                 listShardsBackoffTimeInMillis, maxListShardsRetryAttempts,
                 shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis, INITIAL_POSITION_IN_STREAM,
-                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector, metricsFactory, new AggregatorUtil());
+                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector, metricsFactory, new AggregatorUtil(), new ShardSyncer());
         consumer = spy(
                 new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, argument));
 

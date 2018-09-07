@@ -57,6 +57,7 @@ public class ShardSyncTaskIntegrationTest {
     private static final long LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS = 30;
     private static final int CACHE_MISS_WARNING_MODULUS = 250;
     private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
+    private static final ShardSyncer SHARD_SYNCER = new ShardSyncer();
     private static KinesisAsyncClient kinesisClient;
 
     private LeaseRefresher leaseRefresher;
@@ -115,7 +116,7 @@ public class ShardSyncTaskIntegrationTest {
         Set<String> shardIds = shardDetector.listShards().stream().map(Shard::shardId).collect(Collectors.toSet());
         ShardSyncTask syncTask = new ShardSyncTask(shardDetector, leaseRefresher,
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST), false, false, 0L,
-                NULL_METRICS_FACTORY);
+                NULL_METRICS_FACTORY, SHARD_SYNCER);
         syncTask.call();
         List<Lease> leases = leaseRefresher.listLeases();
         Set<String> leaseKeys = new HashSet<>();

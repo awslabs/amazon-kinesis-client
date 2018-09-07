@@ -51,6 +51,28 @@ public class ShardSyncTaskManager {
     private final ExecutorService executorService;
     @NonNull
     private final MetricsFactory metricsFactory;
+    @NonNull
+    private final ShardSyncer shardSyncer;
+
+    public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher, InitialPositionInStreamExtended initialPositionInStream,
+                                boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis,
+                                ExecutorService executorService, MetricsFactory metricsFactory) {
+        this(shardDetector, leaseRefresher, initialPositionInStream, cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, shardSyncIdleTimeMillis, executorService, metricsFactory, new ShardSyncer());
+    }
+
+    public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher, InitialPositionInStreamExtended initialPositionInStream,
+                                boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis,
+                                ExecutorService executorService, MetricsFactory metricsFactory, ShardSyncer shardSyncer) {
+        this.shardDetector = shardDetector;
+        this.leaseRefresher = leaseRefresher;
+        this.initialPositionInStream = initialPositionInStream;
+        this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
+        this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
+        this.executorService = executorService;
+        this.metricsFactory = metricsFactory;
+        this.shardSyncer = shardSyncer;
+    }
 
     private ConsumerTask currentTask;
     private Future<TaskResult> future;
@@ -82,7 +104,8 @@ public class ShardSyncTaskManager {
                                     cleanupLeasesUponShardCompletion,
                                     ignoreUnexpectedChildShards,
                                     shardSyncIdleTimeMillis,
-                                    metricsFactory),
+                                    metricsFactory,
+                                    shardSyncer),
                             metricsFactory);
             future = executorService.submit(currentTask);
             submittedNewTask = true;
