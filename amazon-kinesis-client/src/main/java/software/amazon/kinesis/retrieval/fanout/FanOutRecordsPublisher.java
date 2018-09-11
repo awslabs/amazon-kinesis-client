@@ -69,6 +69,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     public void start(ExtendedSequenceNumber extendedSequenceNumber,
             InitialPositionInStreamExtended initialPositionInStreamExtended) {
         synchronized (lockObject) {
+            log.debug("[{}] Initializing Publisher @ Sequence: {} -- Initial Position: {}", shardId,
+                    extendedSequenceNumber, initialPositionInStreamExtended);
             this.initialPositionInStreamExtended = initialPositionInStreamExtended;
             this.currentSequenceNumber = extendedSequenceNumber.sequenceNumber();
             this.isFirstConnection = true;
