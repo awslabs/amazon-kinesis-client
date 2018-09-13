@@ -20,10 +20,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import lombok.Data;
-import lombok.experimental.Accessors;
 import org.apache.commons.lang3.StringUtils;
 
+import lombok.Data;
+import lombok.experimental.Accessors;
+
+/**
+ * This supports extracting the shardId from a sequence number. The sequence number is generally an internal opaque type
+ * used by Kinesis, and may change at any time.
+ */
 public class SequenceNumberValidator {
 
     @Data
@@ -37,9 +42,14 @@ public class SequenceNumberValidator {
         Optional<SequenceNumberComponents> read(String sequenceNumber);
     }
 
+    /**
+     * Reader for the v2 sequence number format. v1 sequence numbers are no longer used or available.
+     */
     private static class V2SequenceNumberReader implements SequenceNumberReader {
 
         private static final int VERSION = 2;
+
+        private static final int EXPECTED_BIT_LENGTH = 186;
 
         private static final int VERSION_OFFSET = 184;
         private static final long VERSION_MASK = (1 << 4) - 1;
@@ -50,6 +60,9 @@ public class SequenceNumberValidator {
         @Override
         public Optional<SequenceNumberComponents> read(String sequenceNumberString) {
             BigInteger sequenceNumber = new BigInteger(sequenceNumberString, 10);
+            if (sequenceNumber.bitLength() != EXPECTED_BIT_LENGTH) {
+                return Optional.empty();
+            }
             int version = readOffset(sequenceNumber, VERSION_OFFSET, VERSION_MASK);
             if (version != VERSION) {
                 return Optional.empty();
@@ -71,14 +84,42 @@ public class SequenceNumberValidator {
         return SEQUENCE_NUMBER_READERS.stream().map(r -> r.read(sequenceNumber)).filter(Optional::isPresent).map(Optional::get).findFirst();
     }
 
+    /**
+     * Attempts to retrieve the version for a sequence number. If no reader can be found for the sequence number this
+     * will return an empty Optional.
+     * 
+     * @param sequenceNumber
+     *            the sequence number to extract the version from
+     * @return an Optional containing the version if a compatible sequence number reader can be found, an empty Optional
+     *         otherwise.
+     */
     public Optional<Integer> versionFor(String sequenceNumber) {
         return retrieveComponentsFor(sequenceNumber).map(SequenceNumberComponents::version);
     }
 
+    /**
+     * Attempts to retrieve the shardId from a sequence number. If the version of the sequence number is unsupported
+     * this will return an empty optional.
+     * 
+     * @param sequenceNumber
+     *            the sequence number to extract the shardId from
+     * @return an Optional containing the shardId if the version is supported, an empty Optional otherwise.
+     */
     public Optional<String> shardIdFor(String sequenceNumber) {
         return retrieveComponentsFor(sequenceNumber).map(s -> String.format("shardId-%012d", s.shardId()));
     }
 
+    /**
+     * Validates that the sequence number provided contains the given shardId. If the sequence number is unsupported
+     * this will return an empty Optional.
+     * 
+     * @param sequenceNumber
+     *            the sequence number to verify the shardId
+     * @param shardId
+     *            the shardId that the sequence is expected to contain
+     * @return true if the sequence number contains the shardId, false if it doesn't. If the sequence number version is
+     *         unsupported this will return an empty Optional
+     */
     public Optional<Boolean> validateSequenceNumberForShard(String sequenceNumber, String shardId) {
         return shardIdFor(sequenceNumber).map(s -> StringUtils.equalsIgnoreCase(s, shardId));
     }
