@@ -186,7 +186,7 @@ public class Scheduler implements Runnable {
         this.shardDetector = this.shardSyncTaskManager.shardDetector();
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
-        this.shardSyncer = shardSyncTaskManager.shardSyncer();
+        this.shardSyncer = leaseManagementConfig.shardSyncer();
     }
 
     /**

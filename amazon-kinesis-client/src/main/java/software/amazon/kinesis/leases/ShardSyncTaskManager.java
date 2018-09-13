@@ -56,12 +56,6 @@ public class ShardSyncTaskManager {
 
     public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher, InitialPositionInStreamExtended initialPositionInStream,
                                 boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis,
-                                ExecutorService executorService, MetricsFactory metricsFactory) {
-        this(shardDetector, leaseRefresher, initialPositionInStream, cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, shardSyncIdleTimeMillis, executorService, metricsFactory, new ShardSyncer());
-    }
-
-    public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher, InitialPositionInStreamExtended initialPositionInStream,
-                                boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis,
                                 ExecutorService executorService, MetricsFactory metricsFactory, ShardSyncer shardSyncer) {
         this.shardDetector = shardDetector;
         this.leaseRefresher = leaseRefresher;

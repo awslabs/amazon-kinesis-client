@@ -220,6 +220,15 @@ public class LeaseManagementConfig {
         }
     };
 
+    private ShardSyncer shardSyncer;
+
+    public ShardSyncer shardSyncer() {
+        if (shardSyncer == null) {
+            shardSyncer = new ShardSyncer();
+        }
+        return shardSyncer;
+    }
+
     private LeaseManagementFactory leaseManagementFactory;
 
     public LeaseManagementFactory leaseManagementFactory() {
@@ -246,7 +255,8 @@ public class LeaseManagementConfig {
                     listShardsCacheAllowedAgeInSeconds(),
                     cacheMissWarningModulus(),
                     initialLeaseTableReadCapacity(),
-                    initialLeaseTableWriteCapacity());
+                    initialLeaseTableWriteCapacity(),
+                    shardSyncer());
         }
         return leaseManagementFactory;
     }

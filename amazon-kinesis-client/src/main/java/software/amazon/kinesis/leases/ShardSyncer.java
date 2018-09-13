@@ -30,8 +30,6 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.lang.StringUtils;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +52,6 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * It deletes leases for shards that have been trimmed from Kinesis, or if we've completed processing it
  * and begun processing it's child shards.
  */
-@NoArgsConstructor(access = AccessLevel.PUBLIC)
 @Slf4j
 public class ShardSyncer {
     /**
