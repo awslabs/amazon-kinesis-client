@@ -80,9 +80,15 @@ public class FanOutConfig implements RetrievalSpecificConfig {
      */
     private long retryBackoffMillis = 1000;
 
+    /**
+     * Controls whether the {@link FanOutRecordsPublisher} will validate that all the records are from the shard it's
+     * processing.
+     */
+    private boolean validateRecordsAreForShard = false;
+
     @Override
     public RetrievalFactory retrievalFactory() {
-        return new FanOutRetrievalFactory(kinesisClient, getOrCreateConsumerArn());
+        return new FanOutRetrievalFactory(kinesisClient, getOrCreateConsumerArn()).validateRecordsAreForShard(validateRecordsAreForShard);
     }
 
     private String getOrCreateConsumerArn() {
