@@ -15,8 +15,11 @@
 
 package software.amazon.kinesis.retrieval.fanout;
 
+import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -27,10 +30,14 @@ import software.amazon.kinesis.retrieval.RetrievalFactory;
 
 @RequiredArgsConstructor
 @KinesisClientInternalApi
+@Accessors(fluent = true)
 public class FanOutRetrievalFactory implements RetrievalFactory {
 
     private final KinesisAsyncClient kinesisClient;
     private final String consumerArn;
+    @Getter
+    @Setter
+    private boolean validateRecordsAreForShard = false;
 
     @Override
     public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(final ShardInfo shardInfo,
@@ -41,6 +48,6 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
             final MetricsFactory metricsFactory) {
-        return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(), consumerArn);
+        return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(), consumerArn, validateRecordsAreForShard);
     }
 }
