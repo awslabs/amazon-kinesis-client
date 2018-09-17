@@ -26,8 +26,12 @@ import lombok.Data;
 import lombok.experimental.Accessors;
 
 /**
- * This supports extracting the shardId from a sequence number. The sequence number is generally an internal opaque type
- * used by Kinesis, and may change at any time.
+ * This supports extracting the shardId from a sequence number.
+ *
+ * <h2>Warning</h2>
+ * <strong>Sequence numbers are an opaque value used by Kinesis, and maybe changed at any time. Should validation stop
+ * working you may need to update your version of the KCL</strong>
+ *
  */
 public class SequenceNumberValidator {
 
@@ -60,13 +64,30 @@ public class SequenceNumberValidator {
         @Override
         public Optional<SequenceNumberComponents> read(String sequenceNumberString) {
             BigInteger sequenceNumber = new BigInteger(sequenceNumberString, 10);
+
+            //
+            // If the bit length of the sequence number isn't 186 it's impossible for the version numbers
+            // to be where we expect them. We treat this the same as an unknown version of the sequence number
+            //
+            // If the sequence number length isn't what we expect it's due to a new version of the sequence number or
+            // an invalid sequence number. This
+            //
             if (sequenceNumber.bitLength() != EXPECTED_BIT_LENGTH) {
                 return Optional.empty();
             }
+
+            //
+            // Read the 4 most significant bits of the sequence number, the 2 most significant bits are implicitly 0
+            // (2 == 0b0011). If the version number doesn't match we give up and say we can't parse the sequence number
+            //
             int version = readOffset(sequenceNumber, VERSION_OFFSET, VERSION_MASK);
             if (version != VERSION) {
                 return Optional.empty();
             }
+
+            //
+            // If we get here the sequence number is big enough, and the version matches so the shardId should be valid.
+            //
             int shardId = readOffset(sequenceNumber, SHARD_ID_OFFSET, SHARD_ID_MASK);
             return Optional.of(new SequenceNumberComponents(version, shardId));
         }
@@ -87,6 +108,16 @@ public class SequenceNumberValidator {
     /**
      * Attempts to retrieve the version for a sequence number. If no reader can be found for the sequence number this
      * will return an empty Optional.
+     *
+     * <p>
+     * <strong>This will return an empty Optional if the it's unable to extract the version number. This can occur for
+     * multiple reasons including:
+     * <ul>
+     * <li>Kinesis has started using a new version of sequence numbers</li>
+     * <li>The provided sequence number isn't a valid Kinesis sequence number.</li>
+     * </ul>
+     * </strong>
+     * </p>
      * 
      * @param sequenceNumber
      *            the sequence number to extract the version from
@@ -100,7 +131,18 @@ public class SequenceNumberValidator {
     /**
      * Attempts to retrieve the shardId from a sequence number. If the version of the sequence number is unsupported
      * this will return an empty optional.
-     * 
+     *
+     * <strong>This will return an empty Optional if the sequence number isn't recognized. This can occur for multiple
+     * reasons including:
+     * <ul>
+     * <li>Kinesis has started using a new version of sequence numbers</li>
+     * <li>The provided sequence number isn't a valid Kinesis sequence number.</li>
+     * </ul>
+     * </strong>
+     * <p>
+     * This should always return a value if {@link #versionFor(String)} returns a value
+     * </p>
+     *
      * @param sequenceNumber
      *            the sequence number to extract the shardId from
      * @return an Optional containing the shardId if the version is supported, an empty Optional otherwise.
@@ -112,7 +154,26 @@ public class SequenceNumberValidator {
     /**
      * Validates that the sequence number provided contains the given shardId. If the sequence number is unsupported
      * this will return an empty Optional.
-     * 
+     *
+     * <p>
+     * Validation of a sequence number will only occur if the sequence number can be parsed. It's possible to use
+     * {@link #versionFor(String)} to verify that the given sequence number is supported by this class. There are 3
+     * possible validation states:
+     * <dl>
+     * <dt>Some(True)</dt>
+     * <dd>The sequence number can be parsed, and the shardId matches the one in the sequence number</dd>
+     * <dt>Some(False)</dt>
+     * <dd>THe sequence number can be parsed, and the shardId doesn't match the one in the sequence number</dd>
+     * <dt>None</dt>
+     * <dd>It wasn't possible to parse the sequence number so the validity of the sequence number is unknown</dd>
+     * </dl>
+     * </p>
+     *
+     * <p>
+     * <strong>Handling unknown validation causes is application specific, and not specific handling is
+     * provided.</strong>
+     * </p>
+     *
      * @param sequenceNumber
      *            the sequence number to verify the shardId
      * @param shardId
