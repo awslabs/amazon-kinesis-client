@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import io.netty.handler.timeout.ReadTimeoutException;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
@@ -55,7 +56,6 @@ public class FanOutRecordsPublisherTest {
 
     private static final String SHARD_ID = "shardId-000000000001";
     private static final String CONSUMER_ARN = "arn:consumer";
-    private static final boolean VALIDATE_RECORD_SHARD_MATCHING = true;
 
     @Mock
     private KinesisAsyncClient kinesisClient;
@@ -224,6 +224,25 @@ public class FanOutRecordsPublisherTest {
         ProcessRecordsInput input = inputCaptor.getValue();
         assertThat(input.isAtShardEnd(), equalTo(true));
         assertThat(input.records().isEmpty(), equalTo(true));
+    }
+
+    @Test
+    public void testReadTimeoutExceptionForShard() {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        source.subscribe(subscriber);
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        FanOutRecordsPublisher.RecordFlow recordFlow = flowCaptor.getValue();
+        recordFlow.exceptionOccurred(new RuntimeException(ReadTimeoutException.INSTANCE));
+
+        verify(subscriber).onSubscribe(any());
+        verify(subscriber).onError(any(SubscribeToShardRetryableException.class));
+        verify(subscriber, never()).onNext(any());
+        verify(subscriber, never()).onComplete();
     }
 
     @Test

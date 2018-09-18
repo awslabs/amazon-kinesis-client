@@ -25,7 +25,10 @@ import java.util.stream.Collectors;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
+import lombok.Data;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.http.SdkHttpResponse;
@@ -141,19 +144,29 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         shardId, flow.connectionStartedAt, flow.subscribeToShardId);
                 return;
             }
-            String category = throwableCategory(t);
+            Throwable propagationThrowable = t;
+            ThrowableCategory category = throwableCategory(propagationThrowable);
 
             if (isActiveFlow(triggeringFlow)) {
                 if (flow != null) {
-                    log.warn("{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- {}",
-                            shardId, flow.connectionStartedAt, flow.subscribeToShardId, category, t);
+                    String logMessage = String.format(
+                            "%s: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ %s id: %s -- %s",
+                            shardId, flow.connectionStartedAt, flow.subscribeToShardId, category.throwableTypeString);
+                    if (category.throwableType.equals(ThrowableType.READ_TIMEOUT)) {
+                        log.debug(logMessage, propagationThrowable);
+                        propagationThrowable = new SubscribeToShardRetryableException(category.throwableTypeString,
+                                (Exception) propagationThrowable.getCause());
+                    } else {
+                        log.warn(logMessage, propagationThrowable);
+                    }
+
                     flow.cancel();
                 }
                 log.debug("{}: availableQueueSpace zeroing from {}", shardId, availableQueueSpace);
                 availableQueueSpace = 0;
 
                 try {
-                    handleFlowError(t);
+                    handleFlowError(propagationThrowable);
                 } catch (Throwable innerThrowable) {
                     log.warn("{}: Exception while calling subscriber.onError", shardId, innerThrowable);
                 }
@@ -163,7 +176,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 if (triggeringFlow != null) {
                     log.debug(
                             "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- {} -> triggeringFlow wasn't the active flow.  Didn't dispatch error",
-                            shardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId, category);
+                            shardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId,
+                            category.throwableTypeString);
                     triggeringFlow.cancel();
                 }
             }
@@ -184,29 +198,55 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    private String throwableCategory(Throwable t) {
+    private enum ThrowableType {
+        ACUIRE_TIMEOUT("AcquireTimeout"), READ_TIMEOUT("ReadTimeout"), UNKNOWN("Unknown");
+
+        String value;
+
+        ThrowableType(final String value) {
+            this.value = value;
+        }
+    }
+
+    private class ThrowableCategory {
+        @NonNull
+        final ThrowableType throwableType;
+        @NonNull
+        final String throwableTypeString;
+
+        ThrowableCategory(final ThrowableType throwableType) {
+            this(throwableType, throwableType.value);
+        }
+
+        ThrowableCategory(final ThrowableType throwableType, final String throwableTypeString) {
+            this.throwableType = throwableType;
+            this.throwableTypeString = throwableTypeString;
+        }
+    }
+
+    private ThrowableCategory throwableCategory(Throwable t) {
         Throwable current = t;
         StringBuilder builder = new StringBuilder();
         do {
             if (current.getMessage() != null && current.getMessage().startsWith("Acquire operation")) {
-                return "AcquireTimeout";
+                return new ThrowableCategory(ThrowableType.ACUIRE_TIMEOUT);
             }
             if (current.getClass().getName().equals("io.netty.handler.timeout.ReadTimeoutException")) {
-                return "ReadTimeout";
+                return new ThrowableCategory(ThrowableType.READ_TIMEOUT);
             }
 
             if (current.getCause() == null) {
                 //
                 // At the bottom
                 //
-                builder.append(current.getClass().getName() + ": " + current.getMessage());
+                builder.append(current.getClass().getName()).append(": ").append(current.getMessage());
             } else {
                 builder.append(current.getClass().getSimpleName());
                 builder.append("/");
             }
             current = current.getCause();
         } while (current != null);
-        return builder.toString();
+        return new ThrowableCategory(ThrowableType.UNKNOWN, builder.toString());
     }
 
     private void recordsReceived(RecordFlow triggeringFlow, SubscribeToShardEvent recordBatchEvent) {
