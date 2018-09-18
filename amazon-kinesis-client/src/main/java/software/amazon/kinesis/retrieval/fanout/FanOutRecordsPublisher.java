@@ -404,7 +404,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
      * @throws IllegalArgumentException
      *             if the records are invalid. This will trigger an error response upwards
      */
-    @KinesisClientExperimental
+    @KinesisClientExperimental(reason = "Allows providing a validation function with minimal changes")
     protected void validateRecords(String shardId, SubscribeToShardEvent event) {
     }
 

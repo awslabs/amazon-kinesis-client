@@ -86,7 +86,7 @@ public class FanOutConfig implements RetrievalSpecificConfig {
         return new FanOutRetrievalFactory(kinesisClient, getOrCreateConsumerArn());
     }
 
-    @KinesisClientExperimental
+    @KinesisClientExperimental(reason = "Experimentally changed from private to protected")
     protected String getOrCreateConsumerArn() {
         if (consumerArn != null) {
             return consumerArn;

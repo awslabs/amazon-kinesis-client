@@ -22,4 +22,5 @@ import java.lang.annotation.RetentionPolicy;
  */
 @Retention(RetentionPolicy.CLASS)
 public @interface KinesisClientExperimental {
+    String reason() default "";
 }
