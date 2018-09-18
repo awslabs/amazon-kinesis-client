@@ -70,8 +70,7 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void simpleTest() throws Exception {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN,
-                VALIDATE_RECORD_SHARD_MATCHING);
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
@@ -138,8 +137,7 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void largeRequestTest() throws Exception {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN,
-                VALIDATE_RECORD_SHARD_MATCHING);
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordSubscription.class);
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
@@ -206,8 +204,7 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void testResourceNotFoundForShard() {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN,
-                VALIDATE_RECORD_SHARD_MATCHING);
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
                 .forClass(FanOutRecordsPublisher.RecordFlow.class);
@@ -231,8 +228,7 @@ public class FanOutRecordsPublisherTest {
 
     @Test
     public void testContinuesAfterSequence() {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN,
-                VALIDATE_RECORD_SHARD_MATCHING);
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
                 .forClass(FanOutRecordsPublisher.RecordSubscription.class);
@@ -305,65 +301,7 @@ public class FanOutRecordsPublisherTest {
 
     }
 
-    @Test
-    public void mismatchedShardIdTest() {
-        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN, true);
 
-        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
-                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
-        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
-                .forClass(FanOutRecordsPublisher.RecordFlow.class);
-
-        doNothing().when(publisher).subscribe(captor.capture());
-
-        source.start(ExtendedSequenceNumber.LATEST,
-                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
-
-        List<Throwable> errorsHandled = new ArrayList<>();
-        List<ProcessRecordsInput> inputsReceived = new ArrayList<>();
-
-        source.subscribe(new Subscriber<ProcessRecordsInput>() {
-            Subscription subscription;
-
-            @Override
-            public void onSubscribe(Subscription s) {
-                subscription = s;
-                subscription.request(1);
-            }
-
-            @Override
-            public void onNext(ProcessRecordsInput input) {
-                inputsReceived.add(input);
-            }
-
-            @Override
-            public void onError(Throwable t) {
-                errorsHandled.add(t);
-
-            }
-
-            @Override
-            public void onComplete() {
-                fail("OnComplete called when not expected");
-            }
-        });
-
-        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
-        flowCaptor.getValue().onEventStream(publisher);
-        captor.getValue().onSubscribe(subscription);
-
-        List<Record> records = Stream.of(1, 2, 3).map(seq -> makeRecord(seq, seq)).collect(Collectors.toList());
-
-        batchEvent = SubscribeToShardEvent.builder().millisBehindLatest(100L).records(records).build();
-
-        captor.getValue().onNext(batchEvent);
-
-        verify(subscription, times(1)).request(1);
-        assertThat(inputsReceived.size(), equalTo(0));
-        assertThat(errorsHandled.size(), equalTo(1));
-        assertThat(errorsHandled.get(0), instanceOf(IllegalArgumentException.class));
-        assertThat(errorsHandled.get(0).getMessage(), containsString("Received records destined for different shards"));
-    }
 
     private void verifyRecords(List<KinesisClientRecord> clientRecordsList, List<KinesisClientRecordMatcher> matchers) {
         assertThat(clientRecordsList.size(), equalTo(matchers.size()));
@@ -404,7 +342,7 @@ public class FanOutRecordsPublisherTest {
         return makeRecord(sequenceNumber, 1);
     }
 
-    private Record makeRecord(int sequenceNumber, int shardId) {
+    static Record makeRecord(int sequenceNumber, int shardId) {
         BigInteger version = BigInteger.valueOf(2).shiftLeft(184);
         BigInteger shard = BigInteger.valueOf(shardId).shiftLeft(4);
         BigInteger seq = version.add(shard).add(BigInteger.valueOf(sequenceNumber));

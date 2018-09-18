@@ -26,6 +26,7 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 import software.amazon.kinesis.retrieval.RetrievalSpecificConfig;
+import software.amazon.kinesis.annotations.KinesisClientExperimental;
 
 @Data
 @Accessors(fluent = true)
@@ -80,18 +81,13 @@ public class FanOutConfig implements RetrievalSpecificConfig {
      */
     private long retryBackoffMillis = 1000;
 
-    /**
-     * Controls whether the {@link FanOutRecordsPublisher} will validate that all the records are from the shard it's
-     * processing.
-     */
-    private boolean validateRecordsAreForShard = false;
-
     @Override
     public RetrievalFactory retrievalFactory() {
-        return new FanOutRetrievalFactory(kinesisClient, getOrCreateConsumerArn()).validateRecordsAreForShard(validateRecordsAreForShard);
+        return new FanOutRetrievalFactory(kinesisClient, getOrCreateConsumerArn());
     }
 
-    private String getOrCreateConsumerArn() {
+    @KinesisClientExperimental(reason = "Experimentally changed from private to protected")
+    protected String getOrCreateConsumerArn() {
         if (consumerArn != null) {
             return consumerArn;
         }
