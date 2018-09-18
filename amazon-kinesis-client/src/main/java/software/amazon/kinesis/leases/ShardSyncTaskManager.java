@@ -50,13 +50,13 @@ public class ShardSyncTaskManager {
     @NonNull
     private final ExecutorService executorService;
     @NonNull
-    private final MetricsFactory metricsFactory;
-    @NonNull
     private final ShardSyncer shardSyncer;
+    @NonNull
+    private final MetricsFactory metricsFactory;
 
     public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher, InitialPositionInStreamExtended initialPositionInStream,
                                 boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis,
-                                ExecutorService executorService, MetricsFactory metricsFactory, ShardSyncer shardSyncer) {
+                                ExecutorService executorService, ShardSyncer shardSyncer, MetricsFactory metricsFactory) {
         this.shardDetector = shardDetector;
         this.leaseRefresher = leaseRefresher;
         this.initialPositionInStream = initialPositionInStream;
@@ -64,8 +64,8 @@ public class ShardSyncTaskManager {
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
-        this.metricsFactory = metricsFactory;
         this.shardSyncer = shardSyncer;
+        this.metricsFactory = metricsFactory;
     }
 
     private ConsumerTask currentTask;

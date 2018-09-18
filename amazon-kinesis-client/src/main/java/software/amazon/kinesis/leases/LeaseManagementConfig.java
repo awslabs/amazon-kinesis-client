@@ -220,14 +220,7 @@ public class LeaseManagementConfig {
         }
     };
 
-    private ShardSyncer shardSyncer;
-
-    public ShardSyncer shardSyncer() {
-        if (shardSyncer == null) {
-            shardSyncer = new ShardSyncer();
-        }
-        return shardSyncer;
-    }
+    private ShardSyncer shardSyncer = new ShardSyncer();
 
     private LeaseManagementFactory leaseManagementFactory;
 

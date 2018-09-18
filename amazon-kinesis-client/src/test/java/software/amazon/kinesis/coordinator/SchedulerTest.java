@@ -25,25 +25,17 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.Semaphore;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
 
-import static org.junit.Assert.fail;
-import java.util.function.Supplier;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -53,8 +45,6 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.awssdk.services.kinesis.model.SequenceNumberRange;
-import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.CheckpointFactory;
@@ -65,9 +55,7 @@ import software.amazon.kinesis.leases.LeaseManagementFactory;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.leases.ShardObjectHelper;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
-import software.amazon.kinesis.leases.ShardSyncer;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
@@ -271,95 +259,6 @@ public class SchedulerTest {
         verify(shardDetector, times(maxInitializationAttempts)).listShards();
     }
 
-    /**
-     * Tests if two workers can concurrently sync shards.
-     * Runs the first worker and waits until it starts syncing shards. Then starts the second
-     * worker and checks if the second worker can start syncing shards.
-     */
-    @Test(timeout = 30000L)
-    public final void testWorkersCanSyncShardsInParallel() {
-        LeaseManagementConfig leaseManagementConfig1 = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, streamName,
-                workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory());
-        LeaseManagementConfig leaseManagementConfig2 = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, streamName,
-                workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory());
-        Semaphore waitToResume = new Semaphore(0);
-        Semaphore waitForScheduler1ToRun = new Semaphore(0);
-        Semaphore waitForScheduler2ToRun = new Semaphore(0);
-
-        Consumer<Semaphore> semWaitWrapper = (sem) -> {
-            try {
-                boolean acquired = sem.tryAcquire(10, TimeUnit.SECONDS);
-                assertTrue(acquired);
-            } catch (InterruptedException e) {
-                fail(e.toString());
-            }
-        };
-
-        Runnable waitForScheduler1ToStartSyncingShard = () -> semWaitWrapper.accept(waitForScheduler1ToRun);
-        Runnable signalThatScheduler1HasStartedSyncingShard = () -> waitForScheduler1ToRun.release();
-        Runnable waitBeforeResumingSyncingShard = () -> semWaitWrapper.accept(waitToResume);
-        Runnable signalToScheduler1ToResumeSyncingShard = () -> waitToResume.release();
-
-        Runnable waitForScheduler2ToStartSyncingShard = () -> semWaitWrapper.accept(waitForScheduler2ToRun);
-        Runnable signalThatScheduler2HasStartedSyncingShard = () -> waitForScheduler2ToRun.release();
-
-        Supplier<List<Shard>> getShards = () -> {
-            final String shardId0 = "shardId-0";
-            final String shardId1 = "shardId-1";
-            final SequenceNumberRange sequenceRange = ShardObjectHelper.newSequenceNumberRange("342980", null);
-            return Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange, null),
-                    ShardObjectHelper.newShard(shardId1, null, null, sequenceRange, null));
-        };
-
-        ShardDetector shardDetector1 = mock(ShardDetector.class);
-        when(shardDetector1.listShards()).thenAnswer(params -> {
-                    signalThatScheduler1HasStartedSyncingShard.run();
-                    waitBeforeResumingSyncingShard.run();
-                    return getShards.get();
-                }
-        );
-
-        ShardDetector shardDetector2 = mock(ShardDetector.class);
-        when(shardDetector2.listShards()).thenAnswer(params -> {
-                    signalThatScheduler2HasStartedSyncingShard.run();
-                    return getShards.get();
-                }
-        );
-
-        BiFunction<ShardDetector, LeaseManagementConfig, Scheduler> createScheduler = (shardDetector, leaseManagementConfig) -> {
-            when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
-            when(shardSyncTaskManager.shardSyncer()).thenReturn(new ShardSyncer());
-            return new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
-                    metricsConfig, processorConfig, retrievalConfig);
-        };
-        Scheduler scheduler1 = createScheduler.apply(shardDetector1, leaseManagementConfig1);
-        Thread scheduler1Thread = new Thread(scheduler1);
-
-        Scheduler scheduler2 = createScheduler.apply(shardDetector2, leaseManagementConfig2);
-        Thread scheduler2Thread = new Thread(scheduler2);
-
-        try {
-            scheduler1Thread.start();
-            waitForScheduler1ToStartSyncingShard.run();
-
-            // Now the first scheduler is syncing shard, let the scheduler worker start running
-            scheduler2Thread.start();
-            waitForScheduler2ToStartSyncingShard.run();
-
-            // Both the schedulers are syncing shards now.
-
-            scheduler2.shutdown();
-            scheduler2Thread.join();
-
-            // Signal so that the first scheduler can finish syncing shard.
-            signalToScheduler1ToResumeSyncingShard.run();
-
-            scheduler1.shutdown();
-            scheduler1Thread.join();
-        } catch (Exception ex) {
-            fail(ex.toString());
-        }
-    }
 
     /*private void runAndTestWorker(int numShards, int threadPoolSize) throws Exception {
         final int numberOfRecordsPerShard = 10;

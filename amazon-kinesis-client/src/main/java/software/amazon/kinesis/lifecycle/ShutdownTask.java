@@ -125,8 +125,8 @@ public class ShutdownTask implements ConsumerTask {
                 if (reason == ShutdownReason.SHARD_END) {
                     log.debug("Looking for child shards of shard {}", shardInfo.shardId());
                     // create leases for the child shards
-                    shardSyncer.checkAndCreateLeasesForNewShards(shardDetector, leaseRefresher, initialPositionInStream,
-                            cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
+                    shardSyncer.checkAndCreateLeasesForNewShardsObjectLevelSynchronization(shardDetector, leaseRefresher,
+                            initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
                     log.debug("Finished checking for child shards of shard {}", shardInfo.shardId());
                 }
 

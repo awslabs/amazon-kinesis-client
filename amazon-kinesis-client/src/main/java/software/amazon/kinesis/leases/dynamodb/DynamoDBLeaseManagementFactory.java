@@ -254,8 +254,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 ignoreUnexpectedChildShards,
                 shardSyncIntervalMillis,
                 executorService,
-                metricsFactory,
-                shardSyncer);
+                shardSyncer,
+                metricsFactory);
     }
 
     @Override
