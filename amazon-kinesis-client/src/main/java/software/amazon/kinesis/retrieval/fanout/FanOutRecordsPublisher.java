@@ -18,13 +18,10 @@ package software.amazon.kinesis.retrieval.fanout;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.apache.commons.lang3.StringUtils;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
@@ -40,13 +37,13 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.checkpoint.SequenceNumberValidator;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+import software.amazon.kinesis.annotations.KinesisClientExperimental;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @Slf4j
@@ -56,14 +53,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private final KinesisAsyncClient kinesis;
     private final String shardId;
     private final String consumerArn;
-    private final boolean validateRecordShardMatching;
 
     /**
      * Creates a new FanOutRecordsPublisher.
-     * <p>
-     * This is deprecated and will be removed in a later release. Use
-     * {@link #FanOutRecordsPublisher(KinesisAsyncClient, String, String, boolean)} instead
-     * </p>
      * 
      * @param kinesis
      *            the kinesis client to use for requests
@@ -72,17 +64,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
      * @param consumerArn
      *            the consumer to use when retrieving records
      */
-    @Deprecated
     public FanOutRecordsPublisher(KinesisAsyncClient kinesis, String shardId, String consumerArn) {
-        this(kinesis, shardId, consumerArn, false);
-    }
-
-    public FanOutRecordsPublisher(KinesisAsyncClient kinesis, String shardId, String consumerArn,
-            boolean validateRecordShardMatching) {
         this.kinesis = kinesis;
         this.shardId = shardId;
         this.consumerArn = consumerArn;
-        this.validateRecordShardMatching = validateRecordShardMatching;
     }
 
     private final Object lockObject = new Object();
@@ -383,7 +368,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         }
                         subscriber = null;
                         if (flow != null) {
-                            log.debug("{}: [SubscriptionLifetime]: (FanOutRecordsPublisher/Subscription#cancel) @ {} id: {}",
+                            log.debug(
+                                    "{}: [SubscriptionLifetime]: (FanOutRecordsPublisher/Subscription#cancel) @ {} id: {}",
                                     shardId, flow.connectionStartedAt, flow.subscribeToShardId);
                             flow.cancel();
                             availableQueueSpace = 0;
@@ -406,6 +392,20 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         synchronized (lockObject) {
             return requester == flow;
         }
+    }
+
+    /**
+     * Allows validating records received from SubscribeToShard
+     * 
+     * @param shardId
+     *            the shardId the records should be from
+     * @param event
+     *            the SubscribeToShard event that was received.
+     * @throws IllegalArgumentException
+     *             if the records are invalid. This will trigger an error response upwards
+     */
+    @KinesisClientExperimental
+    protected void validateRecords(String shardId, SubscribeToShardEvent event) {
     }
 
     private void rejectSubscription(SdkPublisher<SubscribeToShardEventStream> publisher) {
@@ -588,7 +588,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         private final RecordFlow flow;
         private final Instant connectionStartedAt;
         private final String subscribeToShardId;
-        private final SequenceNumberValidator sequenceNumberValidator = new SequenceNumberValidator();
 
         private Subscription subscription;
 
@@ -657,52 +656,20 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 recordBatchEvent.accept(new SubscribeToShardResponseHandler.Visitor() {
                     @Override
                     public void visit(SubscribeToShardEvent event) {
-                        if (parent.validateRecordShardMatching && !areRecordsValid(event)) {
+                        try {
+                            parent.validateRecords(parent.shardId, event);
+                        } catch (IllegalArgumentException iae) {
+                            log.debug(
+                                    "{}: [SubscriptionLifetime]: (RecordSubscription#onNext#vistor) @ {} id: {} (Subscription ObjectId: {}) -- Failing subscription due to mismatches: [ {} ]",
+                                    parent.shardId, connectionStartedAt, subscribeToShardId,
+                                    System.identityHashCode(subscription), iae.getMessage());
+                            parent.errorOccurred(flow, iae);
                             return;
                         }
                         flow.recordsReceived(event);
                     }
                 });
             }
-        }
-
-        private boolean areRecordsValid(SubscribeToShardEvent event) {
-            try {
-                Map<String, Integer> mismatchedRecords = recordsNotForShard(event);
-                if (mismatchedRecords.size() > 0) {
-                    String mismatchReport = mismatchedRecords.entrySet().stream()
-                            .map(e -> String.format("(%s -> %d)", e.getKey(), e.getValue()))
-                            .collect(Collectors.joining(", "));
-                    log.debug(
-                            "{}: [SubscriptionLifetime]: (RecordSubscription#onNext#vistor) @ {} id: {} (Subscription ObjectId: {}) -- Failing subscription due to mismatches: [ {} ]",
-                            parent.shardId, connectionStartedAt, subscribeToShardId,
-                            System.identityHashCode(subscription), mismatchReport);
-                    parent.errorOccurred(flow, new IllegalArgumentException(
-                            "Received records destined for different shards: " + mismatchReport));
-                    return false;
-                }
-            } catch (IllegalArgumentException iae) {
-                log.debug(
-                        "{}: [SubscriptionLifetime]: (RecordSubscription#onNext#vistor) @ {} id: {} (Subscription ObjectId: {}) -- "
-                                + "A problem occurred while validating sequence numbers: {} on subscription {}",
-                        parent.shardId, connectionStartedAt, subscribeToShardId, System.identityHashCode(subscription),
-                        iae.getMessage(), iae);
-                parent.errorOccurred(flow, iae);
-                return false;
-            }
-            return true;
-        }
-
-        private Map<String, Integer> recordsNotForShard(SubscribeToShardEvent event) {
-            return event.records().stream().map(r -> {
-                Optional<String> res = sequenceNumberValidator.shardIdFor(r.sequenceNumber());
-                if (!res.isPresent()) {
-                    throw new IllegalArgumentException("Unable to validate sequence number of " + r.sequenceNumber());
-                }
-                return res.get();
-            }).filter(s -> !StringUtils.equalsIgnoreCase(s, parent.shardId))
-                    .collect(Collectors.groupingBy(Function.identity())).entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().size()));
         }
 
         @Override
