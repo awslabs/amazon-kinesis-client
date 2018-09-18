@@ -28,6 +28,11 @@ import software.amazon.kinesis.annotations.KinesisClientExperimental;
 import software.amazon.kinesis.checkpoint.SequenceNumberValidator;
 import software.amazon.kinesis.retrieval.fanout.FanOutRecordsPublisher;
 
+/**
+ * A variation of {@link FanOutRecordsPublisher} that provides validation of every record received by the publisher.
+ *
+ * <h2><strong>This is an experimental class and may be removed at any time</strong></h2>
+ */
 @Slf4j
 @KinesisClientExperimental
 public class ExperimentalFanOutRecordsPublisher extends FanOutRecordsPublisher {

@@ -19,6 +19,11 @@ import software.amazon.kinesis.annotations.KinesisClientExperimental;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
 
+/**
+ * Enables validation of sequence number for every received record.
+ *
+ * <h2><strong>This is an experimental class and may be removed at any time</strong></h2>
+ */
 @KinesisClientExperimental
 public class ExperimentalFanOutConfig extends FanOutConfig {
 

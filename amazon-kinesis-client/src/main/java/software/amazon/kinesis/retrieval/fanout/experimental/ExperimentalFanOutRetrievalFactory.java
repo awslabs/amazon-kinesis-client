@@ -24,7 +24,9 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 
 /**
- * Supports validating that records did originate from the shard
+ * Supports validating that records did originate from the shard.
+ *
+ * <h2><strong>This is an experimental class and may be removed at any time</strong></h2>
  */
 @RequiredArgsConstructor
 @KinesisClientExperimental
