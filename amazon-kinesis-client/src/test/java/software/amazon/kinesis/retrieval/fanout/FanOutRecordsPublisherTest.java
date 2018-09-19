@@ -1,8 +1,6 @@
 package software.amazon.kinesis.retrieval.fanout;
 
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -21,6 +19,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import io.netty.handler.timeout.ReadTimeoutException;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
@@ -47,6 +46,7 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -55,7 +55,6 @@ public class FanOutRecordsPublisherTest {
 
     private static final String SHARD_ID = "shardId-000000000001";
     private static final String CONSUMER_ARN = "arn:consumer";
-    private static final boolean VALIDATE_RECORD_SHARD_MATCHING = true;
 
     @Mock
     private KinesisAsyncClient kinesisClient;
@@ -224,6 +223,25 @@ public class FanOutRecordsPublisherTest {
         ProcessRecordsInput input = inputCaptor.getValue();
         assertThat(input.isAtShardEnd(), equalTo(true));
         assertThat(input.records().isEmpty(), equalTo(true));
+    }
+
+    @Test
+    public void testReadTimeoutExceptionForShard() {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        source.subscribe(subscriber);
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        FanOutRecordsPublisher.RecordFlow recordFlow = flowCaptor.getValue();
+        recordFlow.exceptionOccurred(new RuntimeException(ReadTimeoutException.INSTANCE));
+
+        verify(subscriber).onSubscribe(any());
+        verify(subscriber).onError(any(RetryableRetrievalException.class));
+        verify(subscriber, never()).onNext(any());
+        verify(subscriber, never()).onComplete();
     }
 
     @Test

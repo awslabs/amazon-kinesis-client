@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.async.SdkPublisher;
@@ -36,6 +37,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
+import software.amazon.kinesis.annotations.KinesisClientExperimental;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
@@ -43,12 +45,15 @@ import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
-import software.amazon.kinesis.annotations.KinesisClientExperimental;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @Slf4j
 @KinesisClientInternalApi
 public class FanOutRecordsPublisher implements RecordsPublisher {
+    private static final ThrowableCategory ACQUIRE_TIMEOUT_CATEGORY = new ThrowableCategory(
+            ThrowableType.ACUIRE_TIMEOUT);
+    private static final ThrowableCategory READ_TIMEOUT_CATEGORY = new ThrowableCategory(ThrowableType.READ_TIMEOUT);
 
     private final KinesisAsyncClient kinesis;
     private final String shardId;
@@ -141,19 +146,29 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         shardId, flow.connectionStartedAt, flow.subscribeToShardId);
                 return;
             }
-            String category = throwableCategory(t);
+            Throwable propagationThrowable = t;
+            ThrowableCategory category = throwableCategory(propagationThrowable);
 
             if (isActiveFlow(triggeringFlow)) {
                 if (flow != null) {
-                    log.warn("{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- {}",
-                            shardId, flow.connectionStartedAt, flow.subscribeToShardId, category, t);
+                    String logMessage = String.format(
+                            "%s: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ %s id: %s -- %s",
+                            shardId, flow.connectionStartedAt, flow.subscribeToShardId, category.throwableTypeString);
+                    if (category.throwableType.equals(ThrowableType.READ_TIMEOUT)) {
+                        log.debug(logMessage, propagationThrowable);
+                        propagationThrowable = new RetryableRetrievalException(category.throwableTypeString,
+                                (Exception) propagationThrowable.getCause());
+                    } else {
+                        log.warn(logMessage, propagationThrowable);
+                    }
+
                     flow.cancel();
                 }
                 log.debug("{}: availableQueueSpace zeroing from {}", shardId, availableQueueSpace);
                 availableQueueSpace = 0;
 
                 try {
-                    handleFlowError(t);
+                    handleFlowError(propagationThrowable);
                 } catch (Throwable innerThrowable) {
                     log.warn("{}: Exception while calling subscriber.onError", shardId, innerThrowable);
                 }
@@ -163,7 +178,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 if (triggeringFlow != null) {
                     log.debug(
                             "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- {} -> triggeringFlow wasn't the active flow.  Didn't dispatch error",
-                            shardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId, category);
+                            shardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId,
+                            category.throwableTypeString);
                     triggeringFlow.cancel();
                 }
             }
@@ -184,29 +200,55 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    private String throwableCategory(Throwable t) {
+    private enum ThrowableType {
+        ACUIRE_TIMEOUT("AcquireTimeout"), READ_TIMEOUT("ReadTimeout"), OTHER("Other");
+
+        String value;
+
+        ThrowableType(final String value) {
+            this.value = value;
+        }
+    }
+
+    private static class ThrowableCategory {
+        @NonNull
+        final ThrowableType throwableType;
+        @NonNull
+        final String throwableTypeString;
+
+        ThrowableCategory(final ThrowableType throwableType) {
+            this(throwableType, throwableType.value);
+        }
+
+        ThrowableCategory(final ThrowableType throwableType, final String throwableTypeString) {
+            this.throwableType = throwableType;
+            this.throwableTypeString = throwableTypeString;
+        }
+    }
+
+    private ThrowableCategory throwableCategory(Throwable t) {
         Throwable current = t;
         StringBuilder builder = new StringBuilder();
         do {
             if (current.getMessage() != null && current.getMessage().startsWith("Acquire operation")) {
-                return "AcquireTimeout";
+                return ACQUIRE_TIMEOUT_CATEGORY;
             }
             if (current.getClass().getName().equals("io.netty.handler.timeout.ReadTimeoutException")) {
-                return "ReadTimeout";
+                return READ_TIMEOUT_CATEGORY;
             }
 
             if (current.getCause() == null) {
                 //
                 // At the bottom
                 //
-                builder.append(current.getClass().getName() + ": " + current.getMessage());
+                builder.append(current.getClass().getName()).append(": ").append(current.getMessage());
             } else {
                 builder.append(current.getClass().getSimpleName());
                 builder.append("/");
             }
             current = current.getCause();
         } while (current != null);
-        return builder.toString();
+        return new ThrowableCategory(ThrowableType.OTHER, builder.toString());
     }
 
     private void recordsReceived(RecordFlow triggeringFlow, SubscribeToShardEvent recordBatchEvent) {
