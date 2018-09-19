@@ -13,19 +13,19 @@
  *  permissions and limitations under the License.
  */
 
-package software.amazon.kinesis.retrieval.fanout;
+package software.amazon.kinesis.retrieval;
 
 import software.amazon.kinesis.exceptions.KinesisClientLibRetryableException;
 
 /**
  * RetryableException for SubscribeToShard APIs.
  */
-public class SubscribeToShardRetryableException extends KinesisClientLibRetryableException {
-    public SubscribeToShardRetryableException(final String message) {
+public class RetryableRetrievalException extends KinesisClientLibRetryableException {
+    public RetryableRetrievalException(final String message) {
         super(message);
     }
 
-    public SubscribeToShardRetryableException(final String message, final Exception e) {
+    public RetryableRetrievalException(final String message, final Exception e) {
         super(message, e);
     }
 }

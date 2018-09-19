@@ -43,7 +43,7 @@ import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
-import software.amazon.kinesis.retrieval.fanout.SubscribeToShardRetryableException;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
 /**
  * Responsible for consuming data records of a (specified) shard.
@@ -243,7 +243,7 @@ public class ShardConsumer {
         }
         if (failure != null) {
             String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests", shardInfo.shardId());
-            if (failure instanceof SubscribeToShardRetryableException) {
+            if (failure instanceof RetryableRetrievalException) {
                 log.debug(logMessage, failure.getCause());
             } else {
                 log.warn(logMessage, failure);

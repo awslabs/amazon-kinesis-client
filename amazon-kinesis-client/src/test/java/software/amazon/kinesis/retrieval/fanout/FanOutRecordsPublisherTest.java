@@ -1,8 +1,6 @@
 package software.amazon.kinesis.retrieval.fanout;
 
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -48,6 +46,7 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -240,7 +239,7 @@ public class FanOutRecordsPublisherTest {
         recordFlow.exceptionOccurred(new RuntimeException(ReadTimeoutException.INSTANCE));
 
         verify(subscriber).onSubscribe(any());
-        verify(subscriber).onError(any(SubscribeToShardRetryableException.class));
+        verify(subscriber).onError(any(RetryableRetrievalException.class));
         verify(subscriber, never()).onNext(any());
         verify(subscriber, never()).onComplete();
     }
