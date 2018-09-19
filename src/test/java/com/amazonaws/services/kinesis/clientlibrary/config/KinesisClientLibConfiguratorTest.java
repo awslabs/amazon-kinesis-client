@@ -26,7 +26,7 @@ import java.util.Date;
 import java.util.Optional;
 import java.util.Set;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.Test;
 
 import com.amazonaws.auth.AWSCredentials;
