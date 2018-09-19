@@ -16,6 +16,7 @@ package software.amazon.kinesis.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -36,12 +37,15 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.annotations.KinesisClientExperimental;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.MismatchedRecordReporter;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
@@ -149,6 +153,7 @@ public class ShardConsumer {
                     lastRequestTime = null;
                 }
                 lastDataArrival = Instant.now();
+                checkForMismatchedRecords(input);
                 handleInput(input.toBuilder().cacheExitTime(Instant.now()).build(), subscription);
             } catch (Throwable t) {
                 log.warn("{}: Caught exception from handleInput", shardInfo.shardId(), t);
@@ -177,6 +182,22 @@ public class ShardConsumer {
             if (subscription != null) {
                 subscription.cancel();
             }
+        }
+    }
+
+    @KinesisClientExperimental
+    private final MismatchedRecordReporter mismatchedRecordReporter = new MismatchedRecordReporter();
+
+    @KinesisClientExperimental
+    private void checkForMismatchedRecords(ProcessRecordsInput processRecordsInput) {
+        try {
+            Map<String, Integer> mismatchedRecords = mismatchedRecordReporter.recordsNotForShard(shardInfo.shardId(), processRecordsInput.records().stream().map(KinesisClientRecord::sequenceNumber));
+            if (!mismatchedRecords.isEmpty()) {
+                String report = mismatchedRecordReporter.makeReport(mismatchedRecords);
+                log.error("[{}] Found mismatched records: {}", shardInfo.shardId(), report);
+            }
+        } catch (IllegalArgumentException iae) {
+            log.error("[{}] Argument exception while processing sequence numbers", shardInfo.shardId(), iae);
         }
     }
 

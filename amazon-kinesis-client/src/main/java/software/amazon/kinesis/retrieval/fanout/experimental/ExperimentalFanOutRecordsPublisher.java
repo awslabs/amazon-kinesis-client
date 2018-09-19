@@ -15,17 +15,14 @@
 package software.amazon.kinesis.retrieval.fanout.experimental;
 
 import java.util.Map;
-import java.util.Optional;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import org.apache.commons.lang3.StringUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.kinesis.annotations.KinesisClientExperimental;
-import software.amazon.kinesis.checkpoint.SequenceNumberValidator;
+import software.amazon.kinesis.common.MismatchedRecordReporter;
 import software.amazon.kinesis.retrieval.fanout.FanOutRecordsPublisher;
 
 /**
@@ -37,7 +34,7 @@ import software.amazon.kinesis.retrieval.fanout.FanOutRecordsPublisher;
 @KinesisClientExperimental
 public class ExperimentalFanOutRecordsPublisher extends FanOutRecordsPublisher {
 
-    private final SequenceNumberValidator sequenceNumberValidator = new SequenceNumberValidator();
+    private final MismatchedRecordReporter mismatchedRecordReporter = new MismatchedRecordReporter();
 
     /**
      * Creates a new FanOutRecordsPublisher.
@@ -54,23 +51,13 @@ public class ExperimentalFanOutRecordsPublisher extends FanOutRecordsPublisher {
 
     @Override
     protected void validateRecords(String shardId, SubscribeToShardEvent event) {
-        Map<String, Integer> mismatchedRecords = recordsNotForShard(shardId, event);
+        Map<String, Integer> mismatchedRecords = mismatchedRecordReporter.recordsNotForShard(shardId,
+                event.records().stream().map(Record::sequenceNumber));
         if (mismatchedRecords.size() > 0) {
             String mismatchReport = mismatchedRecords.entrySet().stream()
                     .map(e -> String.format("(%s -> %d)", e.getKey(), e.getValue())).collect(Collectors.joining(", "));
             throw new IllegalArgumentException("Received records destined for different shards: " + mismatchReport);
         }
 
-    }
-
-    private Map<String, Integer> recordsNotForShard(String shardId, SubscribeToShardEvent event) {
-        return event.records().stream().map(r -> {
-            Optional<String> res = sequenceNumberValidator.shardIdFor(r.sequenceNumber());
-            if (!res.isPresent()) {
-                throw new IllegalArgumentException("Unable to validate sequence number of " + r.sequenceNumber());
-            }
-            return res.get();
-        }).filter(s -> !StringUtils.equalsIgnoreCase(s, shardId)).collect(Collectors.groupingBy(Function.identity()))
-                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().size()));
     }
 }
