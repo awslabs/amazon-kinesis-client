@@ -18,7 +18,7 @@ import com.amazonaws.ClientConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.config.KinesisClientLibConfigurator;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
