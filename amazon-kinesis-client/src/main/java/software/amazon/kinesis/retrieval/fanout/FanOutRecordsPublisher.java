@@ -528,7 +528,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         public void responseReceived(SubscribeToShardResponse response) {
             Optional<SdkHttpResponse> sdkHttpResponse = Optional.ofNullable(response)
                     .flatMap(r -> Optional.ofNullable(r.sdkHttpResponse()));
-            Optional<String> requestId = sdkHttpResponse.flatMap(s -> s.firstMatchingHeader("x-amz-requestid"));
+            Optional<String> requestId = sdkHttpResponse.flatMap(s -> s.firstMatchingHeader("x-amzn-requestid"));
             Optional<String> requestId2 = sdkHttpResponse.flatMap(s -> s.firstMatchingHeader("x-amz-id-2"));
 
             log.debug(
