@@ -28,6 +28,7 @@ import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementFactory;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
+import software.amazon.kinesis.leases.TableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
 
 /**

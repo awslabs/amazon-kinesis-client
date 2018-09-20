@@ -32,7 +32,6 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.dynamodb.DoesNothingTableCreatorCallback;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
-import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 

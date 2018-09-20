@@ -16,6 +16,7 @@
 package software.amazon.kinesis.leases.dynamodb;
 
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.kinesis.leases.TableCreatorCallback;
 
 /**
  * This implementation of the TableCreatorCallback does nothing.

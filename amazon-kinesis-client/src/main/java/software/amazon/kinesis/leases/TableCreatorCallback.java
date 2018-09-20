@@ -13,7 +13,7 @@
  * permissions and limitations under the License.
  */
 
-package software.amazon.kinesis.leases.dynamodb;
+package software.amazon.kinesis.leases;
 
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 
