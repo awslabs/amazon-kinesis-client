@@ -615,6 +615,29 @@ public class ShardShardRecordProcessorCheckpointerTest {
     }
 
     @Test
+    public void testBuiltWithSequenceNumberForDifferentShard() throws Exception {
+        String sequenceNumber = "49587497311274533994574834252742144236107130636007899138";
+        String largestPermittedSequenceNumber = new BigInteger(sequenceNumber, 10).add(BigInteger.ONE).toString();
+        String actualShardId = "shardId-000000000000";
+        String shardId = "shardId-000000000001";
+
+        String expectedMessage = String.format(
+                "Sequence number %s encodes a different shard: %s than the expected shard: %s", largestPermittedSequenceNumber,
+                actualShardId, shardId);
+
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage(expectedMessage);
+
+        ShardRecordProcessorCheckpointer checkpointer = new ShardRecordProcessorCheckpointer(
+                new ShardInfo(shardId, "", Collections.emptyList(), ExtendedSequenceNumber.TRIM_HORIZON), checkpoint);
+
+        ExtendedSequenceNumber ex = new ExtendedSequenceNumber(largestPermittedSequenceNumber);
+        checkpointer.largestPermittedCheckpointValue(ex);
+
+        checkpointer.checkpoint();
+    }
+
+    @Test
     public void testInvalidSequenceNumberThrows() throws Exception {
         String sequenceNumber = "79587497311274533994574834252742144236107130636007899138";
 
@@ -633,6 +656,27 @@ public class ShardShardRecordProcessorCheckpointerTest {
         checkpointer.checkpoint(sequenceNumber, 0);
 
     }
+
+    @Test
+    public void testBuiltWithInvalidSequenceNumberThrows() throws Exception {
+        String sequenceNumber = "79587497311274533994574834252742144236107130636007899138";
+        String largestPermittedSequenceNumber = new BigInteger(sequenceNumber, 10).add(BigInteger.ONE).toString();
+
+        String expectedMessage = "Unable to extract shardId from " + largestPermittedSequenceNumber;
+
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage(expectedMessage);
+
+        ShardRecordProcessorCheckpointer checkpointer = new ShardRecordProcessorCheckpointer(
+                new ShardInfo(shardId, "", Collections.emptyList(), ExtendedSequenceNumber.TRIM_HORIZON), checkpoint);
+
+        ExtendedSequenceNumber ex = new ExtendedSequenceNumber(largestPermittedSequenceNumber);
+        checkpointer.largestPermittedCheckpointValue(ex);
+
+        checkpointer.checkpoint();
+
+    }
+
 
     private ShardRecordProcessorCheckpointer make(ShardInfo shardInfo, Checkpointer checkpoint) {
         return new ShardRecordProcessorCheckpointer(shardInfo, checkpoint, null);

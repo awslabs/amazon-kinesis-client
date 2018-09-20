@@ -14,11 +14,11 @@
  */
 package software.amazon.kinesis.checkpoint;
 
+import java.math.BigInteger;
 import java.util.Optional;
 
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.Record;
@@ -269,8 +269,11 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
     }
 
     void advancePosition(ExtendedSequenceNumber extendedSequenceNumber)
-        throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
         ExtendedSequenceNumber checkpointToRecord = extendedSequenceNumber;
+
+        validatePossibleSequenceNumber(extendedSequenceNumber);
+
         if (sequenceNumberAtShardEnd != null && sequenceNumberAtShardEnd.equals(extendedSequenceNumber)) {
             // If we are about to checkpoint the very last sequence number for this shard, we might as well
             // just checkpoint at SHARD_END
@@ -292,6 +295,44 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
             } catch (KinesisClientLibException e) {
                 log.warn("Caught exception setting checkpoint.", e);
                 throw new KinesisClientLibDependencyException("Caught exception while checkpointing", e);
+            }
+        }
+    }
+
+    private void validatePossibleSequenceNumber(ExtendedSequenceNumber extendedSequenceNumber) {
+        if (sequenceNumberValidator != null) {
+            if (extendedSequenceNumber == null) {
+                log.warn("[{}] Got a null extendedSequenceNumber. Skipping validation.", shardInfo.shardId());
+                return;
+            }
+
+            String sequenceNumber = extendedSequenceNumber.sequenceNumber();
+            if (sequenceNumber == null) {
+                log.warn("[{}] Null sequence number really shouldn't happen, skipping validation.", shardInfo.shardId());
+                return;
+            }
+            try {
+                BigInteger seqNum = new BigInteger(sequenceNumber, 10);
+                if (seqNum.compareTo(BigInteger.ZERO) < 0) {
+                    log.debug("[{}] {} is a sentinel. Skipping validation.", shardInfo.shardId(), seqNum);
+                    return;
+                }
+
+                Optional<Boolean> validationResult = sequenceNumberValidator.validateSequenceNumberForShard(sequenceNumber,
+                        shardInfo.shardId());
+                if (!validationResult.isPresent()) {
+                    log.error("[{}] Unable to extract shardId from {}", shardInfo.shardId(), sequenceNumber);
+                    throw new IllegalArgumentException("Unable to extract shardId from " + sequenceNumber);
+                }
+                if (!validationResult.get()) {
+                    String seqShardId = sequenceNumberValidator.shardIdFor(sequenceNumber).orElse("MissingShard");
+                    log.error("[{}] Sequence number {} encodes a different shard {}", shardInfo.shardId(), sequenceNumber, seqShardId);
+                    throw new IllegalArgumentException(String.format(
+                            "Sequence number %s encodes a different shard: %s than the expected shard: %s", sequenceNumber,
+                            seqShardId, shardInfo.shardId()));
+                }
+            } catch (NumberFormatException nfe) {
+                log.debug("[{}] Failed to parse {} to a BigInteger.  Skipping validation.", shardInfo.shardId(), extendedSequenceNumber.sequenceNumber());
             }
         }
     }
