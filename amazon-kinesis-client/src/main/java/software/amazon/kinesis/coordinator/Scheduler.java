@@ -571,7 +571,8 @@ public class Scheduler implements Runnable {
                 shardDetector,
                 metricsFactory,
                 aggregatorUtil);
-        return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(), argument);
+        return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(),
+                argument, lifecycleConfig.taskExecutionListener());
     }
 
     /**

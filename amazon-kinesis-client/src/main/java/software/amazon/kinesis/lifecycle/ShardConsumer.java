@@ -66,6 +66,7 @@ public class ShardConsumer {
     private final Optional<Long> logWarningForTaskAfterMillis;
     private final Function<ConsumerTask, ConsumerTask> taskMetricsDecorator;
     private final int bufferSize;
+    private final TaskExecutionListener taskExecutionListener;
 
     private ConsumerTask currentTask;
     private TaskOutcome taskOutcome;
@@ -95,9 +96,10 @@ public class ShardConsumer {
     private final InternalSubscriber subscriber;
 
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
-                         Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument) {
+                         Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
+                         TaskExecutionListener taskExecutionListener) {
         this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
-                ConsumerStates.INITIAL_STATE,
+                taskExecutionListener, ConsumerStates.INITIAL_STATE,
                 ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8);
     }
 
@@ -106,12 +108,14 @@ public class ShardConsumer {
     //
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
                          Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-                         ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator, int bufferSize) {
+                         TaskExecutionListener taskExecutionListener, ConsumerState initialState, Function<ConsumerTask,
+                         ConsumerTask> taskMetricsDecorator, int bufferSize) {
         this.recordsPublisher = recordsPublisher;
         this.executorService = executorService;
         this.shardInfo = shardInfo;
         this.shardConsumerArgument = shardConsumerArgument;
         this.logWarningForTaskAfterMillis = logWarningForTaskAfterMillis;
+        this.taskExecutionListener = taskExecutionListener;
         this.currentState = initialState;
         this.taskMetricsDecorator = taskMetricsDecorator;
         scheduler = Schedulers.from(executorService);
@@ -379,6 +383,7 @@ public class ShardConsumer {
     }
 
     private synchronized void executeTask(ProcessRecordsInput input) {
+        taskExecutionListener.onTaskBegin(currentState, shardInfo);
         ConsumerTask task = currentState.createTask(shardConsumerArgument, ShardConsumer.this, input);
         if (task != null) {
             taskDispatchedAt = Instant.now();
@@ -392,6 +397,7 @@ public class ShardConsumer {
             }
             taskOutcome = resultToOutcome(result);
         }
+        taskExecutionListener.onTaskEnd(currentState, shardInfo);
     }
 
     private TaskOutcome resultToOutcome(TaskResult result) {

@@ -89,6 +89,8 @@ public class ConsumerStatesTest {
     private MetricsFactory metricsFactory;
     @Mock
     private ProcessRecordsInput processRecordsInput;
+    @Mock
+    private TaskExecutionListener taskExecutionListener;
 
     private long parentShardPollIntervalMillis = 0xCAFE;
     private boolean cleanupLeasesOfCompletedShards = true;
@@ -111,7 +113,7 @@ public class ConsumerStatesTest {
                 shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis, INITIAL_POSITION_IN_STREAM,
                 cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector, metricsFactory, new AggregatorUtil());
         consumer = spy(
-                new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, argument));
+                new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, argument, taskExecutionListener));
 
         when(shardInfo.shardId()).thenReturn("shardId-000000000000");
         when(recordProcessorCheckpointer.checkpointer()).thenReturn(checkpointer);
