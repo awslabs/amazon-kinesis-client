@@ -30,7 +30,9 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.leases.dynamodb.DoesNothingTableCreatorCallback;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
+import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
@@ -218,7 +220,9 @@ public class LeaseManagementConfig {
             super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE_TIME, TimeUnit.SECONDS, new SynchronousQueue<>(),
                     threadFactory);
         }
-    };
+    }
+
+    private TableCreatorCallback tableCreatorCallback = new DoesNothingTableCreatorCallback();
 
     private LeaseManagementFactory leaseManagementFactory;
 
@@ -246,7 +250,8 @@ public class LeaseManagementConfig {
                     listShardsCacheAllowedAgeInSeconds(),
                     cacheMissWarningModulus(),
                     initialLeaseTableReadCapacity(),
-                    initialLeaseTableWriteCapacity());
+                    initialLeaseTableWriteCapacity(),
+                    tableCreatorCallback());
         }
         return leaseManagementFactory;
     }

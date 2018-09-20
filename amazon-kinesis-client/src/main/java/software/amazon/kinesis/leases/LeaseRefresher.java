@@ -203,4 +203,12 @@ public interface LeaseRefresher {
     ExtendedSequenceNumber getCheckpoint(String shardId)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException;
 
+    /**
+     * Ability to perform actions of the lease table post creation. Needs
+     * {@link software.amazon.kinesis.leases.dynamodb.TableCreatorCallback} to be implemented and configured in the
+     * {@link LeaseManagementConfig}.
+     */
+    default void performPostTableCreationAction() {
+    }
+
 }

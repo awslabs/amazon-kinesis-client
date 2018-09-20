@@ -20,18 +20,32 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.junit.Before;
 import org.junit.Test;
 
+import org.junit.runner.RunWith;
+import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 
+@RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest {
+
+    @Before
+    public void setup() {
+        doNothing().when(tableCreatorCallback).performAction(eq(ddbClient), eq(tableName));
+    }
+
     /**
      * Test listLeases when no records are present.
      */
@@ -239,7 +253,8 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
 
     @Test
     public void testWaitUntilLeaseTableExists() throws LeasingException {
-        DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", ddbClient, new DynamoDBLeaseSerializer(), true) {
+        DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", ddbClient,
+                new DynamoDBLeaseSerializer(), true, new DoesNothingTableCreatorCallback()) {
             @Override
             long sleep(long timeToSleepMillis) {
                 fail("Should not sleep");
@@ -257,7 +272,8 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
          * Just using AtomicInteger for the indirection it provides.
          */
         final AtomicInteger sleepCounter = new AtomicInteger(0);
-        DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher("nonexistentTable", ddbClient, new DynamoDBLeaseSerializer(), true) {
+        DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher("nonexistentTable", ddbClient,
+                new DynamoDBLeaseSerializer(), true, new DoesNothingTableCreatorCallback()) {
             @Override
             long sleep(long timeToSleepMillis) {
                 assertEquals(1000L, timeToSleepMillis);
@@ -269,5 +285,14 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
 
         assertFalse(refresher.waitUntilLeaseTableExists(2, 1));
         assertEquals(1, sleepCounter.get());
+    }
+
+    @Test
+    public void testTableCreatorCallback() throws Exception {
+        leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
+        leaseRefresher.waitUntilLeaseTableExists(1, 60);
+        leaseRefresher.performPostTableCreationAction();
+
+        verify(tableCreatorCallback).performAction(eq(ddbClient), eq(tableName));
     }
 }
