@@ -23,7 +23,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import java.util.Collection;
 import java.util.List;
@@ -31,9 +30,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Before;
 import org.junit.Test;
-
 import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
+
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
@@ -254,7 +253,7 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
     @Test
     public void testWaitUntilLeaseTableExists() throws LeasingException {
         DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", ddbClient,
-                new DynamoDBLeaseSerializer(), true, new DoesNothingTableCreatorCallback()) {
+                new DynamoDBLeaseSerializer(), true, tableCreatorCallback) {
             @Override
             long sleep(long timeToSleepMillis) {
                 fail("Should not sleep");
@@ -273,7 +272,7 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
          */
         final AtomicInteger sleepCounter = new AtomicInteger(0);
         DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher("nonexistentTable", ddbClient,
-                new DynamoDBLeaseSerializer(), true, new DoesNothingTableCreatorCallback()) {
+                new DynamoDBLeaseSerializer(), true, tableCreatorCallback) {
             @Override
             long sleep(long timeToSleepMillis) {
                 assertEquals(1000L, timeToSleepMillis);
