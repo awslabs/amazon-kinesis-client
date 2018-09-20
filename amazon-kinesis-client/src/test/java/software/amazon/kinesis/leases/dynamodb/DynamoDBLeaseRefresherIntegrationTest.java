@@ -288,9 +288,12 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
 
     @Test
     public void testTableCreatorCallback() throws Exception {
-        leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
-        leaseRefresher.waitUntilLeaseTableExists(1, 60);
-        leaseRefresher.performPostTableCreationAction();
+        DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher(tableName, ddbClient,
+                new DynamoDBLeaseSerializer(), true, tableCreatorCallback);
+
+        refresher.createLeaseTableIfNotExists(10L, 10L);
+        refresher.waitUntilLeaseTableExists(1, 60);
+        refresher.performPostTableCreationAction();
 
         verify(tableCreatorCallback).performAction(eq(ddbClient), eq(tableName));
     }
