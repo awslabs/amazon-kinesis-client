@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.apache.commons.lang.StringUtils;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -73,10 +74,12 @@ public class ShardSyncerTest {
     private static final int EXPONENT = 128;
     private static final String LEASE_OWNER = "TestOwnere";
     private static final MetricsScope SCOPE = new NullMetricsScope();
-    private static final ShardSyncer SHARD_SYNCER = new ShardSyncer();
 
     private final boolean cleanupLeasesOfCompletedShards = true;
     private final boolean ignoreUnexpectedChildShards = false;
+
+    private ShardSyncer shardSyncer;
+
     /**
      * Old/Obsolete max value of a sequence number (2^128 -1).
      */
@@ -86,6 +89,11 @@ public class ShardSyncerTest {
     private ShardDetector shardDetector;
     @Mock
     private DynamoDBLeaseRefresher dynamoDBLeaseRefresher;
+
+    @Before
+    public void setup() {
+        shardSyncer = new ShardSyncer();
+    }
 
     /**
      * Test determineNewLeasesToCreate() where there are no shards
@@ -152,7 +160,7 @@ public class ShardSyncerTest {
      */
     @Test
     public void testBootstrapShardLeasesAtTrimHorizon() throws Exception {
-        testCheckAndCreateLeasesForNewShards(INITIAL_POSITION_TRIM_HORIZON);
+        testCheckAndCreateLeasesForShardsIfMissing(INITIAL_POSITION_TRIM_HORIZON);
     }
 
     /**
@@ -160,11 +168,11 @@ public class ShardSyncerTest {
      */
     @Test
     public void testBootstrapShardLeasesAtLatest() throws Exception {
-        testCheckAndCreateLeasesForNewShards(INITIAL_POSITION_LATEST);
+        testCheckAndCreateLeasesForShardsIfMissing(INITIAL_POSITION_LATEST);
     }
 
     @Test
-    public void testCheckAndCreateLeasesForNewShardsAtLatest() throws Exception {
+    public void testCheckAndCreateLeasesForShardsIfMissingAtLatest() throws Exception {
         final List<Shard> shards = constructShardListForGraphA();
 
         final ArgumentCaptor<Lease> leaseCaptor = ArgumentCaptor.forClass(Lease.class);
@@ -173,7 +181,7 @@ public class ShardSyncerTest {
         when(dynamoDBLeaseRefresher.listLeases()).thenReturn(Collections.emptyList());
         when(dynamoDBLeaseRefresher.createLeaseIfNotExists(leaseCaptor.capture())).thenReturn(true);
 
-        SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
+        shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
                 cleanupLeasesOfCompletedShards, false, SCOPE);
 
         final Set<String> expectedShardIds = new HashSet<>(
@@ -198,12 +206,12 @@ public class ShardSyncerTest {
 
     @Test
     public void testCheckAndCreateLeasesForNewShardsAtTrimHorizon() throws Exception {
-        testCheckAndCreateLeaseForNewShards(constructShardListForGraphA(), INITIAL_POSITION_TRIM_HORIZON);
+        testCheckAndCreateLeaseForShardsIfMissing(constructShardListForGraphA(), INITIAL_POSITION_TRIM_HORIZON);
     }
 
     @Test
     public void testCheckAndCreateLeasesForNewShardsAtTimestamp() throws Exception {
-        testCheckAndCreateLeaseForNewShards(constructShardListForGraphA(), INITIAL_POSITION_AT_TIMESTAMP);
+        testCheckAndCreateLeaseForShardsIfMissing(constructShardListForGraphA(), INITIAL_POSITION_AT_TIMESTAMP);
     }
 
     @Test(expected = KinesisClientLibIOException.class)
@@ -218,7 +226,7 @@ public class ShardSyncerTest {
         when(shardDetector.listShards()).thenReturn(shards);
 
         try {
-            SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher,
+            shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher,
                     INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards, false, SCOPE);
         } finally {
             verify(shardDetector).listShards();
@@ -252,7 +260,7 @@ public class ShardSyncerTest {
         when(dynamoDBLeaseRefresher.listLeases()).thenReturn(Collections.emptyList());
         when(dynamoDBLeaseRefresher.createLeaseIfNotExists(leaseCaptor.capture())).thenReturn(true);
 
-        SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
+        shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
                 cleanupLeasesOfCompletedShards, true, SCOPE);
 
         final List<Lease> leases = leaseCaptor.getAllValues();
@@ -308,7 +316,7 @@ public class ShardSyncerTest {
         doNothing().when(dynamoDBLeaseRefresher).deleteLease(leaseDeleteCaptor.capture());
 
         // Initial call: No leases present, create leases.
-        SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+        shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                 cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
 
         final Set<Lease> createLeases = new HashSet<>(leaseCreateCaptor.getAllValues());
@@ -323,7 +331,7 @@ public class ShardSyncerTest {
         verify(dynamoDBLeaseRefresher, never()).deleteLease(any(Lease.class));
 
         // Second call: Leases present, with shardId-0 being at ShardEnd causing cleanup.
-        SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+        shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                 cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
         final List<Lease> deleteLeases = leaseDeleteCaptor.getAllValues();
         final Set<String> shardIds = deleteLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
@@ -383,7 +391,7 @@ public class ShardSyncerTest {
                 .when(dynamoDBLeaseRefresher).deleteLease(leaseDeleteCaptor.capture());
 
         // Initial call: Call to create leases.
-        SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+        shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                 cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
 
         final Set<Lease> createLeases = new HashSet<>(leaseCreateCaptor.getAllValues());
@@ -399,7 +407,7 @@ public class ShardSyncerTest {
 
         try {
             // Second call: Leases already present. ShardId-0 is at ShardEnd and needs to be cleaned up. Delete fails.
-            SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+            shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                     cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
         } finally {
             List<Lease> deleteLeases = leaseDeleteCaptor.getAllValues();
@@ -422,7 +430,7 @@ public class ShardSyncerTest {
             verify(dynamoDBLeaseRefresher, times(1)).deleteLease(any(Lease.class));
 
             // Final call: Leases already present. ShardId-0 is at ShardEnd and needs to be cleaned up. Delete passes.
-            SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+            shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                     cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
 
             deleteLeases = leaseDeleteCaptor.getAllValues();
@@ -482,7 +490,7 @@ public class ShardSyncerTest {
 
         try {
             // Initial call: Call to create leases. Fails on ListLeases
-            SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+            shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                     cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
         } finally {
             verify(shardDetector, times(1)).listShards();
@@ -491,7 +499,7 @@ public class ShardSyncerTest {
             verify(dynamoDBLeaseRefresher, never()).deleteLease(any(Lease.class));
 
             // Second call: Leases not present, leases will be created.
-            SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+            shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                     cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
 
             final Set<Lease> createLeases = new HashSet<>(leaseCreateCaptor.getAllValues());
@@ -505,7 +513,7 @@ public class ShardSyncerTest {
             verify(dynamoDBLeaseRefresher, never()).deleteLease(any(Lease.class));
 
             // Final call: Leases present, belongs to TestOwner, shardId-0 is at ShardEnd should be cleaned up.
-            SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+            shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                     cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
 
             final List<Lease> deleteLeases = leaseDeleteCaptor.getAllValues();
@@ -570,7 +578,7 @@ public class ShardSyncerTest {
 
         try {
             // Initial call: No leases present, create leases. Create lease Fails
-            SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+            shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                     cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
         } finally {
             verify(shardDetector, times(1)).listShards();
@@ -578,7 +586,7 @@ public class ShardSyncerTest {
             verify(dynamoDBLeaseRefresher, times(1)).createLeaseIfNotExists(any(Lease.class));
             verify(dynamoDBLeaseRefresher, never()).deleteLease(any(Lease.class));
 
-            SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+            shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                     cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
 
             final Set<Lease> createLeases = new HashSet<>(leaseCreateCaptor.getAllValues());
@@ -592,7 +600,7 @@ public class ShardSyncerTest {
             verify(dynamoDBLeaseRefresher, never()).deleteLease(any(Lease.class));
 
             // Final call: Leases are present, shardId-0 is at ShardEnd needs to be cleaned up.
-            SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, position,
+            shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, position,
                     cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
 
             final List<Lease> deleteLeases = leaseDeleteCaptor.getAllValues();
@@ -654,7 +662,7 @@ public class ShardSyncerTest {
         when(dynamoDBLeaseRefresher.listLeases()).thenReturn(leases);
         doNothing().when(dynamoDBLeaseRefresher).deleteLease(leaseCaptor.capture());
 
-        SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher,
+        shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher,
                 INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, SCOPE);
 
         assertThat(leaseCaptor.getAllValues().size(), equalTo(1));
@@ -666,7 +674,7 @@ public class ShardSyncerTest {
         verify(dynamoDBLeaseRefresher, never()).createLeaseIfNotExists(any(Lease.class));
     }
 
-    private void testCheckAndCreateLeasesForNewShards(InitialPositionInStreamExtended initialPosition)
+    private void testCheckAndCreateLeasesForShardsIfMissing(InitialPositionInStreamExtended initialPosition)
             throws Exception {
         final String shardId0 = "shardId-0";
         final String shardId1 = "shardId-1";
@@ -674,10 +682,10 @@ public class ShardSyncerTest {
         final List<Shard> shards = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange),
                 ShardObjectHelper.newShard(shardId1, null, null, sequenceRange));
 
-        testCheckAndCreateLeaseForNewShards(shards, initialPosition);
+        testCheckAndCreateLeaseForShardsIfMissing(shards, initialPosition);
     }
 
-    private void testCheckAndCreateLeaseForNewShards(final List<Shard> shards,
+    private void testCheckAndCreateLeaseForShardsIfMissing(final List<Shard> shards,
             final InitialPositionInStreamExtended initialPosition) throws Exception {
         final ArgumentCaptor<Lease> leaseCaptor = ArgumentCaptor.forClass(Lease.class);
 
@@ -685,7 +693,7 @@ public class ShardSyncerTest {
         when(dynamoDBLeaseRefresher.listLeases()).thenReturn(Collections.emptyList());
         when(dynamoDBLeaseRefresher.createLeaseIfNotExists(leaseCaptor.capture())).thenReturn(true);
 
-        SHARD_SYNCER.checkAndCreateLeasesForNewShards(shardDetector, dynamoDBLeaseRefresher, initialPosition,
+        shardSyncer.checkAndCreateLeasesForShardsIfMissing(shardDetector, dynamoDBLeaseRefresher, initialPosition,
                 cleanupLeasesOfCompletedShards, false, SCOPE);
 
         final List<Lease> leases = leaseCaptor.getAllValues();

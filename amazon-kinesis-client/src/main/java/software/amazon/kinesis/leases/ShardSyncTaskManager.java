@@ -98,8 +98,8 @@ public class ShardSyncTaskManager {
                                     cleanupLeasesUponShardCompletion,
                                     ignoreUnexpectedChildShards,
                                     shardSyncIdleTimeMillis,
-                                    metricsFactory,
-                                    shardSyncer),
+                                    shardSyncer,
+                                    metricsFactory),
                             metricsFactory);
             future = executorService.submit(currentTask);
             submittedNewTask = true;

@@ -229,7 +229,7 @@ public class Scheduler implements Runnable {
                 if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
                     log.info("Syncing Kinesis shard info");
                     ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetector, leaseRefresher, initialPosition,
-                            cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L, metricsFactory, shardSyncer);
+                            cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L, shardSyncer, metricsFactory);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
                     log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
@@ -562,9 +562,9 @@ public class Scheduler implements Runnable {
                 cleanupLeasesUponShardCompletion,
                 ignoreUnexpetedChildShards,
                 shardDetector,
+                shardSyncer,
                 metricsFactory,
-                aggregatorUtil,
-                shardSyncer);
+                aggregatorUtil);
         return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(), argument);
     }
 

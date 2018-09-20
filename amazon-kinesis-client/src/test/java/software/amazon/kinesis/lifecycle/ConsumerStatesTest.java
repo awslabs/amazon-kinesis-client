@@ -110,7 +110,7 @@ public class ConsumerStatesTest {
                 taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
                 listShardsBackoffTimeInMillis, maxListShardsRetryAttempts,
                 shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis, INITIAL_POSITION_IN_STREAM,
-                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector, metricsFactory, new AggregatorUtil(), new ShardSyncer());
+                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector, new ShardSyncer(), metricsFactory, new AggregatorUtil());
         consumer = spy(
                 new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, argument));
 

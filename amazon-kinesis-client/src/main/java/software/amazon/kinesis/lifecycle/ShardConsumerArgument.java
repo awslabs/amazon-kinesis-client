@@ -66,8 +66,8 @@ public class ShardConsumerArgument {
     private final boolean ignoreUnexpectedChildShards;
     @NonNull
     private final ShardDetector shardDetector;
+    private final ShardSyncer shardSyncer;
     @NonNull
     private final MetricsFactory metricsFactory;
     private final AggregatorUtil aggregatorUtil;
-    private final ShardSyncer shardSyncer;
 }

@@ -54,10 +54,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  */
 @Slf4j
 public class ShardSyncer {
-    private static ShardSyncer shardSyncer;
-    static {
-        shardSyncer = new ShardSyncer();
-    }
+    private static final ShardSyncer SHARD_SYNCER = new ShardSyncer();
 
     /**
      * Class level synchronization
@@ -79,35 +76,12 @@ public class ShardSyncer {
                                                               final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
                                                               final MetricsScope scope) throws DependencyException, InvalidStateException,
             ProvisionedThroughputException, KinesisClientLibIOException {
-        shardSyncer.checkAndCreateLeasesForNewShardsBase(
+        SHARD_SYNCER.checkAndCreateLeasesForShardsIfMissing(
                 shardDetector, leaseRefresher, initialPosition, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
     }
 
     /**
      * Object level synchronization
-     * This method should be used if the use case is to run multiple schedulers on one JVM
-     *
-     * @param shardDetector
-     * @param leaseRefresher
-     * @param initialPosition
-     * @param cleanupLeasesOfCompletedShards
-     * @param ignoreUnexpectedChildShards
-     * @param scope
-     * @throws DependencyException
-     * @throws InvalidStateException
-     * @throws ProvisionedThroughputException
-     * @throws KinesisClientLibIOException
-     */
-    public synchronized void checkAndCreateLeasesForNewShardsObjectLevelSynchronization(
-            @NonNull final ShardDetector shardDetector, final LeaseRefresher leaseRefresher,
-            final InitialPositionInStreamExtended initialPosition, final boolean cleanupLeasesOfCompletedShards,
-            final boolean ignoreUnexpectedChildShards, final MetricsScope scope) throws DependencyException, InvalidStateException,
-            ProvisionedThroughputException, KinesisClientLibIOException {
-        checkAndCreateLeasesForNewShardsBase(
-                shardDetector, leaseRefresher, initialPosition, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
-    }
-
-    /**
      * Check and create leases for any new shards (e.g. following a reshard operation). Sync leases with Kinesis shards
      * (e.g. at startup, or when we reach end of a shard).
      *
@@ -123,7 +97,7 @@ public class ShardSyncer {
      * @throws KinesisClientLibIOException
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
-    private synchronized void checkAndCreateLeasesForNewShardsBase(@NonNull final ShardDetector shardDetector,
+    public synchronized void checkAndCreateLeasesForShardsIfMissing(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
             final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
             final MetricsScope scope) throws DependencyException, InvalidStateException,
