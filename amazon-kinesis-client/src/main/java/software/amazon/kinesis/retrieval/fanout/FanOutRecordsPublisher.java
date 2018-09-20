@@ -52,7 +52,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @KinesisClientInternalApi
 public class FanOutRecordsPublisher implements RecordsPublisher {
     private static final ThrowableCategory ACQUIRE_TIMEOUT_CATEGORY = new ThrowableCategory(
-            ThrowableType.ACUIRE_TIMEOUT);
+            ThrowableType.ACQUIRE_TIMEOUT);
     private static final ThrowableCategory READ_TIMEOUT_CATEGORY = new ThrowableCategory(ThrowableType.READ_TIMEOUT);
 
     private final KinesisAsyncClient kinesis;
@@ -201,7 +201,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     }
 
     private enum ThrowableType {
-        ACUIRE_TIMEOUT("AcquireTimeout"), READ_TIMEOUT("ReadTimeout"), OTHER("Other");
+        ACQUIRE_TIMEOUT("AcquireTimeout"), READ_TIMEOUT("ReadTimeout"), OTHER("Other");
 
         String value;
 
