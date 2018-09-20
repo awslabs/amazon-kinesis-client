@@ -14,6 +14,8 @@
  */
 package software.amazon.kinesis.checkpoint;
 
+import java.util.Optional;
+
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +38,6 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * The Amazon Kinesis Client Library will instantiate an object and provide a reference to the application
  * ShardRecordProcessor instance. Amazon Kinesis Client Library will create one instance per shard assignment.
  */
-@RequiredArgsConstructor
 @Slf4j
 public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpointer {
     @NonNull
@@ -44,6 +45,18 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
     @NonNull
     @Getter @Accessors(fluent = true)
     private final Checkpointer checkpointer;
+
+    private final SequenceNumberValidator sequenceNumberValidator;
+
+    public ShardRecordProcessorCheckpointer(ShardInfo shardInfo, Checkpointer checkpointer) {
+        this(shardInfo, checkpointer, new SequenceNumberValidator());
+    }
+
+    public ShardRecordProcessorCheckpointer(ShardInfo shardInfo, Checkpointer checkpointer, SequenceNumberValidator sequenceNumberValidator) {
+        this.shardInfo = shardInfo;
+        this.checkpointer = checkpointer;
+        this.sequenceNumberValidator = sequenceNumberValidator;
+    }
 
     // Set to the last value set via checkpoint().
     // Sample use: verify application shutdown() invoked checkpoint() at the end of a shard.
@@ -105,6 +118,22 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
         if (subSequenceNumber < 0) {
             throw new IllegalArgumentException("Could not checkpoint at invalid, negative subsequence number "
                     + subSequenceNumber);
+        }
+
+        if (sequenceNumberValidator != null) {
+            Optional<Boolean> validationResult = sequenceNumberValidator.validateSequenceNumberForShard(sequenceNumber,
+                    shardInfo.shardId());
+            if (!validationResult.isPresent()) {
+                log.error("[{}] Unable to extract shardId from {}", shardInfo.shardId(), sequenceNumber);
+                throw new IllegalArgumentException("Unable to extract shardId from " + sequenceNumber);
+            }
+            if (!validationResult.get()) {
+                String seqShardId = sequenceNumberValidator.shardIdFor(sequenceNumber).orElse("MissingShard");
+                log.error("[{}] Sequence number {} encodes a different shard {}", shardInfo.shardId(), sequenceNumber, seqShardId);
+                throw new IllegalArgumentException(String.format(
+                        "Sequence number %s encodes a different shard: %s than the expected shard: %s", sequenceNumber,
+                        seqShardId, shardInfo.shardId()));
+            }
         }
 
         /*
@@ -247,7 +276,7 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
             // just checkpoint at SHARD_END
             checkpointToRecord = ExtendedSequenceNumber.SHARD_END;
         }
-        
+
         // Don't checkpoint a value we already successfully checkpointed
         if (extendedSequenceNumber != null && !extendedSequenceNumber.equals(lastCheckpointValue)) {
             try {
