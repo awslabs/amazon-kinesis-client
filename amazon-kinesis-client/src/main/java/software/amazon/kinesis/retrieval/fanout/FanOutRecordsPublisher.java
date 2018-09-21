@@ -59,6 +59,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private final String shardId;
     private final String consumerArn;
 
+    private SubscribeToShardRequest subscribeToShardRequest = null;
+
     /**
      * Creates a new FanOutRecordsPublisher.
      * 
@@ -133,7 +135,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             log.debug(
                     "{}: [SubscriptionLifetime]: (FanOutRecordsPublisher#subscribeToShard) @ {} id: {} -- Starting subscribe to shard",
                     shardId, connectionStart, instanceId);
-            flow = new RecordFlow(this, connectionStart, instanceId);
+            subscribeToShardRequest = request;
+            flow = new RecordFlow(this, connectionStart, instanceId, subscribeToShardRequest);
+            log.debug(
+                    "{}: [SubscriptionLifetime]: (FanOutRecordsPublisher#subscribeToShard) @ {} id: {} -- Making StoS Request: {}",
+                    shardId, connectionStart, instanceId, subscribeToShardRequest);
             kinesis.subscribeToShard(request, flow);
         }
     }
@@ -484,6 +490,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         private final FanOutRecordsPublisher parent;
         private final Instant connectionStartedAt;
         private final String subscribeToShardId;
+        private final SubscribeToShardRequest subscribeToShardRequest;
 
         private RecordSubscription subscription;
         private boolean isDisposed = false;
@@ -493,8 +500,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         @Override
         public void onEventStream(SdkPublisher<SubscribeToShardEventStream> publisher) {
             synchronized (parent.lockObject) {
-                log.debug("{}: [SubscriptionLifetime]: (RecordFlow#onEventStream)  @ {} id: {} -- Subscribe",
-                        parent.shardId, connectionStartedAt, subscribeToShardId);
+                log.debug("{}: [SubscriptionLifetime]: (RecordFlow#onEventStream)  @ {} id: {} -- Subscription from request: {}",
+                        parent.shardId, connectionStartedAt, subscribeToShardId, subscribeToShardRequest);
                 if (!parent.isActiveFlow(this)) {
                     this.isDisposed = true;
                     log.debug(
@@ -530,6 +537,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     .flatMap(r -> Optional.ofNullable(r.sdkHttpResponse()));
             Optional<String> requestId = sdkHttpResponse.flatMap(s -> s.firstMatchingHeader("x-amzn-requestid"));
             Optional<String> requestId2 = sdkHttpResponse.flatMap(s -> s.firstMatchingHeader("x-amz-id-2"));
+
+            log.debug(
+                    "{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Connected using request: {}",
+                    parent.shardId, connectionStartedAt, subscribeToShardId, subscribeToShardRequest);
 
             log.debug(
                     "{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Response received -- rid: {} -- rid2: {}",
