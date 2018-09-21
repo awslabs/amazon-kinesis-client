@@ -21,7 +21,7 @@ import software.amazon.kinesis.leases.TableCreatorCallback;
 /**
  * This implementation of the TableCreatorCallback does nothing.
  */
-public class DoesNothingTableCreatorCallback implements TableCreatorCallback {
+public class NoOpTableCreatorCallback implements TableCreatorCallback {
     /**
      * {@inheritDoc}
      */

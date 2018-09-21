@@ -37,7 +37,7 @@ import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.StreamStatus;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.leases.dynamodb.DoesNothingTableCreatorCallback;
+import software.amazon.kinesis.leases.dynamodb.NoOpTableCreatorCallback;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -92,7 +92,7 @@ public class ShardSyncTaskIntegrationTest {
         DynamoDbAsyncClient client = DynamoDbAsyncClient.builder().region(Region.US_EAST_1).build();
         leaseRefresher =
                 new DynamoDBLeaseRefresher("ShardSyncTaskIntegrationTest", client, new DynamoDBLeaseSerializer(),
-                        USE_CONSISTENT_READS, new DoesNothingTableCreatorCallback());
+                        USE_CONSISTENT_READS, new NoOpTableCreatorCallback());
 
         shardDetector = new KinesisShardDetector(kinesisClient, STREAM_NAME, 500L, 50,
                 LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS, MAX_CACHE_MISSES_BEFORE_RELOAD, CACHE_MISS_WARNING_MODULUS);

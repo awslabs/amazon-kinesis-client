@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
-import software.amazon.kinesis.leases.dynamodb.DoesNothingTableCreatorCallback;
+import software.amazon.kinesis.leases.dynamodb.NoOpTableCreatorCallback;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
@@ -66,7 +66,7 @@ public class LeaseCoordinatorExerciser {
                 .credentialsProvider(DefaultCredentialsProvider.create()).build();
 
         LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", dynamoDBClient,
-                new DynamoDBLeaseSerializer(), true, new DoesNothingTableCreatorCallback());
+                new DynamoDBLeaseSerializer(), true, new NoOpTableCreatorCallback());
 
         if (leaseRefresher.createLeaseTableIfNotExists(INITIAL_LEASE_TABLE_READ_CAPACITY,
                 INITIAL_LEASE_TABLE_WRITE_CAPACITY)) {

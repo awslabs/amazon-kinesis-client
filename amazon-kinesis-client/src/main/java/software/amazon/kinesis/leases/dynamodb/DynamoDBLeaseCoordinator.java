@@ -222,11 +222,6 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         if (!isTableActive) {
             throw new DependencyException(new IllegalStateException("Creating table timeout"));
         }
-
-        if (newTableCreated) {
-            log.debug("Table was newly created, will call the callback to perform post creation actions.");
-            leaseRefresher.performPostTableCreationAction();
-        }
     }
 
     @Override

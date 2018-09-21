@@ -30,8 +30,8 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.leases.dynamodb.DoesNothingTableCreatorCallback;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
+import software.amazon.kinesis.leases.dynamodb.NoOpTableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
@@ -221,7 +221,15 @@ public class LeaseManagementConfig {
         }
     }
 
-    private TableCreatorCallback tableCreatorCallback = new DoesNothingTableCreatorCallback();
+    /**
+     * Callback used with DynamoDB lease management. Callback is invoked once the table is newly created and is in the
+     * active status.
+     *
+     * <p>
+     * Default value: {@link NoOpTableCreatorCallback}
+     * </p>
+     */
+    private TableCreatorCallback tableCreatorCallback = new NoOpTableCreatorCallback();
 
     private LeaseManagementFactory leaseManagementFactory;
 
