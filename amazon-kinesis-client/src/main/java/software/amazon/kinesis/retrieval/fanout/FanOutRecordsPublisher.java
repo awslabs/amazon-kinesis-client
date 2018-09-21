@@ -551,10 +551,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         @Override
         public void exceptionOccurred(Throwable throwable) {
             synchronized (parent.lockObject) {
-
-                log.debug("{}: [SubscriptionLifetime]: (RecordFlow#exceptionOccurred) @ {} id: {} -- {}: {}",
+                log.debug("{}: [SubscriptionLifetime]: (RecordFlow#exceptionOccurred) @ {} id: {} -- {}: {}. From request: {}",
                         parent.shardId, connectionStartedAt, subscribeToShardId, throwable.getClass().getName(),
-                        throwable.getMessage());
+                        throwable.getMessage(), subscribeToShardRequest);
                 if (this.isDisposed) {
                     log.debug(
                             "{}: [SubscriptionLifetime]: (RecordFlow#exceptionOccurred) @ {} id: {} -- This flow has been disposed, not dispatching error. {}: {}",
@@ -578,8 +577,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         @Override
         public void complete() {
             synchronized (parent.lockObject) {
-                log.debug("{}: [SubscriptionLifetime]: (RecordFlow#complete) @ {} id: {} -- Connection completed",
-                        parent.shardId, connectionStartedAt, subscribeToShardId);
+                log.debug("{}: [SubscriptionLifetime]: (RecordFlow#complete) @ {} id: {} -- Connection completed from request {}",
+                        parent.shardId, connectionStartedAt, subscribeToShardId, subscribeToShardRequest);
 
                 if (isCancelled) {
                     //
