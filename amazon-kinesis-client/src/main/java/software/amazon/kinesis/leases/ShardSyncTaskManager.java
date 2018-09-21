@@ -50,13 +50,13 @@ public class ShardSyncTaskManager {
     @NonNull
     private final ExecutorService executorService;
     @NonNull
-    private final ShardSyncer shardSyncer;
+    private final HierarchichalShardSyncer hierarchichalShardSyncer;
     @NonNull
     private final MetricsFactory metricsFactory;
 
     public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher, InitialPositionInStreamExtended initialPositionInStream,
                                 boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis,
-                                ExecutorService executorService, ShardSyncer shardSyncer, MetricsFactory metricsFactory) {
+                                ExecutorService executorService, HierarchichalShardSyncer hierarchichalShardSyncer, MetricsFactory metricsFactory) {
         this.shardDetector = shardDetector;
         this.leaseRefresher = leaseRefresher;
         this.initialPositionInStream = initialPositionInStream;
@@ -64,7 +64,7 @@ public class ShardSyncTaskManager {
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
-        this.shardSyncer = shardSyncer;
+        this.hierarchichalShardSyncer = hierarchichalShardSyncer;
         this.metricsFactory = metricsFactory;
     }
 
@@ -97,8 +97,7 @@ public class ShardSyncTaskManager {
                                     initialPositionInStream,
                                     cleanupLeasesUponShardCompletion,
                                     ignoreUnexpectedChildShards,
-                                    shardSyncIdleTimeMillis,
-                                    shardSyncer,
+                                    shardSyncIdleTimeMillis, hierarchichalShardSyncer,
                                     metricsFactory),
                             metricsFactory);
             future = executorService.submit(currentTask);

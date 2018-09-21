@@ -33,10 +33,10 @@ import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
+import software.amazon.kinesis.leases.HierarchichalShardSyncer;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.leases.ShardSyncer;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
@@ -55,7 +55,7 @@ public class ShutdownTaskTest {
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
     private static final ShutdownReason TERMINATE_SHUTDOWN_REASON = ShutdownReason.SHARD_END;
     private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
-    private static final ShardSyncer SHARD_SYNCER = new ShardSyncer();
+    private static final HierarchichalShardSyncer SHARD_SYNCER = new HierarchichalShardSyncer();
 
     private final String concurrencyToken = "testToken4398";
     private final String shardId = "shardId-0000397840";
@@ -88,7 +88,7 @@ public class ShutdownTaskTest {
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                 TERMINATE_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                 ignoreUnexpectedChildShards, leaseRefresher, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                NULL_METRICS_FACTORY, SHARD_SYNCER);
+                SHARD_SYNCER, NULL_METRICS_FACTORY);
     }
 
     /**

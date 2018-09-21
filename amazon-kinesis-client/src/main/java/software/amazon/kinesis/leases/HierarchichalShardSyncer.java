@@ -35,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.utils.CollectionUtils;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
@@ -53,32 +54,8 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * and begun processing it's child shards.
  */
 @Slf4j
-public class ShardSyncer {
-    private static final ShardSyncer SHARD_SYNCER = new ShardSyncer();
-
-    /**
-     * Class level synchronization
-     *
-     * @param shardDetector
-     * @param leaseRefresher
-     * @param initialPosition
-     * @param cleanupLeasesOfCompletedShards
-     * @param ignoreUnexpectedChildShards
-     * @param scope
-     * @throws DependencyException
-     * @throws InvalidStateException
-     * @throws ProvisionedThroughputException
-     * @throws KinesisClientLibIOException
-     */
-    @Deprecated
-    public static synchronized void checkAndCreateLeasesForNewShards(@NonNull final ShardDetector shardDetector,
-                                                              final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
-                                                              final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
-                                                              final MetricsScope scope) throws DependencyException, InvalidStateException,
-            ProvisionedThroughputException, KinesisClientLibIOException {
-        SHARD_SYNCER.checkAndCreateLeasesForShardsIfMissing(
-                shardDetector, leaseRefresher, initialPosition, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
-    }
+@KinesisClientInternalApi
+public class HierarchichalShardSyncer {
 
     /**
      * Object level synchronization
@@ -97,7 +74,7 @@ public class ShardSyncer {
      * @throws KinesisClientLibIOException
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
-    public synchronized void checkAndCreateLeasesForShardsIfMissing(@NonNull final ShardDetector shardDetector,
+    public synchronized void checkAndCreateLeaseForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
             final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
             final MetricsScope scope) throws DependencyException, InvalidStateException,

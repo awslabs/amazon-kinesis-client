@@ -495,8 +495,8 @@ class ConsumerStates {
                     argument.leaseRefresher(),
                     argument.taskBackoffTimeMillis(),
                     argument.recordsPublisher(),
-                    argument.metricsFactory(),
-                    argument.shardSyncer());
+                    argument.hierarchichalShardSyncer(),
+                    argument.metricsFactory());
         }
 
         @Override
