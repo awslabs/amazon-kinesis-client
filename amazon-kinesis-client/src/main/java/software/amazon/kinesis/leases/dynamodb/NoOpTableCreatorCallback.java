@@ -15,7 +15,6 @@
 
 package software.amazon.kinesis.leases.dynamodb;
 
-import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.kinesis.leases.TableCreatorCallback;
 
 /**
@@ -26,7 +25,7 @@ public class NoOpTableCreatorCallback implements TableCreatorCallback {
      * {@inheritDoc}
      */
     @Override
-    public void performAction(final DynamoDbAsyncClient client, final String tableName) {
+    public void performAction(final TableCreatorCallbackInput tableCreatorCallbackInput) {
         // Does nothing
     }
 }

@@ -15,7 +15,7 @@
 
 package software.amazon.kinesis.leases;
 
-import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.kinesis.leases.dynamodb.TableCreatorCallbackInput;
 
 /**
  * Callback interface for interacting with the DynamoDB lease table post creation.
@@ -26,11 +26,9 @@ public interface TableCreatorCallback {
      * Actions needed to be performed on the DynamoDB lease table once the table has been created and is in the ACTIVE
      * status. Will not be called if the table previously exists.
      *
-     * @param client
-     *            DynamoDB client used to interact with the DynamoDB service
-     * @param tableName
-     *            Table name of the lease table
+     * @param tableCreatorCallbackInput
+     *            Input object for table creator
      */
-    void performAction(DynamoDbAsyncClient client, String tableName);
+    void performAction(TableCreatorCallbackInput tableCreatorCallbackInput);
 
 }

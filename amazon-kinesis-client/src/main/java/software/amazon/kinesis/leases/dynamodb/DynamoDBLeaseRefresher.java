@@ -641,6 +641,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     }
 
     void performPostTableCreationAction() {
-        tableCreatorCallback.performAction(dynamoDBClient, table);
+        tableCreatorCallback.performAction(
+                TableCreatorCallbackInput.builder().dynamoDbClient(dynamoDBClient).tableName(table).build());
     }
 }

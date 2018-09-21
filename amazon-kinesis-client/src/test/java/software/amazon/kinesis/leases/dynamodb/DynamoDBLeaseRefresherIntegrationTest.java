@@ -42,7 +42,8 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
 
     @Before
     public void setup() {
-        doNothing().when(tableCreatorCallback).performAction(eq(ddbClient), eq(tableName));
+        doNothing().when(tableCreatorCallback).performAction(
+                eq(TableCreatorCallbackInput.builder().dynamoDbClient(ddbClient).tableName(tableName).build()));
     }
 
     /**
@@ -291,10 +292,9 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
         DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher(tableName, ddbClient,
                 new DynamoDBLeaseSerializer(), true, tableCreatorCallback);
 
-        refresher.createLeaseTableIfNotExists(10L, 10L);
-        refresher.waitUntilLeaseTableExists(1, 60);
         refresher.performPostTableCreationAction();
 
-        verify(tableCreatorCallback).performAction(eq(ddbClient), eq(tableName));
+        verify(tableCreatorCallback).performAction(
+                eq(TableCreatorCallbackInput.builder().dynamoDbClient(ddbClient).tableName(tableName).build()));
     }
 }
