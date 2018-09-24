@@ -50,13 +50,29 @@ public class ShardSyncTaskManager {
     @NonNull
     private final ExecutorService executorService;
     @NonNull
-    private final HierarchichalShardSyncer hierarchichalShardSyncer;
+    private final HierarchicalShardSyncer hierarchicalShardSyncer;
     @NonNull
     private final MetricsFactory metricsFactory;
 
-    public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher, InitialPositionInStreamExtended initialPositionInStream,
-                                boolean cleanupLeasesUponShardCompletion, boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis,
-                                ExecutorService executorService, HierarchichalShardSyncer hierarchichalShardSyncer, MetricsFactory metricsFactory) {
+    /**
+     * Constructor.
+     *
+     * <p>NOTE: This constructor is deprecated and will be removed in a future release.</p>
+     *
+     * @param shardDetector
+     * @param leaseRefresher
+     * @param initialPositionInStream
+     * @param cleanupLeasesUponShardCompletion
+     * @param ignoreUnexpectedChildShards
+     * @param shardSyncIdleTimeMillis
+     * @param executorService
+     * @param metricsFactory
+     */
+    @Deprecated
+    public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher,
+            InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesUponShardCompletion,
+            boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis, ExecutorService executorService,
+            MetricsFactory metricsFactory) {
         this.shardDetector = shardDetector;
         this.leaseRefresher = leaseRefresher;
         this.initialPositionInStream = initialPositionInStream;
@@ -64,7 +80,35 @@ public class ShardSyncTaskManager {
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
-        this.hierarchichalShardSyncer = hierarchichalShardSyncer;
+        this.hierarchicalShardSyncer = new HierarchicalShardSyncer();
+        this.metricsFactory = metricsFactory;
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param shardDetector
+     * @param leaseRefresher
+     * @param initialPositionInStream
+     * @param cleanupLeasesUponShardCompletion
+     * @param ignoreUnexpectedChildShards
+     * @param shardSyncIdleTimeMillis
+     * @param executorService
+     * @param hierarchicalShardSyncer
+     * @param metricsFactory
+     */
+    public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher,
+            InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesUponShardCompletion,
+            boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis, ExecutorService executorService,
+            HierarchicalShardSyncer hierarchicalShardSyncer, MetricsFactory metricsFactory) {
+        this.shardDetector = shardDetector;
+        this.leaseRefresher = leaseRefresher;
+        this.initialPositionInStream = initialPositionInStream;
+        this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
+        this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
+        this.executorService = executorService;
+        this.hierarchicalShardSyncer = hierarchicalShardSyncer;
         this.metricsFactory = metricsFactory;
     }
 
@@ -97,7 +141,8 @@ public class ShardSyncTaskManager {
                                     initialPositionInStream,
                                     cleanupLeasesUponShardCompletion,
                                     ignoreUnexpectedChildShards,
-                                    shardSyncIdleTimeMillis, hierarchichalShardSyncer,
+                                    shardSyncIdleTimeMillis,
+                                    hierarchicalShardSyncer,
                                     metricsFactory),
                             metricsFactory);
             future = executorService.submit(currentTask);

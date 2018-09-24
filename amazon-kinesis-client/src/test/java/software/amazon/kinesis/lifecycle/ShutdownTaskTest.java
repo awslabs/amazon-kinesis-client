@@ -17,6 +17,7 @@ package software.amazon.kinesis.lifecycle;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,7 +34,7 @@ import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
-import software.amazon.kinesis.leases.HierarchichalShardSyncer;
+import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -55,7 +56,6 @@ public class ShutdownTaskTest {
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
     private static final ShutdownReason TERMINATE_SHUTDOWN_REASON = ShutdownReason.SHARD_END;
     private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
-    private static final HierarchichalShardSyncer SHARD_SYNCER = new HierarchichalShardSyncer();
 
     private final String concurrencyToken = "testToken4398";
     private final String shardId = "shardId-0000397840";
@@ -75,6 +75,8 @@ public class ShutdownTaskTest {
     private LeaseRefresher leaseRefresher;
     @Mock
     private ShardDetector shardDetector;
+    @Mock
+    private HierarchicalShardSyncer hierarchicalShardSyncer;
 
     @Before
     public void setUp() throws Exception {
@@ -88,7 +90,7 @@ public class ShutdownTaskTest {
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                 TERMINATE_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                 ignoreUnexpectedChildShards, leaseRefresher, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                SHARD_SYNCER, NULL_METRICS_FACTORY);
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
     }
 
     /**
@@ -106,9 +108,15 @@ public class ShutdownTaskTest {
      * Test method for {@link ShutdownTask#call()}.
      */
     @Test
-    public final void testCallWhenSyncingShardsThrows() {
+    public final void testCallWhenSyncingShardsThrows() throws Exception {
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
         when(shardDetector.listShards()).thenReturn(null);
+        doAnswer((invocation) -> {
+            throw new KinesisClientLibIOException("KinesisClientLibIOException");
+        }).when(hierarchicalShardSyncer)
+                .checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, INITIAL_POSITION_TRIM_HORIZON,
+                        cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
+                        NULL_METRICS_FACTORY.createMetrics());
 
         TaskResult result = task.call();
         assertNotNull(result.getException());

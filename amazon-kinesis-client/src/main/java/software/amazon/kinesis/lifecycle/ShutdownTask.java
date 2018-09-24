@@ -25,7 +25,7 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.leases.HierarchichalShardSyncer;
+import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -66,7 +66,7 @@ public class ShutdownTask implements ConsumerTask {
     @NonNull
     private final RecordsPublisher recordsPublisher;
     @NonNull
-    private final HierarchichalShardSyncer hierarchichalShardSyncer;
+    private final HierarchicalShardSyncer hierarchicalShardSyncer;
     @NonNull
     private final MetricsFactory metricsFactory;
 
@@ -125,7 +125,7 @@ public class ShutdownTask implements ConsumerTask {
                 if (reason == ShutdownReason.SHARD_END) {
                     log.debug("Looking for child shards of shard {}", shardInfo.shardId());
                     // create leases for the child shards
-                    hierarchichalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher,
+                    hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher,
                             initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
                     log.debug("Finished checking for child shards of shard {}", shardInfo.shardId());
                 }

@@ -220,7 +220,7 @@ public class LeaseManagementConfig {
         }
     };
 
-    private HierarchichalShardSyncer hierarchichalShardSyncer = new HierarchichalShardSyncer();
+    private HierarchicalShardSyncer hierarchicalShardSyncer = new HierarchicalShardSyncer();
 
     private LeaseManagementFactory leaseManagementFactory;
 
@@ -249,7 +249,7 @@ public class LeaseManagementConfig {
                     cacheMissWarningModulus(),
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
-                    hierarchichalShardSyncer());
+                    hierarchicalShardSyncer());
         }
         return leaseManagementFactory;
     }

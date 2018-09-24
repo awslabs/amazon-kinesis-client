@@ -55,7 +55,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  */
 @Slf4j
 @KinesisClientInternalApi
-public class HierarchichalShardSyncer {
+public class HierarchicalShardSyncer {
 
     /**
      * Object level synchronization
