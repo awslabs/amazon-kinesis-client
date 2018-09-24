@@ -28,63 +28,51 @@ For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesi
 ## Amazon KCL support for other languages
 To make it easier for developers to write record processors in other languages, we have implemented a Java based daemon, called MultiLangDaemon that does all the heavy lifting. Our approach has the daemon spawn a sub-process, which in turn runs the record processor, which can be written in any language. The MultiLangDaemon process and the record processor sub-process communicate with each other over [STDIN and STDOUT using a defined protocol][multi-lang-protocol]. There will be a one to one correspondence amongst record processors, child processes, and shards. For Python developers specifically, we have abstracted these implementation details away and [expose an interface][kclpy] that enables you to focus on writing record processing logic in Python. This approach enables KCL to be language agnostic, while providing identical features and similar parallel processing model across all languages.
 
-## Release Notes
+## Using the KCL
+The recommended way to use the KCL for Java is to consume it from Maven.
 
-### Latest Release (2.0.0)
-* The Maven `groupId`, along with the `version`, for the Amazon Kinesis Client has changed from `com.amazonaws` to `software.amazon.kinesis`.  
-  To add a dependency on the new version of the Amazon Kinesis Client:  
+### Version 2.x
   ``` xml
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.0.0</version>
+      <version>2.0.1</version>
   </dependency>
   ```
-* Added support for Enhanced Fan Out.  
-  Enhanced Fan Out provides for lower end to end latency, and increased number of consumers per stream. 
-  * Records are now delivered via streaming, reducing end-to-end latency.
-  * The Amazon Kinesis Client will automatically register a new consumer if required.  
-    When registering a new consumer, the Kinesis Client will default to the application name unless configured otherwise.
-  * `SubscribeToShard` maintains long lived connections with Kinesis, which in the AWS Java SDK 2.0 is limited by default.  
-    The `KinesisClientUtil` has been added to assist configuring the `maxConcurrency` of the `KinesisAsyncClient`.   
-    __WARNING: The Amazon Kinesis Client may see significantly increased latency, unless the `KinesisAsyncClient` is configured to have a `maxConcurrency` high enough to allow all leases plus additional usages of the `KinesisAsyncClient`.__
-  * The Amazon Kinesis Client now uses additional Kinesis API's:  
-    __WARNING: If using a restrictive Kinesis IAM policy you may need to add the following API methods to the policy.__  
-    * [`SubscribeToShard`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_SubscribeToShard.html)
-    * [`DescribeStreamSummary`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_DescribeStreamSummary.html)
-    * [`DescribeStreamConsumer`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_DescribeStreamConsumer.html)
-    * [`RegisterStreamConsumer`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_RegisterStreamConsumer.html)
-  * New configuration options are available to configure Enhanced Fan Out.  
-  
-  | Name            | Default | Description                                                                                                         |
-  |-----------------|---------|---------------------------------------------------------------------------------------------------------------------|
-  | consumerArn     | Unset   | The ARN for an already created consumer.  If this is set, the Kinesis Client will not attempt to create a consumer. |
-  | streamName      | Unset   | The name of the stream that a consumer should be create for if necessary                                            |
-  | consumerName    | Unset   | The name of the consumer to create.  If this is not set the applicationName will be used instead.                   |
-  | applicationName | Unset   | The name of the application.  This is used as the name of the consumer unless consumerName is set.                  |
 
-* Modular Configuration of the Kinesis Client
-  The Kinesis Client has migrated to a modular configuration system, and the `KinesisClientLibConfiguration` class has been removed.  
-  Configuration has been split into 7 classes.  Default versions of the configuration can be created from the `ConfigsBuilder`.  
-  Please [see the migration guide for more information][migration-guide].
-  * `CheckpointConfig`
-  * `CoordinatorConfig`
-  * `LeaseManagementConfig`
-  * `LifecycleConfig`
-  * `MetricsConfig`
-  * `ProcessorConfig`
-  * `RetrievalConfig`
+### Version 1.x
+[Version 1.x tracking branch](https://github.com/awslabs/amazon-kinesis-client/tree/v1.x)
+  ``` xml
+  <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>amazon-kinesis-client</artifactId>
+      <version>1.9.2</version>
+  </dependency>
+  ```
 
-* Upgraded to AWS Java SDK 2.0  
-  The Kinesis Client now uses the AWS Java SDK 2.0.  The dependency on AWS Java SDK 1.11 has been removed. 
-  All configurations will only accept 2.0 clients.  
-  * When configuring the `KinesisAsyncClient` the `KinesisClientUtil#createKinesisAsyncClient` can be used to configure the Kinesis Client 
-  * __If you need support for AWS Java SDK 1.11 you will need to add a direct dependency.__  
-    __When adding a dependency you must ensure that the 1.11 versions of Jackson dependencies are excluded__  
-    [Please see the migration guide for more information][migration-guide]
-    
-* MultiLangDaemon is now a separate module  
-  The MultiLangDaemon has been separated to its own Maven module and is no longer available in `amazon-kinesis-client`.  To include the MultiLangDaemon, add a dependency on `amazon-kinesis-client-multilang`.
+
+## Release Notes
+
+### Latest Release (2.0.2 - September 4, 2018)
+[Milestone #22](https://github.com/awslabs/amazon-kinesis-client/milestone/22)
+* Fixed an issue where the a warning would be logged every second if `logWarningForTaskAfterMillis` was set.  
+  The logging for last time of data arrival now respects the value of `logWarningForTaskAfterMillis`.  
+  * [PR #383](https://github.com/awslabs/amazon-kinesis-client/pull/383)
+  * [Issue #381](https://github.com/awslabs/amazon-kinesis-client/issues/381)
+* Moved creation of `WorkerStateChangedListener` and `GracefulShutdownCoordinator` to the `CoordinatorConfig`.
+  Originally the `WorkerStateChangedListener` and `GracefulShutdownCoordinator` were created by methods on the `SchedulerCoordinatorFactory`, but they should have been configuration options.  
+  The original methods have been deprecated, and may be removed at a later date.  
+  * [PR #385](https://github.com/awslabs/amazon-kinesis-client/pull/385)
+  * [PR #388](https://github.com/awslabs/amazon-kinesis-client/pull/388)
+* Removed dependency on Apache Commons Lang 2.6.  
+  The dependency on Apache Commons Lang 2.6 has removed, and all usages updated to use Apache Commons Lang 3.7.  
+  * [PR #386](https://github.com/awslabs/amazon-kinesis-client/pull/386)
+  * [Issue #370](https://github.com/awslabs/amazon-kinesis-client/issues/370)
+* Fixed a typo in the MutliLang Daemon shutdown hook.  
+  * [PR #387](https://github.com/awslabs/amazon-kinesis-client/pull/387)
+* Added method `onAllInitializationAttemptsFailed(Throwable)` to `WorkerStateChangedListener` to report when all initialization attempts have failed.  
+  This method is a default method, and it isn't require to implement the method. This method is only called after all attempts to initialize the `Scheduler` have failed.
+  * [PR #369](https://github.com/awslabs/amazon-kinesis-client/pull/369)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 

@@ -17,6 +17,7 @@ package software.amazon.kinesis.retrieval.fanout;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -27,6 +28,7 @@ import software.amazon.kinesis.retrieval.RetrievalFactory;
 
 @RequiredArgsConstructor
 @KinesisClientInternalApi
+@Accessors(fluent = true)
 public class FanOutRetrievalFactory implements RetrievalFactory {
 
     private final KinesisAsyncClient kinesisClient;

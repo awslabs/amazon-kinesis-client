@@ -23,7 +23,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-import org.apache.commons.lang.Validate;
+import org.apache.commons.lang3.Validate;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
@@ -37,8 +37,8 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
-import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;

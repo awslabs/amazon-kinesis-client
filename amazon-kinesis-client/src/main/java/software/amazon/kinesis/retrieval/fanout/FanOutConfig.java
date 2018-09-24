@@ -26,6 +26,7 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 import software.amazon.kinesis.retrieval.RetrievalSpecificConfig;
+import software.amazon.kinesis.annotations.KinesisClientExperimental;
 
 @Data
 @Accessors(fluent = true)
@@ -85,7 +86,8 @@ public class FanOutConfig implements RetrievalSpecificConfig {
         return new FanOutRetrievalFactory(kinesisClient, getOrCreateConsumerArn());
     }
 
-    private String getOrCreateConsumerArn() {
+    @KinesisClientExperimental(reason = "Experimentally changed from private to protected")
+    protected String getOrCreateConsumerArn() {
         if (consumerArn != null) {
             return consumerArn;
         }

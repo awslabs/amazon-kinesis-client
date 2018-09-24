@@ -14,18 +14,18 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
-import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
@@ -77,6 +77,8 @@ public class InitializeTask implements ConsumerTask {
             log.debug("Initializing ShardId {}", shardInfo);
             Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.shardId());
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.checkpoint();
+            log.debug("[{}]: Checkpoint: {} -- Initial Position: {}", shardInfo.shardId(), initialCheckpoint,
+                    initialPositionInStream);
 
             cache.start(initialCheckpoint, initialPositionInStream);
 

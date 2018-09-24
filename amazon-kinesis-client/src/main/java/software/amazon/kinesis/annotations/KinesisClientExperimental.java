@@ -12,22 +12,15 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.coordinator;
+package software.amazon.kinesis.annotations;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 /**
- * A listener for callbacks on changes worker state
+ * Anything marked as experimental may be removed at any time without warning.
  */
-@FunctionalInterface
-public interface WorkerStateChangeListener {
-	enum WorkerState {
-		CREATED,
-		INITIALIZING,
-		STARTED,
-		SHUT_DOWN
-	}
-
-	void onWorkerStateChange(WorkerState newState);
-
-	default void onAllInitializationAttemptsFailed(Throwable e) {
-	}
+@Retention(RetentionPolicy.CLASS)
+public @interface KinesisClientExperimental {
+    String reason() default "";
 }

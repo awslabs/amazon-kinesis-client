@@ -1,5 +1,55 @@
 # Changelog
 
+### Release 2.0.2 (September 4, 2018)
+[Milestone #22](https://github.com/awslabs/amazon-kinesis-client/milestone/22)
+* Fixed an issue where the a warning would be logged every second if `logWarningForTaskAfterMillis` was set.  
+  The logging for last time of data arrival now respects the value of `logWarningForTaskAfterMillis`.  
+  * [PR #383](https://github.com/awslabs/amazon-kinesis-client/pull/383)
+  * [Issue #381](https://github.com/awslabs/amazon-kinesis-client/issues/381)
+* Moved creation of `WorkerStateChangedListener` and `GracefulShutdownCoordinator` to the `CoordinatorConfig`.
+  Originally the `WorkerStateChangedListener` and `GracefulShutdownCoordinator` were created by methods on the `SchedulerCoordinatorFactory`, but they should have been configuration options.  
+  The original methods have been deprecated, and may be removed at a later date.  
+  * [PR #385](https://github.com/awslabs/amazon-kinesis-client/pull/385)
+  * [PR #388](https://github.com/awslabs/amazon-kinesis-client/pull/388)
+* Removed dependency on Apache Commons Lang 2.6.  
+  The dependency on Apache Commons Lang 2.6 has removed, and all usages updated to use Apache Commons Lang 3.7.  
+  * [PR #386](https://github.com/awslabs/amazon-kinesis-client/pull/386)
+  * [Issue #370](https://github.com/awslabs/amazon-kinesis-client/issues/370)
+* Fixed a typo in the MutliLang Daemon shutdown hook.  
+  * [PR #387](https://github.com/awslabs/amazon-kinesis-client/pull/387)
+* Added method `onAllInitializationAttemptsFailed(Throwable)` to `WorkerStateChangedListener` to report when all initialization attempts have failed.  
+  This method is a default method, and it isn't require to implement the method. This method is only called after all attempts to initialize the `Scheduler` have failed.
+  * [PR #369](https://github.com/awslabs/amazon-kinesis-client/pull/369)
+
+### Release 2.0.1 (August 21, 2018)
+* Mark certain internal components with `@KinesisClientInternalApi` attribute.  
+  Components marked as internal may be deprecated at a faster rate than public components.  
+  * [PR #358](https://github.com/awslabs/amazon-kinesis-client/pull/358)
+* Fixed an issue where `ResourceNotFoundException` on subscription to a shard was not triggering end of shard handling.  
+  If a lease table contains a shard that is no longer present in the stream attempt to subscribe to that shard will trigger a `ResourceNotFoundException`. These exception are treated the same as reaching the end of a shard.
+  * [PR #359](https://github.com/awslabs/amazon-kinesis-client/pull/359)
+* Fixed an issue where the KCL would not Use the configured DynamoDB IOPs when creating the lease table.  
+  * [PR #360](https://github.com/awslabs/amazon-kinesis-client/pull/360)
+* Make the maximum number of Scheduler initialization attempts configurable.  
+  The maximum number of `Scheduler` initialization attempts can be configured via `CoordinatorConfig#maxInitializationAttempts`.
+  * [PR #363](https://github.com/awslabs/amazon-kinesis-client/pull/363)
+  * [PR #368](https://github.com/awslabs/amazon-kinesis-client/pull/368)
+* Fixed an issue where it was possible to get a duplicate record when resubscribing to a shard.  
+  Subscribe to shard requires periodic resubscribing, and uses a new concept of a continuation sequence number.  If the continuation sequence number was equal to the last record that record would be processed a second time.  Resubscribing now uses `AFTER_SEQUENCE_NUMBER` to ensure that only later records are returned.  
+  * [PR #371](https://github.com/awslabs/amazon-kinesis-client/pull/371)
+* Upgraded to AWS SDK 2.0.1  
+  * [PR #372](https://github.com/awslabs/amazon-kinesis-client/pull/372)
+* Fixed an issue where time based restart of the subscription wasn't resetting the `lastRequestTime`.  
+  If a subscription hasn't delivered any data for more than 30 seconds it will be canceled and restarted.  This detection is based of the `lastRequestTime` which wasn't getting reset after the restart was triggered.
+  * [PR #373](https://github.com/awslabs/amazon-kinesis-client/pull/373)
+* Fixed an issue where requesting on the subscription from the `FanOutRecordsPublisher` could trigger an unexpected failure.  
+  Due to a race condition the underlying flow in the subscription could be set to something else.  The method is now synchronized, and verifies that the subscriber it was created with is still the subscriber in affect.  
+  This issue generally would only appear when multiple errors were occurring while connecting to Kinesis.
+  * [PR #374](https://github.com/awslabs/amazon-kinesis-client/pull/374)
+* Fixed an issue where the number of requested items could exceed the capacity of the RxJava queue.  
+  There was an off by one issue when determining whether to make a request to the SDK subscription.  This changes the calculation to represent the capacity as a queue.
+  * [PR #375](https://github.com/awslabs/amazon-kinesis-client/pull/375)
+
 ### Release 2.0.0 (August 02, 2018)
 * The Maven `groupId`, along with the `version`, for the Amazon Kinesis Client has changed from `com.amazonaws` to `software.amazon.kinesis`.  
   To add a dependency on the new version of the Amazon Kinesis Client:  

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import io.netty.handler.timeout.ReadTimeoutException;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
@@ -44,13 +46,14 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @RunWith(MockitoJUnitRunner.class)
 @Slf4j
 public class FanOutRecordsPublisherTest {
 
-    private static final String SHARD_ID = "Shard-001";
+    private static final String SHARD_ID = "shardId-000000000001";
     private static final String CONSUMER_ARN = "arn:consumer";
 
     @Mock
@@ -223,6 +226,25 @@ public class FanOutRecordsPublisherTest {
     }
 
     @Test
+    public void testReadTimeoutExceptionForShard() {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        source.subscribe(subscriber);
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        FanOutRecordsPublisher.RecordFlow recordFlow = flowCaptor.getValue();
+        recordFlow.exceptionOccurred(new RuntimeException(ReadTimeoutException.INSTANCE));
+
+        verify(subscriber).onSubscribe(any());
+        verify(subscriber).onError(any(RetryableRetrievalException.class));
+        verify(subscriber, never()).onNext(any());
+        verify(subscriber, never()).onComplete();
+    }
+
+    @Test
     public void testContinuesAfterSequence() {
         FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
@@ -297,6 +319,8 @@ public class FanOutRecordsPublisherTest {
 
     }
 
+
+
     private void verifyRecords(List<KinesisClientRecord> clientRecordsList, List<KinesisClientRecordMatcher> matchers) {
         assertThat(clientRecordsList.size(), equalTo(matchers.size()));
         for (int i = 0; i < clientRecordsList.size(); ++i) {
@@ -333,9 +357,17 @@ public class FanOutRecordsPublisherTest {
     }
 
     private Record makeRecord(int sequenceNumber) {
+        return makeRecord(sequenceNumber, 1);
+    }
+
+    static Record makeRecord(int sequenceNumber, int shardId) {
+        BigInteger version = BigInteger.valueOf(2).shiftLeft(184);
+        BigInteger shard = BigInteger.valueOf(shardId).shiftLeft(4);
+        BigInteger seq = version.add(shard).add(BigInteger.valueOf(sequenceNumber));
+
         SdkBytes buffer = SdkBytes.fromByteArray(new byte[] { 1, 2, 3 });
         return Record.builder().data(buffer).approximateArrivalTimestamp(Instant.now())
-                .sequenceNumber(Integer.toString(sequenceNumber)).partitionKey("A").build();
+                .sequenceNumber(seq.toString()).partitionKey("A").build();
     }
 
     private static class KinesisClientRecordMatcher extends TypeSafeDiagnosingMatcher<KinesisClientRecord> {

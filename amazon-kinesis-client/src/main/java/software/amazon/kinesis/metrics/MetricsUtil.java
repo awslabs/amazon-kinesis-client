@@ -15,7 +15,7 @@
 
 package software.amazon.kinesis.metrics;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import lombok.NonNull;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;

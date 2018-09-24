@@ -87,6 +87,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
     public Checkpoint getCheckpointObject(final String shardId) throws KinesisClientLibException {
         try {
             Lease lease = leaseRefresher.getLease(shardId);
+            log.debug("[{}] Retrieved lease => {}", shardId, lease);
             return new Checkpoint(lease.checkpoint(), lease.pendingCheckpoint());
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
             String message = "Unable to fetch checkpoint for shardId " + shardId;

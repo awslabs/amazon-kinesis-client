@@ -12,22 +12,20 @@
  *  express or implied. See the License for the specific language governing
  *  permissions and limitations under the License.
  */
-package software.amazon.kinesis.coordinator;
+
+package software.amazon.kinesis.retrieval;
+
+import software.amazon.kinesis.exceptions.KinesisClientLibRetryableException;
 
 /**
- * A listener for callbacks on changes worker state
+ * RetryableException for SubscribeToShard APIs.
  */
-@FunctionalInterface
-public interface WorkerStateChangeListener {
-	enum WorkerState {
-		CREATED,
-		INITIALIZING,
-		STARTED,
-		SHUT_DOWN
-	}
+public class RetryableRetrievalException extends KinesisClientLibRetryableException {
+    public RetryableRetrievalException(final String message) {
+        super(message);
+    }
 
-	void onWorkerStateChange(WorkerState newState);
-
-	default void onAllInitializationAttemptsFailed(Throwable e) {
-	}
+    public RetryableRetrievalException(final String message, final Exception e) {
+        super(message, e);
+    }
 }

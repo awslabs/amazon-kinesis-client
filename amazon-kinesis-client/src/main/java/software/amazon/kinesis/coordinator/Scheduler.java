@@ -172,9 +172,18 @@ public class Scheduler implements Runnable {
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
                 this.coordinatorConfig.skipShardSyncAtWorkerInitializationIfLeasesExist();
-        this.gracefulShutdownCoordinator =
-                this.coordinatorConfig.coordinatorFactory().createGracefulShutdownCoordinator();
-        this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory().createWorkerStateChangeListener();
+        if (coordinatorConfig.gracefulShutdownCoordinator() != null) {
+            this.gracefulShutdownCoordinator = coordinatorConfig.gracefulShutdownCoordinator();
+        } else {
+            this.gracefulShutdownCoordinator = this.coordinatorConfig.coordinatorFactory()
+                    .createGracefulShutdownCoordinator();
+        }
+        if (coordinatorConfig.workerStateChangeListener() != null) {
+            this.workerStateChangeListener = coordinatorConfig.workerStateChangeListener();
+        } else {
+            this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory()
+                    .createWorkerStateChangeListener();
+        }
         this.initialPosition = retrievalConfig.initialPositionInStreamExtended();
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
@@ -201,8 +210,9 @@ public class Scheduler implements Runnable {
         try {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
-        } catch (RuntimeException e) {
+        } catch (RuntimeException e) { 
             log.error("Unable to initialize after {} attempts. Shutting down.", maxInitializationAttempts, e);
+            workerStateChangeListener.onAllInitializationAttemptsFailed(e);
             shutdown();
         }
 
