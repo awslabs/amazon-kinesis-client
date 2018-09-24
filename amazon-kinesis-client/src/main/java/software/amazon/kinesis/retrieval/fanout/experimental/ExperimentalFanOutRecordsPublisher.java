@@ -16,6 +16,7 @@ package software.amazon.kinesis.retrieval.fanout.experimental;
 
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -53,10 +54,19 @@ public class ExperimentalFanOutRecordsPublisher extends FanOutRecordsPublisher {
     protected void validateRecords(String shardId, SubscribeToShardEvent event) {
         Map<String, Integer> mismatchedRecords = mismatchedRecordReporter.recordsNotForShard(shardId,
                 event.records().stream().map(Record::sequenceNumber));
+
         if (mismatchedRecords.size() > 0) {
-            String mismatchReport = mismatchedRecords.entrySet().stream()
+            String mismatchReport = "Received records destined for different shards: " + mismatchedRecords.entrySet().stream()
                     .map(e -> String.format("(%s -> %d)", e.getKey(), e.getValue())).collect(Collectors.joining(", "));
-            throw new IllegalArgumentException("Received records destined for different shards: " + mismatchReport);
+            log.error(mismatchReport);
+            throw new IllegalArgumentException(mismatchReport);
+        }
+
+        Map<String, Integer> continuationMismatch = mismatchedRecordReporter.recordsNotForShard(shardId, Stream.of(event.continuationSequenceNumber()));
+        if (!continuationMismatch.isEmpty()) {
+            String continuationReport = "Continuation sequence number not matched to shard: " + mismatchedRecordReporter.makeReport(continuationMismatch);
+            log.error(continuationReport);
+            throw new IllegalArgumentException(continuationReport);
         }
 
     }
