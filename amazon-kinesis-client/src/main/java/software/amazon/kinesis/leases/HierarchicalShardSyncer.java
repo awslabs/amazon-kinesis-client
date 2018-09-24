@@ -48,7 +48,7 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
- * Helper class per kcl scheduler instance to sync leases with shards of the Kinesis stream.
+ * Helper class to sync leases with shards of the Kinesis stream.
  * It will create new leases/activities when it discovers new Kinesis shards (bootstrap/resharding).
  * It deletes leases for shards that have been trimmed from Kinesis, or if we've completed processing it
  * and begun processing it's child shards.
@@ -58,7 +58,6 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 public class HierarchicalShardSyncer {
 
     /**
-     * Object level synchronization
      * Check and create leases for any new shards (e.g. following a reshard operation). Sync leases with Kinesis shards
      * (e.g. at startup, or when we reach end of a shard).
      *

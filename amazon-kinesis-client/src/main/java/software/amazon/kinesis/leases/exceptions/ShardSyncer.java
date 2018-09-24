@@ -24,10 +24,8 @@ public class ShardSyncer {
      *
      * <p>NOTE: This method is deprecated and will be removed in a future release.</p>
      *
-     * Class level synchronization
-     *
      * @param shardDetector
-     * @param leaseRefresherShutdownTaskTest.java
+     * @param leaseRefresher
      * @param initialPosition
      * @param cleanupLeasesOfCompletedShards
      * @param ignoreUnexpectedChildShards
