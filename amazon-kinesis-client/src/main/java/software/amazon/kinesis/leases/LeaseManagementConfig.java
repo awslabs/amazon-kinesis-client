@@ -226,7 +226,7 @@ public class LeaseManagementConfig {
      * active status.
      *
      * <p>
-     * Default value: {@link NoOpTableCreatorCallback}
+     * Default value: {@link TableCreatorCallback#NOOP_TABLE_CREATOR_CALLBACK}
      * </p>
      */
     private TableCreatorCallback tableCreatorCallback = TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK;
