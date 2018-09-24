@@ -48,7 +48,6 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseSerializer;
-import software.amazon.kinesis.leases.TableCreatorCallback;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -84,7 +83,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Deprecated
     public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
             final LeaseSerializer serializer, final boolean consistentReads) {
-        this(table, dynamoDBClient, serializer, consistentReads, new NoOpTableCreatorCallback());
+        this(table, dynamoDBClient, serializer, consistentReads, TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
     }
 
     /**

@@ -73,7 +73,7 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
             DynamoDbAsyncClient dynamoDBClient = DynamoDbAsyncClient.builder()
                     .credentialsProvider(DefaultCredentialsProvider.create()).build();
             leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDBClient, new DynamoDBLeaseSerializer(),
-                    useConsistentReads, new NoOpTableCreatorCallback());
+                    useConsistentReads, TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
         }
         leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
 

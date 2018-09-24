@@ -31,7 +31,7 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
-import software.amazon.kinesis.leases.dynamodb.NoOpTableCreatorCallback;
+import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
@@ -229,7 +229,7 @@ public class LeaseManagementConfig {
      * Default value: {@link NoOpTableCreatorCallback}
      * </p>
      */
-    private TableCreatorCallback tableCreatorCallback = new NoOpTableCreatorCallback();
+    private TableCreatorCallback tableCreatorCallback = TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK;
 
     private LeaseManagementFactory leaseManagementFactory;
 

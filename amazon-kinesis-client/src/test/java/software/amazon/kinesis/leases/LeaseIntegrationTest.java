@@ -24,6 +24,7 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
+import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 
 @Slf4j
 public class LeaseIntegrationTest {

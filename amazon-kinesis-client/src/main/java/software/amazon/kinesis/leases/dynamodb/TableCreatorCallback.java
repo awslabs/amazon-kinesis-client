@@ -13,14 +13,19 @@
  * permissions and limitations under the License.
  */
 
-package software.amazon.kinesis.leases;
-
-import software.amazon.kinesis.leases.dynamodb.TableCreatorCallbackInput;
+package software.amazon.kinesis.leases.dynamodb;
 
 /**
  * Callback interface for interacting with the DynamoDB lease table post creation.
  */
+@FunctionalInterface
 public interface TableCreatorCallback {
+    /**
+     * NoOp implemetation for TableCreatorCallback
+     */
+    TableCreatorCallback NOOP_TABLE_CREATOR_CALLBACK = (TableCreatorCallbackInput tableCreatorCallbackInput) -> {
+        // Do nothing
+    };
 
     /**
      * Actions needed to be performed on the DynamoDB lease table once the table has been created and is in the ACTIVE
