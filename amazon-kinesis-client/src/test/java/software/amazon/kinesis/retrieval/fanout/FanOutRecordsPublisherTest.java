@@ -361,13 +361,22 @@ public class FanOutRecordsPublisherTest {
     }
 
     static Record makeRecord(int sequenceNumber, int shardId) {
-        BigInteger version = BigInteger.valueOf(2).shiftLeft(184);
-        BigInteger shard = BigInteger.valueOf(shardId).shiftLeft(4);
-        BigInteger seq = version.add(shard).add(BigInteger.valueOf(sequenceNumber));
+
+        String seq = makeSequenceNumber(sequenceNumber, shardId);
 
         SdkBytes buffer = SdkBytes.fromByteArray(new byte[] { 1, 2, 3 });
         return Record.builder().data(buffer).approximateArrivalTimestamp(Instant.now())
-                .sequenceNumber(seq.toString()).partitionKey("A").build();
+                .sequenceNumber(seq).partitionKey("A").build();
+    }
+
+    static String makeSequenceNumber(int id, int shardId) {
+        BigInteger version = BigInteger.valueOf(2).shiftLeft(184);
+        BigInteger shard = BigInteger.valueOf(shardId).shiftLeft(4);
+        BigInteger idTrack = BigInteger.valueOf(id).shiftLeft(80);
+        BigInteger seq = version.or(shard).or(idTrack);
+
+        return seq.toString();
+
     }
 
     private static class KinesisClientRecordMatcher extends TypeSafeDiagnosingMatcher<KinesisClientRecord> {
