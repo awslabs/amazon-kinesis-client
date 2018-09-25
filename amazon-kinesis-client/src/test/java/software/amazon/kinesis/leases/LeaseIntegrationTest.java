@@ -17,12 +17,14 @@ package software.amazon.kinesis.leases;
 import org.junit.Rule;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
+import org.mockito.Mock;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
+import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 
 @Slf4j
 public class LeaseIntegrationTest {
@@ -32,6 +34,11 @@ public class LeaseIntegrationTest {
     protected static DynamoDbAsyncClient ddbClient = DynamoDbAsyncClient.builder()
             .credentialsProvider(DefaultCredentialsProvider.create()).build();
 
+    protected String tableName = "nagl_ShardProgress";
+
+    @Mock
+    protected TableCreatorCallback tableCreatorCallback;
+
     @Rule
     public TestWatcher watcher = new TestWatcher() {
 
@@ -40,7 +47,8 @@ public class LeaseIntegrationTest {
             if (leaseRefresher == null) {
                 // Do some static setup once per class.
 
-                leaseRefresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", ddbClient, leaseSerializer, true);
+                leaseRefresher = new DynamoDBLeaseRefresher(tableName, ddbClient, leaseSerializer, true,
+                        tableCreatorCallback);
             }
 
             try {
