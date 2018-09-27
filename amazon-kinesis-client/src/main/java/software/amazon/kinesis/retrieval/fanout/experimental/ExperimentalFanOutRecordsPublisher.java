@@ -62,11 +62,13 @@ public class ExperimentalFanOutRecordsPublisher extends FanOutRecordsPublisher {
             throw new IllegalArgumentException(mismatchReport);
         }
 
-        Map<String, Integer> continuationMismatch = mismatchedRecordReporter.recordsNotForShard(shardId, Stream.of(event.continuationSequenceNumber()));
-        if (!continuationMismatch.isEmpty()) {
-            String continuationReport = "Continuation sequence number not matched to shard: " + mismatchedRecordReporter.makeReport(continuationMismatch);
-            log.error(continuationReport);
-            throw new IllegalArgumentException(continuationReport);
+        if (event.continuationSequenceNumber() != null) {
+            Map<String, Integer> continuationMismatch = mismatchedRecordReporter.recordsNotForShard(shardId, Stream.of(event.continuationSequenceNumber()));
+            if (!continuationMismatch.isEmpty()) {
+                String continuationReport = "Continuation sequence number not matched to shard: " + mismatchedRecordReporter.makeReport(continuationMismatch);
+                log.error(continuationReport);
+                throw new IllegalArgumentException(continuationReport);
+            }
         }
 
     }
