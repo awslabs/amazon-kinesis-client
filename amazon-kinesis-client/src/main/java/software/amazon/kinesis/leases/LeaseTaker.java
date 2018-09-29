@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.leases;
 
+import java.util.Collection;
 import java.util.Map;
 
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -45,4 +46,8 @@ public interface LeaseTaker {
      */
     String getWorkerIdentifier();
 
+    /**
+     * @return Lease object for all leases
+     */
+    Collection<Lease> getAllLeases();
 }

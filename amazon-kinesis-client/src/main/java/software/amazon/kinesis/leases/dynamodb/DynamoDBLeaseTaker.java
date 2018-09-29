@@ -530,4 +530,12 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     public String getWorkerIdentifier() {
         return workerIdentifier;
     }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public synchronized Collection<Lease> getAllLeases() {
+        return Collections.unmodifiableCollection(new ArrayList<Lease>(allLeases.values()));
+    }
 }

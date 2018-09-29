@@ -279,6 +279,11 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     }
 
     @Override
+    public Collection<Lease> getAllAssignments() {
+        return leaseTaker.getAllLeases();
+    }
+
+    @Override
     public Lease getCurrentlyHeldLease(String leaseKey) {
         return leaseRenewer.getCurrentlyHeldLease(leaseKey);
     }

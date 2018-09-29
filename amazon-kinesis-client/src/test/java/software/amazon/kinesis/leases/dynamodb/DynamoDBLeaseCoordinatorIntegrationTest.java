@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -134,6 +135,28 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
         lease.checkpoint(newCheckpoint);
         lease.leaseOwner(coordinator.workerIdentifier());
         assertEquals(lease, fromDynamo);
+    }
+
+    /**
+     * Tests if getAllAssignments() returns all leases
+     */
+    @Test
+    public void testGetAllAssignments() throws Exception {
+        TestHarnessBuilder builder = new TestHarnessBuilder();
+
+        Map<String, Lease> addedLeases = builder.withLease("1", WORKER_ID)
+                .withLease("2", WORKER_ID)
+                .withLease("3", WORKER_ID)
+                .withLease("4", WORKER_ID)
+                .withLease("5", WORKER_ID)
+                .build();
+
+        // Run the taker
+        coordinator.runLeaseTaker();
+
+        Collection<Lease> allAssignments = coordinator.getAllAssignments();
+        assertEquals(allAssignments.size(), addedLeases.size());
+        allAssignments.containsAll(addedLeases.keySet());
     }
 
     /**

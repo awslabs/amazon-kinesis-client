@@ -14,17 +14,19 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
+import java.util.Collection;
 import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+
+import static org.junit.Assert.assertEquals;
 
 public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
@@ -98,6 +100,32 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
         builder.withLease("4", "bar").build();
 
         builder.takeMutateAssert(taker, 2);
+    }
+
+    /**
+     * Verify that when getAllLeases() is called, DynamoDBLeaseTaker
+     * - does not call listLeases()
+     * - returns cached result was built during takeLeases() operation to return result
+     */
+    @Test
+    public void testGetAllLeases() throws LeasingException {
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
+
+        Map<String, Lease> addedLeases = builder.withLease("1", "bar")
+                .withLease("2", "bar")
+                .withLease("3", "baz")
+                .withLease("4", "baz")
+                .withLease("5", "foo")
+                .build();
+
+        // In the current DynamoDBLeaseTaker implementation getAllLeases() gets leases from an internal cache that is built during takeLeases() operation
+        assertEquals(taker.getAllLeases().size(), 0);
+
+        taker.takeLeases();
+
+        Collection<Lease> allLeases = taker.getAllLeases();
+        assertEquals(allLeases.size(), addedLeases.size());
+        addedLeases.values().containsAll(allLeases);
     }
 
     /**

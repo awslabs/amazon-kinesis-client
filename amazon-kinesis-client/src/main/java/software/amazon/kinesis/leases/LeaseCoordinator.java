@@ -125,6 +125,11 @@ public interface LeaseCoordinator {
     List<ShardInfo> getCurrentAssignments();
 
     /**
+     * @return All leases
+     */
+    Collection<Lease> getAllAssignments();
+
+    /**
      * @param writeCapacity The DynamoDB table used for tracking leases will be provisioned with the specified initial
      *        write capacity
      * @return LeaseCoordinator
