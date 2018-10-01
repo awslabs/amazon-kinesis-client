@@ -26,7 +26,9 @@ import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
@@ -126,7 +128,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
         Collection<Lease> allLeases = taker.getAllLeases();
         assertEquals(allLeases.size(), addedLeases.size());
-        assertTrue(addedLeases.values().containsAll(allLeases));
+        assertThat(addedLeases.values().containsAll(allLeases), equalTo(true));
     }
 
     /**

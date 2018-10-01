@@ -14,10 +14,12 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
 import java.util.Collection;
@@ -156,7 +158,7 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
 
         Collection<Lease> allAssignments = coordinator.getAllAssignments();
         assertEquals(allAssignments.size(), addedLeases.size());
-        assertTrue(allAssignments.containsAll(addedLeases.values()));
+        assertThat(allAssignments.containsAll(addedLeases.values()), equalTo(true));
     }
 
     /**
