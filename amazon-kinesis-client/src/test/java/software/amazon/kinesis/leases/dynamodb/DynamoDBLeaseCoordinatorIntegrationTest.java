@@ -156,7 +156,7 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
 
         Collection<Lease> allAssignments = coordinator.getAllAssignments();
         assertEquals(allAssignments.size(), addedLeases.size());
-        allAssignments.containsAll(addedLeases.keySet());
+        assertTrue(allAssignments.containsAll(addedLeases.values()));
     }
 
     /**
