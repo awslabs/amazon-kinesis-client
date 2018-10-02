@@ -14,88 +14,113 @@
  */
 package software.amazon.kinesis.checkpoint;
 
-import org.junit.Before;
-import org.junit.Test;
-
-import java.util.Optional;
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.junit.Assert.assertThat;
-
+//@RunWith(MockitoJUnitRunner.class)
 public class SequenceNumberValidatorTest {
+    /*private final String streamName = "testStream";
+    private final boolean validateWithGetIterator = true;
+    private final String shardId = "shardid-123";
 
-    private SequenceNumberValidator validator;
+    @Mock
+    private AmazonKinesis amazonKinesis;
 
-    @Before
-    public void begin() {
-        validator = new SequenceNumberValidator();
-    }
+    @Test (expected = IllegalArgumentException.class)
+    public final void testSequenceNumberValidator() {
+        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(amazonKinesis, streamName,
+                shardId, validateWithGetIterator);
 
+        String goodSequence = "456";
+        String iterator = "happyiterator";
+        String badSequence = "789";
 
-    @Test
-    public void matchingSequenceNumberTest() {
-        String sequenceNumber = "49587497311274533994574834252742144236107130636007899138";
-        String expectedShardId = "shardId-000000000000";
+        ArgumentCaptor<GetShardIteratorRequest> requestCaptor = ArgumentCaptor.forClass(GetShardIteratorRequest.class);
 
-        Optional<Integer> version = validator.versionFor(sequenceNumber);
-        assertThat(version, equalTo(Optional.of(2)));
+        when(amazonKinesis.getShardIterator(requestCaptor.capture()))
+                .thenReturn(new GetShardIteratorResult().withShardIterator(iterator))
+                .thenThrow(new InvalidArgumentException(""));
 
-        Optional<String> shardId = validator.shardIdFor(sequenceNumber);
-        assertThat(shardId, equalTo(Optional.of(expectedShardId)));
+        validator.validateSequenceNumber(goodSequence);
+        try {
+            validator.validateSequenceNumber(badSequence);
+        } finally {
+            final List<GetShardIteratorRequest> requests = requestCaptor.getAllValues();
+            assertEquals(2, requests.size());
 
-        assertThat(validator.validateSequenceNumberForShard(sequenceNumber, expectedShardId), equalTo(Optional.of(true)));
-    }
+            final GetShardIteratorRequest goodRequest = requests.get(0);
+            final GetShardIteratorRequest badRequest = requests.get(0);
 
-    @Test
-    public void shardMismatchTest() {
-        String sequenceNumber = "49585389983312162443796657944872008114154899568972529698";
-        String invalidShardId = "shardId-000000000001";
+            assertEquals(streamName, goodRequest.getStreamName());
+            assertEquals(shardId, goodRequest.shardId());
+            assertEquals(ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(), goodRequest.getShardIteratorType());
+            assertEquals(goodSequence, goodRequest.getStartingSequenceNumber());
 
-        Optional<Integer> version = validator.versionFor(sequenceNumber);
-        assertThat(version, equalTo(Optional.of(2)));
-
-        Optional<String> shardId = validator.shardIdFor(sequenceNumber);
-        assertThat(shardId, not(equalTo(invalidShardId)));
-
-        assertThat(validator.validateSequenceNumberForShard(sequenceNumber, invalidShardId), equalTo(Optional.of(false)));
-    }
-
-    @Test
-    public void versionMismatchTest() {
-        String sequenceNumber = "74107425965128755728308386687147091174006956590945533954";
-        String expectedShardId = "shardId-000000000000";
-
-        Optional<Integer> version = validator.versionFor(sequenceNumber);
-        assertThat(version, equalTo(Optional.empty()));
-
-        Optional<String> shardId = validator.shardIdFor(sequenceNumber);
-        assertThat(shardId, equalTo(Optional.empty()));
-
-        assertThat(validator.validateSequenceNumberForShard(sequenceNumber, expectedShardId), equalTo(Optional.empty()));
+            assertEquals(streamName, badRequest.getStreamName());
+            assertEquals(shardId, badRequest.shardId());
+            assertEquals(ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(), badRequest.getShardIteratorType());
+            assertEquals(goodSequence, badRequest.getStartingSequenceNumber());
+        }
     }
 
     @Test
-    public void sequenceNumberToShortTest() {
-        String sequenceNumber = "4958538998331216244379665794487200811415489956897252969";
-        String expectedShardId = "shardId-000000000000";
+    public final void testNoValidation() {
+        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(amazonKinesis, streamName,
+                shardId, !validateWithGetIterator);
+        String sequenceNumber = "456";
 
-        assertThat(validator.versionFor(sequenceNumber), equalTo(Optional.empty()));
-        assertThat(validator.shardIdFor(sequenceNumber), equalTo(Optional.empty()));
+        // Just checking that the false flag for validating against getIterator is honored
+        validator.validateSequenceNumber(sequenceNumber);
 
-        assertThat(validator.validateSequenceNumberForShard(sequenceNumber, expectedShardId), equalTo(Optional.empty()));
+        verify(amazonKinesis, never()).getShardIterator(any(GetShardIteratorRequest.class));
     }
 
     @Test
-    public void sequenceNumberToLongTest() {
-        String sequenceNumber = "495874973112745339945748342527421442361071306360078991381";
-        String expectedShardId = "shardId-000000000000";
+    public void nonNumericValueValidationTest() {
+        Checkpoint.SequenceNumberValidator validator = new Checkpoint.SequenceNumberValidator(amazonKinesis, streamName,
+                shardId, validateWithGetIterator);
 
-        assertThat(validator.versionFor(sequenceNumber), equalTo(Optional.empty()));
-        assertThat(validator.shardIdFor(sequenceNumber), equalTo(Optional.empty()));
+        String[] nonNumericStrings = {null,
+                "bogus-sequence-number",
+                SentinelCheckpoint.LATEST.toString(),
+                SentinelCheckpoint.TRIM_HORIZON.toString(),
+                SentinelCheckpoint.AT_TIMESTAMP.toString()};
 
-        assertThat(validator.validateSequenceNumberForShard(sequenceNumber, expectedShardId), equalTo(Optional.empty()));
+        Arrays.stream(nonNumericStrings).forEach(sequenceNumber -> {
+            try {
+                validator.validateSequenceNumber(sequenceNumber);
+                fail("Validator should not consider " + sequenceNumber + " a valid sequence number");
+            } catch (IllegalArgumentException e) {
+                // Do nothing
+            }
+        });
+
+        verify(amazonKinesis, never()).getShardIterator(any(GetShardIteratorRequest.class));
     }
 
+    @Test
+    public final void testIsDigits() {
+        // Check things that are all digits
+        String[] stringsOfDigits = {"0", "12", "07897803434", "12324456576788"};
 
+        for (String digits : stringsOfDigits) {
+            assertTrue("Expected that " + digits + " would be considered a string of digits.",
+                    Checkpoint.SequenceNumberValidator.isDigits(digits));
+        }
+        // Check things that are not all digits
+        String[] stringsWithNonDigits = {
+                null,
+                "",
+                "      ", // white spaces
+                "6 4",
+                "\t45",
+                "5242354235234\n",
+                "7\n6\n5\n",
+                "12s", // last character
+                "c07897803434", // first character
+                "1232445wef6576788", // interior
+                "no-digits",
+        };
+        for (String notAllDigits : stringsWithNonDigits) {
+            assertFalse("Expected that " + notAllDigits + " would not be considered a string of digits.",
+                    Checkpoint.SequenceNumberValidator.isDigits(notAllDigits));
+        }
+    }*/
 }
