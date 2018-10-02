@@ -122,12 +122,12 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
                 .build();
 
         // In the current DynamoDBLeaseTaker implementation getAllLeases() gets leases from an internal cache that is built during takeLeases() operation
-        assertEquals(taker.getAllLeases().size(), 0);
+        assertThat(taker.allLeases().size(), equalTo(0));
 
         taker.takeLeases();
 
-        Collection<Lease> allLeases = taker.getAllLeases();
-        assertEquals(allLeases.size(), addedLeases.size());
+        Collection<Lease> allLeases = taker.allLeases();
+        assertThat(allLeases.size(), equalTo(addedLeases.size()));
         assertThat(addedLeases.values().containsAll(allLeases), equalTo(true));
     }
 

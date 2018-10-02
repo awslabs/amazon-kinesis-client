@@ -535,7 +535,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * {@inheritDoc}
      */
     @Override
-    public synchronized Collection<Lease> getAllLeases() {
-        return Collections.unmodifiableCollection(new ArrayList<Lease>(allLeases.values()));
+    public synchronized List<Lease> allLeases() {
+        return new ArrayList<>(allLeases.values());
     }
 }

@@ -16,6 +16,7 @@
 package software.amazon.kinesis.leases;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -125,9 +126,15 @@ public interface LeaseCoordinator {
     List<ShardInfo> getCurrentAssignments();
 
     /**
-     * @return All leases
+     * Default implementation returns an empty list and concrete implementation is expected to return all leases
+     * for the application that are in the lease table. This enables application managing Kcl Scheduler to take care of
+     * horizontal scaling for example.
+     *
+     * @return all leases for the application that are in the lease table
      */
-    Collection<Lease> getAllAssignments();
+    default List<Lease> allLeases() {
+       return Collections.emptyList();
+    }
 
     /**
      * @param writeCapacity The DynamoDB table used for tracking leases will be provisioned with the specified initial

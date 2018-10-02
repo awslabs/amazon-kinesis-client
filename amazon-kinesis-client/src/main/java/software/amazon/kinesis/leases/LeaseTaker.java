@@ -14,7 +14,8 @@
  */
 package software.amazon.kinesis.leases;
 
-import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -47,7 +48,12 @@ public interface LeaseTaker {
     String getWorkerIdentifier();
 
     /**
-     * @return Lease object for all leases
+     * Default implementation returns an empty list and concrete implementaion is expected to return all leases
+     * for the application that are in the lease table either by reading lease table or from an internal cache.
+     *
+     * @return all leases for the application that are in the lease table
      */
-    Collection<Lease> getAllLeases();
+    default List<Lease> allLeases() {
+        return Collections.emptyList();
+    }
 }
