@@ -40,6 +40,7 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
@@ -99,8 +100,8 @@ public class ShardConsumer {
                          Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
                          TaskExecutionListener taskExecutionListener) {
         this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
-                taskExecutionListener, ConsumerStates.INITIAL_STATE,
-                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8);
+                ConsumerStates.INITIAL_STATE,
+                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener);
     }
 
     //
@@ -108,8 +109,8 @@ public class ShardConsumer {
     //
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
                          Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-                         TaskExecutionListener taskExecutionListener, ConsumerState initialState, Function<ConsumerTask,
-                         ConsumerTask> taskMetricsDecorator, int bufferSize) {
+                         ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator,
+                         int bufferSize, TaskExecutionListener taskExecutionListener) {
         this.recordsPublisher = recordsPublisher;
         this.executorService = executorService;
         this.shardInfo = shardInfo;
@@ -383,7 +384,11 @@ public class ShardConsumer {
     }
 
     private synchronized void executeTask(ProcessRecordsInput input) {
-        taskExecutionListener.onTaskBegin(currentState, shardInfo);
+        TaskExecutionListenerInput taskExecutionListenerInput = TaskExecutionListenerInput.builder()
+                .shardInfo(shardInfo)
+                .taskType(currentState.taskType())
+                .build();
+        taskExecutionListener.onTaskBegin(taskExecutionListenerInput);
         ConsumerTask task = currentState.createTask(shardConsumerArgument, ShardConsumer.this, input);
         if (task != null) {
             taskDispatchedAt = Instant.now();
@@ -396,8 +401,9 @@ public class ShardConsumer {
                 taskIsRunning = false;
             }
             taskOutcome = resultToOutcome(result);
+            taskExecutionListenerInput = taskExecutionListenerInput.toBuilder().taskOutcome(taskOutcome).build();
         }
-        taskExecutionListener.onTaskEnd(currentState, shardInfo);
+        taskExecutionListener.onTaskEnd(taskExecutionListenerInput);
     }
 
     private TaskOutcome resultToOutcome(TaskResult result) {
@@ -439,10 +445,6 @@ public class ShardConsumer {
             return currentState.shutdownTransition(shutdownReason);
         }
         return nextState;
-    }
-
-    private enum TaskOutcome {
-        SUCCESSFUL, END_OF_SHARD, FAILURE
     }
 
     private void logTaskException(TaskResult taskResult) {

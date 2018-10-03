@@ -14,15 +14,20 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
-
 /**
- * A listener for callbacks on task execution lifecycle for for a shard. The implementation for this interface should
- * not perform any blocking operation like remote service calls, because that would block subsequent task executions.
+ * Enumerates types of outcome of tasks executed as part of processing a shard.
  */
-public interface TaskExecutionListener {
-
-    void onTaskBegin(TaskExecutionListenerInput input);
-
-    void onTaskEnd(TaskExecutionListenerInput input);
+public enum TaskOutcome {
+    /**
+     * Denotes a successful task outcome.
+     */
+    SUCCESSFUL,
+    /**
+     * Denotes that the last record from the shard has been read/consumed.
+     */
+    END_OF_SHARD,
+    /**
+     * Denotes a failure or exception during processing of the shard.
+     */
+    FAILURE
 }
