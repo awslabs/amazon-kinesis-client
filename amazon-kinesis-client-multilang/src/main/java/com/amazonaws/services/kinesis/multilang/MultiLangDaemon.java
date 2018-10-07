@@ -24,6 +24,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.ConfigsBuilder;
 import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.coordinator.Scheduler;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
@@ -75,7 +80,38 @@ public class MultiLangDaemon implements Callable<Integer> {
 
     private static Scheduler buildWorker(ShardRecordProcessorFactory recordShardRecordProcessorFactory,
             KinesisClientLibConfiguration configuration, ExecutorService workerThreadPool) {
-        return null;
+        Region region = Region.of(configuration.getRegionName());
+        KinesisAsyncClient kinesisClient = KinesisAsyncClient.builder()
+                .credentialsProvider(configuration.getKinesisCredentialsProvider())
+                .region(region)
+                .build();
+        DynamoDbAsyncClient dynamoClient = DynamoDbAsyncClient.builder()
+                .credentialsProvider(configuration.getDynamoDBCredentialsProvider())
+                .region(region)
+                .build();
+        CloudWatchAsyncClient cloudWatchClient = CloudWatchAsyncClient.builder()
+                .credentialsProvider(configuration.getCloudWatchCredentialsProvider())
+                .region(region)
+                .build();
+
+        ConfigsBuilder configsBuilder = new ConfigsBuilder(
+                configuration.getStreamName(),
+                configuration.getApplicationName(),
+                kinesisClient,
+                dynamoClient,
+                cloudWatchClient,
+                configuration.getWorkerIdentifier(),
+                recordShardRecordProcessorFactory);
+
+        return new Scheduler(
+                configsBuilder.checkpointConfig(),
+                configsBuilder.coordinatorConfig(),
+                configsBuilder.leaseManagementConfig(),
+                configsBuilder.lifecycleConfig(),
+                configsBuilder.metricsConfig(),
+                configsBuilder.processorConfig(),
+                configsBuilder.retrievalConfig()
+        );
     }
 
     /**
@@ -148,9 +184,13 @@ public class MultiLangDaemon implements Callable<Integer> {
             public void run() {
                 log.info("Process terminated, will initiate shutdown.");
                 try {
-                    Future<Void> fut = daemon.scheduler.requestShutdown();
-                    fut.get(shutdownGraceMillis, TimeUnit.MILLISECONDS);
-                    log.info("Process shutdown is complete.");
+                    Future<Boolean> fut = daemon.scheduler.startGracefulShutdown();
+                    final boolean shutdownResult = fut.get(shutdownGraceMillis, TimeUnit.MILLISECONDS);
+                    if (shutdownResult) {
+                        log.info("Process shutdown is complete.");
+                    } else {
+                        log.info("Process shutdown terminated early.");
+                    }
                 } catch (InterruptedException | ExecutionException | TimeoutException e) {
                     log.error("Encountered an error during shutdown.", e);
                 }
