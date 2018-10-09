@@ -31,6 +31,7 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
+import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 
@@ -218,7 +219,17 @@ public class LeaseManagementConfig {
             super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE_TIME, TimeUnit.SECONDS, new SynchronousQueue<>(),
                     threadFactory);
         }
-    };
+    }
+
+    /**
+     * Callback used with DynamoDB lease management. Callback is invoked once the table is newly created and is in the
+     * active status.
+     *
+     * <p>
+     * Default value: {@link TableCreatorCallback#NOOP_TABLE_CREATOR_CALLBACK}
+     * </p>
+     */
+    private TableCreatorCallback tableCreatorCallback = TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK;
 
     private HierarchicalShardSyncer hierarchicalShardSyncer = new HierarchicalShardSyncer();
 
@@ -249,7 +260,8 @@ public class LeaseManagementConfig {
                     cacheMissWarningModulus(),
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
-                    hierarchicalShardSyncer());
+                    hierarchicalShardSyncer(),
+                    tableCreatorCallback());
         }
         return leaseManagementFactory;
     }

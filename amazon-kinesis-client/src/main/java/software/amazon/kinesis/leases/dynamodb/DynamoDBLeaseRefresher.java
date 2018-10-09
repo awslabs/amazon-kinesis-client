@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
@@ -58,7 +57,6 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 /**
  * An implementation of {@link LeaseRefresher} that uses DynamoDB.
  */
-@AllArgsConstructor
 @Slf4j
 @KinesisClientInternalApi
 public class DynamoDBLeaseRefresher implements LeaseRefresher {
@@ -66,6 +64,46 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     protected final DynamoDbAsyncClient dynamoDBClient;
     protected final LeaseSerializer serializer;
     protected final boolean consistentReads;
+    private final TableCreatorCallback tableCreatorCallback;
+
+    private boolean newTableCreated = false;
+
+    /**
+     * Constructor.
+     *
+     * <p>
+     * NOTE: This constructor is deprecated and will be removed in a future release.
+     * </p>
+     *
+     * @param table
+     * @param dynamoDBClient
+     * @param serializer
+     * @param consistentReads
+     */
+    @Deprecated
+    public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
+            final LeaseSerializer serializer, final boolean consistentReads) {
+        this(table, dynamoDBClient, serializer, consistentReads, TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param table
+     * @param dynamoDBClient
+     * @param serializer
+     * @param consistentReads
+     * @param tableCreatorCallback
+     */
+    public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
+            final LeaseSerializer serializer, final boolean consistentReads,
+            @NonNull final TableCreatorCallback tableCreatorCallback) {
+        this.table = table;
+        this.dynamoDBClient = dynamoDBClient;
+        this.serializer = serializer;
+        this.consistentReads = consistentReads;
+        this.tableCreatorCallback = tableCreatorCallback;
+    }
 
     /**
      * {@inheritDoc}
@@ -75,7 +113,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             throws ProvisionedThroughputException, DependencyException {
         try {
             if (tableStatus() != null) {
-                return false;
+                return newTableCreated;
             }
         } catch (DependencyException de) {
             //
@@ -95,6 +133,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         try {
             try {
                 dynamoDBClient.createTable(request).get();
+                newTableCreated = true;
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
             } catch (InterruptedException e) {
@@ -102,13 +141,13 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             }
         } catch (ResourceInUseException e) {
             log.info("Table {} already exists.", table);
-            return false;
+            return newTableCreated;
         } catch (LimitExceededException e) {
             throw new ProvisionedThroughputException("Capacity exceeded when creating table " + table, e);
         } catch (DynamoDbException e) {
             throw new DependencyException(e);
         }
-        return true;
+        return newTableCreated;
     }
 
     /**
@@ -160,6 +199,11 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             long timeToSleepMillis = Math.min(TimeUnit.SECONDS.toMillis(secondsBetweenPolls), sleepTimeRemaining);
 
             sleepTimeRemaining -= sleep(timeToSleepMillis);
+        }
+
+        if (newTableCreated) {
+            log.debug("Lease table was recently created, will perform post table creation actions");
+            performPostTableCreationAction();
         }
 
         return true;
@@ -591,7 +635,12 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
     private AWSExceptionManager createExceptionManager() {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
-        exceptionManager.add(DynamoDbException.class, t -> (DynamoDbException) t);
+        exceptionManager.add(DynamoDbException.class, t -> t);
         return exceptionManager;
+    }
+
+    void performPostTableCreationAction() {
+        tableCreatorCallback.performAction(
+                TableCreatorCallbackInput.builder().dynamoDbClient(dynamoDBClient).tableName(table).build());
     }
 }

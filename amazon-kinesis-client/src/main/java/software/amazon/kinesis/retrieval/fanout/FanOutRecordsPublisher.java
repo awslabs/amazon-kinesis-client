@@ -18,7 +18,6 @@ package software.amazon.kinesis.retrieval.fanout;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -29,7 +28,6 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.async.SdkPublisher;
-import software.amazon.awssdk.http.SdkHttpResponse;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
@@ -37,7 +35,6 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
-import software.amazon.kinesis.annotations.KinesisClientExperimental;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
@@ -48,6 +45,7 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+@RequiredArgsConstructor
 @Slf4j
 @KinesisClientInternalApi
 public class FanOutRecordsPublisher implements RecordsPublisher {
@@ -58,22 +56,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private final KinesisAsyncClient kinesis;
     private final String shardId;
     private final String consumerArn;
-
-    /**
-     * Creates a new FanOutRecordsPublisher.
-     * 
-     * @param kinesis
-     *            the kinesis client to use for requests
-     * @param shardId
-     *            the shardId to retrieve records for
-     * @param consumerArn
-     *            the consumer to use when retrieving records
-     */
-    public FanOutRecordsPublisher(KinesisAsyncClient kinesis, String shardId, String consumerArn) {
-        this.kinesis = kinesis;
-        this.shardId = shardId;
-        this.consumerArn = consumerArn;
-    }
 
     private final Object lockObject = new Object();
 
@@ -410,8 +392,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         }
                         subscriber = null;
                         if (flow != null) {
-                            log.debug(
-                                    "{}: [SubscriptionLifetime]: (FanOutRecordsPublisher/Subscription#cancel) @ {} id: {}",
+                            log.debug("{}: [SubscriptionLifetime]: (FanOutRecordsPublisher/Subscription#cancel) @ {} id: {}",
                                     shardId, flow.connectionStartedAt, flow.subscribeToShardId);
                             flow.cancel();
                             availableQueueSpace = 0;
@@ -434,20 +415,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         synchronized (lockObject) {
             return requester == flow;
         }
-    }
-
-    /**
-     * Allows validating records received from SubscribeToShard
-     * 
-     * @param shardId
-     *            the shardId the records should be from
-     * @param event
-     *            the SubscribeToShard event that was received.
-     * @throws IllegalArgumentException
-     *             if the records are invalid. This will trigger an error response upwards
-     */
-    @KinesisClientExperimental(reason = "Allows providing a validation function with minimal changes")
-    protected void validateRecords(String shardId, SubscribeToShardEvent event) {
     }
 
     private void rejectSubscription(SdkPublisher<SubscribeToShardEventStream> publisher) {
@@ -526,15 +493,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         @Override
         public void responseReceived(SubscribeToShardResponse response) {
-            Optional<SdkHttpResponse> sdkHttpResponse = Optional.ofNullable(response)
-                    .flatMap(r -> Optional.ofNullable(r.sdkHttpResponse()));
-            Optional<String> requestId = sdkHttpResponse.flatMap(s -> s.firstMatchingHeader("x-amz-requestid"));
-            Optional<String> requestId2 = sdkHttpResponse.flatMap(s -> s.firstMatchingHeader("x-amz-id-2"));
-
-            log.debug(
-                    "{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Response received -- rid: {} -- rid2: {}",
-                    parent.shardId, connectionStartedAt, subscribeToShardId, requestId.orElse("None"),
-                    requestId2.orElse("None"));
+            log.debug("{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Response received",
+                    parent.shardId, connectionStartedAt, subscribeToShardId);
         }
 
         @Override
@@ -676,9 +636,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     cancel();
                 }
                 log.debug(
-                        "{}: [SubscriptionLifetime]: (RecordSubscription#onSubscribe) @ {} id: {} (Subscription ObjectId: {}) -- Outstanding: {} items so requesting an item",
-                        parent.shardId, connectionStartedAt, subscribeToShardId, System.identityHashCode(subscription),
-                        parent.availableQueueSpace);
+                        "{}: [SubscriptionLifetime]: (RecordSubscription#onSubscribe) @ {} id: {} -- Outstanding: {} items so requesting an item",
+                        parent.shardId, connectionStartedAt, subscribeToShardId, parent.availableQueueSpace);
                 if (parent.availableQueueSpace > 0) {
                     request(1);
                 }
@@ -698,16 +657,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 recordBatchEvent.accept(new SubscribeToShardResponseHandler.Visitor() {
                     @Override
                     public void visit(SubscribeToShardEvent event) {
-                        try {
-                            parent.validateRecords(parent.shardId, event);
-                        } catch (IllegalArgumentException iae) {
-                            log.debug(
-                                    "{}: [SubscriptionLifetime]: (RecordSubscription#onNext#vistor) @ {} id: {} (Subscription ObjectId: {}) -- Failing subscription due to mismatches: [ {} ]",
-                                    parent.shardId, connectionStartedAt, subscribeToShardId,
-                                    System.identityHashCode(subscription), iae.getMessage());
-                            parent.errorOccurred(flow, iae);
-                            return;
-                        }
                         flow.recordsReceived(event);
                     }
                 });
