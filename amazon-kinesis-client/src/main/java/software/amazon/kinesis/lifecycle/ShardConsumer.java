@@ -388,7 +388,7 @@ public class ShardConsumer {
                 .shardInfo(shardInfo)
                 .taskType(currentState.taskType())
                 .build();
-        taskExecutionListener.onTaskBegin(taskExecutionListenerInput);
+        taskExecutionListener.beforeTaskExecution(taskExecutionListenerInput);
         ConsumerTask task = currentState.createTask(shardConsumerArgument, ShardConsumer.this, input);
         if (task != null) {
             taskDispatchedAt = Instant.now();
@@ -403,7 +403,7 @@ public class ShardConsumer {
             taskOutcome = resultToOutcome(result);
             taskExecutionListenerInput = taskExecutionListenerInput.toBuilder().taskOutcome(taskOutcome).build();
         }
-        taskExecutionListener.onTaskEnd(taskExecutionListenerInput);
+        taskExecutionListener.afterTaskExecution(taskExecutionListenerInput);
     }
 
     private TaskOutcome resultToOutcome(TaskResult result) {

@@ -15,9 +15,7 @@
 package software.amazon.kinesis.lifecycle.events;
 
 import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.ToString;
+import lombok.Data;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.TaskOutcome;
@@ -26,27 +24,25 @@ import software.amazon.kinesis.lifecycle.TaskExecutionListener;
 
 /**
  * Container for the parameters to the TaskExecutionListener's
- * {@link TaskExecutionListener#onTaskBegin(TaskExecutionListenerInput)} method.
- * {@link TaskExecutionListener#onTaskEnd(TaskExecutionListenerInput)} method.
+ * {@link TaskExecutionListener#beforeTaskExecution(TaskExecutionListenerInput)} method.
+ * {@link TaskExecutionListener#afterTaskExecution(TaskExecutionListenerInput)} method.
  */
+@Data
 @Builder(toBuilder = true)
-@Getter
 @Accessors(fluent = true)
-@EqualsAndHashCode
-@ToString
 public class TaskExecutionListenerInput {
     /**
      * Detailed information about the shard whose progress is monitored by TaskExecutionListener.
      */
-    private ShardInfo shardInfo;
+    private final ShardInfo shardInfo;
     /**
      * The type of task being executed for the shard.
      *
      * This corresponds to the state the shard is in.
      */
-    private TaskType taskType;
+    private final TaskType taskType;
     /**
      * Outcome of the task execution for the shard.
      */
-    private TaskOutcome taskOutcome;
+    private final TaskOutcome taskOutcome;
 }

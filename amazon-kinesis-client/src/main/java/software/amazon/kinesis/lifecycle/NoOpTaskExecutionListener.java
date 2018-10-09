@@ -17,15 +17,15 @@ package software.amazon.kinesis.lifecycle;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 
 /**
- * A default implementation of TaskExecutionListener that takes no action on task execution.
+ * NoOp implementation of {@link TaskExecutionListener} interface that takes no action on task execution.
  */
 public class NoOpTaskExecutionListener implements TaskExecutionListener {
     @Override
-    public void onTaskBegin(TaskExecutionListenerInput input) {
+    public void beforeTaskExecution(TaskExecutionListenerInput input) {
     }
 
     @Override
-    public void onTaskEnd(TaskExecutionListenerInput input) {
+    public void afterTaskExecution(TaskExecutionListenerInput input) {
     }
 }
 

@@ -266,17 +266,17 @@ public class ShardConsumerTest {
         verify(cache.subscription, times(3)).request(anyLong());
         verify(cache.subscription).cancel();
         verify(processingState, times(2)).createTask(eq(shardConsumerArgument), eq(consumer), any());
-        verify(taskExecutionListener, times(1)).onTaskBegin(initialTaskInput);
-        verify(taskExecutionListener, times(2)).onTaskBegin(processTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskBegin(shutdownTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).beforeTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
 
         initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
         processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
         shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
 
-        verify(taskExecutionListener, times(1)).onTaskEnd(initialTaskInput);
-        verify(taskExecutionListener, times(2)).onTaskEnd(processTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskEnd(shutdownTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
         verifyNoMoreInteractions(taskExecutionListener);
     }
 
@@ -335,17 +335,17 @@ public class ShardConsumerTest {
         verify(processingTask, times(3)).call();
         verify(processingState).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
         verify(shutdownState).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
-        verify(taskExecutionListener, times(1)).onTaskBegin(initialTaskInput);
-        verify(taskExecutionListener, times(3)).onTaskBegin(processTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskBegin(shutdownTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(3)).beforeTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
 
         initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
         processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
         shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
 
-        verify(taskExecutionListener, times(1)).onTaskEnd(initialTaskInput);
-        verify(taskExecutionListener, times(3)).onTaskEnd(processTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskEnd(shutdownTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(3)).afterTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
         verifyNoMoreInteractions(taskExecutionListener);
     }
 
@@ -414,7 +414,7 @@ public class ShardConsumerTest {
         } catch (ExecutionException ee) {
             assertThat(ee.getCause(), instanceOf(Error.class));
         }
-        verify(taskExecutionListener, times(1)).onTaskBegin(initialTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
         verifyNoMoreInteractions(taskExecutionListener);
     }
 
@@ -483,11 +483,11 @@ public class ShardConsumerTest {
         verify(shutdownRequestedState).shutdownTransition(eq(ShutdownReason.REQUESTED));
         verify(shutdownRequestedAwaitState).createTask(any(), any(), any());
         verify(shutdownRequestedAwaitState).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
-        verify(taskExecutionListener, times(1)).onTaskBegin(initialTaskInput);
-        verify(taskExecutionListener, times(2)).onTaskBegin(processTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskBegin(shutdownRequestedTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskBegin(shutdownRequestedAwaitTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskBegin(shutdownTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).beforeTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownRequestedTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownRequestedAwaitTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
 
         initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
         processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
@@ -495,11 +495,11 @@ public class ShardConsumerTest {
         shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
         // No task is created/run for this shutdownRequestedAwaitState, so there's no task outcome.
 
-        verify(taskExecutionListener, times(1)).onTaskEnd(initialTaskInput);
-        verify(taskExecutionListener, times(2)).onTaskEnd(processTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskEnd(shutdownRequestedTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskEnd(shutdownRequestedAwaitTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskEnd(shutdownTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownRequestedTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownRequestedAwaitTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
         verifyNoMoreInteractions(taskExecutionListener);
     }
 
@@ -540,12 +540,12 @@ public class ShardConsumerTest {
         assertThat(healthCheckOutcome, equalTo(expectedException));
 
         verify(cache.subscription, times(2)).request(anyLong());
-        verify(taskExecutionListener, times(1)).onTaskBegin(initialTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskBegin(processTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(processTaskInput);
 
         initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
 
-        verify(taskExecutionListener, times(1)).onTaskEnd(initialTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
         verifyNoMoreInteractions(taskExecutionListener);
     }
 
@@ -626,17 +626,17 @@ public class ShardConsumerTest {
         assertThat(consumer.taskRunningTime(), nullValue());
         consumer.healthCheck();
 
-        verify(taskExecutionListener, times(1)).onTaskBegin(initialTaskInput);
-        verify(taskExecutionListener, times(2)).onTaskBegin(processTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskBegin(shutdownTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).beforeTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
 
         initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
         processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
         shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
 
-        verify(taskExecutionListener, times(1)).onTaskEnd(initialTaskInput);
-        verify(taskExecutionListener, times(2)).onTaskEnd(processTaskInput);
-        verify(taskExecutionListener, times(1)).onTaskEnd(shutdownTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
         verifyNoMoreInteractions(taskExecutionListener);
     }
 

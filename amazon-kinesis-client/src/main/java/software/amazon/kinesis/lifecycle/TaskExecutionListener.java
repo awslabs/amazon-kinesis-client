@@ -17,12 +17,15 @@ package software.amazon.kinesis.lifecycle;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 
 /**
- * A listener for callbacks on task execution lifecycle for for a shard. The implementation for this interface should
- * not perform any blocking operation like remote service calls, because that would block subsequent task executions.
+ * A listener for callbacks on task execution lifecycle for for a shard.
+ *
+ * Note: Recommended not to have a blocking implementation since these methods are
+ * called around the ShardRecordProcessor. A blocking call would result in slowing
+ * down the ShardConsumer.
  */
 public interface TaskExecutionListener {
 
-    void onTaskBegin(TaskExecutionListenerInput input);
+    void beforeTaskExecution(TaskExecutionListenerInput input);
 
-    void onTaskEnd(TaskExecutionListenerInput input);
+    void afterTaskExecution(TaskExecutionListenerInput input);
 }
