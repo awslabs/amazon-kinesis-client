@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.KinesisShardDetector;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementFactory;
@@ -50,6 +51,9 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private final ExecutorService executorService;
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
+    @NonNull
+    private final HierarchicalShardSyncer hierarchicalShardSyncer;
+
     private final long failoverTimeMillis;
     private final long epsilonMillis;
     private final int maxLeasesForWorker;
@@ -162,7 +166,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
                 cacheMissWarningModulus, initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity,
-                TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
+                new HierarchicalShardSyncer(), TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
     }
 
     /**
@@ -191,6 +195,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      * @param cacheMissWarningModulus
      * @param initialLeaseTableReadCapacity
      * @param initialLeaseTableWriteCapacity
+     * @param hierarchicalShardSyncer
      * @param tableCreatorCallback
      */
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final String streamName,
@@ -203,6 +208,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final int maxListShardsRetryAttempts, final int maxCacheMissesBeforeReload,
             final long listShardsCacheAllowedAgeInSeconds, final int cacheMissWarningModulus,
             final long initialLeaseTableReadCapacity, final long initialLeaseTableWriteCapacity,
+            final HierarchicalShardSyncer hierarchicalShardSyncer,
             final TableCreatorCallback tableCreatorCallback) {
         this.kinesisClient = kinesisClient;
         this.streamName = streamName;
@@ -227,6 +233,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         this.cacheMissWarningModulus = cacheMissWarningModulus;
         this.initialLeaseTableReadCapacity = initialLeaseTableReadCapacity;
         this.initialLeaseTableWriteCapacity = initialLeaseTableWriteCapacity;
+        this.hierarchicalShardSyncer = hierarchicalShardSyncer;
         this.tableCreatorCallback = tableCreatorCallback;
     }
 
@@ -253,6 +260,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 ignoreUnexpectedChildShards,
                 shardSyncIntervalMillis,
                 executorService,
+                hierarchicalShardSyncer,
                 metricsFactory);
     }
 

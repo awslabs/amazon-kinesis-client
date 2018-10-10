@@ -231,6 +231,8 @@ public class LeaseManagementConfig {
      */
     private TableCreatorCallback tableCreatorCallback = TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK;
 
+    private HierarchicalShardSyncer hierarchicalShardSyncer = new HierarchicalShardSyncer();
+
     private LeaseManagementFactory leaseManagementFactory;
 
     public LeaseManagementFactory leaseManagementFactory() {
@@ -258,6 +260,7 @@ public class LeaseManagementConfig {
                     cacheMissWarningModulus(),
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
+                    hierarchicalShardSyncer(),
                     tableCreatorCallback());
         }
         return leaseManagementFactory;
