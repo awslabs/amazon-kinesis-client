@@ -46,4 +46,10 @@ public class LifecycleConfig {
      */
     private AggregatorUtil aggregatorUtil = new AggregatorUtil();
 
+    /**
+     * TaskExecutionListener to be used to handle events during task execution lifecycle for a shard.
+     *
+     * <p>Default value: {@link NoOpTaskExecutionListener}</p>
+     */
+    private TaskExecutionListener taskExecutionListener = new NoOpTaskExecutionListener();
 }
