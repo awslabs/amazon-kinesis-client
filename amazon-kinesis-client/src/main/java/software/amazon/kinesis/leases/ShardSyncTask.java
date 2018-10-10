@@ -48,6 +48,8 @@ public class ShardSyncTask implements ConsumerTask {
     private final boolean ignoreUnexpectedChildShards;
     private final long shardSyncTaskIdleTimeMillis;
     @NonNull
+    private final HierarchicalShardSyncer hierarchicalShardSyncer;
+    @NonNull
     private final MetricsFactory metricsFactory;
 
     private final TaskType taskType = TaskType.SHARDSYNC;
@@ -62,7 +64,7 @@ public class ShardSyncTask implements ConsumerTask {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, SHARD_SYNC_TASK_OPERATION);
 
         try {
-            ShardSyncer.checkAndCreateLeasesForNewShards(shardDetector, leaseRefresher, initialPosition,
+            hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
                     cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, scope);
             if (shardSyncTaskIdleTimeMillis > 0) {
                 Thread.sleep(shardSyncTaskIdleTimeMillis);

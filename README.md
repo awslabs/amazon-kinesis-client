@@ -6,6 +6,13 @@ The **Amazon Kinesis Client Library for Java** (Amazon KCL) enables Java develop
 * [Forum][kinesis-forum]
 * [Issues][kinesis-client-library-issues]
 
+### Recommended Upgrade for All Users of the 2.x Amazon Kinesis Client
+**:warning: It's highly recommended for users of version 2.0 of the Amazon Kinesis Client to upgrade to version 2.0.3 or later. A [bug has been](https://github.com/awslabs/amazon-kinesis-client/issues/391) identified in versions prior to 2.0.3 that could cause records to be delivered to the wrong record processor.**  
+
+**:information_source: Amazon Kinesis Client versions 1.x are not impacted.**  
+
+Please open an issue if you have any questions.
+
 ## Features
 
 * Provides an easy-to-use programming model for processing data using Amazon Kinesis
@@ -36,7 +43,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.0.1</version>
+      <version>2.0.3</version>
   </dependency>
   ```
 
@@ -53,26 +60,27 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.0.2 - September 4, 2018)
-[Milestone #22](https://github.com/awslabs/amazon-kinesis-client/milestone/22)
-* Fixed an issue where the a warning would be logged every second if `logWarningForTaskAfterMillis` was set.  
-  The logging for last time of data arrival now respects the value of `logWarningForTaskAfterMillis`.  
-  * [PR #383](https://github.com/awslabs/amazon-kinesis-client/pull/383)
-  * [Issue #381](https://github.com/awslabs/amazon-kinesis-client/issues/381)
-* Moved creation of `WorkerStateChangedListener` and `GracefulShutdownCoordinator` to the `CoordinatorConfig`.
-  Originally the `WorkerStateChangedListener` and `GracefulShutdownCoordinator` were created by methods on the `SchedulerCoordinatorFactory`, but they should have been configuration options.  
-  The original methods have been deprecated, and may be removed at a later date.  
-  * [PR #385](https://github.com/awslabs/amazon-kinesis-client/pull/385)
-  * [PR #388](https://github.com/awslabs/amazon-kinesis-client/pull/388)
-* Removed dependency on Apache Commons Lang 2.6.  
-  The dependency on Apache Commons Lang 2.6 has removed, and all usages updated to use Apache Commons Lang 3.7.  
-  * [PR #386](https://github.com/awslabs/amazon-kinesis-client/pull/386)
-  * [Issue #370](https://github.com/awslabs/amazon-kinesis-client/issues/370)
-* Fixed a typo in the MutliLang Daemon shutdown hook.  
-  * [PR #387](https://github.com/awslabs/amazon-kinesis-client/pull/387)
-* Added method `onAllInitializationAttemptsFailed(Throwable)` to `WorkerStateChangedListener` to report when all initialization attempts have failed.  
-  This method is a default method, and it isn't require to implement the method. This method is only called after all attempts to initialize the `Scheduler` have failed.
-  * [PR #369](https://github.com/awslabs/amazon-kinesis-client/pull/369)
+### Latest Release (2.0.3 - October 8, 2018)
+[Milestone #23](https://github.com/awslabs/amazon-kinesis-client/milestone/23)
+* Fixed an issue where the `KinesisAsyncClient` could be misconfigured to use HTTP 1.1.  
+  Using HTTP 1.1 with `SubscribeToShard` is unsupported, and could cause misdelivery of records to the record processor.  
+  * [Issue #391](https://github.com/awslabs/amazon-kinesis-client/issues/391)
+  * [PR #434](https://github.com/awslabs/amazon-kinesis-client/pull/434)
+  * [PR #433](https://github.com/awslabs/amazon-kinesis-client/pull/433)
+* Lower the severity of `ReadTimeout` exceptions.  
+  `ReadTimeout` exceptions can occur if the client is unable to request data from Kinesis for more than client timeout, which defaults to 30 seconds.  This can occur if the record processor blocks for more than the timeout period.  `ReadTimeout` could also occur as part of [Issue #391](https://github.com/awslabs/amazon-kinesis-client/issues/391).  
+  * [Issue #399](https://github.com/awslabs/amazon-kinesis-client/issues/399)
+  * [PR #403](https://github.com/awslabs/amazon-kinesis-client/pull/403)
+* Added a callback that allows applications to take actions after DynamoDB table creation.  
+  Applications can now install a callback that is called after creating the DynamoDB table by implementing `TableCreatorCallback`.  
+  * [PR #413](https://github.com/awslabs/amazon-kinesis-client/pull/413)
+* Updated the guava dependency to 26.0-jre.  
+  * [PR #420](https://github.com/awslabs/amazon-kinesis-client/pull/420)
+  * [Issue #416](https://github.com/awslabs/amazon-kinesis-client/issues/416)
+* Added some additional debug logging around the initialization of the `FanOutRecordsPublisher`.  
+  * [PR #398](https://github.com/awslabs/amazon-kinesis-client/pull/398)
+* Upgraded AWS SDK version to 2.0.6  
+  * [PR #434](https://github.com/awslabs/amazon-kinesis-client/pull/434)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 

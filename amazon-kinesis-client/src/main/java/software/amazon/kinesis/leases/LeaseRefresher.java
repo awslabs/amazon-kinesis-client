@@ -202,5 +202,4 @@ public interface LeaseRefresher {
      */
     ExtendedSequenceNumber getCheckpoint(String shardId)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException;
-
 }
