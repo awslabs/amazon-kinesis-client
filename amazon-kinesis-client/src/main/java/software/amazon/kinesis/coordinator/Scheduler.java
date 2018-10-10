@@ -47,6 +47,7 @@ import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.leases.ShardSyncTask;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
+import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
@@ -113,6 +114,7 @@ public class Scheduler implements Runnable {
     private final ShardDetector shardDetector;
     private final boolean ignoreUnexpetedChildShards;
     private final AggregatorUtil aggregatorUtil;
+    private final HierarchicalShardSyncer hierarchicalShardSyncer;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -195,6 +197,7 @@ public class Scheduler implements Runnable {
         this.shardDetector = this.shardSyncTaskManager.shardDetector();
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
+        this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer();
     }
 
     /**
@@ -239,7 +242,8 @@ public class Scheduler implements Runnable {
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
                         log.info("Syncing Kinesis shard info");
                         ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetector, leaseRefresher, initialPosition,
-                                cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L, metricsFactory);
+                                cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L, hierarchicalShardSyncer,
+                                metricsFactory);
                         result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                     } else {
                         log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
@@ -575,8 +579,9 @@ public class Scheduler implements Runnable {
                 cleanupLeasesUponShardCompletion,
                 ignoreUnexpetedChildShards,
                 shardDetector,
-                metricsFactory,
-                aggregatorUtil);
+                aggregatorUtil,
+                hierarchicalShardSyncer,
+                metricsFactory);
         return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(), argument);
     }
 

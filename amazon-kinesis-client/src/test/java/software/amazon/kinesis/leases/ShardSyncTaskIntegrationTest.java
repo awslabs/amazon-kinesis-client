@@ -63,6 +63,7 @@ public class ShardSyncTaskIntegrationTest {
 
     private LeaseRefresher leaseRefresher;
     private ShardDetector shardDetector;
+    private HierarchicalShardSyncer hierarchicalShardSyncer;
 
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
@@ -97,6 +98,7 @@ public class ShardSyncTaskIntegrationTest {
 
         shardDetector = new KinesisShardDetector(kinesisClient, STREAM_NAME, 500L, 50,
                 LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS, MAX_CACHE_MISSES_BEFORE_RELOAD, CACHE_MISS_WARNING_MODULUS);
+        hierarchicalShardSyncer = new HierarchicalShardSyncer();
     }
 
     /**
@@ -117,7 +119,7 @@ public class ShardSyncTaskIntegrationTest {
         Set<String> shardIds = shardDetector.listShards().stream().map(Shard::shardId).collect(Collectors.toSet());
         ShardSyncTask syncTask = new ShardSyncTask(shardDetector, leaseRefresher,
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST), false, false, 0L,
-                NULL_METRICS_FACTORY);
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
         syncTask.call();
         List<Lease> leases = leaseRefresher.listLeases();
         Set<String> leaseKeys = new HashSet<>();
