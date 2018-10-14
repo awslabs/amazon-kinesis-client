@@ -113,8 +113,6 @@ public class MultiLangDaemonConfig {
         java.security.Security.setProperty("networkaddress.cache.ttl", "60");
 
         log.info("Using workerId: {}", kinesisClientLibConfig.getWorkerIdentifier());
-        log.info("Using credentials with access key id: {}",
-                kinesisClientLibConfig.getKinesisCredentialsProvider().resolveCredentials().accessKeyId());
 
         StringBuilder userAgent = new StringBuilder(RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT);
         userAgent.append(" ");

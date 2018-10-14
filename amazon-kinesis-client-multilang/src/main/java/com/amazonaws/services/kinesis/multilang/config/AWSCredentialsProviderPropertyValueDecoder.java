@@ -28,7 +28,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
  */
 @Slf4j
 class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecoder<AwsCredentialsProvider> {
-    private static final String AUTH_PREFIX = "com.amazonaws.auth.";
+    private static final String AUTH_PREFIX = "software.amazon.awssdk.auth.credentials.";
     private static final String LIST_DELIMITER = ",";
     private static final String ARG_DELIMITER = "|";
 
@@ -87,7 +87,7 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
             } else {
                 try {
                     Class<?> className = Class.forName(providerName);
-                    credentialsProviders.add((AwsCredentialsProvider) className.newInstance());
+                    credentialsProviders.add((AwsCredentialsProvider) className.getDeclaredMethod("create").invoke(null));
                 } catch (Exception e) {
                     log.debug("Can't find any credentials provider matching {}.", providerName);
                 }

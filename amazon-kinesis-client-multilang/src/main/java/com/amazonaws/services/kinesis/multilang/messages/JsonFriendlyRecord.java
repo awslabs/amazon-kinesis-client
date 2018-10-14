@@ -48,7 +48,18 @@ public class JsonFriendlyRecord {
     public static String ACTION = "record";
 
     public static JsonFriendlyRecord fromKinesisClientRecord(@NonNull final KinesisClientRecord record) {
-        byte[] data = record.data() == null ? null : record.data().array();
+        byte[] data;
+        if (record.data() == null) {
+            data = null;
+        } else {
+            if (record.data().hasArray()) {
+                data = record.data().array();
+            } else {
+                data = new byte[record.data().remaining()];
+                record.data().get(data);
+            }
+        }
+
         return new JsonFriendlyRecord(data, record.partitionKey(), record.sequenceNumber(),
                 record.approximateArrivalTimestamp(), record.subSequenceNumber());
     }
