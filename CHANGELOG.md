@@ -1,5 +1,20 @@
 # Changelog
 
+### Latest Release (2.0.4 - October 18, 2018)
+[Milestone #25](https://github.com/awslabs/amazon-kinesis-client/milestone/25)
+* Added method to retrieve leases from the LeaseCoordinator and LeaseTaker.
+  * [PR #428](https://github.com/awslabs/amazon-kinesis-client/pull/428)
+* Fixed a race condition shutting down the Scheduler before it has completed initialization.
+  * [PR #439](https://github.com/awslabs/amazon-kinesis-client/pull/439)
+  * [Issue #427](https://github.com/awslabs/amazon-kinesis-client/issues/427)
+* Added `HierarchicalShardSyncer` which replaces the static `ShardSyncer`.  
+  `HierarchicalShardSyncer` removes the contention between multiple instances of the Scheduler when running under a single JVM.
+  * [PR #395](https://github.com/awslabs/amazon-kinesis-client/pull/395)
+  * [Issue #415](https://github.com/awslabs/amazon-kinesis-client/issues/415)
+* Added `TaskExecutionListener` which allows monitoring of tasks being executed by the `ShardConsumer`.  
+  The listener is invoked before and after a task is executed by the `ShardConsumer`.
+  * [PR #417](https://github.com/awslabs/amazon-kinesis-client/pull/417)
+
 ### Release 2.0.3 (October 8, 2018)
 [Milestone #23](https://github.com/awslabs/amazon-kinesis-client/milestone/23)
 * Fixed an issue where the `KinesisAsyncClient` could be misconfigured to use HTTP 1.1.  
