@@ -27,6 +27,7 @@ import lombok.Data;
 import lombok.NonNull;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.common.ThreadExceptionReporter;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.Checkpointer;
 
@@ -42,7 +43,7 @@ public class SchedulerCoordinatorFactory implements CoordinatorFactory {
     @Override
     public ExecutorService createExecutorService() {
         return new SchedulerThreadPoolExecutor(
-                new ThreadFactoryBuilder().setNameFormat("ShardRecordProcessor-%04d").build());
+                new ThreadFactoryBuilder().setNameFormat("ShardRecordProcessor-%04d").setUncaughtExceptionHandler(new ThreadExceptionReporter("SchedulerPool")).build());
     }
 
     static class SchedulerThreadPoolExecutor extends ThreadPoolExecutor {

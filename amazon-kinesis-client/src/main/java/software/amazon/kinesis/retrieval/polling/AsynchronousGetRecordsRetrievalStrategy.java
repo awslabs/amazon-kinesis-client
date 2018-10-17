@@ -35,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.ThreadExceptionReporter;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 
@@ -137,7 +138,7 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
         String threadNameFormat = "get-records-worker-" + shardId + "-%d";
         return new ThreadPoolExecutor(CORE_THREAD_POOL_COUNT, maxGetRecordsThreadPool, TIME_TO_KEEP_ALIVE,
                 TimeUnit.SECONDS, new LinkedBlockingQueue<>(1),
-                new ThreadFactoryBuilder().setDaemon(true).setNameFormat(threadNameFormat).build(),
+                new ThreadFactoryBuilder().setDaemon(true).setNameFormat(threadNameFormat).setUncaughtExceptionHandler(new ThreadExceptionReporter("GetRecordsPool-" + shardId)).build(),
                 new ThreadPoolExecutor.AbortPolicy());
     }
 

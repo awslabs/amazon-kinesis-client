@@ -20,6 +20,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.ThreadExceptionReporter;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.DataFetchingStrategy;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -44,7 +45,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
                 Executors
                         .newFixedThreadPool(1,
                                 new ThreadFactoryBuilder().setDaemon(true)
-                                        .setNameFormat("prefetch-cache-" + shardId + "-%04d").build()),
+                                        .setNameFormat("prefetch-cache-" + shardId + "-%04d").setUncaughtExceptionHandler(new ThreadExceptionReporter("PrefetchCachePool-" + shardId)).build()),
                 idleMillisBetweenCalls, metricsFactory, "ProcessTask", shardId);
 
     }
