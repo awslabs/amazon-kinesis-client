@@ -20,6 +20,10 @@
         </encoder>
     </appender>
 
+    <appender name="THREAD_REPORTER" class="software.amazon.kinesis.common.ThreadExceptionReporterTest$ThreadExceptionReporterAppender">
+
+    </appender>
+
     <root level="debug">
         <appender-ref ref="CONSOLE" />
     </root>
@@ -28,4 +32,7 @@
     <logger level="info" name="software.amazon.awssdk.http" />
     <logger level="info" name="io.netty" />
     <logger level="info" name="software.amazon.awssdk.auth.signer" />
+    <logger name="software.amazon.kinesis.common.ThreadExceptionReporter" additivity="false" level="debug">
+        <appender-ref ref="THREAD_REPORTER"/>
+    </logger>
 </configuration>
