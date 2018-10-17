@@ -15,8 +15,10 @@
 package software.amazon.kinesis.common;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
 @Slf4j
+@KinesisClientInternalApi
 public class ThreadExceptionReporter implements Thread.UncaughtExceptionHandler {
 
     private final String threadSource;
