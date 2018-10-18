@@ -43,7 +43,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.0.3</version>
+      <version>2.0.4</version>
   </dependency>
   ```
 
@@ -60,27 +60,20 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.0.3 - October 8, 2018)
-[Milestone #23](https://github.com/awslabs/amazon-kinesis-client/milestone/23)
-* Fixed an issue where the `KinesisAsyncClient` could be misconfigured to use HTTP 1.1.  
-  Using HTTP 1.1 with `SubscribeToShard` is unsupported, and could cause misdelivery of records to the record processor.  
-  * [Issue #391](https://github.com/awslabs/amazon-kinesis-client/issues/391)
-  * [PR #434](https://github.com/awslabs/amazon-kinesis-client/pull/434)
-  * [PR #433](https://github.com/awslabs/amazon-kinesis-client/pull/433)
-* Lower the severity of `ReadTimeout` exceptions.  
-  `ReadTimeout` exceptions can occur if the client is unable to request data from Kinesis for more than client timeout, which defaults to 30 seconds.  This can occur if the record processor blocks for more than the timeout period.  `ReadTimeout` could also occur as part of [Issue #391](https://github.com/awslabs/amazon-kinesis-client/issues/391).  
-  * [Issue #399](https://github.com/awslabs/amazon-kinesis-client/issues/399)
-  * [PR #403](https://github.com/awslabs/amazon-kinesis-client/pull/403)
-* Added a callback that allows applications to take actions after DynamoDB table creation.  
-  Applications can now install a callback that is called after creating the DynamoDB table by implementing `TableCreatorCallback`.  
-  * [PR #413](https://github.com/awslabs/amazon-kinesis-client/pull/413)
-* Updated the guava dependency to 26.0-jre.  
-  * [PR #420](https://github.com/awslabs/amazon-kinesis-client/pull/420)
-  * [Issue #416](https://github.com/awslabs/amazon-kinesis-client/issues/416)
-* Added some additional debug logging around the initialization of the `FanOutRecordsPublisher`.  
-  * [PR #398](https://github.com/awslabs/amazon-kinesis-client/pull/398)
-* Upgraded AWS SDK version to 2.0.6  
-  * [PR #434](https://github.com/awslabs/amazon-kinesis-client/pull/434)
+### Latest Release (2.0.4 - October 18, 2018)
+[Milestone #25](https://github.com/awslabs/amazon-kinesis-client/milestone/25)
+* Added method to retrieve leases from the LeaseCoordinator and LeaseTaker.
+  * [PR #428](https://github.com/awslabs/amazon-kinesis-client/pull/428)
+* Fixed a race condition shutting down the Scheduler before it has completed initialization.
+  * [PR #439](https://github.com/awslabs/amazon-kinesis-client/pull/439)
+  * [Issue #427](https://github.com/awslabs/amazon-kinesis-client/issues/427)
+* Added `HierarchicalShardSyncer` which replaces the static `ShardSyncer`.  
+  `HierarchicalShardSyncer` removes the contention between multiple instances of the Scheduler when running under a single JVM.
+  * [PR #395](https://github.com/awslabs/amazon-kinesis-client/pull/395)
+  * [Issue #415](https://github.com/awslabs/amazon-kinesis-client/issues/415)
+* Added `TaskExecutionListener` which allows monitoring of tasks being executed by the `ShardConsumer`.  
+  The listener is invoked before and after a task is executed by the `ShardConsumer`.
+  * [PR #417](https://github.com/awslabs/amazon-kinesis-client/pull/417)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
