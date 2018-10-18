@@ -1,6 +1,6 @@
 # Changelog
 
-### Latest Release (2.0.4 - October 18, 2018)
+### Release 2.0.4 (October 18, 2018)
 [Milestone #25](https://github.com/awslabs/amazon-kinesis-client/milestone/25)
 * Added method to retrieve leases from the LeaseCoordinator and LeaseTaker.
   * [PR #428](https://github.com/awslabs/amazon-kinesis-client/pull/428)
