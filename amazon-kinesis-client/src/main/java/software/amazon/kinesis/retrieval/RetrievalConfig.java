@@ -88,7 +88,7 @@ public class RetrievalConfig {
 
         if (retrievalFactory == null) {
             if (retrievalSpecificConfig == null) {
-                retrievalSpecificConfig = new FanOutConfig(kinesisClient).streamName(streamName())
+                retrievalSpecificConfig = new FanOutConfig(kinesisClient()).streamName(streamName())
                         .applicationName(applicationName());
             }
             retrievalFactory = retrievalSpecificConfig.retrievalFactory();
