@@ -1024,9 +1024,9 @@ public class ShardSyncerTest {
 
         SequenceNumberRange range0 = ShardObjectHelper.newSequenceNumberRange("11", "102");
         SequenceNumberRange range1 = ShardObjectHelper.newSequenceNumberRange("11", null);
-        SequenceNumberRange range2 = ShardObjectHelper.newSequenceNumberRange("11", "205");
-        SequenceNumberRange range3 = ShardObjectHelper.newSequenceNumberRange("103", "205");
-        SequenceNumberRange range4 = ShardObjectHelper.newSequenceNumberRange("206", null);
+        SequenceNumberRange range2 = ShardObjectHelper.newSequenceNumberRange("11", "210");
+        SequenceNumberRange range3 = ShardObjectHelper.newSequenceNumberRange("103", "210");
+        SequenceNumberRange range4 = ShardObjectHelper.newSequenceNumberRange("211", null);
 
         HashKeyRange hashRange0 = ShardObjectHelper.newHashKeyRange("0", "99");
         HashKeyRange hashRange1 = ShardObjectHelper.newHashKeyRange("100", "199");
