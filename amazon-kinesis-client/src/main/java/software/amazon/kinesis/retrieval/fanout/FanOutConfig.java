@@ -99,9 +99,9 @@ public class FanOutConfig implements RetrievalSpecificConfig {
     }
 
     private FanOutConsumerRegistration createConsumerRegistration() {
-        String consumerToCreate = ObjectUtils.firstNonNull(consumerName, applicationName);
-        return createConsumerRegistration(kinesisClient,
-                Preconditions.checkNotNull(streamName, "streamName must be set for consumer creation"),
+        String consumerToCreate = ObjectUtils.firstNonNull(consumerName(), applicationName());
+        return createConsumerRegistration(kinesisClient(),
+                Preconditions.checkNotNull(streamName(), "streamName must be set for consumer creation"),
                 Preconditions.checkNotNull(consumerToCreate,
                         "applicationName or consumerName must be set for consumer creation"));
 
@@ -109,8 +109,8 @@ public class FanOutConfig implements RetrievalSpecificConfig {
 
     protected FanOutConsumerRegistration createConsumerRegistration(KinesisAsyncClient client, String stream,
                                                                     String consumerToCreate) {
-        return new FanOutConsumerRegistration(client, stream, consumerToCreate, maxDescribeStreamSummaryRetries,
-                maxDescribeStreamConsumerRetries, registerStreamConsumerRetries, retryBackoffMillis);
+        return new FanOutConsumerRegistration(client, stream, consumerToCreate, maxDescribeStreamSummaryRetries(),
+                maxDescribeStreamConsumerRetries(), registerStreamConsumerRetries(), retryBackoffMillis());
     }
 
 }
