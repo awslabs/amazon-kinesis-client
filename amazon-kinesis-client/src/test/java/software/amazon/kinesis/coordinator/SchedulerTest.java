@@ -116,13 +116,15 @@ public class SchedulerTest {
     private ShardDetector shardDetector;
     @Mock
     private Checkpointer checkpoint;
+    @Mock
+    private WorkerStateChangeListener workerStateChangeListener;
 
     @Before
     public void setup() {
         shardRecordProcessorFactory = new TestShardRecordProcessorFactory();
 
         checkpointConfig = new CheckpointConfig().checkpointFactory(new TestKinesisCheckpointFactory());
-        coordinatorConfig = new CoordinatorConfig(applicationName).parentShardPollIntervalMillis(100L);
+        coordinatorConfig = new CoordinatorConfig(applicationName).parentShardPollIntervalMillis(100L).workerStateChangeListener(workerStateChangeListener);
         leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, streamName,
                 workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory());
         lifecycleConfig = new LifecycleConfig();
@@ -257,6 +259,14 @@ public class SchedulerTest {
 
         // verify initialization was retried for maxInitializationAttempts times
         verify(shardDetector, times(maxInitializationAttempts)).listShards();
+    }
+
+    @Test
+    public final void testSchedulerShutdown() {
+        scheduler.shutdown();
+        verify(workerStateChangeListener, times(1)).onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN_STARTED);
+        verify(leaseCoordinator, times(1)).stop();
+        verify(workerStateChangeListener, times(1)).onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
     }
 
 

@@ -476,6 +476,7 @@ public class Scheduler implements Runnable {
                 log.warn("Shutdown requested a second time.");
                 return;
             }
+            workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN_STARTED);
             log.info("Worker shutdown requested.");
 
             // Set shutdown flag, so Worker.run can start shutdown process.
