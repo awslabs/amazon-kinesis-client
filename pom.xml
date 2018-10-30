@@ -25,7 +25,7 @@
   </licenses>
 
   <properties>
-    <aws-java-sdk.version>1.11.400</aws-java-sdk.version>
+    <aws-java-sdk.version>1.11.438</aws-java-sdk.version>
     <sqlite4java.version>1.0.392</sqlite4java.version>
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
