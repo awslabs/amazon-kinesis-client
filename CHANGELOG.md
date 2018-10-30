@@ -1,5 +1,13 @@
 # Changelog
 
+## Release 1.9.3 (October 30, 2018)
+* Upgraded Apache Commons Lang from 2.6 to 3.7.  
+  * [Issue #370](https://github.com/awslabs/amazon-kinesis-client/issues/370)
+  * [PR #406](https://github.com/awslabs/amazon-kinesis-client/pull/406)
+* Upgraded Google Guava from 10.0 to 26.0-jre.  
+  * [Issue #416](https://github.com/awslabs/amazon-kinesis-client/issues/416)
+  * [PR #421](https://github.com/awslabs/amazon-kinesis-client/pull/421)
+
 ## Release 1.9.2 (September 4, 2018)
 * Allow use of Immutable Clients  
   * [Issue #280](https://github.com/awslabs/amazon-kinesis-client/issues/280)
