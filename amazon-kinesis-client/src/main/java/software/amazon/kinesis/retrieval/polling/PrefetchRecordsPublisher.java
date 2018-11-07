@@ -176,7 +176,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         });
     }
 
-    private synchronized void addArrivedRecordsInput(ProcessRecordsInput processRecordsInput) throws InterruptedException {
+    private void addArrivedRecordsInput(ProcessRecordsInput processRecordsInput) throws InterruptedException {
         getRecordsResultQueue.put(processRecordsInput);
         prefetchCounters.added(processRecordsInput);
     }

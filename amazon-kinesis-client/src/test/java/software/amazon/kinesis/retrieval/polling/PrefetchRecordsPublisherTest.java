@@ -15,11 +15,14 @@
 
 package software.amazon.kinesis.retrieval.polling;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doNothing;
@@ -28,17 +31,16 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import lombok.extern.slf4j.Slf4j;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -46,7 +48,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
 
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
@@ -222,10 +227,11 @@ public class PrefetchRecordsPublisherTest {
     @Test
     public void testExpiredIteratorException() {
         log.info("Starting tests");
-        getRecordsCache.start(sequenceNumber, initialPosition);
-
         when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL)).thenThrow(ExpiredIteratorException.class)
                 .thenReturn(getRecordsResponse);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
         doNothing().when(dataFetcher).restartIterator();
 
         getRecordsCache.getNextResult();
@@ -233,6 +239,65 @@ public class PrefetchRecordsPublisherTest {
         sleep(1000);
 
         verify(dataFetcher).restartIterator();
+    }
+
+    @Test(timeout = 1000L)
+    public void testNoDeadlockOnFullQueue() throws Exception {
+        //
+        // Fixes https://github.com/awslabs/amazon-kinesis-client/issues/448
+        //
+        // This test is to verify that the drain and fill of the queue no longer deadlock
+        //
+        GetRecordsResponse response = GetRecordsResponse.builder().records(
+                Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
+                .build();
+        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        //
+        // Wait for the queue to fill up, and the publisher to block on adding items to the queue
+        //
+        while (getRecordsCache.getRecordsResultQueue.size() < MAX_SIZE) {
+            Thread.sleep(0);
+        }
+
+        AtomicInteger receivedItems = new AtomicInteger(0);
+
+        Subscriber<ProcessRecordsInput> subscriber = new Subscriber<ProcessRecordsInput>() {
+            Subscription sub;
+
+            @Override
+            public void onSubscribe(Subscription s) {
+                sub = s;
+                s.request(1);
+            }
+
+            @Override
+            public void onNext(ProcessRecordsInput processRecordsInput) {
+                receivedItems.incrementAndGet();
+                if (receivedItems.get() > MAX_SIZE) {
+                    sub.cancel();
+                } else {
+                    sub.request(1);
+                }
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                log.error("Caught error", t);
+            }
+
+            @Override
+            public void onComplete() {
+
+            }
+        };
+
+        getRecordsCache.subscribe(subscriber);
+
+        assertThat(receivedItems.get(), equalTo(6));
+
     }
 
     @After
