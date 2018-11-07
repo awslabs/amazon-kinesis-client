@@ -21,10 +21,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -47,10 +49,13 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
+import io.reactivex.Flowable;
+import io.reactivex.schedulers.Schedulers;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
@@ -242,11 +247,13 @@ public class PrefetchRecordsPublisherTest {
     }
 
     @Test(timeout = 1000L)
-    public void testNoDeadlockOnFullQueue() throws Exception {
+    public void testNoDeadlockOnFullQueue() {
         //
         // Fixes https://github.com/awslabs/amazon-kinesis-client/issues/448
         //
-        // This test is to verify that the drain of a blocked queue no longer deadlocks
+        // This test is to verify that the drain of a blocked queue no longer deadlocks.
+        // If the test times out before starting the subscriber it means something went wrong while filling the queue.
+        // After the subscriber is started one of the things that can trigger a timeout is a deadlock.
         //
         GetRecordsResponse response = GetRecordsResponse.builder().records(
                 Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
@@ -256,13 +263,18 @@ public class PrefetchRecordsPublisherTest {
         getRecordsCache.start(sequenceNumber, initialPosition);
 
         //
-        // Wait for the queue to fill up, and the publisher to block on adding items to the queue
+        // Wait for the queue to fill up, and the publisher to block on adding items to the queue.
         //
+        log.info("Waiting for queue to fill up");
         while (getRecordsCache.getRecordsResultQueue.size() < MAX_SIZE) {
-            Thread.sleep(0);
+            Thread.yield();
         }
 
+        log.info("Queue is currently at {} starting subscriber", getRecordsCache.getRecordsResultQueue.size());
         AtomicInteger receivedItems = new AtomicInteger(0);
+        final int expectedItems = MAX_SIZE * 3;
+
+        Object lock = new Object();
 
         Subscriber<ProcessRecordsInput> subscriber = new Subscriber<ProcessRecordsInput>() {
             Subscription sub;
@@ -276,7 +288,11 @@ public class PrefetchRecordsPublisherTest {
             @Override
             public void onNext(ProcessRecordsInput processRecordsInput) {
                 receivedItems.incrementAndGet();
-                if (receivedItems.get() > MAX_SIZE) {
+                if (receivedItems.get() >= expectedItems) {
+                    synchronized (lock) {
+                        log.info("Notifying waiters");
+                        lock.notifyAll();
+                    }
                     sub.cancel();
                 } else {
                     sub.request(1);
@@ -286,18 +302,28 @@ public class PrefetchRecordsPublisherTest {
             @Override
             public void onError(Throwable t) {
                 log.error("Caught error", t);
+                throw new RuntimeException(t);
             }
 
             @Override
             public void onComplete() {
-
+                fail("onComplete not expected in this test");
             }
         };
 
-        getRecordsCache.subscribe(subscriber);
-
-        assertThat(receivedItems.get(), equalTo(6));
-
+        synchronized (lock) {
+            log.info("Awaiting notification");
+            Flowable.fromPublisher(getRecordsCache).subscribeOn(Schedulers.computation())
+                    .observeOn(Schedulers.computation(), true, 8).subscribe(subscriber);
+            try {
+                lock.wait();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        verify(getRecordsRetrievalStrategy, atLeast(expectedItems)).getRecords(anyInt());
+        verify(getRecordsRetrievalStrategy, atMost(expectedItems + MAX_SIZE + 1)).getRecords(anyInt());
+        assertThat(receivedItems.get(), equalTo(expectedItems));
     }
 
     @After
