@@ -246,7 +246,7 @@ public class PrefetchRecordsPublisherTest {
         //
         // Fixes https://github.com/awslabs/amazon-kinesis-client/issues/448
         //
-        // This test is to verify that the drain and fill of the queue no longer deadlock
+        // This test is to verify that the drain of a blocked queue no longer deadlocks
         //
         GetRecordsResponse response = GetRecordsResponse.builder().records(
                 Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
