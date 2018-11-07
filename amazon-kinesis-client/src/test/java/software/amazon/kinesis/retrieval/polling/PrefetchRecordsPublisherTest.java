@@ -322,7 +322,6 @@ public class PrefetchRecordsPublisherTest {
             }
         }
         verify(getRecordsRetrievalStrategy, atLeast(expectedItems)).getRecords(anyInt());
-        verify(getRecordsRetrievalStrategy, atMost(expectedItems + MAX_SIZE + 1)).getRecords(anyInt());
         assertThat(receivedItems.get(), equalTo(expectedItems));
     }
 
