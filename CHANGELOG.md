@@ -1,5 +1,15 @@
 # Changelog
 
+### Release 2.0.5 (November 12, 2018)
+[Milestone #26](https://github.com/awslabs/amazon-kinesis-client/milestone/26?closed=1)
+* Fixed a deadlock condition that could occur when using the polling model.  
+  When using the `PollingConfig` and a slower record processor it was possible to hit a deadlock in the retrieval of records. 
+  * [PR #462](https://github.com/awslabs/amazon-kinesis-client/pull/462)
+  * [Issue #448](https://github.com/awslabs/amazon-kinesis-client/issues/448)
+* Adjusted `RetrievalConfig`, and `FanOutConfig` to use accessors instead of direct member access.  
+  * [PR #453](https://github.com/awslabs/amazon-kinesis-client/pull/453)
+
+
 ### Release 2.0.4 (October 18, 2018)
 [Milestone #25](https://github.com/awslabs/amazon-kinesis-client/milestone/25)
 * Added method to retrieve leases from the LeaseCoordinator and LeaseTaker.
