@@ -61,20 +61,14 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.0.4 - October 18, 2018)
-[Milestone #25](https://github.com/awslabs/amazon-kinesis-client/milestone/25)
-* Added method to retrieve leases from the LeaseCoordinator and LeaseTaker.
-  * [PR #428](https://github.com/awslabs/amazon-kinesis-client/pull/428)
-* Fixed a race condition shutting down the Scheduler before it has completed initialization.
-  * [PR #439](https://github.com/awslabs/amazon-kinesis-client/pull/439)
-  * [Issue #427](https://github.com/awslabs/amazon-kinesis-client/issues/427)
-* Added `HierarchicalShardSyncer` which replaces the static `ShardSyncer`.  
-  `HierarchicalShardSyncer` removes the contention between multiple instances of the Scheduler when running under a single JVM.
-  * [PR #395](https://github.com/awslabs/amazon-kinesis-client/pull/395)
-  * [Issue #415](https://github.com/awslabs/amazon-kinesis-client/issues/415)
-* Added `TaskExecutionListener` which allows monitoring of tasks being executed by the `ShardConsumer`.  
-  The listener is invoked before and after a task is executed by the `ShardConsumer`.
-  * [PR #417](https://github.com/awslabs/amazon-kinesis-client/pull/417)
+### Latest Release (2.0.5 - November 12, 2018)
+[Milestone #26](https://github.com/awslabs/amazon-kinesis-client/milestone/26?closed=1)
+* Fixed a deadlock condition that could occur when using the polling model.  
+  It was possible to hit a deadlock in the retrieval of records When using the `PollingConfig` and a slow running record processor.
+  * [PR #462](https://github.com/awslabs/amazon-kinesis-client/pull/462)
+  * [Issue #448](https://github.com/awslabs/amazon-kinesis-client/issues/448)
+* Adjusted `RetrievalConfig`, and `FanOutConfig` to use accessors instead of direct member access.  
+  * [PR #453](https://github.com/awslabs/amazon-kinesis-client/pull/453)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
