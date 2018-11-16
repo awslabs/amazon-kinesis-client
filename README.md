@@ -84,6 +84,6 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 [kinesis-guide-kpl]: http://docs.aws.amazon.com//kinesis/latest/dev/developing-producers-with-kpl.html
 [kinesis-guide-consumer-deaggregation]: http://docs.aws.amazon.com//kinesis/latest/dev/kinesis-kpl-consumer-deaggregation.html
 [kclpy]: https://github.com/awslabs/amazon-kinesis-client-python
-[multi-lang-protocol]: https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/multilang/package-info.java
+[multi-lang-protocol]: https://github.com/awslabs/amazon-kinesis-client/blob/master/amazon-kinesis-client-multilang/src/main/java/com/amazonaws/services/kinesis/multilang/package-info.java
 [changelog-md]: https://github.com/awslabs/amazon-kinesis-client/blob/master/CHANGELOG.md
 [migration-guide]: https://docs.aws.amazon.com/streams/latest/dev/kcl-migration.html
