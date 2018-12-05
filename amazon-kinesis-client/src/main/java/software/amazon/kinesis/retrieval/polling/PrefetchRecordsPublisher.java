@@ -23,6 +23,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
+import lombok.Data;
+import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -44,6 +46,7 @@ import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -75,8 +78,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private final KinesisDataFetcher dataFetcher;
     private final String shardId;
 
-    private Subscriber<? super ProcessRecordsInput> subscriber;
+    private Subscriber<? super RecordsRetrieved> subscriber;
     private final AtomicLong requestedResponses = new AtomicLong(0);
+    private String highestSequenceNumber;
 
     /**
      * Constructor for the PrefetchRecordsPublisher. This cache prefetches records from Kinesis and stores them in a
@@ -124,6 +128,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             throw new IllegalStateException("ExecutorService has been shutdown.");
         }
 
+        highestSequenceNumber = extendedSequenceNumber.sequenceNumber();
         dataFetcher.initialize(extendedSequenceNumber, initialPositionInStreamExtended);
 
         if (!started) {
@@ -133,7 +138,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         started = true;
     }
 
-    ProcessRecordsInput getNextResult() {
+    RecordsRetrieved getNextResult() {
         if (executorService.isShutdown()) {
             throw new IllegalStateException("Shutdown has been called on the cache, can't accept new requests.");
         }
@@ -146,10 +151,14 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             result = getRecordsResultQueue.take().toBuilder().cacheExitTime(Instant.now()).build();
             prefetchCounters.removed(result);
             requestedResponses.decrementAndGet();
+            if (result.records() != null && !result.records().isEmpty()) {
+                highestSequenceNumber = result.records().get(result.records().size() - 1).sequenceNumber();
+            }
         } catch (InterruptedException e) {
             log.error("Interrupted while getting records from the cache", e);
         }
-        return result;
+
+        return new PrefetchRecordsRetrieved(result, highestSequenceNumber);
     }
 
     @Override
@@ -160,7 +169,12 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public void subscribe(Subscriber<? super ProcessRecordsInput> s) {
+    public void restartFrom(RecordsRetrieved processRecordsInput) {
+
+    }
+
+    @Override
+    public void subscribe(Subscriber<? super RecordsRetrieved> s) {
         subscriber = s;
         subscriber.onSubscribe(new Subscription() {
             @Override
@@ -184,6 +198,19 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private synchronized void drainQueueForRequests() {
         while (requestedResponses.get() > 0 && !getRecordsResultQueue.isEmpty()) {
             subscriber.onNext(getNextResult());
+        }
+    }
+
+    @Accessors(fluent = true)
+    @Data
+    private static class PrefetchRecordsRetrieved implements RecordsRetrieved {
+
+        final ProcessRecordsInput processRecordsInput;
+        final String lastSequenceNumber;
+
+        @Override
+        public ProcessRecordsInput processRecordsInput() {
+            return processRecordsInput;
         }
     }
 

@@ -45,6 +45,7 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -62,7 +63,7 @@ public class FanOutRecordsPublisherTest {
     @Mock
     private Subscription subscription;
     @Mock
-    private Subscriber<ProcessRecordsInput> subscriber;
+    private Subscriber<RecordsRetrieved> subscriber;
 
     private SubscribeToShardEvent batchEvent;
 
@@ -80,7 +81,7 @@ public class FanOutRecordsPublisherTest {
 
         List<ProcessRecordsInput> receivedInput = new ArrayList<>();
 
-        source.subscribe(new Subscriber<ProcessRecordsInput>() {
+        source.subscribe(new Subscriber<RecordsRetrieved>() {
             Subscription subscription;
 
             @Override
@@ -90,8 +91,8 @@ public class FanOutRecordsPublisherTest {
             }
 
             @Override
-            public void onNext(ProcessRecordsInput input) {
-                receivedInput.add(input);
+            public void onNext(RecordsRetrieved input) {
+                receivedInput.add(input.processRecordsInput());
                 subscription.request(1);
             }
 
@@ -147,7 +148,7 @@ public class FanOutRecordsPublisherTest {
 
         List<ProcessRecordsInput> receivedInput = new ArrayList<>();
 
-        source.subscribe(new Subscriber<ProcessRecordsInput>() {
+        source.subscribe(new Subscriber<RecordsRetrieved>() {
             Subscription subscription;
 
             @Override
@@ -157,8 +158,8 @@ public class FanOutRecordsPublisherTest {
             }
 
             @Override
-            public void onNext(ProcessRecordsInput input) {
-                receivedInput.add(input);
+            public void onNext(RecordsRetrieved input) {
+                receivedInput.add(input.processRecordsInput());
                 subscription.request(1);
             }
 
@@ -206,7 +207,7 @@ public class FanOutRecordsPublisherTest {
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
                 .forClass(FanOutRecordsPublisher.RecordFlow.class);
-        ArgumentCaptor<ProcessRecordsInput> inputCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
+        ArgumentCaptor<RecordsRetrieved> inputCaptor = ArgumentCaptor.forClass(RecordsRetrieved.class);
 
         source.subscribe(subscriber);
 
@@ -219,7 +220,7 @@ public class FanOutRecordsPublisherTest {
         verify(subscriber).onNext(inputCaptor.capture());
         verify(subscriber).onComplete();
 
-        ProcessRecordsInput input = inputCaptor.getValue();
+        ProcessRecordsInput input = inputCaptor.getValue().processRecordsInput();
         assertThat(input.isAtShardEnd(), equalTo(true));
         assertThat(input.records().isEmpty(), equalTo(true));
     }
@@ -325,7 +326,7 @@ public class FanOutRecordsPublisherTest {
         }
     }
 
-    private static class NonFailingSubscriber implements Subscriber<ProcessRecordsInput> {
+    private static class NonFailingSubscriber implements Subscriber<RecordsRetrieved> {
         final List<ProcessRecordsInput> received = new ArrayList<>();
         Subscription subscription;
 
@@ -336,8 +337,8 @@ public class FanOutRecordsPublisherTest {
         }
 
         @Override
-        public void onNext(ProcessRecordsInput input) {
-            received.add(input);
+        public void onNext(RecordsRetrieved input) {
+            received.add(input.processRecordsInput());
             subscription.request(1);
         }
 

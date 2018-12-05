@@ -66,6 +66,7 @@ import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -131,7 +132,7 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput result = getRecordsCache.getNextResult();
+        ProcessRecordsInput result = getRecordsCache.getNextResult().processRecordsInput();
 
         assertEquals(expectedRecords, result.records());
 
@@ -200,7 +201,7 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult();
+        ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult().processRecordsInput();
 
         verify(executorService).execute(any());
         assertEquals(expectedRecords, processRecordsInput.records());
@@ -209,7 +210,7 @@ public class PrefetchRecordsPublisherTest {
 
         sleep(2000);
 
-        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult();
+        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult().processRecordsInput();
         assertNotEquals(processRecordsInput, processRecordsInput2);
         assertEquals(expectedRecords, processRecordsInput2.records());
         assertNotEquals(processRecordsInput2.timeSpentInCache(), Duration.ZERO);
@@ -276,7 +277,7 @@ public class PrefetchRecordsPublisherTest {
 
         Object lock = new Object();
 
-        Subscriber<ProcessRecordsInput> subscriber = new Subscriber<ProcessRecordsInput>() {
+        Subscriber<RecordsRetrieved> subscriber = new Subscriber<RecordsRetrieved>() {
             Subscription sub;
 
             @Override
@@ -286,7 +287,7 @@ public class PrefetchRecordsPublisherTest {
             }
 
             @Override
-            public void onNext(ProcessRecordsInput processRecordsInput) {
+            public void onNext(RecordsRetrieved recordsRetrieved) {
                 receivedItems.incrementAndGet();
                 if (receivedItems.get() >= expectedItems) {
                     synchronized (lock) {

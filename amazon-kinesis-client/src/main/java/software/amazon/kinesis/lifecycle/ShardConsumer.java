@@ -44,6 +44,7 @@ import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
 /**
@@ -129,14 +130,21 @@ public class ShardConsumer {
     }
 
     private void startSubscriptions() {
-        Flowable.fromPublisher(recordsPublisher).subscribeOn(scheduler).observeOn(scheduler, true, bufferSize)
-                .subscribe(subscriber);
+        synchronized (lockObject) {
+            if (lastAccepted != null) {
+                recordsPublisher.restartFrom(lastAccepted);
+            }
+            Flowable.fromPublisher(recordsPublisher).subscribeOn(scheduler).observeOn(scheduler, true, bufferSize)
+                    .subscribe(subscriber);
+
+        }
     }
 
     private final Object lockObject = new Object();
     private Instant lastRequestTime = null;
+    private RecordsRetrieved lastAccepted = null;
 
-    private class InternalSubscriber implements Subscriber<ProcessRecordsInput> {
+    private class InternalSubscriber implements Subscriber<RecordsRetrieved> {
 
         private Subscription subscription;
         private volatile Instant lastDataArrival;
@@ -148,13 +156,16 @@ public class ShardConsumer {
         }
 
         @Override
-        public void onNext(ProcessRecordsInput input) {
+        public void onNext(RecordsRetrieved input) {
             try {
                 synchronized (lockObject) {
                     lastRequestTime = null;
                 }
                 lastDataArrival = Instant.now();
-                handleInput(input.toBuilder().cacheExitTime(Instant.now()).build(), subscription);
+                handleInput(input.processRecordsInput().toBuilder().cacheExitTime(Instant.now()).build(), subscription);
+                synchronized (lockObject) {
+                    lastAccepted = input;
+                }
             } catch (Throwable t) {
                 log.warn("{}: Caught exception from handleInput", shardInfo.shardId(), t);
                 dispatchFailure.set(t);
