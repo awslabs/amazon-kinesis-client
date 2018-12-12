@@ -1,16 +1,16 @@
 /*
- * Copyright 2012-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.leases.impl;
 
@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.leases.util.DynamoUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -386,7 +387,19 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
                         + " because the lease counter was not " + lease.getLeaseCounter());
             }
 
-            return false;
+            // If we had a spurious retry during the Dynamo update, then this conditional PUT failure
+            // might be incorrect. So, we get the item straight away and check if the lease owner + lease counter
+            // are what we expected.
+            String expectedOwner = lease.getLeaseOwner();
+            Long expectedCounter = lease.getLeaseCounter() + 1;
+            T updatedLease = getLease(lease.getLeaseKey());
+            if (updatedLease == null || !expectedOwner.equals(updatedLease.getLeaseOwner()) ||
+                    !expectedCounter.equals(updatedLease.getLeaseCounter())) {
+                return false;
+            }
+
+            LOG.info("Detected spurious renewal failure for lease with key " + lease.getLeaseKey()
+                    + ", but recovered");
         } catch (AmazonClientException e) {
             throw convertAndRethrowExceptions("renew", lease.getLeaseKey(), e);
         }
@@ -564,6 +577,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
     protected DependencyException convertAndRethrowExceptions(String operation, String leaseKey, AmazonClientException e)
         throws ProvisionedThroughputException, InvalidStateException {
         if (e instanceof ProvisionedThroughputExceededException) {
+            LOG.warn("Provisioned Throughput on the lease table has been exceeded. It's recommended that you increase the IOPs on the table. Failure to increase the IOPs may cause the application to not make progress.");
             throw new ProvisionedThroughputException(e);
         } else if (e instanceof ResourceNotFoundException) {
             // @formatter:on

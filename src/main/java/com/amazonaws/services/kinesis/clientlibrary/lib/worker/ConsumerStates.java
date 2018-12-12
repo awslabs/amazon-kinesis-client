@@ -1,3 +1,17 @@
+/*
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
+ *
+ *  http://aws.amazon.com/asl/
+ *
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
+ */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 /**
@@ -237,9 +251,14 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new InitializeTask(consumer.getShardInfo(), consumer.getRecordProcessor(), consumer.getCheckpoint(),
-                    consumer.getRecordProcessorCheckpointer(), consumer.getDataFetcher(),
-                    consumer.getTaskBackoffTimeMillis(), consumer.getStreamConfig());
+            return new InitializeTask(consumer.getShardInfo(),
+                    consumer.getRecordProcessor(),
+                    consumer.getCheckpoint(),
+                    consumer.getRecordProcessorCheckpointer(),
+                    consumer.getDataFetcher(),
+                    consumer.getTaskBackoffTimeMillis(),
+                    consumer.getStreamConfig(),
+                    consumer.getGetRecordsCache());
         }
 
         @Override
@@ -293,9 +312,14 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new ProcessTask(consumer.getShardInfo(), consumer.getStreamConfig(), consumer.getRecordProcessor(),
-                    consumer.getRecordProcessorCheckpointer(), consumer.getDataFetcher(),
-                    consumer.getTaskBackoffTimeMillis(), consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist());
+            return new ProcessTask(consumer.getShardInfo(),
+                    consumer.getStreamConfig(),
+                    consumer.getRecordProcessor(),
+                    consumer.getRecordProcessorCheckpointer(),
+                    consumer.getDataFetcher(),
+                    consumer.getTaskBackoffTimeMillis(),
+                    consumer.isSkipShardSyncAtWorkerInitializationIfLeasesExist(),
+                    consumer.getGetRecordsCache());
         }
 
         @Override
@@ -354,8 +378,10 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new ShutdownNotificationTask(consumer.getRecordProcessor(), consumer.getRecordProcessorCheckpointer(),
-                    consumer.getShutdownNotification(), consumer.getShardInfo());
+            return new ShutdownNotificationTask(consumer.getRecordProcessor(),
+                    consumer.getRecordProcessorCheckpointer(),
+                    consumer.getShutdownNotification(),
+                    consumer.getShardInfo());
         }
 
         @Override
@@ -494,12 +520,17 @@ class ConsumerStates {
 
         @Override
         public ITask createTask(ShardConsumer consumer) {
-            return new ShutdownTask(consumer.getShardInfo(), consumer.getRecordProcessor(),
-                    consumer.getRecordProcessorCheckpointer(), consumer.getShutdownReason(),
+            return new ShutdownTask(consumer.getShardInfo(),
+                    consumer.getRecordProcessor(),
+                    consumer.getRecordProcessorCheckpointer(),
+                    consumer.getShutdownReason(),
                     consumer.getStreamConfig().getStreamProxy(),
                     consumer.getStreamConfig().getInitialPositionInStream(),
-                    consumer.isCleanupLeasesOfCompletedShards(), consumer.getLeaseManager(),
-                    consumer.getTaskBackoffTimeMillis());
+                    consumer.isCleanupLeasesOfCompletedShards(),
+                    consumer.isIgnoreUnexpectedChildShards(),
+                    consumer.getLeaseManager(),
+                    consumer.getTaskBackoffTimeMillis(),
+                    consumer.getGetRecordsCache());
         }
 
         @Override

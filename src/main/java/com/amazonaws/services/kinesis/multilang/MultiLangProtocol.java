@@ -1,24 +1,22 @@
 /*
- * Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.multilang;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason;
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
@@ -27,9 +25,15 @@ import com.amazonaws.services.kinesis.multilang.messages.InitializeMessage;
 import com.amazonaws.services.kinesis.multilang.messages.Message;
 import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
+import com.amazonaws.services.kinesis.multilang.messages.ShutdownRequestedMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
-
 import lombok.extern.apachecommons.CommonsLog;
+
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * An implementation of the multi language protocol.
@@ -40,10 +44,11 @@ class MultiLangProtocol {
     private MessageReader messageReader;
     private MessageWriter messageWriter;
     private final InitializationInput initializationInput;
+    private KinesisClientLibConfiguration configuration;
 
     /**
      * Constructor.
-     * 
+     *
      * @param messageReader
      *            A message reader.
      * @param messageWriter
@@ -52,16 +57,17 @@ class MultiLangProtocol {
      *            information about the shard this processor is starting to process
      */
     MultiLangProtocol(MessageReader messageReader, MessageWriter messageWriter,
-            InitializationInput initializationInput) {
+            InitializationInput initializationInput, KinesisClientLibConfiguration configuration) {
         this.messageReader = messageReader;
         this.messageWriter = messageWriter;
         this.initializationInput = initializationInput;
+        this.configuration = configuration;
     }
 
     /**
      * Writes an {@link InitializeMessage} to the child process's STDIN and waits for the child process to respond with
      * a {@link StatusMessage} on its STDOUT.
-     * 
+     *
      * @return Whether or not this operation succeeded.
      */
     boolean initialize() {
@@ -76,7 +82,7 @@ class MultiLangProtocol {
     /**
      * Writes a {@link ProcessRecordsMessage} to the child process's STDIN and waits for the child process to respond
      * with a {@link StatusMessage} on its STDOUT.
-     * 
+     *
      * @param processRecordsInput
      *            The records, and associated metadata, to process.
      * @return Whether or not this operation succeeded.
@@ -89,7 +95,7 @@ class MultiLangProtocol {
     /**
      * Writes a {@link ShutdownMessage} to the child process's STDIN and waits for the child process to respond with a
      * {@link StatusMessage} on its STDOUT.
-     * 
+     *
      * @param checkpointer A checkpointer.
      * @param reason Why this processor is being shutdown.
      * @return Whether or not this operation succeeded.
@@ -100,13 +106,25 @@ class MultiLangProtocol {
     }
 
     /**
+     * Writes a {@link ShutdownRequestedMessage} to the child process's STDIN and waits for the child process to respond with a
+     * {@link StatusMessage} on its STDOUT.
+     *
+     * @param checkpointer A checkpointer.
+     * @return Whether or not this operation succeeded.
+     */
+    boolean shutdownRequested(IRecordProcessorCheckpointer checkpointer) {
+        Future<Boolean> writeFuture = messageWriter.writeShutdownRequestedMessage();
+        return waitForStatusMessage(ShutdownRequestedMessage.ACTION, checkpointer, writeFuture);
+    }
+
+    /**
      * Waits for a {@link StatusMessage} for a particular action. If a {@link CheckpointMessage} is received, then this
      * method will attempt to checkpoint with the provided {@link IRecordProcessorCheckpointer}. This method returns
      * true if writing to the child process succeeds and the status message received back was for the correct action and
      * all communications with the child process regarding checkpointing were successful. Note that whether or not the
      * checkpointing itself was successful is not the concern of this method. This method simply cares whether it was
      * able to successfully communicate the results of its attempts to checkpoint.
-     * 
+     *
      * @param action
      *            What action is being waited on.
      * @param checkpointer
@@ -137,44 +155,75 @@ class MultiLangProtocol {
 
     /**
      * Waits for status message and verifies it against the expectation
-     * 
+     *
      * @param action
      *            What action is being waited on.
      * @param checkpointer
      *            the original process records request
      * @return Whether or not this operation succeeded.
      */
-    private boolean waitForStatusMessage(String action, IRecordProcessorCheckpointer checkpointer) {
-        StatusMessage statusMessage = null;
-        while (statusMessage == null) {
+    boolean waitForStatusMessage(String action, IRecordProcessorCheckpointer checkpointer) {
+        Optional<StatusMessage> statusMessage = Optional.empty();
+        while (!statusMessage.isPresent()) {
             Future<Message> future = this.messageReader.getNextMessageFromSTDOUT();
-            try {
-                Message message = future.get();
-                // Note that instanceof doubles as a check against a value being null
-                if (message instanceof CheckpointMessage) {
-                    boolean checkpointWriteSucceeded = checkpoint((CheckpointMessage) message, checkpointer).get();
-                    if (!checkpointWriteSucceeded) {
-                        return false;
-                    }
-                } else if (message instanceof StatusMessage) {
-                    statusMessage = (StatusMessage) message;
-                }
-            } catch (InterruptedException e) {
-                log.error(String.format("Interrupted while waiting for %s message for shard %s", action,
-                        initializationInput.getShardId()));
-                return false;
-            } catch (ExecutionException e) {
-                log.error(String.format("Failed to get status message for %s action for shard %s", action,
-                        initializationInput.getShardId()), e);
+            Optional<Message> message = configuration.getTimeoutInSeconds()
+            .map(second -> futureMethod(() -> future.get(second, TimeUnit.SECONDS), action))
+            .orElse(futureMethod(future::get, action));
+
+            if (!message.isPresent()) {
                 return false;
             }
+
+            Optional<Boolean> checkpointFailed = message.filter(m -> m instanceof CheckpointMessage )
+            .map(m -> (CheckpointMessage) m)
+            .flatMap(m -> futureMethod(() -> checkpoint(m, checkpointer).get(), "Checkpoint"))
+            .map(checkpointSuccess -> !checkpointSuccess);
+
+            if (checkpointFailed.orElse(false)) {
+                return false;
+            }
+
+            statusMessage = message.filter(m -> m instanceof StatusMessage).map(m -> (StatusMessage) m );
         }
-        return this.validateStatusMessage(statusMessage, action);
+        return this.validateStatusMessage(statusMessage.get(), action);
+    }
+
+    private interface FutureMethod<T> {
+        T get() throws InterruptedException, TimeoutException, ExecutionException;
+    }
+
+    private <T> Optional<T> futureMethod(FutureMethod<T> fm, String action) {
+        try {
+            return Optional.of(fm.get());
+        } catch (InterruptedException e) {
+            log.error(String.format("Interrupted while waiting for %s message for shard %s", action,
+                    initializationInput.getShardId()), e);
+        } catch (ExecutionException e) {
+            log.error(String.format("Failed to get status message for %s action for shard %s", action,
+                    initializationInput.getShardId()), e);
+        } catch (TimeoutException e) {
+            log.error(String.format("Timedout to get status message for %s action for shard %s. Terminating...",
+                    action,
+                    initializationInput.getShardId()),
+                    e);
+            haltJvm(1);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * This method is used to halt the JVM. Use this method with utmost caution, since this method will kill the JVM
+     * without calling the Shutdown hooks.
+     *
+     * @param exitStatus The exit status with which the JVM is to be halted.
+     */
+    protected void haltJvm(int exitStatus) {
+        Runtime.getRuntime().halt(exitStatus);
     }
 
     /**
      * Utility for confirming that the status message is for the provided action.
-     * 
+     *
      * @param statusMessage The status of the child process.
      * @param action The action that was being waited on.
      * @return Whether or not this operation succeeded.
@@ -192,7 +241,7 @@ class MultiLangProtocol {
      * provided {@link CheckpointMessage}. If no sequence number is provided, i.e. the sequence number is null, then
      * this method will call {@link IRecordProcessorCheckpointer#checkpoint()}. The method returns a future representing
      * the attempt to write the result of this checkpoint attempt to the child process.
-     * 
+     *
      * @param checkpointMessage A checkpoint message.
      * @param checkpointer A checkpointer.
      * @return Whether or not this operation succeeded.

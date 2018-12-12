@@ -17,7 +17,11 @@ package com.amazonaws.services.kinesis.clientlibrary.proxies;
 /** 
  * Interface for a KinesisProxyFactory.
  *
+ * @deprecated Deprecating since KinesisProxy is just created once, there is no use of a factory. There is no
+ * replacement for this class. This class will be removed in the next major/minor release.
+ * 
  */
+@Deprecated
 public interface IKinesisProxyFactory {
 
     /**

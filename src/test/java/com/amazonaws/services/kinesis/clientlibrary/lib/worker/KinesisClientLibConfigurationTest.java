@@ -1,25 +1,26 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
-import junit.framework.Assert;
+import java.util.Date;
 
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -35,7 +36,7 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorF
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
 
-import java.util.Date;
+import junit.framework.Assert;
 
 public class KinesisClientLibConfigurationTest {
     private static final long INVALID_LONG = 0L;
@@ -84,7 +85,8 @@ public class KinesisClientLibConfigurationTest {
                         TEST_VALUE_LONG,
                         TEST_VALUE_INT,
                         skipCheckpointValidationValue,
-                        null);
+                        null,
+                        TEST_VALUE_LONG);
     }
 
     @Test
@@ -94,7 +96,8 @@ public class KinesisClientLibConfigurationTest {
         // Try each argument at one time.
         KinesisClientLibConfiguration config = null;
         long[] longValues =
-        { TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG };
+                { TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG, TEST_VALUE_LONG,
+                        TEST_VALUE_LONG };
         for (int i = 0; i < PARAMETER_COUNT; i++) {
             longValues[i] = INVALID_LONG;
             try {
@@ -122,7 +125,8 @@ public class KinesisClientLibConfigurationTest {
                                 longValues[5],
                                 TEST_VALUE_INT,
                                 skipCheckpointValidationValue,
-                                null);
+                                null,
+                                longValues[6]);
             } catch (IllegalArgumentException e) {
                 System.out.println(e.getMessage());
             }
@@ -156,7 +160,8 @@ public class KinesisClientLibConfigurationTest {
                                 TEST_VALUE_LONG,
                                 intValues[1],
                                 skipCheckpointValidationValue,
-                                null);
+                                null,
+                                TEST_VALUE_LONG);
             } catch (IllegalArgumentException e) {
                 System.out.println(e.getMessage());
             }
@@ -263,8 +268,8 @@ public class KinesisClientLibConfigurationTest {
         IRecordProcessorFactory processorFactory = Mockito.mock(IRecordProcessorFactory.class);
         new Worker(processorFactory, kclConfig);
 
-        Mockito.verify(kclConfig, Mockito.times(9)).getRegionName();
-        Mockito.verify(kclConfig, Mockito.times(4)).getKinesisEndpoint();
+        Mockito.verify(kclConfig, Mockito.times(5)).getRegionName();
+        Mockito.verify(kclConfig, Mockito.times(2)).getKinesisEndpoint();
 
         kclConfig = Mockito.spy(
                 new KinesisClientLibConfiguration("Test", "Test", credentialsProvider, "0")
@@ -272,59 +277,11 @@ public class KinesisClientLibConfigurationTest {
 
         new Worker(processorFactory, kclConfig);
 
-        Mockito.verify(kclConfig, Mockito.times(3)).getRegionName();
-        Mockito.verify(kclConfig, Mockito.times(3)).getKinesisEndpoint();
+        Mockito.verify(kclConfig, Mockito.times(2)).getRegionName();
+        Mockito.verify(kclConfig, Mockito.times(2)).getKinesisEndpoint();
     }
 
-    @Test
-    public void testKCLConfigurationWithMultiRegionWithIlligalRegionName() {
-        // test with illegal region name
-        AWSCredentialsProvider credentialsProvider = Mockito.mock(AWSCredentialsProvider.class);
 
-        KinesisClientLibConfiguration kclConfig =
-                new KinesisClientLibConfiguration("Test", "Test", credentialsProvider, "0");
-        try {
-            kclConfig = kclConfig.withRegionName("abcd");
-            Assert.fail("No expected Exception is thrown.");
-        } catch (IllegalArgumentException e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
-    @Test
-    public void testKCLConfigurationWithMultiRegionWithIlligalRegionNameInFullConstructor() {
-        // test with illegal region name
-        Mockito.mock(AWSCredentialsProvider.class);
-        try {
-            new KinesisClientLibConfiguration(TEST_STRING,
-                        TEST_STRING,
-                        TEST_STRING,
-                        TEST_STRING,
-                        null,
-                        null,
-                        null,
-                        null,
-                        TEST_VALUE_LONG,
-                        TEST_STRING,
-                        3,
-                        TEST_VALUE_LONG,
-                        false,
-                        TEST_VALUE_LONG,
-                        TEST_VALUE_LONG,
-                        true,
-                        new ClientConfiguration(),
-                        new ClientConfiguration(),
-                        new ClientConfiguration(),
-                        TEST_VALUE_LONG,
-                        TEST_VALUE_LONG,
-                        1,
-                        skipCheckpointValidationValue,
-                        "abcd");
-            Assert.fail("No expected Exception is thrown.");
-        } catch(IllegalArgumentException e) {
-            System.out.println(e.getMessage());
-        }
-    }
 
     @Test
     public void testKCLConfigurationMetricsDefaults() {
@@ -401,5 +358,15 @@ public class KinesisClientLibConfigurationTest {
         } catch (Exception e) {
             fail("Should not have thrown");
         }
+    }
+
+    @Test
+    public void testKCLConfigurationWithIgnoreUnexpectedChildShards() {
+        KinesisClientLibConfiguration config =
+                new KinesisClientLibConfiguration("TestApplication", "TestStream", null, "TestWorker");
+        // By default, unexpected child shards should not be ignored.
+        assertFalse(config.shouldIgnoreUnexpectedChildShards());
+        config = config.withIgnoreUnexpectedChildShards(true);
+        assertTrue(config.shouldIgnoreUnexpectedChildShards());
     }
 }

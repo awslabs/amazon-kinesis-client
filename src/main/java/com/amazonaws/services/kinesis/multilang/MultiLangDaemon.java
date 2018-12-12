@@ -1,25 +1,28 @@
 /*
- * Copyright 2014-2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.multilang;
 
 import java.io.IOException;
 import java.io.PrintStream;
+
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -140,10 +143,25 @@ public class MultiLangDaemon implements Callable<Integer> {
         ExecutorService executorService = config.getExecutorService();
 
         // Daemon
-        MultiLangDaemon daemon = new MultiLangDaemon(
+        final MultiLangDaemon daemon = new MultiLangDaemon(
                 config.getKinesisClientLibConfiguration(),
                 config.getRecordProcessorFactory(),
                 executorService);
+
+        final long shutdownGraceMillis = config.getKinesisClientLibConfiguration().getShutdownGraceMillis();
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                LOG.info("Process terminanted, will initiate shutdown.");
+                try {
+                    Future<Void> fut = daemon.worker.requestShutdown();
+                    fut.get(shutdownGraceMillis, TimeUnit.MILLISECONDS);
+                    LOG.info("Process shutdown is complete.");
+                } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                    LOG.error("Encountered an error during shutdown.", e);
+                }
+            }
+        });
 
         Future<Integer> future = executorService.submit(daemon);
         try {

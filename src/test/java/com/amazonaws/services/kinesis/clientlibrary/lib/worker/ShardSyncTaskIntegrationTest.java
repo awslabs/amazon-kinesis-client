@@ -90,6 +90,7 @@ public class ShardSyncTaskIntegrationTest {
                 new KinesisClientLeaseManager("ShardSyncTaskIntegrationTest",
                         new AmazonDynamoDBClient(credentialsProvider),
                         useConsistentReads);
+
         kinesisProxy =
                 new KinesisProxy(STREAM_NAME,
                         new DefaultAWSCredentialsProviderChain(),
@@ -106,7 +107,6 @@ public class ShardSyncTaskIntegrationTest {
     /**
      * Test method for call().
      * 
-     * @throws CapacityExceededException
      * @throws DependencyException
      * @throws InvalidStateException
      * @throws ProvisionedThroughputException
@@ -123,6 +123,7 @@ public class ShardSyncTaskIntegrationTest {
         ShardSyncTask syncTask = new ShardSyncTask(kinesisProxy,
                 leaseManager,
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST),
+                false,
                 false,
                 0L);
         syncTask.call();

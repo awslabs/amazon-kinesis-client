@@ -1,31 +1,37 @@
 /*
- * Copyright 2012-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License. 
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.util.Collections;
+import java.util.Date;
+
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.services.kinesis.model.GetRecordsResult;
-import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
-import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.SentinelCheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.MetricsCollectingKinesisProxyDecorator;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
+import com.amazonaws.services.kinesis.model.GetRecordsResult;
+import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
+import com.amazonaws.services.kinesis.model.ShardIteratorType;
+import com.amazonaws.util.CollectionUtils;
+import com.google.common.collect.Iterables;
 
-import java.util.Date;
+import lombok.Data;
 
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
@@ -39,6 +45,8 @@ class KinesisDataFetcher {
     private final String shardId;
     private boolean isShardEndReached;
     private boolean isInitialized;
+    private String lastKnownSequenceNumber;
+    private InitialPositionInStreamExtended initialPositionInStream;
 
     /**
      *
@@ -47,8 +55,7 @@ class KinesisDataFetcher {
      */
     public KinesisDataFetcher(IKinesisProxy kinesisProxy, ShardInfo shardInfo) {
         this.shardId = shardInfo.getShardId();
-        this.kinesisProxy =
-                new MetricsCollectingKinesisProxyDecorator("KinesisDataFetcher", kinesisProxy, this.shardId);
+        this.kinesisProxy = new MetricsCollectingKinesisProxyDecorator("KinesisDataFetcher", kinesisProxy, this.shardId);
     }
 
     /**
@@ -57,28 +64,68 @@ class KinesisDataFetcher {
      * @param maxRecords Max records to fetch
      * @return list of records of up to maxRecords size
      */
-    public GetRecordsResult getRecords(int maxRecords) {
+    public DataFetcherResult getRecords(int maxRecords) {
         if (!isInitialized) {
             throw new IllegalArgumentException("KinesisDataFetcher.getRecords called before initialization.");
         }
-
-        GetRecordsResult response = null;
+        
         if (nextIterator != null) {
             try {
-                response = kinesisProxy.get(nextIterator, maxRecords);
-                nextIterator = response.getNextShardIterator();
+                return new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
-                nextIterator = null;
+                return TERMINAL_RESULT;
+            }
+        } else {
+            return TERMINAL_RESULT;
+        }
+    }
+
+    final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
+        @Override
+        public GetRecordsResult getResult() {
+            return new GetRecordsResult().withMillisBehindLatest(null).withRecords(Collections.emptyList())
+                    .withNextShardIterator(null);
+        }
+
+        @Override
+        public GetRecordsResult accept() {
+            isShardEndReached = true;
+            return getResult();
+        }
+
+        @Override
+        public boolean isShardEnd() {
+            return isShardEndReached;
+        }
+    };
+
+    @Data
+    class AdvancingResult implements DataFetcherResult {
+
+        final GetRecordsResult result;
+
+        @Override
+        public GetRecordsResult getResult() {
+            return result;
+        }
+
+        @Override
+        public GetRecordsResult accept() {
+            nextIterator = result.getNextShardIterator();
+            if (!CollectionUtils.isNullOrEmpty(result.getRecords())) {
+                lastKnownSequenceNumber = Iterables.getLast(result.getRecords()).getSequenceNumber();
             }
             if (nextIterator == null) {
                 isShardEndReached = true;
             }
-        } else {
-            isShardEndReached = true;
+            return getResult();
         }
 
-        return response;
+        @Override
+        public boolean isShardEnd() {
+            return isShardEndReached;
+        }
     }
 
     /**
@@ -122,6 +169,8 @@ class KinesisDataFetcher {
         if (nextIterator == null) {
             isShardEndReached = true;
         }
+        this.lastKnownSequenceNumber = sequenceNumber;
+        this.initialPositionInStream = initialPositionInStream;
     }
 
     /**
@@ -176,6 +225,17 @@ class KinesisDataFetcher {
             LOG.info("Caught ResourceNotFoundException when getting an iterator for shard " + shardId, e);
         }
         return iterator;
+    }
+
+    /**
+     * Gets a new iterator from the last known sequence number i.e. the sequence number of the last record from the last
+     * getRecords call.
+     */
+    public void restartIterator() {
+        if (StringUtils.isEmpty(lastKnownSequenceNumber) || initialPositionInStream == null) {
+            throw new IllegalStateException("Make sure to initialize the KinesisDataFetcher before restarting the iterator.");
+        }
+        advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream);
     }
 
     /**

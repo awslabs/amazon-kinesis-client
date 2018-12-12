@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.interfaces;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
+import com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint.Checkpoint;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 
 /**
@@ -45,5 +46,31 @@ public interface ICheckpoint {
      * @throws KinesisClientLibException Thrown if we are unable to fetch the checkpoint
      */
     ExtendedSequenceNumber getCheckpoint(String shardId) throws KinesisClientLibException;
+
+    /**
+     * Get the current checkpoint stored for the specified shard, which holds the sequence numbers for the checkpoint
+     * and pending checkpoint. Useful for checking that the parent shard has been completely processed before we start
+     * processing the child shard.
+     *
+     * @param shardId Current checkpoint for this shard is fetched
+     * @return Current checkpoint object for this shard, null if there is no record for this shard.
+     * @throws KinesisClientLibException Thrown if we are unable to fetch the checkpoint
+     */
+    Checkpoint getCheckpointObject(String shardId) throws KinesisClientLibException;
+
+
+    /**
+     * Record intent to checkpoint for a shard. Upon failover, the pendingCheckpointValue will be passed to the new
+     * RecordProcessor's initialize() method.
+     *
+     * @param shardId Checkpoint is specified for this shard.
+     * @param pendingCheckpoint Value of the pending checkpoint (e.g. Kinesis sequence number and subsequence number)
+     * @param concurrencyToken Used with conditional writes to prevent stale updates
+     *        (e.g. if there was a fail over to a different record processor, we don't want to
+     *        overwrite it's checkpoint)
+     * @throws KinesisClientLibException Thrown if we were unable to save the checkpoint
+     */
+    void prepareCheckpoint(String shardId, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
+        throws KinesisClientLibException;
 
 }

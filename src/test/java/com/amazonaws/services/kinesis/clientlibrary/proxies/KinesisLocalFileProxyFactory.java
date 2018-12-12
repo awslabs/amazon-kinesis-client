@@ -33,7 +33,6 @@ public class KinesisLocalFileProxyFactory implements IKinesisProxyFactory {
     private static final String DEFAULT_TEST_PROXY_FILE = "defaultKinesisProxyLocalFile";
     
     private IKinesisProxy testKinesisProxy;
-    
 
     /** 
      * @param fileName File to be used for stream data.
@@ -60,5 +59,4 @@ public class KinesisLocalFileProxyFactory implements IKinesisProxyFactory {
     public IKinesisProxy getProxy(String streamARN) {
         return testKinesisProxy;
     }
-
 }

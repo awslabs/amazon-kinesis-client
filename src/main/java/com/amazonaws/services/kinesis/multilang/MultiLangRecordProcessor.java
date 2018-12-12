@@ -1,16 +1,16 @@
 /*
- * Copyright 2014-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *  Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- * Licensed under the Amazon Software License (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
+ *  Licensed under the Amazon Software License (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
  *
- * http://aws.amazon.com/asl/
+ *  http://aws.amazon.com/asl/
  *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
  */
 package com.amazonaws.services.kinesis.multilang;
 
@@ -20,6 +20,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer;
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -29,13 +34,14 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+
 /**
  * A record processor that manages creating a child process that implements the multi language protocol and connecting
  * that child process's input and outputs to a {@link MultiLangProtocol} object and calling the appropriate methods on
  * that object when its corresponding {@link #initialize}, {@link #processRecords}, and {@link #shutdown} methods are
  * called.
  */
-public class MultiLangRecordProcessor implements IRecordProcessor {
+public class MultiLangRecordProcessor implements IRecordProcessor, IShutdownNotificationAware {
 
     private static final Log LOG = LogFactory.getLog(MultiLangRecordProcessor.class);
     private static final int EXIT_VALUE = 1;
@@ -60,6 +66,8 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
 
     private MultiLangProtocol protocol;
 
+    private KinesisClientLibConfiguration configuration;
+
     @Override
     public void initialize(InitializationInput initializationInput) {
         try {
@@ -82,7 +90,7 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
             // Submit the error reader for execution
             stderrReadTask = executorService.submit(readSTDERRTask);
 
-            protocol = new MultiLangProtocol(messageReader, messageWriter, initializationInput);
+            protocol = new MultiLangProtocol(messageReader, messageWriter, initializationInput, configuration);
             if (!protocol.initialize()) {
                 throw new RuntimeException("Failed to initialize child process");
             }
@@ -136,6 +144,20 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
         }
     }
 
+    @Override
+    public void shutdownRequested(IRecordProcessorCheckpointer checkpointer) {
+        LOG.info("Shutdown is requested.");
+        if (!initialized) {
+            LOG.info("Record processor was not initialized so no need to initiate a final checkpoint.");
+            return;
+        }
+        LOG.info("Requesting a checkpoint on shutdown notification.");
+        if (!protocol.shutdownRequested(checkpointer)) {
+            LOG.error("Child process failed to complete shutdown notification.");
+        }
+    }
+
+
     /**
      * Used to tell whether the processor has been shutdown already.
      */
@@ -154,9 +176,9 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
      *            An obejct mapper.
      */
     MultiLangRecordProcessor(ProcessBuilder processBuilder, ExecutorService executorService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, KinesisClientLibConfiguration configuration) {
         this(processBuilder, executorService, objectMapper, new MessageWriter(), new MessageReader(),
-                new DrainChildSTDERRTask());
+                new DrainChildSTDERRTask(), configuration);
     }
 
     /**
@@ -176,13 +198,16 @@ public class MultiLangRecordProcessor implements IRecordProcessor {
      *            Error reader to read from child process's stderr
      */
     MultiLangRecordProcessor(ProcessBuilder processBuilder, ExecutorService executorService, ObjectMapper objectMapper,
-            MessageWriter messageWriter, MessageReader messageReader, DrainChildSTDERRTask readSTDERRTask) {
+                             MessageWriter messageWriter, MessageReader messageReader, DrainChildSTDERRTask readSTDERRTask,
+                             KinesisClientLibConfiguration configuration) {
         this.executorService = executorService;
         this.processBuilder = processBuilder;
         this.objectMapper = objectMapper;
         this.messageWriter = messageWriter;
         this.messageReader = messageReader;
         this.readSTDERRTask = readSTDERRTask;
+        this.configuration = configuration;
+
 
         this.state = ProcessState.ACTIVE;
     }
