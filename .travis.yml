@@ -1,6 +1,6 @@
 language: java
 jdk:
-  - openjdk8
+  - openjdk7
+  - oraclejdk7
   - oraclejdk8
 sudo: false
-dist: trusty
