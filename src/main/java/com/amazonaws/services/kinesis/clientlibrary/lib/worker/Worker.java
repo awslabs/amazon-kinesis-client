@@ -66,6 +66,7 @@ public class Worker implements Runnable {
     private static final Log LOG = LogFactory.getLog(Worker.class);
 
     private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
+    private static final int MAX_RETRIES = 4;
 
     private WorkerLog wlog = new WorkerLog();
 
@@ -370,38 +371,42 @@ public class Worker implements Runnable {
 
     @VisibleForTesting
     void runProcessLoop() {
-        try {
-            boolean foundCompletedShard = false;
-            Set<ShardInfo> assignedShards = new HashSet<>();
-            for (ShardInfo shardInfo : getShardInfoForAssignments()) {
-                ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
-                if (shardConsumer.isShutdown() && shardConsumer.getShutdownReason().equals(ShutdownReason.TERMINATE)) {
-                    foundCompletedShard = true;
-                } else {
-                    shardConsumer.consumeShard();
-                }
-                assignedShards.add(shardInfo);
-            }
-
-            if (foundCompletedShard) {
-                controlServer.syncShardAndLeaseInfo(null);
-            }
-
-            // clean up shard consumers for unassigned shards
-            cleanupShardConsumers(assignedShards);
-
-            wlog.info("Sleeping ...");
-            Thread.sleep(idleTimeInMilliseconds);
-        } catch (Exception e) {
-            LOG.error(String.format("Worker.run caught exception, sleeping for %s milli seconds!",
-                    String.valueOf(idleTimeInMilliseconds)), e);
+        for (int i = 0; ; i++) {
             try {
+                boolean foundCompletedShard = false;
+                Set<ShardInfo> assignedShards = new HashSet<>();
+                for (ShardInfo shardInfo : getShardInfoForAssignments()) {
+                    ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
+                    if (shardConsumer.isShutdown() && shardConsumer.getShutdownReason().equals(ShutdownReason.TERMINATE)) {
+                        foundCompletedShard = true;
+                    } else {
+                        shardConsumer.consumeShard();
+                    }
+                    assignedShards.add(shardInfo);
+                }
+
+                if (foundCompletedShard) {
+                    controlServer.syncShardAndLeaseInfo(null);
+                }
+
+                // clean up shard consumers for unassigned shards
+                cleanupShardConsumers(assignedShards);
+
+                wlog.info("Sleeping ...");
                 Thread.sleep(idleTimeInMilliseconds);
-            } catch (InterruptedException ex) {
-                LOG.info("Worker: sleep interrupted after catching exception ", ex);
+            } catch (Exception e) {
+                if (i > MAX_RETRIES) throw new RuntimeException("Giving up after " + i + " retries", e);
+
+                LOG.error(String.format("Worker.run caught exception, sleeping for %s milli seconds!",
+                        String.valueOf(idleTimeInMilliseconds)), e);
+                try {
+                    Thread.sleep(idleTimeInMilliseconds);
+                } catch (InterruptedException ex) {
+                    LOG.info("Worker: sleep interrupted after catching exception ", ex);
+                }
             }
+            wlog.resetInfoLogging();
         }
-        wlog.resetInfoLogging();
     }
 
     private void initialize() {
