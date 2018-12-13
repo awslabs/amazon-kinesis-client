@@ -80,7 +80,7 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                   Class<?> className = Class.forName(nameAndArgs[0]);
                   Constructor<?> c = className.getConstructor(argTypes);
                   credentialsProviders.add((AWSCredentialsProvider) c.newInstance(
-                        Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length)));
+                          (Object[]) Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length)));
               } catch (Exception e) {
                   LOG.debug("Can't find any credentials provider matching " + providerName + ".");
               }
