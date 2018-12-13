@@ -28,9 +28,6 @@ class GracefulShutdownContext {
         this.shutdownCompleteLatch = shutdownCompleteLatch;
         this.notificationCompleteLatch = notificationCompleteLatch;
         this.worker = worker;
-        Objects.requireNonNull(shutdownCompleteLatch);
-        Objects.requireNonNull(notificationCompleteLatch);
-        Objects.requireNonNull(worker);
     }
 
     boolean isShutdownAlreadyCompleted() {
