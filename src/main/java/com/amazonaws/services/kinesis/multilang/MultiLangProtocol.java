@@ -27,7 +27,7 @@ import com.amazonaws.services.kinesis.multilang.messages.ProcessRecordsMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownMessage;
 import com.amazonaws.services.kinesis.multilang.messages.ShutdownRequestedMessage;
 import com.amazonaws.services.kinesis.multilang.messages.StatusMessage;
-import lombok.extern.apachecommons.CommonsLog;
+import org.apache.commons.logging.impl.SimpleLog;
 
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -38,8 +38,8 @@ import java.util.concurrent.TimeoutException;
 /**
  * An implementation of the multi language protocol.
  */
-@CommonsLog
 class MultiLangProtocol {
+    private static final org.apache.commons.logging.Log log = org.apache.commons.logging.LogFactory.getLog(SimpleLog.class);
 
     private MessageReader messageReader;
     private MessageWriter messageWriter;

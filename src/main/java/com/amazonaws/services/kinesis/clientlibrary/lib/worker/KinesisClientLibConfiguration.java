@@ -22,13 +22,10 @@ import org.apache.commons.lang3.Validate;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
-
-import lombok.Getter;
 
 /**
  * Configuration for the Amazon Kinesis Client Library.
@@ -231,28 +228,14 @@ public class KinesisClientLibConfiguration {
     private ShardPrioritization shardPrioritization;
     private long shutdownGraceMillis;
 
-    @Getter
+    /* there should be getters for the following */
     private Optional<Integer> timeoutInSeconds = Optional.empty();
-
-    @Getter
     private Optional<Integer> retryGetRecordsInSeconds = Optional.empty();
-
-    @Getter
     private Optional<Integer> maxGetRecordsThreadPool = Optional.empty();
-
-    @Getter
     private int maxLeaseRenewalThreads = DEFAULT_MAX_LEASE_RENEWAL_THREADS;
-
-    @Getter
     private RecordsFetcherFactory recordsFetcherFactory;
-    
-    @Getter
     private Optional<Long> logWarningForTaskAfterMillis = Optional.empty();
-    
-    @Getter
     private long listShardsBackoffTimeInMillis = DEFAULT_LIST_SHARDS_BACKOFF_TIME_IN_MILLIS;
-    
-    @Getter
     private int maxListShardsRetryAttempts = DEFAULT_MAX_LIST_SHARDS_RETRY_ATTEMPTS;
 
     /**
@@ -1415,5 +1398,37 @@ public class KinesisClientLibConfiguration {
         checkIsValuePositive("maxListShardsRetryAttempts", maxListShardsRetryAttempts);
         this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
         return this;
+    }
+
+    public Optional<Integer> getTimeoutInSeconds() {
+        return timeoutInSeconds;
+    }
+
+    public Optional<Integer> getRetryGetRecordsInSeconds() {
+        return retryGetRecordsInSeconds;
+    }
+
+    public Optional<Integer> getMaxGetRecordsThreadPool() {
+        return maxGetRecordsThreadPool;
+    }
+
+    public int getMaxLeaseRenewalThreads() {
+        return maxLeaseRenewalThreads;
+    }
+
+    public RecordsFetcherFactory getRecordsFetcherFactory() {
+        return recordsFetcherFactory;
+    }
+
+    public Optional<Long> getLogWarningForTaskAfterMillis() {
+        return logWarningForTaskAfterMillis;
+    }
+
+    public long getListShardsBackoffTimeInMillis() {
+        return listShardsBackoffTimeInMillis;
+    }
+
+    public int getMaxListShardsRetryAttempts() {
+        return maxListShardsRetryAttempts;
     }
 }

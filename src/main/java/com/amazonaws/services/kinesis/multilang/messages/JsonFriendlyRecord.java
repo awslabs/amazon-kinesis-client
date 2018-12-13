@@ -20,15 +20,10 @@ import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord;
 import com.amazonaws.services.kinesis.model.Record;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import lombok.Getter;
-import lombok.Setter;
-
 /**
  * Class for encoding Record objects to json. Needed because Records have byte buffers for their data field which causes
  * problems for the json library we're using.
  */
-@Getter
-@Setter
 public class JsonFriendlyRecord {
     private byte[] data;
     private String partitionKey;
@@ -66,4 +61,43 @@ public class JsonFriendlyRecord {
         return ACTION;
     }
 
+    public byte[] getData() {
+        return data;
+    }
+
+    public void setData(byte[] data) {
+        this.data = data;
+    }
+
+    public String getPartitionKey() {
+        return partitionKey;
+    }
+
+    public void setPartitionKey(String partitionKey) {
+        this.partitionKey = partitionKey;
+    }
+
+    public String getSequenceNumber() {
+        return sequenceNumber;
+    }
+
+    public void setSequenceNumber(String sequenceNumber) {
+        this.sequenceNumber = sequenceNumber;
+    }
+
+    public Date getApproximateArrivalTimestamp() {
+        return approximateArrivalTimestamp;
+    }
+
+    public void setApproximateArrivalTimestamp(Date approximateArrivalTimestamp) {
+        this.approximateArrivalTimestamp = approximateArrivalTimestamp;
+    }
+
+    public Long getSubSequenceNumber() {
+        return subSequenceNumber;
+    }
+
+    public void setSubSequenceNumber(Long subSequenceNumber) {
+        this.subSequenceNumber = subSequenceNumber;
+    }
 }

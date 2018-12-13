@@ -18,17 +18,17 @@ import java.util.concurrent.Executors;
 
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.commons.logging.impl.SimpleLog;
 
-import lombok.extern.apachecommons.CommonsLog;
-
-@CommonsLog
 public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
+    private static final org.apache.commons.logging.Log log = org.apache.commons.logging.LogFactory.getLog(SimpleLog.class);
+
     private int maxPendingProcessRecordsInput = 3;
     private int maxByteSize = 8 * 1024 * 1024;
     private int maxRecordsCount = 30000;
     private long idleMillisBetweenCalls = 1500L;
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
-    
+
     @Override
     public GetRecordsCache createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId,
                                                 IMetricsFactory metricsFactory, int maxRecords) {

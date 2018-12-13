@@ -15,14 +15,10 @@
 package com.amazonaws.services.kinesis.multilang.messages;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
-import lombok.Getter;
-import lombok.Setter;
 
 /**
  * An initialize message is sent to the client's subprocess to indicate that it should perform its initialization steps.
  */
-@Getter
-@Setter
 public class InitializeMessage extends Message {
     /**
      * The name used for the action field in {@link Message}.
@@ -59,4 +55,27 @@ public class InitializeMessage extends Message {
 
     }
 
+    public String getShardId() {
+        return shardId;
+    }
+
+    public void setShardId(String shardId) {
+        this.shardId = shardId;
+    }
+
+    public String getSequenceNumber() {
+        return sequenceNumber;
+    }
+
+    public void setSequenceNumber(String sequenceNumber) {
+        this.sequenceNumber = sequenceNumber;
+    }
+
+    public Long getSubSequenceNumber() {
+        return subSequenceNumber;
+    }
+
+    public void setSubSequenceNumber(Long subSequenceNumber) {
+        this.subSequenceNumber = subSequenceNumber;
+    }
 }

@@ -15,20 +15,17 @@
 
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.time.Duration;
-import java.time.Instant;
-
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
-
-import lombok.extern.apachecommons.CommonsLog;
+import org.apache.commons.logging.impl.SimpleLog;
 
 /**
  * This is the BlockingGetRecordsCache class. This class blocks any calls to the getRecords on the
  * GetRecordsRetrievalStrategy class.
  */
-@CommonsLog
 public class BlockingGetRecordsCache implements GetRecordsCache {
+    private static final org.apache.commons.logging.Log log = org.apache.commons.logging.LogFactory.getLog(SimpleLog.class);
+
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 

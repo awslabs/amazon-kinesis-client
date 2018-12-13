@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -31,9 +32,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
-
-import lombok.NonNull;
-import lombok.extern.apachecommons.CommonsLog;
+import org.apache.commons.logging.impl.SimpleLog;
 
 /**
  * This is the prefetch caching class, this class spins up a thread if prefetching is enabled. That thread fetches the
@@ -43,9 +42,10 @@ import lombok.extern.apachecommons.CommonsLog;
  * be present in the cache across multiple GetRecordsResult object. If no data is available in the cache, the call from
  * the record processor is blocked till records are retrieved from Kinesis.
  */
-@CommonsLog
 public class PrefetchGetRecordsCache implements GetRecordsCache {
+    private static final org.apache.commons.logging.Log log = org.apache.commons.logging.LogFactory.getLog(SimpleLog.class);
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
+
     LinkedBlockingQueue<ProcessRecordsInput> getRecordsResultQueue;
     private int maxPendingProcessRecordsInput;
     private int maxByteSize;
@@ -78,14 +78,16 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
      * @param executorService Executor service for the cache
      * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
      */
-    public PrefetchGetRecordsCache(final int maxPendingProcessRecordsInput, final int maxByteSize, final int maxRecordsCount,
+    public PrefetchGetRecordsCache(final int maxPendingProcessRecordsInput,
+                                   final int maxByteSize,
+                                   final int maxRecordsCount,
                                    final int maxRecordsPerCall,
-                                   @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
-                                   @NonNull final ExecutorService executorService,
+                                   final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+                                   final ExecutorService executorService,
                                    final long idleMillisBetweenCalls,
-                                   @NonNull final IMetricsFactory metricsFactory,
-                                   @NonNull final String operation,
-                                   @NonNull final String shardId) {
+                                   final IMetricsFactory metricsFactory,
+                                   final String operation,
+                                   final String shardId) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
@@ -101,6 +103,11 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         this.operation = operation;
         this.dataFetcher = this.getRecordsRetrievalStrategy.getDataFetcher();
         this.shardId = shardId;
+        Objects.requireNonNull(getRecordsRetrievalStrategy);
+        Objects.requireNonNull(executorService);
+        Objects.requireNonNull(metricsFactory);
+        Objects.requireNonNull(operation);
+        Objects.requireNonNull(shardId);
     }
 
     @Override

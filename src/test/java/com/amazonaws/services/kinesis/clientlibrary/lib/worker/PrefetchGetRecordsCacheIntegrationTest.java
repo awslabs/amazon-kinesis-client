@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.apache.commons.logging.impl.SimpleLog;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -49,14 +50,12 @@ import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.Record;
 
-import lombok.extern.apachecommons.CommonsLog;
-
 /**
  * These are the integration tests for the PrefetchGetRecordsCache class. 
  */
 @RunWith(MockitoJUnitRunner.class)
-@CommonsLog
 public class PrefetchGetRecordsCacheIntegrationTest {
+    private static final org.apache.commons.logging.Log log = org.apache.commons.logging.LogFactory.getLog(SimpleLog.class);
     private static final int MAX_SIZE = 3;
     private static final int MAX_BYTE_SIZE = 5 * 1024 * 1024;
     private static final int MAX_RECORDS_COUNT = 30_000;

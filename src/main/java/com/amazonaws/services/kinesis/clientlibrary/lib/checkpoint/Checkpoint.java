@@ -1,12 +1,13 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.checkpoint;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
-import lombok.Data;
+
+import java.util.Objects;
 
 /**
  * A class encapsulating the 2 pieces of state stored in a checkpoint.
  */
-@Data public class Checkpoint {
+public class Checkpoint {
 
     private final ExtendedSequenceNumber checkpoint;
     private final ExtendedSequenceNumber pendingCheckpoint;
@@ -23,5 +24,35 @@ import lombok.Data;
         }
         this.checkpoint = checkpoint;
         this.pendingCheckpoint = pendingCheckpoint;
+    }
+
+    @Override
+    public String toString() {
+        return "Checkpoint{" +
+                "checkpoint=" + checkpoint +
+                ", pendingCheckpoint=" + pendingCheckpoint +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Checkpoint that = (Checkpoint) o;
+        return Objects.equals(checkpoint, that.checkpoint) &&
+                Objects.equals(pendingCheckpoint, that.pendingCheckpoint);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(checkpoint, pendingCheckpoint);
+    }
+
+    public ExtendedSequenceNumber getPendingCheckpoint() {
+        return pendingCheckpoint;
+    }
+
+    public ExtendedSequenceNumber getCheckpoint() {
+        return checkpoint;
     }
 }

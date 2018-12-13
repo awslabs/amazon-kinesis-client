@@ -18,13 +18,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -56,11 +50,6 @@ import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamStatus;
 
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
-
 /**
  * Kinesis proxy - used to make calls to Amazon Kinesis (e.g. fetch data records and list of shards).
  */
@@ -82,14 +71,9 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
     private ShardIterationState shardIterationState = null;
 
-    @Setter(AccessLevel.PACKAGE)
-    private volatile Map<String, Shard> cachedShardMap = null;
-    @Setter(AccessLevel.PACKAGE)
-    @Getter(AccessLevel.PACKAGE)
-    private volatile Instant lastCacheUpdateTime = null;
-    @Setter(AccessLevel.PACKAGE)
-    @Getter(AccessLevel.PACKAGE)
-    private AtomicInteger cacheMisses = new AtomicInteger(0);
+    volatile Map<String, Shard> cachedShardMap = null;
+    volatile Instant lastCacheUpdateTime = null;
+    AtomicInteger cacheMisses = new AtomicInteger(0);
 
     private final String streamName;
 
@@ -575,7 +559,26 @@ public class KinesisProxy implements IKinesisProxyExtended {
         return response;
     }
 
-    @Data
+    public void setCachedShardMap(Map<String, Shard> cachedShardMap) {
+        this.cachedShardMap = cachedShardMap;
+    }
+
+    public void setLastCacheUpdateTime(Instant lastCacheUpdateTime) {
+        this.lastCacheUpdateTime = lastCacheUpdateTime;
+    }
+
+    public void setCacheMisses(AtomicInteger cacheMisses) {
+        this.cacheMisses = cacheMisses;
+    }
+
+    public Instant getLastCacheUpdateTime() {
+        return lastCacheUpdateTime;
+    }
+
+    public AtomicInteger getCacheMisses() {
+        return cacheMisses;
+    }
+
     static class ShardIterationState {
 
         private List<Shard> shards;
@@ -594,6 +597,46 @@ public class KinesisProxy implements IKinesisProxyExtended {
             if (lastShardId == null || lastShardId.compareTo(lastShard.getShardId()) < 0) {
                 lastShardId = lastShard.getShardId();
             }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ShardIterationState that = (ShardIterationState) o;
+            return Objects.equals(shards, that.shards) &&
+                    Objects.equals(lastShardId, that.lastShardId);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(shards, lastShardId);
+        }
+
+        public List<Shard> getShards() {
+            return shards;
+        }
+
+        public void setShards(List<Shard> shards) {
+            Objects.requireNonNull(shards);
+            this.shards = shards;
+        }
+
+        public String getLastShardId() {
+            return lastShardId;
+        }
+
+        public void setLastShardId(String lastShardId) {
+            Objects.requireNonNull(lastShardId);
+            this.lastShardId = lastShardId;
+        }
+
+        @Override
+        public String toString() {
+            return "ShardIterationState{" +
+                    "shards=" + shards +
+                    ", lastShardId='" + lastShardId + '\'' +
+                    '}';
         }
     }
 

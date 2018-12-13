@@ -14,16 +14,11 @@
  */
 package com.amazonaws.services.kinesis.multilang.messages;
 
-import lombok.Getter;
-import lombok.Setter;
-
 /**
  * A checkpoint message is sent by the client's subprocess to indicate to the kcl processor that it should attempt to
  * checkpoint. The processor sends back a checkpoint message as an acknowledgement that it attempted to checkpoint along
  * with an error message which corresponds to the names of exceptions that a checkpointer can throw.
  */
-@Getter
-@Setter
 public class CheckpointMessage extends Message {
     /**
      * The name used for the action field in {@link Message}.
@@ -66,4 +61,27 @@ public class CheckpointMessage extends Message {
         }
     }
 
+    public String getSequenceNumber() {
+        return sequenceNumber;
+    }
+
+    public void setSequenceNumber(String sequenceNumber) {
+        this.sequenceNumber = sequenceNumber;
+    }
+
+    public Long getSubSequenceNumber() {
+        return subSequenceNumber;
+    }
+
+    public void setSubSequenceNumber(Long subSequenceNumber) {
+        this.subSequenceNumber = subSequenceNumber;
+    }
+
+    public String getError() {
+        return error;
+    }
+
+    public void setError(String error) {
+        this.error = error;
+    }
 }

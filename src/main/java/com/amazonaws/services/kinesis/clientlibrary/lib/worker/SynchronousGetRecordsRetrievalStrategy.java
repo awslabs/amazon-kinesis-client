@@ -15,16 +15,19 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
-import lombok.Data;
-import lombok.NonNull;
+
+import java.util.Objects;
 
 /**
  *
  */
-@Data
 public class SynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrievalStrategy {
-    @NonNull
     private final KinesisDataFetcher dataFetcher;
+
+    public SynchronousGetRecordsRetrievalStrategy(KinesisDataFetcher dataFetcher) {
+        this.dataFetcher = dataFetcher;
+        Objects.requireNonNull(dataFetcher);
+    }
 
     @Override
     public GetRecordsResult getRecords(final int maxRecords) {
@@ -46,5 +49,25 @@ public class SynchronousGetRecordsRetrievalStrategy implements GetRecordsRetriev
     @Override
     public KinesisDataFetcher getDataFetcher() {
         return dataFetcher;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SynchronousGetRecordsRetrievalStrategy that = (SynchronousGetRecordsRetrievalStrategy) o;
+        return Objects.equals(dataFetcher, that.dataFetcher);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(dataFetcher);
+    }
+
+    @Override
+    public String toString() {
+        return "SynchronousGetRecordsRetrievalStrategy{" +
+                "dataFetcher=" + dataFetcher +
+                '}';
     }
 }

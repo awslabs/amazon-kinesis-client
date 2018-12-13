@@ -14,19 +14,21 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.apachecommons.CommonsLog;
 import org.apache.commons.logging.Log;
+import org.apache.commons.logging.impl.SimpleLog;
 
-@RequiredArgsConstructor
-@CommonsLog
 class ThrottlingReporter {
 
+    private static final org.apache.commons.logging.Log log = org.apache.commons.logging.LogFactory.getLog(SimpleLog.class);
     private final int maxConsecutiveWarnThrottles;
     private final String shardId;
 
     private int consecutiveThrottles = 0;
+
+    public ThrottlingReporter(int maxConsecutiveWarnThrottles, String shardId) {
+        this.maxConsecutiveWarnThrottles = maxConsecutiveWarnThrottles;
+        this.shardId = shardId;
+    }
 
     void throttled() {
         consecutiveThrottles++;

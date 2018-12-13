@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.Collections;
 import java.util.Date;
+import java.util.Objects;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
@@ -30,8 +31,6 @@ import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.util.CollectionUtils;
 import com.google.common.collect.Iterables;
-
-import lombok.Data;
 
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
@@ -100,10 +99,14 @@ class KinesisDataFetcher {
         }
     };
 
-    @Data
     class AdvancingResult implements DataFetcherResult {
 
         final GetRecordsResult result;
+
+        public AdvancingResult(GetRecordsResult result) {
+            this.result = result;
+            Objects.requireNonNull(result);
+        }
 
         @Override
         public GetRecordsResult getResult() {
@@ -125,6 +128,26 @@ class KinesisDataFetcher {
         @Override
         public boolean isShardEnd() {
             return isShardEndReached;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            AdvancingResult that = (AdvancingResult) o;
+            return Objects.equals(result, that.result);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(result);
+        }
+
+        @Override
+        public String toString() {
+            return "AdvancingResult{" +
+                    "result=" + result +
+                    '}';
         }
     }
 

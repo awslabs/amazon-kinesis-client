@@ -19,14 +19,10 @@ import java.util.List;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.model.Record;
-import lombok.Getter;
-import lombok.Setter;
 
 /**
  * A message to indicate to the client's process that it should process a list of records.
  */
-@Getter
-@Setter
 public class ProcessRecordsMessage extends Message {
     /**
      * The name used for the action field in {@link Message}.
@@ -58,5 +54,21 @@ public class ProcessRecordsMessage extends Message {
             recordMessages.add(new JsonFriendlyRecord(record));
         }
         this.setRecords(recordMessages);
+    }
+
+    public List<JsonFriendlyRecord> getRecords() {
+        return records;
+    }
+
+    public void setRecords(List<JsonFriendlyRecord> records) {
+        this.records = records;
+    }
+
+    public Long getMillisBehindLatest() {
+        return millisBehindLatest;
+    }
+
+    public void setMillisBehindLatest(Long millisBehindLatest) {
+        this.millisBehindLatest = millisBehindLatest;
     }
 }

@@ -38,7 +38,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import com.amazonaws.AmazonWebServiceClient;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.client.builder.AwsClientBuilder;
@@ -69,10 +68,6 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
-import lombok.NonNull;
-import lombok.Setter;
-import lombok.experimental.Accessors;
 
 /**
  * Worker is the high level class that Kinesis applications use to start processing data. It initializes and oversees
@@ -1054,36 +1049,17 @@ public class Worker implements Runnable {
      */
     public static class Builder {
 
+        // make setters for each field minus the "set" part
         private IRecordProcessorFactory recordProcessorFactory;
-        @Setter
-        @Accessors(fluent = true)
         private KinesisClientLibConfiguration config;
-        @Setter
-        @Accessors(fluent = true)
         private AmazonKinesis kinesisClient;
-        @Setter
-        @Accessors(fluent = true)
         private AmazonDynamoDB dynamoDBClient;
-        @Setter
-        @Accessors(fluent = true)
         private AmazonCloudWatch cloudWatchClient;
-        @Setter
-        @Accessors(fluent = true)
         private IMetricsFactory metricsFactory;
-        @Setter
-        @Accessors(fluent = true)
         private ILeaseManager<KinesisClientLease> leaseManager;
-        @Setter
-        @Accessors(fluent = true)
         private ExecutorService execService;
-        @Setter
-        @Accessors(fluent = true)
         private ShardPrioritization shardPrioritization;
-        @Setter
-        @Accessors(fluent = true)
         private IKinesisProxy kinesisProxy;
-        @Setter
-        @Accessors(fluent = true)
         private WorkerStateChangeListener workerStateChangeListener;
 
         @VisibleForTesting
@@ -1255,6 +1231,56 @@ public class Worker implements Runnable {
                 builder.withRegion(Regions.US_EAST_1);
             }
             return builder.build();
+        }
+
+        public Builder config(KinesisClientLibConfiguration config) {
+            this.config = config;
+            return this;
+        }
+
+        public Builder kinesisClient(AmazonKinesis kinesisClient) {
+            this.kinesisClient = kinesisClient;
+            return this;
+        }
+
+        public Builder dynamoDBClient(AmazonDynamoDB dynamoDBClient) {
+            this.dynamoDBClient = dynamoDBClient;
+            return this;
+        }
+
+        public Builder cloudWatchClient(AmazonCloudWatch cloudWatchClient) {
+            this.cloudWatchClient = cloudWatchClient;
+            return this;
+        }
+
+        public Builder metricsFactory(IMetricsFactory metricsFactory) {
+            this.metricsFactory = metricsFactory;
+            return this;
+        }
+
+        public Builder leaseManager(ILeaseManager<KinesisClientLease> leaseManager) {
+            this.leaseManager = leaseManager;
+            return this;
+        }
+
+        public Builder execService(ExecutorService execService) {
+            this.execService = execService;
+            return this;
+        }
+
+        public Builder shardPrioritization(ShardPrioritization shardPrioritization) {
+            this.shardPrioritization = shardPrioritization;
+            return this;
+        }
+
+        public Builder kinesisProxy(IKinesisProxy kinesisProxy) {
+            this.kinesisProxy = kinesisProxy;
+            return this;
+        }
+
+        public Builder workerStateChangeListener(WorkerStateChangeListener workerStateChangeListener) {
+            this.workerStateChangeListener = workerStateChangeListener;
+            return this;
         }
     }
 }

@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionService;
@@ -33,15 +34,13 @@ import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingSc
 import com.amazonaws.services.kinesis.model.ExpiredIteratorException;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
-import lombok.NonNull;
-import lombok.extern.apachecommons.CommonsLog;
+import org.apache.commons.logging.impl.SimpleLog;
 
 /**
  *
  */
-@CommonsLog
 public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrievalStrategy {
+    private static final org.apache.commons.logging.Log log = org.apache.commons.logging.LogFactory.getLog(SimpleLog.class);
     private static final int TIME_TO_KEEP_ALIVE = 5;
     private static final int CORE_THREAD_POOL_COUNT = 1;
 
@@ -51,9 +50,10 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
     private final String shardId;
     final Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
 
-    public AsynchronousGetRecordsRetrievalStrategy(@NonNull final KinesisDataFetcher dataFetcher,
+    public AsynchronousGetRecordsRetrievalStrategy(final KinesisDataFetcher dataFetcher,
             final int retryGetRecordsInSeconds, final int maxGetRecordsThreadPool, String shardId) {
         this(dataFetcher, buildExector(maxGetRecordsThreadPool, shardId), retryGetRecordsInSeconds, shardId);
+        Objects.requireNonNull(dataFetcher);
     }
 
     public AsynchronousGetRecordsRetrievalStrategy(final KinesisDataFetcher dataFetcher,

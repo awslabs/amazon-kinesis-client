@@ -31,8 +31,6 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.google.common.annotations.VisibleForTesting;
 
-import lombok.Getter;
-
 /**
  * Responsible for consuming data records of a (specified) shard.
  * The instance should be shutdown when we lose the primary responsibility for a shard.
@@ -62,7 +60,6 @@ class ShardConsumer {
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
     
-    @Getter
     private final GetRecordsCache getRecordsCache;
 
     private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
@@ -302,6 +299,10 @@ class ShardConsumer {
 
     public boolean isSkipShardSyncAtWorkerInitializationIfLeasesExist() {
         return skipShardSyncAtWorkerInitializationIfLeasesExist;
+    }
+
+    public GetRecordsCache getGetRecordsCache() {
+        return getRecordsCache;
     }
 
     private enum TaskOutcome {

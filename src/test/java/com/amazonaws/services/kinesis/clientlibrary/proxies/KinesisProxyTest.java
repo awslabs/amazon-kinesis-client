@@ -36,13 +36,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -75,8 +69,6 @@ import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamDescription;
 import com.amazonaws.services.kinesis.model.StreamStatus;
-
-import lombok.AllArgsConstructor;
 
 @RunWith(MockitoJUnitRunner.class)
 public class KinesisProxyTest {
@@ -569,10 +561,14 @@ public class KinesisProxyTest {
         return new ListShardsRequestMatcher(null, nextToken);
     }
 
-    @AllArgsConstructor
     private static class ListShardsRequestMatcher extends TypeSafeDiagnosingMatcher<ListShardsRequest> {
         private final String shardId;
         private final String nextToken;
+
+        public ListShardsRequestMatcher(String shardId, String nextToken) {
+            this.shardId = shardId;
+            this.nextToken = nextToken;
+        }
 
         @Override
         protected boolean matchesSafely(final ListShardsRequest listShardsRequest, final Description description) {

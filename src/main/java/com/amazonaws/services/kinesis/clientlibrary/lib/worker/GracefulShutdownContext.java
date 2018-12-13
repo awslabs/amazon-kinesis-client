@@ -14,11 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import lombok.Data;
-
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 
-@Data
 class GracefulShutdownContext {
     private final CountDownLatch shutdownCompleteLatch;
     private final CountDownLatch notificationCompleteLatch;
@@ -26,8 +24,52 @@ class GracefulShutdownContext {
 
     static GracefulShutdownContext SHUTDOWN_ALREADY_COMPLETED = new GracefulShutdownContext(null, null, null);
 
+    public GracefulShutdownContext(CountDownLatch shutdownCompleteLatch, CountDownLatch notificationCompleteLatch, Worker worker) {
+        this.shutdownCompleteLatch = shutdownCompleteLatch;
+        this.notificationCompleteLatch = notificationCompleteLatch;
+        this.worker = worker;
+        Objects.requireNonNull(shutdownCompleteLatch);
+        Objects.requireNonNull(notificationCompleteLatch);
+        Objects.requireNonNull(worker);
+    }
+
     boolean isShutdownAlreadyCompleted() {
         return shutdownCompleteLatch == null && notificationCompleteLatch == null && worker == null;
     }
 
+    public CountDownLatch getShutdownCompleteLatch() {
+        return shutdownCompleteLatch;
+    }
+
+    public CountDownLatch getNotificationCompleteLatch() {
+        return notificationCompleteLatch;
+    }
+
+    public Worker getWorker() {
+        return worker;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        GracefulShutdownContext that = (GracefulShutdownContext) o;
+        return Objects.equals(shutdownCompleteLatch, that.shutdownCompleteLatch) &&
+                Objects.equals(notificationCompleteLatch, that.notificationCompleteLatch) &&
+                Objects.equals(worker, that.worker);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(shutdownCompleteLatch, notificationCompleteLatch, worker);
+    }
+
+    @Override
+    public String toString() {
+        return "GracefulShutdownContext{" +
+                "shutdownCompleteLatch=" + shutdownCompleteLatch +
+                ", notificationCompleteLatch=" + notificationCompleteLatch +
+                ", worker=" + worker +
+                '}';
+    }
 }
