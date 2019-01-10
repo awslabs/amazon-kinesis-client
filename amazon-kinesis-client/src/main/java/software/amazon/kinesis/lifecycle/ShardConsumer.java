@@ -20,17 +20,12 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import io.reactivex.Flowable;
-import io.reactivex.Scheduler;
-import io.reactivex.schedulers.Schedulers;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NonNull;
@@ -44,8 +39,6 @@ import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
-import software.amazon.kinesis.retrieval.RecordsRetrieved;
-import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
 /**
  * Responsible for consuming data records of a (specified) shard.
@@ -61,7 +54,6 @@ public class ShardConsumer {
     public static final int MAX_TIME_BETWEEN_REQUEST_RESPONSE = 35000;
     private final RecordsPublisher recordsPublisher;
     private final ExecutorService executorService;
-    private final Scheduler scheduler;
     private final ShardInfo shardInfo;
     private final ShardConsumerArgument shardConsumerArgument;
     @NonNull
@@ -72,9 +64,6 @@ public class ShardConsumer {
 
     private ConsumerTask currentTask;
     private TaskOutcome taskOutcome;
-
-    private final AtomicReference<Throwable> processFailure = new AtomicReference<>(null);
-    private final AtomicReference<Throwable> dispatchFailure = new AtomicReference<>(null);
 
     private CompletableFuture<Boolean> stateChangeFuture;
     private boolean needsInitialization = true;
@@ -95,7 +84,7 @@ public class ShardConsumer {
     private volatile ShutdownReason shutdownReason;
     private volatile ShutdownNotification shutdownNotification;
 
-    private final InternalSubscriber subscriber;
+    private final ShardConsumerSubscriber subscriber;
 
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
                          Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
@@ -120,8 +109,7 @@ public class ShardConsumer {
         this.taskExecutionListener = taskExecutionListener;
         this.currentState = initialState;
         this.taskMetricsDecorator = taskMetricsDecorator;
-        scheduler = Schedulers.from(executorService);
-        subscriber = new InternalSubscriber();
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this);
         this.bufferSize = bufferSize;
 
         if (this.shardInfo.isCompleted()) {
@@ -129,74 +117,8 @@ public class ShardConsumer {
         }
     }
 
-    private void startSubscriptions() {
-        synchronized (lockObject) {
-            if (lastAccepted != null) {
-                recordsPublisher.restartFrom(lastAccepted);
-            }
-            Flowable.fromPublisher(recordsPublisher).subscribeOn(scheduler).observeOn(scheduler, true, bufferSize)
-                    .subscribe(subscriber);
 
-        }
-    }
-
-    private final Object lockObject = new Object();
-    private Instant lastRequestTime = null;
-    private RecordsRetrieved lastAccepted = null;
-
-    private class InternalSubscriber implements Subscriber<RecordsRetrieved> {
-
-        private Subscription subscription;
-        private volatile Instant lastDataArrival;
-
-        @Override
-        public void onSubscribe(Subscription s) {
-            subscription = s;
-            subscription.request(1);
-        }
-
-        @Override
-        public void onNext(RecordsRetrieved input) {
-            try {
-                synchronized (lockObject) {
-                    lastRequestTime = null;
-                }
-                lastDataArrival = Instant.now();
-                handleInput(input.processRecordsInput().toBuilder().cacheExitTime(Instant.now()).build(), subscription);
-                synchronized (lockObject) {
-                    lastAccepted = input;
-                }
-            } catch (Throwable t) {
-                log.warn("{}: Caught exception from handleInput", shardInfo.shardId(), t);
-                dispatchFailure.set(t);
-            } finally {
-                subscription.request(1);
-                synchronized (lockObject) {
-                    lastRequestTime = Instant.now();
-                }
-            }
-        }
-
-        @Override
-        public void onError(Throwable t) {
-            log.warn("{}: onError().  Cancelling subscription, and marking self as failed.", shardInfo.shardId(), t);
-            subscription.cancel();
-            processFailure.set(t);
-        }
-
-        @Override
-        public void onComplete() {
-            log.debug("{}: onComplete(): Received onComplete.  Activity should be triggered externally", shardInfo.shardId());
-        }
-
-        public void cancel() {
-            if (subscription != null) {
-                subscription.cancel();
-            }
-        }
-    }
-
-    private synchronized void handleInput(ProcessRecordsInput input, Subscription subscription) {
+     synchronized void handleInput(ProcessRecordsInput input, Subscription subscription) {
         if (isShutdownRequested()) {
             subscription.cancel();
             return;
@@ -251,50 +173,15 @@ public class ShardConsumer {
     Throwable healthCheck() {
         logNoDataRetrievedAfterTime();
         logLongRunningTask();
-        Throwable failure = processFailure.get();
-        if (!processFailure.compareAndSet(failure, null) && failure != null) {
-            log.error("{}: processFailure was updated while resetting, this shouldn't happen.  " +
-                    "Will retry on next health check", shardInfo.shardId());
-            return null;
-        }
+        Throwable failure = subscriber.healthCheck(MAX_TIME_BETWEEN_REQUEST_RESPONSE);
+
         if (failure != null) {
-            String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests", shardInfo.shardId());
-            if (failure instanceof RetryableRetrievalException) {
-                log.debug(logMessage, failure.getCause());
-            } else {
-                log.warn(logMessage, failure);
-            }
-            startSubscriptions();
             return failure;
         }
-        Throwable expectedDispatchFailure = dispatchFailure.get();
-        if (expectedDispatchFailure != null) {
-            if (!dispatchFailure.compareAndSet(expectedDispatchFailure, null)) {
-                log.info("{}: Unable to reset the dispatch failure, this can happen if the record processor is failing aggressively.", shardInfo.shardId());
-                return null;
-            }
-            log.warn("Exception occurred while dispatching incoming data.  The incoming data has been skipped", expectedDispatchFailure);
-            return expectedDispatchFailure;
-        }
-        synchronized (lockObject) {
-            if (lastRequestTime != null) {
-                Instant now = Instant.now();
-                Duration timeSinceLastResponse = Duration.between(lastRequestTime, now);
-                if (timeSinceLastResponse.toMillis() > MAX_TIME_BETWEEN_REQUEST_RESPONSE) {
-                    log.error(
-                            "{}: Last request was dispatched at {}, but no response as of {} ({}).  Cancelling subscription, and restarting.",
-                            shardInfo.shardId(), lastRequestTime, now, timeSinceLastResponse);
-                    if (subscriber != null) {
-                        subscriber.cancel();
-                    }
-                    //
-                    // Set the last request time to now, we specifically don't null it out since we want it to trigger a
-                    // restart if the subscription still doesn't start producing.
-                    //
-                    lastRequestTime = Instant.now();
-                    startSubscriptions();
-                }
-            }
+        Throwable dispatchFailure = subscriber.getAndResetDispatchFailure();
+        if (dispatchFailure != null) {
+            log.warn("Exception occurred while dispatching incoming data.  The incoming data has been skipped", dispatchFailure);
+            return dispatchFailure;
         }
 
         return null;
@@ -317,10 +204,10 @@ public class ShardConsumer {
 
     private void logNoDataRetrievedAfterTime() {
         logWarningForTaskAfterMillis.ifPresent(value -> {
-            Instant lastDataArrival = subscriber.lastDataArrival;
+            Instant lastDataArrival = subscriber.lastDataArrival();
             if (lastDataArrival != null) {
                 Instant now = Instant.now();
-                Duration timeSince = Duration.between(subscriber.lastDataArrival, now);
+                Duration timeSince = Duration.between(subscriber.lastDataArrival(), now);
                 if (timeSince.toMillis() > value) {
                     log.warn("Last time data arrived: {} ({})", lastDataArrival, timeSince);
                 }
@@ -346,7 +233,7 @@ public class ShardConsumer {
 
     @VisibleForTesting
     void subscribe() {
-        startSubscriptions();
+        subscriber.startSubscriptions();
     }
 
     @VisibleForTesting
