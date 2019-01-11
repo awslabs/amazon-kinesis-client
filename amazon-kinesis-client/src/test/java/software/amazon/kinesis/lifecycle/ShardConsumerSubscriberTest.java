@@ -24,26 +24,21 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.utils.ProcessRecordsInputMatcher.eqProcessRecordsInput;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -59,7 +54,6 @@ import org.reactivestreams.Subscription;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
-import lombok.Data;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -433,56 +427,6 @@ public class ShardConsumerSubscriberTest {
                     requested = 0;
                 }
             });
-        }
-    }
-
-    private static ProcessRecordsInputMatcher eqProcessRecordsInput(ProcessRecordsInput expected) {
-        return new ProcessRecordsInputMatcher(expected);
-    }
-
-    @Data
-    private static class MatcherData {
-        private final Matcher<?> matcher;
-        private final Function<ProcessRecordsInput, ?> accessor;
-    }
-
-    private static class ProcessRecordsInputMatcher extends TypeSafeDiagnosingMatcher<ProcessRecordsInput> {
-
-        private final ProcessRecordsInput template;
-        private final Map<String, MatcherData> matchers = new HashMap<>();
-
-        private ProcessRecordsInputMatcher(ProcessRecordsInput template) {
-            matchers.put("cacheEntryTime",
-                    nullOrEquals(template.cacheEntryTime(), ProcessRecordsInput::cacheEntryTime));
-            matchers.put("checkpointer", nullOrEquals(template.checkpointer(), ProcessRecordsInput::checkpointer));
-            matchers.put("isAtShardEnd", nullOrEquals(template.isAtShardEnd(), ProcessRecordsInput::isAtShardEnd));
-            matchers.put("millisBehindLatest",
-                    nullOrEquals(template.millisBehindLatest(), ProcessRecordsInput::millisBehindLatest));
-            matchers.put("records", nullOrEquals(template.records(), ProcessRecordsInput::records));
-
-            this.template = template;
-        }
-
-        private static MatcherData nullOrEquals(Object item, Function<ProcessRecordsInput, ?> accessor) {
-            if (item == null) {
-                return new MatcherData(nullValue(), accessor);
-            }
-            return new MatcherData(equalTo(item), accessor);
-        }
-
-        @Override
-        protected boolean matchesSafely(ProcessRecordsInput item, Description mismatchDescription) {
-            return matchers.entrySet().stream()
-                    .filter(e -> e.getValue().matcher.matches(e.getValue().accessor.apply(item))).anyMatch(e -> {
-                        mismatchDescription.appendText(e.getKey()).appendText(" ");
-                        e.getValue().matcher.describeMismatch(e.getValue().accessor.apply(item), mismatchDescription);
-                        return true;
-                    });
-        }
-
-        @Override
-        public void describeTo(Description description) {
-            matchers.forEach((k, v) -> description.appendText(k).appendText(" ").appendDescriptionOf(v.matcher));
         }
     }
 
