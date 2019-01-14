@@ -183,13 +183,17 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     "Provided RecordsRetrieved was not produced by the PrefetchRecordsPublisher");
         }
         PrefetchRecordsRetrieved prefetchRecordsRetrieved = (PrefetchRecordsRetrieved) recordsRetrieved;
-        synchronized (resetLock) {
+        resetLock.lock();
+        try {
             getRecordsResultQueue.clear();
             prefetchCounters.reset();
 
             highestSequenceNumber = prefetchRecordsRetrieved.lastBatchSequenceNumber();
             dataFetcher.resetIterator(prefetchRecordsRetrieved.shardIterator());
             dataFetcher.advanceIteratorTo(highestSequenceNumber, initialPositionInStreamExtended);
+            wasReset = true;
+        } finally {
+            resetLock.unlock();
         }
     }
 
@@ -210,7 +214,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         });
     }
 
-    private boolean addArrivedRecordsInput(PrefetchRecordsRetrieved recordsRetrieved) throws InterruptedException {
+    private void addArrivedRecordsInput(PrefetchRecordsRetrieved recordsRetrieved) throws InterruptedException {
         wasReset = false;
         while (!getRecordsResultQueue.offer(recordsRetrieved, 1, TimeUnit.SECONDS)) {
             if (resetLock.hasQueuedThreads()) {
@@ -223,7 +227,6 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             }
         }
         prefetchCounters.added(recordsRetrieved.processRecordsInput);
-        return true;
     }
 
     private synchronized void drainQueueForRequests() {
@@ -308,6 +311,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     highestSequenceNumber = recordsRetrieved.lastBatchSequenceNumber;
                     addArrivedRecordsInput(recordsRetrieved);
                     drainQueueForRequests();
+                } catch (PositionResetException pse) {
+                    throw pse;
                 } catch (InterruptedException e) {
                     log.info("Thread was interrupted, indicating shutdown was called on the cache.");
                 } catch (ExpiredIteratorException e) {
