@@ -31,7 +31,10 @@ public class KinesisClientUtil {
      * @return
      */
     public static KinesisAsyncClient createKinesisAsyncClient(KinesisAsyncClientBuilder clientBuilder) {
-        return clientBuilder.httpClientBuilder(NettyNioAsyncHttpClient.builder().maxConcurrency(Integer.MAX_VALUE))
-                .build();
+        return adjustKinesisClientBuilder(clientBuilder).build();
+    }
+
+    public static KinesisAsyncClientBuilder adjustKinesisClientBuilder(KinesisAsyncClientBuilder builder) {
+        return builder.httpClientBuilder(NettyNioAsyncHttpClient.builder().maxConcurrency(Integer.MAX_VALUE));
     }
 }
