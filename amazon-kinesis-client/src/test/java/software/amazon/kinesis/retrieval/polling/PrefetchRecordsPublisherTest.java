@@ -39,7 +39,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -351,7 +350,7 @@ public class PrefetchRecordsPublisherTest {
             String resetTo = a.getArgumentAt(0, String.class);
             retrieverAnswer.resetIteratorTo(resetTo);
             return null;
-        }).when(dataFetcher).resetIterator(anyString());
+        }).when(dataFetcher).resetIterator(anyString(), anyString(), any());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -370,7 +369,8 @@ public class PrefetchRecordsPublisherTest {
         RecordsRetrieved postRestart = getRecordsCache.getNextResult();
 
         assertThat(postRestart.processRecordsInput(), eqProcessRecordsInput(expected.processRecordsInput()));
-        verify(dataFetcher).resetIterator(eq(responses.get(0).nextShardIterator()));
+        verify(dataFetcher).resetIterator(eq(responses.get(0).nextShardIterator()),
+                eq(responses.get(0).records().get(0).sequenceNumber()), any());
 
     }
 

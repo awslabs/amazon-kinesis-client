@@ -227,8 +227,10 @@ public class KinesisDataFetcher {
         advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream);
     }
 
-    public void resetIterator(String shardIterator) {
-        nextIterator = shardIterator;
+    public void resetIterator(String shardIterator, String sequenceNumber, InitialPositionInStreamExtended initialPositionInStream) {
+        this.nextIterator = shardIterator;
+        this.lastKnownSequenceNumber = sequenceNumber;
+        this.initialPositionInStream = initialPositionInStream;
     }
 
     private GetRecordsResponse getRecords(@NonNull final String nextIterator) {

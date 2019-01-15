@@ -22,8 +22,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
@@ -88,7 +86,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private String highestSequenceNumber;
     private InitialPositionInStreamExtended initialPositionInStreamExtended;
 
-    private final ReentrantLock resetLock = new ReentrantLock();
+    private final ReentrantReadWriteLock resetLock = new ReentrantReadWriteLock();
     private boolean wasReset = false;
 
     /**
@@ -183,17 +181,17 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     "Provided RecordsRetrieved was not produced by the PrefetchRecordsPublisher");
         }
         PrefetchRecordsRetrieved prefetchRecordsRetrieved = (PrefetchRecordsRetrieved) recordsRetrieved;
-        resetLock.lock();
+        resetLock.writeLock().lock();
         try {
             getRecordsResultQueue.clear();
             prefetchCounters.reset();
 
             highestSequenceNumber = prefetchRecordsRetrieved.lastBatchSequenceNumber();
-            dataFetcher.resetIterator(prefetchRecordsRetrieved.shardIterator());
-            dataFetcher.advanceIteratorTo(highestSequenceNumber, initialPositionInStreamExtended);
+            dataFetcher.resetIterator(prefetchRecordsRetrieved.shardIterator(), highestSequenceNumber,
+                    initialPositionInStreamExtended);
             wasReset = true;
         } finally {
-            resetLock.unlock();
+            resetLock.writeLock().unlock();
         }
     }
 
@@ -216,14 +214,17 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     private void addArrivedRecordsInput(PrefetchRecordsRetrieved recordsRetrieved) throws InterruptedException {
         wasReset = false;
-        while (!getRecordsResultQueue.offer(recordsRetrieved, 1, TimeUnit.SECONDS)) {
-            if (resetLock.hasQueuedThreads()) {
-                resetLock.unlock();
-                Thread.yield();
-                resetLock.lock();
-                if (wasReset) {
-                    throw new PositionResetException();
-                }
+        while (!getRecordsResultQueue.offer(recordsRetrieved, idleMillisBetweenCalls, TimeUnit.MILLISECONDS)) {
+            //
+            // Unlocking the read lock, and then reacquiring the read lock, should allow any waiters on the write lock a
+            // chance to run. If the write lock is acquired by restartFrom than the readLock will now block until
+            // restartFrom(...) has completed. This is to ensure that if a reset has occurred we know to discard the
+            // data we received and start a new fetch of data.
+            //
+            resetLock.readLock().unlock();
+            resetLock.readLock().lock();
+            if (wasReset) {
+                throw new PositionResetException();
             }
         }
         prefetchCounters.added(recordsRetrieved.processRecordsInput);
@@ -274,13 +275,13 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     break;
                 }
 
-                resetLock.lock();
+                resetLock.readLock().lock();
                 try {
                     makeRetrievalAttempt();
                 } catch(PositionResetException pre) {
                     log.debug("Position was reset while attempting to add item to queue.");
                 } finally {
-                    resetLock.unlock();
+                    resetLock.readLock().unlock();
                 }
 
 
