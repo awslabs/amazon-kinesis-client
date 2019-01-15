@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.lang3.Validate;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -63,6 +64,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @KinesisClientInternalApi
 public class PrefetchRecordsPublisher implements RecordsPublisher {
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
+    @VisibleForTesting
     LinkedBlockingQueue<PrefetchRecordsRetrieved> getRecordsResultQueue;
     private int maxPendingProcessRecordsInput;
     private int maxByteSize;

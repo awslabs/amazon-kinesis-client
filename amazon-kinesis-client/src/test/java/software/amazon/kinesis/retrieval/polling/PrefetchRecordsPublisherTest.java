@@ -365,6 +365,10 @@ public class PrefetchRecordsPublisherTest {
 
         verify(getRecordsRetrievalStrategy, atLeast(2)).getRecords(anyInt());
 
+        while(getRecordsCache.getRecordsResultQueue.remainingCapacity() > 0) {
+            Thread.yield();
+        }
+
         getRecordsCache.restartFrom(lastProcessed);
         RecordsRetrieved postRestart = getRecordsCache.getNextResult();
 
