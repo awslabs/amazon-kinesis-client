@@ -61,14 +61,14 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.0.5 - November 12, 2018)
-[Milestone #26](https://github.com/awslabs/amazon-kinesis-client/milestone/26?closed=1)
-* Fixed a deadlock condition that could occur when using the polling model.  
-  It was possible to hit a deadlock in the retrieval of records When using the `PollingConfig` and a slow running record processor.
-  * [PR #462](https://github.com/awslabs/amazon-kinesis-client/pull/462)
-  * [Issue #448](https://github.com/awslabs/amazon-kinesis-client/issues/448)
-* Adjusted `RetrievalConfig`, and `FanOutConfig` to use accessors instead of direct member access.  
-  * [PR #453](https://github.com/awslabs/amazon-kinesis-client/pull/453)
+### Latest Release (2.1.0 - January 14, 2019)
+[Milestone #27](https://github.com/awslabs/amazon-kinesis-client/milestone/27)
+* Introducing MultiLangDaemon support for Enhanced Fan-Out.  
+* MultiLangDaemon now supports the following command line options.
+  * `--properties-file`: Properties file that the KCL should use to set up the Scheduler.
+  * `--log-configuration`: logback.xml that the KCL should use for logging.
+* Updated AWS SDK dependency to 2.2.0.
+* MultiLangDaemon now uses logback for logging.
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
@@ -84,6 +84,6 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 [kinesis-guide-kpl]: http://docs.aws.amazon.com//kinesis/latest/dev/developing-producers-with-kpl.html
 [kinesis-guide-consumer-deaggregation]: http://docs.aws.amazon.com//kinesis/latest/dev/kinesis-kpl-consumer-deaggregation.html
 [kclpy]: https://github.com/awslabs/amazon-kinesis-client-python
-[multi-lang-protocol]: https://github.com/awslabs/amazon-kinesis-client/blob/master/src/main/java/com/amazonaws/services/kinesis/multilang/package-info.java
+[multi-lang-protocol]: https://github.com/awslabs/amazon-kinesis-client/blob/master/amazon-kinesis-client-multilang/src/main/java/software/amazon/kinesis/multilang/package-info.java
 [changelog-md]: https://github.com/awslabs/amazon-kinesis-client/blob/master/CHANGELOG.md
 [migration-guide]: https://docs.aws.amazon.com/streams/latest/dev/kcl-migration.html
