@@ -286,7 +286,64 @@ public class ShardConsumerTest {
         verifyNoMoreInteractions(taskExecutionListener);
     }
 
+    @Test(timeout = 1000L)
+    public void testLeaseLossIsNonBlocking() throws Exception {
+        CyclicBarrier taskCallBarrier = new CyclicBarrier(2);
+        CyclicBarrier processingTaskInterlock = new CyclicBarrier(2);
 
+        mockSuccessfulInitialize(null);
+
+        mockSuccessfulProcessing(taskCallBarrier, processingTaskInterlock);
+
+        mockSuccessfulShutdown(null);
+
+        TestPublisher cache = new TestPublisher();
+        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+
+        boolean initComplete = false;
+        while (!initComplete) {
+            initComplete = consumer.initializeComplete().get();
+        }
+
+        consumer.subscribe();
+        cache.awaitInitialSetup();
+
+        log.debug("Setup complete publishing entry");
+        cache.publish();
+        awaitAndResetBarrier(taskCallBarrier);
+        consumer.leaseLost();
+
+        //
+        // This will block if a lock is held on ShardConsumer#this
+        //
+        consumer.executeLifecycle();
+        assertThat(consumer.isShutdown(), equalTo(false));
+
+        log.debug("Release processing task interlock");
+        awaitAndResetBarrier(processingTaskInterlock);
+
+        while(!consumer.isShutdown()) {
+            consumer.executeLifecycle();
+            Thread.yield();
+        }
+
+        verify(cache.subscription, times(1)).request(anyLong());
+        verify(cache.subscription).cancel();
+        verify(processingState, times(1)).createTask(eq(shardConsumerArgument), eq(consumer), any());
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
+
+        initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+
+        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
+        verifyNoMoreInteractions(taskExecutionListener);
+    }
 
     @Test
     public void testDataArrivesAfterProcessing2() throws Exception {
