@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Amazon Software License (the "License").
  * You may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import static org.junit.Assert.assertThat;
 
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -37,8 +38,11 @@ import software.amazon.kinesis.retrieval.polling.PollingConfig;
 @RunWith(MockitoJUnitRunner.class)
 public class MultiLangDaemonConfigurationTest {
 
+    private static final String AWS_REGION_PROPERTY_NAME = "aws.region";
+
     private BeanUtilsBean utilsBean;
     private ConvertUtilsBean convertUtilsBean;
+    private String originalRegionValue;
 
     @Mock
     private ShardRecordProcessorFactory shardRecordProcessorFactory;
@@ -48,9 +52,21 @@ public class MultiLangDaemonConfigurationTest {
 
     @Before
     public void setup() {
+        originalRegionValue = System.getProperty(AWS_REGION_PROPERTY_NAME);
+        System.setProperty(AWS_REGION_PROPERTY_NAME, "us-east-1");
         convertUtilsBean = new ConvertUtilsBean();
         utilsBean = new BeanUtilsBean(convertUtilsBean);
     }
+
+    @After
+    public void after() {
+        if (originalRegionValue != null) {
+            System.setProperty(AWS_REGION_PROPERTY_NAME, originalRegionValue);
+        } else {
+            System.clearProperty(AWS_REGION_PROPERTY_NAME);
+        }
+    }
+
 
     public MultiLangDaemonConfiguration baseConfiguration() {
         MultiLangDaemonConfiguration configuration = new MultiLangDaemonConfiguration(utilsBean, convertUtilsBean);
