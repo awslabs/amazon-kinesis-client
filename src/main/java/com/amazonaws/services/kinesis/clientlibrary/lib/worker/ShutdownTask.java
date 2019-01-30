@@ -48,6 +48,7 @@ class ShutdownTask implements ITask {
     private final TaskType taskType = TaskType.SHUTDOWN;
     private final long backoffTimeMillis;
     private final GetRecordsCache getRecordsCache;
+    private final ShardSyncer shardSyncer;
 
     /**
      * Constructor.
@@ -62,8 +63,9 @@ class ShutdownTask implements ITask {
                  boolean cleanupLeasesOfCompletedShards,
                  boolean ignoreUnexpectedChildShards,
                  ILeaseManager<KinesisClientLease> leaseManager,
-                 long backoffTimeMillis, 
-                 GetRecordsCache getRecordsCache) {
+                 long backoffTimeMillis,
+                 GetRecordsCache getRecordsCache,
+                 ShardSyncer shardSyncer) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -75,12 +77,13 @@ class ShutdownTask implements ITask {
         this.leaseManager = leaseManager;
         this.backoffTimeMillis = backoffTimeMillis;
         this.getRecordsCache = getRecordsCache;
+        this.shardSyncer = shardSyncer;
     }
 
     /*
      * Invokes RecordProcessor shutdown() API.
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
     @Override
@@ -127,7 +130,7 @@ class ShutdownTask implements ITask {
             if (reason == ShutdownReason.TERMINATE) {
                 LOG.debug("Looking for child shards of shard " + shardInfo.getShardId());
                 // create leases for the child shards
-                ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
+                shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                         leaseManager,
                         initialPositionInStream,
                         cleanupLeasesOfCompletedShards,

@@ -70,6 +70,8 @@ public class ShardSyncerTest {
     AmazonDynamoDB ddbClient = DynamoDBEmbedded.create().amazonDynamoDB();
     LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("tempTestTable", ddbClient);
     private static final int EXPONENT = 128;
+    protected static final KinesisLeaseCleanupValidator leaseCleanupValidator = new KinesisLeaseCleanupValidator();
+    private static final ShardSyncer shardSyncer = new ShardSyncer(leaseCleanupValidator);
     /**
      * Old/Obsolete max value of a sequence number (2^128 -1).
      */
@@ -117,7 +119,7 @@ public class ShardSyncerTest {
         List<Shard> shards = new ArrayList<Shard>();
         List<KinesisClientLease> leases = new ArrayList<KinesisClientLease>();
 
-        Assert.assertTrue(ShardSyncer.determineNewLeasesToCreate(shards, leases, INITIAL_POSITION_LATEST).isEmpty());
+        Assert.assertTrue(shardSyncer.determineNewLeasesToCreate(shards, leases, INITIAL_POSITION_LATEST).isEmpty());
     }
 
     /**
@@ -136,7 +138,7 @@ public class ShardSyncerTest {
         shards.add(ShardObjectHelper.newShard(shardId1, null, null, sequenceRange));
 
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST);
         Assert.assertEquals(2, newLeases.size());
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         expectedLeaseShardIds.add(shardId0);
@@ -169,7 +171,7 @@ public class ShardSyncerTest {
         inconsistentShardIds.add(shardId2);
 
         List<KinesisClientLease> newLeases =
-            ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST, inconsistentShardIds);
+            shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST, inconsistentShardIds);
         Assert.assertEquals(2, newLeases.size());
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         expectedLeaseShardIds.add(shardId0);
@@ -227,8 +229,8 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
-                cleanupLeasesOfCompletedShards);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
+                cleanupLeasesOfCompletedShards, false);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         expectedLeaseShardIds.add("shardId-4");
@@ -259,8 +261,8 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
-                cleanupLeasesOfCompletedShards);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
+                cleanupLeasesOfCompletedShards, false);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         for (int i = 0; i < 11; i++) {
@@ -290,8 +292,8 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_AT_TIMESTAMP,
-                cleanupLeasesOfCompletedShards);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_AT_TIMESTAMP,
+                cleanupLeasesOfCompletedShards, false);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         for (int i = 0; i < 11; i++) {
@@ -324,8 +326,8 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
-                cleanupLeasesOfCompletedShards);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
+                cleanupLeasesOfCompletedShards, false);
         dataFile.delete();
     }
 
@@ -349,7 +351,7 @@ public class ShardSyncerTest {
         File dataFile = KinesisLocalFileDataCreator.generateTempDataFile(shards, 2, "testBootstrap1");
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
-        ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
                                                      cleanupLeasesOfCompletedShards, true);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
@@ -461,10 +463,11 @@ public class ShardSyncerTest {
             // Only need to try two times.
             for (int i = 1; i <= 2; i++) {
                 try {
-                    ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
+                    shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                             exceptionThrowingLeaseManager,
                             position,
-                            cleanupLeasesOfCompletedShards);
+                            cleanupLeasesOfCompletedShards,
+                            false);
                     return;
                 } catch (LeasingException e) {
                     LOG.debug("Catch leasing exception", e);
@@ -473,10 +476,11 @@ public class ShardSyncerTest {
                 exceptionThrowingLeaseManager.clearLeaseManagerThrowingExceptionScenario();
             }
         } else {
-            ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
+            shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                     leaseManager,
                     position,
-                    cleanupLeasesOfCompletedShards);
+                    cleanupLeasesOfCompletedShards,
+                    false);
         }
     }
 
@@ -629,7 +633,7 @@ public class ShardSyncerTest {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException, IOException,
         KinesisClientLibIOException {
         String garbageShardId = "shardId-garbage-001";
-        KinesisClientLease garbageLease = ShardSyncer.newKCLLease(ShardObjectHelper.newShard(garbageShardId,
+        KinesisClientLease garbageLease = shardSyncer.newKCLLease(ShardObjectHelper.newShard(garbageShardId,
                 null,
                 null,
                 ShardObjectHelper.newSequenceNumberRange("101", null)));
@@ -654,7 +658,7 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        ShardSyncer.bootstrapShardLeases(kinesisProxy, leaseManager, initialPosition, cleanupLeasesOfCompletedShards,
+        shardSyncer.bootstrapShardLeases(kinesisProxy, leaseManager, initialPosition, cleanupLeasesOfCompletedShards,
                                          false);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Assert.assertEquals(2, newLeases.size());
@@ -690,7 +694,7 @@ public class ShardSyncerTest {
 
         for (InitialPositionInStreamExtended initialPosition : initialPositions) {
             List<KinesisClientLease> newLeases =
-                    ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, initialPosition);
+                    shardSyncer.determineNewLeasesToCreate(shards, currentLeases, initialPosition);
             Assert.assertEquals(2, newLeases.size());
             Set<String> expectedLeaseShardIds = new HashSet<String>();
             expectedLeaseShardIds.add(shardId0);
@@ -722,7 +726,7 @@ public class ShardSyncerTest {
                 ShardObjectHelper.newSequenceNumberRange("405", null)));
 
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST);
         Assert.assertEquals(1, newLeases.size());
         Assert.assertEquals(lastShardId, newLeases.get(0).getLeaseKey());
     }
@@ -747,7 +751,7 @@ public class ShardSyncerTest {
         currentLeases.add(newLease("shardId-5"));
 
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST);
         Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap =
                 new HashMap<String, ExtendedSequenceNumber>();
         expectedShardIdCheckpointMap.put("shardId-8", ExtendedSequenceNumber.TRIM_HORIZON);
@@ -785,7 +789,7 @@ public class ShardSyncerTest {
         currentLeases.add(newLease("shardId-7"));
 
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_LATEST);
         Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap =
                 new HashMap<String, ExtendedSequenceNumber>();
         expectedShardIdCheckpointMap.put("shardId-8", ExtendedSequenceNumber.TRIM_HORIZON);
@@ -821,7 +825,7 @@ public class ShardSyncerTest {
         currentLeases.add(newLease("shardId-5"));
 
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_TRIM_HORIZON);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_TRIM_HORIZON);
         Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap =
                 new HashMap<String, ExtendedSequenceNumber>();
         expectedShardIdCheckpointMap.put("shardId-8", ExtendedSequenceNumber.TRIM_HORIZON);
@@ -861,7 +865,7 @@ public class ShardSyncerTest {
         currentLeases.add(newLease("shardId-7"));
 
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_TRIM_HORIZON);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_TRIM_HORIZON);
         Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap =
                 new HashMap<String, ExtendedSequenceNumber>();
         expectedShardIdCheckpointMap.put("shardId-8", ExtendedSequenceNumber.TRIM_HORIZON);
@@ -890,7 +894,7 @@ public class ShardSyncerTest {
         List<Shard> shards = constructShardListForGraphB();
         List<KinesisClientLease> currentLeases = new ArrayList<KinesisClientLease>();
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_TRIM_HORIZON);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_TRIM_HORIZON);
         Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap =
                 new HashMap<String, ExtendedSequenceNumber>();
         for (int i = 0; i < 11; i++) {
@@ -927,7 +931,7 @@ public class ShardSyncerTest {
         currentLeases.add(newLease("shardId-5"));
 
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_AT_TIMESTAMP);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_AT_TIMESTAMP);
         Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap = new HashMap<String, ExtendedSequenceNumber>();
         expectedShardIdCheckpointMap.put("shardId-8", ExtendedSequenceNumber.AT_TIMESTAMP);
         expectedShardIdCheckpointMap.put("shardId-9", ExtendedSequenceNumber.AT_TIMESTAMP);
@@ -966,7 +970,7 @@ public class ShardSyncerTest {
         currentLeases.add(newLease("shardId-7"));
 
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_AT_TIMESTAMP);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_AT_TIMESTAMP);
         Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap = new HashMap<String, ExtendedSequenceNumber>();
         expectedShardIdCheckpointMap.put("shardId-8", ExtendedSequenceNumber.AT_TIMESTAMP);
         expectedShardIdCheckpointMap.put("shardId-9", ExtendedSequenceNumber.AT_TIMESTAMP);
@@ -993,7 +997,7 @@ public class ShardSyncerTest {
         List<Shard> shards = constructShardListForGraphB();
         List<KinesisClientLease> currentLeases = new ArrayList<KinesisClientLease>();
         List<KinesisClientLease> newLeases =
-                ShardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_AT_TIMESTAMP);
+                shardSyncer.determineNewLeasesToCreate(shards, currentLeases, INITIAL_POSITION_AT_TIMESTAMP);
         Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap =
                 new HashMap<String, ExtendedSequenceNumber>();
         for (int i = 0; i < shards.size(); i++) {
@@ -1102,7 +1106,7 @@ public class ShardSyncerTest {
     @Test
     public final void testCheckIfDescendantAndAddNewLeasesForAncestorsNullShardId() {
         Map<String, Boolean> memoizationContext = new HashMap<>();
-        Assert.assertFalse(ShardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(null, INITIAL_POSITION_LATEST,
+        Assert.assertFalse(shardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(null, INITIAL_POSITION_LATEST,
                 null,
                 null,
                 null,
@@ -1117,7 +1121,7 @@ public class ShardSyncerTest {
         String shardId = "shardId-trimmed";
         Map<String, Shard> kinesisShards = new HashMap<String, Shard>();
         Map<String, Boolean> memoizationContext = new HashMap<>();
-        Assert.assertFalse(ShardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(shardId, INITIAL_POSITION_LATEST,
+        Assert.assertFalse(shardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(shardId, INITIAL_POSITION_LATEST,
                 null,
                 kinesisShards,
                 null,
@@ -1136,7 +1140,7 @@ public class ShardSyncerTest {
         shardIdsOfCurrentLeases.add(shardId);
         Map<String, KinesisClientLease> newLeaseMap = new HashMap<String, KinesisClientLease>();
         Map<String, Boolean> memoizationContext = new HashMap<>();
-        Assert.assertTrue(ShardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(shardId, INITIAL_POSITION_LATEST,
+        Assert.assertTrue(shardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(shardId, INITIAL_POSITION_LATEST,
                 shardIdsOfCurrentLeases,
                 kinesisShards,
                 newLeaseMap,
@@ -1163,7 +1167,7 @@ public class ShardSyncerTest {
         kinesisShards.put(shardId, ShardObjectHelper.newShard(shardId, parentShardId, adjacentParentShardId, null));
 
         Map<String, Boolean> memoizationContext = new HashMap<>();
-        Assert.assertFalse(ShardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(shardId, INITIAL_POSITION_LATEST,
+        Assert.assertFalse(shardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(shardId, INITIAL_POSITION_LATEST,
                 shardIdsOfCurrentLeases,
                 kinesisShards,
                 newLeaseMap,
@@ -1192,7 +1196,7 @@ public class ShardSyncerTest {
         kinesisShards.put(shardId, shard);
 
         Map<String, Boolean> memoizationContext = new HashMap<>();
-        Assert.assertTrue(ShardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(shardId, INITIAL_POSITION_LATEST,
+        Assert.assertTrue(shardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(shardId, INITIAL_POSITION_LATEST,
                 shardIdsOfCurrentLeases,
                 kinesisShards,
                 newLeaseMap,
@@ -1209,7 +1213,7 @@ public class ShardSyncerTest {
     @Test
     public final void testGetParentShardIdsNoParents() {
         Shard shard = new Shard();
-        Assert.assertTrue(ShardSyncer.getParentShardIds(shard, null).isEmpty());
+        Assert.assertTrue(shardSyncer.getParentShardIds(shard, null).isEmpty());
     }
 
     /**
@@ -1219,7 +1223,7 @@ public class ShardSyncerTest {
     public final void testGetParentShardIdsTrimmedParents() {
         Map<String, Shard> shardMap = new HashMap<String, Shard>();
         Shard shard = ShardObjectHelper.newShard("shardId-test", "foo", "bar", null);
-        Assert.assertTrue(ShardSyncer.getParentShardIds(shard, shardMap).isEmpty());
+        Assert.assertTrue(shardSyncer.getParentShardIds(shard, shardMap).isEmpty());
     }
 
     /**
@@ -1233,16 +1237,16 @@ public class ShardSyncerTest {
         shardMap.put(parentShardId, ShardObjectHelper.newShard(parentShardId, null, null, null));
 
         Shard shard = ShardObjectHelper.newShard("shardId-test", parentShardId, null, null);
-        Set<String> parentShardIds = ShardSyncer.getParentShardIds(shard, shardMap);
+        Set<String> parentShardIds = shardSyncer.getParentShardIds(shard, shardMap);
         Assert.assertEquals(1, parentShardIds.size());
         Assert.assertTrue(parentShardIds.contains(parentShardId));
 
         shard.setParentShardId(null);
-        parentShardIds = ShardSyncer.getParentShardIds(shard, shardMap);
+        parentShardIds = shardSyncer.getParentShardIds(shard, shardMap);
         Assert.assertTrue(parentShardIds.isEmpty());
 
         shard.setAdjacentParentShardId(parentShardId);
-        parentShardIds = ShardSyncer.getParentShardIds(shard, shardMap);
+        parentShardIds = shardSyncer.getParentShardIds(shard, shardMap);
         Assert.assertEquals(1, parentShardIds.size());
         Assert.assertTrue(parentShardIds.contains(parentShardId));
     }
@@ -1263,16 +1267,16 @@ public class ShardSyncerTest {
         Shard shard = ShardObjectHelper.newShard("shardId-test", parentShardId, adjacentParentShardId, null);
 
         shardMap.put(parentShardId, parent);
-        Set<String> parentShardIds = ShardSyncer.getParentShardIds(shard, shardMap);
+        Set<String> parentShardIds = shardSyncer.getParentShardIds(shard, shardMap);
         Assert.assertEquals(1, parentShardIds.size());
         Assert.assertTrue(parentShardIds.contains(parentShardId));
 
         shardMap.remove(parentShardId);
-        parentShardIds = ShardSyncer.getParentShardIds(shard, shardMap);
+        parentShardIds = shardSyncer.getParentShardIds(shard, shardMap);
         Assert.assertTrue(parentShardIds.isEmpty());
 
         shardMap.put(adjacentParentShardId, adjacentParent);
-        parentShardIds = ShardSyncer.getParentShardIds(shard, shardMap);
+        parentShardIds = shardSyncer.getParentShardIds(shard, shardMap);
         Assert.assertEquals(1, parentShardIds.size());
         Assert.assertTrue(parentShardIds.contains(adjacentParentShardId));
     }
@@ -1292,7 +1296,7 @@ public class ShardSyncerTest {
 
         Shard shard = ShardObjectHelper.newShard("shardId-test", parentShardId, adjacentParentShardId, null);
 
-        Set<String> parentShardIds = ShardSyncer.getParentShardIds(shard, shardMap);
+        Set<String> parentShardIds = shardSyncer.getParentShardIds(shard, shardMap);
         Assert.assertEquals(2, parentShardIds.size());
         Assert.assertTrue(parentShardIds.contains(parentShardId));
         Assert.assertTrue(parentShardIds.contains(adjacentParentShardId));
@@ -1310,7 +1314,7 @@ public class ShardSyncerTest {
         shard.setParentShardId(parentShardId);
         shard.setAdjacentParentShardId(adjacentParentShardId);
 
-        KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
+        KinesisClientLease lease = shardSyncer.newKCLLease(shard);
         Assert.assertEquals(shardId, lease.getLeaseKey());
         Assert.assertNull(lease.getCheckpoint());
         Set<String> parentIds = lease.getParentShardIds();
@@ -1330,7 +1334,7 @@ public class ShardSyncerTest {
         shards.add(ShardObjectHelper.newShard("shardId-0", null, null, null));
         shards.add(ShardObjectHelper.newShard("shardId-1", null, null, null));
 
-        Map<String, Shard> shardIdToShardMap = ShardSyncer.constructShardIdToShardMap(shards);
+        Map<String, Shard> shardIdToShardMap = shardSyncer.constructShardIdToShardMap(shards);
         Assert.assertEquals(shards.size(), shardIdToShardMap.size());
         for (Shard shard : shards) {
             Assert.assertSame(shard, shardIdToShardMap.get(shard.getShardId()));
@@ -1347,7 +1351,7 @@ public class ShardSyncerTest {
                 null,
                 null,
                 ShardObjectHelper.newSequenceNumberRange("123", "345")));
-        Assert.assertTrue(ShardSyncer.getOpenShards(shards).isEmpty());
+        Assert.assertTrue(shardSyncer.getOpenShards(shards).isEmpty());
     }
 
     /**
@@ -1361,18 +1365,18 @@ public class ShardSyncerTest {
         shards.add(ShardObjectHelper.newShard(shardId, null, null, sequenceNumberRange));
 
         // Verify shard is considered open when it has a null end sequence number
-        List<Shard> openShards = ShardSyncer.getOpenShards(shards);
+        List<Shard> openShards = shardSyncer.getOpenShards(shards);
         Assert.assertEquals(1, openShards.size());
         Assert.assertEquals(shardId, openShards.get(0).getShardId());
 
         // Close shard before testing for max sequence number
         sequenceNumberRange.setEndingSequenceNumber("1000");
-        openShards = ShardSyncer.getOpenShards(shards);
+        openShards = shardSyncer.getOpenShards(shards);
         Assert.assertTrue(openShards.isEmpty());
 
         // Verify shard is considered closed when the end sequence number is set to max allowed sequence number
         sequenceNumberRange.setEndingSequenceNumber(MAX_SEQUENCE_NUMBER.toString());
-        openShards = ShardSyncer.getOpenShards(shards);
+        openShards = shardSyncer.getOpenShards(shards);
         Assert.assertEquals(0, openShards.size());
     }
 
@@ -1394,23 +1398,23 @@ public class ShardSyncerTest {
         Set<String> currentKinesisShardIds = new HashSet<>();
 
         currentKinesisShardIds.add(shardId);
-        Assert.assertFalse(ShardSyncer.isCandidateForCleanup(lease, currentKinesisShardIds));
+        Assert.assertFalse(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
 
         currentKinesisShardIds.clear();
-        Assert.assertTrue(ShardSyncer.isCandidateForCleanup(lease, currentKinesisShardIds));
+        Assert.assertTrue(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
 
         currentKinesisShardIds.add(parentShardId);
-        // Assert.assertFalse(ShardSyncer.isCandidateForCleanup(lease, currentKinesisShardIds));
+        // Assert.assertFalse(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
 
         currentKinesisShardIds.clear();
-        Assert.assertTrue(ShardSyncer.isCandidateForCleanup(lease, currentKinesisShardIds));
+        Assert.assertTrue(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
 
         currentKinesisShardIds.add(adjacentParentShardId);
-        // Assert.assertFalse(ShardSyncer.isCandidateForCleanup(lease, currentKinesisShardIds));
+        // Assert.assertFalse(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
         currentKinesisShardIds.add(parentShardId);
-        // Assert.assertFalse(ShardSyncer.isCandidateForCleanup(lease, currentKinesisShardIds));
+        // Assert.assertFalse(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
         currentKinesisShardIds.add(shardId);
-        Assert.assertFalse(ShardSyncer.isCandidateForCleanup(lease, currentKinesisShardIds));
+        Assert.assertFalse(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
     }
 
     /**
@@ -1431,7 +1435,7 @@ public class ShardSyncerTest {
         Set<String> currentKinesisShardIds = new HashSet<>();
 
         currentKinesisShardIds.add(parentShardId);
-        Assert.assertFalse(ShardSyncer.isCandidateForCleanup(lease, currentKinesisShardIds));
+        Assert.assertFalse(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
     }
 
     /**
@@ -1452,7 +1456,7 @@ public class ShardSyncerTest {
         Set<String> currentKinesisShardIds = new HashSet<>();
 
         currentKinesisShardIds.add(adjacentParentShardId);
-        Assert.assertFalse(ShardSyncer.isCandidateForCleanup(lease, currentKinesisShardIds));
+        Assert.assertFalse(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
     }
 
     /**
@@ -1482,22 +1486,22 @@ public class ShardSyncerTest {
         KinesisClientLease childLease2 = newLease(childShardId2);
         childLease2.setParentShardIds(parentShardIds);
         childLease2.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
-        Map<String, KinesisClientLease> trackedLeaseMap = ShardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
+        Map<String, KinesisClientLease> trackedLeaseMap = shardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
 
         // empty list of leases
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
+        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNotNull(leaseManager.getLease(closedShardId));
 
         // closed shard has not been fully processed yet (checkpoint != SHARD_END)
         trackedLeases.add(leaseForClosedShard);
-        trackedLeaseMap = ShardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
+        trackedLeaseMap = shardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
+        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNotNull(leaseManager.getLease(closedShardId));
 
         // closed shard has been fully processed yet (checkpoint == SHARD_END)
         leaseForClosedShard.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
         leaseManager.updateLease(leaseForClosedShard);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
+        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNull(leaseManager.getLease(closedShardId));
 
         // lease for only one child exists
@@ -1506,27 +1510,27 @@ public class ShardSyncerTest {
         leaseManager.createLeaseIfNotExists(leaseForClosedShard);
         leaseManager.createLeaseIfNotExists(childLease1);
         trackedLeases.add(childLease1);
-        trackedLeaseMap = ShardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
+        trackedLeaseMap = shardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
+        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNotNull(leaseManager.getLease(closedShardId));
 
         // leases for both children exists, but they are both at TRIM_HORIZON
         leaseManager.createLeaseIfNotExists(childLease2);
         trackedLeases.add(childLease2);
-        trackedLeaseMap = ShardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
+        trackedLeaseMap = shardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
+        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNotNull(leaseManager.getLease(closedShardId));
 
         // leases for both children exists, one is at TRIM_HORIZON
         childLease1.setCheckpoint(new ExtendedSequenceNumber("34890"));
         leaseManager.updateLease(childLease1);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
+        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNotNull(leaseManager.getLease(closedShardId));
 
         // leases for both children exists, NONE of them are at TRIM_HORIZON
         childLease2.setCheckpoint(new ExtendedSequenceNumber("43789"));
         leaseManager.updateLease(childLease2);
-        ShardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
+        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNull(leaseManager.getLease(closedShardId));
     }
 
@@ -1546,32 +1550,32 @@ public class ShardSyncerTest {
         SequenceNumberRange childSequenceNumberRange = ShardObjectHelper.newSequenceNumberRange("206", "300");
         Shard child1 =
                 ShardObjectHelper.newShard("shardId-54879", expectedClosedShardId, null, childSequenceNumberRange);
-        Map<String, Shard> shardIdToShardMap = ShardSyncer.constructShardIdToShardMap(shards);
+        Map<String, Shard> shardIdToShardMap = shardSyncer.constructShardIdToShardMap(shards);
         Map<String, Set<String>> shardIdToChildShardIdsMap =
-                ShardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
+                shardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
         Set<String> closedShardIds = new HashSet<>();
         closedShardIds.add(expectedClosedShardId);
-        ShardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
+        shardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
 
         // test for case where shard has been trimmed (absent from list)
-        ShardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
+        shardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
 
         // Populate shards.
         shards.add(closedShard);
         shards.add(child1);
         shardIdToShardMap.put(expectedClosedShardId, closedShard);
         shardIdToShardMap.put(child1.getShardId(), child1);
-        shardIdToChildShardIdsMap = ShardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
+        shardIdToChildShardIdsMap = shardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
 
         // test degenerate split/merge
         child1.setHashKeyRange(hashKeyRange);
-        ShardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
+        shardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
 
         // test merge
         child1.setHashKeyRange(ShardObjectHelper.newHashKeyRange("10", "2985"));
-        ShardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
+        shardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
         child1.setHashKeyRange(ShardObjectHelper.newHashKeyRange("3", "25"));
-        ShardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
+        shardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
 
         // test split
         HashKeyRange childHashKeyRange1 = ShardObjectHelper.newHashKeyRange("10", "15");
@@ -1584,8 +1588,8 @@ public class ShardSyncerTest {
                 childHashKeyRange2);
         shards.add(child2);
         shardIdToShardMap.put(child2.getShardId(), child2);
-        shardIdToChildShardIdsMap = ShardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
-        ShardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
+        shardIdToChildShardIdsMap = shardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
+        shardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
     }
 
     /**
@@ -1602,12 +1606,12 @@ public class ShardSyncerTest {
         Shard openShard =
                 ShardObjectHelper.newShard(expectedClosedShardId, null, null, sequenceNumberRange, hashKeyRange);
         shards.add(openShard);
-        Map<String, Shard> shardIdToShardMap = ShardSyncer.constructShardIdToShardMap(shards);
+        Map<String, Shard> shardIdToShardMap = shardSyncer.constructShardIdToShardMap(shards);
         Map<String, Set<String>> shardIdToChildShardIdsMap =
-                ShardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
+                shardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
         Set<String> closedShardIds = new HashSet<>();
         closedShardIds.add(expectedClosedShardId);
-        ShardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
+        shardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
     }
 
     /**
@@ -1624,12 +1628,12 @@ public class ShardSyncerTest {
         Shard closedShard =
                 ShardObjectHelper.newShard(expectedClosedShardId, null, null, sequenceNumberRange, hashKeyRange);
         shards.add(closedShard);
-        Map<String, Shard> shardIdToShardMap = ShardSyncer.constructShardIdToShardMap(shards);
+        Map<String, Shard> shardIdToShardMap = shardSyncer.constructShardIdToShardMap(shards);
         Map<String, Set<String>> shardIdToChildShardIdsMap =
-                ShardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
+                shardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
         Set<String> closedShardIds = new HashSet<>();
         closedShardIds.add(expectedClosedShardId);
-        ShardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
+        shardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
     }
 
     /**
@@ -1683,12 +1687,12 @@ public class ShardSyncerTest {
                 child2HashKeyRange);
         shards.add(child2);
 
-        Map<String, Shard> shardIdToShardMap = ShardSyncer.constructShardIdToShardMap(shards);
+        Map<String, Shard> shardIdToShardMap = shardSyncer.constructShardIdToShardMap(shards);
         Map<String, Set<String>> shardIdToChildShardIdsMap =
-                ShardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
+                shardSyncer.constructShardIdToChildShardIdsMap(shardIdToShardMap);
         Set<String> closedShardIds = new HashSet<>();
         closedShardIds.add(expectedClosedShardId);
-        ShardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
+        shardSyncer.assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, closedShardIds);
     }
 
     /**

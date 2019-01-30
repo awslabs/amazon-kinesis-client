@@ -22,6 +22,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+import com.amazonaws.services.kinesis.leases.impl.Lease;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -58,36 +60,41 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
 
     /**
      * @param leaseManager Lease manager which provides CRUD lease operations.
+     * @param leaseSelector Lease selector which decides which leases to take
      * @param workerIdentifier Used to identify this worker process
      * @param leaseDurationMillis Duration of a lease in milliseconds
      * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
      */
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
+            ILeaseSelector<KinesisClientLease> leaseSelector,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis) {
-        super(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis);
+        super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis);
         this.leaseManager = leaseManager;
     }
 
     /**
      * @param leaseManager Lease manager which provides CRUD lease operations.
+     * @param leaseSelector Lease selector which decides which leases to take
      * @param workerIdentifier Used to identify this worker process
      * @param leaseDurationMillis Duration of a lease in milliseconds
      * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
      * @param metricsFactory Metrics factory used to emit metrics
      */
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
+            ILeaseSelector<KinesisClientLease> leaseSelector,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
             IMetricsFactory metricsFactory) {
-        super(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, metricsFactory);
+        super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis, metricsFactory);
         this.leaseManager = leaseManager;
     }
 
     /**
      * @param leaseManager Lease manager which provides CRUD lease operations.
+     * @param leaseSelector Lease selector which decides which leases to take
      * @param workerIdentifier Used to identify this worker process
      * @param leaseDurationMillis Duration of a lease in milliseconds
      * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
@@ -96,6 +103,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @param metricsFactory Metrics factory used to emit metrics
      */
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
+            ILeaseSelector<KinesisClientLease> leaseSelector,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
@@ -103,7 +111,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
             int maxLeasesToStealAtOneTime,
             int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
-        super(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
+        super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
         this.leaseManager = leaseManager;
     }

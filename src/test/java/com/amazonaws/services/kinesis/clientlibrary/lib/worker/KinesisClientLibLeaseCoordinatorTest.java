@@ -19,6 +19,9 @@ import static org.mockito.Mockito.doReturn;
 
 import java.util.UUID;
 
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import com.amazonaws.services.kinesis.leases.impl.KinesisLeaseSelector;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSelector;
 import junit.framework.Assert;
 
 import org.junit.Before;
@@ -54,7 +57,8 @@ public class KinesisClientLibLeaseCoordinatorTest {
         MockitoAnnotations.initMocks(this);
         // Set up lease coordinator
         doReturn(true).when(mockLeaseManager).createLeaseTableIfNotExists(anyLong(), anyLong());
-        leaseCoordinator = new KinesisClientLibLeaseCoordinator(mockLeaseManager, WORK_ID, TEST_LONG, TEST_LONG);
+        ILeaseSelector<KinesisClientLease> leaseSelector = new KinesisLeaseSelector<>();
+        leaseCoordinator = new KinesisClientLibLeaseCoordinator(mockLeaseManager, leaseSelector, WORK_ID, TEST_LONG, TEST_LONG);
     }
 
     @Test(expected = ShutdownException.class)

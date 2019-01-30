@@ -26,6 +26,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -89,32 +90,36 @@ public class LeaseCoordinator<T extends Lease> {
      * Constructor.
      *
      * @param leaseManager LeaseManager instance to use
+     * @param leaseSelector LeaseSelector instance to use
      * @param workerIdentifier Identifies the worker (e.g. useful to track lease ownership)
      * @param leaseDurationMillis Duration of a lease
      * @param epsilonMillis Allow for some variance when calculating lease expirations
      */
     public LeaseCoordinator(ILeaseManager<T> leaseManager,
+            ILeaseSelector<T> leaseSelector,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis) {
-        this(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, new LogMetricsFactory());
+        this(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis, new LogMetricsFactory());
     }
 
     /**
      * Constructor.
      *
      * @param leaseManager LeaseManager instance to use
+     * @param leaseSelector LeaseSelector instance to use
      * @param workerIdentifier Identifies the worker (e.g. useful to track lease ownership)
      * @param leaseDurationMillis Duration of a lease
      * @param epsilonMillis Allow for some variance when calculating lease expirations
      * @param metricsFactory Used to publish metrics about lease operations
      */
     public LeaseCoordinator(ILeaseManager<T> leaseManager,
+            ILeaseSelector<T> leaseSelector,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
             IMetricsFactory metricsFactory) {
-        this(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis,
+        this(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis,
                 DEFAULT_MAX_LEASES_FOR_WORKER, DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME,
                 KinesisClientLibConfiguration.DEFAULT_MAX_LEASE_RENEWAL_THREADS, metricsFactory);
     }
@@ -123,6 +128,7 @@ public class LeaseCoordinator<T extends Lease> {
      * Constructor.
      *
      * @param leaseManager LeaseManager instance to use
+     * @param leaseSelector LeaseSelector instance to use
      * @param workerIdentifier Identifies the worker (e.g. useful to track lease ownership)
      * @param leaseDurationMillis Duration of a lease
      * @param epsilonMillis Allow for some variance when calculating lease expirations
@@ -131,6 +137,7 @@ public class LeaseCoordinator<T extends Lease> {
      * @param metricsFactory Used to publish metrics about lease operations
      */
     public LeaseCoordinator(ILeaseManager<T> leaseManager,
+            ILeaseSelector<T> leaseSelector,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
@@ -139,7 +146,7 @@ public class LeaseCoordinator<T extends Lease> {
             int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
         this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
-        this.leaseTaker = new LeaseTaker<T>(leaseManager, workerIdentifier, leaseDurationMillis)
+        this.leaseTaker = new LeaseTaker<T>(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis)
                 .withMaxLeasesForWorker(maxLeasesForWorker)
                 .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
         this.leaseRenewer = new LeaseRenewer<T>(

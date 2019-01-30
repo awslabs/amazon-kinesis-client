@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.leases.impl;
 
 import java.util.Map;
 
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSelector;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -26,10 +27,11 @@ public class LeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
     private static final long LEASE_DURATION_MILLIS = 1000L;
     private LeaseTaker<KinesisClientLease> taker;
+    private static final ILeaseSelector<KinesisClientLease> leaseSelector = new KinesisLeaseSelector<>();
 
     @Before
     public void setUp() {
-        taker = new LeaseTaker<KinesisClientLease>(leaseManager, "foo", LEASE_DURATION_MILLIS);
+        taker = new LeaseTaker<KinesisClientLease>(leaseManager, leaseSelector,"foo", LEASE_DURATION_MILLIS);
     }
 
     @Test

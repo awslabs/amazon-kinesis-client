@@ -26,6 +26,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -59,6 +60,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
     };
 
     private final ILeaseManager<T> leaseManager;
+    private final ILeaseSelector<T> leaseSelector;
     private final String workerIdentifier;
     private final Map<String, T> allLeases = new HashMap<String, T>();
     private final long leaseDurationNanos;
@@ -67,8 +69,10 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
 
     private long lastScanTimeNanos = 0L;
 
-    public LeaseTaker(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis) {
+    public LeaseTaker(ILeaseManager<T> leaseManager, ILeaseSelector<T> leaseSelector,
+                      String workerIdentifier, long leaseDurationMillis) {
         this.leaseManager = leaseManager;
+        this.leaseSelector = leaseSelector;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
     }
@@ -332,7 +336,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
         Set<T> leasesToTake = new HashSet<T>();
         IMetricsScope metrics = MetricsHelper.getMetricsScope();
 
-        int numLeases = allLeases.size();
+        int numLeases = leaseSelector.getLeaseCountThatCanBeTaken(allLeases.values());
         int numWorkers = leaseCounts.size();
 
         if (numLeases == 0) {
@@ -382,10 +386,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
 
         int originalExpiredLeasesSize = expiredLeases.size();
         if (expiredLeases.size() > 0) {
-            // If we have expired leases, get up to <needed> leases from expiredLeases
-            for (; numLeasesToReachTarget > 0 && expiredLeases.size() > 0; numLeasesToReachTarget--) {
-                leasesToTake.add(expiredLeases.remove(0));
-            }
+            leasesToTake = leaseSelector.getLeasesToTakeFromExpiredLeases(expiredLeases, numLeasesToReachTarget);
         } else {
             // If there are no expired leases and we need a lease, consider stealing.
             List<T> leasesToSteal = chooseLeasesToSteal(leaseCounts, numLeasesToReachTarget, target);

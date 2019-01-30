@@ -58,10 +58,13 @@ class ShardConsumer {
     private final long taskBackoffTimeMillis;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
 
+    @Getter
+    private final ShardSyncer shardSyncer;
+
     private ITask currentTask;
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
-    
+
     @Getter
     private final GetRecordsCache getRecordsCache;
 
@@ -99,6 +102,7 @@ class ShardConsumer {
      * @param executorService ExecutorService used to execute process tasks for this shard
      * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
      * @param backoffTimeMillis backoff interval when we encounter exceptions
+     * @param shardSyncer shardSyncer instance used to check and create new leases
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     ShardConsumer(ShardInfo shardInfo,
@@ -112,7 +116,8 @@ class ShardConsumer {
                   IMetricsFactory metricsFactory,
                   long backoffTimeMillis,
                   boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                  KinesisClientLibConfiguration config) {
+                  KinesisClientLibConfiguration config,
+                  ShardSyncer shardSyncer) {
         this(shardInfo,
                 streamConfig,
                 checkpoint,
@@ -126,7 +131,8 @@ class ShardConsumer {
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
                 Optional.empty(),
                 Optional.empty(),
-                config);
+                config,
+                shardSyncer);
     }
 
     /**
@@ -142,6 +148,7 @@ class ShardConsumer {
      * @param retryGetRecordsInSeconds time in seconds to wait before the worker retries to get a record.
      * @param maxGetRecordsThreadPool max number of threads in the getRecords thread pool.
      * @param config Kinesis library configuration
+     * @param shardSyncer shardSyncer instance used to check and create new leases
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     ShardConsumer(ShardInfo shardInfo,
@@ -157,8 +164,9 @@ class ShardConsumer {
                   boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
                   Optional<Integer> retryGetRecordsInSeconds,
                   Optional<Integer> maxGetRecordsThreadPool,
-                  KinesisClientLibConfiguration config) {
-        
+                  KinesisClientLibConfiguration config,
+                  ShardSyncer shardSyncer) {
+
         this(
                 shardInfo,
                 streamConfig,
@@ -182,7 +190,8 @@ class ShardConsumer {
                 new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo),
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
-                config
+                config,
+                shardSyncer
         );
     }
 
@@ -203,6 +212,7 @@ class ShardConsumer {
      * @param retryGetRecordsInSeconds time in seconds to wait before the worker retries to get a record
      * @param maxGetRecordsThreadPool max number of threads in the getRecords thread pool
      * @param config Kinesis library configuration
+     * @param shardSyncer shardSyncer instance used to check and create new leases
      */
     ShardConsumer(ShardInfo shardInfo,
                   StreamConfig streamConfig,
@@ -219,7 +229,8 @@ class ShardConsumer {
                   KinesisDataFetcher kinesisDataFetcher,
                   Optional<Integer> retryGetRecordsInSeconds,
                   Optional<Integer> maxGetRecordsThreadPool,
-                  KinesisClientLibConfiguration config) {
+                  KinesisClientLibConfiguration config,
+                  ShardSyncer shardSyncer) {
         this.shardInfo = shardInfo;
         this.streamConfig = streamConfig;
         this.checkpoint = checkpoint;
@@ -237,12 +248,13 @@ class ShardConsumer {
         this.getRecordsCache = config.getRecordsFetcherFactory().createRecordsFetcher(
                 makeStrategy(this.dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, this.shardInfo),
                 this.getShardInfo().getShardId(), this.metricsFactory, this.config.getMaxRecords());
+        this.shardSyncer = shardSyncer;
     }
 
     /**
      * No-op if current task is pending, otherwise submits next task for this shard.
      * This method should NOT be called if the ShardConsumer is already in SHUTDOWN_COMPLETED state.
-     * 
+     *
      * @return true if a new process task was submitted, false otherwise
      */
     synchronized boolean consumeShard() {
@@ -343,7 +355,7 @@ class ShardConsumer {
     /**
      * Requests the shutdown of the this ShardConsumer. This should give the record processor a chance to checkpoint
      * before being shutdown.
-     * 
+     *
      * @param shutdownNotification used to signal that the record processor has been given the chance to shutdown.
      */
     void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
@@ -354,7 +366,7 @@ class ShardConsumer {
     /**
      * Shutdown this ShardConsumer (including invoking the RecordProcessor shutdown API).
      * This is called by Worker when it loses responsibility for a shard.
-     * 
+     *
      * @return true if shutdown is complete (false if shutdown is still in progress)
      */
     synchronized boolean beginShutdown() {
@@ -374,7 +386,7 @@ class ShardConsumer {
     /**
      * Used (by Worker) to check if this ShardConsumer instance has been shutdown
      * RecordProcessor shutdown() has been invoked, as appropriate.
-     * 
+     *
      * @return true if shutdown is complete
      */
     boolean isShutdown() {
@@ -390,7 +402,7 @@ class ShardConsumer {
 
     /**
      * Figure out next task to run based on current state, task, and shutdown context.
-     * 
+     *
      * @return Return next task to run
      */
     private ITask getNextTask() {
@@ -406,7 +418,7 @@ class ShardConsumer {
     /**
      * Note: This is a private/internal method with package level access solely for testing purposes.
      * Update state based on information about: task success, current state, and shutdown info.
-     * 
+     *
      * @param taskOutcome The outcome of the last task
      */
     void updateState(TaskOutcome taskOutcome) {
@@ -438,7 +450,7 @@ class ShardConsumer {
 
     /**
      * Private/Internal method - has package level access solely for testing purposes.
-     * 
+     *
      * @return the currentState
      */
     ConsumerStates.ShardConsumerState getCurrentState() {

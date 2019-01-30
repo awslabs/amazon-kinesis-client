@@ -66,6 +66,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.amazonaws.services.kinesis.leases.impl.*;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Condition;
@@ -111,10 +113,6 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseBuilder;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
-import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
@@ -159,6 +157,7 @@ public class WorkerTest {
 
     private RecordsFetcherFactory recordsFetcherFactory;
     private KinesisClientLibConfiguration config;
+    private ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
 
     @Mock
     private KinesisClientLibLeaseCoordinator leaseCoordinator;
@@ -503,7 +502,7 @@ public class WorkerTest {
         final int numberOfRecordsPerShard = 10;
         List<Shard> shardList = createShardListWithOneSplit();
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
-        KinesisClientLease lease = ShardSyncer.newKCLLease(shardList.get(0));
+        KinesisClientLease lease = shardSyncer.newKCLLease(shardList.get(0));
         lease.setCheckpoint(new ExtendedSequenceNumber("2"));
         initialLeases.add(lease);
         runAndTestWorker(shardList, threadPoolSize, initialLeases, callProcessRecordsForEmptyRecordList, numberOfRecordsPerShard, config);
@@ -519,7 +518,7 @@ public class WorkerTest {
         final int numberOfRecordsPerShard = 10;
         List<Shard> shardList = createShardListWithOneSplit();
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
-        KinesisClientLease lease = ShardSyncer.newKCLLease(shardList.get(0));
+        KinesisClientLease lease = shardSyncer.newKCLLease(shardList.get(0));
         lease.setCheckpoint(new ExtendedSequenceNumber("2"));
         initialLeases.add(lease);
         boolean callProcessRecordsForEmptyRecordList = true;
@@ -611,7 +610,7 @@ public class WorkerTest {
 
         final List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
-            KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
+            KinesisClientLease lease = shardSyncer.newKCLLease(shard);
             lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             initialLeases.add(lease);
         }
@@ -687,7 +686,7 @@ public class WorkerTest {
 
         final List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
-            KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
+            KinesisClientLease lease = shardSyncer.newKCLLease(shard);
             lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             initialLeases.add(lease);
         }
@@ -2013,7 +2012,7 @@ public class WorkerTest {
         Assert.assertEquals(numShards, shardList.size());
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
-            KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
+            KinesisClientLease lease = shardSyncer.newKCLLease(shard);
             lease.setCheckpoint(ExtendedSequenceNumber.AT_TIMESTAMP);
             initialLeases.add(lease);
         }
@@ -2077,8 +2076,10 @@ public class WorkerTest {
             leaseManager.createLeaseIfNotExists(initialLease);
         }
 
+        ILeaseSelector<KinesisClientLease> leaseSelector = new KinesisLeaseSelector<>();
         KinesisClientLibLeaseCoordinator leaseCoordinator =
                 new KinesisClientLibLeaseCoordinator(leaseManager,
+                        leaseSelector,
                         stageName,
                         leaseDurationMillis,
                         epsilonMillis,
