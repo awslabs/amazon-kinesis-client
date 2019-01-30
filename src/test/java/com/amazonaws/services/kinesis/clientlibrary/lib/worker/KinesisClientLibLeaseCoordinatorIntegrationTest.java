@@ -23,7 +23,8 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.auth.SystemPropertiesCredentialsProvider;
+import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
+import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import junit.framework.Assert;
 
 import org.junit.Before;
@@ -56,6 +57,7 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
     @Before
     public void setUp() throws ProvisionedThroughputException, DependencyException, InvalidStateException {
         final boolean useConsistentReads = true;
+        LeaseSelector<KinesisClientLease> leaseSelector = new GenericLeaseSelector<>();
         if (leaseManager == null) {
             AmazonDynamoDBClient ddb = new AmazonDynamoDBClient(new DefaultAWSCredentialsProviderChain());
             leaseManager =
@@ -63,7 +65,7 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
         }
         leaseManager.createLeaseTableIfNotExists(10L, 10L);
         leaseManager.deleteAll();
-        coordinator = new KinesisClientLibLeaseCoordinator(leaseManager, WORKER_ID, 5000L, 50L);
+        coordinator = new KinesisClientLibLeaseCoordinator(leaseManager, WORKER_ID, 5000L, 50L, leaseSelector);
         coordinator.start();
     }
 
@@ -210,7 +212,7 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
         }
 
         public void addLeasesToRenew(ILeaseRenewer<KinesisClientLease> renewer, String... shardIds)
-            throws DependencyException, InvalidStateException {
+                throws DependencyException, InvalidStateException {
             List<KinesisClientLease> leasesToRenew = new ArrayList<KinesisClientLease>();
 
             for (String shardId : shardIds) {
