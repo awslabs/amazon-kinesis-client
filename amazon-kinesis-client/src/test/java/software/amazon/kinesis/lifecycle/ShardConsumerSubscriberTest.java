@@ -267,13 +267,25 @@ public class ShardConsumerSubscriberTest {
             processedNotifier.wait(5000);
         }
 
-        executorService.execute(() -> {
-            try {
-                barrier.await();
-            } catch (Exception e) {
-                log.error("Exception while blocking thread", e);
-            }
-        });
+        synchronized (processedNotifier) {
+            executorService.execute(() -> {
+                try {
+                    //
+                    // Notify the test as soon as we have started executing, then wait on the post add barrier.
+                    //
+                    synchronized (processedNotifier) {
+                        processedNotifier.notifyAll();
+                    }
+                    barrier.await();
+                } catch (Exception e) {
+                    log.error("Exception while blocking thread", e);
+                }
+            });
+            //
+            // Wait for our blocking thread to control the thread in the executor.
+            //
+            processedNotifier.wait(5000);
+        }
 
         Stream.iterate(2, i -> i + 1).limit(97).forEach(this::addUniqueItem);
 
