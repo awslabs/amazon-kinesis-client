@@ -44,7 +44,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.0.4</version>
+      <version>2.1.1</version>
   </dependency>
   ```
 
@@ -54,21 +54,21 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>1.9.2</version>
+      <version>1.9.3</version>
   </dependency>
   ```
 
 
 ## Release Notes
 
-### Latest Release (2.1.0 - January 14, 2019)
-[Milestone #27](https://github.com/awslabs/amazon-kinesis-client/milestone/27)
-* Introducing MultiLangDaemon support for Enhanced Fan-Out.  
-* MultiLangDaemon now supports the following command line options.
-  * `--properties-file`: Properties file that the KCL should use to set up the Scheduler.
-  * `--log-configuration`: logback.xml that the KCL should use for logging.
-* Updated AWS SDK dependency to 2.2.0.
-* MultiLangDaemon now uses logback for logging.
+### Latest Release (2.1.1 - February 6, 2019)
+[Milestone#28](https://github.com/awslabs/amazon-kinesis-client/milestone/28)
+* Introducing `SHUT_DOWN_STARTED` state for the `WorkerStateChangeListener`.
+  * [PR#457](https://github.com/awslabs/amazon-kinesis-client/pull/457)
+* Fixed a bug with `AWSSessionCredentials` using `AWSSecretID` instead of `AWSAccessID` and vice versa.
+  * [PR#486](https://github.com/awslabs/amazon-kinesis-client/pull/486)
+* Upgrading SDK version to 2.4.0, which includes a fix for a possible deadlock when using Enhanced Fan-Out.
+  * [PR#493](https://github.com/awslabs/amazon-kinesis-client/pull/493)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
