@@ -279,8 +279,6 @@ public class ShardConsumerSubscriberTest {
 
         addTerminalMarker(2);
 
-        recordsPublisher.send();
-
         synchronized (processedNotifier) {
             assertThat(subscriber.healthCheck(1), nullValue());
             barrier.await(500, TimeUnit.MILLISECONDS);
@@ -359,7 +357,7 @@ public class ShardConsumerSubscriberTest {
     private class TestPublisher implements RecordsPublisher {
 
         private final LinkedList<ResponseItem> responses = new LinkedList<>();
-        private long requested = 0;
+        private volatile long requested = 0;
         private int currentIndex = 0;
         private Subscriber<? super RecordsRetrieved> subscriber;
         private RecordsRetrieved restartedFrom;
@@ -370,6 +368,11 @@ public class ShardConsumerSubscriberTest {
         }
 
         void send() {
+            send(0);
+        }
+
+        synchronized void send(long toRequest) {
+            requested += toRequest;
             while (requested > 0 && currentIndex < responses.size()) {
                 ResponseItem item = responses.get(currentIndex);
                 currentIndex++;
@@ -418,8 +421,7 @@ public class ShardConsumerSubscriberTest {
             s.onSubscribe(new Subscription() {
                 @Override
                 public void request(long n) {
-                    requested += n;
-                    send();
+                    send(n);
                 }
 
                 @Override
