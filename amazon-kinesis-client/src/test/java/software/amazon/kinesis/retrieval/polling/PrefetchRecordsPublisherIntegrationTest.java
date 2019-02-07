@@ -121,13 +121,13 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput processRecordsInput1 = getRecordsCache.getNextResult();
+        ProcessRecordsInput processRecordsInput1 = getRecordsCache.getNextResult().processRecordsInput();
 
         assertTrue(processRecordsInput1.records().isEmpty());
         assertEquals(processRecordsInput1.millisBehindLatest(), new Long(1000));
         assertNotNull(processRecordsInput1.cacheEntryTime());
 
-        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult();
+        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult().processRecordsInput();
 
         assertNotEquals(processRecordsInput1, processRecordsInput2);
     }
@@ -139,8 +139,8 @@ public class PrefetchRecordsPublisherIntegrationTest {
 
         assertEquals(getRecordsCache.getRecordsResultQueue.size(), MAX_SIZE);
 
-        ProcessRecordsInput processRecordsInput1 = getRecordsCache.getNextResult();
-        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult();
+        ProcessRecordsInput processRecordsInput1 = getRecordsCache.getNextResult().processRecordsInput();
+        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult().processRecordsInput();
 
         assertNotEquals(processRecordsInput1, processRecordsInput2);
     }
@@ -179,9 +179,9 @@ public class PrefetchRecordsPublisherIntegrationTest {
 
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput p1 = getRecordsCache.getNextResult();
+        ProcessRecordsInput p1 = getRecordsCache.getNextResult().processRecordsInput();
 
-        ProcessRecordsInput p2 = recordsPublisher2.getNextResult();
+        ProcessRecordsInput p2 = recordsPublisher2.getNextResult().processRecordsInput();
 
         assertNotEquals(p1, p2);
         assertTrue(p1.records().isEmpty());
@@ -207,7 +207,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult();
+        ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult().processRecordsInput();
 
         assertNotNull(processRecordsInput);
         assertTrue(processRecordsInput.records().isEmpty());

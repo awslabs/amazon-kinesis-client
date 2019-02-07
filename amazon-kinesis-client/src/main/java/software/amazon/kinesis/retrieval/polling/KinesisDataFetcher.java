@@ -227,6 +227,12 @@ public class KinesisDataFetcher {
         advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream);
     }
 
+    public void resetIterator(String shardIterator, String sequenceNumber, InitialPositionInStreamExtended initialPositionInStream) {
+        this.nextIterator = shardIterator;
+        this.lastKnownSequenceNumber = sequenceNumber;
+        this.initialPositionInStream = initialPositionInStream;
+    }
+
     private GetRecordsResponse getRecords(@NonNull final String nextIterator) {
         final AWSExceptionManager exceptionManager = createExceptionManager();
         GetRecordsRequest request = KinesisRequestsBuilder.getRecordsRequestBuilder().shardIterator(nextIterator)

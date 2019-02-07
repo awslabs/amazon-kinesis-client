@@ -70,6 +70,7 @@ import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -161,7 +162,7 @@ public class ShardConsumerTest {
         final CyclicBarrier barrier = new CyclicBarrier(2);
         final CyclicBarrier requestBarrier = new CyclicBarrier(2);
 
-        Subscriber<? super ProcessRecordsInput> subscriber;
+        Subscriber<? super RecordsRetrieved> subscriber;
         final Subscription subscription = mock(Subscription.class);
 
         TestPublisher() {
@@ -193,7 +194,7 @@ public class ShardConsumerTest {
         }
 
         @Override
-        public void subscribe(Subscriber<? super ProcessRecordsInput> s) {
+        public void subscribe(Subscriber<? super RecordsRetrieved> s) {
             subscriber = s;
             subscriber.onSubscribe(subscription);
             try {
@@ -201,6 +202,11 @@ public class ShardConsumerTest {
             } catch (Exception ex) {
                 throw new RuntimeException(ex);
             }
+        }
+
+        @Override
+        public void restartFrom(RecordsRetrieved recordsRetrieved) {
+
         }
 
         public void awaitSubscription() throws InterruptedException, BrokenBarrierException {
@@ -219,10 +225,10 @@ public class ShardConsumerTest {
         }
 
         public void publish() {
-            publish(processRecordsInput);
+            publish(() -> processRecordsInput);
         }
 
-        public void publish(ProcessRecordsInput input) {
+        public void publish(RecordsRetrieved input) {
             subscriber.onNext(input);
         }
     }

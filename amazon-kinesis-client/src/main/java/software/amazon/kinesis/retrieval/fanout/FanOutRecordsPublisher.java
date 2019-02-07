@@ -24,8 +24,10 @@ import java.util.stream.Collectors;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
+import lombok.Data;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -42,6 +44,7 @@ import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -67,7 +70,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private InitialPositionInStreamExtended initialPositionInStreamExtended;
     private boolean isFirstConnection = true;
 
-    private Subscriber<? super ProcessRecordsInput> subscriber;
+    private Subscriber<? super RecordsRetrieved> subscriber;
     private long availableQueueSpace = 0;
 
     @Override
@@ -90,6 +93,24 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 flow.cancel();
             }
             flow = null;
+        }
+    }
+
+    @Override
+    public void restartFrom(RecordsRetrieved recordsRetrieved) {
+        synchronized (lockObject) {
+            if (flow != null) {
+                //
+                // The flow should not be running at this time
+                //
+                flow.cancel();
+            }
+            flow = null;
+            if (!(recordsRetrieved instanceof FanoutRecordsRetrieved)) {
+                throw new IllegalArgumentException(
+                        "Provided ProcessRecordsInput not created from the FanOutRecordsPublisher");
+            }
+            currentSequenceNumber = ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();
         }
     }
 
@@ -174,8 +195,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             log.debug(
                     "{}: Could not call SubscribeToShard successfully because shard no longer exists. Marking shard for completion.",
                     shardId);
+            FanoutRecordsRetrieved response = new FanoutRecordsRetrieved(
+                    ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true).build(), null);
             subscriber
-                    .onNext(ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true).build());
+                    .onNext(response);
             subscriber.onComplete();
         } else {
             subscriber.onError(t);
@@ -257,9 +280,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             ProcessRecordsInput input = ProcessRecordsInput.builder().cacheEntryTime(Instant.now())
                     .millisBehindLatest(recordBatchEvent.millisBehindLatest())
                     .isAtShardEnd(recordBatchEvent.continuationSequenceNumber() == null).records(records).build();
+            FanoutRecordsRetrieved recordsRetrieved = new FanoutRecordsRetrieved(input, recordBatchEvent.continuationSequenceNumber());
 
             try {
-                subscriber.onNext(input);
+                subscriber.onNext(recordsRetrieved);
                 //
                 // Only advance the currentSequenceNumber if we successfully dispatch the last received input
                 //
@@ -311,7 +335,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public void subscribe(Subscriber<? super ProcessRecordsInput> s) {
+    public void subscribe(Subscriber<? super RecordsRetrieved> s) {
         synchronized (lockObject) {
             if (subscriber != null) {
                 log.error(
@@ -442,6 +466,19 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 localSub.cancel();
             }
         });
+    }
+
+    @Accessors(fluent = true)
+    @Data
+    static class FanoutRecordsRetrieved implements RecordsRetrieved {
+
+        private final ProcessRecordsInput processRecordsInput;
+        private final String continuationSequenceNumber;
+
+        @Override
+        public ProcessRecordsInput processRecordsInput() {
+            return processRecordsInput;
+        }
     }
 
     @RequiredArgsConstructor

@@ -27,6 +27,7 @@ import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -38,7 +39,7 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
-    private Subscriber<? super ProcessRecordsInput> subscriber;
+    private Subscriber<? super RecordsRetrieved> subscriber;
 
     public BlockingRecordsPublisher(final int maxRecordsPerCall,
                                     final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
@@ -70,7 +71,12 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public void subscribe(Subscriber<? super ProcessRecordsInput> s) {
+    public void subscribe(Subscriber<? super RecordsRetrieved> s) {
         subscriber = s;
+    }
+
+    @Override
+    public void restartFrom(RecordsRetrieved recordsRetrieved) {
+        throw new UnsupportedOperationException();
     }
 }

@@ -24,17 +24,21 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.utils.ProcessRecordsInputMatcher.eqProcessRecordsInput;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -42,15 +46,18 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
+import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
@@ -66,6 +73,7 @@ import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -92,7 +100,7 @@ public class PrefetchRecordsPublisherTest {
 
     private List<Record> records;
     private ExecutorService executorService;
-    private LinkedBlockingQueue<ProcessRecordsInput> spyQueue;
+    private LinkedBlockingQueue<PrefetchRecordsPublisher.PrefetchRecordsRetrieved> spyQueue;
     private PrefetchRecordsPublisher getRecordsCache;
     private String operation = "ProcessTask";
     private GetRecordsResponse getRecordsResponse;
@@ -131,7 +139,7 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput result = getRecordsCache.getNextResult();
+        ProcessRecordsInput result = getRecordsCache.getNextResult().processRecordsInput();
 
         assertEquals(expectedRecords, result.records());
 
@@ -200,7 +208,7 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult();
+        ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult().processRecordsInput();
 
         verify(executorService).execute(any());
         assertEquals(expectedRecords, processRecordsInput.records());
@@ -209,7 +217,7 @@ public class PrefetchRecordsPublisherTest {
 
         sleep(2000);
 
-        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult();
+        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult().processRecordsInput();
         assertNotEquals(processRecordsInput, processRecordsInput2);
         assertEquals(expectedRecords, processRecordsInput2.records());
         assertNotEquals(processRecordsInput2.timeSpentInCache(), Duration.ZERO);
@@ -276,7 +284,7 @@ public class PrefetchRecordsPublisherTest {
 
         Object lock = new Object();
 
-        Subscriber<ProcessRecordsInput> subscriber = new Subscriber<ProcessRecordsInput>() {
+        Subscriber<RecordsRetrieved> subscriber = new Subscriber<RecordsRetrieved>() {
             Subscription sub;
 
             @Override
@@ -286,7 +294,7 @@ public class PrefetchRecordsPublisherTest {
             }
 
             @Override
-            public void onNext(ProcessRecordsInput processRecordsInput) {
+            public void onNext(RecordsRetrieved recordsRetrieved) {
                 receivedItems.incrementAndGet();
                 if (receivedItems.get() >= expectedItems) {
                     synchronized (lock) {
@@ -325,6 +333,87 @@ public class PrefetchRecordsPublisherTest {
         assertThat(receivedItems.get(), equalTo(expectedItems));
     }
 
+    @Test
+    public void testResetClearsRemainingData() {
+        List<GetRecordsResponse> responses = Stream.iterate(0, i -> i + 1).limit(10).map(i -> {
+            Record record = Record.builder().partitionKey("record-" + i).sequenceNumber("seq-" + i)
+                    .data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).approximateArrivalTimestamp(Instant.now())
+                    .build();
+            String nextIterator = "shard-iter-" + (i + 1);
+            return GetRecordsResponse.builder().records(record).nextShardIterator(nextIterator).build();
+        }).collect(Collectors.toList());
+
+        RetrieverAnswer retrieverAnswer = new RetrieverAnswer(responses);
+
+        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenAnswer(retrieverAnswer);
+        doAnswer(a -> {
+            String resetTo = a.getArgumentAt(0, String.class);
+            retrieverAnswer.resetIteratorTo(resetTo);
+            return null;
+        }).when(dataFetcher).resetIterator(anyString(), anyString(), any());
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        RecordsRetrieved lastProcessed = getRecordsCache.getNextResult();
+        RecordsRetrieved expected = getRecordsCache.getNextResult();
+
+        //
+        // Skip some of the records the cache
+        //
+        getRecordsCache.getNextResult();
+        getRecordsCache.getNextResult();
+
+        verify(getRecordsRetrievalStrategy, atLeast(2)).getRecords(anyInt());
+
+        while(getRecordsCache.getRecordsResultQueue.remainingCapacity() > 0) {
+            Thread.yield();
+        }
+
+        getRecordsCache.restartFrom(lastProcessed);
+        RecordsRetrieved postRestart = getRecordsCache.getNextResult();
+
+        assertThat(postRestart.processRecordsInput(), eqProcessRecordsInput(expected.processRecordsInput()));
+        verify(dataFetcher).resetIterator(eq(responses.get(0).nextShardIterator()),
+                eq(responses.get(0).records().get(0).sequenceNumber()), any());
+
+    }
+
+    private static class RetrieverAnswer implements Answer<GetRecordsResponse> {
+
+        private final List<GetRecordsResponse> responses;
+        private Iterator<GetRecordsResponse> iterator;
+
+        public RetrieverAnswer(List<GetRecordsResponse> responses) {
+            this.responses = responses;
+            this.iterator = responses.iterator();
+        }
+
+        public void resetIteratorTo(String nextIterator) {
+            Iterator<GetRecordsResponse> newIterator = responses.iterator();
+            while(newIterator.hasNext()) {
+                GetRecordsResponse current = newIterator.next();
+                if (StringUtils.equals(nextIterator, current.nextShardIterator())) {
+                    if (!newIterator.hasNext()) {
+                        iterator = responses.iterator();
+                    } else {
+                        newIterator.next();
+                        iterator = newIterator;
+                    }
+                    break;
+                }
+            }
+        }
+
+        @Override
+        public GetRecordsResponse answer(InvocationOnMock invocation) throws Throwable {
+            GetRecordsResponse response = iterator.next();
+            if (!iterator.hasNext()) {
+                iterator = responses.iterator();
+            }
+            return response;
+        }
+    }
+
     @After
     public void shutdown() {
         getRecordsCache.shutdown();
@@ -340,4 +429,5 @@ public class PrefetchRecordsPublisherTest {
     private SdkBytes createByteBufferWithSize(int size) {
         return SdkBytes.fromByteArray(new byte[size]);
     }
+
 }
