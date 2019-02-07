@@ -1,5 +1,14 @@
 # Changelog
 
+### Release 2.1.1 (February 6, 2019)
+[Milestone#28](https://github.com/awslabs/amazon-kinesis-client/milestone/28)
+* Introducing `SHUT_DOWN_STARTED` state for the `WorkerStateChangeListener`.
+  * [PR#457](https://github.com/awslabs/amazon-kinesis-client/pull/457)
+* Fixed a bug with `AWSSessionCredentials` using `AWSSecretID` instead of `AWSAccessID` and vice versa.
+  * [PR#486](https://github.com/awslabs/amazon-kinesis-client/pull/486)
+* Upgrading SDK version to 2.4.0, which includes a fix for a possible deadlock when using Enhanced Fan-Out.
+  * [PR#493](https://github.com/awslabs/amazon-kinesis-client/pull/493)
+
 ### Release 2.1.0 (January 14, 2019)
 [Milestone #27](https://github.com/awslabs/amazon-kinesis-client/milestone/27)
 * Introducing MultiLangDaemon support for Enhanced Fan-Out.  
