@@ -25,16 +25,17 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.lang3.Validate;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
@@ -325,7 +326,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     scope.addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
                     dataFetcher.restartIterator();
-                } catch (SdkClientException e) {
+                } catch (SdkException e) {
                     log.error("Exception thrown while fetching records from Kinesis", e);
                 } catch (Throwable e) {
                     log.error("Unexpected exception was thrown. This could probably be an issue or a bug." +
