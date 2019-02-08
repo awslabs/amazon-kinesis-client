@@ -1,3 +1,5 @@
 target/
 AwsCredentials.properties
 .idea
+*.iml
+
