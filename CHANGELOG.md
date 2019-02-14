@@ -1,5 +1,15 @@
 # Changelog
 
+### Release 2.1.2 (February 15, 2019)
+[Milestone#29](https://github.com/awslabs/amazon-kinesis-client/milestone/29)
+* Fixed handling of the progress detection in the `ShardConsumer` to restart from the last accepted record, instead of the last queued record.
+  * [PR#492](https://github.com/awslabs/amazon-kinesis-client/pull/492)
+* Fixed handling of exceptions when using polling so that it will no longer treat `SdkException`s as an unexpected exception.
+  * [PR#497](https://github.com/awslabs/amazon-kinesis-client/pull/497)
+  * [PR#502](https://github.com/awslabs/amazon-kinesis-client/pull/502)
+* Fixed a case where lease loss would block the `Scheduler` while waiting for a record processor's `processRecords` method to complete.
+  * [PR#501](https://github.com/awslabs/amazon-kinesis-client/pull/501)
+
 ### Release 2.1.1 (February 6, 2019)
 [Milestone#28](https://github.com/awslabs/amazon-kinesis-client/milestone/28)
 * Introducing `SHUT_DOWN_STARTED` state for the `WorkerStateChangeListener`.
