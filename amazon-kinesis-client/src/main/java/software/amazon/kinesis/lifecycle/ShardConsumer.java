@@ -76,10 +76,8 @@ public class ShardConsumer {
      * much coordination/synchronization to handle concurrent reads/updates.
      */
     private ConsumerState currentState;
-    /*
-     * Used to track if we lost the primary responsibility. Once set to true, we will start shutting down.
-     * If we regain primary responsibility before shutdown is complete, Worker should create a new ShardConsumer object.
-     */
+
+    private final Object shutdownLock = new Object();
     @Getter(AccessLevel.PUBLIC)
     private volatile ShutdownReason shutdownReason;
     private volatile ShutdownNotification shutdownNotification;
@@ -257,24 +255,27 @@ public class ShardConsumer {
     }
 
     @VisibleForTesting
-    synchronized CompletableFuture<Boolean> shutdownComplete() {
-        if (taskOutcome != null) {
-            updateState(taskOutcome);
-        } else {
-            //
-            // ShardConsumer has been asked to shutdown before the first task even had a chance to run.
-            // In this case generate a successful task outcome, and allow the shutdown to continue.  This should only
-            // happen if the lease was lost before the initial state had a chance to run.
-            //
-            updateState(TaskOutcome.SUCCESSFUL);
-        }
-        if (isShutdown()) {
-            return CompletableFuture.completedFuture(true);
-        }
+    CompletableFuture<Boolean> shutdownComplete() {
         return CompletableFuture.supplyAsync(() -> {
-            executeTask(null);
-            return false;
-        });
+            synchronized (this) {
+                if (taskOutcome != null) {
+                    updateState(taskOutcome);
+                } else {
+                    //
+                    // ShardConsumer has been asked to shutdown before the first task even had a chance to run.
+                    // In this case generate a successful task outcome, and allow the shutdown to continue.  This should only
+                    // happen if the lease was lost before the initial state had a chance to run.
+                    //
+                    updateState(TaskOutcome.SUCCESSFUL);
+                }
+                if (isShutdown()) {
+                    return true;
+                }
+
+                executeTask(null);
+                return false;
+            }
+        }, executorService);
     }
 
     private synchronized void processData(ProcessRecordsInput input) {
@@ -339,10 +340,12 @@ public class ShardConsumer {
     }
 
     private ConsumerState handleShutdownTransition(TaskOutcome outcome, ConsumerState nextState) {
-        if (isShutdownRequested() && outcome != TaskOutcome.FAILURE) {
-            return currentState.shutdownTransition(shutdownReason);
+        synchronized (shutdownLock) {
+            if (isShutdownRequested() && outcome != TaskOutcome.FAILURE) {
+                return currentState.shutdownTransition(shutdownReason);
+            }
+            return nextState;
         }
-        return nextState;
     }
 
     private void logTaskException(TaskResult taskResult) {
@@ -388,13 +391,15 @@ public class ShardConsumer {
         return isShutdown();
     }
 
-    synchronized void markForShutdown(ShutdownReason reason) {
-        //
-        // ShutdownReason.LEASE_LOST takes precedence over SHARD_END
-        // (we won't be able to save checkpoint at end of shard)
-        //
-        if (shutdownReason == null || shutdownReason.canTransitionTo(reason)) {
-            shutdownReason = reason;
+    void markForShutdown(ShutdownReason reason) {
+        synchronized (shutdownLock) {
+            //
+            // ShutdownReason.LEASE_LOST takes precedence over SHARD_END
+            // (we won't be able to save checkpoint at end of shard)
+            //
+            if (shutdownReason == null || shutdownReason.canTransitionTo(reason)) {
+                shutdownReason = reason;
+            }
         }
     }
 
@@ -410,7 +415,9 @@ public class ShardConsumer {
 
     @VisibleForTesting
     public boolean isShutdownRequested() {
-        return shutdownReason != null;
+        synchronized (shutdownLock) {
+            return shutdownReason != null;
+        }
     }
 
     /**
