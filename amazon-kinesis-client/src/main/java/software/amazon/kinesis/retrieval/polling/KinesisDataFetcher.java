@@ -27,6 +27,7 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
@@ -263,6 +264,7 @@ public class KinesisDataFetcher {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
         exceptionManager.add(ResourceNotFoundException.class, t -> t);
         exceptionManager.add(KinesisException.class, t -> t);
+        exceptionManager.add(SdkException.class, t -> t);
         return exceptionManager;
     }
 }
