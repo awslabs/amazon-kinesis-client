@@ -44,7 +44,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.1.1</version>
+      <version>2.1.2</version>
   </dependency>
   ```
 
@@ -61,14 +61,15 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.1.1 - February 6, 2019)
-[Milestone#28](https://github.com/awslabs/amazon-kinesis-client/milestone/28)
-* Introducing `SHUT_DOWN_STARTED` state for the `WorkerStateChangeListener`.
-  * [PR#457](https://github.com/awslabs/amazon-kinesis-client/pull/457)
-* Fixed a bug with `AWSSessionCredentials` using `AWSSecretID` instead of `AWSAccessID` and vice versa.
-  * [PR#486](https://github.com/awslabs/amazon-kinesis-client/pull/486)
-* Upgrading SDK version to 2.4.0, which includes a fix for a possible deadlock when using Enhanced Fan-Out.
-  * [PR#493](https://github.com/awslabs/amazon-kinesis-client/pull/493)
+### Latest Release (2.1.2 - February 15, 2019)
+[Milestone#29](https://github.com/awslabs/amazon-kinesis-client/milestone/29)
+* Fixed handling of the progress detection in the `ShardConsumer` to restart from the last accepted record, instead of the last queued record.
+  * [PR#492](https://github.com/awslabs/amazon-kinesis-client/pull/492)
+* Fixed handling of exceptions when using polling so that it will no longer treat `SdkException`s as an unexpected exception.
+  * [PR#497](https://github.com/awslabs/amazon-kinesis-client/pull/497)
+  * [PR#502](https://github.com/awslabs/amazon-kinesis-client/pull/502)
+* Fixed a case where lease loss would block the `Scheduler` while waiting for a record processor's `processRecords` method to complete.
+  * [PR#501](https://github.com/awslabs/amazon-kinesis-client/pull/501)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
