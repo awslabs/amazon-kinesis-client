@@ -152,6 +152,12 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
         while (!ConsumerStatus.ACTIVE.equals(status) && retries > 0) {
             status = describeStreamConsumer().consumerDescription().consumerStatus();
             retries--;
+            try {
+                log.info(String.format("Waiting for StreamConsumer %s to have ACTIVE status...", streamConsumerName));
+                Thread.sleep(retryBackoffMillis);
+            } catch (InterruptedException ie) {
+                log.debug("Sleep interrupted, will immediately retry fetching StreamConsumer status.");
+            }
         }
 
         if (!ConsumerStatus.ACTIVE.equals(status)) {

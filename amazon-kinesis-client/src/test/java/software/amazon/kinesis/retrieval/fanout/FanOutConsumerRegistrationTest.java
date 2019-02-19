@@ -9,6 +9,7 @@
 package software.amazon.kinesis.retrieval.fanout;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -20,6 +21,7 @@ import static org.mockito.Mockito.when;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.commons.lang3.StringUtils;
+import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -172,9 +174,12 @@ public class FanOutConsumerRegistrationTest {
                 .thenReturn(intermidateResponse).thenReturn(successResponse);
         when(client.registerStreamConsumer(any(RegisterStreamConsumerRequest.class))).thenReturn(rscFuture);
 
+        final long startTime = System.currentTimeMillis();
         final String consumerArn = consumerRegistration.getOrCreateStreamConsumerArn();
+        final long endTime = System.currentTimeMillis();
 
-        assertThat(consumerArn, equalTo(CONSUMER_ARN));
+        assertThat(consumerArn, Matchers.equalTo(CONSUMER_ARN));
+        assertThat(endTime - startTime, greaterThanOrEqualTo(2 * BACKOFF_MILLIS));
 
         verify(client).registerStreamConsumer(eq(createRegisterStreamConsumerRequest()));
         verify(client).describeStreamSummary(eq(createDescribeStreamSummaryRequest()));
