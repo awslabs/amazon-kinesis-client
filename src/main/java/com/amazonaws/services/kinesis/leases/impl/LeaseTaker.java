@@ -67,15 +67,14 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
     private int maxLeasesForWorker = Integer.MAX_VALUE;
     private int maxLeasesToStealAtOneTime = 1;
 
-    private final LeaseSelector<T> defaultLeaseSelector = new GenericLeaseSelector<>();
-
     private long lastScanTimeNanos = 0L;
 
+    private static <T extends Lease> LeaseSelector<T> getDefaultLeaseSelector() {
+        return new GenericLeaseSelector<>();
+    }
+
     public LeaseTaker(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis) {
-        this.leaseManager = leaseManager;
-        this.leaseSelector = defaultLeaseSelector;
-        this.workerIdentifier = workerIdentifier;
-        this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
+        this(leaseManager, getDefaultLeaseSelector(), workerIdentifier, leaseDurationMillis);
     }
 
     public LeaseTaker(ILeaseManager<T> leaseManager, LeaseSelector<T> leaseSelector,

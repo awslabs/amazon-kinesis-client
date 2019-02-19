@@ -83,9 +83,13 @@ public class LeaseCoordinator<T extends Lease> {
 
     private ScheduledExecutorService leaseCoordinatorThreadPool;
     private final ExecutorService leaseRenewalThreadpool;
-    private final LeaseSelector<T> leaseSelector = new GenericLeaseSelector<>();
+
     private volatile boolean running = false;
     private ScheduledFuture<?> takerFuture;
+
+    private static <T extends Lease> LeaseSelector<T> getDefaultLeaseSelector() {
+        return new GenericLeaseSelector<>();
+    }
 
     /**
      * Constructor.
@@ -178,25 +182,8 @@ public class LeaseCoordinator<T extends Lease> {
             int maxLeasesToStealAtOneTime,
             int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
-        this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
-        this.leaseTaker = new LeaseTaker<T>(leaseManager, this.leaseSelector, workerIdentifier, leaseDurationMillis)
-                .withMaxLeasesForWorker(maxLeasesForWorker)
-                .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
-        this.leaseRenewer = new LeaseRenewer<T>(
-                leaseManager, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool);
-        this.renewerIntervalMillis = leaseDurationMillis / 3 - epsilonMillis;
-        this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
-        this.metricsFactory = metricsFactory;
-
-        LOG.info(String.format(
-                "With failover time %d ms and epsilon %d ms, LeaseCoordinator will renew leases every %d ms, take" +
-                        "leases every %d ms, process maximum of %d leases and steal %d lease(s) at a time.",
-                leaseDurationMillis,
-                epsilonMillis,
-                renewerIntervalMillis,
-                takerIntervalMillis,
-                maxLeasesForWorker,
-                maxLeasesToStealAtOneTime));
+        this(leaseManager, getDefaultLeaseSelector(), workerIdentifier, leaseDurationMillis, epsilonMillis,
+                maxLeasesForWorker, maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
     }
 
     /**
