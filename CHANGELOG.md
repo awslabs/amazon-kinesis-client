@@ -1,6 +1,6 @@
 # Changelog
 
-### Release 2.1.2 (February 15, 2019)
+### Release 2.1.2 (February 18, 2019)
 [Milestone#29](https://github.com/awslabs/amazon-kinesis-client/milestone/29)
 * Fixed handling of the progress detection in the `ShardConsumer` to restart from the last accepted record, instead of the last queued record.
   * [PR#492](https://github.com/awslabs/amazon-kinesis-client/pull/492)
