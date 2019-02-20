@@ -46,11 +46,12 @@ class ShardSyncTaskManager {
     private boolean cleanupLeasesUponShardCompletion;
     private boolean ignoreUnexpectedChildShards;
     private final long shardSyncIdleTimeMillis;
+    private final ShardSyncer shardSyncer;
 
 
     /**
      * Constructor.
-     * 
+     *
      * @param kinesisProxy Proxy used to fetch streamInfo (shards)
      * @param leaseManager Lease manager (used to list and create leases for shards)
      * @param initialPositionInStream Initial position in stream
@@ -60,6 +61,7 @@ class ShardSyncTaskManager {
      * @param shardSyncIdleTimeMillis Time between tasks to sync leases and Kinesis shards
      * @param metricsFactory Metrics factory
      * @param executorService ExecutorService to execute the shard sync tasks
+     * @param shardSyncer shardSyncer instance used to check and create new leases
      */
     ShardSyncTaskManager(final IKinesisProxy kinesisProxy,
             final ILeaseManager<KinesisClientLease> leaseManager,
@@ -68,7 +70,8 @@ class ShardSyncTaskManager {
             final boolean ignoreUnexpectedChildShards,
             final long shardSyncIdleTimeMillis,
             final IMetricsFactory metricsFactory,
-            ExecutorService executorService) {
+            ExecutorService executorService,
+            ShardSyncer shardSyncer) {
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.metricsFactory = metricsFactory;
@@ -77,6 +80,7 @@ class ShardSyncTaskManager {
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
         this.initialPositionInStream = initialPositionInStream;
+        this.shardSyncer = shardSyncer;
     }
 
     synchronized boolean syncShardAndLeaseInfo(Set<String> closedShardIds) {
@@ -104,7 +108,8 @@ class ShardSyncTaskManager {
                             initialPositionInStream,
                             cleanupLeasesUponShardCompletion,
                             ignoreUnexpectedChildShards,
-                            shardSyncIdleTimeMillis), metricsFactory);
+                            shardSyncIdleTimeMillis,
+                            shardSyncer), metricsFactory);
             future = executorService.submit(currentTask);
             submittedNewTask = true;
             if (LOG.isDebugEnabled()) {
