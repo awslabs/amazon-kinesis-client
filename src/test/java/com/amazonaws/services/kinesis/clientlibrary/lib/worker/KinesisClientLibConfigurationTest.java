@@ -369,4 +369,13 @@ public class KinesisClientLibConfigurationTest {
         config = config.withIgnoreUnexpectedChildShards(true);
         assertTrue(config.shouldIgnoreUnexpectedChildShards());
     }
+
+    @Test
+    public void testKCLConfigurationDontCreateLeaseIfDescendantExists() {
+        KinesisClientLibConfiguration config =
+                new KinesisClientLibConfiguration("TestApplication", "TestStream", null, "TestWorker");
+        assertFalse(config.shouldNotCreateLeaseIfDescendantExists());
+        config = config.withDontCreateLeaseIfDescendantExists(true);
+        assertTrue(config.shouldNotCreateLeaseIfDescendantExists());
+    }
 }

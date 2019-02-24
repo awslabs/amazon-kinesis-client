@@ -49,6 +49,7 @@ class ShutdownTask implements ITask {
     private final long backoffTimeMillis;
     private final GetRecordsCache getRecordsCache;
     private final ShardSyncer shardSyncer;
+    private final boolean dontCreateLeaseIfDescendantExists;
 
     /**
      * Constructor.
@@ -65,7 +66,8 @@ class ShutdownTask implements ITask {
             ILeaseManager<KinesisClientLease> leaseManager,
             long backoffTimeMillis,
             GetRecordsCache getRecordsCache,
-            ShardSyncer shardSyncer) {
+            ShardSyncer shardSyncer,
+            boolean dontCreateLeaseIfDescendantExists) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -78,6 +80,7 @@ class ShutdownTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
         this.getRecordsCache = getRecordsCache;
         this.shardSyncer = shardSyncer;
+        this.dontCreateLeaseIfDescendantExists = dontCreateLeaseIfDescendantExists;
     }
 
     /*
@@ -134,7 +137,8 @@ class ShutdownTask implements ITask {
                         leaseManager,
                         initialPositionInStream,
                         cleanupLeasesOfCompletedShards,
-                        ignoreUnexpectedChildShards);
+                        ignoreUnexpectedChildShards,
+                        dontCreateLeaseIfDescendantExists);
                 LOG.debug("Finished checking for child shards of shard " + shardInfo.getShardId());
             }
 
