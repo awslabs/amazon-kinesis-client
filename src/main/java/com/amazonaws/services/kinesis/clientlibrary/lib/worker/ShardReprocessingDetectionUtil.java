@@ -27,11 +27,11 @@ import java.util.stream.Collectors;
  * This class removes shards from newLeasesToCreate that have:
  * a) Already begun processing, or
  * b) One of their descendants have begun processing.
- * If a lease for the shard itself of any one of their descendants is found
+ * If a lease for the shard itself, or any one of its descendants is found
  * in currentLeases, and the lease is not checkpointed at TRIM_HORIZON, LATEST,
  * or AT_TIMESTAMP, it is considered to have begun processing.
  * This class expects newLeasesToCreate to be sorted in increasing order of
- * sequence number range.
+ * sequence number range, i.e., from oldest ancestor to youngest descendants.
  */
 public class ShardReprocessingDetectionUtil {
     private final List<KinesisClientLease> newLeasesToCreate;
@@ -55,9 +55,8 @@ public class ShardReprocessingDetectionUtil {
 
     /**
      * This method iterates through every lease in the newLeasesToCreate list and determines if the shard is being
-     * reprocessed by using a helper method isShardBeingReprocessed, in which case, it emits a metric.
-     * In the future, after validation of this shard reprocessing detection mechanism, this method will also
-     * return a modified list of newLeasesToCreate by removing the reprocessed shards.
+     * reprocessed by using a helper method hasShardBeenProcessed, in which case, it removes that shard from the
+     * newLeasesToCreate.
      */
     public List<KinesisClientLease> removeShardsWhoseDescendantsExist() {
         return newLeasesToCreate.stream()
