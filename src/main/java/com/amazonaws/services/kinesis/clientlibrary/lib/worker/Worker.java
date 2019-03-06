@@ -482,9 +482,10 @@ public class Worker implements Runnable {
             shutdown();
         }
 
-        while (!shouldShutdown()) {
+        do {
+            // use do while to initialize the shardInfoShardConsumerMap, which is checked in shouldShutdown()
             runProcessLoop();
-        }
+        } while (!shouldShutdown());
 
         finalShutdown();
         LOG.info("Worker loop is complete. Exiting from worker.");
@@ -526,6 +527,9 @@ public class Worker implements Runnable {
                 LOG.info("Worker: sleep interrupted after catching exception ", ex);
             }
         }
+
+        // reset retries
+        retries.set(0);
         wlog.resetInfoLogging();
     }
 
@@ -867,6 +871,10 @@ public class Worker implements Runnable {
                 LOG.info("Lease failover time is reached, so forcing shutdown.");
                 return true;
             }
+        }
+
+        if (shardInfoShardConsumerMap.isEmpty()) {
+            LOG.info("Nothing to consume");
         }
         return false;
     }
