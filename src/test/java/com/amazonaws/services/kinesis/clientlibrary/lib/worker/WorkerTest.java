@@ -38,6 +38,7 @@ import java.io.File;
 import java.lang.Thread.State;
 import java.lang.reflect.Field;
 import java.math.BigInteger;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -60,7 +61,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Condition;
@@ -68,7 +68,6 @@ import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.hamcrest.TypeSafeMatcher;
-import org.hamcrest.internal.ReflectiveTypeFinder;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -1083,7 +1082,7 @@ public class WorkerTest {
         verify(executorService, never()).submit(argThat(
                 both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN))));
 
-        assertThat(worker.shouldShutdown(), equalTo(true));
+        assertThat(worker.shouldShutdown(Instant.now()), equalTo(true));
 
     }
 
@@ -1314,7 +1313,7 @@ public class WorkerTest {
 
 
 
-        assertThat(worker.shouldShutdown(), equalTo(true));
+        assertThat(worker.shouldShutdown(Instant.now()), equalTo(true));
 
     }
 

@@ -14,6 +14,8 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -81,6 +83,9 @@ public class Worker implements Runnable {
     private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
     private static final int MAX_RETRIES = 4;
     private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
+    private static final boolean DEFAULT_EXITS_ON_FAILURE = false;
+    private static final boolean DEFAULT_EXITS_WHEN_SHARD_CONSUMERS_FINISH = false;
+    private static final Optional<Duration> DEFAULT_TIME_LIMIT = Optional.empty();
 
     private WorkerLog wlog = new WorkerLog();
 
@@ -119,6 +124,12 @@ public class Worker implements Runnable {
     private final boolean cleanupLeasesUponShardCompletion;
 
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
+
+    // fivetran configurables
+    private final boolean exitOnFailure;
+    private final boolean exitWhenShardConsumersFinish;
+    private final Optional<Duration> timeLimit;
+
 
     /**
      * Used to ensure that only one requestedShutdown is in progress at a time.
@@ -348,7 +359,10 @@ public class Worker implements Runnable {
                 config.getShardPrioritizationStrategy(),
                 config.getRetryGetRecordsInSeconds(),
                 config.getMaxGetRecordsThreadPool(),
-                DEFAULT_WORKER_STATE_CHANGE_LISTENER);
+                DEFAULT_WORKER_STATE_CHANGE_LISTENER,
+                DEFAULT_EXITS_ON_FAILURE,
+                DEFAULT_EXITS_WHEN_SHARD_CONSUMERS_FINISH,
+                DEFAULT_TIME_LIMIT);
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
@@ -395,7 +409,8 @@ public class Worker implements Runnable {
         this(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
                 shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
                 metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
-                shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER);
+                shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER,
+                DEFAULT_EXITS_ON_FAILURE, DEFAULT_EXITS_WHEN_SHARD_CONSUMERS_FINISH, DEFAULT_TIME_LIMIT);
     }
 
     /**
@@ -426,7 +441,8 @@ public class Worker implements Runnable {
            KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
            IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
            boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
-           Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener) {
+           Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener,
+           boolean exitOnFailure, boolean exitWhenShardConsumersFinish, Optional<Duration> timeLimit) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.config = config;
@@ -449,6 +465,9 @@ public class Worker implements Runnable {
         this.retryGetRecordsInSeconds = retryGetRecordsInSeconds;
         this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
         this.workerStateChangeListener = workerStateChangeListener;
+        this.exitOnFailure = exitOnFailure;
+        this.exitWhenShardConsumersFinish = exitWhenShardConsumersFinish;
+        this.timeLimit = timeLimit;
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.CREATED);
     }
 
@@ -469,10 +488,13 @@ public class Worker implements Runnable {
     /**
      * Start consuming data from the stream, and pass it to the application record processors.
      */
+    @Override
     public void run() {
         if (shutdown) {
             return;
         }
+
+        Instant start = Instant.now();
 
         try {
             initialize();
@@ -485,7 +507,7 @@ public class Worker implements Runnable {
         do {
             // use do while to initialize the shardInfoShardConsumerMap, which is checked in shouldShutdown()
             runProcessLoop();
-        } while (!shouldShutdown());
+        } while (!shouldShutdown(start));
 
         finalShutdown();
         LOG.info("Worker loop is complete. Exiting from worker.");
@@ -516,7 +538,7 @@ public class Worker implements Runnable {
             wlog.info("Sleeping ...");
             Thread.sleep(idleTimeInMilliseconds);
         } catch (Exception e) {
-            if (retries.getAndIncrement() > MAX_RETRIES)
+            if (exitOnFailure && retries.getAndIncrement() > MAX_RETRIES)
                 throw new RuntimeException("Failing after " + MAX_RETRIES + " attempts", e);
 
             LOG.error(String.format("Worker.run caught exception, sleeping for %s milli seconds!",
@@ -855,9 +877,10 @@ public class Worker implements Runnable {
      * method before every loop run, so method must do minimum amount of work to not impact shard processing timings.
      *
      * @return Whether worker should shutdown immediately.
+     * @param start
      */
     @VisibleForTesting
-    boolean shouldShutdown() {
+    boolean shouldShutdown(Instant start) {
         if (executorService.isShutdown()) {
             LOG.error("Worker executor service has been shutdown, so record processors cannot be shutdown.");
             return true;
@@ -873,9 +896,20 @@ public class Worker implements Runnable {
             }
         }
 
-        if (shardInfoShardConsumerMap.isEmpty()) {
-            LOG.info("Nothing to consume");
+        return fivetranWantsShutdown(start);
+    }
+
+    boolean fivetranWantsShutdown(Instant start) {
+        if (exitWhenShardConsumersFinish && shardInfoShardConsumerMap.isEmpty()) {
+            LOG.info("All ShardConsumers have finished");
+            return true;
         }
+
+        if (timeLimit.isPresent() && Duration.between(start, Instant.now()).compareTo(timeLimit.get()) > 0) {
+            LOG.info("Time limit of " + timeLimit.get() + " reached");
+            return true;
+        }
+
         return false;
     }
 
@@ -1070,6 +1104,11 @@ public class Worker implements Runnable {
         private IKinesisProxy kinesisProxy;
         private WorkerStateChangeListener workerStateChangeListener;
 
+        // fivetran additions
+        boolean exitOnFailure = DEFAULT_EXITS_ON_FAILURE;
+        boolean exitWhenShardConsumersFinish = DEFAULT_EXITS_WHEN_SHARD_CONSUMERS_FINISH;
+        Optional<Duration> timeLimit = DEFAULT_TIME_LIMIT;
+
         @VisibleForTesting
         AmazonKinesis getKinesisClient() {
             return kinesisClient;
@@ -1213,7 +1252,10 @@ public class Worker implements Runnable {
                     shardPrioritization,
                     config.getRetryGetRecordsInSeconds(),
                     config.getMaxGetRecordsThreadPool(),
-                    workerStateChangeListener);
+                    workerStateChangeListener,
+                    exitOnFailure,
+                    exitWhenShardConsumersFinish,
+                    timeLimit);
         }
 
         <R, T extends AwsClientBuilder<T, R>> R createClient(final T builder,
@@ -1288,6 +1330,21 @@ public class Worker implements Runnable {
 
         public Builder workerStateChangeListener(WorkerStateChangeListener workerStateChangeListener) {
             this.workerStateChangeListener = workerStateChangeListener;
+            return this;
+        }
+
+        public Builder exitOnFailure() {
+            this.exitOnFailure = true;
+            return this;
+        }
+
+        public Builder exitWhenShardConsumersFinish() {
+            this.exitWhenShardConsumersFinish = true;
+            return this;
+        }
+
+        public Builder timeLimit(Duration timeLimit) {
+            this.timeLimit = Optional.ofNullable(timeLimit);
             return this;
         }
     }
