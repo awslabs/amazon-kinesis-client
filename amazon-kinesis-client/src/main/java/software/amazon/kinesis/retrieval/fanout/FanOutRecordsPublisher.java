@@ -157,14 +157,21 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     String logMessage = String.format(
                             "%s: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ %s id: %s -- %s",
                             shardId, flow.connectionStartedAt, flow.subscribeToShardId, category.throwableTypeString);
-                    if (category.throwableType.equals(ThrowableType.READ_TIMEOUT)) {
+                    switch (category.throwableType) {
+                    case READ_TIMEOUT:
                         log.debug(logMessage, propagationThrowable);
                         propagationThrowable = new RetryableRetrievalException(category.throwableTypeString,
                                 (Exception) propagationThrowable.getCause());
-                    } else {
+                        break;
+                    case ACQUIRE_TIMEOUT:
+                        logAcquireTimeoutMessage(t);
+                        //
+                        // Fall through is intentional here as we still want to log the details of the exception
+                        //
+                    default:
                         log.warn(logMessage, propagationThrowable);
-                    }
 
+                    }
                     flow.cancel();
                 }
                 log.debug("{}: availableQueueSpace zeroing from {}", shardId, availableQueueSpace);
@@ -190,6 +197,13 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         }
     }
 
+    protected void logAcquireTimeoutMessage(Throwable t) {
+        log.error("An acquire timeout occurred which usually indicates that the KinesisAsyncClient supplied has a " +
+                "low maximum streams limit.  " +
+                "Please use the software.amazon.kinesis.common.KinesisClientUtil to setup the client, " +
+                "or refer to the class to setup the client manually.");
+    }
+
     private void handleFlowError(Throwable t) {
         if (t.getCause() instanceof ResourceNotFoundException) {
             log.debug(
@@ -197,8 +211,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     shardId);
             FanoutRecordsRetrieved response = new FanoutRecordsRetrieved(
                     ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true).build(), null);
-            subscriber
-                    .onNext(response);
+            subscriber.onNext(response);
             subscriber.onComplete();
         } else {
             subscriber.onError(t);
@@ -280,7 +293,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             ProcessRecordsInput input = ProcessRecordsInput.builder().cacheEntryTime(Instant.now())
                     .millisBehindLatest(recordBatchEvent.millisBehindLatest())
                     .isAtShardEnd(recordBatchEvent.continuationSequenceNumber() == null).records(records).build();
-            FanoutRecordsRetrieved recordsRetrieved = new FanoutRecordsRetrieved(input, recordBatchEvent.continuationSequenceNumber());
+            FanoutRecordsRetrieved recordsRetrieved = new FanoutRecordsRetrieved(input,
+                    recordBatchEvent.continuationSequenceNumber());
 
             try {
                 subscriber.onNext(recordsRetrieved);
@@ -416,7 +430,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         }
                         subscriber = null;
                         if (flow != null) {
-                            log.debug("{}: [SubscriptionLifetime]: (FanOutRecordsPublisher/Subscription#cancel) @ {} id: {}",
+                            log.debug(
+                                    "{}: [SubscriptionLifetime]: (FanOutRecordsPublisher/Subscription#cancel) @ {} id: {}",
                                     shardId, flow.connectionStartedAt, flow.subscribeToShardId);
                             flow.cancel();
                             availableQueueSpace = 0;
