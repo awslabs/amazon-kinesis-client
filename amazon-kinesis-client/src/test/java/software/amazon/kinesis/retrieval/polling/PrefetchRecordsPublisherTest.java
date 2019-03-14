@@ -38,11 +38,13 @@ import static software.amazon.kinesis.utils.ProcessRecordsInputMatcher.eqProcess
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -74,6 +76,7 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -252,6 +255,18 @@ public class PrefetchRecordsPublisherTest {
         sleep(1000);
 
         verify(dataFetcher).restartIterator();
+    }
+
+    @Test
+    public void testRetryableRetrievalExceptionContinues() {
+
+        GetRecordsResponse response = GetRecordsResponse.builder().millisBehindLatest(100L).records(Collections.emptyList()).build();
+        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenThrow(new RetryableRetrievalException("Timeout", new TimeoutException("Timeout"))).thenReturn(response);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        RecordsRetrieved records = getRecordsCache.getNextResult();
+        assertThat(records.processRecordsInput().millisBehindLatest(), equalTo(response.millisBehindLatest()));
     }
 
     @Test(timeout = 1000L)

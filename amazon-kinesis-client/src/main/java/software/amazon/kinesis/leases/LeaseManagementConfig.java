@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.leases;
 
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
@@ -41,6 +42,9 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 @Data
 @Accessors(fluent = true)
 public class LeaseManagementConfig {
+
+    public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofMinutes(1);
+
     /**
      * Name of the table to use in DynamoDB
      *
@@ -159,6 +163,8 @@ public class LeaseManagementConfig {
 
     public long epsilonMillis = 25L;
 
+    private Duration dynamoDbRequestTimeout = DEFAULT_REQUEST_TIMEOUT;
+
     /**
      * The initial position for getting records from Kinesis streams.
      *
@@ -261,7 +267,7 @@ public class LeaseManagementConfig {
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
                     hierarchicalShardSyncer(),
-                    tableCreatorCallback());
+                    tableCreatorCallback(), dynamoDbRequestTimeout());
         }
         return leaseManagementFactory;
     }

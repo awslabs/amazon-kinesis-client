@@ -1,16 +1,16 @@
 /*
- *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- *  Licensed under the Amazon Software License (the "License").
- *  You may not use this file except in compliance with the License.
- *  A copy of the License is located at
+ * Licensed under the Amazon Software License (the "License").
+ * You may not use this file except in compliance with the License.
+ * A copy of the License is located at
  *
- *  http://aws.amazon.com/asl/
+ * http://aws.amazon.com/asl/
  *
- *  or in the "license" file accompanying this file. This file is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- *  express or implied. See the License for the specific language governing
- *  permissions and limitations under the License.
+ * or in the "license" file accompanying this file. This file is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ * express or implied. See the License for the specific language governing
+ * permissions and limitations under the License.
  */
 
 package software.amazon.kinesis.leases;
@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -31,7 +33,6 @@ import org.apache.commons.lang3.StringUtils;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.Synchronized;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
@@ -44,17 +45,18 @@ import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 
 /**
  *
  */
-@RequiredArgsConstructor
 @Slf4j
 @Accessors(fluent = true)
 @KinesisClientInternalApi
 public class KinesisShardDetector implements ShardDetector {
+
     @NonNull
     private final KinesisAsyncClient kinesisClient;
     @NonNull
@@ -64,11 +66,34 @@ public class KinesisShardDetector implements ShardDetector {
     private final long listShardsCacheAllowedAgeInSeconds;
     private final int maxCacheMissesBeforeReload;
     private final int cacheMissWarningModulus;
+    private final Duration kinesisRequestTimeout;
 
     private volatile Map<String, Shard> cachedShardMap = null;
     private volatile Instant lastCacheUpdateTime;
     @Getter(AccessLevel.PACKAGE)
     private AtomicInteger cacheMisses = new AtomicInteger(0);
+
+    @Deprecated
+    public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
+            int maxListShardsRetryAttempts, long listShardsCacheAllowedAgeInSeconds, int maxCacheMissesBeforeReload,
+            int cacheMissWarningModulus) {
+        this(kinesisClient, streamName, listShardsBackoffTimeInMillis, maxListShardsRetryAttempts,
+                listShardsCacheAllowedAgeInSeconds, maxCacheMissesBeforeReload, cacheMissWarningModulus,
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
+    }
+
+    public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
+            int maxListShardsRetryAttempts, long listShardsCacheAllowedAgeInSeconds, int maxCacheMissesBeforeReload,
+            int cacheMissWarningModulus, Duration kinesisRequestTimeout) {
+        this.kinesisClient = kinesisClient;
+        this.streamName = streamName;
+        this.listShardsBackoffTimeInMillis = listShardsBackoffTimeInMillis;
+        this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
+        this.listShardsCacheAllowedAgeInSeconds = listShardsCacheAllowedAgeInSeconds;
+        this.maxCacheMissesBeforeReload = maxCacheMissesBeforeReload;
+        this.cacheMissWarningModulus = cacheMissWarningModulus;
+        this.kinesisRequestTimeout = kinesisRequestTimeout;
+    }
 
     @Override
     public Shard shard(@NonNull final String shardId) {
@@ -132,10 +157,10 @@ public class KinesisShardDetector implements ShardDetector {
             result = listShards(nextToken);
 
             if (result == null) {
-                    /*
-                    * If listShards ever returns null, we should bail and return null. This indicates the stream is not
-                    * in ACTIVE or UPDATING state and we may not have accurate/consistent information about the stream.
-                    */
+                /*
+                 * If listShards ever returns null, we should bail and return null. This indicates the stream is not
+                 * in ACTIVE or UPDATING state and we may not have accurate/consistent information about the stream.
+                 */
                 return null;
             } else {
                 shards.addAll(result.shards());
@@ -167,7 +192,7 @@ public class KinesisShardDetector implements ShardDetector {
 
             try {
                 try {
-                    result = kinesisClient.listShards(request.build()).get();
+                    result = FutureUtils.resolveOrCancelFuture(kinesisClient.listShards(request.build()), kinesisRequestTimeout);
                 } catch (ExecutionException e) {
                     throw exceptionManager.apply(e.getCause());
                 } catch (InterruptedException e) {
@@ -188,6 +213,8 @@ public class KinesisShardDetector implements ShardDetector {
                     log.debug("Stream {} : Sleep  was interrupted ", streamName, ie);
                 }
                 lastException = e;
+            } catch (TimeoutException te) {
+                throw new RuntimeException(te);
             }
             remainingRetries--;
             if (remainingRetries <= 0 && result == null) {

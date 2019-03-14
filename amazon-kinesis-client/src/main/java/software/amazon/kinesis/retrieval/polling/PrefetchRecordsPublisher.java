@@ -51,6 +51,7 @@ import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -317,6 +318,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     drainQueueForRequests();
                 } catch (PositionResetException pse) {
                     throw pse;
+                } catch (RetryableRetrievalException rre) {
+                    log.info("Timeout occurred while waiting for response from Kinesis.  Will retry the request.");
                 } catch (InterruptedException e) {
                     log.info("Thread was interrupted, indicating shutdown was called on the cache.");
                 } catch (ExpiredIteratorException e) {

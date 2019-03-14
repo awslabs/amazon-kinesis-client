@@ -19,12 +19,15 @@ import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 
+import java.time.Duration;
+
 /**
  *
  */
 @Data
 @KinesisClientInternalApi
 public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
+
     @NonNull
     private final String streamName;
     @NonNull
@@ -34,12 +37,26 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
     // private final long listShardsBackoffTimeInMillis;
     // private final int maxListShardsRetryAttempts;
     private final int maxRecords;
+    private final Duration kinesisRequestTimeout;
+
+    public SynchronousBlockingRetrievalFactory(String streamName, KinesisAsyncClient kinesisClient, RecordsFetcherFactory recordsFetcherFactory, int maxRecords, Duration kinesisRequestTimeout) {
+        this.streamName = streamName;
+        this.kinesisClient = kinesisClient;
+        this.recordsFetcherFactory = recordsFetcherFactory;
+        this.maxRecords = maxRecords;
+        this.kinesisRequestTimeout = kinesisRequestTimeout;
+    }
+
+    @Deprecated
+    public SynchronousBlockingRetrievalFactory(String streamName, KinesisAsyncClient kinesisClient, RecordsFetcherFactory recordsFetcherFactory, int maxRecords) {
+        this(streamName, kinesisClient, recordsFetcherFactory, maxRecords, PollingConfig.DEFAULT_REQUEST_TIMEOUT);
+    }
 
     @Override
     public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
         return new SynchronousGetRecordsRetrievalStrategy(
-                new KinesisDataFetcher(kinesisClient, streamName, shardInfo.shardId(), maxRecords, metricsFactory));
+                new KinesisDataFetcher(kinesisClient, streamName, shardInfo.shardId(), maxRecords, metricsFactory, kinesisRequestTimeout));
     }
 
     @Override

@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.retrieval.polling;
 
+import java.time.Duration;
 import java.util.Optional;
 
 import lombok.Data;
@@ -31,6 +32,8 @@ import software.amazon.kinesis.retrieval.RetrievalSpecificConfig;
 @Data
 @Getter
 public class PollingConfig implements RetrievalSpecificConfig {
+
+    public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
     /**
      * Name of the Kinesis stream.
@@ -94,9 +97,14 @@ public class PollingConfig implements RetrievalSpecificConfig {
      */
     private RecordsFetcherFactory recordsFetcherFactory = new SimpleRecordsFetcherFactory();
 
+    /**
+     * The maximum time to wait for a future request from Kinesis to complete
+     */
+    private Duration kinesisRequestTimeout = DEFAULT_REQUEST_TIMEOUT;
+
     @Override
     public RetrievalFactory retrievalFactory() {
         return new SynchronousBlockingRetrievalFactory(streamName(), kinesisClient(), recordsFetcherFactory,
-                maxRecords());
+                maxRecords(), kinesisRequestTimeout);
     }
 }
