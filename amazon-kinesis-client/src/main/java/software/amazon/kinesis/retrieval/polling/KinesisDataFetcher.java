@@ -14,8 +14,10 @@
  */
 package software.amazon.kinesis.retrieval.polling;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -25,7 +27,6 @@ import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -35,6 +36,8 @@ import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorResponse;
 import software.amazon.awssdk.services.kinesis.model.KinesisException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -44,14 +47,16 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
  */
-@RequiredArgsConstructor
 @Slf4j
+@KinesisClientInternalApi
 public class KinesisDataFetcher {
+
     private static final String METRICS_PREFIX = "KinesisDataFetcher";
     private static final String OPERATION = "ProcessTask";
 
@@ -64,6 +69,21 @@ public class KinesisDataFetcher {
     private final int maxRecords;
     @NonNull
     private final MetricsFactory metricsFactory;
+    private final Duration maxFutureWait;
+
+    @Deprecated
+    public KinesisDataFetcher(KinesisAsyncClient kinesisClient, String streamName, String shardId, int maxRecords, MetricsFactory metricsFactory) {
+        this(kinesisClient, streamName, shardId, maxRecords, metricsFactory, PollingConfig.DEFAULT_REQUEST_TIMEOUT);
+    }
+
+    public KinesisDataFetcher(KinesisAsyncClient kinesisClient, String streamName, String shardId, int maxRecords, MetricsFactory metricsFactory, Duration maxFutureWait) {
+        this.kinesisClient = kinesisClient;
+        this.streamName = streamName;
+        this.shardId = shardId;
+        this.maxRecords = maxRecords;
+        this.metricsFactory = metricsFactory;
+        this.maxFutureWait = maxFutureWait;
+    }
 
     /** Note: This method has package level access for testing purposes.
      * @return nextIterator
@@ -191,7 +211,8 @@ public class KinesisDataFetcher {
 
         try {
             try {
-                final GetShardIteratorResponse result = kinesisClient.getShardIterator(request).get();
+                final GetShardIteratorResponse result = FutureUtils
+                        .resolveOrCancelFuture(kinesisClient.getShardIterator(request), maxFutureWait);
                 nextIterator = result.shardIterator();
                 success = true;
             } catch (ExecutionException e) {
@@ -199,6 +220,8 @@ public class KinesisDataFetcher {
             } catch (InterruptedException e) {
                 // TODO: Check behavior
                 throw new RuntimeException(e);
+            } catch (TimeoutException e) {
+                throw new RetryableRetrievalException(e.getMessage(), e);
             }
         } catch (ResourceNotFoundException e) {
             log.info("Caught ResourceNotFoundException when getting an iterator for shard {}", shardId, e);
@@ -244,7 +267,8 @@ public class KinesisDataFetcher {
         boolean success = false;
         long startTime = System.currentTimeMillis();
         try {
-            final GetRecordsResponse response = kinesisClient.getRecords(request).get();
+            final GetRecordsResponse response = FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(request),
+                    maxFutureWait);
             success = true;
             return response;
         } catch (ExecutionException e) {
@@ -253,6 +277,8 @@ public class KinesisDataFetcher {
             // TODO: Check behavior
             log.debug("Interrupt called on metod, shutdown initiated");
             throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            throw new RetryableRetrievalException(e.getMessage(), e);
         } finally {
             MetricsUtil.addSuccessAndLatency(metricsScope, String.format("%s.%s", METRICS_PREFIX, "getRecords"),
                     success, startTime, MetricsLevel.DETAILED);

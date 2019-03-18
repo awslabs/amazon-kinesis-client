@@ -1,24 +1,24 @@
 /*
- *  Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- *  Licensed under the Amazon Software License (the "License").
- *  You may not use this file except in compliance with the License.
- *  A copy of the License is located at
+ * Licensed under the Amazon Software License (the "License").
+ * You may not use this file except in compliance with the License.
+ * A copy of the License is located at
  *
- *  http://aws.amazon.com/asl/
+ * http://aws.amazon.com/asl/
  *
- *  or in the "license" file accompanying this file. This file is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- *  express or implied. See the License for the specific language governing
- *  permissions and limitations under the License.
+ * or in the "license" file accompanying this file. This file is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ * express or implied. See the License for the specific language governing
+ * permissions and limitations under the License.
  */
 
 package software.amazon.kinesis.retrieval.polling;
 
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -31,7 +31,6 @@ import software.amazon.kinesis.retrieval.RetrievalFactory;
 /**
  *
  */
-@RequiredArgsConstructor
 @KinesisClientInternalApi
 public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory {
     @NonNull
@@ -44,26 +43,41 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
     @NonNull
     private final ExecutorService executorService;
     private final long idleMillisBetweenCalls;
+    private final Duration maxFutureWait;
+
+    @Deprecated
+    public SynchronousPrefetchingRetrievalFactory(String streamName, KinesisAsyncClient kinesisClient,
+            RecordsFetcherFactory recordsFetcherFactory, int maxRecords, ExecutorService executorService,
+            long idleMillisBetweenCalls) {
+        this(streamName, kinesisClient, recordsFetcherFactory, maxRecords, executorService, idleMillisBetweenCalls,
+                PollingConfig.DEFAULT_REQUEST_TIMEOUT);
+    }
+
+    public SynchronousPrefetchingRetrievalFactory(String streamName, KinesisAsyncClient kinesisClient,
+            RecordsFetcherFactory recordsFetcherFactory, int maxRecords, ExecutorService executorService,
+            long idleMillisBetweenCalls, Duration maxFutureWait) {
+        this.streamName = streamName;
+        this.kinesisClient = kinesisClient;
+        this.recordsFetcherFactory = recordsFetcherFactory;
+        this.maxRecords = maxRecords;
+        this.executorService = executorService;
+        this.idleMillisBetweenCalls = idleMillisBetweenCalls;
+        this.maxFutureWait = maxFutureWait;
+    }
 
     @Override
     public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
-        return new SynchronousGetRecordsRetrievalStrategy(
-                new KinesisDataFetcher(kinesisClient, streamName, shardInfo.shardId(), maxRecords, metricsFactory));
+        return new SynchronousGetRecordsRetrievalStrategy(new KinesisDataFetcher(kinesisClient, streamName,
+                shardInfo.shardId(), maxRecords, metricsFactory, maxFutureWait));
     }
 
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
         return new PrefetchRecordsPublisher(recordsFetcherFactory.maxPendingProcessRecordsInput(),
-                recordsFetcherFactory.maxByteSize(),
-                recordsFetcherFactory.maxRecordsCount(),
-                maxRecords,
-                createGetRecordsRetrievalStrategy(shardInfo, metricsFactory),
-                executorService,
-                idleMillisBetweenCalls,
-                metricsFactory,
-                "Prefetching",
-                shardInfo.shardId());
+                recordsFetcherFactory.maxByteSize(), recordsFetcherFactory.maxRecordsCount(), maxRecords,
+                createGetRecordsRetrievalStrategy(shardInfo, metricsFactory), executorService, idleMillisBetweenCalls,
+                metricsFactory, "Prefetching", shardInfo.shardId());
     }
 }

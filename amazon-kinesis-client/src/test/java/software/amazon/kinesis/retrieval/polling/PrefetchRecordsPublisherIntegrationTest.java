@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -34,6 +35,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
 import org.junit.Before;
@@ -93,7 +95,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
     private InitialPositionInStreamExtended initialPosition;
 
     @Before
-    public void setup() throws InterruptedException, ExecutionException {
+    public void setup() throws Exception {
         records = new ArrayList<>();
         dataFetcher = spy(new KinesisDataFetcherForTest(kinesisClient, streamName, shardId, MAX_RECORDS_PER_CALL));
         getRecordsRetrievalStrategy = Mockito.spy(new SynchronousGetRecordsRetrievalStrategy(dataFetcher));
@@ -101,7 +103,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
         CompletableFuture<GetShardIteratorResponse> future = mock(CompletableFuture.class);
 
         when(extendedSequenceNumber.sequenceNumber()).thenReturn("LATEST");
-        when(future.get()).thenReturn(GetShardIteratorResponse.builder().shardIterator("TestIterator").build());
+        when(future.get(anyLong(), any(TimeUnit.class))).thenReturn(GetShardIteratorResponse.builder().shardIterator("TestIterator").build());
         when(kinesisClient.getShardIterator(any(GetShardIteratorRequest.class))).thenReturn(future);
 
         getRecordsCache = new PrefetchRecordsPublisher(MAX_SIZE,

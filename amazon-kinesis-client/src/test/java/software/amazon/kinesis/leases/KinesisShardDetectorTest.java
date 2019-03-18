@@ -9,9 +9,11 @@
 package software.amazon.kinesis.leases;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -22,11 +24,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
@@ -55,8 +61,13 @@ public class KinesisShardDetectorTest {
 
     private KinesisShardDetector shardDetector;
 
+    @Rule
+    public ExpectedException expectedExceptionRule = ExpectedException.none();
+
     @Mock
     private KinesisAsyncClient client;
+    @Mock
+    private CompletableFuture<ListShardsResponse> mockFuture;
 
     @Before
     public void setup() {
@@ -138,6 +149,19 @@ public class KinesisShardDetectorTest {
         } finally {
             verify(client).listShards(eq(ListShardsRequest.builder().streamName(STREAM_NAME).build()));
         }
+    }
+
+    @Test
+    public void testListShardsTimesOut() throws Exception {
+        expectedExceptionRule.expect(RuntimeException.class);
+        expectedExceptionRule.expectCause(isA(TimeoutException.class));
+
+        when(mockFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(new TimeoutException("Timeout"));
+
+        when(client.listShards(any(ListShardsRequest.class))).thenReturn(mockFuture);
+
+        shardDetector.listShards();
+
     }
 
     @Test

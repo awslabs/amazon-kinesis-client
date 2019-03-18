@@ -14,11 +14,13 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +47,9 @@ import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -60,11 +64,14 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @Slf4j
 @KinesisClientInternalApi
 public class DynamoDBLeaseRefresher implements LeaseRefresher {
+
     protected final String table;
     protected final DynamoDbAsyncClient dynamoDBClient;
     protected final LeaseSerializer serializer;
     protected final boolean consistentReads;
     private final TableCreatorCallback tableCreatorCallback;
+
+    private final Duration dynamoDbRequestTimeout;
 
     private boolean newTableCreated = false;
 
@@ -95,14 +102,31 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      * @param consistentReads
      * @param tableCreatorCallback
      */
+    @Deprecated
     public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
-            final LeaseSerializer serializer, final boolean consistentReads,
-            @NonNull final TableCreatorCallback tableCreatorCallback) {
+                                  final LeaseSerializer serializer, final boolean consistentReads,
+                                  @NonNull final TableCreatorCallback tableCreatorCallback) {
+        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
+    }
+
+    /**
+     * Constructor.
+     *  @param table
+     * @param dynamoDBClient
+     * @param serializer
+     * @param consistentReads
+     * @param tableCreatorCallback
+     * @param dynamoDbRequestTimeout
+     */
+    public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
+                                  final LeaseSerializer serializer, final boolean consistentReads,
+                                  @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout) {
         this.table = table;
         this.dynamoDBClient = dynamoDBClient;
         this.serializer = serializer;
         this.consistentReads = consistentReads;
         this.tableCreatorCallback = tableCreatorCallback;
+        this.dynamoDbRequestTimeout = dynamoDbRequestTimeout;
     }
 
     /**
@@ -132,7 +156,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         try {
             try {
-                dynamoDBClient.createTable(request).get();
+                FutureUtils.resolveOrCancelFuture(dynamoDBClient.createTable(request), dynamoDbRequestTimeout);
                 newTableCreated = true;
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
@@ -144,7 +168,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             return newTableCreated;
         } catch (LimitExceededException e) {
             throw new ProvisionedThroughputException("Capacity exceeded when creating table " + table, e);
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw new DependencyException(e);
         }
         return newTableCreated;
@@ -167,7 +191,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         DescribeTableResponse result;
         try {
             try {
-                result = dynamoDBClient.describeTable(request).get();
+                result = FutureUtils.resolveOrCancelFuture(dynamoDBClient.describeTable(request), dynamoDbRequestTimeout);
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
             } catch (InterruptedException e) {
@@ -177,7 +201,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         } catch (ResourceNotFoundException e) {
             log.debug("Got ResourceNotFoundException for table {} in leaseTableExists, returning false.", table);
             return null;
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw new DependencyException(e);
         }
 
@@ -269,7 +293,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         try {
             try {
-                ScanResponse scanResult = dynamoDBClient.scan(scanRequest).get();
+                ScanResponse scanResult = FutureUtils.resolveOrCancelFuture(dynamoDBClient.scan(scanRequest), dynamoDbRequestTimeout);
                 List<Lease> result = new ArrayList<>();
 
                 while (scanResult != null) {
@@ -287,7 +311,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                         // Make another request, picking up where we left off.
                         scanRequest = scanRequest.toBuilder().exclusiveStartKey(lastEvaluatedKey).build();
                         log.debug("lastEvaluatedKey was {}, continuing scan.", lastEvaluatedKey);
-                        scanResult = dynamoDBClient.scan(scanRequest).get();
+                        scanResult = FutureUtils.resolveOrCancelFuture(dynamoDBClient.scan(scanRequest), dynamoDbRequestTimeout);
                     }
                 }
                 log.debug("Listed {} leases from table {}", result.size(), table);
@@ -302,7 +326,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             throw new InvalidStateException("Cannot scan lease table " + table + " because it does not exist.", e);
         } catch (ProvisionedThroughputExceededException e) {
             throw new ProvisionedThroughputException(e);
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw new DependencyException(e);
         }
     }
@@ -323,7 +347,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         try {
             try {
-                dynamoDBClient.putItem(request).get();
+                FutureUtils.resolveOrCancelFuture(dynamoDBClient.putItem(request), dynamoDbRequestTimeout);
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
             } catch (InterruptedException e) {
@@ -333,7 +357,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         } catch (ConditionalCheckFailedException e) {
             log.debug("Did not create lease {} because it already existed", lease);
             return false;
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("create", lease.leaseKey(), e);
         }
         return true;
@@ -352,7 +376,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         final AWSExceptionManager exceptionManager = createExceptionManager();
         try {
             try {
-                GetItemResponse result = dynamoDBClient.getItem(request).get();
+                GetItemResponse result = FutureUtils.resolveOrCancelFuture(dynamoDBClient.getItem(request), dynamoDbRequestTimeout);
 
                 Map<String, AttributeValue> dynamoRecord = result.item();
                 if (CollectionUtils.isNullOrEmpty(dynamoRecord)) {
@@ -369,7 +393,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                 // TODO: check behavior
                 throw new DependencyException(e);
             }
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("get", leaseKey, e);
         }
     }
@@ -391,7 +415,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         try {
             try {
-                dynamoDBClient.updateItem(request).get();
+                FutureUtils.resolveOrCancelFuture(dynamoDBClient.updateItem(request), dynamoDbRequestTimeout);
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
             } catch (InterruptedException e) {
@@ -414,7 +438,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             }
 
             log.info("Detected spurious renewal failure for lease with key {}, but recovered", lease.leaseKey());
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw new DependencyException(e);
         }
 
@@ -444,7 +468,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         try {
             try {
-                dynamoDBClient.updateItem(request).get();
+                FutureUtils.resolveOrCancelFuture(dynamoDBClient.updateItem(request), dynamoDbRequestTimeout);
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
             } catch (InterruptedException e) {
@@ -455,7 +479,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             log.debug("Lease renewal failed for lease with key {} because the lease counter was not {}",
                     lease.leaseKey(), lease.leaseCounter());
             return false;
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("take", lease.leaseKey(), e);
         }
 
@@ -487,7 +511,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         try {
             try {
-                dynamoDBClient.updateItem(request).get();
+                FutureUtils.resolveOrCancelFuture(dynamoDBClient.updateItem(request), dynamoDbRequestTimeout);
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
             } catch (InterruptedException e) {
@@ -498,7 +522,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             log.debug("Lease eviction failed for lease with key {} because the lease owner was not {}",
                     lease.leaseKey(), lease.leaseOwner());
             return false;
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("evict", lease.leaseKey(), e);
         }
 
@@ -522,14 +546,14 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
             try {
                 try {
-                    dynamoDBClient.deleteItem(deleteRequest).get();
+                    FutureUtils.resolveOrCancelFuture(dynamoDBClient.deleteItem(deleteRequest), dynamoDbRequestTimeout);
                 } catch (ExecutionException e) {
                     throw exceptionManager.apply(e.getCause());
                 } catch (InterruptedException e) {
                     // TODO: check the behavior
                     throw new DependencyException(e);
                 }
-            } catch (DynamoDbException e) {
+            } catch (DynamoDbException | TimeoutException e) {
                 throw convertAndRethrowExceptions("deleteAll", lease.leaseKey(), e);
             }
         }
@@ -549,14 +573,14 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         final AWSExceptionManager exceptionManager = createExceptionManager();
         try {
             try {
-                dynamoDBClient.deleteItem(deleteRequest).get();
+                FutureUtils.resolveOrCancelFuture(dynamoDBClient.deleteItem(deleteRequest), dynamoDbRequestTimeout);
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
             } catch (InterruptedException e) {
                 // TODO: Check if this is the correct behavior
                 throw new DependencyException(e);
             }
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("delete", lease.leaseKey(), e);
         }
     }
@@ -580,7 +604,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         try {
             try {
-                dynamoDBClient.updateItem(request).get();
+                FutureUtils.resolveOrCancelFuture(dynamoDBClient.updateItem(request), dynamoDbRequestTimeout);
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
             } catch (InterruptedException e) {
@@ -590,7 +614,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             log.debug("Lease update failed for lease with key {} because the lease counter was not {}",
                     lease.leaseKey(), lease.leaseCounter());
             return false;
-        } catch (DynamoDbException e) {
+        } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("update", lease.leaseKey(), e);
         }
 
