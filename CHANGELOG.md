@@ -1,5 +1,22 @@
 # Changelog
 
+### Release 2.1.3 (March 18, 2019)
+[Milestone#30](https://github.com/awslabs/amazon-kinesis-client/milestone/30)
+* Added a message to recommend using `KinesisClientUtil` when an acquire timeout occurs in the `FanOutRecordsPublisher`.
+  * [PR#514](https://github.com/awslabs/amazon-kinesis-client/pull/514)
+* Added a sleep between retries while waiting for a newly created stream consumer to become active.
+  * [PR#506](https://github.com/awslabs/amazon-kinesis-client/issues/506)
+* Added timeouts on all futures returned from the DynamoDB and Kinesis clients.  
+  The timeouts can be configured by setting `LeaseManagementConfig#requestTimeout(Duration)` for DynamoDB, and `PollingConfig#kinesisRequestTimeout(Duration)` for Kinesis.
+  * [PR#518](https://github.com/awslabs/amazon-kinesis-client/pull/518)
+* Upgraded to SDK version 2.5.10.
+  * [PR#518](https://github.com/awslabs/amazon-kinesis-client/pull/518)
+* Artifacts for the Amazon Kinesis Client for Java are now signed by a new GPG key:
+  ```
+  pub   4096R/86368934 2019-02-14 [expires: 2020-02-14]
+  uid                  Amazon Kinesis Tools <amazon-kinesis-tools@amazon.com>
+  ```
+
 ### Release 2.1.2 (February 18, 2019)
 [Milestone#29](https://github.com/awslabs/amazon-kinesis-client/milestone/29)
 * Fixed handling of the progress detection in the `ShardConsumer` to restart from the last accepted record, instead of the last queued record.
