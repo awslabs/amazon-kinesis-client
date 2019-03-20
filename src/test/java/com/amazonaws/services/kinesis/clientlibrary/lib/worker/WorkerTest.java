@@ -1082,7 +1082,7 @@ public class WorkerTest {
         verify(executorService, never()).submit(argThat(
                 both(isA(MetricsCollectingTaskDecorator.class)).and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN))));
 
-        assertThat(worker.shouldShutdown(Instant.now()), equalTo(true));
+        assertThat(worker.shouldShutdown(), equalTo(true));
 
     }
 
@@ -1313,7 +1313,7 @@ public class WorkerTest {
 
 
 
-        assertThat(worker.shouldShutdown(Instant.now()), equalTo(true));
+        assertThat(worker.shouldShutdown(), equalTo(true));
 
     }
 
