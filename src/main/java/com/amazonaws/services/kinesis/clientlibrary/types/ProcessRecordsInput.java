@@ -32,6 +32,7 @@ public class ProcessRecordsInput {
     private List<Record> records;
     private IRecordProcessorCheckpointer checkpointer;
     private Long millisBehindLatest;
+    private String shardId;
 
     /**
      * Default constructor.
@@ -89,6 +90,10 @@ public class ProcessRecordsInput {
         return millisBehindLatest;
     }
 
+    public String getShardId() {
+        return shardId;
+    }
+
     /**
      * Set milliseconds behind latest.
      *
@@ -108,6 +113,11 @@ public class ProcessRecordsInput {
     
     public ProcessRecordsInput withCacheExitTime(Instant cacheExitTime) {
         this.cacheExitTime = cacheExitTime;
+        return this;
+    }
+
+    public ProcessRecordsInput withShardId(String shardId) {
+        this.shardId = shardId;
         return this;
     }
     

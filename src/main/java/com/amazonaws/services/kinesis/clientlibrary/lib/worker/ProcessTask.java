@@ -214,6 +214,7 @@ class ProcessTask implements ITask {
                 + shardInfo.getShardId());
         final ProcessRecordsInput processRecordsInput = new ProcessRecordsInput().withRecords(records)
                 .withCheckpointer(recordProcessorCheckpointer)
+                .withShardId(shardInfo.getShardId())
                 .withMillisBehindLatest(input.getMillisBehindLatest());
 
         final long recordProcessorStartTimeMillis = System.currentTimeMillis();
