@@ -31,6 +31,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.ThreadExceptionReporter;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -216,7 +217,7 @@ public class LeaseManagementConfig {
      * <p>Default value: {@link LeaseManagementThreadPool}</p>
      */
     private ExecutorService executorService = new LeaseManagementThreadPool(
-            new ThreadFactoryBuilder().setNameFormat("ShardSyncTaskManager-%04d").build());
+            new ThreadFactoryBuilder().setNameFormat("ShardSyncTaskManager-%04d").setUncaughtExceptionHandler(new ThreadExceptionReporter("ShardSyncTaskManagerPool")).build());
 
     static class LeaseManagementThreadPool extends ThreadPoolExecutor {
         private static final long DEFAULT_KEEP_ALIVE_TIME = 60L;
