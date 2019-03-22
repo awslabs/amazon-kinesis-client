@@ -522,7 +522,7 @@ public class Worker implements Runnable {
             Thread.sleep(idleTimeInMilliseconds);
         } catch (Exception e) {
             if (causedByStreamRecordProcessingError(e))
-                throw new RuntimeException("Failing worker after irrecoverable failure in processing records");
+                throw new RuntimeException("Failing worker after irrecoverable failure: " + e.getMessage());
             if (exitOnFailure && retries.getAndIncrement() > MAX_RETRIES)
                 throw new RuntimeException("Failing after " + MAX_RETRIES + " attempts", e);
 
