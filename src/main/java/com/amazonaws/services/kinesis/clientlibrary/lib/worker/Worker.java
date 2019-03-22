@@ -14,8 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,12 +29,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
-import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.impl.Lease;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -85,9 +78,6 @@ public class Worker implements Runnable {
     private static final int MAX_RETRIES = 4;
     private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
     private static final boolean DEFAULT_EXITS_ON_FAILURE = false;
-
-    // WARNING: dynamo connector depends upon this exact string
-    private static final String PROCESS_RECORDS_ERROR_MESSAGE = "Failure to process records";
 
     private WorkerLog wlog = new WorkerLog();
 
@@ -531,7 +521,7 @@ public class Worker implements Runnable {
             wlog.info("Sleeping ...");
             Thread.sleep(idleTimeInMilliseconds);
         } catch (Exception e) {
-            if (e.getCause().getMessage().contains(PROCESS_RECORDS_ERROR_MESSAGE))
+            if (causedByStreamRecordProcessingError(e))
                 throw new RuntimeException("Failing worker after irrecoverable failure in processing records");
             if (exitOnFailure && retries.getAndIncrement() > MAX_RETRIES)
                 throw new RuntimeException("Failing after " + MAX_RETRIES + " attempts", e);
@@ -548,6 +538,13 @@ public class Worker implements Runnable {
         // reset retries
         retries.set(0);
         wlog.resetInfoLogging();
+    }
+
+    private boolean causedByStreamRecordProcessingError(Throwable t) {
+        if (t.getCause() == null) return false;
+        if (t.getCause().getClass().equals(StreamRecordProcessingError.class)) return true;
+
+        return causedByStreamRecordProcessingError(t.getCause());
     }
 
     private void initialize() {
