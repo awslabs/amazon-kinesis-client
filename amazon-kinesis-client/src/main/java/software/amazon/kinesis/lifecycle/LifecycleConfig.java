@@ -52,4 +52,13 @@ public class LifecycleConfig {
      * <p>Default value: {@link NoOpTaskExecutionListener}</p>
      */
     private TaskExecutionListener taskExecutionListener = new NoOpTaskExecutionListener();
+
+    /**
+     * Number of consecutive ReadTimeouts to ignore before logging warning messages.
+     * If you find yourself seeing frequent ReadTimeout, you should also consider increasing your timeout according to
+     * your expected processing time.
+     *
+     * <p>Default value: 0</p>
+     */
+    private int readTimeoutsToIgnoreBeforeWarning = 0;
 }

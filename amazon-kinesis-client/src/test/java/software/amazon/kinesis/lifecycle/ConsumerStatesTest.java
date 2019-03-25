@@ -117,7 +117,7 @@ public class ConsumerStatesTest {
                 cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector, new AggregatorUtil(),
                 hierarchicalShardSyncer, metricsFactory);
         consumer = spy(
-                new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, argument, taskExecutionListener));
+                new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, argument, taskExecutionListener,0));
 
         when(shardInfo.shardId()).thenReturn("shardId-000000000000");
         when(recordProcessorCheckpointer.checkpointer()).thenReturn(checkpointer);
