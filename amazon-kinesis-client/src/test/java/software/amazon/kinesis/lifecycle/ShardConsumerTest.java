@@ -776,7 +776,7 @@ public class ShardConsumerTest {
 
 
     //Increased timeout to attempt to get auto-build working...
-    private static final int awaitTimeout = 15;
+    private static final int awaitTimeout = 5;
     private static final TimeUnit awaitTimeoutUnit = TimeUnit.SECONDS;
 
     /**
