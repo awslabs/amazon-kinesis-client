@@ -101,7 +101,7 @@ public class ShardConsumerSubscriberTest {
         processRecordsInput = ProcessRecordsInput.builder().records(Collections.emptyList())
                 .cacheEntryTime(Instant.now()).build();
 
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer);
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer,0);
         when(recordsRetrieved.processRecordsInput()).thenReturn(processRecordsInput);
     }
 
@@ -244,7 +244,7 @@ public class ShardConsumerSubscriberTest {
         executorService = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
                 .setNameFormat("test-" + testName.getMethodName() + "-%04d").setDaemon(true).build());
 
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer);
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer,0);
         addUniqueItem(1);
         addTerminalMarker(1);
 
@@ -271,7 +271,7 @@ public class ShardConsumerSubscriberTest {
             executorService.execute(() -> {
                 try {
                     //
-                    // Notify the test as soon as we have started executing, then wait on the post add barrier.
+                    // Notify the test as soon as we have started executing, then wait on the post add subscriptionBarrier.
                     //
                     synchronized (processedNotifier) {
                         processedNotifier.notifyAll();

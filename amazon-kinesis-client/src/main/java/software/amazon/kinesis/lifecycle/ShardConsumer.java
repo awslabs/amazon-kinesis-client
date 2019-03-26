@@ -86,10 +86,10 @@ public class ShardConsumer {
 
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
                          Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-                         TaskExecutionListener taskExecutionListener) {
+                         TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
         this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
                 ConsumerStates.INITIAL_STATE,
-                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener);
+                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener,readTimeoutsToIgnoreBeforeWarning);
     }
 
     //
@@ -98,7 +98,7 @@ public class ShardConsumer {
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
                          Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
                          ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator,
-                         int bufferSize, TaskExecutionListener taskExecutionListener) {
+                         int bufferSize, TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.executorService = executorService;
         this.shardInfo = shardInfo;
@@ -107,7 +107,7 @@ public class ShardConsumer {
         this.taskExecutionListener = taskExecutionListener;
         this.currentState = initialState;
         this.taskMetricsDecorator = taskMetricsDecorator;
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this);
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this,readTimeoutsToIgnoreBeforeWarning);
         this.bufferSize = bufferSize;
 
         if (this.shardInfo.isCompleted()) {

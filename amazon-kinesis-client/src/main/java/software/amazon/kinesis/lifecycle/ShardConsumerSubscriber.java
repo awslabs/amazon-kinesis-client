@@ -31,6 +31,7 @@ import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Accessors(fluent = true)
@@ -40,6 +41,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     private final Scheduler scheduler;
     private final int bufferSize;
     private final ShardConsumer shardConsumer;
+    private final int readTimeoutsToIgnoreBeforeWarning;
+    private volatile int readTimeoutSinceLastRead=0;
 
     @VisibleForTesting
     final Object lockObject = new Object();
@@ -55,11 +58,12 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     private volatile Throwable retrievalFailure;
 
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
-                            ShardConsumer shardConsumer) {
+                            ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.scheduler = Schedulers.from(executorService);
         this.bufferSize = bufferSize;
         this.shardConsumer = shardConsumer;
+        this.readTimeoutsToIgnoreBeforeWarning=readTimeoutsToIgnoreBeforeWarning;
     }
 
     void startSubscriptions() {
@@ -157,13 +161,31 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 lastRequestTime = Instant.now();
             }
         }
+
+        readTimeoutSinceLastRead=0;
     }
 
     @Override
     public void onError(Throwable t) {
         synchronized (lockObject) {
-            log.warn("{}: onError().  Cancelling subscription, and marking self as failed.",
-                    shardConsumer.shardInfo().shardId(), t);
+            if(t instanceof RetryableRetrievalException &&
+            t.getMessage().contains("ReadTimeout")){
+                readTimeoutSinceLastRead++;
+                if(readTimeoutSinceLastRead > readTimeoutsToIgnoreBeforeWarning){
+                    log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will" +
+                                    " recreate the subscription as neccessary to continue processing. If you " +
+                                    "are seeing this warning frequently consider increasing the SDK timeouts " +
+                                    "by providing an OverrideConfiguration to the kinesis client. Alternatively you" +
+                                    "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress" +
+                                    "intermittant ReadTimeout warnings.",
+                            shardConsumer.shardInfo().shardId(), t);
+                }
+            }else{
+                log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will " +
+                                "recreate the subscription as neccessary to continue processing.",
+                        shardConsumer.shardInfo().shardId(), t);
+            }
+
             subscription.cancel();
             retrievalFailure = t;
         }
