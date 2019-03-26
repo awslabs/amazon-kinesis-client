@@ -33,37 +33,31 @@ import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@Slf4j
-@Accessors(fluent = true)
-class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
+@Slf4j @Accessors(fluent = true) class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
     private final RecordsPublisher recordsPublisher;
     private final Scheduler scheduler;
     private final int bufferSize;
     private final ShardConsumer shardConsumer;
     private final int readTimeoutsToIgnoreBeforeWarning;
-    private volatile int readTimeoutSinceLastRead=0;
+    private volatile int readTimeoutSinceLastRead = 0;
 
-    @VisibleForTesting
-    final Object lockObject = new Object();
+    @VisibleForTesting final Object lockObject = new Object();
     private Instant lastRequestTime = null;
     private RecordsRetrieved lastAccepted = null;
 
     private Subscription subscription;
-    @Getter
-    private volatile Instant lastDataArrival;
-    @Getter
-    private volatile Throwable dispatchFailure;
-    @Getter(AccessLevel.PACKAGE)
-    private volatile Throwable retrievalFailure;
+    @Getter private volatile Instant lastDataArrival;
+    @Getter private volatile Throwable dispatchFailure;
+    @Getter(AccessLevel.PACKAGE) private volatile Throwable retrievalFailure;
 
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
-                            ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
+            ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.scheduler = Schedulers.from(executorService);
         this.bufferSize = bufferSize;
         this.shardConsumer = shardConsumer;
-        this.readTimeoutsToIgnoreBeforeWarning=readTimeoutsToIgnoreBeforeWarning;
+        this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
     }
 
     void startSubscriptions() {
@@ -96,7 +90,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         Throwable oldFailure = null;
         if (retrievalFailure != null) {
             synchronized (lockObject) {
-                String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests", shardConsumer.shardInfo().shardId());
+                String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests",
+                        shardConsumer.shardInfo().shardId());
                 if (retrievalFailure instanceof RetryableRetrievalException) {
                     log.debug(logMessage, retrievalFailure.getCause());
                 } else {
@@ -133,14 +128,12 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         }
     }
 
-    @Override
-    public void onSubscribe(Subscription s) {
+    @Override public void onSubscribe(Subscription s) {
         subscription = s;
         subscription.request(1);
     }
 
-    @Override
-    public void onNext(RecordsRetrieved input) {
+    @Override public void onNext(RecordsRetrieved input) {
         try {
             synchronized (lockObject) {
                 lastRequestTime = null;
@@ -162,27 +155,24 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
             }
         }
 
-        readTimeoutSinceLastRead=0;
+        readTimeoutSinceLastRead = 0;
     }
 
-    @Override
-    public void onError(Throwable t) {
+    @Override public void onError(Throwable t) {
         synchronized (lockObject) {
-            if(t instanceof RetryableRetrievalException &&
-            t.getMessage().contains("ReadTimeout")){
+            if (t instanceof RetryableRetrievalException && t.getMessage().contains("ReadTimeout")) {
                 readTimeoutSinceLastRead++;
-                if(readTimeoutSinceLastRead > readTimeoutsToIgnoreBeforeWarning){
-                    log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will" +
-                                    " recreate the subscription as neccessary to continue processing. If you " +
-                                    "are seeing this warning frequently consider increasing the SDK timeouts " +
-                                    "by providing an OverrideConfiguration to the kinesis client. Alternatively you" +
-                                    "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress" +
-                                    "intermittant ReadTimeout warnings.",
-                            shardConsumer.shardInfo().shardId(), t);
+                if (readTimeoutSinceLastRead > readTimeoutsToIgnoreBeforeWarning) {
+                    log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will"
+                            + " recreate the subscription as neccessary to continue processing. If you "
+                            + "are seeing this warning frequently consider increasing the SDK timeouts "
+                            + "by providing an OverrideConfiguration to the kinesis client. Alternatively you"
+                            + "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
+                            + "intermittant ReadTimeout warnings.", shardConsumer.shardInfo().shardId(), t);
                 }
-            }else{
-                log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will " +
-                                "recreate the subscription as neccessary to continue processing.",
+            } else {
+                log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
+                                + "recreate the subscription as neccessary to continue processing.",
                         shardConsumer.shardInfo().shardId(), t);
             }
 
@@ -191,8 +181,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         }
     }
 
-    @Override
-    public void onComplete() {
+    @Override public void onComplete() {
         log.debug("{}: onComplete(): Received onComplete.  Activity should be triggered externally",
                 shardConsumer.shardInfo().shardId());
     }

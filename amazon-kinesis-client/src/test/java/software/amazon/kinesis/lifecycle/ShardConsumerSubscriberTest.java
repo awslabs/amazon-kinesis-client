@@ -64,18 +64,14 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-@Slf4j
-@RunWith(MockitoJUnitRunner.class)
-public class ShardConsumerSubscriberTest {
+@Slf4j @RunWith(MockitoJUnitRunner.class) public class ShardConsumerSubscriberTest {
 
     private final Object processedNotifier = new Object();
 
     private static final String TERMINAL_MARKER = "Terminal";
 
-    @Mock
-    private ShardConsumer shardConsumer;
-    @Mock
-    private RecordsRetrieved recordsRetrieved;
+    @Mock private ShardConsumer shardConsumer;
+    @Mock private RecordsRetrieved recordsRetrieved;
 
     private ProcessRecordsInput processRecordsInput;
     private TestPublisher recordsPublisher;
@@ -85,13 +81,12 @@ public class ShardConsumerSubscriberTest {
 
     private ShardConsumerSubscriber subscriber;
 
-    @Rule
-    public TestName testName = new TestName();
+    @Rule public TestName testName = new TestName();
 
-    @Before
-    public void before() {
-        executorService = Executors.newFixedThreadPool(8, new ThreadFactoryBuilder()
-                .setNameFormat("test-" + testName.getMethodName() + "-%04d").setDaemon(true).build());
+    @Before public void before() {
+        executorService = Executors.newFixedThreadPool(8,
+                new ThreadFactoryBuilder().setNameFormat("test-" + testName.getMethodName() + "-%04d").setDaemon(true)
+                        .build());
         recordsPublisher = new TestPublisher();
 
         ShardInfo shardInfo = new ShardInfo("shard-001", "", Collections.emptyList(),
@@ -101,17 +96,15 @@ public class ShardConsumerSubscriberTest {
         processRecordsInput = ProcessRecordsInput.builder().records(Collections.emptyList())
                 .cacheEntryTime(Instant.now()).build();
 
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer,0);
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         when(recordsRetrieved.processRecordsInput()).thenReturn(processRecordsInput);
     }
 
-    @After
-    public void after() {
+    @After public void after() {
         executorService.shutdownNow();
     }
 
-    @Test
-    public void singleItemTest() throws Exception {
+    @Test public void singleItemTest() throws Exception {
         addItemsToReturn(1);
 
         setupNotifierAnswer(1);
@@ -124,8 +117,7 @@ public class ShardConsumerSubscriberTest {
         verify(shardConsumer).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)), any(Subscription.class));
     }
 
-    @Test
-    public void multipleItemTest() throws Exception {
+    @Test public void multipleItemTest() throws Exception {
         addItemsToReturn(100);
 
         setupNotifierAnswer(recordsPublisher.responses.size());
@@ -135,12 +127,11 @@ public class ShardConsumerSubscriberTest {
             processedNotifier.wait(5000);
         }
 
-        verify(shardConsumer, times(100)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(100))
+                .handleInput(argThat(eqProcessRecordsInput(processRecordsInput)), any(Subscription.class));
     }
 
-    @Test
-    public void consumerErrorSkipsEntryTest() throws Exception {
+    @Test public void consumerErrorSkipsEntryTest() throws Exception {
         addItemsToReturn(20);
 
         Throwable testException = new Throwable("ShardConsumerError");
@@ -148,8 +139,7 @@ public class ShardConsumerSubscriberTest {
         doAnswer(new Answer() {
             int expectedInvocations = recordsPublisher.responses.size();
 
-            @Override
-            public Object answer(InvocationOnMock invocation) throws Throwable {
+            @Override public Object answer(InvocationOnMock invocation) throws Throwable {
                 expectedInvocations--;
                 if (expectedInvocations == 10) {
                     throw testException;
@@ -171,13 +161,12 @@ public class ShardConsumerSubscriberTest {
         assertThat(subscriber.getAndResetDispatchFailure(), equalTo(testException));
         assertThat(subscriber.getAndResetDispatchFailure(), nullValue());
 
-        verify(shardConsumer, times(20)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(20))
+                .handleInput(argThat(eqProcessRecordsInput(processRecordsInput)), any(Subscription.class));
 
     }
 
-    @Test
-    public void onErrorStopsProcessingTest() throws Exception {
+    @Test public void onErrorStopsProcessingTest() throws Exception {
         Throwable expected = new Throwable("Wheee");
         addItemsToReturn(10);
         recordsPublisher.add(new ResponseItem(expected));
@@ -197,13 +186,12 @@ public class ShardConsumerSubscriberTest {
             Thread.sleep(10);
         }
 
-        verify(shardConsumer, times(10)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(10))
+                .handleInput(argThat(eqProcessRecordsInput(processRecordsInput)), any(Subscription.class));
         assertThat(subscriber.retrievalFailure(), equalTo(expected));
     }
 
-    @Test
-    public void restartAfterErrorTest() throws Exception {
+    @Test public void restartAfterErrorTest() throws Exception {
         Throwable expected = new Throwable("whee");
         addItemsToReturn(9);
         RecordsRetrieved edgeRecord = mock(RecordsRetrieved.class);
@@ -234,17 +222,17 @@ public class ShardConsumerSubscriberTest {
         }
 
         assertThat(recordsPublisher.restartedFrom, equalTo(edgeRecord));
-        verify(shardConsumer, times(20)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(20))
+                .handleInput(argThat(eqProcessRecordsInput(processRecordsInput)), any(Subscription.class));
     }
 
-    @Test
-    public void restartAfterRequestTimerExpiresTest() throws Exception {
+    @Test public void restartAfterRequestTimerExpiresTest() throws Exception {
 
-        executorService = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
-                .setNameFormat("test-" + testName.getMethodName() + "-%04d").setDaemon(true).build());
+        executorService = Executors.newFixedThreadPool(1,
+                new ThreadFactoryBuilder().setNameFormat("test-" + testName.getMethodName() + "-%04d").setDaemon(true)
+                        .build());
 
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer,0);
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
         addTerminalMarker(1);
 
@@ -298,8 +286,8 @@ public class ShardConsumerSubscriberTest {
             processedNotifier.wait(5000);
         }
 
-        verify(shardConsumer, times(100)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(100))
+                .handleInput(argThat(eqProcessRecordsInput(processRecordsInput)), any(Subscription.class));
 
         assertThat(received.size(), equalTo(recordsPublisher.responses.size()));
         Stream.iterate(0, i -> i + 1).limit(received.size()).forEach(i -> assertThat(received.get(i),
@@ -318,9 +306,8 @@ public class ShardConsumerSubscriberTest {
 
     private ProcessRecordsInput addTerminalMarker(int id) {
         RecordsRetrieved terminalResponse = mock(RecordsRetrieved.class, TERMINAL_MARKER + "-" + id);
-        ProcessRecordsInput terminalInput = ProcessRecordsInput.builder()
-                .records(Collections
-                        .singletonList(KinesisClientRecord.builder().partitionKey(TERMINAL_MARKER + "-" + id).build()))
+        ProcessRecordsInput terminalInput = ProcessRecordsInput.builder().records(Collections
+                .singletonList(KinesisClientRecord.builder().partitionKey(TERMINAL_MARKER + "-" + id).build()))
                 .cacheEntryTime(Instant.now()).build();
         when(terminalResponse.processRecordsInput()).thenReturn(terminalInput);
         recordsPublisher.add(new ResponseItem(terminalResponse));
@@ -337,8 +324,7 @@ public class ShardConsumerSubscriberTest {
         doAnswer(new Answer() {
             int seen = expected;
 
-            @Override
-            public Object answer(InvocationOnMock invocation) throws Throwable {
+            @Override public Object answer(InvocationOnMock invocation) throws Throwable {
                 seen--;
                 if (seen == 0) {
                     synchronized (processedNotifier) {
@@ -402,14 +388,12 @@ public class ShardConsumerSubscriberTest {
             }
         }
 
-        @Override
-        public void start(ExtendedSequenceNumber extendedSequenceNumber,
+        @Override public void start(ExtendedSequenceNumber extendedSequenceNumber,
                 InitialPositionInStreamExtended initialPositionInStreamExtended) {
 
         }
 
-        @Override
-        public void restartFrom(RecordsRetrieved recordsRetrieved) {
+        @Override public void restartFrom(RecordsRetrieved recordsRetrieved) {
             restartedFrom = recordsRetrieved;
             currentIndex = -1;
             for (int i = 0; i < responses.size(); i++) {
@@ -422,22 +406,18 @@ public class ShardConsumerSubscriberTest {
 
         }
 
-        @Override
-        public void shutdown() {
+        @Override public void shutdown() {
 
         }
 
-        @Override
-        public void subscribe(Subscriber<? super RecordsRetrieved> s) {
+        @Override public void subscribe(Subscriber<? super RecordsRetrieved> s) {
             subscriber = s;
             s.onSubscribe(new Subscription() {
-                @Override
-                public void request(long n) {
+                @Override public void request(long n) {
                     send(n);
                 }
 
-                @Override
-                public void cancel() {
+                @Override public void cancel() {
                     requested = 0;
                 }
             });

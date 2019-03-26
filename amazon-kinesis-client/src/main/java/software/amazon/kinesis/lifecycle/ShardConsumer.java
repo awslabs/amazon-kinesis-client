@@ -45,19 +45,14 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
  * The instance should be shutdown when we lose the primary responsibility for a shard.
  * A new instance should be created if the primary responsibility is reassigned back to this process.
  */
-@Getter(AccessLevel.PACKAGE)
-@Accessors(fluent = true)
-@Slf4j
-@KinesisClientInternalApi
-public class ShardConsumer {
+@Getter(AccessLevel.PACKAGE) @Accessors(fluent = true) @Slf4j @KinesisClientInternalApi public class ShardConsumer {
 
     public static final int MAX_TIME_BETWEEN_REQUEST_RESPONSE = 35000;
     private final RecordsPublisher recordsPublisher;
     private final ExecutorService executorService;
     private final ShardInfo shardInfo;
     private final ShardConsumerArgument shardConsumerArgument;
-    @NonNull
-    private final Optional<Long> logWarningForTaskAfterMillis;
+    @NonNull private final Optional<Long> logWarningForTaskAfterMillis;
     private final Function<ConsumerTask, ConsumerTask> taskMetricsDecorator;
     private final int bufferSize;
     private final TaskExecutionListener taskExecutionListener;
@@ -78,27 +73,27 @@ public class ShardConsumer {
     private ConsumerState currentState;
 
     private final Object shutdownLock = new Object();
-    @Getter(AccessLevel.PUBLIC)
-    private volatile ShutdownReason shutdownReason;
+    @Getter(AccessLevel.PUBLIC) private volatile ShutdownReason shutdownReason;
     private volatile ShutdownNotification shutdownNotification;
 
     private final ShardConsumerSubscriber subscriber;
 
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
-                         Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-                         TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
+            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
+            TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
         this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
                 ConsumerStates.INITIAL_STATE,
-                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener,readTimeoutsToIgnoreBeforeWarning);
+                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener,
+                readTimeoutsToIgnoreBeforeWarning);
     }
 
     //
     // TODO: Make bufferSize configurable
     //
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
-                         Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-                         ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator,
-                         int bufferSize, TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
+            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
+            ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator, int bufferSize,
+            TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.executorService = executorService;
         this.shardInfo = shardInfo;
@@ -107,7 +102,8 @@ public class ShardConsumer {
         this.taskExecutionListener = taskExecutionListener;
         this.currentState = initialState;
         this.taskMetricsDecorator = taskMetricsDecorator;
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this,readTimeoutsToIgnoreBeforeWarning);
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this,
+                readTimeoutsToIgnoreBeforeWarning);
         this.bufferSize = bufferSize;
 
         if (this.shardInfo.isCompleted()) {
@@ -115,8 +111,7 @@ public class ShardConsumer {
         }
     }
 
-
-     synchronized void handleInput(ProcessRecordsInput input, Subscription subscription) {
+    synchronized void handleInput(ProcessRecordsInput input, Subscription subscription) {
         if (isShutdownRequested()) {
             subscription.cancel();
             return;
@@ -167,8 +162,7 @@ public class ShardConsumer {
 
     }
 
-    @VisibleForTesting
-    Throwable healthCheck() {
+    @VisibleForTesting Throwable healthCheck() {
         logNoDataRetrievedAfterTime();
         logLongRunningTask();
         Throwable failure = subscriber.healthCheck(MAX_TIME_BETWEEN_REQUEST_RESPONSE);
@@ -178,7 +172,8 @@ public class ShardConsumer {
         }
         Throwable dispatchFailure = subscriber.getAndResetDispatchFailure();
         if (dispatchFailure != null) {
-            log.warn("Exception occurred while dispatching incoming data.  The incoming data has been skipped", dispatchFailure);
+            log.warn("Exception occurred while dispatching incoming data.  The incoming data has been skipped",
+                    dispatchFailure);
             return dispatchFailure;
         }
 
@@ -229,13 +224,11 @@ public class ShardConsumer {
         }
     }
 
-    @VisibleForTesting
-    void subscribe() {
+    @VisibleForTesting void subscribe() {
         subscriber.startSubscriptions();
     }
 
-    @VisibleForTesting
-    synchronized CompletableFuture<Boolean> initializeComplete() {
+    @VisibleForTesting synchronized CompletableFuture<Boolean> initializeComplete() {
         if (taskOutcome != null) {
             updateState(taskOutcome);
         }
@@ -254,8 +247,7 @@ public class ShardConsumer {
         }, executorService);
     }
 
-    @VisibleForTesting
-    CompletableFuture<Boolean> shutdownComplete() {
+    @VisibleForTesting CompletableFuture<Boolean> shutdownComplete() {
         return CompletableFuture.supplyAsync(() -> {
             synchronized (this) {
                 if (taskOutcome != null) {
@@ -284,9 +276,7 @@ public class ShardConsumer {
 
     private synchronized void executeTask(ProcessRecordsInput input) {
         TaskExecutionListenerInput taskExecutionListenerInput = TaskExecutionListenerInput.builder()
-                .shardInfo(shardInfo)
-                .taskType(currentState.taskType())
-                .build();
+                .shardInfo(shardInfo).taskType(currentState.taskType()).build();
         taskExecutionListener.beforeTaskExecution(taskExecutionListenerInput);
         ConsumerTask task = currentState.createTask(shardConsumerArgument, ShardConsumer.this, input);
         if (task != null) {
@@ -364,8 +354,7 @@ public class ShardConsumer {
      * Requests the shutdown of the this ShardConsumer. This should give the record processor a chance to checkpoint
      * before being shutdown.
      *
-     * @param shutdownNotification
-     *            used to signal that the record processor has been given the chance to shutdown.
+     * @param shutdownNotification used to signal that the record processor has been given the chance to shutdown.
      */
     public void gracefulShutdown(ShutdownNotification shutdownNotification) {
         if (subscriber != null) {
@@ -413,8 +402,7 @@ public class ShardConsumer {
         return currentState.isTerminal();
     }
 
-    @VisibleForTesting
-    public boolean isShutdownRequested() {
+    @VisibleForTesting public boolean isShutdownRequested() {
         synchronized (shutdownLock) {
             return shutdownReason != null;
         }
@@ -422,9 +410,8 @@ public class ShardConsumer {
 
     /**
      * Default task wrapping function for metrics
-     * 
-     * @param metricsFactory
-     *            the factory used for reporting metrics
+     *
+     * @param metricsFactory the factory used for reporting metrics
      * @return a function that will wrap the task with a metrics reporter
      */
     private static Function<ConsumerTask, ConsumerTask> metricsWrappingFunction(MetricsFactory metricsFactory) {
