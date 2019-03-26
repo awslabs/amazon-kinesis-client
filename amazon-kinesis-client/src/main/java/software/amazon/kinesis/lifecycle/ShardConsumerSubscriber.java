@@ -1,16 +1,16 @@
 /*
- *  Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- *  Licensed under the Amazon Software License (the "License").
- *  You may not use this file except in compliance with the License.
- *  A copy of the License is located at
+ * Licensed under the Amazon Software License (the "License").
+ * You may not use this file except in compliance with the License.
+ * A copy of the License is located at
  *
- *  http://aws.amazon.com/asl/
+ * http://aws.amazon.com/asl/
  *
- *  or in the "license" file accompanying this file. This file is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- *  express or implied. See the License for the specific language governing
- *  permissions and limitations under the License.
+ * or in the "license" file accompanying this file. This file is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ * express or implied. See the License for the specific language governing
+ * permissions and limitations under the License.
  */
 package software.amazon.kinesis.lifecycle;
 
@@ -33,7 +33,9 @@ import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@Slf4j @Accessors(fluent = true) class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
+@Slf4j
+@Accessors(fluent = true)
+class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
     private final RecordsPublisher recordsPublisher;
     private final Scheduler scheduler;
@@ -42,14 +44,18 @@ import java.util.concurrent.atomic.AtomicInteger;
     private final int readTimeoutsToIgnoreBeforeWarning;
     private volatile int readTimeoutSinceLastRead = 0;
 
-    @VisibleForTesting final Object lockObject = new Object();
+    @VisibleForTesting
+    final Object lockObject = new Object();
     private Instant lastRequestTime = null;
     private RecordsRetrieved lastAccepted = null;
 
     private Subscription subscription;
-    @Getter private volatile Instant lastDataArrival;
-    @Getter private volatile Throwable dispatchFailure;
-    @Getter(AccessLevel.PACKAGE) private volatile Throwable retrievalFailure;
+    @Getter
+    private volatile Instant lastDataArrival;
+    @Getter
+    private volatile Throwable dispatchFailure;
+    @Getter(AccessLevel.PACKAGE)
+    private volatile Throwable retrievalFailure;
 
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
             ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
@@ -128,12 +134,14 @@ import java.util.concurrent.atomic.AtomicInteger;
         }
     }
 
-    @Override public void onSubscribe(Subscription s) {
+    @Override
+    public void onSubscribe(Subscription s) {
         subscription = s;
         subscription.request(1);
     }
 
-    @Override public void onNext(RecordsRetrieved input) {
+    @Override
+    public void onNext(RecordsRetrieved input) {
         try {
             synchronized (lockObject) {
                 lastRequestTime = null;
@@ -158,7 +166,8 @@ import java.util.concurrent.atomic.AtomicInteger;
         readTimeoutSinceLastRead = 0;
     }
 
-    @Override public void onError(Throwable t) {
+    @Override
+    public void onError(Throwable t) {
         synchronized (lockObject) {
             if (t instanceof RetryableRetrievalException && t.getMessage().contains("ReadTimeout")) {
                 readTimeoutSinceLastRead++;
@@ -171,7 +180,8 @@ import java.util.concurrent.atomic.AtomicInteger;
                             + "intermittant ReadTimeout warnings.", shardConsumer.shardInfo().shardId(), t);
                 }
             } else {
-                log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
+                log.warn(
+                        "{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
                                 + "recreate the subscription as neccessary to continue processing.",
                         shardConsumer.shardInfo().shardId(), t);
             }
@@ -181,7 +191,8 @@ import java.util.concurrent.atomic.AtomicInteger;
         }
     }
 
-    @Override public void onComplete() {
+    @Override
+    public void onComplete() {
         log.debug("{}: onComplete(): Received onComplete.  Activity should be triggered externally",
                 shardConsumer.shardInfo().shardId());
     }

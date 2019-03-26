@@ -44,9 +44,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.Accessors;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -54,7 +51,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
@@ -80,80 +76,37 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @Slf4j
 public class ShardConsumerTest {
 
-    private final String shardId = "shardId-0-0";
-    private final String concurrencyToken = "TestToken";
-    private ShardInfo shardInfo;
-    private TaskExecutionListenerInput initialTaskInput;
-    private TaskExecutionListenerInput processTaskInput;
-    private TaskExecutionListenerInput shutdownTaskInput;
-    private TaskExecutionListenerInput shutdownRequestedTaskInput;
-    private TaskExecutionListenerInput shutdownRequestedAwaitTaskInput;
-
-    private ExecutorService executorService;
-    @Mock
-    private RecordsPublisher recordsPublisher;
-    @Mock
-    private ShutdownNotification shutdownNotification;
-    @Mock
-    private ConsumerState initialState;
-    @Mock
-    private ConsumerTask initializeTask;
-    @Mock
-    private ConsumerState processingState;
-    @Mock
-    private ConsumerTask processingTask;
-    @Mock
-    private ConsumerState shutdownState;
-    @Mock
-    private ConsumerTask shutdownTask;
-    @Mock
-    private TaskResult initializeTaskResult;
-    @Mock
-    private TaskResult processingTaskResult;
-    @Mock
-    private ConsumerState shutdownCompleteState;
-    @Mock
-    private ShardConsumerArgument shardConsumerArgument;
-    @Mock
-    private ConsumerState shutdownRequestedState;
-    @Mock
-    private ConsumerTask shutdownRequestedTask;
-    @Mock
-    private ConsumerState shutdownRequestedAwaitState;
-    @Mock
-    private TaskExecutionListener taskExecutionListener;
-
-    private ProcessRecordsInput processRecordsInput;
-
-    private Optional<Long> logWarningForTaskAfterMillis = Optional.empty();
+    private ShardConsumerTestContext ctx = new ShardConsumerTestContext();
 
     @Rule
     public TestName testName = new TestName();
 
     @Before
     public void before() {
-        shardInfo = new ShardInfo(shardId, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
+        ctx = new ShardConsumerTestContext();
+        ctx.setShardInfo(
+                new ShardInfo(ctx.getShardId(), ctx.getConcurrencyToken(), null, ExtendedSequenceNumber.TRIM_HORIZON));
         ThreadFactory factory = new ThreadFactoryBuilder().setNameFormat("test-" + testName.getMethodName() + "-%04d")
                 .setDaemon(true).build();
-        executorService = new ThreadPoolExecutor(4, 4, 1, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), factory);
+        ctx.setExecutorService(new ThreadPoolExecutor(4, 4, 1, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), factory));
 
-        processRecordsInput = ProcessRecordsInput.builder().isAtShardEnd(false).cacheEntryTime(Instant.now())
-                .millisBehindLatest(1000L).records(Collections.emptyList()).build();
-        initialTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
-                .taskType(TaskType.INITIALIZE).build();
-        processTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
-                .taskType(TaskType.PROCESS).build();
-        shutdownRequestedTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
-                .taskType(TaskType.SHUTDOWN_NOTIFICATION).build();
-        shutdownRequestedAwaitTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
-                .taskType(TaskType.SHUTDOWN_COMPLETE).build();
-        shutdownTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
-                .taskType(TaskType.SHUTDOWN).build();
+        ctx.setProcessRecordsInput(ProcessRecordsInput.builder().isAtShardEnd(false).cacheEntryTime(Instant.now())
+                .millisBehindLatest(1000L).records(Collections.emptyList()).build());
+        ctx.setInitialTaskInput(TaskExecutionListenerInput.builder().shardInfo(ctx.getShardInfo())
+                .taskType(TaskType.INITIALIZE).build());
+        ctx.setProcessTaskInput(
+                TaskExecutionListenerInput.builder().shardInfo(ctx.getShardInfo()).taskType(TaskType.PROCESS).build());
+        ctx.setShutdownRequestedTaskInput(TaskExecutionListenerInput.builder().shardInfo(ctx.getShardInfo())
+                .taskType(TaskType.SHUTDOWN_NOTIFICATION).build());
+        ctx.setShutdownRequestedAwaitTaskInput(TaskExecutionListenerInput.builder().shardInfo(ctx.getShardInfo())
+                .taskType(TaskType.SHUTDOWN_COMPLETE).build());
+        ctx.setShutdownTaskInput(
+                TaskExecutionListenerInput.builder().shardInfo(ctx.getShardInfo()).taskType(TaskType.SHUTDOWN).build());
     }
 
     @After
     public void after() {
-        List<Runnable> remainder = executorService.shutdownNow();
+        List<Runnable> remainder = ctx.getExecutorService().shutdownNow();
         assertThat(remainder.isEmpty(), equalTo(true));
     }
 
@@ -225,7 +178,7 @@ public class ShardConsumerTest {
         }
 
         public void publish() {
-            publish(() -> processRecordsInput);
+            publish(() -> ctx.getProcessRecordsInput());
         }
 
         public void publish(RecordsRetrieved input) {
@@ -244,8 +197,9 @@ public class ShardConsumerTest {
         mockSuccessfulShutdown(null);
 
         TestPublisher cache = new TestPublisher();
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
+        ShardConsumer consumer = new ShardConsumer(cache, ctx.getExecutorService(), ctx.getShardInfo(),
+                ctx.getLogWarningForTaskAfterMillis(), ctx.getShardConsumerArgument(), ctx.getInitialState(),
+                Function.identity(), 1, ctx.getTaskExecutionListener(), 0);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -271,19 +225,19 @@ public class ShardConsumerTest {
 
         verify(cache.subscription, times(3)).request(anyLong());
         verify(cache.subscription).cancel();
-        verify(processingState, times(2)).createTask(eq(shardConsumerArgument), eq(consumer), any());
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(2)).beforeTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
+        verify(ctx.getProcessingState(), times(2)).createTask(eq(ctx.getShardConsumerArgument()), eq(consumer), any());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(2)).beforeTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getShutdownTaskInput());
 
-        initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        ctx.setInitialTaskInput(ctx.getInitialTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setProcessTaskInput(ctx.getProcessTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setShutdownTaskInput(ctx.getShutdownTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
 
-        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
-        verifyNoMoreInteractions(taskExecutionListener);
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(2)).afterTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getShutdownTaskInput());
+        verifyNoMoreInteractions(ctx.getTaskExecutionListener());
     }
 
     @Test(timeout = 1000L)
@@ -298,8 +252,9 @@ public class ShardConsumerTest {
         mockSuccessfulShutdown(null);
 
         TestPublisher cache = new TestPublisher();
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
+        ShardConsumer consumer = new ShardConsumer(cache, ctx.getExecutorService(), ctx.getShardInfo(),
+                ctx.getLogWarningForTaskAfterMillis(), ctx.getShardConsumerArgument(), ctx.getInitialState(),
+                Function.identity(), 1, ctx.getTaskExecutionListener(), 0);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -323,26 +278,26 @@ public class ShardConsumerTest {
         log.debug("Release processing task interlock");
         awaitAndResetBarrier(processingTaskInterlock);
 
-        while(!consumer.isShutdown()) {
+        while (!consumer.isShutdown()) {
             consumer.executeLifecycle();
             Thread.yield();
         }
 
         verify(cache.subscription, times(1)).request(anyLong());
         verify(cache.subscription).cancel();
-        verify(processingState, times(1)).createTask(eq(shardConsumerArgument), eq(consumer), any());
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
+        verify(ctx.getProcessingState(), times(1)).createTask(eq(ctx.getShardConsumerArgument()), eq(consumer), any());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getShutdownTaskInput());
 
-        initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        ctx.setInitialTaskInput(ctx.getInitialTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setProcessTaskInput(ctx.getProcessTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setShutdownTaskInput(ctx.getShutdownTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
 
-        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(1)).afterTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
-        verifyNoMoreInteractions(taskExecutionListener);
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getShutdownTaskInput());
+        verifyNoMoreInteractions(ctx.getTaskExecutionListener());
     }
 
     @Test
@@ -357,8 +312,9 @@ public class ShardConsumerTest {
         mockSuccessfulShutdown(null);
 
         TestPublisher cache = new TestPublisher();
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
+        ShardConsumer consumer = new ShardConsumer(cache, ctx.getExecutorService(), ctx.getShardInfo(),
+                ctx.getLogWarningForTaskAfterMillis(), ctx.getShardConsumerArgument(), ctx.getInitialState(),
+                Function.identity(), 1, ctx.getTaskExecutionListener(), 0);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -371,15 +327,15 @@ public class ShardConsumerTest {
         cache.publish();
         awaitAndResetBarrier(taskCallBarrier);
 
-        verify(processingState).createTask(any(), any(), any());
-        verify(processingTask).call();
+        verify(ctx.getProcessingState()).createTask(any(), any(), any());
+        verify(ctx.getProcessingTask()).call();
 
         cache.awaitRequest();
 
         cache.publish();
         awaitAndResetBarrier(taskCallBarrier);
-        verify(processingState, times(2)).createTask(any(), any(), any());
-        verify(processingTask, times(2)).call();
+        verify(ctx.getProcessingState(), times(2)).createTask(any(), any(), any());
+        verify(ctx.getProcessingTask(), times(2)).call();
 
         cache.awaitRequest();
 
@@ -394,39 +350,41 @@ public class ShardConsumerTest {
             shutdownComplete = consumer.shutdownComplete().get();
         } while (!shutdownComplete);
 
-        verify(processingState, times(3)).createTask(any(), any(), any());
-        verify(processingTask, times(3)).call();
-        verify(processingState).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
-        verify(shutdownState).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(3)).beforeTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
+        verify(ctx.getProcessingState(), times(3)).createTask(any(), any(), any());
+        verify(ctx.getProcessingTask(), times(3)).call();
+        verify(ctx.getProcessingState()).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
+        verify(ctx.getShutdownState()).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(3)).beforeTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getShutdownTaskInput());
 
-        initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        ctx.setInitialTaskInput(ctx.getInitialTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setProcessTaskInput(ctx.getProcessTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setShutdownTaskInput(ctx.getShutdownTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
 
-        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(3)).afterTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
-        verifyNoMoreInteractions(taskExecutionListener);
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(3)).afterTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getShutdownTaskInput());
+        verifyNoMoreInteractions(ctx.getTaskExecutionListener());
     }
 
     @SuppressWarnings("unchecked")
     @Test
     @Ignore
     public final void testInitializationStateUponFailure() throws Exception {
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
+        ShardConsumer consumer = new ShardConsumer(ctx.getRecordsPublisher(), ctx.getExecutorService(),
+                ctx.getShardInfo(), ctx.getLogWarningForTaskAfterMillis(), ctx.getShardConsumerArgument(),
+                ctx.getInitialState(), Function.identity(), 1, ctx.getTaskExecutionListener(), 0);
 
-        when(initialState.createTask(eq(shardConsumerArgument), eq(consumer), any())).thenReturn(initializeTask);
-        when(initializeTask.call()).thenReturn(new TaskResult(new Exception("Bad")));
-        when(initializeTask.taskType()).thenReturn(TaskType.INITIALIZE);
-        when(initialState.failureTransition()).thenReturn(initialState);
+        when(ctx.getInitialState().createTask(eq(ctx.getShardConsumerArgument()), eq(consumer), any()))
+                .thenReturn(ctx.getInitializeTask());
+        when(ctx.getInitializeTask().call()).thenReturn(new TaskResult(new Exception("Bad")));
+        when(ctx.getInitializeTask().taskType()).thenReturn(TaskType.INITIALIZE);
+        when(ctx.getInitialState().failureTransition()).thenReturn(ctx.getInitialState());
 
         CyclicBarrier taskBarrier = new CyclicBarrier(2);
 
-        when(initialState.requiresDataAvailability()).thenAnswer(i -> {
+        when(ctx.getInitialState().requiresDataAvailability()).thenAnswer(i -> {
             taskBarrier.await();
             return false;
         });
@@ -436,9 +394,9 @@ public class ShardConsumerTest {
             awaitAndResetBarrier(taskBarrier);
         }
 
-        verify(initialState, times(5)).createTask(eq(shardConsumerArgument), eq(consumer), any());
-        verify(initialState, never()).successTransition();
-        verify(initialState, never()).shutdownTransition(any());
+        verify(ctx.getInitialState(), times(5)).createTask(eq(ctx.getShardConsumerArgument()), eq(consumer), any());
+        verify(ctx.getInitialState(), never()).successTransition();
+        verify(ctx.getInitialState(), never()).shutdownTransition(any());
     }
 
     /**
@@ -449,8 +407,9 @@ public class ShardConsumerTest {
     public final void testInitializationStateUponSubmissionFailure() throws Exception {
 
         ExecutorService failingService = mock(ExecutorService.class);
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener,0);
+        ShardConsumer consumer = new ShardConsumer(ctx.getRecordsPublisher(), failingService, ctx.getShardInfo(),
+                ctx.getLogWarningForTaskAfterMillis(), ctx.getShardConsumerArgument(), ctx.getInitialState(), t -> t, 1,
+                ctx.getTaskExecutionListener(), 0);
 
         doThrow(new RejectedExecutionException()).when(failingService).execute(any());
 
@@ -458,17 +417,18 @@ public class ShardConsumerTest {
         do {
             initComplete = consumer.initializeComplete().get();
         } while (!initComplete);
-        verifyZeroInteractions(taskExecutionListener);
+        verifyZeroInteractions(ctx.getTaskExecutionListener());
     }
 
     @Test
     public void testErrorThrowableInInitialization() throws Exception {
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener,0);
+        ShardConsumer consumer = new ShardConsumer(ctx.getRecordsPublisher(), ctx.getExecutorService(),
+                ctx.getShardInfo(), ctx.getLogWarningForTaskAfterMillis(), ctx.getShardConsumerArgument(),
+                ctx.getInitialState(), t -> t, 1, ctx.getTaskExecutionListener(), 0);
 
-        when(initialState.createTask(any(), any(), any())).thenReturn(initializeTask);
-        when(initialState.taskType()).thenReturn(TaskType.INITIALIZE);
-        when(initializeTask.call()).thenAnswer(i -> {
+        when(ctx.getInitialState().createTask(any(), any(), any())).thenReturn(ctx.getInitializeTask());
+        when(ctx.getInitialState().taskType()).thenReturn(TaskType.INITIALIZE);
+        when(ctx.getInitializeTask().call()).thenAnswer(i -> {
             throw new Error("Error");
         });
 
@@ -477,8 +437,8 @@ public class ShardConsumerTest {
         } catch (ExecutionException ee) {
             assertThat(ee.getCause(), instanceOf(Error.class));
         }
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
-        verifyNoMoreInteractions(taskExecutionListener);
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getInitialTaskInput());
+        verifyNoMoreInteractions(ctx.getTaskExecutionListener());
     }
 
     @Test
@@ -487,28 +447,33 @@ public class ShardConsumerTest {
         CyclicBarrier taskBarrier = new CyclicBarrier(2);
 
         TestPublisher cache = new TestPublisher();
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener,0);
+        ShardConsumer consumer = new ShardConsumer(cache, ctx.getExecutorService(), ctx.getShardInfo(),
+                ctx.getLogWarningForTaskAfterMillis(), ctx.getShardConsumerArgument(), ctx.getInitialState(), t -> t, 1,
+                ctx.getTaskExecutionListener(), 0);
 
         mockSuccessfulInitialize(null);
 
         mockSuccessfulProcessing(taskBarrier);
 
-        when(processingState.shutdownTransition(eq(ShutdownReason.REQUESTED))).thenReturn(shutdownRequestedState);
-        when(shutdownRequestedState.requiresDataAvailability()).thenReturn(false);
-        when(shutdownRequestedState.createTask(any(), any(), any())).thenReturn(shutdownRequestedTask);
-        when(shutdownRequestedState.taskType()).thenReturn(TaskType.SHUTDOWN_NOTIFICATION);
-        when(shutdownRequestedTask.call()).thenReturn(new TaskResult(null));
+        when(ctx.getProcessingState().shutdownTransition(eq(ShutdownReason.REQUESTED)))
+                .thenReturn(ctx.getShutdownRequestedState());
+        when(ctx.getShutdownRequestedState().requiresDataAvailability()).thenReturn(false);
+        when(ctx.getShutdownRequestedState().createTask(any(), any(), any()))
+                .thenReturn(ctx.getShutdownRequestedTask());
+        when(ctx.getShutdownRequestedState().taskType()).thenReturn(TaskType.SHUTDOWN_NOTIFICATION);
+        when(ctx.getShutdownRequestedTask().call()).thenReturn(new TaskResult(null));
 
-        when(shutdownRequestedState.shutdownTransition(eq(ShutdownReason.REQUESTED)))
-                .thenReturn(shutdownRequestedAwaitState);
-        when(shutdownRequestedState.shutdownTransition(eq(ShutdownReason.LEASE_LOST))).thenReturn(shutdownState);
-        when(shutdownRequestedAwaitState.requiresDataAvailability()).thenReturn(false);
-        when(shutdownRequestedAwaitState.createTask(any(), any(), any())).thenReturn(null);
-        when(shutdownRequestedAwaitState.shutdownTransition(eq(ShutdownReason.REQUESTED)))
-                .thenReturn(shutdownRequestedState);
-        when(shutdownRequestedAwaitState.shutdownTransition(eq(ShutdownReason.LEASE_LOST))).thenReturn(shutdownState);
-        when(shutdownRequestedAwaitState.taskType()).thenReturn(TaskType.SHUTDOWN_COMPLETE);
+        when(ctx.getShutdownRequestedState().shutdownTransition(eq(ShutdownReason.REQUESTED)))
+                .thenReturn(ctx.getShutdownRequestedAwaitState());
+        when(ctx.getShutdownRequestedState().shutdownTransition(eq(ShutdownReason.LEASE_LOST)))
+                .thenReturn(ctx.getShutdownState());
+        when(ctx.getShutdownRequestedAwaitState().requiresDataAvailability()).thenReturn(false);
+        when(ctx.getShutdownRequestedAwaitState().createTask(any(), any(), any())).thenReturn(null);
+        when(ctx.getShutdownRequestedAwaitState().shutdownTransition(eq(ShutdownReason.REQUESTED)))
+                .thenReturn(ctx.getShutdownRequestedState());
+        when(ctx.getShutdownRequestedAwaitState().shutdownTransition(eq(ShutdownReason.LEASE_LOST)))
+                .thenReturn(ctx.getShutdownState());
+        when(ctx.getShutdownRequestedAwaitState().taskType()).thenReturn(TaskType.SHUTDOWN_COMPLETE);
 
         mockSuccessfulShutdown(null);
 
@@ -528,7 +493,7 @@ public class ShardConsumerTest {
         awaitAndResetBarrier(taskBarrier);
         cache.awaitRequest();
 
-        consumer.gracefulShutdown(shutdownNotification);
+        consumer.gracefulShutdown(ctx.getShutdownNotification());
         boolean shutdownComplete = consumer.shutdownComplete().get();
         assertThat(shutdownComplete, equalTo(false));
         shutdownComplete = consumer.shutdownComplete().get();
@@ -540,45 +505,47 @@ public class ShardConsumerTest {
         shutdownComplete = consumer.shutdownComplete().get();
         assertThat(shutdownComplete, equalTo(true));
 
-        verify(processingState, times(2)).createTask(any(), any(), any());
-        verify(shutdownRequestedState, never()).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
-        verify(shutdownRequestedState).createTask(any(), any(), any());
-        verify(shutdownRequestedState).shutdownTransition(eq(ShutdownReason.REQUESTED));
-        verify(shutdownRequestedAwaitState).createTask(any(), any(), any());
-        verify(shutdownRequestedAwaitState).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(2)).beforeTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownRequestedTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownRequestedAwaitTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
+        verify(ctx.getProcessingState(), times(2)).createTask(any(), any(), any());
+        verify(ctx.getShutdownRequestedState(), never()).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
+        verify(ctx.getShutdownRequestedState()).createTask(any(), any(), any());
+        verify(ctx.getShutdownRequestedState()).shutdownTransition(eq(ShutdownReason.REQUESTED));
+        verify(ctx.getShutdownRequestedAwaitState()).createTask(any(), any(), any());
+        verify(ctx.getShutdownRequestedAwaitState()).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(2)).beforeTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getShutdownRequestedTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getShutdownRequestedAwaitTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getShutdownTaskInput());
 
-        initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        shutdownRequestedTaskInput = shutdownRequestedTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        ctx.setInitialTaskInput(ctx.getInitialTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setProcessTaskInput(ctx.getProcessTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setShutdownRequestedTaskInput(
+                ctx.getShutdownRequestedTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setShutdownTaskInput(ctx.getShutdownTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
         // No task is created/run for this shutdownRequestedAwaitState, so there's no task outcome.
 
-        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownRequestedTaskInput);
-        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownRequestedAwaitTaskInput);
-        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
-        verifyNoMoreInteractions(taskExecutionListener);
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(2)).afterTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getShutdownRequestedTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getShutdownRequestedAwaitTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getShutdownTaskInput());
+        verifyNoMoreInteractions(ctx.getTaskExecutionListener());
     }
 
     @Test
     public void testExceptionInProcessingStopsRequests() throws Exception {
         TestPublisher cache = new TestPublisher();
 
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, Optional.of(1L),
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
+        ShardConsumer consumer = new ShardConsumer(cache, ctx.getExecutorService(), ctx.getShardInfo(), Optional.of(1L),
+                ctx.getShardConsumerArgument(), ctx.getInitialState(), Function.identity(), 1,
+                ctx.getTaskExecutionListener(), 0);
 
         mockSuccessfulInitialize(null);
         mockSuccessfulProcessing(null);
 
         CyclicBarrier taskCallBarrier = new CyclicBarrier(2);
         final RuntimeException expectedException = new RuntimeException("Whee");
-        when(processingTask.call()).thenAnswer(a -> {
+        when(ctx.getProcessingTask().call()).thenAnswer(a -> {
             try {
                 throw expectedException;
             } finally {
@@ -603,13 +570,13 @@ public class ShardConsumerTest {
         assertThat(healthCheckOutcome, equalTo(expectedException));
 
         verify(cache.subscription, times(2)).request(anyLong());
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(processTaskInput);
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getProcessTaskInput());
 
-        initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        ctx.setInitialTaskInput(ctx.getInitialTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
 
-        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
-        verifyNoMoreInteractions(taskExecutionListener);
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getInitialTaskInput());
+        verifyNoMoreInteractions(ctx.getTaskExecutionListener());
     }
 
     @Test
@@ -617,8 +584,9 @@ public class ShardConsumerTest {
 
         TestPublisher cache = new TestPublisher();
 
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, Optional.of(1L),
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
+        ShardConsumer consumer = new ShardConsumer(cache, ctx.getExecutorService(), ctx.getShardInfo(), Optional.of(1L),
+                ctx.getShardConsumerArgument(), ctx.getInitialState(), Function.identity(), 1,
+                ctx.getTaskExecutionListener(), 0);
 
         CyclicBarrier taskArriveBarrier = new CyclicBarrier(2);
         CyclicBarrier taskDepartBarrier = new CyclicBarrier(2);
@@ -635,10 +603,10 @@ public class ShardConsumerTest {
         awaitAndResetBarrier(taskDepartBarrier);
 
         assertThat(initSuccess.get(), equalTo(false));
-        verify(initializeTask).call();
+        verify(ctx.getInitializeTask()).call();
 
         initSuccess = consumer.initializeComplete();
-        verify(initializeTask).call();
+        verify(ctx.getInitializeTask()).call();
         assertThat(initSuccess.get(), equalTo(true));
         consumer.healthCheck();
 
@@ -689,18 +657,18 @@ public class ShardConsumerTest {
         assertThat(consumer.taskRunningTime(), nullValue());
         consumer.healthCheck();
 
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(2)).beforeTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(2)).beforeTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).beforeTaskExecution(ctx.getShutdownTaskInput());
 
-        initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
-        shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        ctx.setInitialTaskInput(ctx.getInitialTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setProcessTaskInput(ctx.getProcessTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
+        ctx.setShutdownTaskInput(ctx.getShutdownTaskInput().toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build());
 
-        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
-        verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
-        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
-        verifyNoMoreInteractions(taskExecutionListener);
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getInitialTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(2)).afterTaskExecution(ctx.getProcessTaskInput());
+        verify(ctx.getTaskExecutionListener(), times(1)).afterTaskExecution(ctx.getShutdownTaskInput());
+        verifyNoMoreInteractions(ctx.getTaskExecutionListener());
     }
 
     private void mockSuccessfulShutdown(CyclicBarrier taskCallBarrier) {
@@ -708,18 +676,19 @@ public class ShardConsumerTest {
     }
 
     private void mockSuccessfulShutdown(CyclicBarrier taskArriveBarrier, CyclicBarrier taskDepartBarrier) {
-        when(shutdownState.createTask(eq(shardConsumerArgument), any(), any())).thenReturn(shutdownTask);
-        when(shutdownState.taskType()).thenReturn(TaskType.SHUTDOWN);
-        when(shutdownTask.taskType()).thenReturn(TaskType.SHUTDOWN);
-        when(shutdownTask.call()).thenAnswer(i -> {
+        when(ctx.getShutdownState().createTask(eq(ctx.getShardConsumerArgument()), any(), any()))
+                .thenReturn(ctx.getShutdownTask());
+        when(ctx.getShutdownState().taskType()).thenReturn(TaskType.SHUTDOWN);
+        when(ctx.getShutdownTask().taskType()).thenReturn(TaskType.SHUTDOWN);
+        when(ctx.getShutdownTask().call()).thenAnswer(i -> {
             awaitBarrier(taskArriveBarrier);
             awaitBarrier(taskDepartBarrier);
             return new TaskResult(null);
         });
-        when(shutdownState.shutdownTransition(any())).thenReturn(shutdownCompleteState);
-        when(shutdownState.state()).thenReturn(ConsumerStates.ShardConsumerState.SHUTTING_DOWN);
+        when(ctx.getShutdownState().shutdownTransition(any())).thenReturn(ctx.getShutdownCompleteState());
+        when(ctx.getShutdownState().state()).thenReturn(ConsumerStates.ShardConsumerState.SHUTTING_DOWN);
 
-        when(shutdownCompleteState.isTerminal()).thenReturn(true);
+        when(ctx.getShutdownCompleteState().isTerminal()).thenReturn(true);
     }
 
     private void mockSuccessfulProcessing(CyclicBarrier taskCallBarrier) {
@@ -727,19 +696,20 @@ public class ShardConsumerTest {
     }
 
     private void mockSuccessfulProcessing(CyclicBarrier taskCallBarrier, CyclicBarrier taskInterlockBarrier) {
-        when(processingState.createTask(eq(shardConsumerArgument), any(), any())).thenReturn(processingTask);
-        when(processingState.requiresDataAvailability()).thenReturn(true);
-        when(processingState.taskType()).thenReturn(TaskType.PROCESS);
-        when(processingTask.taskType()).thenReturn(TaskType.PROCESS);
-        when(processingTask.call()).thenAnswer(i -> {
+        when(ctx.getProcessingState().createTask(eq(ctx.getShardConsumerArgument()), any(), any()))
+                .thenReturn(ctx.getProcessingTask());
+        when(ctx.getProcessingState().requiresDataAvailability()).thenReturn(true);
+        when(ctx.getProcessingState().taskType()).thenReturn(TaskType.PROCESS);
+        when(ctx.getProcessingTask().taskType()).thenReturn(TaskType.PROCESS);
+        when(ctx.getProcessingTask().call()).thenAnswer(i -> {
             awaitBarrier(taskCallBarrier);
             awaitBarrier(taskInterlockBarrier);
-            return processingTaskResult;
+            return ctx.getProcessingTaskResult();
         });
-        when(processingTaskResult.getException()).thenReturn(null);
-        when(processingState.successTransition()).thenReturn(processingState);
-        when(processingState.shutdownTransition(any())).thenReturn(shutdownState);
-        when(processingState.state()).thenReturn(ConsumerStates.ShardConsumerState.PROCESSING);
+        when(ctx.getProcessingTaskResult().getException()).thenReturn(null);
+        when(ctx.getProcessingState().successTransition()).thenReturn(ctx.getProcessingState());
+        when(ctx.getProcessingState().shutdownTransition(any())).thenReturn(ctx.getShutdownState());
+        when(ctx.getProcessingState().state()).thenReturn(ConsumerStates.ShardConsumerState.PROCESSING);
     }
 
     private void mockSuccessfulInitialize(CyclicBarrier taskCallBarrier) {
@@ -748,18 +718,19 @@ public class ShardConsumerTest {
 
     private void mockSuccessfulInitialize(CyclicBarrier taskCallBarrier, CyclicBarrier taskInterlockBarrier) {
 
-        when(initialState.createTask(eq(shardConsumerArgument), any(), any())).thenReturn(initializeTask);
-        when(initialState.taskType()).thenReturn(TaskType.INITIALIZE);
-        when(initializeTask.taskType()).thenReturn(TaskType.INITIALIZE);
-        when(initializeTask.call()).thenAnswer(i -> {
+        when(ctx.getInitialState().createTask(eq(ctx.getShardConsumerArgument()), any(), any()))
+                .thenReturn(ctx.getInitializeTask());
+        when(ctx.getInitialState().taskType()).thenReturn(TaskType.INITIALIZE);
+        when(ctx.getInitializeTask().taskType()).thenReturn(TaskType.INITIALIZE);
+        when(ctx.getInitializeTask().call()).thenAnswer(i -> {
             awaitBarrier(taskCallBarrier);
             awaitBarrier(taskInterlockBarrier);
-            return initializeTaskResult;
+            return ctx.getInitializeTaskResult();
         });
-        when(initializeTaskResult.getException()).thenReturn(null);
-        when(initialState.requiresDataAvailability()).thenReturn(false);
-        when(initialState.successTransition()).thenReturn(processingState);
-        when(initialState.state()).thenReturn(ConsumerStates.ShardConsumerState.INITIALIZING);
+        when(ctx.getInitializeTaskResult().getException()).thenReturn(null);
+        when(ctx.getInitialState().requiresDataAvailability()).thenReturn(false);
+        when(ctx.getInitialState().successTransition()).thenReturn(ctx.getProcessingState());
+        when(ctx.getInitialState().state()).thenReturn(ConsumerStates.ShardConsumerState.INITIALIZING);
 
     }
 
@@ -774,129 +745,146 @@ public class ShardConsumerTest {
         barrier.reset();
     }
 
-
-    //Increased timeout to attempt to get auto-build working...
-    private static final int awaitTimeout = 5;
-    private static final TimeUnit awaitTimeoutUnit = TimeUnit.SECONDS;
-
     /**
      * Test to validate the warning message from ShardConsumer is not suppressed with the default configuration of 0
+     * 
      * @throws Exception
      */
     @Test
     public void testLoggingSuppressedAfterTimeoutIgnoreDefaultHappyPath() throws Exception {
-        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        boolean[] requestsToThrowException = {false, false, false, false, false};
-        int[] expectedLogs={0,0,0,0,0};
-        runLogSuppressionTest(requestsToThrowException, expectedLogs,0, exceptionToThrow);
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, false, false, false };
+        int[] expectedLogs = { 0, 0, 0, 0, 0 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 0, exceptionToThrow);
     }
 
     /**
      * Test to validate the warning message from ShardConsumer is not suppressed with the default configuration of 0
+     * 
      * @throws Exception
      */
     @Test
     public void testLoggingSuppressedAfterTimeoutIgnoreDefault() throws Exception {
-        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        boolean[] requestsToThrowException = {false, false, true, false, true};
-        int[] expectedLogs={0,0,1,1,2};
-        runLogSuppressionTest(requestsToThrowException, expectedLogs,0, exceptionToThrow);
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, true, false, true };
+        int[] expectedLogs = { 0, 0, 1, 1, 2 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 0, exceptionToThrow);
     }
 
     /**
-     * Test to validate the warning message from ShardConsumer is successfully supressed if we only have intermittant readTimeouts.
+     * Test to validate the warning message from ShardConsumer is successfully supressed if we only have intermittant
+     * readTimeouts.
+     * 
      * @throws Exception
      */
     @Test
     public void testLoggingSuppressedAfterTimeoutIgnore1() throws Exception {
-        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        boolean[] requestsToThrowException = {false, false, true, false, true};
-        int[] expectedLogs={0,0,0,0,0};
-        runLogSuppressionTest(requestsToThrowException, expectedLogs,1, exceptionToThrow);
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, true, false, true };
+        int[] expectedLogs = { 0, 0, 0, 0, 0 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 1, exceptionToThrow);
     }
 
     /**
-     * Test to validate the warning message from ShardConsumer is successfully logged if multiple sequential timeouts occur.
+     * Test to validate the warning message from ShardConsumer is successfully logged if multiple sequential timeouts
+     * occur.
+     * 
      * @throws Exception
      */
     @Test
     public void testLoggingSuppressedAfterMultipleTimeoutIgnore1() throws Exception {
-        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        boolean[] requestsToThrowException = {true, true, false, true, true};
-        int[] expectedLogs={0,1,1,1,2};
-        runLogSuppressionTest(requestsToThrowException, expectedLogs,1, exceptionToThrow);
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { true, true, false, true, true };
+        int[] expectedLogs = { 0, 1, 1, 1, 2 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 1, exceptionToThrow);
     }
 
     /**
      * Test to validate the warning message from ShardConsumer is successfully logged if sequential timeouts occur.
+     * 
      * @throws Exception
      */
     @Test
     public void testLoggingSuppressedAfterMultipleTimeoutIgnore2() throws Exception {
-        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        boolean[] requestsToThrowException = {true, true, true, true, true};
-        int[] expectedLogs={0,0,1,2,3};
-        runLogSuppressionTest(requestsToThrowException, expectedLogs,2, exceptionToThrow);
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { true, true, true, true, true };
+        int[] expectedLogs = { 0, 0, 1, 2, 3 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 2, exceptionToThrow);
     }
 
     /**
-     * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with the default configuration of 0
+     * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with the default
+     * configuration of 0
+     * 
      * @throws Exception
      */
     @Test
     public void testLoggingSuppressedAfterExceptionDefault() throws Exception {
-        //We're not throwing a ReadTimeout, so no suppression is expected.
-        Exception exceptionToThrow=new RuntimeException("Uh oh Not a ReadTimeout");
-        boolean[] requestsToThrowException = {false, false, true, false, true};
-        int[] expectedLogs={0,0,1,1,2};
-        runLogSuppressionTest(requestsToThrowException, expectedLogs,0, exceptionToThrow);
+        // We're not throwing a ReadTimeout, so no suppression is expected.
+        Exception exceptionToThrow = new RuntimeException("Uh oh Not a ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, true, false, true };
+        int[] expectedLogs = { 0, 0, 1, 1, 2 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 0, exceptionToThrow);
     }
 
     /**
-     * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with 2 ReadTimeouts to ignore
+     * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with 2 ReadTimeouts to
+     * ignore
+     * 
      * @throws Exception
      */
     @Test
     public void testLoggingNotSuppressedAfterExceptionIgnore2ReadTimeouts() throws Exception {
-        //We're not throwing a ReadTimeout, so no suppression is expected.
-        Exception exceptionToThrow=new RuntimeException("Uh oh Not a ReadTimeout");
-        boolean[] requestsToThrowException = {false, false, true, false, true};
-        int[] expectedLogs={0,0,1,1,2};
-        runLogSuppressionTest(requestsToThrowException, expectedLogs,2, exceptionToThrow);
+        // We're not throwing a ReadTimeout, so no suppression is expected.
+        Exception exceptionToThrow = new RuntimeException("Uh oh Not a ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, true, false, true };
+        int[] expectedLogs = { 0, 0, 1, 1, 2 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 2, exceptionToThrow);
     }
 
     /**
-     * Runs the log suppression test which mocks exceptions to be thrown during shard consumption and validates log messages and requests recieved.
-     * @param requestsToThrowException - Controls the test execution for how many requests to mock, and if they are successful, or throw an exception.
-     *                                 true-> publish throws exception
-     *                                 false-> publish successfully processes
-     * @param expectedLogCounts - The expected warning log counts given the request profile from <tt>requestsToThrowException</tt> and <tt>readTimeoutsToIgnoreBeforeWarning</tt>
-     * @param readTimeoutsToIgnoreBeforeWarning - Used to configure the ShardConsumer for the test to specify the configurable number of timeouts to suppress. This should not suppress any non-timeout exception.
-     * @param exceptionToThrow - Specifies the type of exception to throw.
+     * Runs the log suppression test which mocks exceptions to be thrown during shard consumption and validates log
+     * messages and requests recieved.
+     * 
+     * @param requestsToThrowException
+     *            - Controls the test execution for how many requests to mock, and if they are successful, or throw an
+     *            exception.
+     *            true-> publish throws exception
+     *            false-> publish successfully processes
+     * @param expectedLogCounts
+     *            - The expected warning log counts given the request profile from <tt>requestsToThrowException</tt> and
+     *            <tt>readTimeoutsToIgnoreBeforeWarning</tt>
+     * @param readTimeoutsToIgnoreBeforeWarning
+     *            - Used to configure the ShardConsumer for the test to specify the configurable number of timeouts to
+     *            suppress. This should not suppress any non-timeout exception.
+     * @param exceptionToThrow
+     *            - Specifies the type of exception to throw.
      * @throws Exception
      */
-    private void runLogSuppressionTest(boolean[] requestsToThrowException, int[] expectedLogCounts, int readTimeoutsToIgnoreBeforeWarning, Exception exceptionToThrow) throws Exception {
-        //Setup Test
+    private void runLogSuppressionTest(boolean[] requestsToThrowException, int[] expectedLogCounts,
+            int readTimeoutsToIgnoreBeforeWarning, Exception exceptionToThrow) throws Exception {
+        // Setup Test
         ExecutorService executor = Executors.newSingleThreadExecutor();
         CyclicBarrier taskCallBarrier = new CyclicBarrier(2);
 
         mockSuccessfulInitialize(null);
         mockSuccessfulProcessing(taskCallBarrier);
         mockSuccessfulShutdown(null);
-        CyclicBarrierTestPublisher cache = new CyclicBarrierTestPublisher(true, processRecordsInput ,requestsToThrowException, exceptionToThrow);
+        CyclicBarrierTestPublisher cache = new CyclicBarrierTestPublisher(true, ctx.getProcessRecordsInput(),
+                requestsToThrowException, exceptionToThrow);
 
-        //Logging supressions specific setup
-        int expectedRequest=0;
-        int expectedPublish=0;
+        // Logging supressions specific setup
+        int expectedRequest = 0;
+        int expectedPublish = 0;
 
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,
-                readTimeoutsToIgnoreBeforeWarning);
+        ShardConsumer consumer = new ShardConsumer(cache, ctx.getExecutorService(), ctx.getShardInfo(),
+                ctx.getLogWarningForTaskAfterMillis(), ctx.getShardConsumerArgument(), ctx.getInitialState(),
+                Function.identity(), 1, ctx.getTaskExecutionListener(), readTimeoutsToIgnoreBeforeWarning);
 
         Logger mockLogger = mock(Logger.class);
         injectLogger(consumer.subscriber(), mockLogger);
 
-        //This needs to be executed in a seperate thread before an expected timeout
+        // This needs to be executed in a seperate thread before an expected timeout
         // publish call to await the required cyclic barriers
         Runnable awaitingCacheThread = () -> {
             try {
@@ -906,69 +894,69 @@ public class ShardConsumerTest {
             }
         };
 
-        //Run the configured test
+        // Run the configured test
         boolean initComplete = false;
         while (!initComplete) {
             initComplete = consumer.initializeComplete().get();
         }
-        //Initialize Shard Consumer Subscriptions
+        // Initialize Shard Consumer Subscriptions
         consumer.subscribe();
         cache.awaitInitialSetup();
-        for(int i=0; i< requestsToThrowException.length; i++){
+        for (int i = 0; i < requestsToThrowException.length; i++) {
             boolean shouldTimeout = requestsToThrowException[i];
             int expectedLogCount = expectedLogCounts[i];
             expectedRequest++;
-            if(shouldTimeout){
-                //Mock a ReadTimeout call
+            if (shouldTimeout) {
+                // Mock a ReadTimeout call
                 executor.submit(awaitingCacheThread);
                 cache.publish();
                 // Sleep to increase liklihood of async processing is picked up in ShardConsumer.
-                // Previous cyclic barriers are used to sync Publisher with the test, this test would require another subscriptionBarrier
+                // Previous cyclic barriers are used to sync Publisher with the test, this test would require another
+                // subscriptionBarrier
                 // in the ShardConsumer to fully sync the processing with the Test.
                 Thread.sleep(50);
-                //Restart subscription after failed request
+                // Restart subscription after failed request
                 consumer.subscribe();
                 cache.awaitSubscription();
-            }else{
+            } else {
                 expectedPublish++;
-                //Mock a successful call
+                // Mock a successful call
                 cache.publish();
                 awaitAndResetBarrierWithTimeout(taskCallBarrier);
                 cache.awaitRequest();
             }
-            assertEquals(expectedPublish,cache.getPublishCount());
+            assertEquals(expectedPublish, cache.getPublishCount());
             assertEquals(expectedRequest, cache.getRequestCount());
-            if(exceptionToThrow instanceof RetryableRetrievalException
-                    && exceptionToThrow.getMessage().contains("ReadTimeout")){
-                verify(mockLogger, times(expectedLogCount)).warn(eq(
-                        "{}: onError().  Cancelling subscription, and marking self as failed. KCL will" +
-                                " recreate the subscription as neccessary to continue processing. If you " +
-                                "are seeing this warning frequently consider increasing the SDK timeouts " +
-                                "by providing an OverrideConfiguration to the kinesis client. Alternatively you" +
-                                "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress" +
-                                "intermittant ReadTimeout warnings."), anyString(), any());
-            }else {
-                verify(mockLogger, times(expectedLogCount)).warn(eq(
-                        "{}: onError().  Cancelling subscription, and marking self as failed. KCL will " +
-                                "recreate the subscription as neccessary to continue processing."), anyString(), any());
+            if (exceptionToThrow instanceof RetryableRetrievalException
+                    && exceptionToThrow.getMessage().contains("ReadTimeout")) {
+                verify(mockLogger, times(expectedLogCount))
+                        .warn(eq("{}: onError().  Cancelling subscription, and marking self as failed. KCL will"
+                                + " recreate the subscription as neccessary to continue processing. If you "
+                                + "are seeing this warning frequently consider increasing the SDK timeouts "
+                                + "by providing an OverrideConfiguration to the kinesis client. Alternatively you"
+                                + "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
+                                + "intermittant ReadTimeout warnings."), anyString(), any());
+            } else {
+                verify(mockLogger, times(expectedLogCount)).warn(
+                        eq("{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
+                                + "recreate the subscription as neccessary to continue processing."),
+                        anyString(), any());
             }
         }
 
-        //Clean Up Test
+        // Clean Up Test
         injectLogger(consumer.subscriber(), LoggerFactory.getLogger(ShardConsumerSubscriber.class));
 
-        Thread closingThread =
-                new Thread(
-                        new Runnable() {
-                            public void run() {
-                                consumer.leaseLost();
-                            }
-                        });
+        Thread closingThread = new Thread(new Runnable() {
+            public void run() {
+                consumer.leaseLost();
+            }
+        });
         closingThread.start();
         cache.awaitRequest();
 
-        //We need to await and reset the task subscriptionBarrier prior to going into the shutdown loop.
-        Runnable awaitingTaskThread = ()->{
+        // We need to await and reset the task subscriptionBarrier prior to going into the shutdown loop.
+        Runnable awaitingTaskThread = () -> {
             try {
                 awaitAndResetBarrierWithTimeout(taskCallBarrier);
             } catch (Exception e) {
@@ -976,7 +964,8 @@ public class ShardConsumerTest {
             }
         };
         executor.submit(awaitingTaskThread);
-        while (!consumer.shutdownComplete().get()) { }
+        while (!consumer.shutdownComplete().get()) {
+        }
     }
 
     /**
@@ -992,24 +981,24 @@ public class ShardConsumerTest {
         final Field field = subscriber.getClass().getDeclaredField("log");
         // Allow modification on the field
         field.setAccessible(true);
-        //Make the logger non-final
+        // Make the logger non-final
         Field modifiersField = Field.class.getDeclaredField("modifiers");
         modifiersField.setAccessible(true);
         modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
         // Inject the mock...
-        field.set(subscriber, logger );
+        field.set(subscriber, logger);
 
     }
 
     public static void awaitBarrierWithTimeout(CyclicBarrier barrier) throws Exception {
         if (barrier != null) {
-            barrier.await(awaitTimeout, awaitTimeoutUnit);
+            barrier.await(ShardConsumerTestContext.awaitTimeout, ShardConsumerTestContext.awaitTimeoutUnit);
         }
     }
 
     public static void awaitAndResetBarrierWithTimeout(CyclicBarrier barrier) throws Exception {
-        if(barrier!=null) {
-            barrier.await(awaitTimeout, awaitTimeoutUnit);
+        if (barrier != null) {
+            barrier.await(ShardConsumerTestContext.awaitTimeout, ShardConsumerTestContext.awaitTimeoutUnit);
             barrier.reset();
         }
     }
@@ -1037,33 +1026,37 @@ public class ShardConsumerTest {
             return publishCount;
         }
 
-        private AtomicInteger requestCount=new AtomicInteger(0);
+        private AtomicInteger requestCount = new AtomicInteger(0);
 
         Subscriber<? super RecordsRetrieved> subscriber;
         final Subscription subscription = mock(Subscription.class);
-        private int publishCount=0;
+        private int publishCount = 0;
         private ProcessRecordsInput processRecordsInput;
 
         CyclicBarrierTestPublisher(ProcessRecordsInput processRecordsInput) {
-            this(false,processRecordsInput);
+            this(false, processRecordsInput);
         }
 
-        CyclicBarrierTestPublisher(boolean enableCancelAwait,ProcessRecordsInput processRecordsInput) { this(enableCancelAwait,processRecordsInput, null,null);}
+        CyclicBarrierTestPublisher(boolean enableCancelAwait, ProcessRecordsInput processRecordsInput) {
+            this(enableCancelAwait, processRecordsInput, null, null);
+        }
 
-        CyclicBarrierTestPublisher(boolean enableCancelAwait, ProcessRecordsInput processRecordsInput, boolean[] requestsToThrowException, Exception exceptionToThrow){
+        CyclicBarrierTestPublisher(boolean enableCancelAwait, ProcessRecordsInput processRecordsInput,
+                boolean[] requestsToThrowException, Exception exceptionToThrow) {
             doAnswer(a -> {
-                requestBarrier.await(awaitTimeout, awaitTimeoutUnit);
+                requestBarrier.await(ShardConsumerTestContext.awaitTimeout, ShardConsumerTestContext.awaitTimeoutUnit);
                 return null;
             }).when(subscription).request(anyLong());
             doAnswer(a -> {
                 if (enableCancelAwait) {
-                    requestBarrier.await(awaitTimeout, awaitTimeoutUnit);
+                    requestBarrier.await(ShardConsumerTestContext.awaitTimeout,
+                            ShardConsumerTestContext.awaitTimeoutUnit);
                 }
                 return null;
             }).when(subscription).cancel();
             this.requestsToThrowException = requestsToThrowException;
-            this.exceptionToThrow=exceptionToThrow;
-            this.processRecordsInput=processRecordsInput;
+            this.exceptionToThrow = exceptionToThrow;
+            this.processRecordsInput = processRecordsInput;
         }
 
         @Override
@@ -1082,7 +1075,8 @@ public class ShardConsumerTest {
             subscriber = s;
             subscriber.onSubscribe(subscription);
             try {
-                subscriptionBarrier.await(awaitTimeout, awaitTimeoutUnit);
+                subscriptionBarrier.await(ShardConsumerTestContext.awaitTimeout,
+                        ShardConsumerTestContext.awaitTimeoutUnit);
             } catch (Exception ex) {
                 throw new RuntimeException(ex);
             }
@@ -1094,12 +1088,12 @@ public class ShardConsumerTest {
         }
 
         public void awaitSubscription() throws InterruptedException, BrokenBarrierException, TimeoutException {
-            subscriptionBarrier.await(awaitTimeout, awaitTimeoutUnit);
+            subscriptionBarrier.await(ShardConsumerTestContext.awaitTimeout, ShardConsumerTestContext.awaitTimeoutUnit);
             subscriptionBarrier.reset();
         }
 
         public void awaitRequest() throws InterruptedException, BrokenBarrierException, TimeoutException {
-            requestBarrier.await(awaitTimeout, awaitTimeoutUnit);
+            requestBarrier.await(ShardConsumerTestContext.awaitTimeout, ShardConsumerTestContext.awaitTimeoutUnit);
             requestBarrier.reset();
         }
 
@@ -1109,10 +1103,11 @@ public class ShardConsumerTest {
         }
 
         public void publish() {
-            if (requestsToThrowException != null && requestsToThrowException[requestCount.getAndIncrement() % requestsToThrowException.length]) {
+            if (requestsToThrowException != null
+                    && requestsToThrowException[requestCount.getAndIncrement() % requestsToThrowException.length]) {
                 subscriber.onError(exceptionToThrow);
             } else {
-                publish(()->processRecordsInput);
+                publish(() -> processRecordsInput);
             }
         }
 
