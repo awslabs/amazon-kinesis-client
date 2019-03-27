@@ -20,10 +20,10 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.*;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -34,22 +34,19 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -65,12 +62,15 @@ import org.reactivestreams.Subscription;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -245,7 +245,7 @@ public class ShardConsumerTest {
 
         TestPublisher cache = new TestPublisher();
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -299,7 +299,7 @@ public class ShardConsumerTest {
 
         TestPublisher cache = new TestPublisher();
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -358,7 +358,7 @@ public class ShardConsumerTest {
 
         TestPublisher cache = new TestPublisher();
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -417,7 +417,7 @@ public class ShardConsumerTest {
     @Ignore
     public final void testInitializationStateUponFailure() throws Exception {
         ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
 
         when(initialState.createTask(eq(shardConsumerArgument), eq(consumer), any())).thenReturn(initializeTask);
         when(initializeTask.call()).thenReturn(new TaskResult(new Exception("Bad")));
@@ -450,7 +450,7 @@ public class ShardConsumerTest {
 
         ExecutorService failingService = mock(ExecutorService.class);
         ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener);
+                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener,0);
 
         doThrow(new RejectedExecutionException()).when(failingService).execute(any());
 
@@ -464,7 +464,7 @@ public class ShardConsumerTest {
     @Test
     public void testErrorThrowableInInitialization() throws Exception {
         ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener);
+                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener,0);
 
         when(initialState.createTask(any(), any(), any())).thenReturn(initializeTask);
         when(initialState.taskType()).thenReturn(TaskType.INITIALIZE);
@@ -488,7 +488,7 @@ public class ShardConsumerTest {
 
         TestPublisher cache = new TestPublisher();
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener);
+                shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener,0);
 
         mockSuccessfulInitialize(null);
 
@@ -571,7 +571,7 @@ public class ShardConsumerTest {
         TestPublisher cache = new TestPublisher();
 
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, Optional.of(1L),
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
 
         mockSuccessfulInitialize(null);
         mockSuccessfulProcessing(null);
@@ -618,7 +618,7 @@ public class ShardConsumerTest {
         TestPublisher cache = new TestPublisher();
 
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, Optional.of(1L),
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,0);
 
         CyclicBarrier taskArriveBarrier = new CyclicBarrier(2);
         CyclicBarrier taskDepartBarrier = new CyclicBarrier(2);
@@ -773,4 +773,353 @@ public class ShardConsumerTest {
         barrier.await();
         barrier.reset();
     }
+
+
+    //Increased timeout to attempt to get auto-build working...
+    private static final int awaitTimeout = 15;
+    private static final TimeUnit awaitTimeoutUnit = TimeUnit.SECONDS;
+
+    /**
+     * Test to validate the warning message from ShardConsumer is not suppressed with the default configuration of 0
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterTimeoutIgnoreDefaultHappyPath() throws Exception {
+        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = {false, false, false, false, false};
+        int[] expectedLogs={0,0,0,0,0};
+        runLogSuppressionTest(requestsToThrowException, expectedLogs,0, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the warning message from ShardConsumer is not suppressed with the default configuration of 0
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterTimeoutIgnoreDefault() throws Exception {
+        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = {false, false, true, false, true};
+        int[] expectedLogs={0,0,1,1,2};
+        runLogSuppressionTest(requestsToThrowException, expectedLogs,0, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the warning message from ShardConsumer is successfully supressed if we only have intermittant readTimeouts.
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterTimeoutIgnore1() throws Exception {
+        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = {false, false, true, false, true};
+        int[] expectedLogs={0,0,0,0,0};
+        runLogSuppressionTest(requestsToThrowException, expectedLogs,1, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the warning message from ShardConsumer is successfully logged if multiple sequential timeouts occur.
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterMultipleTimeoutIgnore1() throws Exception {
+        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = {true, true, false, true, true};
+        int[] expectedLogs={0,1,1,1,2};
+        runLogSuppressionTest(requestsToThrowException, expectedLogs,1, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the warning message from ShardConsumer is successfully logged if sequential timeouts occur.
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterMultipleTimeoutIgnore2() throws Exception {
+        Exception exceptionToThrow=new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = {true, true, true, true, true};
+        int[] expectedLogs={0,0,1,2,3};
+        runLogSuppressionTest(requestsToThrowException, expectedLogs,2, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with the default configuration of 0
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterExceptionDefault() throws Exception {
+        //We're not throwing a ReadTimeout, so no suppression is expected.
+        Exception exceptionToThrow=new RuntimeException("Uh oh Not a ReadTimeout");
+        boolean[] requestsToThrowException = {false, false, true, false, true};
+        int[] expectedLogs={0,0,1,1,2};
+        runLogSuppressionTest(requestsToThrowException, expectedLogs,0, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with 2 ReadTimeouts to ignore
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingNotSuppressedAfterExceptionIgnore2ReadTimeouts() throws Exception {
+        //We're not throwing a ReadTimeout, so no suppression is expected.
+        Exception exceptionToThrow=new RuntimeException("Uh oh Not a ReadTimeout");
+        boolean[] requestsToThrowException = {false, false, true, false, true};
+        int[] expectedLogs={0,0,1,1,2};
+        runLogSuppressionTest(requestsToThrowException, expectedLogs,2, exceptionToThrow);
+    }
+
+    /**
+     * Runs the log suppression test which mocks exceptions to be thrown during shard consumption and validates log messages and requests recieved.
+     * @param requestsToThrowException - Controls the test execution for how many requests to mock, and if they are successful, or throw an exception.
+     *                                 true-> publish throws exception
+     *                                 false-> publish successfully processes
+     * @param expectedLogCounts - The expected warning log counts given the request profile from <tt>requestsToThrowException</tt> and <tt>readTimeoutsToIgnoreBeforeWarning</tt>
+     * @param readTimeoutsToIgnoreBeforeWarning - Used to configure the ShardConsumer for the test to specify the configurable number of timeouts to suppress. This should not suppress any non-timeout exception.
+     * @param exceptionToThrow - Specifies the type of exception to throw.
+     * @throws Exception
+     */
+    private void runLogSuppressionTest(boolean[] requestsToThrowException, int[] expectedLogCounts, int readTimeoutsToIgnoreBeforeWarning, Exception exceptionToThrow) throws Exception {
+        //Setup Test
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CyclicBarrier taskCallBarrier = new CyclicBarrier(2);
+
+        mockSuccessfulInitialize(null);
+        mockSuccessfulProcessing(taskCallBarrier);
+        mockSuccessfulShutdown(null);
+        CyclicBarrierTestPublisher cache = new CyclicBarrierTestPublisher(true, processRecordsInput ,requestsToThrowException, exceptionToThrow);
+
+        //Logging supressions specific setup
+        int expectedRequest=0;
+        int expectedPublish=0;
+
+        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener,
+                readTimeoutsToIgnoreBeforeWarning);
+
+        Logger mockLogger = mock(Logger.class);
+        injectLogger(consumer.subscriber(), mockLogger);
+
+        //This needs to be executed in a seperate thread before an expected timeout
+        // publish call to await the required cyclic barriers
+        Runnable awaitingCacheThread = () -> {
+            try {
+                cache.awaitRequest();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        };
+
+        //Run the configured test
+        boolean initComplete = false;
+        while (!initComplete) {
+            initComplete = consumer.initializeComplete().get();
+        }
+        //Initialize Shard Consumer Subscriptions
+        consumer.subscribe();
+        cache.awaitInitialSetup();
+        for(int i=0; i< requestsToThrowException.length; i++){
+            boolean shouldTimeout = requestsToThrowException[i];
+            int expectedLogCount = expectedLogCounts[i];
+            expectedRequest++;
+            if(shouldTimeout){
+                //Mock a ReadTimeout call
+                executor.submit(awaitingCacheThread);
+                cache.publish();
+                // Sleep to increase liklihood of async processing is picked up in ShardConsumer.
+                // Previous cyclic barriers are used to sync Publisher with the test, this test would require another subscriptionBarrier
+                // in the ShardConsumer to fully sync the processing with the Test.
+                Thread.sleep(50);
+                //Restart subscription after failed request
+                consumer.subscribe();
+                cache.awaitSubscription();
+            }else{
+                expectedPublish++;
+                //Mock a successful call
+                cache.publish();
+                awaitAndResetBarrierWithTimeout(taskCallBarrier);
+                cache.awaitRequest();
+            }
+            assertEquals(expectedPublish,cache.getPublishCount());
+            assertEquals(expectedRequest, cache.getRequestCount());
+            if(exceptionToThrow instanceof RetryableRetrievalException
+                    && exceptionToThrow.getMessage().contains("ReadTimeout")){
+                verify(mockLogger, times(expectedLogCount)).warn(eq(
+                        "{}: onError().  Cancelling subscription, and marking self as failed. KCL will" +
+                                " recreate the subscription as neccessary to continue processing. If you " +
+                                "are seeing this warning frequently consider increasing the SDK timeouts " +
+                                "by providing an OverrideConfiguration to the kinesis client. Alternatively you" +
+                                "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress" +
+                                "intermittant ReadTimeout warnings."), anyString(), any());
+            }else {
+                verify(mockLogger, times(expectedLogCount)).warn(eq(
+                        "{}: onError().  Cancelling subscription, and marking self as failed. KCL will " +
+                                "recreate the subscription as neccessary to continue processing."), anyString(), any());
+            }
+        }
+
+        //Clean Up Test
+        injectLogger(consumer.subscriber(), LoggerFactory.getLogger(ShardConsumerSubscriber.class));
+
+        Thread closingThread =
+                new Thread(
+                        new Runnable() {
+                            public void run() {
+                                consumer.leaseLost();
+                            }
+                        });
+        closingThread.start();
+        cache.awaitRequest();
+
+        //We need to await and reset the task subscriptionBarrier prior to going into the shutdown loop.
+        Runnable awaitingTaskThread = ()->{
+            try {
+                awaitAndResetBarrierWithTimeout(taskCallBarrier);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        };
+        executor.submit(awaitingTaskThread);
+        while (!consumer.shutdownComplete().get()) { }
+    }
+
+    /**
+     * Use reflection to inject a logger for verification. This will mute any logging occuring with this logger,
+     * but allow it to be verifiable.
+     *
+     * After executing the test, a normal Logger from a standard LoggerFactory should be injected to continue logging
+     * as expected.
+     */
+    private void injectLogger(final ShardConsumerSubscriber subscriber, final Logger logger) throws SecurityException,
+            NoSuchFieldException, ClassNotFoundException, IllegalArgumentException, IllegalAccessException {
+        // Get the private field
+        final Field field = subscriber.getClass().getDeclaredField("log");
+        // Allow modification on the field
+        field.setAccessible(true);
+        //Make the logger non-final
+        Field modifiersField = Field.class.getDeclaredField("modifiers");
+        modifiersField.setAccessible(true);
+        modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+        // Inject the mock...
+        field.set(subscriber, logger );
+
+    }
+
+    public static void awaitBarrierWithTimeout(CyclicBarrier barrier) throws Exception {
+        if (barrier != null) {
+            barrier.await(awaitTimeout, awaitTimeoutUnit);
+        }
+    }
+
+    public static void awaitAndResetBarrierWithTimeout(CyclicBarrier barrier) throws Exception {
+        if(barrier!=null) {
+            barrier.await(awaitTimeout, awaitTimeoutUnit);
+            barrier.reset();
+        }
+    }
+
+    /**
+     * Test Publisher with seperate barriers for Task processing and creating a subscription.
+     *
+     * These barriers need to be "primed" in a seperate thread via the await/reset methods to allow processing
+     * to sync along these barriers.
+     *
+     * Optionally, you can errors also trigger the Task Processing Barrier if you are wanting to validate
+     * handling around error conditions.
+     */
+    public class CyclicBarrierTestPublisher implements RecordsPublisher {
+        protected final CyclicBarrier subscriptionBarrier = new CyclicBarrier(2);
+        protected final CyclicBarrier requestBarrier = new CyclicBarrier(2);
+        private final Exception exceptionToThrow;
+        private final boolean[] requestsToThrowException;
+
+        public int getRequestCount() {
+            return requestCount.get();
+        }
+
+        public int getPublishCount() {
+            return publishCount;
+        }
+
+        private AtomicInteger requestCount=new AtomicInteger(0);
+
+        Subscriber<? super RecordsRetrieved> subscriber;
+        final Subscription subscription = mock(Subscription.class);
+        private int publishCount=0;
+        private ProcessRecordsInput processRecordsInput;
+
+        CyclicBarrierTestPublisher(ProcessRecordsInput processRecordsInput) {
+            this(false,processRecordsInput);
+        }
+
+        CyclicBarrierTestPublisher(boolean enableCancelAwait,ProcessRecordsInput processRecordsInput) { this(enableCancelAwait,processRecordsInput, null,null);}
+
+        CyclicBarrierTestPublisher(boolean enableCancelAwait, ProcessRecordsInput processRecordsInput, boolean[] requestsToThrowException, Exception exceptionToThrow){
+            doAnswer(a -> {
+                requestBarrier.await(awaitTimeout, awaitTimeoutUnit);
+                return null;
+            }).when(subscription).request(anyLong());
+            doAnswer(a -> {
+                if (enableCancelAwait) {
+                    requestBarrier.await(awaitTimeout, awaitTimeoutUnit);
+                }
+                return null;
+            }).when(subscription).cancel();
+            this.requestsToThrowException = requestsToThrowException;
+            this.exceptionToThrow=exceptionToThrow;
+            this.processRecordsInput=processRecordsInput;
+        }
+
+        @Override
+        public void start(ExtendedSequenceNumber extendedSequenceNumber,
+                InitialPositionInStreamExtended initialPositionInStreamExtended) {
+
+        }
+
+        @Override
+        public void shutdown() {
+
+        }
+
+        @Override
+        public void subscribe(Subscriber<? super RecordsRetrieved> s) {
+            subscriber = s;
+            subscriber.onSubscribe(subscription);
+            try {
+                subscriptionBarrier.await(awaitTimeout, awaitTimeoutUnit);
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+
+        @Override
+        public void restartFrom(RecordsRetrieved recordsRetrieved) {
+
+        }
+
+        public void awaitSubscription() throws InterruptedException, BrokenBarrierException, TimeoutException {
+            subscriptionBarrier.await(awaitTimeout, awaitTimeoutUnit);
+            subscriptionBarrier.reset();
+        }
+
+        public void awaitRequest() throws InterruptedException, BrokenBarrierException, TimeoutException {
+            requestBarrier.await(awaitTimeout, awaitTimeoutUnit);
+            requestBarrier.reset();
+        }
+
+        public void awaitInitialSetup() throws InterruptedException, BrokenBarrierException, TimeoutException {
+            awaitRequest();
+            awaitSubscription();
+        }
+
+        public void publish() {
+            if (requestsToThrowException != null && requestsToThrowException[requestCount.getAndIncrement() % requestsToThrowException.length]) {
+                subscriber.onError(exceptionToThrow);
+            } else {
+                publish(()->processRecordsInput);
+            }
+        }
+
+        public void publish(RecordsRetrieved input) {
+            subscriber.onNext(input);
+            publishCount++;
+        }
+    }
+
 }

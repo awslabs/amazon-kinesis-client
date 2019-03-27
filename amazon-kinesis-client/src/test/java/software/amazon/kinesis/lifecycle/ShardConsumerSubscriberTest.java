@@ -16,6 +16,7 @@ package software.amazon.kinesis.lifecycle;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.argThat;
@@ -46,6 +47,7 @@ import org.junit.Test;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
@@ -62,6 +64,7 @@ import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @Slf4j
@@ -101,7 +104,7 @@ public class ShardConsumerSubscriberTest {
         processRecordsInput = ProcessRecordsInput.builder().records(Collections.emptyList())
                 .cacheEntryTime(Instant.now()).build();
 
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer);
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         when(recordsRetrieved.processRecordsInput()).thenReturn(processRecordsInput);
     }
 
@@ -244,7 +247,7 @@ public class ShardConsumerSubscriberTest {
         executorService = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
                 .setNameFormat("test-" + testName.getMethodName() + "-%04d").setDaemon(true).build());
 
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer);
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
         addTerminalMarker(1);
 
@@ -271,7 +274,8 @@ public class ShardConsumerSubscriberTest {
             executorService.execute(() -> {
                 try {
                     //
-                    // Notify the test as soon as we have started executing, then wait on the post add barrier.
+                    // Notify the test as soon as we have started executing, then wait on the post add
+                    // subscriptionBarrier.
                     //
                     synchronized (processedNotifier) {
                         processedNotifier.notifyAll();
@@ -444,4 +448,177 @@ public class ShardConsumerSubscriberTest {
         }
     }
 
+    class TestShardConsumerSubscriber extends ShardConsumerSubscriber {
+
+        private int genericWarningLogged = 0;
+        private int readTimeoutWarningLogged = 0;
+        private RecordsPublisher recordsPublisher;
+        private ExecutorService executorService;
+        private int bufferSize;
+        private ShardConsumer shardConsumer;
+
+        TestShardConsumerSubscriber(int readTimeoutsToIgnoreBeforeWarning) {
+            this(mock(RecordsPublisher.class), Executors.newFixedThreadPool(1), 8, mock(ShardConsumer.class),
+                    readTimeoutsToIgnoreBeforeWarning);
+            Mockito.when(shardConsumer.shardInfo()).thenReturn(new ShardInfo("001", "token", null, null));
+        }
+
+        TestShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
+                ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
+            super(recordsPublisher, executorService, bufferSize, shardConsumer, readTimeoutsToIgnoreBeforeWarning);
+            this.recordsPublisher = recordsPublisher;
+            this.executorService = executorService;
+            this.bufferSize = bufferSize;
+            this.shardConsumer = shardConsumer;
+        }
+
+        @Override
+        public void onNext(RecordsRetrieved input) {
+            super.onNext(input);
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            super.onError(t);
+        }
+
+        @Override
+        protected void logOnErrorWarning(Throwable t) {
+            genericWarningLogged++;
+            super.logOnErrorWarning(t);
+        }
+
+        @Override
+        protected void logOnErrorReadTimeoutWarning(Throwable t) {
+            readTimeoutWarningLogged++;
+            super.logOnErrorReadTimeoutWarning(t);
+        }
+    }
+
+    /**
+     * Test to validate the warning message from ShardConsumer is not suppressed with the default configuration of 0
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterTimeoutIgnoreDefaultHappyPath() throws Exception {
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, false, false, false };
+        int[] expectedLogs = { 0, 0, 0, 0, 0 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 0, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the warning message from ShardConsumer is not suppressed with the default configuration of 0
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterTimeoutIgnoreDefault() throws Exception {
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, true, false, true };
+        int[] expectedLogs = { 0, 0, 1, 1, 2 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 0, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the warning message from ShardConsumer is successfully supressed if we only have intermittant
+     * readTimeouts.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterTimeoutIgnore1() throws Exception {
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, true, false, true };
+        int[] expectedLogs = { 0, 0, 0, 0, 0 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 1, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the warning message from ShardConsumer is successfully logged if multiple sequential timeouts
+     * occur.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterMultipleTimeoutIgnore1() throws Exception {
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { true, true, false, true, true };
+        int[] expectedLogs = { 0, 1, 1, 1, 2 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 1, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the warning message from ShardConsumer is successfully logged if sequential timeouts occur.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterMultipleTimeoutIgnore2() throws Exception {
+        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
+        boolean[] requestsToThrowException = { true, true, true, true, true };
+        int[] expectedLogs = { 0, 0, 1, 2, 3 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 2, exceptionToThrow);
+    }
+
+    /**
+     * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with the default
+     * configuration of 0
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingSuppressedAfterExceptionDefault() throws Exception {
+        // We're not throwing a ReadTimeout, so no suppression is expected.
+        Exception exceptionToThrow = new RuntimeException("Uh oh Not a ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, true, false, true };
+        int[] expectedLogs = { 0, 0, 1, 1, 2 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 0, exceptionToThrow);
+    }
+
+    private void runLogSuppressionTest(boolean[] requestsToThrowException, int[] expectedLogCounts,
+            int readTimeoutsToIgnore, Exception exceptionToThrow) {
+        // Setup Test
+        // Logging supressions specific setup
+        int expectedRequest = 0;
+        int expectedPublish = 0;
+
+        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(readTimeoutsToIgnore);
+        consumer.startSubscriptions();
+        // Run the configured test
+        for (int i = 0; i < requestsToThrowException.length; i++) {
+            boolean shouldTimeout = requestsToThrowException[i];
+            int expectedLogCount = expectedLogCounts[i];
+            if (shouldTimeout) {
+                // Mock a ReadTimeout call
+                consumer.onError(exceptionToThrow);
+                consumer.startSubscriptions();
+            } else {
+                consumer.onNext(recordsRetrieved);
+            }
+
+            if (exceptionToThrow instanceof RetryableRetrievalException
+                    && exceptionToThrow.getMessage().contains("ReadTimeout")) {
+                assertEquals(expectedLogCount, consumer.readTimeoutWarningLogged);
+            } else {
+                assertEquals(expectedLogCount, consumer.genericWarningLogged);
+            }
+        }
+    }
+
+    /**
+     * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with 2 ReadTimeouts to
+     * ignore
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testLoggingNotSuppressedAfterExceptionIgnore2ReadTimeouts() throws Exception {
+        // We're not throwing a ReadTimeout, so no suppression is expected.
+        Exception exceptionToThrow = new RuntimeException("Uh oh Not a ReadTimeout");
+        boolean[] requestsToThrowException = { false, false, true, false, true };
+        int[] expectedLogs = { 0, 0, 1, 1, 2 };
+        runLogSuppressionTest(requestsToThrowException, expectedLogs, 2, exceptionToThrow);
+    }
 }

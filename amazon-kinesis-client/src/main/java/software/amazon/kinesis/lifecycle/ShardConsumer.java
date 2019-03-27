@@ -85,20 +85,21 @@ public class ShardConsumer {
     private final ShardConsumerSubscriber subscriber;
 
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
-                         Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-                         TaskExecutionListener taskExecutionListener) {
+            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
+            TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
         this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
                 ConsumerStates.INITIAL_STATE,
-                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener);
+                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener,
+                readTimeoutsToIgnoreBeforeWarning);
     }
 
     //
     // TODO: Make bufferSize configurable
     //
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
-                         Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-                         ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator,
-                         int bufferSize, TaskExecutionListener taskExecutionListener) {
+            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
+            ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator, int bufferSize,
+            TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.executorService = executorService;
         this.shardInfo = shardInfo;
@@ -107,7 +108,8 @@ public class ShardConsumer {
         this.taskExecutionListener = taskExecutionListener;
         this.currentState = initialState;
         this.taskMetricsDecorator = taskMetricsDecorator;
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this);
+        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this,
+                readTimeoutsToIgnoreBeforeWarning);
         this.bufferSize = bufferSize;
 
         if (this.shardInfo.isCompleted()) {
@@ -115,8 +117,7 @@ public class ShardConsumer {
         }
     }
 
-
-     synchronized void handleInput(ProcessRecordsInput input, Subscription subscription) {
+    synchronized void handleInput(ProcessRecordsInput input, Subscription subscription) {
         if (isShutdownRequested()) {
             subscription.cancel();
             return;
@@ -178,7 +179,8 @@ public class ShardConsumer {
         }
         Throwable dispatchFailure = subscriber.getAndResetDispatchFailure();
         if (dispatchFailure != null) {
-            log.warn("Exception occurred while dispatching incoming data.  The incoming data has been skipped", dispatchFailure);
+            log.warn("Exception occurred while dispatching incoming data.  The incoming data has been skipped",
+                    dispatchFailure);
             return dispatchFailure;
         }
 
@@ -263,7 +265,8 @@ public class ShardConsumer {
                 } else {
                     //
                     // ShardConsumer has been asked to shutdown before the first task even had a chance to run.
-                    // In this case generate a successful task outcome, and allow the shutdown to continue.  This should only
+                    // In this case generate a successful task outcome, and allow the shutdown to continue. This should
+                    // only
                     // happen if the lease was lost before the initial state had a chance to run.
                     //
                     updateState(TaskOutcome.SUCCESSFUL);
@@ -284,9 +287,7 @@ public class ShardConsumer {
 
     private synchronized void executeTask(ProcessRecordsInput input) {
         TaskExecutionListenerInput taskExecutionListenerInput = TaskExecutionListenerInput.builder()
-                .shardInfo(shardInfo)
-                .taskType(currentState.taskType())
-                .build();
+                .shardInfo(shardInfo).taskType(currentState.taskType()).build();
         taskExecutionListener.beforeTaskExecution(taskExecutionListenerInput);
         ConsumerTask task = currentState.createTask(shardConsumerArgument, ShardConsumer.this, input);
         if (task != null) {
@@ -422,7 +423,7 @@ public class ShardConsumer {
 
     /**
      * Default task wrapping function for metrics
-     * 
+     *
      * @param metricsFactory
      *            the factory used for reporting metrics
      * @return a function that will wrap the task with a metrics reporter
