@@ -1087,9 +1087,6 @@ public class Worker implements Runnable {
         if (config.getMetricsLevel() == MetricsLevel.NONE) {
             metricsFactory = new NullMetricsFactory();
         } else {
-            if (config.getRegionName() != null) {
-                setField(cloudWatchClient, "region", cloudWatchClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
-            }
             metricsFactory = new WorkerCWMetricsFactory(cloudWatchClient, config.getApplicationName(),
                     config.getMetricsBufferTimeMillis(), config.getMetricsMaxQueueSize(), config.getMetricsLevel(),
                     config.getMetricsEnabledDimensions());

@@ -1790,7 +1790,6 @@ public class WorkerTest {
 
         verify(kinesisClient, times(1)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
         verify(dynamoDBClient, times(1)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
-        verify(cloudWatchClient, times(2)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
 
         verify(kinesisClient, times(1)).setEndpoint(eq(endpoint));
         verify(dynamoDBClient, times(1)).setEndpoint(eq(endpoint));
@@ -1820,7 +1819,6 @@ public class WorkerTest {
 
         verify(kinesisClient, times(1)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
         verify(dynamoDBClient, times(1)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
-        verify(cloudWatchClient, times(2)).setRegion(eq(RegionUtils.getRegion(config.getRegionName())));
 
         verify(kinesisClient, never()).setEndpoint(any());
         verify(dynamoDBClient, never()).setEndpoint(any());
