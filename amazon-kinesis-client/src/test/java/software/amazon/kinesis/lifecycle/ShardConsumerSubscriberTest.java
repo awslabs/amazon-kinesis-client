@@ -501,7 +501,7 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void testLoggingSuppressedAfterTimeoutIgnoreDefaultHappyPath() throws Exception {
+    public void noLoggingSuppressionNeededOnHappyPathTest() throws Exception {
         Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
         boolean[] requestsToThrowException = { false, false, false, false, false };
         int[] expectedLogs = { 0, 0, 0, 0, 0 };
@@ -514,7 +514,7 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void testLoggingSuppressedAfterTimeoutIgnoreDefault() throws Exception {
+    public void loggingNotSuppressedAfterTimeoutTest() throws Exception {
         Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
         boolean[] requestsToThrowException = { false, false, true, false, true };
         int[] expectedLogs = { 0, 0, 1, 1, 2 };
@@ -528,7 +528,7 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void testLoggingSuppressedAfterTimeoutIgnore1() throws Exception {
+    public void loggingSuppressedAfterIntermittentTimeoutTest() throws Exception {
         Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
         boolean[] requestsToThrowException = { false, false, true, false, true };
         int[] expectedLogs = { 0, 0, 0, 0, 0 };
@@ -542,7 +542,7 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void testLoggingSuppressedAfterMultipleTimeoutIgnore1() throws Exception {
+    public void loggingPartiallySuppressedAfterMultipleTimeoutTest() throws Exception {
         Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
         boolean[] requestsToThrowException = { true, true, false, true, true };
         int[] expectedLogs = { 0, 1, 1, 1, 2 };
@@ -555,7 +555,7 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void testLoggingSuppressedAfterMultipleTimeoutIgnore2() throws Exception {
+    public void loggingPartiallySuppressedAfterConsecutiveTimeoutTest() throws Exception {
         Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
         boolean[] requestsToThrowException = { true, true, true, true, true };
         int[] expectedLogs = { 0, 0, 1, 2, 3 };
@@ -569,7 +569,7 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void testLoggingSuppressedAfterExceptionDefault() throws Exception {
+    public void loggingNotSuppressedOnNonReadTimeoutExceptionNotIgnoringReadTimeoutsExceptionTest() throws Exception {
         // We're not throwing a ReadTimeout, so no suppression is expected.
         Exception exceptionToThrow = new RuntimeException("Uh oh Not a ReadTimeout");
         boolean[] requestsToThrowException = { false, false, true, false, true };
@@ -614,7 +614,7 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void testLoggingNotSuppressedAfterExceptionIgnore2ReadTimeouts() throws Exception {
+    public void loggingNotSuppressedOnNonReadTimeoutExceptionIgnoringReadTimeoutsTest() throws Exception {
         // We're not throwing a ReadTimeout, so no suppression is expected.
         Exception exceptionToThrow = new RuntimeException("Uh oh Not a ReadTimeout");
         boolean[] requestsToThrowException = { false, false, true, false, true };

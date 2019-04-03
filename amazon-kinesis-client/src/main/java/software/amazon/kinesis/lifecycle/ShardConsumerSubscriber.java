@@ -57,6 +57,12 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     @Getter(AccessLevel.PACKAGE)
     private volatile Throwable retrievalFailure;
 
+    @Deprecated
+    ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
+                            ShardConsumer shardConsumer) {
+        this(recordsPublisher,executorService,bufferSize,shardConsumer,new LifecycleConfig().readTimeoutsToIgnoreBeforeWarning());
+    }
+
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
             ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
