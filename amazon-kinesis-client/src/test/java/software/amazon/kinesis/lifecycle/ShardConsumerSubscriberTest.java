@@ -457,12 +457,6 @@ public class ShardConsumerSubscriberTest {
         private int bufferSize;
         private ShardConsumer shardConsumer;
 
-        TestShardConsumerSubscriber(int readTimeoutsToIgnoreBeforeWarning) {
-            this(mock(RecordsPublisher.class), Executors.newFixedThreadPool(1), 8, mock(ShardConsumer.class),
-                    readTimeoutsToIgnoreBeforeWarning);
-            Mockito.when(shardConsumer.shardInfo()).thenReturn(new ShardInfo("001", "token", null, null));
-        }
-
         TestShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
                 ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
             super(recordsPublisher, executorService, bufferSize, shardConsumer, readTimeoutsToIgnoreBeforeWarning);
@@ -570,11 +564,15 @@ public class ShardConsumerSubscriberTest {
     private void runLogSuppressionTest(boolean[] requestsToThrowException, int[] expectedLogCounts,
             int readTimeoutsToIgnore, Exception exceptionToThrow) {
         // Setup Test
+        ShardConsumer shardConsumer = mock(ShardConsumer.class);
+        Mockito.when(shardConsumer.shardInfo()).thenReturn(new ShardInfo("001", "token", null, null));
+
         // Logging supressions specific setup
         int expectedRequest = 0;
         int expectedPublish = 0;
 
-        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(readTimeoutsToIgnore);
+        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(mock(RecordsPublisher.class), Executors.newFixedThreadPool(1), 8, shardConsumer,readTimeoutsToIgnore);
+
         consumer.startSubscriptions();
         // Run the configured test
         for (int i = 0; i < requestsToThrowException.length; i++) {

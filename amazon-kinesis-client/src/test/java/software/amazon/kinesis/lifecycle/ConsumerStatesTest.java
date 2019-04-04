@@ -111,13 +111,12 @@ public class ConsumerStatesTest {
     public void setup() {
         argument = new ShardConsumerArgument(shardInfo, STREAM_NAME, leaseRefresher, executorService, recordsPublisher,
                 shardRecordProcessor, checkpointer, recordProcessorCheckpointer, parentShardPollIntervalMillis,
-                taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
-                listShardsBackoffTimeInMillis, maxListShardsRetryAttempts,
-                shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis, INITIAL_POSITION_IN_STREAM,
-                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector, new AggregatorUtil(),
-                hierarchicalShardSyncer, metricsFactory);
-        consumer = spy(
-                new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, argument, taskExecutionListener,0));
+                taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, listShardsBackoffTimeInMillis,
+                maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,
+                INITIAL_POSITION_IN_STREAM, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector,
+                new AggregatorUtil(), hierarchicalShardSyncer, metricsFactory);
+        consumer = spy(new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis,
+                argument, taskExecutionListener, 0));
 
         when(shardInfo.shardId()).thenReturn("shardId-000000000000");
         when(recordProcessorCheckpointer.checkpointer()).thenReturn(checkpointer);
@@ -257,7 +256,8 @@ public class ConsumerStatesTest {
         consumer.gracefulShutdown(shutdownNotification);
         ConsumerTask task = state.createTask(argument, consumer, null);
 
-        assertThat(task, shutdownReqTask(ShardRecordProcessor.class, "shardRecordProcessor", equalTo(shardRecordProcessor)));
+        assertThat(task,
+                shutdownReqTask(ShardRecordProcessor.class, "shardRecordProcessor", equalTo(shardRecordProcessor)));
         assertThat(task, shutdownReqTask(RecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task,
@@ -304,7 +304,8 @@ public class ConsumerStatesTest {
         ConsumerTask task = state.createTask(argument, consumer, null);
 
         assertThat(task, shutdownTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
-        assertThat(task, shutdownTask(ShardRecordProcessor.class, "shardRecordProcessor", equalTo(shardRecordProcessor)));
+        assertThat(task,
+                shutdownTask(ShardRecordProcessor.class, "shardRecordProcessor", equalTo(shardRecordProcessor)));
         assertThat(task, shutdownTask(ShardRecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, shutdownTask(ShutdownReason.class, "reason", equalTo(reason)));
@@ -318,8 +319,7 @@ public class ConsumerStatesTest {
         assertThat(state.successTransition(), equalTo(ShardConsumerState.SHUTDOWN_COMPLETE.consumerState()));
 
         for (ShutdownReason reason : ShutdownReason.values()) {
-            assertThat(state.shutdownTransition(reason),
-                    equalTo(ShardConsumerState.SHUTDOWN_COMPLETE.consumerState()));
+            assertThat(state.shutdownTransition(reason), equalTo(ShardConsumerState.SHUTDOWN_COMPLETE.consumerState()));
         }
 
         assertThat(state.state(), equalTo(ShardConsumerState.SHUTTING_DOWN));
