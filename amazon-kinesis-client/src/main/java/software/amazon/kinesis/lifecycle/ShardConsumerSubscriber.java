@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @Accessors(fluent = true)
 class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
-
+    private static final int DEFAULT_READ_TIMEOUTS_TO_IGNORE = 0;
     private final RecordsPublisher recordsPublisher;
     private final Scheduler scheduler;
     private final int bufferSize;
@@ -60,7 +60,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     @Deprecated
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
                             ShardConsumer shardConsumer) {
-        this(recordsPublisher,executorService,bufferSize,shardConsumer,new LifecycleConfig().readTimeoutsToIgnoreBeforeWarning());
+        this(recordsPublisher,executorService,bufferSize,shardConsumer, DEFAULT_READ_TIMEOUTS_TO_IGNORE);
     }
 
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
