@@ -84,6 +84,16 @@ public class ShardConsumer {
 
     private final ShardConsumerSubscriber subscriber;
 
+    @Deprecated
+    public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
+            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
+            TaskExecutionListener taskExecutionListener) {
+        this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
+                ConsumerStates.INITIAL_STATE,
+                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener,
+                LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
+    }
+
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
             Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
             TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
@@ -91,6 +101,16 @@ public class ShardConsumer {
                 ConsumerStates.INITIAL_STATE,
                 ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener,
                 readTimeoutsToIgnoreBeforeWarning);
+    }
+
+    @Deprecated
+    public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
+            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
+            ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator, int bufferSize,
+            TaskExecutionListener taskExecutionListener) {
+        this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
+                initialState, taskMetricsDecorator, bufferSize, taskExecutionListener,
+                LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
     }
 
     //
@@ -265,9 +285,8 @@ public class ShardConsumer {
                 } else {
                     //
                     // ShardConsumer has been asked to shutdown before the first task even had a chance to run.
-                    // In this case generate a successful task outcome, and allow the shutdown to continue. This should
-                    // only
-                    // happen if the lease was lost before the initial state had a chance to run.
+                    // In this case generate a successful task outcome, and allow the shutdown to continue.
+                    // This should only happen if the lease was lost before the initial state had a chance to run.
                     //
                     updateState(TaskOutcome.SUCCESSFUL);
                 }

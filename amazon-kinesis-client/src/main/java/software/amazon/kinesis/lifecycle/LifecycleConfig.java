@@ -27,6 +27,7 @@ import software.amazon.kinesis.retrieval.AggregatorUtil;
 @Data
 @Accessors(fluent = true)
 public class LifecycleConfig {
+    public static final int DEFAULT_READ_TIMEOUTS_TO_IGNORE = 0;
     /**
      * Logs warn message if as task is held in  a task for more than the set time.
      *
@@ -60,5 +61,5 @@ public class LifecycleConfig {
      *
      * <p>Default value: 0</p>
      */
-    private int readTimeoutsToIgnoreBeforeWarning = 0;
+    private int readTimeoutsToIgnoreBeforeWarning = DEFAULT_READ_TIMEOUTS_TO_IGNORE;
 }

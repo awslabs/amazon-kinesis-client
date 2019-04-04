@@ -473,16 +473,6 @@ public class ShardConsumerSubscriberTest {
         }
 
         @Override
-        public void onNext(RecordsRetrieved input) {
-            super.onNext(input);
-        }
-
-        @Override
-        public void onError(Throwable t) {
-            super.onError(t);
-        }
-
-        @Override
         protected void logOnErrorWarning(Throwable t) {
             genericWarningLogged++;
             super.logOnErrorWarning(t);
