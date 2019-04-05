@@ -4,8 +4,8 @@
 * Updated License to [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)
   * [PR#522](https://github.com/awslabs/amazon-kinesis-client/pull/522)
   * [PR#523](https://github.com/awslabs/amazon-kinesis-client/pull/523)
-* Updated warning logs for ReadTimeouts for more clarity on handling and added an optional logging suppression configuration for readTimeouts in `LifeCycleConfig.java`.
-The suppression can be configured with `LifecycleConfig#readTimeoutsToIgnoreBeforeWarning(Count)`.
+* Introducing configuration for suppressing logs from ReadTimeoutExceptions caused while calling SubscribeToShard.
+    Suppression can be configured by setting readTimeoutsToIgnoreBeforeWarning in `LifecycleConfig#readTimeoutsToIgnoreBeforeWarning(Count)`.
   * [PR#528](https://github.com/awslabs/amazon-kinesis-client/issues/528)
 
 ### Release 2.1.3 (March 18, 2019)
