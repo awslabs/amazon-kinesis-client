@@ -35,11 +35,12 @@ import java.util.concurrent.ExecutorService;
 @Slf4j
 @Accessors(fluent = true)
 class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
-
     private final RecordsPublisher recordsPublisher;
     private final Scheduler scheduler;
     private final int bufferSize;
     private final ShardConsumer shardConsumer;
+    private final int readTimeoutsToIgnoreBeforeWarning;
+    private volatile int readTimeoutSinceLastRead = 0;
 
     @VisibleForTesting
     final Object lockObject = new Object();
@@ -54,13 +55,21 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     @Getter(AccessLevel.PACKAGE)
     private volatile Throwable retrievalFailure;
 
+    @Deprecated
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
                             ShardConsumer shardConsumer) {
+        this(recordsPublisher,executorService,bufferSize,shardConsumer, LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
+    }
+
+    ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
+            ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.scheduler = Schedulers.from(executorService);
         this.bufferSize = bufferSize;
         this.shardConsumer = shardConsumer;
+        this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
     }
+
 
     void startSubscriptions() {
         synchronized (lockObject) {
@@ -92,7 +101,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         Throwable oldFailure = null;
         if (retrievalFailure != null) {
             synchronized (lockObject) {
-                String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests", shardConsumer.shardInfo().shardId());
+                String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests",
+                        shardConsumer.shardInfo().shardId());
                 if (retrievalFailure instanceof RetryableRetrievalException) {
                     log.debug(logMessage, retrievalFailure.getCause());
                 } else {
@@ -157,16 +167,41 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 lastRequestTime = Instant.now();
             }
         }
+
+        readTimeoutSinceLastRead = 0;
     }
 
     @Override
     public void onError(Throwable t) {
         synchronized (lockObject) {
-            log.warn("{}: onError().  Cancelling subscription, and marking self as failed.",
-                    shardConsumer.shardInfo().shardId(), t);
+            if (t instanceof RetryableRetrievalException && t.getMessage().contains("ReadTimeout")) {
+                readTimeoutSinceLastRead++;
+                if (readTimeoutSinceLastRead > readTimeoutsToIgnoreBeforeWarning) {
+                    logOnErrorReadTimeoutWarning(t);
+                }
+            } else {
+                logOnErrorWarning(t);
+            }
+
             subscription.cancel();
             retrievalFailure = t;
         }
+    }
+
+    protected void logOnErrorWarning(Throwable t) {
+        log.warn(
+                "{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
+                        + "recreate the subscription as neccessary to continue processing.",
+                shardConsumer.shardInfo().shardId(), t);
+    }
+
+    protected void logOnErrorReadTimeoutWarning(Throwable t) {
+        log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will"
+                + " recreate the subscription as neccessary to continue processing. If you "
+                + "are seeing this warning frequently consider increasing the SDK timeouts "
+                + "by providing an OverrideConfiguration to the kinesis client. Alternatively you"
+                + "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
+                + "intermittant ReadTimeout warnings.", shardConsumer.shardInfo().shardId(), t);
     }
 
     @Override
