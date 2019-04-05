@@ -452,18 +452,12 @@ public class ShardConsumerSubscriberTest {
 
         private int genericWarningLogged = 0;
         private int readTimeoutWarningLogged = 0;
-        private RecordsPublisher recordsPublisher;
-        private ExecutorService executorService;
-        private int bufferSize;
-        private ShardConsumer shardConsumer;
 
         TestShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
-                ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
+                ShardConsumer shardConsumer,
+                // Setup test expectations
+                int readTimeoutsToIgnoreBeforeWarning) {
             super(recordsPublisher, executorService, bufferSize, shardConsumer, readTimeoutsToIgnoreBeforeWarning);
-            this.recordsPublisher = recordsPublisher;
-            this.executorService = executorService;
-            this.bufferSize = bufferSize;
-            this.shardConsumer = shardConsumer;
         }
 
         @Override
@@ -485,12 +479,23 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void noLoggingSuppressionNeededOnHappyPathTest() throws Exception {
-        Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        //All requests are expected to succeed. No logs are expected.
-        boolean[] requestsToThrowException = { false, false, false, false, false };
-        int[] expectedLogs = { 0, 0, 0, 0, 0 };
-        runLogSuppressionTest(requestsToThrowException, expectedLogs, 0, exceptionToThrow);
+    public void noLoggingSuppressionNeededOnHappyPathTest() {
+        // All requests are expected to succeed. No logs are expected.
+
+        // Setup test expectations
+        int readTimeoutsToIgnore = 0;
+        int expectedReadTimeoutLogs = 0;
+        int expectedGenericLogs = 0;
+        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(mock(RecordsPublisher.class),
+                Executors.newFixedThreadPool(1), 8, shardConsumer, readTimeoutsToIgnore);
+        consumer.startSubscriptions();
+        mimicSuccess(consumer);
+        mimicSuccess(consumer);
+        mimicSuccess(consumer);
+        mimicSuccess(consumer);
+        mimicSuccess(consumer);
+        assertEquals(expectedGenericLogs, consumer.genericWarningLogged);
+        assertEquals(expectedReadTimeoutLogs, consumer.readTimeoutWarningLogged);
     }
 
     /**
@@ -499,14 +504,26 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void loggingNotSuppressedAfterTimeoutTest() throws Exception {
+    public void loggingNotSuppressedAfterTimeoutTest() {
         Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        //The first 2 requests succeed, followed by an exception, a success, and another exception.
-        //We are not ignoring any ReadTimeouts, so we expect 1 log on the first failure,
+        // The first 2 requests succeed, followed by an exception, a success, and another exception.
+        // We are not ignoring any ReadTimeouts, so we expect 1 log on the first failure,
         // and another log on the second failure.
-        boolean[] requestsToThrowException = { false, false, true, false, true };
-        int[] expectedLogs = { 0, 0, 1, 1, 2 };
-        runLogSuppressionTest(requestsToThrowException, expectedLogs, 0, exceptionToThrow);
+
+        // Setup test expectations
+        int readTimeoutsToIgnore = 0;
+        int expectedReadTimeoutLogs = 2;
+        int expectedGenericLogs = 0;
+        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(mock(RecordsPublisher.class),
+                Executors.newFixedThreadPool(1), 8, shardConsumer, readTimeoutsToIgnore);
+        consumer.startSubscriptions();
+        mimicSuccess(consumer);
+        mimicSuccess(consumer);
+        mimicException(exceptionToThrow, consumer);
+        mimicSuccess(consumer);
+        mimicException(exceptionToThrow, consumer);
+        assertEquals(expectedGenericLogs, consumer.genericWarningLogged);
+        assertEquals(expectedReadTimeoutLogs, consumer.readTimeoutWarningLogged);
     }
 
     /**
@@ -516,13 +533,25 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void loggingSuppressedAfterIntermittentTimeoutTest() throws Exception {
+    public void loggingSuppressedAfterIntermittentTimeoutTest() {
         Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        //The first 2 requests succeed, followed by an exception, a success, and another exception.
-        //We are ignoring a single consecutive ReadTimeout, So we don't expect any logs to be made.
-        boolean[] requestsToThrowException = { false, false, true, false, true };
-        int[] expectedLogs = { 0, 0, 0, 0, 0 };
-        runLogSuppressionTest(requestsToThrowException, expectedLogs, 1, exceptionToThrow);
+        // The first 2 requests succeed, followed by an exception, a success, and another exception.
+        // We are ignoring a single consecutive ReadTimeout, So we don't expect any logs to be made.
+
+        // Setup test expectations
+        int readTimeoutsToIgnore = 1;
+        int expectedReadTimeoutLogs = 0;
+        int expectedGenericLogs = 0;
+        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(mock(RecordsPublisher.class),
+                Executors.newFixedThreadPool(1), 8, shardConsumer, readTimeoutsToIgnore);
+        consumer.startSubscriptions();
+        mimicSuccess(consumer);
+        mimicSuccess(consumer);
+        mimicException(exceptionToThrow, consumer);
+        mimicSuccess(consumer);
+        mimicException(exceptionToThrow, consumer);
+        assertEquals(expectedGenericLogs, consumer.genericWarningLogged);
+        assertEquals(expectedReadTimeoutLogs, consumer.readTimeoutWarningLogged);
     }
 
     /**
@@ -532,14 +561,26 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void loggingPartiallySuppressedAfterMultipleTimeoutTest() throws Exception {
+    public void loggingPartiallySuppressedAfterMultipleTimeoutTest() {
         Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        //The first 2 requests are expected to throw an exception, followed by a success, and 2 more exceptions.
-        //We are ignoring a single consecutive ReadTimeout, so we expect a single log starting after the second
+        // The first 2 requests are expected to throw an exception, followed by a success, and 2 more exceptions.
+        // We are ignoring a single consecutive ReadTimeout, so we expect a single log starting after the second
         // consecutive ReadTimeout (Request 2) and another log after another second consecutive failure (Request 5)
-        boolean[] requestsToThrowException = { true, true, false, true, true };
-        int[] expectedLogs = { 0, 1, 1, 1, 2 };
-        runLogSuppressionTest(requestsToThrowException, expectedLogs, 1, exceptionToThrow);
+
+        // Setup test expectations
+        int readTimeoutsToIgnore = 1;
+        int expectedReadTimeoutLogs = 2;
+        int expectedGenericLogs = 0;
+        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(mock(RecordsPublisher.class),
+                Executors.newFixedThreadPool(1), 8, shardConsumer, readTimeoutsToIgnore);
+        consumer.startSubscriptions();
+        mimicException(exceptionToThrow, consumer);
+        mimicException(exceptionToThrow, consumer);
+        mimicSuccess(consumer);
+        mimicException(exceptionToThrow, consumer);
+        mimicException(exceptionToThrow, consumer);
+        assertEquals(expectedGenericLogs, consumer.genericWarningLogged);
+        assertEquals(expectedReadTimeoutLogs, consumer.readTimeoutWarningLogged);
     }
 
     /**
@@ -548,15 +589,27 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void loggingPartiallySuppressedAfterConsecutiveTimeoutTest() throws Exception {
+    public void loggingPartiallySuppressedAfterConsecutiveTimeoutTest() {
         Exception exceptionToThrow = new software.amazon.kinesis.retrieval.RetryableRetrievalException("ReadTimeout");
-        //Every request of 5 requests are expected to fail.
-        //We are ignoring 2 consecutive ReadTimeout exceptions, so we expect a single log starting after the third
+        // Every request of 5 requests are expected to fail.
+        // We are ignoring 2 consecutive ReadTimeout exceptions, so we expect a single log starting after the third
         // consecutive ReadTimeout (Request 3) and another log after each other request since we are still breaching the
         // number of consecutive ReadTimeouts to ignore.
-        boolean[] requestsToThrowException = { true, true, true, true, true };
-        int[] expectedLogs = { 0, 0, 1, 2, 3 };
-        runLogSuppressionTest(requestsToThrowException, expectedLogs, 2, exceptionToThrow);
+
+        // Setup test expectations
+        int readTimeoutsToIgnore = 2;
+        int expectedReadTimeoutLogs = 3;
+        int expectedGenericLogs = 0;
+        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(mock(RecordsPublisher.class),
+                Executors.newFixedThreadPool(1), 8, shardConsumer, readTimeoutsToIgnore);
+        consumer.startSubscriptions();
+        mimicException(exceptionToThrow, consumer);
+        mimicException(exceptionToThrow, consumer);
+        mimicException(exceptionToThrow, consumer);
+        mimicException(exceptionToThrow, consumer);
+        mimicException(exceptionToThrow, consumer);
+        assertEquals(expectedGenericLogs, consumer.genericWarningLogged);
+        assertEquals(expectedReadTimeoutLogs, consumer.readTimeoutWarningLogged);
     }
 
     /**
@@ -566,14 +619,26 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void loggingNotSuppressedOnNonReadTimeoutExceptionNotIgnoringReadTimeoutsExceptionTest() throws Exception {
+    public void loggingNotSuppressedOnNonReadTimeoutExceptionNotIgnoringReadTimeoutsExceptionTest() {
         // We're not throwing a ReadTimeout, so no suppression is expected.
         // The test expects a non-ReadTimeout exception to be thrown on requests 3 and 5, and we expect logs on
         // each Non-ReadTimeout Exception, no matter what the number of ReadTimeoutsToIgnore we pass in.
         Exception exceptionToThrow = new RuntimeException("Uh oh Not a ReadTimeout");
-        boolean[] requestsToThrowException = { false, false, true, false, true };
-        int[] expectedLogs = { 0, 0, 1, 1, 2 };
-        runLogSuppressionTest(requestsToThrowException, expectedLogs, 0, exceptionToThrow);
+
+        // Setup test expectations
+        int readTimeoutsToIgnore = 0;
+        int expectedReadTimeoutLogs = 0;
+        int expectedGenericLogs = 2;
+        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(mock(RecordsPublisher.class),
+                Executors.newFixedThreadPool(1), 8, shardConsumer, readTimeoutsToIgnore);
+        consumer.startSubscriptions();
+        mimicSuccess(consumer);
+        mimicSuccess(consumer);
+        mimicException(exceptionToThrow, consumer);
+        mimicSuccess(consumer);
+        mimicException(exceptionToThrow, consumer);
+        assertEquals(expectedGenericLogs, consumer.genericWarningLogged);
+        assertEquals(expectedReadTimeoutLogs, consumer.readTimeoutWarningLogged);
     }
 
     /**
@@ -583,69 +648,41 @@ public class ShardConsumerSubscriberTest {
      * @throws Exception
      */
     @Test
-    public void loggingNotSuppressedOnNonReadTimeoutExceptionIgnoringReadTimeoutsTest() throws Exception {
+    public void loggingNotSuppressedOnNonReadTimeoutExceptionIgnoringReadTimeoutsTest() {
+
         // We're not throwing a ReadTimeout, so no suppression is expected.
         // The test expects a non-ReadTimeout exception to be thrown on requests 3 and 5, and we expect logs on
         // each Non-ReadTimeout Exception, no matter what the number of ReadTimeoutsToIgnore we pass in,
         // in this case if we had instead thrown ReadTimeouts, we would not have expected any logs with this
         // configuration.
         Exception exceptionToThrow = new RuntimeException("Uh oh Not a ReadTimeout");
-        boolean[] requestsToThrowException = { false, false, true, false, true };
-        int[] expectedLogs = { 0, 0, 1, 1, 2 };
-        runLogSuppressionTest(requestsToThrowException, expectedLogs, 2, exceptionToThrow);
+
+        // Setup test expectations
+        int readTimeoutsToIgnore = 2;
+        int expectedReadTimeoutLogs = 0;
+        int expectedGenericLogs = 2;
+        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(mock(RecordsPublisher.class),
+                Executors.newFixedThreadPool(1), 8, shardConsumer, readTimeoutsToIgnore);
+        consumer.startSubscriptions();
+        mimicSuccess(consumer);
+        mimicSuccess(consumer);
+        mimicException(exceptionToThrow, consumer);
+        mimicSuccess(consumer);
+        mimicException(exceptionToThrow, consumer);
+        assertEquals(expectedGenericLogs, consumer.genericWarningLogged);
+        assertEquals(expectedReadTimeoutLogs, consumer.readTimeoutWarningLogged);
     }
 
-    /**
-     * Runs a log suppression test configuring the test programatically. Creates a Publisher that mimics the behavior
-     * passed into the function by running a number of requests, and throwing a specific exception when configured to
-     * do so.
-     * @param requestsToThrowException - Array of booleans that dictates how many requests to publish, and which of
-     *                                 them results in an exception being thrown. True will throw an exception, while
-     *                                 false will be a successful read.
-     * @param expectedLogCounts - The sum of logs expected to be logged while testing during each request.
-     * @param readTimeoutsToIgnore - Configuration passed into the ShardConsumerSubscriber to configure the number of
-     *                               logs to ignore before logging. This normally comes from the LifecycleConfig in KCL
-     *                               applications.
-     * @param exceptionToThrow - When a request is marked to throw an exception via <tt>requestsToThrowException</tt>,
-     *                           this is the exception that will be thrown.
-     */
-    private void runLogSuppressionTest(boolean[] requestsToThrowException, int[] expectedLogCounts,
-                                       int readTimeoutsToIgnore, Exception exceptionToThrow) {
-        // Setup Test
-        ShardConsumer shardConsumer = mock(ShardConsumer.class);
-        Mockito.when(shardConsumer.shardInfo()).thenReturn(new ShardInfo("001", "token", null, null));
+    private void mimicSuccess(TestShardConsumerSubscriber consumer) {
+        // Mimic a successful publishing request
+        consumer.onNext(recordsRetrieved);
+    }
 
-        // Logging supressions specific setup
-        TestShardConsumerSubscriber consumer = new TestShardConsumerSubscriber(mock(RecordsPublisher.class), Executors.newFixedThreadPool(1), 8, shardConsumer,readTimeoutsToIgnore);
-
+    private void mimicException(Exception exceptionToThrow, TestShardConsumerSubscriber consumer) {
+        // Mimic throwing an exception during publishing,
+        consumer.onError(exceptionToThrow);
+        // restart subscriptions to allow further requests to be mimiced
         consumer.startSubscriptions();
-        // Run the configured test, the number of requests to publish is the length of the array passed in
-        for (int i = 0; i < requestsToThrowException.length; i++) {
-            //Find if the current request should throw an exception, or pass
-            boolean shouldThrowException = requestsToThrowException[i];
-            int expectedLogCount = expectedLogCounts[i];
-            if (shouldThrowException) {
-                // Mimic throwing an exception during publishing,
-                consumer.onError(exceptionToThrow);
-                // restart subscriptions to allow further requests to be mimiced
-                consumer.startSubscriptions();
-            } else {
-                //Mimic a successful publishing request
-                consumer.onNext(recordsRetrieved);
-            }
-            //During each request in the loop, validate the expected number of requests are being logged.
-            if (exceptionToThrow instanceof RetryableRetrievalException
-                    && exceptionToThrow.getMessage().contains("ReadTimeout")) {
-                //If the exception we are choosing to throw is a ReadTimeout, we should validate the
-                //readTimeoutWarningLogged method is triggered the expected number of times.
-                assertEquals(expectedLogCount, consumer.readTimeoutWarningLogged);
-                assertEquals(0, consumer.genericWarningLogged);
-            } else {
-                //For all other exceptions, we will want to verify the genericWarningLogged method is called.
-                assertEquals(expectedLogCount, consumer.genericWarningLogged);
-                assertEquals(0, consumer.readTimeoutWarningLogged);
-            }
-        }
     }
 
 }
