@@ -27,6 +27,7 @@ import software.amazon.kinesis.retrieval.AggregatorUtil;
 @Data
 @Accessors(fluent = true)
 public class LifecycleConfig {
+    public static final int DEFAULT_READ_TIMEOUTS_TO_IGNORE = 0;
     /**
      * Logs warn message if as task is held in  a task for more than the set time.
      *
@@ -52,4 +53,13 @@ public class LifecycleConfig {
      * <p>Default value: {@link NoOpTaskExecutionListener}</p>
      */
     private TaskExecutionListener taskExecutionListener = new NoOpTaskExecutionListener();
+
+    /**
+     * Number of consecutive ReadTimeouts to ignore before logging warning messages.
+     * If you find yourself seeing frequent ReadTimeout, you should also consider increasing your timeout according to
+     * your expected processing time.
+     *
+     * <p>Default value: 0</p>
+     */
+    private int readTimeoutsToIgnoreBeforeWarning = DEFAULT_READ_TIMEOUTS_TO_IGNORE;
 }

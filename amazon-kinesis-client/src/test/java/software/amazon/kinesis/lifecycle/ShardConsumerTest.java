@@ -139,16 +139,15 @@ public class ShardConsumerTest {
 
         processRecordsInput = ProcessRecordsInput.builder().isAtShardEnd(false).cacheEntryTime(Instant.now())
                 .millisBehindLatest(1000L).records(Collections.emptyList()).build();
-        initialTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
-                .taskType(TaskType.INITIALIZE).build();
-        processTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
-                .taskType(TaskType.PROCESS).build();
+        initialTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo).taskType(TaskType.INITIALIZE)
+                .build();
+        processTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo).taskType(TaskType.PROCESS).build();
         shutdownRequestedTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
                 .taskType(TaskType.SHUTDOWN_NOTIFICATION).build();
         shutdownRequestedAwaitTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
                 .taskType(TaskType.SHUTDOWN_COMPLETE).build();
-        shutdownTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo)
-                .taskType(TaskType.SHUTDOWN).build();
+        shutdownTaskInput = TaskExecutionListenerInput.builder().shardInfo(shardInfo).taskType(TaskType.SHUTDOWN)
+                .build();
     }
 
     @After
@@ -245,7 +244,7 @@ public class ShardConsumerTest {
 
         TestPublisher cache = new TestPublisher();
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener, 0);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -299,7 +298,7 @@ public class ShardConsumerTest {
 
         TestPublisher cache = new TestPublisher();
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener, 0);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -323,7 +322,7 @@ public class ShardConsumerTest {
         log.debug("Release processing task interlock");
         awaitAndResetBarrier(processingTaskInterlock);
 
-        while(!consumer.isShutdown()) {
+        while (!consumer.isShutdown()) {
             consumer.executeLifecycle();
             Thread.yield();
         }
@@ -358,7 +357,7 @@ public class ShardConsumerTest {
 
         TestPublisher cache = new TestPublisher();
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener, 0);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -417,7 +416,8 @@ public class ShardConsumerTest {
     @Ignore
     public final void testInitializationStateUponFailure() throws Exception {
         ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, Function.identity(), 1,
+                taskExecutionListener, 0);
 
         when(initialState.createTask(eq(shardConsumerArgument), eq(consumer), any())).thenReturn(initializeTask);
         when(initializeTask.call()).thenReturn(new TaskResult(new Exception("Bad")));
@@ -450,7 +450,7 @@ public class ShardConsumerTest {
 
         ExecutorService failingService = mock(ExecutorService.class);
         ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener);
+                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener, 0);
 
         doThrow(new RejectedExecutionException()).when(failingService).execute(any());
 
@@ -464,7 +464,7 @@ public class ShardConsumerTest {
     @Test
     public void testErrorThrowableInInitialization() throws Exception {
         ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener);
+                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener, 0);
 
         when(initialState.createTask(any(), any(), any())).thenReturn(initializeTask);
         when(initialState.taskType()).thenReturn(TaskType.INITIALIZE);
@@ -488,7 +488,7 @@ public class ShardConsumerTest {
 
         TestPublisher cache = new TestPublisher();
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener);
+                shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener, 0);
 
         mockSuccessfulInitialize(null);
 
@@ -571,7 +571,7 @@ public class ShardConsumerTest {
         TestPublisher cache = new TestPublisher();
 
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, Optional.of(1L),
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener, 0);
 
         mockSuccessfulInitialize(null);
         mockSuccessfulProcessing(null);
@@ -618,7 +618,7 @@ public class ShardConsumerTest {
         TestPublisher cache = new TestPublisher();
 
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, Optional.of(1L),
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener);
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener, 0);
 
         CyclicBarrier taskArriveBarrier = new CyclicBarrier(2);
         CyclicBarrier taskDepartBarrier = new CyclicBarrier(2);
