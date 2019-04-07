@@ -198,10 +198,6 @@ public class ProcessTask implements ConsumerTask {
         final long startTime = System.currentTimeMillis();
         try {
             shardRecordProcessor.processRecords(processRecordsInput);
-        } catch (Exception e) {
-            log.error("ShardId {}: Application processRecords() threw an exception when processing shard ",
-                    shardInfo.shardId(), e);
-            log.error("ShardId {}: Skipping over the following data records: {}", shardInfo.shardId(), records);
         } finally {
             MetricsUtil.addLatency(scope, RECORD_PROCESSOR_PROCESS_RECORDS_METRIC, startTime, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(scope);
