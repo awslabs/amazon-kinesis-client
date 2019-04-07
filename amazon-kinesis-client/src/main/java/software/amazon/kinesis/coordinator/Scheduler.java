@@ -548,7 +548,8 @@ public class Scheduler implements Runnable {
         // one if the shard has been
         // completely processed (shutdown reason terminate).
         if ((consumer == null)
-                || (consumer.isShutdown() && consumer.shutdownReason().equals(ShutdownReason.LEASE_LOST))) {
+                || (consumer.isShutdown() && (consumer.shutdownReason().equals(ShutdownReason.LEASE_LOST)
+                || consumer.shutdownReason().equals(ShutdownReason.UNRECOVERABLE)))) {
             consumer = buildConsumer(shardInfo, shardRecordProcessorFactory);
             shardInfoShardConsumerMap.put(shardInfo, consumer);
             slog.infoForce("Created new shardConsumer for : " + shardInfo);

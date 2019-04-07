@@ -32,6 +32,7 @@ import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.exceptions.ShutdownException;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -300,6 +301,13 @@ public class ShardConsumer {
                 taskIsRunning = false;
             }
             taskOutcome = resultToOutcome(result);
+
+            if (result.getException() instanceof ShutdownException) {
+                subscriber.cancel();
+                markForShutdown(ShutdownReason.UNRECOVERABLE);
+                updateState(TaskOutcome.SUCCESSFUL);
+            }
+
             taskExecutionListenerInput = taskExecutionListenerInput.toBuilder().taskOutcome(taskOutcome).build();
         }
         taskExecutionListener.afterTaskExecution(taskExecutionListenerInput);

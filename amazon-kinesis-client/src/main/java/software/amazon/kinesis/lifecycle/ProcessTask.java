@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.exceptions.ShutdownException;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -141,6 +142,10 @@ public class ProcessTask implements ConsumerTask {
                     callProcessRecords(processRecordsInput, records);
                 }
                 success = true;
+            } catch (ShutdownException shutdownException) {
+                log.error("ShardId {}: Caught Shutdown exception exception: ", shardInfo.shardId(), shutdownException);
+                exception = shutdownException;
+                backoff();
             } catch (RuntimeException e) {
                 log.error("ShardId {}: Caught exception: ", shardInfo.shardId(), e);
                 exception = e;
@@ -186,7 +191,7 @@ public class ProcessTask implements ConsumerTask {
      * @param records
      *            the records to be dispatched. It's possible the records have been adjusted by KPL deaggregation.
      */
-    private void callProcessRecords(ProcessRecordsInput input, List<KinesisClientRecord> records) {
+    private void callProcessRecords(ProcessRecordsInput input, List<KinesisClientRecord> records) throws ShutdownException {
         log.debug("Calling application processRecords() with {} records from {}", records.size(),
                 shardInfo.shardId());
 

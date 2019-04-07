@@ -56,6 +56,7 @@ import lombok.Getter;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.exceptions.ShutdownException;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -134,7 +135,7 @@ public class ProcessTaskTest {
     }
 
     @Test
-    public void testNonAggregatedKinesisRecord() {
+    public void testNonAggregatedKinesisRecord() throws ShutdownException {
         final String sqn = new BigInteger(128, new Random()).toString();
         final String pk = UUID.randomUUID().toString();
         final Date ts = new Date(System.currentTimeMillis() - TimeUnit.MILLISECONDS.convert(4, TimeUnit.HOURS));
@@ -161,7 +162,7 @@ public class ProcessTaskTest {
     }
 
     @Test
-    public void testDeaggregatesRecord() {
+    public void testDeaggregatesRecord() throws ShutdownException {
         final String sqn = new BigInteger(128, new Random()).toString();
         final String pk = UUID.randomUUID().toString();
         final Instant ts = Instant.now().minus(4, ChronoUnit.HOURS);
@@ -189,7 +190,7 @@ public class ProcessTaskTest {
     }
 
     @Test
-    public void testDeaggregatesRecordWithNoArrivalTimestamp() {
+    public void testDeaggregatesRecordWithNoArrivalTimestamp() throws ShutdownException {
         final String sqn = new BigInteger(128, new Random()).toString();
         final String pk = UUID.randomUUID().toString();
 
@@ -209,7 +210,7 @@ public class ProcessTaskTest {
     }
 
     @Test
-    public void testLargestPermittedCheckpointValue() {
+    public void testLargestPermittedCheckpointValue() throws ShutdownException {
         // Some sequence number value from previous processRecords call to mock.
         final BigInteger previousCheckpointSqn = new BigInteger(128, new Random());
 
@@ -231,7 +232,7 @@ public class ProcessTaskTest {
     }
 
     @Test
-    public void testLargestPermittedCheckpointValueWithEmptyRecords() {
+    public void testLargestPermittedCheckpointValueWithEmptyRecords() throws ShutdownException {
         // Some sequence number value from previous processRecords call.
         final BigInteger baseSqn = new BigInteger(128, new Random());
         final ExtendedSequenceNumber lastCheckpointEspn = new ExtendedSequenceNumber(baseSqn.toString());
@@ -247,7 +248,7 @@ public class ProcessTaskTest {
     }
 
     @Test
-    public void testFilterBasedOnLastCheckpointValue() {
+    public void testFilterBasedOnLastCheckpointValue() throws ShutdownException {
         // Explanation of setup:
         // * Assume in previous processRecord call, user got 3 sub-records that all belonged to one
         // Kinesis record. So sequence number was X, and sub-sequence numbers were 0, 1, 2.
@@ -468,18 +469,18 @@ public class ProcessTaskTest {
         }
     }
 
-    private ShardRecordProcessorOutcome testWithRecord(KinesisClientRecord record) {
+    private ShardRecordProcessorOutcome testWithRecord(KinesisClientRecord record) throws ShutdownException {
         return testWithRecords(Collections.singletonList(record), ExtendedSequenceNumber.TRIM_HORIZON,
                 ExtendedSequenceNumber.TRIM_HORIZON);
     }
 
     private ShardRecordProcessorOutcome testWithRecords(List<KinesisClientRecord> records,
-                                                        ExtendedSequenceNumber lastCheckpointValue, ExtendedSequenceNumber largestPermittedCheckpointValue) {
+                                                        ExtendedSequenceNumber lastCheckpointValue, ExtendedSequenceNumber largestPermittedCheckpointValue) throws ShutdownException {
         return testWithRecords(records, lastCheckpointValue, largestPermittedCheckpointValue, new AggregatorUtil());
     }
 
     private ShardRecordProcessorOutcome testWithRecords(List<KinesisClientRecord> records, ExtendedSequenceNumber lastCheckpointValue,
-                                                        ExtendedSequenceNumber largestPermittedCheckpointValue, AggregatorUtil aggregatorUtil) {
+                                                        ExtendedSequenceNumber largestPermittedCheckpointValue, AggregatorUtil aggregatorUtil) throws ShutdownException {
         when(processRecordsInput.records()).thenReturn(records);
         return testWithRecords(
                 makeProcessTask(processRecordsInput, aggregatorUtil, skipShardSyncAtWorkerInitializationIfLeasesExist),
@@ -487,7 +488,7 @@ public class ProcessTaskTest {
     }
 
     private ShardRecordProcessorOutcome testWithRecords(ProcessTask processTask, ExtendedSequenceNumber lastCheckpointValue,
-                                                        ExtendedSequenceNumber largestPermittedCheckpointValue) {
+                                                        ExtendedSequenceNumber largestPermittedCheckpointValue) throws ShutdownException {
         when(checkpointer.lastCheckpointValue()).thenReturn(lastCheckpointValue);
         when(checkpointer.largestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
         processTask.call();
