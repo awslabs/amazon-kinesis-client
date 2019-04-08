@@ -44,7 +44,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.1.2</version>
+      <version>2.2.0</version>
   </dependency>
   ```
 
@@ -60,22 +60,13 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.1.3 - March 18, 2019)
-[Milestone#30](https://github.com/awslabs/amazon-kinesis-client/milestone/30)
-* Added a message to recommend using `KinesisClientUtil` when an acquire timeout occurs in the `FanOutRecordsPublisher`.
-  * [PR#514](https://github.com/awslabs/amazon-kinesis-client/pull/514)
-* Added a sleep between retries while waiting for a newly created stream consumer to become active.
-  * [PR#506](https://github.com/awslabs/amazon-kinesis-client/issues/506)
-* Added timeouts on all futures returned from the DynamoDB and Kinesis clients.  
-  The timeouts can be configured by setting `LeaseManagementConfig#requestTimeout(Duration)` for DynamoDB, and `PollingConfig#kinesisRequestTimeout(Duration)` for Kinesis.
-  * [PR#518](https://github.com/awslabs/amazon-kinesis-client/pull/518)
-* Upgraded to SDK version 2.5.10.
-  * [PR#518](https://github.com/awslabs/amazon-kinesis-client/pull/518)
-* Artifacts for the Amazon Kinesis Client for Java are now signed by a new GPG key:
-  ```
-  pub   4096R/86368934 2019-02-14 [expires: 2020-02-14]
-  uid                  Amazon Kinesis Tools <amazon-kinesis-tools@amazon.com>
-  ```
+### Latest Release (2.2.0 - April 8, 2019)
+[Milestone#31](https://github.com/awslabs/amazon-kinesis-client/milestone/31)
+* Updated License to [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+  * [PR#523](https://github.com/awslabs/amazon-kinesis-client/pull/523)
+* Introducing configuration for suppressing logs from ReadTimeoutExceptions caused while calling SubscribeToShard.  
+Suppression can be configured by setting `LifecycleConfig#readTimeoutsToIgnoreBeforeWarning(Count)`.
+  * [PR#528](https://github.com/awslabs/amazon-kinesis-client/issues/528)
 
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
