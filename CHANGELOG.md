@@ -1,5 +1,8 @@
 # Changelog
-
+### Release 1.10.0 (April 8, 2019)
+[Milestone#31](https://github.com/awslabs/amazon-kinesis-client/milestone/31)
+* Updated License to [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+  * [PR#522](https://github.com/awslabs/amazon-kinesis-client/pull/522)	
 ## Release 1.9.3 (October 30, 2018)
 * Upgraded Apache Commons Lang from 2.6 to 3.7.  
   * [Issue #370](https://github.com/awslabs/amazon-kinesis-client/issues/370)

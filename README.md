@@ -31,13 +31,10 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.9.3 - October 30, 2018)
-* Upgraded Apache Commons Lang from 2.6 to 3.7.  
-  * [Issue #370](https://github.com/awslabs/amazon-kinesis-client/issues/370)
-  * [PR #406](https://github.com/awslabs/amazon-kinesis-client/pull/406)
-* Upgraded Google Guava from 10.0 to 26.0-jre.  
-  * [Issue #416](https://github.com/awslabs/amazon-kinesis-client/issues/416)
-  * [PR #421](https://github.com/awslabs/amazon-kinesis-client/pull/421)
+### Latest Release (1.10.0 - April 8, 2019)
+[Milestone#31](https://github.com/awslabs/amazon-kinesis-client/milestone/31)
+* Updated License to [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+  * [PR#522](https://github.com/awslabs/amazon-kinesis-client/pull/522)	
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
