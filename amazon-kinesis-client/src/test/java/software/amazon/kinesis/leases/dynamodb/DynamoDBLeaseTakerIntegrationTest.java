@@ -21,6 +21,8 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import org.junit.runner.RunWith;
+import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
@@ -31,6 +33,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
+@RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
     private static final long LEASE_DURATION_MILLIS = 1000L;
