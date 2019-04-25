@@ -103,6 +103,7 @@ public class ConsumerStatesTest {
     private long listShardsBackoffTimeInMillis = 50L;
     private int maxListShardsRetryAttempts = 10;
     private boolean shouldCallProcessRecordsEvenForEmptyRecordList = true;
+    private boolean isRecordProcessorConcurrentlyCallable = false;
     private boolean ignoreUnexpectedChildShards = false;
     private long idleTimeInMillis = 1000L;
     private Optional<Long> logWarningForTaskAfterMillis = Optional.empty();
@@ -112,7 +113,7 @@ public class ConsumerStatesTest {
         argument = new ShardConsumerArgument(shardInfo, STREAM_NAME, leaseRefresher, executorService, recordsPublisher,
                 shardRecordProcessor, checkpointer, recordProcessorCheckpointer, parentShardPollIntervalMillis,
                 taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, listShardsBackoffTimeInMillis,
-                maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,
+                maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, isRecordProcessorConcurrentlyCallable, idleTimeInMillis,
                 INITIAL_POSITION_IN_STREAM, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector,
                 new AggregatorUtil(), hierarchicalShardSyncer, metricsFactory);
         consumer = spy(new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis,

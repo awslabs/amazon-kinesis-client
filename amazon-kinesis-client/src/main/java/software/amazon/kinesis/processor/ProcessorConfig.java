@@ -38,4 +38,10 @@ public class ProcessorConfig {
      */
     private boolean callProcessRecordsEvenForEmptyRecordList = false;
 
+    /**
+     * If set to true, record processor is assumed to be thread safe and concurrent calls could be made
+     *
+     * <p>Default value: false</p>
+     */
+    private boolean isRecordProcessorConcurrentlyCallable = false;
 }

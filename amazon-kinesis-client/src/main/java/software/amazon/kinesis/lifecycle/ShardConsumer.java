@@ -34,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
@@ -83,6 +84,7 @@ public class ShardConsumer {
     private volatile ShutdownNotification shutdownNotification;
 
     private final ShardConsumerSubscriber subscriber;
+    private final Runnable leaseLostNotifierToRecordProcessor;
 
     @Deprecated
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
@@ -131,6 +133,12 @@ public class ShardConsumer {
         subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this,
                 readTimeoutsToIgnoreBeforeWarning);
         this.bufferSize = bufferSize;
+
+        this.leaseLostNotifierToRecordProcessor = () -> {
+            if (shardConsumerArgument.isRecordProcessorConcurrentlyCallable()) {
+                shardConsumerArgument.shardRecordProcessor().leaseLost(LeaseLostInput.builder().build());
+            }
+        };
 
         if (this.shardInfo.isCompleted()) {
             markForShutdown(ShutdownReason.SHARD_END);
@@ -407,6 +415,8 @@ public class ShardConsumer {
             subscriber.cancel();
             log.debug("Shutdown({}): Subscriber cancelled.", shardInfo.shardId());
         }
+        // Notify the record processor about lost lease event
+        leaseLostNotifierToRecordProcessor.run();
         markForShutdown(ShutdownReason.LEASE_LOST);
         return isShutdown();
     }

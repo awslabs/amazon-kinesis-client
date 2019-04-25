@@ -575,6 +575,7 @@ public class Scheduler implements Runnable {
                 listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts,
                 processorConfig.callProcessRecordsEvenForEmptyRecordList(),
+                processorConfig.isRecordProcessorConcurrentlyCallable(),
                 shardConsumerDispatchPollIntervalMillis,
                 initialPosition,
                 cleanupLeasesUponShardCompletion,
