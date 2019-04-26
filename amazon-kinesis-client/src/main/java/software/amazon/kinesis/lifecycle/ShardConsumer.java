@@ -84,7 +84,6 @@ public class ShardConsumer {
     private volatile ShutdownNotification shutdownNotification;
 
     private final ShardConsumerSubscriber subscriber;
-    private final Runnable leaseLostNotifierToRecordProcessor;
 
     @Deprecated
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
@@ -133,12 +132,6 @@ public class ShardConsumer {
         subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this,
                 readTimeoutsToIgnoreBeforeWarning);
         this.bufferSize = bufferSize;
-
-        this.leaseLostNotifierToRecordProcessor = () -> {
-            if (shardConsumerArgument.isRecordProcessorConcurrentlyCallable()) {
-                shardConsumerArgument.shardRecordProcessor().leaseLost(LeaseLostInput.builder().build());
-            }
-        };
 
         if (this.shardInfo.isCompleted()) {
             markForShutdown(ShutdownReason.SHARD_END);
@@ -416,7 +409,10 @@ public class ShardConsumer {
             log.debug("Shutdown({}): Subscriber cancelled.", shardInfo.shardId());
         }
         // Notify the record processor about lost lease event
-        leaseLostNotifierToRecordProcessor.run();
+        if (shardConsumerArgument.isRecordProcessorConcurrentlyCallable()) {
+            shardConsumerArgument.shardRecordProcessor().leaseLost(LeaseLostInput.builder().build());
+        }
+
         markForShutdown(ShutdownReason.LEASE_LOST);
         return isShutdown();
     }
