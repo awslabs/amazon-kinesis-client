@@ -67,8 +67,10 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
+import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -122,6 +124,8 @@ public class ShardConsumerTest {
     private ConsumerState shutdownRequestedAwaitState;
     @Mock
     private TaskExecutionListener taskExecutionListener;
+    @Mock
+    private ShardRecordProcessor recordProcessor;
 
     private ProcessRecordsInput processRecordsInput;
 
@@ -701,6 +705,30 @@ public class ShardConsumerTest {
         verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
         verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
         verifyNoMoreInteractions(taskExecutionListener);
+    }
+
+    @Test
+    public void testLeaseLostEventForConcurrentRecordProcessor() {
+        verifyCallToRecordProcessorOnLeaseLost(true);
+    }
+
+    @Test
+    public void testLeaseLostEventForNonConcurrentRecordProcessor() {
+        verifyCallToRecordProcessorOnLeaseLost(false);
+    }
+
+    private void verifyCallToRecordProcessorOnLeaseLost(boolean isRecordProcessorConcurrent) {
+        when(shardConsumerArgument.shardRecordProcessor()).thenReturn(recordProcessor);
+        when(shardConsumerArgument.isRecordProcessorConcurrentlyCallable()).thenReturn(isRecordProcessorConcurrent);
+        ShardConsumer consumer = new ShardConsumer(new TestPublisher(), executorService, shardInfo, Optional.of(1L),
+                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener, 0);
+        consumer.leaseLost();
+        if (isRecordProcessorConcurrent) {
+            verify(recordProcessor).leaseLost(any(LeaseLostInput.class));
+        } else {
+            verify(recordProcessor, never()).leaseLost(any(LeaseLostInput.class));
+        }
+
     }
 
     private void mockSuccessfulShutdown(CyclicBarrier taskCallBarrier) {

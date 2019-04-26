@@ -34,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
@@ -407,6 +408,11 @@ public class ShardConsumer {
             subscriber.cancel();
             log.debug("Shutdown({}): Subscriber cancelled.", shardInfo.shardId());
         }
+        // Notify the record processor about lost lease event
+        if (shardConsumerArgument.isRecordProcessorConcurrentlyCallable()) {
+            shardConsumerArgument.shardRecordProcessor().leaseLost(LeaseLostInput.builder().build());
+        }
+
         markForShutdown(ShutdownReason.LEASE_LOST);
         return isShutdown();
     }
