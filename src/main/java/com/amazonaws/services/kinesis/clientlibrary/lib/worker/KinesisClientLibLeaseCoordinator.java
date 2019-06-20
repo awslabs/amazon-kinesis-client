@@ -282,13 +282,16 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      */
     @Override
     public Checkpoint getCheckpointObject(String shardId) throws KinesisClientLibException {
+        String errorMessage = "Unable to fetch checkpoint for shardId " + shardId;
         try {
             KinesisClientLease lease = leaseManager.getLease(shardId);
+            if (lease == null) {
+                throw new KinesisClientLibIOException(errorMessage);
+            }
             return new Checkpoint(lease.getCheckpoint(), lease.getPendingCheckpoint());
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
-            String message = "Unable to fetch checkpoint for shardId " + shardId;
-            LOG.error(message, e);
-            throw new KinesisClientLibIOException(message, e);
+            LOG.error(errorMessage, e);
+            throw new KinesisClientLibIOException(errorMessage, e);
         }
     }
 

@@ -15,10 +15,12 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doReturn;
 
 import java.util.UUID;
 
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
@@ -75,5 +77,13 @@ public class KinesisClientLibLeaseCoordinatorTest {
         // Set mock lease manager to return false in waiting
         doReturn(false).when(mockLeaseManager).waitUntilLeaseTableExists(anyLong(), anyLong());
         leaseCoordinator.initialize();
+    }
+
+    @Test(expected = KinesisClientLibIOException.class)
+    public void testGetCheckpointObjectWithNoLease()
+            throws DependencyException, ProvisionedThroughputException, IllegalStateException, InvalidStateException,
+            KinesisClientLibException {
+        doReturn(null).when(mockLeaseManager).getLease(anyString());
+        leaseCoordinator.getCheckpointObject(SHARD_ID);
     }
 }
