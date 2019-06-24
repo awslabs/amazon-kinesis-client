@@ -20,14 +20,18 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -36,8 +40,10 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
@@ -67,6 +73,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerState;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
@@ -95,6 +102,10 @@ public class ShardConsumerTest {
     @Mock
     private ShutdownNotification shutdownNotification;
     @Mock
+    private ConsumerState blockedOnParentsState;
+    @Mock
+    private ConsumerTask blockedOnParentsTask;
+    @Mock
     private ConsumerState initialState;
     @Mock
     private ConsumerTask initializeTask;
@@ -110,6 +121,8 @@ public class ShardConsumerTest {
     private TaskResult initializeTaskResult;
     @Mock
     private TaskResult processingTaskResult;
+    @Mock
+    private TaskResult blockOnParentsTaskResult;
     @Mock
     private ConsumerState shutdownCompleteState;
     @Mock
@@ -442,6 +455,131 @@ public class ShardConsumerTest {
     }
 
     /**
+     * Test method to verify consumer undergoes the transition WAITING_ON_PARENT_SHARDS -> INITIALIZING -> PROCESSING
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public final void testSuccessfulConsumerStateTransition() throws Exception {
+        ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
+                logWarningForTaskAfterMillis, shardConsumerArgument, blockedOnParentsState,
+                t -> t, 1, taskExecutionListener, 0);
+
+        mockSuccessfulUnblockOnParents();
+        mockSuccessfulInitializeWithFailureTransition();
+        mockSuccessfulProcessing(null);
+
+        int arbitraryExecutionCount = 3;
+        do {
+            try {
+                consumer.executeLifecycle();
+                Thread.sleep(100);
+            } catch (Exception e) {
+                // Suppress any exception like the scheduler.
+            }
+        } while (--arbitraryExecutionCount > 0);
+        assertEquals(ShardConsumerState.PROCESSING.consumerState().state(), consumer.currentState().state());
+    }
+
+    /**
+     * Test method to verify consumer does not transition to PROCESSING from WAITING_ON_PARENT_SHARDS when
+     * INITIALIZING tasks gets rejected.
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public final void testConsumerNotTransitionsToProcessingWhenInitializationFails() {
+        ExecutorService failingService = spy(executorService);
+        ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
+                logWarningForTaskAfterMillis, shardConsumerArgument, blockedOnParentsState,
+                t -> t, 1, taskExecutionListener, 0);
+
+        mockSuccessfulUnblockOnParents();
+        mockSuccessfulInitializeWithFailureTransition();
+        mockSuccessfulProcessing(null);
+
+        // Failing the initialization task and all other attempts after that.
+        doCallRealMethod()
+                .doThrow(new RejectedExecutionException())
+                .when(failingService).execute(any());
+
+        int arbitraryExecutionCount = 5;
+        do {
+            try {
+                consumer.executeLifecycle();
+                Thread.sleep(100);
+            } catch (Exception e) {
+                // Suppress any exception like the scheduler.
+            }
+        } while (--arbitraryExecutionCount > 0);
+        assertEquals(ShardConsumerState.INITIALIZING.consumerState().state(), consumer.currentState().state());
+    }
+
+    /**
+     * Test method to verify consumer transition to PROCESSING from WAITING_ON_PARENT_SHARDS with
+     * intermittent INITIALIZING task rejections.
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public final void testConsumerTransitionsToProcessingWithIntermittentInitializationFailures() {
+        ExecutorService failingService = spy(executorService);
+        ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
+                logWarningForTaskAfterMillis, shardConsumerArgument, blockedOnParentsState,
+                t -> t, 1, taskExecutionListener, 0);
+
+        mockSuccessfulUnblockOnParents();
+        mockSuccessfulInitializeWithFailureTransition();
+        mockSuccessfulProcessing(null);
+
+        // Failing the initialization task and few other attempts after that.
+        doCallRealMethod()
+                .doThrow(new RejectedExecutionException())
+                .doThrow(new RejectedExecutionException())
+                .doThrow(new RejectedExecutionException())
+                .doCallRealMethod()
+                .when(failingService).execute(any());
+
+        int arbitraryExecutionCount = 6;
+        do {
+            try {
+                consumer.executeLifecycle();
+                Thread.sleep(100);
+            } catch (Exception e) {
+                // Suppress any exception like the scheduler.
+            }
+        } while (--arbitraryExecutionCount > 0);
+        assertEquals(ShardConsumerState.PROCESSING.consumerState().state(), consumer.currentState().state());
+    }
+
+    /**
+     * Test method to verify consumer does not transition to INITIALIZING when WAITING_ON_PARENT_SHARDS task rejected.
+     */
+    @SuppressWarnings("unchecked")
+    @Test
+    public final void testConsumerNotTransitionsToInitializingWhenWaitingOnParentsFails() {
+        ExecutorService failingService = spy(executorService);
+        ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
+                logWarningForTaskAfterMillis, shardConsumerArgument, blockedOnParentsState,
+                t -> t, 1, taskExecutionListener, 0);
+
+        mockSuccessfulUnblockOnParentsWithFailureTransition();
+        mockSuccessfulInitializeWithFailureTransition();
+
+        // Failing the waiting_on_parents task and few other attempts after that.
+        doThrow(new RejectedExecutionException())
+                .when(failingService).execute(any());
+
+        int arbitraryExecutionCount = 5;
+        do {
+            try {
+                consumer.executeLifecycle();
+                Thread.sleep(100);
+            } catch (Exception e) {
+                // Suppress any exception like the scheduler.
+            }
+        } while (--arbitraryExecutionCount > 0);
+        assertEquals(ShardConsumerState.WAITING_ON_PARENT_SHARDS.consumerState().state(), consumer.currentState().state());
+    }
+
+    /**
      * Test method to verify consumer stays in INITIALIZING state when InitializationTask fails.
      */
     @SuppressWarnings("unchecked")
@@ -742,6 +880,11 @@ public class ShardConsumerTest {
         when(processingState.state()).thenReturn(ConsumerStates.ShardConsumerState.PROCESSING);
     }
 
+    private void mockSuccessfulInitializeWithFailureTransition() {
+        mockSuccessfulInitialize(null, null);
+        when(initialState.failureTransition()).thenReturn(initialState);
+    }
+
     private void mockSuccessfulInitialize(CyclicBarrier taskCallBarrier) {
         mockSuccessfulInitialize(taskCallBarrier, null);
     }
@@ -761,6 +904,22 @@ public class ShardConsumerTest {
         when(initialState.successTransition()).thenReturn(processingState);
         when(initialState.state()).thenReturn(ConsumerStates.ShardConsumerState.INITIALIZING);
 
+    }
+
+    private void mockSuccessfulUnblockOnParentsWithFailureTransition() {
+        mockSuccessfulUnblockOnParents();
+        when(blockedOnParentsState.failureTransition()).thenReturn(blockedOnParentsState);
+    }
+
+    private void mockSuccessfulUnblockOnParents() {
+        when(blockedOnParentsState.createTask(eq(shardConsumerArgument), any(), any())).thenReturn(blockedOnParentsTask);
+        when(blockedOnParentsState.taskType()).thenReturn(TaskType.BLOCK_ON_PARENT_SHARDS);
+        when(blockedOnParentsTask.taskType()).thenReturn(TaskType.BLOCK_ON_PARENT_SHARDS);
+        when(blockedOnParentsTask.call()).thenAnswer(i -> blockOnParentsTaskResult);
+        when(blockOnParentsTaskResult.getException()).thenReturn(null);
+        when(blockedOnParentsState.requiresDataAvailability()).thenReturn(false);
+        when(blockedOnParentsState.successTransition()).thenReturn(initialState);
+        when(blockedOnParentsState.state()).thenReturn(ShardConsumerState.WAITING_ON_PARENT_SHARDS);
     }
 
     private void awaitBarrier(CyclicBarrier barrier) throws Exception {
