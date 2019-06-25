@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import io.reactivex.plugins.RxJavaPlugins;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -95,6 +96,8 @@ public class Scheduler implements Runnable {
     // parent shards
     private final long parentShardPollIntervalMillis;
     private final ExecutorService executorService;
+    private final DiagnosticEventHandler diagnosticEventHandler;
+    private final long executorDiagnosticsDaemonSleepTimeMillis;
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final LeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager shardSyncTaskManager;
@@ -167,6 +170,9 @@ public class Scheduler implements Runnable {
         this.shardConsumerDispatchPollIntervalMillis = this.coordinatorConfig.shardConsumerDispatchPollIntervalMillis();
         this.parentShardPollIntervalMillis = this.coordinatorConfig.parentShardPollIntervalMillis();
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
+        this.diagnosticEventHandler = new DefaultDiagnosticEventHandler();
+        this.executorDiagnosticsDaemonSleepTimeMillis =
+                this.coordinatorConfig.executorDiagnosticsDaemonSleepTimeMillis();
 
         this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory()
                 .createShardSyncTaskManager(this.metricsFactory);
@@ -228,6 +234,8 @@ public class Scheduler implements Runnable {
 
     private void initialize() {
         synchronized (lock) {
+            startExecutorDiagnosticsDaemon();
+            registerErrorHandlerForUndeliverableAsyncTaskExceptions();
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.INITIALIZING);
             boolean isDone = false;
             Exception lastException = null;
@@ -610,6 +618,32 @@ public class Scheduler implements Runnable {
                 }
             }
         }
+    }
+
+    private void startExecutorDiagnosticsDaemon() {
+        log.info("Starting executor diagnostics daemon.");
+
+        Thread diagnosticsThread = new Thread(new ThreadGroup("Diagnostics"), () -> {
+            while (true) {
+                ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
+                executorStateEvent.accept(diagnosticEventHandler);
+                try {
+                    Thread.sleep(executorDiagnosticsDaemonSleepTimeMillis);
+                } catch (InterruptedException e) {
+                    log.error("Executor diagnostics thread interrupted", e);
+                }
+            }
+        });
+
+        diagnosticsThread.setDaemon(true);
+        diagnosticsThread.start();
+    }
+
+    private void registerErrorHandlerForUndeliverableAsyncTaskExceptions() {
+        RxJavaPlugins.setErrorHandler(t -> {
+            RejectedTaskEvent rejectedTaskEvent = new RejectedTaskEvent(executorService, leaseCoordinator, t);
+            rejectedTaskEvent.accept(diagnosticEventHandler);
+        });
     }
 
     /**

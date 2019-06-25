@@ -1,0 +1,152 @@
+/*
+ * Copyright 2019 Amazon.com, Inc. or its affiliates.
+ * Licensed under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package software.amazon.kinesis.coordinator;
+
+import lombok.extern.slf4j.Slf4j;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseBuilder;
+import software.amazon.kinesis.leases.LeaseCoordinator;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@Slf4j
+@RunWith(MockitoJUnitRunner.class)
+public class DiagnosticEventsTest {
+    @Mock
+    private ThreadPoolExecutor executor;
+    @Mock
+    private LeaseCoordinator leaseCoordinator;
+    @Mock
+    private DiagnosticEventHandler defaultHandler;
+
+    private DiagnosticEventHandler customHandler;
+    private boolean wasCustomHandlerInvoked;
+
+    private Throwable throwable;
+
+    private int activeThreadCount;
+    private int corePoolSize;
+    private int largestPoolSize;
+    private int maximumPoolSize;
+
+    private SynchronousQueue<Runnable> executorQueue;
+    private Collection<Lease> leaseAssignments;
+
+    @Before
+    public final void setup() {
+        customHandler = new CustomHandler();
+        wasCustomHandlerInvoked = false;
+
+        throwable = new TestRejectedTaskException();
+
+        activeThreadCount = 2;
+        corePoolSize = 4;
+        largestPoolSize = 8;
+        maximumPoolSize = 16;
+
+        executorQueue = new SynchronousQueue<>();
+
+        final Lease lease = new LeaseBuilder().build();
+        leaseAssignments = Collections.singletonList(lease);
+
+        when(executor.getQueue()).thenReturn(executorQueue);
+        when(executor.getActiveCount()).thenReturn(activeThreadCount);
+        when(executor.getCorePoolSize()).thenReturn(corePoolSize);
+        when(executor.getLargestPoolSize()).thenReturn(largestPoolSize);
+        when(executor.getMaximumPoolSize()).thenReturn(maximumPoolSize);
+        when(leaseCoordinator.getAssignments()).thenReturn(leaseAssignments);
+    }
+
+    @Test
+    public final void testExecutorStateEventWithDefaultHandler() {
+        ExecutorStateEvent event = new ExecutorStateEvent(executor, leaseCoordinator);
+        event.accept(defaultHandler);
+
+        assertEquals(event.getActiveThreads(), activeThreadCount);
+        assertEquals(event.getCoreThreads(), corePoolSize);
+        assertEquals(event.getLargestPoolSize(), largestPoolSize);
+        assertEquals(event.getMaximumPoolSize(), maximumPoolSize);
+        assertEquals(event.getLeasesOwned(), leaseAssignments.size());
+        assertEquals(event.getCurrentQueueSize(),0);
+
+        verify(defaultHandler, times(1)).visit(event);
+    }
+
+    @Test
+    public final void testExecutorStateEventWithCustomHandler() {
+        ExecutorStateEvent event = new ExecutorStateEvent(executor, leaseCoordinator);
+        event.accept(customHandler);
+
+        assertTrue(wasCustomHandlerInvoked);
+        wasCustomHandlerInvoked = false;
+    }
+
+    @Test
+    public final void testRejectedTaskEventWithDefaultHandler() {
+        RejectedTaskEvent event = new RejectedTaskEvent(executor, leaseCoordinator, throwable);
+        event.accept(defaultHandler);
+
+        assertEquals(event.getActiveThreads(), activeThreadCount);
+        assertEquals(event.getCoreThreads(), corePoolSize);
+        assertEquals(event.getLargestPoolSize(), largestPoolSize);
+        assertEquals(event.getMaximumPoolSize(), maximumPoolSize);
+        assertEquals(event.getLeasesOwned(), leaseAssignments.size());
+        assertEquals(event.getCurrentQueueSize(),0);
+        System.out.println(event.getThrowable());
+        assertTrue(event.getThrowable() instanceof TestRejectedTaskException);
+
+        verify(defaultHandler, times(1)).visit(event);
+    }
+
+    @Test
+    public final void testRejectedTaskEventWithCustomHandler() {
+        RejectedTaskEvent event = new RejectedTaskEvent(executor, leaseCoordinator, throwable);
+        customHandler = new CustomHandler();
+        event.accept(customHandler);
+
+        assertTrue(wasCustomHandlerInvoked);
+        wasCustomHandlerInvoked = false;
+    }
+
+    private class TestRejectedTaskException extends Exception {
+        private TestRejectedTaskException() { super(); }
+    }
+
+    private class CustomHandler implements DiagnosticEventHandler {
+        @Override
+        public void visit(ExecutorStateEvent event) {
+            wasCustomHandlerInvoked = true;
+        }
+
+        @Override
+        public void visit(RejectedTaskEvent event) {
+            wasCustomHandlerInvoked = true;
+        }
+    }
+}
