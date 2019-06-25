@@ -48,6 +48,7 @@ import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -56,6 +57,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import com.google.common.util.concurrent.MoreExecutors;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -64,7 +66,9 @@ import org.junit.Test;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
@@ -460,7 +464,12 @@ public class ShardConsumerTest {
     @SuppressWarnings("unchecked")
     @Test
     public final void testSuccessfulConsumerStateTransition() throws Exception {
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
+        ExecutorService directExecutorService = spy(executorService);
+
+        doAnswer(invocation -> directlyExecuteRunnable(invocation))
+                .when(directExecutorService).execute(any());
+
+        ShardConsumer consumer = new ShardConsumer(recordsPublisher, directExecutorService, shardInfo,
                 logWarningForTaskAfterMillis, shardConsumerArgument, blockedOnParentsState,
                 t -> t, 1, taskExecutionListener, 0);
 
@@ -472,12 +481,13 @@ public class ShardConsumerTest {
         do {
             try {
                 consumer.executeLifecycle();
-                Thread.sleep(100);
             } catch (Exception e) {
                 // Suppress any exception like the scheduler.
             }
         } while (--arbitraryExecutionCount > 0);
+
         assertEquals(ShardConsumerState.PROCESSING.consumerState().state(), consumer.currentState().state());
+        verify(directExecutorService, times(2)).execute(any());
     }
 
     /**
@@ -497,7 +507,7 @@ public class ShardConsumerTest {
         mockSuccessfulProcessing(null);
 
         // Failing the initialization task and all other attempts after that.
-        doCallRealMethod()
+        doAnswer(invocation -> directlyExecuteRunnable(invocation))
                 .doThrow(new RejectedExecutionException())
                 .when(failingService).execute(any());
 
@@ -505,12 +515,13 @@ public class ShardConsumerTest {
         do {
             try {
                 consumer.executeLifecycle();
-                Thread.sleep(100);
             } catch (Exception e) {
                 // Suppress any exception like the scheduler.
             }
         } while (--arbitraryExecutionCount > 0);
+
         assertEquals(ShardConsumerState.INITIALIZING.consumerState().state(), consumer.currentState().state());
+        verify(failingService, times(5)).execute(any());
     }
 
     /**
@@ -530,23 +541,24 @@ public class ShardConsumerTest {
         mockSuccessfulProcessing(null);
 
         // Failing the initialization task and few other attempts after that.
-        doCallRealMethod()
+        doAnswer(invocation -> directlyExecuteRunnable(invocation))
                 .doThrow(new RejectedExecutionException())
                 .doThrow(new RejectedExecutionException())
                 .doThrow(new RejectedExecutionException())
-                .doCallRealMethod()
+                .doAnswer(invocation -> directlyExecuteRunnable(invocation))
                 .when(failingService).execute(any());
 
         int arbitraryExecutionCount = 6;
         do {
             try {
                 consumer.executeLifecycle();
-                Thread.sleep(100);
             } catch (Exception e) {
                 // Suppress any exception like the scheduler.
             }
         } while (--arbitraryExecutionCount > 0);
+
         assertEquals(ShardConsumerState.PROCESSING.consumerState().state(), consumer.currentState().state());
+        verify(failingService, times(5)).execute(any());
     }
 
     /**
@@ -576,7 +588,9 @@ public class ShardConsumerTest {
                 // Suppress any exception like the scheduler.
             }
         } while (--arbitraryExecutionCount > 0);
+
         assertEquals(ShardConsumerState.WAITING_ON_PARENT_SHARDS.consumerState().state(), consumer.currentState().state());
+        verify(failingService, times(5)).execute(any());
     }
 
     /**
@@ -932,4 +946,12 @@ public class ShardConsumerTest {
         barrier.await();
         barrier.reset();
     }
+
+    private Object directlyExecuteRunnable(InvocationOnMock invocation) {
+        Object[] args = invocation.getArguments();
+        Runnable runnable = (Runnable)args[0];
+        runnable.run();
+        return null;
+    }
+
 }
