@@ -110,6 +110,7 @@ class InitializeTask implements ITask {
                 LOG.error("Application initialize() threw exception: ", e);
             } else {
                 LOG.error("Caught exception: ", e);
+                throw new RuntimeException(e);
             }
             exception = e;
             // backoff if we encounter an exception.
