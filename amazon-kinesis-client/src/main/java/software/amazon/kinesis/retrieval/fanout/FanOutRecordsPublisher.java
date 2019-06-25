@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import com.google.common.annotations.VisibleForTesting;
+import lombok.Getter;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
@@ -65,7 +67,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private final AtomicInteger subscribeToShardId = new AtomicInteger(0);
 
     private RecordFlow flow;
-
+    @Getter @VisibleForTesting
     private String currentSequenceNumber;
     private InitialPositionInStreamExtended initialPositionInStreamExtended;
     private boolean isFirstConnection = true;
