@@ -489,12 +489,15 @@ public class Worker implements Runnable {
             shutdown();
         }
 
-        while (!shouldShutdown()) {
-            runProcessLoop();
+        try {
+            while (!shouldShutdown()) {
+                runProcessLoop();
+            }
         }
-
-        finalShutdown();
-        LOG.info("Worker loop is complete. Exiting from worker.");
+        finally {
+            finalShutdown();
+            LOG.info("Worker loop is complete. Exiting from worker.");
+        }
     }
 
     @VisibleForTesting
