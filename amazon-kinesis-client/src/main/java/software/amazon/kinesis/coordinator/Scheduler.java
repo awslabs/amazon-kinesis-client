@@ -633,8 +633,7 @@ public class Scheduler implements Runnable {
     void registerErrorHandlerForUndeliverableAsyncTaskExceptions(@Nullable Consumer<Throwable> handler) {
        if (handler == null) {
            RxJavaPlugins.setErrorHandler(t -> {
-               ExecutorStateEvent executorStateEvent = new ExecutorStateEvent((ThreadPoolExecutor) executorService,
-                       leaseCoordinator);
+               ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
                RejectedTaskEvent rejectedTaskEvent = new RejectedTaskEvent(executorStateEvent, t);
                rejectedTaskEvent.accept(diagnosticEventHandler);
            });
@@ -644,8 +643,7 @@ public class Scheduler implements Runnable {
     }
 
     private void logExecutorState() {
-        ExecutorStateEvent executorStateEvent = new ExecutorStateEvent((ThreadPoolExecutor) executorService,
-                leaseCoordinator);
+        ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
         executorStateEvent.accept(diagnosticEventHandler);
     }
 

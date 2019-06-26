@@ -20,15 +20,17 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 
 @Getter
-@ToString(exclude = "MESSAGE")
+@ToString(exclude = {"MESSAGE", "isThreadPoolExecutor"})
 @Slf4j
 @KinesisClientInternalApi
 class ExecutorStateEvent implements DiagnosticEvent {
     private final String MESSAGE = "Current thread pool executor state: ";
 
+    private boolean isThreadPoolExecutor;
     private int currentQueueSize;
     private int activeThreads;
     private int coreThreads;
@@ -36,18 +38,28 @@ class ExecutorStateEvent implements DiagnosticEvent {
     private int largestPoolSize;
     private int maximumPoolSize;
 
-    ExecutorStateEvent(ThreadPoolExecutor executor, LeaseCoordinator leaseCoordinator) {
-        this.currentQueueSize = executor.getQueue().size();
-        this.activeThreads = executor.getActiveCount();
-        this.coreThreads = executor.getCorePoolSize();
-        this.largestPoolSize = executor.getLargestPoolSize();
-        this.maximumPoolSize = executor.getMaximumPoolSize();
+    ExecutorStateEvent(ExecutorService executor, LeaseCoordinator leaseCoordinator) {
+        if (executor instanceof ThreadPoolExecutor) {
+            this.isThreadPoolExecutor = true;
+
+            ThreadPoolExecutor ex = (ThreadPoolExecutor) executor;
+            this.currentQueueSize = ex.getQueue().size();
+            this.activeThreads = ex.getActiveCount();
+            this.coreThreads = ex.getCorePoolSize();
+            this.largestPoolSize = ex.getLargestPoolSize();
+            this.maximumPoolSize = ex.getMaximumPoolSize();
+        }
+
         this.leasesOwned = leaseCoordinator.getAssignments().size();
     }
 
+
     @Override
     public void accept(DiagnosticEventHandler visitor) {
-        visitor.visit(this);
+        // logging is only meaningful for a ThreadPoolExecutor executor service (default config)
+        if (isThreadPoolExecutor) {
+            visitor.visit(this);
+        }
     }
 
     @Override
