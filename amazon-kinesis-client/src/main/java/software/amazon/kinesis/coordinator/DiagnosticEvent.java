@@ -17,7 +17,7 @@ package software.amazon.kinesis.coordinator;
 /**
  * An interface to implement various types of stateful events that can be used for diagnostics throughout the KCL.
  */
-public interface DiagnosticEvent {
+interface DiagnosticEvent {
     /**
      * DiagnosticEvent is part of a visitor pattern and it accepts DiagnosticEventHandler visitors.
      *

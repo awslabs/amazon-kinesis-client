@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -130,9 +131,6 @@ public class Scheduler implements Runnable {
     private volatile boolean shutdownComplete = false;
 
     private final Object lock = new Object();
-
-    private final long executorLogIntervalMillis = TimeUnit.SECONDS.toMillis(30);
-    private long nextExecutorLogTime = System.currentTimeMillis() + executorLogIntervalMillis;
 
     /**
      * Used to ensure that only one requestedShutdown is in progress at a time.
@@ -635,7 +633,8 @@ public class Scheduler implements Runnable {
     void registerErrorHandlerForUndeliverableAsyncTaskExceptions(@Nullable Consumer<Throwable> handler) {
        if (handler == null) {
            RxJavaPlugins.setErrorHandler(t -> {
-               ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
+               ExecutorStateEvent executorStateEvent = new ExecutorStateEvent((ThreadPoolExecutor) executorService,
+                       leaseCoordinator);
                RejectedTaskEvent rejectedTaskEvent = new RejectedTaskEvent(executorStateEvent, t);
                rejectedTaskEvent.accept(diagnosticEventHandler);
            });
@@ -645,27 +644,9 @@ public class Scheduler implements Runnable {
     }
 
     private void logExecutorState() {
-        ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
-        DiagnosticEventHandler debugHandler = new DiagnosticEventHandler() {
-            @Override
-            public void visit(ExecutorStateEvent event) {
-                log.debug(event.message());
-            }
-
-            @Override
-            public void visit(RejectedTaskEvent event) {
-                // no op as RejectedTaskEvents get handled at Error level by diagnosticEventHandler
-            }
-        };
-
-        // only log at info level (behavior of diagnosticEventHandler) every 30s to avoid over-logging, else log at
-        // debug level
-        if (System.currentTimeMillis() >= nextExecutorLogTime) {
-            executorStateEvent.accept(diagnosticEventHandler);
-            nextExecutorLogTime = System.currentTimeMillis() + executorLogIntervalMillis;
-        } else {
-            executorStateEvent.accept(debugHandler);
-        }
+        ExecutorStateEvent executorStateEvent = new ExecutorStateEvent((ThreadPoolExecutor) executorService,
+                leaseCoordinator);
+        executorStateEvent.accept(diagnosticEventHandler);
     }
 
     /**

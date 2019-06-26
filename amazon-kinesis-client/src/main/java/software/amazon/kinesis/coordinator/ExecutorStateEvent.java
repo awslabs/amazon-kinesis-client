@@ -20,14 +20,13 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 
 @Getter
 @ToString(exclude = "MESSAGE")
 @Slf4j
 @KinesisClientInternalApi
-public class ExecutorStateEvent implements DiagnosticEvent {
+class ExecutorStateEvent implements DiagnosticEvent {
     private final String MESSAGE = "Current thread pool executor state: ";
 
     private int currentQueueSize;
@@ -37,16 +36,12 @@ public class ExecutorStateEvent implements DiagnosticEvent {
     private int largestPoolSize;
     private int maximumPoolSize;
 
-    public ExecutorStateEvent(ExecutorService executor, LeaseCoordinator leaseCoordinator) {
-        if (executor instanceof ThreadPoolExecutor) {
-            ThreadPoolExecutor ex = (ThreadPoolExecutor) executor;
-            this.currentQueueSize = ex.getQueue().size();
-            this.activeThreads = ex.getActiveCount();
-            this.coreThreads = ex.getCorePoolSize();
-            this.largestPoolSize = ex.getLargestPoolSize();
-            this.maximumPoolSize = ex.getMaximumPoolSize();
-        }
-
+    ExecutorStateEvent(ThreadPoolExecutor executor, LeaseCoordinator leaseCoordinator) {
+        this.currentQueueSize = executor.getQueue().size();
+        this.activeThreads = executor.getActiveCount();
+        this.coreThreads = executor.getCorePoolSize();
+        this.largestPoolSize = executor.getLargestPoolSize();
+        this.maximumPoolSize = executor.getMaximumPoolSize();
         this.leasesOwned = leaseCoordinator.getAssignments().size();
     }
 

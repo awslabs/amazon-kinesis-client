@@ -25,13 +25,23 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 @NoArgsConstructor
 @Slf4j
 @KinesisClientInternalApi
-public class DiagnosticEventLogger implements DiagnosticEventHandler {
+class DiagnosticEventLogger implements DiagnosticEventHandler {
+    private static final long executorLogIntervalMillis = 30000L;
+    private long nextExecutorLogTime = System.currentTimeMillis() + executorLogIntervalMillis;
+
     /**
      * {@inheritDoc}
+     *
+     * Only log at info level every 30s to avoid over-logging, else log at debug level
      */
     @Override
     public void visit(ExecutorStateEvent event) {
-        log.info(event.message());
+        if (System.currentTimeMillis() >= nextExecutorLogTime) {
+            log.info(event.message());
+            nextExecutorLogTime = System.currentTimeMillis() + executorLogIntervalMillis;
+        } else {
+            log.debug(event.message());
+        }
     }
 
     /**

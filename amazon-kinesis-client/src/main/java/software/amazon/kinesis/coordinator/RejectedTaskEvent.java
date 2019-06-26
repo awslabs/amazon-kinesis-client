@@ -23,22 +23,22 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 @ToString(exclude = "MESSAGE")
 @Slf4j
 @KinesisClientInternalApi
-public class RejectedTaskEvent implements DiagnosticEvent {
-    private final String MESSAGE = "Unexpected task rejection occurred. This could possibly " +
-            "be an issue or a bug. Please search for the exception/error online to check what is " +
-            "going on. If the issue persists or is a recurring problem, feel free to open an issue " +
-            "at https://github.com/awslabs/amazon-kinesis-client. ";
+class RejectedTaskEvent implements DiagnosticEvent {
+    private final String MESSAGE = "This is a misconfiguration of the thread pool. We currently " +
+            "only support the default thread pool configuration, until the next KCL release. ";
 
     private ExecutorStateEvent executorStateEvent;
     private Throwable throwable;
 
-    public RejectedTaskEvent(ExecutorStateEvent executorStateEvent, Throwable throwable) {
+    RejectedTaskEvent(ExecutorStateEvent executorStateEvent, Throwable throwable) {
         this.executorStateEvent = executorStateEvent;
         this.throwable = throwable;
     }
 
     @Override
-    public void accept(DiagnosticEventHandler visitor) { visitor.visit(this); }
+    public void accept(DiagnosticEventHandler visitor) {
+        visitor.visit(this);
+    }
 
     @Override
     public String message() {

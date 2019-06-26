@@ -19,7 +19,7 @@ package software.amazon.kinesis.coordinator;
  * the DiagnosticEvent when the behavior is desired. A default implementation that performs simple logging is found in
  * {@link DiagnosticEventLogger}.
  */
-public interface DiagnosticEventHandler {
+interface DiagnosticEventHandler {
     /**
      * @param event Log or otherwise react to periodic pulses on the thread pool executor state.
      */

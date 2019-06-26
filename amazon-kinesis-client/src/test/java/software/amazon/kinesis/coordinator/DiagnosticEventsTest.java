@@ -45,7 +45,7 @@ public class DiagnosticEventsTest {
     @Mock
     private DiagnosticEventHandler defaultHandler;
 
-    private DiagnosticEventHandler customHandler = new CustomHandler();;
+    private DiagnosticEventHandler customHandler = new CustomHandler();
     private boolean wasCustomHandlerInvoked;
 
     private final Throwable throwable = new TestRejectedTaskException();

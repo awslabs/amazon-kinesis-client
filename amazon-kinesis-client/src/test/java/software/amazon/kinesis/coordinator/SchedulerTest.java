@@ -24,7 +24,9 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -44,8 +46,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 
+import org.mockito.stubbing.Answer;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -278,10 +282,17 @@ public class SchedulerTest {
         AtomicBoolean wasHandlerInvoked = new AtomicBoolean(false);
         Consumer<Throwable> testHandler = t -> wasHandlerInvoked.compareAndSet(false, true);
 
-        scheduler.registerErrorHandlerForUndeliverableAsyncTaskExceptions(testHandler);
+        Scheduler schedulerSpy = spy(scheduler);
 
-        // trigger rejected task in RxJava layer
-        RxJavaPlugins.onError(new RejectedExecutionException("Test exception."));
+        doAnswer(invocation -> {
+            // trigger rejected task in RxJava layer
+            RxJavaPlugins.onError(new RejectedExecutionException("Test exception."));
+            return null;
+        }).when(schedulerSpy).runProcessLoop();
+
+        schedulerSpy.registerErrorHandlerForUndeliverableAsyncTaskExceptions(testHandler);
+        schedulerSpy.runProcessLoop();
+
         assertTrue(wasHandlerInvoked.get());
     }
 
