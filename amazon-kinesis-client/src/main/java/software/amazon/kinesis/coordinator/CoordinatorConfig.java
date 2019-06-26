@@ -89,11 +89,4 @@ public class CoordinatorConfig {
     private GracefulShutdownCoordinator gracefulShutdownCoordinator = new GracefulShutdownCoordinator();
 
     private CoordinatorFactory coordinatorFactory = new SchedulerCoordinatorFactory();
-
-    /**
-     * The number of milliseconds to sleep in between logging the executor state.
-     *
-     * <p>Default value: 30,000 milliseconds</p>
-     */
-    private long executorDiagnosticsDaemonSleepTimeMillis = 30000L;
 }

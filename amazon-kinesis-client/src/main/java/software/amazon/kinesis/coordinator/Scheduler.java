@@ -26,6 +26,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -70,6 +71,8 @@ import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
+import javax.annotation.Nullable;
+
 /**
  *
  */
@@ -97,7 +100,6 @@ public class Scheduler implements Runnable {
     private final long parentShardPollIntervalMillis;
     private final ExecutorService executorService;
     private final DiagnosticEventHandler diagnosticEventHandler;
-    private final long executorDiagnosticsDaemonSleepTimeMillis;
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final LeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager shardSyncTaskManager;
@@ -128,6 +130,9 @@ public class Scheduler implements Runnable {
     private volatile boolean shutdownComplete = false;
 
     private final Object lock = new Object();
+
+    private final long executorLogIntervalMillis = TimeUnit.SECONDS.toMillis(30);
+    private long nextExecutorLogTime = System.currentTimeMillis() + executorLogIntervalMillis;
 
     /**
      * Used to ensure that only one requestedShutdown is in progress at a time.
@@ -170,9 +175,7 @@ public class Scheduler implements Runnable {
         this.shardConsumerDispatchPollIntervalMillis = this.coordinatorConfig.shardConsumerDispatchPollIntervalMillis();
         this.parentShardPollIntervalMillis = this.coordinatorConfig.parentShardPollIntervalMillis();
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
-        this.diagnosticEventHandler = new DefaultDiagnosticEventHandler();
-        this.executorDiagnosticsDaemonSleepTimeMillis =
-                this.coordinatorConfig.executorDiagnosticsDaemonSleepTimeMillis();
+        this.diagnosticEventHandler = new DiagnosticEventLogger();
 
         this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory()
                 .createShardSyncTaskManager(this.metricsFactory);
@@ -218,7 +221,7 @@ public class Scheduler implements Runnable {
         try {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
-        } catch (RuntimeException e) { 
+        } catch (RuntimeException e) {
             log.error("Unable to initialize after {} attempts. Shutting down.", maxInitializationAttempts, e);
             workerStateChangeListener.onAllInitializationAttemptsFailed(e);
             shutdown();
@@ -234,8 +237,7 @@ public class Scheduler implements Runnable {
 
     private void initialize() {
         synchronized (lock) {
-            startExecutorDiagnosticsDaemon();
-            registerErrorHandlerForUndeliverableAsyncTaskExceptions();
+            registerErrorHandlerForUndeliverableAsyncTaskExceptions(null);
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.INITIALIZING);
             boolean isDone = false;
             Exception lastException = null;
@@ -313,6 +315,7 @@ public class Scheduler implements Runnable {
             // clean up shard consumers for unassigned shards
             cleanupShardConsumers(assignedShards);
 
+            logExecutorState();
             slog.info("Sleeping ...");
             Thread.sleep(shardConsumerDispatchPollIntervalMillis);
         } catch (Exception e) {
@@ -620,30 +623,49 @@ public class Scheduler implements Runnable {
         }
     }
 
-    private void startExecutorDiagnosticsDaemon() {
-        log.info("Starting executor diagnostics daemon.");
-
-        Thread diagnosticsThread = new Thread(new ThreadGroup("Diagnostics"), () -> {
-            while (true) {
-                ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
-                executorStateEvent.accept(diagnosticEventHandler);
-                try {
-                    Thread.sleep(executorDiagnosticsDaemonSleepTimeMillis);
-                } catch (InterruptedException e) {
-                    log.error("Executor diagnostics thread interrupted", e);
-                }
-            }
-        });
-
-        diagnosticsThread.setDaemon(true);
-        diagnosticsThread.start();
+    /**
+     * Exceptions in the RxJava layer can fail silently unless an error handler is set to propagate these exceptions
+     * back to the KCL, as is done below. This method is internal to the class and has package access solely
+     * for testing.
+     *
+     * @param handler This method accepts a handler param solely for testing. All non-test calls to this method will
+     *                have a null input.
+     */
+    @VisibleForTesting
+    void registerErrorHandlerForUndeliverableAsyncTaskExceptions(@Nullable Consumer<Throwable> handler) {
+       if (handler == null) {
+           RxJavaPlugins.setErrorHandler(t -> {
+               ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
+               RejectedTaskEvent rejectedTaskEvent = new RejectedTaskEvent(executorStateEvent, t);
+               rejectedTaskEvent.accept(diagnosticEventHandler);
+           });
+       } else {
+           RxJavaPlugins.setErrorHandler(t -> handler.accept(t));
+       }
     }
 
-    private void registerErrorHandlerForUndeliverableAsyncTaskExceptions() {
-        RxJavaPlugins.setErrorHandler(t -> {
-            RejectedTaskEvent rejectedTaskEvent = new RejectedTaskEvent(executorService, leaseCoordinator, t);
-            rejectedTaskEvent.accept(diagnosticEventHandler);
-        });
+    private void logExecutorState() {
+        ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
+        DiagnosticEventHandler debugHandler = new DiagnosticEventHandler() {
+            @Override
+            public void visit(ExecutorStateEvent event) {
+                log.debug(event.message());
+            }
+
+            @Override
+            public void visit(RejectedTaskEvent event) {
+                // no op as RejectedTaskEvents get handled at Error level by diagnosticEventHandler
+            }
+        };
+
+        // only log at info level (behavior of diagnosticEventHandler) every 30s to avoid over-logging, else log at
+        // debug level
+        if (System.currentTimeMillis() >= nextExecutorLogTime) {
+            executorStateEvent.accept(diagnosticEventHandler);
+            nextExecutorLogTime = System.currentTimeMillis() + executorLogIntervalMillis;
+        } else {
+            executorStateEvent.accept(debugHandler);
+        }
     }
 
     /**

@@ -14,17 +14,19 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-
 /**
  * An interface to implement various types of stateful events that can be used for diagnostics throughout the KCL.
  */
-@KinesisClientInternalApi
 public interface DiagnosticEvent {
     /**
-     * DiagnosticEvent is part of a visitor pattern along with DiagnosticEventHandler visitors.
+     * DiagnosticEvent is part of a visitor pattern and it accepts DiagnosticEventHandler visitors.
      *
      * @param visitor A handler that that controls the behavior of the DiagnosticEvent when invoked.
      */
     void accept(DiagnosticEventHandler visitor);
+
+    /**
+     * The string to output to logs when a DiagnosticEvent occurs.
+     */
+    String message();
 }

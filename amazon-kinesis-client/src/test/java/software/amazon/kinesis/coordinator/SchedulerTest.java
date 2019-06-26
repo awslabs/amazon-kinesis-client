@@ -35,7 +35,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
+import io.reactivex.plugins.RxJavaPlugins;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -269,6 +273,17 @@ public class SchedulerTest {
         verify(workerStateChangeListener, times(1)).onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
     }
 
+    @Test
+    public final void testErrorHandlerForUndeliverableAsyncTaskExceptions() {
+        AtomicBoolean wasHandlerInvoked = new AtomicBoolean(false);
+        Consumer<Throwable> testHandler = t -> wasHandlerInvoked.compareAndSet(false, true);
+
+        scheduler.registerErrorHandlerForUndeliverableAsyncTaskExceptions(testHandler);
+
+        // trigger rejected task in RxJava layer
+        RxJavaPlugins.onError(new RejectedExecutionException("Test exception."));
+        assertTrue(wasHandlerInvoked.get());
+    }
 
     /*private void runAndTestWorker(int numShards, int threadPoolSize) throws Exception {
         final int numberOfRecordsPerShard = 10;

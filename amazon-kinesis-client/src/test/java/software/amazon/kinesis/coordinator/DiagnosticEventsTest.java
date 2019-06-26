@@ -45,30 +45,22 @@ public class DiagnosticEventsTest {
     @Mock
     private DiagnosticEventHandler defaultHandler;
 
-    private DiagnosticEventHandler customHandler;
+    private DiagnosticEventHandler customHandler = new CustomHandler();;
     private boolean wasCustomHandlerInvoked;
 
-    private Throwable throwable;
+    private final Throwable throwable = new TestRejectedTaskException();
 
-    private int activeThreadCount;
-    private int corePoolSize;
-    private int largestPoolSize;
-    private int maximumPoolSize;
+    private final int activeThreadCount = 2;
+    private final int corePoolSize = 4;
+    private final int largestPoolSize = 8;
+    private final int maximumPoolSize = 16;
 
     private SynchronousQueue<Runnable> executorQueue;
     private Collection<Lease> leaseAssignments;
 
     @Before
-    public final void setup() {
-        customHandler = new CustomHandler();
+    public void setup() {
         wasCustomHandlerInvoked = false;
-
-        throwable = new TestRejectedTaskException();
-
-        activeThreadCount = 2;
-        corePoolSize = 4;
-        largestPoolSize = 8;
-        maximumPoolSize = 16;
 
         executorQueue = new SynchronousQueue<>();
 
@@ -84,7 +76,7 @@ public class DiagnosticEventsTest {
     }
 
     @Test
-    public final void testExecutorStateEventWithDefaultHandler() {
+    public void testExecutorStateEventWithDefaultHandler() {
         ExecutorStateEvent event = new ExecutorStateEvent(executor, leaseCoordinator);
         event.accept(defaultHandler);
 
@@ -99,39 +91,38 @@ public class DiagnosticEventsTest {
     }
 
     @Test
-    public final void testExecutorStateEventWithCustomHandler() {
+    public void testExecutorStateEventWithCustomHandler() {
         ExecutorStateEvent event = new ExecutorStateEvent(executor, leaseCoordinator);
         event.accept(customHandler);
 
         assertTrue(wasCustomHandlerInvoked);
-        wasCustomHandlerInvoked = false;
     }
 
     @Test
-    public final void testRejectedTaskEventWithDefaultHandler() {
-        RejectedTaskEvent event = new RejectedTaskEvent(executor, leaseCoordinator, throwable);
+    public void testRejectedTaskEventWithDefaultHandler() {
+        ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executor, leaseCoordinator);
+        RejectedTaskEvent event = new RejectedTaskEvent(executorStateEvent, throwable);
         event.accept(defaultHandler);
 
-        assertEquals(event.getActiveThreads(), activeThreadCount);
-        assertEquals(event.getCoreThreads(), corePoolSize);
-        assertEquals(event.getLargestPoolSize(), largestPoolSize);
-        assertEquals(event.getMaximumPoolSize(), maximumPoolSize);
-        assertEquals(event.getLeasesOwned(), leaseAssignments.size());
-        assertEquals(event.getCurrentQueueSize(),0);
-        System.out.println(event.getThrowable());
+        assertEquals(event.getExecutorStateEvent().getActiveThreads(), activeThreadCount);
+        assertEquals(event.getExecutorStateEvent().getCoreThreads(), corePoolSize);
+        assertEquals(event.getExecutorStateEvent().getLargestPoolSize(), largestPoolSize);
+        assertEquals(event.getExecutorStateEvent().getMaximumPoolSize(), maximumPoolSize);
+        assertEquals(event.getExecutorStateEvent().getLeasesOwned(), leaseAssignments.size());
+        assertEquals(event.getExecutorStateEvent().getCurrentQueueSize(),0);
         assertTrue(event.getThrowable() instanceof TestRejectedTaskException);
 
         verify(defaultHandler, times(1)).visit(event);
     }
 
     @Test
-    public final void testRejectedTaskEventWithCustomHandler() {
-        RejectedTaskEvent event = new RejectedTaskEvent(executor, leaseCoordinator, throwable);
+    public void testRejectedTaskEventWithCustomHandler() {
+        ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executor, leaseCoordinator);
+        RejectedTaskEvent event = new RejectedTaskEvent(executorStateEvent, throwable);
         customHandler = new CustomHandler();
         event.accept(customHandler);
 
         assertTrue(wasCustomHandlerInvoked);
-        wasCustomHandlerInvoked = false;
     }
 
     private class TestRejectedTaskException extends Exception {

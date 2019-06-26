@@ -18,22 +18,30 @@ import lombok.Getter;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.leases.LeaseCoordinator;
-
-import java.util.concurrent.ExecutorService;
 
 @Getter
-@ToString
+@ToString(exclude = "MESSAGE")
 @Slf4j
 @KinesisClientInternalApi
-public class RejectedTaskEvent extends ExecutorStateEvent {
+public class RejectedTaskEvent implements DiagnosticEvent {
+    private final String MESSAGE = "Unexpected task rejection occurred. This could possibly " +
+            "be an issue or a bug. Please search for the exception/error online to check what is " +
+            "going on. If the issue persists or is a recurring problem, feel free to open an issue " +
+            "at https://github.com/awslabs/amazon-kinesis-client. ";
+
+    private ExecutorStateEvent executorStateEvent;
     private Throwable throwable;
 
-    public RejectedTaskEvent(ExecutorService executor, LeaseCoordinator leaseCoordinator, Throwable throwable) {
-        super(executor, leaseCoordinator);
+    public RejectedTaskEvent(ExecutorStateEvent executorStateEvent, Throwable throwable) {
+        this.executorStateEvent = executorStateEvent;
         this.throwable = throwable;
     }
 
     @Override
     public void accept(DiagnosticEventHandler visitor) { visitor.visit(this); }
+
+    @Override
+    public String message() {
+        return MESSAGE + executorStateEvent.message();
+    }
 }

@@ -24,10 +24,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 
 @Getter
-@ToString
+@ToString(exclude = "MESSAGE")
 @Slf4j
 @KinesisClientInternalApi
 public class ExecutorStateEvent implements DiagnosticEvent {
+    private final String MESSAGE = "Current thread pool executor state: ";
+
     private int currentQueueSize;
     private int activeThreads;
     private int coreThreads;
@@ -51,5 +53,10 @@ public class ExecutorStateEvent implements DiagnosticEvent {
     @Override
     public void accept(DiagnosticEventHandler visitor) {
         visitor.visit(this);
+    }
+
+    @Override
+    public String message() {
+        return MESSAGE + this.toString();
     }
 }

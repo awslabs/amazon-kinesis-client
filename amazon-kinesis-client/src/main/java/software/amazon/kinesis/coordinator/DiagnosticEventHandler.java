@@ -14,14 +14,11 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-
 /**
  * An interface to implement behaviors associated with a {@link DiagnosticEvent}. Uses the visitor pattern to visit
  * the DiagnosticEvent when the behavior is desired. A default implementation that performs simple logging is found in
- * {@link DefaultDiagnosticEventHandler}.
+ * {@link DiagnosticEventLogger}.
  */
-@KinesisClientInternalApi
 public interface DiagnosticEventHandler {
     /**
      * @param event Log or otherwise react to periodic pulses on the thread pool executor state.

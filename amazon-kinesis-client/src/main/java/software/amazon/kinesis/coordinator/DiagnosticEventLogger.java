@@ -18,17 +18,27 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
+/**
+ * Internal implementation of {@link DiagnosticEventHandler} used by {@link Scheduler} to log executor state both
+ * 1) in normal conditions periodically, and 2) in reaction to rejected task exceptions.
+ */
 @NoArgsConstructor
 @Slf4j
 @KinesisClientInternalApi
-public class DefaultDiagnosticEventHandler implements DiagnosticEventHandler {
+public class DiagnosticEventLogger implements DiagnosticEventHandler {
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void visit(ExecutorStateEvent event) {
-        log.info("Current state of thread pool executor: {}", event);
+        log.info(event.message());
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void visit(RejectedTaskEvent event) {
-        log.info("Undeliverable task exception: {}", event);
+        log.error(event.message(), event.getThrowable());
     }
 }
