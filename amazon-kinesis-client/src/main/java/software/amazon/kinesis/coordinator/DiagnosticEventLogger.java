@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package software.amazon.kinesis.coordinator;
 
 import lombok.NoArgsConstructor;
@@ -26,8 +27,8 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 @Slf4j
 @KinesisClientInternalApi
 class DiagnosticEventLogger implements DiagnosticEventHandler {
-    private static final long executorLogIntervalMillis = 30000L;
-    private long nextExecutorLogTime = System.currentTimeMillis() + executorLogIntervalMillis;
+    private static final long EXECUTOR_LOG_INTERVAL_MILLIS = 30000L;
+    private long nextExecutorLogTime = System.currentTimeMillis() + EXECUTOR_LOG_INTERVAL_MILLIS;
 
     /**
      * {@inheritDoc}
@@ -38,7 +39,7 @@ class DiagnosticEventLogger implements DiagnosticEventHandler {
     public void visit(ExecutorStateEvent event) {
         if (System.currentTimeMillis() >= nextExecutorLogTime) {
             log.info(event.message());
-            nextExecutorLogTime = System.currentTimeMillis() + executorLogIntervalMillis;
+            nextExecutorLogTime = System.currentTimeMillis() + EXECUTOR_LOG_INTERVAL_MILLIS;
         } else {
             log.debug(event.message());
         }

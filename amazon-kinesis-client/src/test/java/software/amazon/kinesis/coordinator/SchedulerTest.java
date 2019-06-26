@@ -275,7 +275,7 @@ public class SchedulerTest {
     }
 
     @Test
-    public final void testErrorHandlerForUndeliverableAsyncTaskExceptions() {
+    public void testErrorHandlerForUndeliverableAsyncTaskExceptions() {
         AtomicBoolean wasHandlerInvoked = new AtomicBoolean(false);
         Consumer<Throwable> testHandler = t -> wasHandlerInvoked.compareAndSet(false, true);
 
@@ -287,7 +287,7 @@ public class SchedulerTest {
             return null;
         }).when(schedulerSpy).runProcessLoop();
 
-        schedulerSpy.registerErrorHandlerForUndeliverableAsyncTaskExceptions(testHandler);
+        schedulerSpy.registerErrorHandlerForUndeliverableAsyncTaskExceptions(null);
         schedulerSpy.runProcessLoop();
 
         assertTrue(wasHandlerInvoked.get());

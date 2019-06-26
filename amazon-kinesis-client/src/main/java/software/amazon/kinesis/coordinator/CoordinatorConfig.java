@@ -89,4 +89,5 @@ public class CoordinatorConfig {
     private GracefulShutdownCoordinator gracefulShutdownCoordinator = new GracefulShutdownCoordinator();
 
     private CoordinatorFactory coordinatorFactory = new SchedulerCoordinatorFactory();
+
 }

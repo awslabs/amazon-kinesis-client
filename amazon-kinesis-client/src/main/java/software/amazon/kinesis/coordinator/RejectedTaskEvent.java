@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package software.amazon.kinesis.coordinator;
 
 import lombok.Getter;
@@ -24,8 +25,8 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 @Slf4j
 @KinesisClientInternalApi
 class RejectedTaskEvent implements DiagnosticEvent {
-    private final String MESSAGE = "This is a misconfiguration of the thread pool. We currently " +
-            "only support the default thread pool configuration, until the next KCL release. ";
+    private final String MESSAGE = "Review your thread configuration to prevent task rejections. " +
+            "Until next release, KCL will not be resilient to task rejections. ";
 
     private ExecutorStateEvent executorStateEvent;
     private Throwable throwable;

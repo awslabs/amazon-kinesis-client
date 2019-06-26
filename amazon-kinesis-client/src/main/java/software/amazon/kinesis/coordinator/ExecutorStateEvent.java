@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package software.amazon.kinesis.coordinator;
 
 import lombok.Getter;
@@ -31,6 +32,7 @@ class ExecutorStateEvent implements DiagnosticEvent {
     private final String MESSAGE = "Current thread pool executor state: ";
 
     private boolean isThreadPoolExecutor;
+    private String executorName;
     private int currentQueueSize;
     private int activeThreads;
     private int coreThreads;
@@ -43,6 +45,7 @@ class ExecutorStateEvent implements DiagnosticEvent {
             this.isThreadPoolExecutor = true;
 
             ThreadPoolExecutor ex = (ThreadPoolExecutor) executor;
+            this.executorName = ex.getClass().getSimpleName();
             this.currentQueueSize = ex.getQueue().size();
             this.activeThreads = ex.getActiveCount();
             this.coreThreads = ex.getCorePoolSize();
