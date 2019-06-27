@@ -21,11 +21,11 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
 @Getter
-@ToString(exclude = "MESSAGE")
+@ToString
 @Slf4j
 @KinesisClientInternalApi
 class RejectedTaskEvent implements DiagnosticEvent {
-    private final String MESSAGE = "Review your thread configuration to prevent task rejections. " +
+    private static final String MESSAGE = "Review your thread configuration to prevent task rejections. " +
             "Until next release, KCL will not be resilient to task rejections. ";
 
     private ExecutorStateEvent executorStateEvent;

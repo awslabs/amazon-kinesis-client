@@ -25,11 +25,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 
 @Getter
-@ToString(exclude = {"MESSAGE", "isThreadPoolExecutor"})
+@ToString(exclude = "isThreadPoolExecutor")
 @Slf4j
 @KinesisClientInternalApi
 class ExecutorStateEvent implements DiagnosticEvent {
-    private final String MESSAGE = "Current thread pool executor state: ";
+    private static final String MESSAGE = "Current thread pool executor state: ";
 
     private boolean isThreadPoolExecutor;
     private String executorName;

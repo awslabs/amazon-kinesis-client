@@ -26,7 +26,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -71,8 +70,6 @@ import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
-import javax.annotation.Nullable;
-
 /**
  *
  */
@@ -99,6 +96,7 @@ public class Scheduler implements Runnable {
     // parent shards
     private final long parentShardPollIntervalMillis;
     private final ExecutorService executorService;
+    private DiagnosticEventFactory diagnosticEventFactory;
     private final DiagnosticEventHandler diagnosticEventHandler;
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final LeaseCoordinator leaseCoordinator;
@@ -172,6 +170,7 @@ public class Scheduler implements Runnable {
         this.shardConsumerDispatchPollIntervalMillis = this.coordinatorConfig.shardConsumerDispatchPollIntervalMillis();
         this.parentShardPollIntervalMillis = this.coordinatorConfig.parentShardPollIntervalMillis();
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
+        this.diagnosticEventFactory = new DiagnosticEventFactory(this.executorService, this.leaseCoordinator);
         this.diagnosticEventHandler = new DiagnosticEventLogger();
 
         this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory()
@@ -207,6 +206,24 @@ public class Scheduler implements Runnable {
     }
 
     /**
+     * Customers do not currently have the ability to customize the DiagnosticEventFactory, but this visibility
+     * is desired for testing. This constructor is only used for testing to provide a mock DiagnosticEventFactory.
+     */
+    @VisibleForTesting
+    protected Scheduler(@NonNull final CheckpointConfig checkpointConfig,
+                        @NonNull final CoordinatorConfig coordinatorConfig,
+                        @NonNull final LeaseManagementConfig leaseManagementConfig,
+                        @NonNull final LifecycleConfig lifecycleConfig,
+                        @NonNull final MetricsConfig metricsConfig,
+                        @NonNull final ProcessorConfig processorConfig,
+                        @NonNull final RetrievalConfig retrievalConfig,
+                        @NonNull final DiagnosticEventFactory diagnosticEventFactory) {
+        this(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig, metricsConfig,
+                processorConfig, retrievalConfig);
+        this.diagnosticEventFactory = diagnosticEventFactory;
+    }
+
+    /**
      * Start consuming data from the stream, and pass it to the application record processors.
      */
     @Override
@@ -232,9 +249,10 @@ public class Scheduler implements Runnable {
         log.info("Worker loop is complete. Exiting from worker.");
     }
 
-    private void initialize() {
+    @VisibleForTesting
+    void initialize() {
         synchronized (lock) {
-            registerErrorHandlerForUndeliverableAsyncTaskExceptions(null);
+            registerErrorHandlerForUndeliverableAsyncTaskExceptions();
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.INITIALIZING);
             boolean isDone = false;
             Exception lastException = null;
@@ -622,27 +640,17 @@ public class Scheduler implements Runnable {
 
     /**
      * Exceptions in the RxJava layer can fail silently unless an error handler is set to propagate these exceptions
-     * back to the KCL, as is done below. This method is internal to the class and has package access solely
-     * for testing.
-     *
-     * @param handler This method accepts a handler param solely for testing. All non-test calls to this method will
-     *                have a null input.
+     * back to the KCL, as is done below.
      */
-    @VisibleForTesting
-    void registerErrorHandlerForUndeliverableAsyncTaskExceptions(@Nullable Consumer<Throwable> handler) {
-       if (handler == null) {
-           RxJavaPlugins.setErrorHandler(t -> {
-               ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
-               RejectedTaskEvent rejectedTaskEvent = new RejectedTaskEvent(executorStateEvent, t);
-               rejectedTaskEvent.accept(diagnosticEventHandler);
-           });
-       } else {
-           RxJavaPlugins.setErrorHandler(t -> handler.accept(t));
-       }
+    private void registerErrorHandlerForUndeliverableAsyncTaskExceptions() {
+        RxJavaPlugins.setErrorHandler(t -> {
+            RejectedTaskEvent rejectedTaskEvent = diagnosticEventFactory.emitRejectedTaskEvent(t);
+            rejectedTaskEvent.accept(diagnosticEventHandler);
+        });
     }
 
     private void logExecutorState() {
-        ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executorService, leaseCoordinator);
+        ExecutorStateEvent executorStateEvent = diagnosticEventFactory.emitExecutorStateEvent();
         executorStateEvent.accept(diagnosticEventHandler);
     }
 

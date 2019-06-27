@@ -24,8 +24,9 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -37,8 +38,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 
 import io.reactivex.plugins.RxJavaPlugins;
 import org.junit.Before;
@@ -276,21 +275,37 @@ public class SchedulerTest {
 
     @Test
     public void testErrorHandlerForUndeliverableAsyncTaskExceptions() {
-        AtomicBoolean wasHandlerInvoked = new AtomicBoolean(false);
-        Consumer<Throwable> testHandler = t -> wasHandlerInvoked.compareAndSet(false, true);
+        DiagnosticEventFactory eventFactory = mock(DiagnosticEventFactory.class);
+        ExecutorStateEvent executorStateEvent = mock(ExecutorStateEvent.class);
+        RejectedTaskEvent rejectedTaskEvent = mock(RejectedTaskEvent.class);
 
-        Scheduler schedulerSpy = spy(scheduler);
+        when(eventFactory.emitRejectedTaskEvent(any())).thenReturn(rejectedTaskEvent);
+        when(eventFactory.emitExecutorStateEvent()).thenReturn(executorStateEvent);
 
-        doAnswer(invocation -> {
-            // trigger rejected task in RxJava layer
-            RxJavaPlugins.onError(new RejectedExecutionException("Test exception."));
-            return null;
-        }).when(schedulerSpy).runProcessLoop();
+        Scheduler testScheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig,
+                lifecycleConfig, metricsConfig, processorConfig, retrievalConfig, eventFactory);
 
-        schedulerSpy.registerErrorHandlerForUndeliverableAsyncTaskExceptions(testHandler);
+        Scheduler schedulerSpy = spy(testScheduler);
+
+        // reject task on third loop
+        doCallRealMethod()
+                .doCallRealMethod()
+                .doAnswer(invocation -> {
+                    // trigger rejected task in RxJava layer
+                     RxJavaPlugins.onError(new RejectedExecutionException("Test exception."));
+                     return null;
+                }).when(schedulerSpy).runProcessLoop();
+
+        // Scheduler sets error handler in initialize method
+        schedulerSpy.initialize();
+        schedulerSpy.runProcessLoop();
+        schedulerSpy.runProcessLoop();
         schedulerSpy.runProcessLoop();
 
-        assertTrue(wasHandlerInvoked.get());
+        verify(eventFactory, times(2)).emitExecutorStateEvent();
+        verify(executorStateEvent, times(2)).accept(any());
+        verify(eventFactory, times(1)).emitRejectedTaskEvent(any());
+        verify(rejectedTaskEvent, times(1)).accept(any());
     }
 
     /*private void runAndTestWorker(int numShards, int threadPoolSize) throws Exception {

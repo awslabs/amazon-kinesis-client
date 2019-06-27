@@ -77,7 +77,7 @@ public class DiagnosticEventsTest {
     }
 
     @Test
-    public void testExecutorStateEventWithDefaultHandler() {
+    public void testExecutorStateEvent() {
         ExecutorStateEvent event = new ExecutorStateEvent(executor, leaseCoordinator);
         event.accept(defaultHandler);
 
@@ -100,7 +100,7 @@ public class DiagnosticEventsTest {
     }
 
     @Test
-    public void testRejectedTaskEventWithDefaultHandler() {
+    public void testRejectedTaskEvent() {
         ExecutorStateEvent executorStateEvent = new ExecutorStateEvent(executor, leaseCoordinator);
         RejectedTaskEvent event = new RejectedTaskEvent(executorStateEvent, throwable);
         event.accept(defaultHandler);
@@ -124,6 +124,28 @@ public class DiagnosticEventsTest {
         event.accept(customHandler);
 
         assertTrue(wasCustomHandlerInvoked);
+    }
+
+    @Test
+    public void testDiagnosticEventFactory() {
+        DiagnosticEventFactory factory = new DiagnosticEventFactory(executor, leaseCoordinator);
+
+        ExecutorStateEvent executorStateEvent = factory.emitExecutorStateEvent();
+        assertEquals(executorStateEvent.getActiveThreads(), activeThreadCount);
+        assertEquals(executorStateEvent.getCoreThreads(), corePoolSize);
+        assertEquals(executorStateEvent.getLargestPoolSize(), largestPoolSize);
+        assertEquals(executorStateEvent.getMaximumPoolSize(), maximumPoolSize);
+        assertEquals(executorStateEvent.getLeasesOwned(), leaseAssignments.size());
+        assertEquals(executorStateEvent.getCurrentQueueSize(),0);
+
+        RejectedTaskEvent rejectedTaskEvent = factory.emitRejectedTaskEvent(new TestRejectedTaskException());
+        assertEquals(rejectedTaskEvent.getExecutorStateEvent().getActiveThreads(), activeThreadCount);
+        assertEquals(rejectedTaskEvent.getExecutorStateEvent().getCoreThreads(), corePoolSize);
+        assertEquals(rejectedTaskEvent.getExecutorStateEvent().getLargestPoolSize(), largestPoolSize);
+        assertEquals(rejectedTaskEvent.getExecutorStateEvent().getMaximumPoolSize(), maximumPoolSize);
+        assertEquals(rejectedTaskEvent.getExecutorStateEvent().getLeasesOwned(), leaseAssignments.size());
+        assertEquals(rejectedTaskEvent.getExecutorStateEvent().getCurrentQueueSize(),0);
+        assertTrue(rejectedTaskEvent.getThrowable() instanceof TestRejectedTaskException);
     }
 
     private class TestRejectedTaskException extends Exception {
