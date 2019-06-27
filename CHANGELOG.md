@@ -1,4 +1,9 @@
 # Changelog
+### Release 2.2.1 (June 28, 2019)
+[Milestone#32](https://github.com/awslabs/amazon-kinesis-client/milestone/32)
+* Added periodic logging of thread pool executor state for debugging complex thread configuration issues. Added logging for silent failures in RxJava layer by propagating back up to KCL.
+  * [PR#559](https://github.com/awslabs/amazon-kinesis-client/pull/559)
+
 ### Release 2.2.0 (April 8, 2019)
 [Milestone#31](https://github.com/awslabs/amazon-kinesis-client/milestone/31)
 * Updated License to [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
