@@ -287,7 +287,7 @@ public class SchedulerTest {
             return null;
         }).when(schedulerSpy).runProcessLoop();
 
-        schedulerSpy.registerErrorHandlerForUndeliverableAsyncTaskExceptions(null);
+        schedulerSpy.registerErrorHandlerForUndeliverableAsyncTaskExceptions(testHandler);
         schedulerSpy.runProcessLoop();
 
         assertTrue(wasHandlerInvoked.get());
