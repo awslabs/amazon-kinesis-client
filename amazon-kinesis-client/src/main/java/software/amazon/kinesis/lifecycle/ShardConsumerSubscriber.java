@@ -73,6 +73,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
     void startSubscriptions() {
         synchronized (lockObject) {
+            lastRequestTime = Instant.now();
             if (lastAccepted != null) {
                 recordsPublisher.restartFrom(lastAccepted);
             }
