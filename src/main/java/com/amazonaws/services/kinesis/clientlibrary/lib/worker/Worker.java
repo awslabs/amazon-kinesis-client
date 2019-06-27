@@ -468,7 +468,7 @@ public class Worker implements Runnable {
     /**
      * @return the leaseCoordinator
      */
-    public KinesisClientLibLeaseCoordinator getLeaseCoordinator() {
+    KinesisClientLibLeaseCoordinator getLeaseCoordinator() {
         return leaseCoordinator;
     }
 
@@ -1031,10 +1031,6 @@ public class Worker implements Runnable {
     private static ExecutorService getExecutorService() {
         ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("RecordProcessor-%04d").build();
         return new WorkerThreadPoolExecutor(threadFactory);
-    }
-
-    public ExecutorService returnExecutorService() {
-        return this.executorService;
     }
 
     private static <S, T> void setField(final S source, final String field, final Consumer<T> t, T value) {
