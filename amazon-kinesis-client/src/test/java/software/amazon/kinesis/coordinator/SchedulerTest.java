@@ -24,7 +24,9 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -35,7 +37,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.RejectedExecutionException;
 
+import io.reactivex.plugins.RxJavaPlugins;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -269,6 +273,38 @@ public class SchedulerTest {
         verify(workerStateChangeListener, times(1)).onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
     }
 
+    @Test
+    public void testErrorHandlerForUndeliverableAsyncTaskExceptions() {
+        DiagnosticEventFactory eventFactory = mock(DiagnosticEventFactory.class);
+        ExecutorStateEvent executorStateEvent = mock(ExecutorStateEvent.class);
+        RejectedTaskEvent rejectedTaskEvent = mock(RejectedTaskEvent.class);
+
+        when(eventFactory.rejectedTaskEvent(any(), any())).thenReturn(rejectedTaskEvent);
+        when(eventFactory.executorStateEvent(any(), any())).thenReturn(executorStateEvent);
+
+        Scheduler testScheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig,
+                lifecycleConfig, metricsConfig, processorConfig, retrievalConfig, eventFactory);
+
+        Scheduler schedulerSpy = spy(testScheduler);
+
+        // reject task on third loop
+        doCallRealMethod()
+                .doCallRealMethod()
+                .doAnswer(invocation -> {
+                    // trigger rejected task in RxJava layer
+                     RxJavaPlugins.onError(new RejectedExecutionException("Test exception."));
+                     return null;
+                }).when(schedulerSpy).runProcessLoop();
+
+        // Scheduler sets error handler in initialize method
+        schedulerSpy.initialize();
+        schedulerSpy.runProcessLoop();
+        schedulerSpy.runProcessLoop();
+        schedulerSpy.runProcessLoop();
+
+        verify(eventFactory, times(1)).rejectedTaskEvent(eq(executorStateEvent), any());
+        verify(rejectedTaskEvent, times(1)).accept(any());
+    }
 
     /*private void runAndTestWorker(int numShards, int threadPoolSize) throws Exception {
         final int numberOfRecordsPerShard = 10;

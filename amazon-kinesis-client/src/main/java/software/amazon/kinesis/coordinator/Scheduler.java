@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import io.reactivex.plugins.RxJavaPlugins;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -95,6 +96,8 @@ public class Scheduler implements Runnable {
     // parent shards
     private final long parentShardPollIntervalMillis;
     private final ExecutorService executorService;
+    private final DiagnosticEventFactory diagnosticEventFactory;
+    private final DiagnosticEventHandler diagnosticEventHandler;
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final LeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager shardSyncTaskManager;
@@ -140,6 +143,23 @@ public class Scheduler implements Runnable {
                      @NonNull final MetricsConfig metricsConfig,
                      @NonNull final ProcessorConfig processorConfig,
                      @NonNull final RetrievalConfig retrievalConfig) {
+        this(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig, metricsConfig,
+                processorConfig, retrievalConfig, new DiagnosticEventFactory());
+    }
+
+    /**
+     * Customers do not currently have the ability to customize the DiagnosticEventFactory, but this visibility
+     * is desired for testing. This constructor is only used for testing to provide a mock DiagnosticEventFactory.
+     */
+    @VisibleForTesting
+    protected Scheduler(@NonNull final CheckpointConfig checkpointConfig,
+                        @NonNull final CoordinatorConfig coordinatorConfig,
+                        @NonNull final LeaseManagementConfig leaseManagementConfig,
+                        @NonNull final LifecycleConfig lifecycleConfig,
+                        @NonNull final MetricsConfig metricsConfig,
+                        @NonNull final ProcessorConfig processorConfig,
+                        @NonNull final RetrievalConfig retrievalConfig,
+                        @NonNull final DiagnosticEventFactory diagnosticEventFactory) {
         this.checkpointConfig = checkpointConfig;
         this.coordinatorConfig = coordinatorConfig;
         this.leaseManagementConfig = leaseManagementConfig;
@@ -167,6 +187,8 @@ public class Scheduler implements Runnable {
         this.shardConsumerDispatchPollIntervalMillis = this.coordinatorConfig.shardConsumerDispatchPollIntervalMillis();
         this.parentShardPollIntervalMillis = this.coordinatorConfig.parentShardPollIntervalMillis();
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
+        this.diagnosticEventFactory = diagnosticEventFactory;
+        this.diagnosticEventHandler = new DiagnosticEventLogger();
 
         this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory()
                 .createShardSyncTaskManager(this.metricsFactory);
@@ -212,7 +234,7 @@ public class Scheduler implements Runnable {
         try {
             initialize();
             log.info("Initialization complete. Starting worker loop.");
-        } catch (RuntimeException e) { 
+        } catch (RuntimeException e) {
             log.error("Unable to initialize after {} attempts. Shutting down.", maxInitializationAttempts, e);
             workerStateChangeListener.onAllInitializationAttemptsFailed(e);
             shutdown();
@@ -226,8 +248,10 @@ public class Scheduler implements Runnable {
         log.info("Worker loop is complete. Exiting from worker.");
     }
 
-    private void initialize() {
+    @VisibleForTesting
+    void initialize() {
         synchronized (lock) {
+            registerErrorHandlerForUndeliverableAsyncTaskExceptions();
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.INITIALIZING);
             boolean isDone = false;
             Exception lastException = null;
@@ -305,6 +329,7 @@ public class Scheduler implements Runnable {
             // clean up shard consumers for unassigned shards
             cleanupShardConsumers(assignedShards);
 
+            logExecutorState();
             slog.info("Sleeping ...");
             Thread.sleep(shardConsumerDispatchPollIntervalMillis);
         } catch (Exception e) {
@@ -610,6 +635,25 @@ public class Scheduler implements Runnable {
                 }
             }
         }
+    }
+
+    /**
+     * Exceptions in the RxJava layer can fail silently unless an error handler is set to propagate these exceptions
+     * back to the KCL, as is done below.
+     */
+    private void registerErrorHandlerForUndeliverableAsyncTaskExceptions() {
+        RxJavaPlugins.setErrorHandler(t -> {
+            ExecutorStateEvent executorStateEvent = diagnosticEventFactory.executorStateEvent(executorService,
+                    leaseCoordinator);
+            RejectedTaskEvent rejectedTaskEvent = diagnosticEventFactory.rejectedTaskEvent(executorStateEvent, t);
+            rejectedTaskEvent.accept(diagnosticEventHandler);
+        });
+    }
+
+    private void logExecutorState() {
+        ExecutorStateEvent executorStateEvent = diagnosticEventFactory.executorStateEvent(executorService,
+                leaseCoordinator);
+        executorStateEvent.accept(diagnosticEventHandler);
     }
 
     /**
