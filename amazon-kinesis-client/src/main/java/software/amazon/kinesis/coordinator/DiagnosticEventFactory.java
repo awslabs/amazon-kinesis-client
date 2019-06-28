@@ -16,26 +16,43 @@
 package software.amazon.kinesis.coordinator;
 
 import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.metrics.MetricsConfig;
+import software.amazon.kinesis.metrics.MetricsFactory;
 
 import java.util.concurrent.ExecutorService;
 
 /**
- * Holds state and emits {@link DiagnosticEvent}s for logging and visibility
+ * Creates {@link DiagnosticEvent}s for logging and visibility
  */
 class DiagnosticEventFactory {
     private ExecutorService executorService;
     private LeaseCoordinator leaseCoordinator;
 
+    /**
+     * Used for passing in specific instances of ExecutorService and LeaseCoordinator
+     */
     DiagnosticEventFactory(ExecutorService executorService, LeaseCoordinator leaseCoordinator) {
         this.executorService = executorService;
         this.leaseCoordinator = leaseCoordinator;
     }
 
-    ExecutorStateEvent emitExecutorStateEvent() {
+    /**
+     * Used to create DiagnosticEventFactory from high-level configs
+     */
+    DiagnosticEventFactory(CoordinatorConfig coordinatorConfig, LeaseManagementConfig leaseManagementConfig,
+                           MetricsConfig metricsConfig) {
+        this.executorService = coordinatorConfig.coordinatorFactory().createExecutorService();
+
+        MetricsFactory metricsFactory = metricsConfig.metricsFactory();
+        this.leaseCoordinator = leaseManagementConfig.leaseManagementFactory().createLeaseCoordinator(metricsFactory);
+    }
+
+    ExecutorStateEvent executorStateEvent() {
         return new ExecutorStateEvent(executorService, leaseCoordinator);
     }
 
-    RejectedTaskEvent emitRejectedTaskEvent(Throwable t) {
-        return new RejectedTaskEvent(emitExecutorStateEvent(), t);
+    RejectedTaskEvent rejectedTaskEvent(Throwable t) {
+        return new RejectedTaskEvent(executorStateEvent(), t);
     }
 }

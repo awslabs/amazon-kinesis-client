@@ -279,8 +279,8 @@ public class SchedulerTest {
         ExecutorStateEvent executorStateEvent = mock(ExecutorStateEvent.class);
         RejectedTaskEvent rejectedTaskEvent = mock(RejectedTaskEvent.class);
 
-        when(eventFactory.emitRejectedTaskEvent(any())).thenReturn(rejectedTaskEvent);
-        when(eventFactory.emitExecutorStateEvent()).thenReturn(executorStateEvent);
+        when(eventFactory.rejectedTaskEvent(any())).thenReturn(rejectedTaskEvent);
+        when(eventFactory.executorStateEvent()).thenReturn(executorStateEvent);
 
         Scheduler testScheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig,
                 lifecycleConfig, metricsConfig, processorConfig, retrievalConfig, eventFactory);
@@ -302,9 +302,9 @@ public class SchedulerTest {
         schedulerSpy.runProcessLoop();
         schedulerSpy.runProcessLoop();
 
-        verify(eventFactory, times(2)).emitExecutorStateEvent();
+        verify(eventFactory, times(2)).executorStateEvent();
         verify(executorStateEvent, times(2)).accept(any());
-        verify(eventFactory, times(1)).emitRejectedTaskEvent(any());
+        verify(eventFactory, times(1)).rejectedTaskEvent(any());
         verify(rejectedTaskEvent, times(1)).accept(any());
     }
 

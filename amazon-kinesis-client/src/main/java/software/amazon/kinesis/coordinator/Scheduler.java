@@ -96,7 +96,7 @@ public class Scheduler implements Runnable {
     // parent shards
     private final long parentShardPollIntervalMillis;
     private final ExecutorService executorService;
-    private DiagnosticEventFactory diagnosticEventFactory;
+    private final DiagnosticEventFactory diagnosticEventFactory;
     private final DiagnosticEventHandler diagnosticEventHandler;
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final LeaseCoordinator leaseCoordinator;
@@ -143,6 +143,24 @@ public class Scheduler implements Runnable {
                      @NonNull final MetricsConfig metricsConfig,
                      @NonNull final ProcessorConfig processorConfig,
                      @NonNull final RetrievalConfig retrievalConfig) {
+        this(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig, metricsConfig,
+                processorConfig, retrievalConfig, new DiagnosticEventFactory(coordinatorConfig, leaseManagementConfig,
+                        metricsConfig));
+    }
+
+    /**
+     * Customers do not currently have the ability to customize the DiagnosticEventFactory, but this visibility
+     * is desired for testing. This constructor is only used for testing to provide a mock DiagnosticEventFactory.
+     */
+    @VisibleForTesting
+    protected Scheduler(@NonNull final CheckpointConfig checkpointConfig,
+                        @NonNull final CoordinatorConfig coordinatorConfig,
+                        @NonNull final LeaseManagementConfig leaseManagementConfig,
+                        @NonNull final LifecycleConfig lifecycleConfig,
+                        @NonNull final MetricsConfig metricsConfig,
+                        @NonNull final ProcessorConfig processorConfig,
+                        @NonNull final RetrievalConfig retrievalConfig,
+                        @NonNull final DiagnosticEventFactory diagnosticEventFactory) {
         this.checkpointConfig = checkpointConfig;
         this.coordinatorConfig = coordinatorConfig;
         this.leaseManagementConfig = leaseManagementConfig;
@@ -170,7 +188,7 @@ public class Scheduler implements Runnable {
         this.shardConsumerDispatchPollIntervalMillis = this.coordinatorConfig.shardConsumerDispatchPollIntervalMillis();
         this.parentShardPollIntervalMillis = this.coordinatorConfig.parentShardPollIntervalMillis();
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
-        this.diagnosticEventFactory = new DiagnosticEventFactory(this.executorService, this.leaseCoordinator);
+        this.diagnosticEventFactory = diagnosticEventFactory;
         this.diagnosticEventHandler = new DiagnosticEventLogger();
 
         this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory()
@@ -203,24 +221,6 @@ public class Scheduler implements Runnable {
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
         this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer();
-    }
-
-    /**
-     * Customers do not currently have the ability to customize the DiagnosticEventFactory, but this visibility
-     * is desired for testing. This constructor is only used for testing to provide a mock DiagnosticEventFactory.
-     */
-    @VisibleForTesting
-    protected Scheduler(@NonNull final CheckpointConfig checkpointConfig,
-                        @NonNull final CoordinatorConfig coordinatorConfig,
-                        @NonNull final LeaseManagementConfig leaseManagementConfig,
-                        @NonNull final LifecycleConfig lifecycleConfig,
-                        @NonNull final MetricsConfig metricsConfig,
-                        @NonNull final ProcessorConfig processorConfig,
-                        @NonNull final RetrievalConfig retrievalConfig,
-                        @NonNull final DiagnosticEventFactory diagnosticEventFactory) {
-        this(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig, metricsConfig,
-                processorConfig, retrievalConfig);
-        this.diagnosticEventFactory = diagnosticEventFactory;
     }
 
     /**
@@ -644,13 +644,13 @@ public class Scheduler implements Runnable {
      */
     private void registerErrorHandlerForUndeliverableAsyncTaskExceptions() {
         RxJavaPlugins.setErrorHandler(t -> {
-            RejectedTaskEvent rejectedTaskEvent = diagnosticEventFactory.emitRejectedTaskEvent(t);
+            RejectedTaskEvent rejectedTaskEvent = diagnosticEventFactory.rejectedTaskEvent(t);
             rejectedTaskEvent.accept(diagnosticEventHandler);
         });
     }
 
     private void logExecutorState() {
-        ExecutorStateEvent executorStateEvent = diagnosticEventFactory.emitExecutorStateEvent();
+        ExecutorStateEvent executorStateEvent = diagnosticEventFactory.executorStateEvent();
         executorStateEvent.accept(diagnosticEventHandler);
     }
 
