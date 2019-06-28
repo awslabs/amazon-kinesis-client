@@ -128,9 +128,9 @@ public class DiagnosticEventsTest {
 
     @Test
     public void testDiagnosticEventFactory() {
-        DiagnosticEventFactory factory = new DiagnosticEventFactory(executor, leaseCoordinator);
+        DiagnosticEventFactory factory = new DiagnosticEventFactory();
 
-        ExecutorStateEvent executorStateEvent = factory.executorStateEvent();
+        ExecutorStateEvent executorStateEvent = factory.executorStateEvent(executor, leaseCoordinator);
         assertEquals(executorStateEvent.getActiveThreads(), activeThreadCount);
         assertEquals(executorStateEvent.getCoreThreads(), corePoolSize);
         assertEquals(executorStateEvent.getLargestPoolSize(), largestPoolSize);
@@ -138,7 +138,8 @@ public class DiagnosticEventsTest {
         assertEquals(executorStateEvent.getLeasesOwned(), leaseAssignments.size());
         assertEquals(executorStateEvent.getCurrentQueueSize(),0);
 
-        RejectedTaskEvent rejectedTaskEvent = factory.rejectedTaskEvent(new TestRejectedTaskException());
+        RejectedTaskEvent rejectedTaskEvent = factory.rejectedTaskEvent(executorStateEvent,
+                new TestRejectedTaskException());
         assertEquals(rejectedTaskEvent.getExecutorStateEvent().getActiveThreads(), activeThreadCount);
         assertEquals(rejectedTaskEvent.getExecutorStateEvent().getCoreThreads(), corePoolSize);
         assertEquals(rejectedTaskEvent.getExecutorStateEvent().getLargestPoolSize(), largestPoolSize);

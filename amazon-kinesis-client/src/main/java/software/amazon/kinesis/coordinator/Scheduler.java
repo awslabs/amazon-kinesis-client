@@ -144,8 +144,7 @@ public class Scheduler implements Runnable {
                      @NonNull final ProcessorConfig processorConfig,
                      @NonNull final RetrievalConfig retrievalConfig) {
         this(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig, metricsConfig,
-                processorConfig, retrievalConfig, new DiagnosticEventFactory(coordinatorConfig, leaseManagementConfig,
-                        metricsConfig));
+                processorConfig, retrievalConfig, new DiagnosticEventFactory());
     }
 
     /**
@@ -644,13 +643,16 @@ public class Scheduler implements Runnable {
      */
     private void registerErrorHandlerForUndeliverableAsyncTaskExceptions() {
         RxJavaPlugins.setErrorHandler(t -> {
-            RejectedTaskEvent rejectedTaskEvent = diagnosticEventFactory.rejectedTaskEvent(t);
+            ExecutorStateEvent executorStateEvent = diagnosticEventFactory.executorStateEvent(executorService,
+                    leaseCoordinator);
+            RejectedTaskEvent rejectedTaskEvent = diagnosticEventFactory.rejectedTaskEvent(executorStateEvent, t);
             rejectedTaskEvent.accept(diagnosticEventHandler);
         });
     }
 
     private void logExecutorState() {
-        ExecutorStateEvent executorStateEvent = diagnosticEventFactory.executorStateEvent();
+        ExecutorStateEvent executorStateEvent = diagnosticEventFactory.executorStateEvent(executorService,
+                leaseCoordinator);
         executorStateEvent.accept(diagnosticEventHandler);
     }
 

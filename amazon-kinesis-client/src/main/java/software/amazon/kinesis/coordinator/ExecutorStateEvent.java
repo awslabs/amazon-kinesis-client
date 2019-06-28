@@ -56,7 +56,6 @@ class ExecutorStateEvent implements DiagnosticEvent {
         this.leasesOwned = leaseCoordinator.getAssignments().size();
     }
 
-
     @Override
     public void accept(DiagnosticEventHandler visitor) {
         // logging is only meaningful for a ThreadPoolExecutor executor service (default config)
