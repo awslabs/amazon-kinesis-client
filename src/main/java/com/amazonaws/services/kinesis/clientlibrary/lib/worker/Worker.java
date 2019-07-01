@@ -493,8 +493,7 @@ public class Worker implements Runnable {
             while (!shouldShutdown()) {
                 runProcessLoop();
             }
-        }
-        finally {
+        } finally {
             finalShutdown();
             LOG.info("Worker loop is complete. Exiting from worker.");
         }
