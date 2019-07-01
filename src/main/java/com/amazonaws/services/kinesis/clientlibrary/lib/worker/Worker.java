@@ -30,6 +30,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
+import com.amazonaws.services.dynamodbv2.model.AmazonDynamoDBException;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -488,12 +489,14 @@ public class Worker implements Runnable {
             shutdown();
         }
 
-        while (!shouldShutdown()) {
-            runProcessLoop();
+        try {
+            while (!shouldShutdown()) {
+                runProcessLoop();
+            }
+        } finally {
+            finalShutdown();
+            LOG.info("Worker loop is complete. Exiting from worker.");
         }
-
-        finalShutdown();
-        LOG.info("Worker loop is complete. Exiting from worker.");
     }
 
     @VisibleForTesting
@@ -520,6 +523,8 @@ public class Worker implements Runnable {
 
             wlog.info("Sleeping ...");
             Thread.sleep(idleTimeInMilliseconds);
+        } catch (AmazonDynamoDBException e) {
+            throw e;
         } catch (Exception e) {
             if (causedByStreamRecordProcessingError(e))
                 throw new RuntimeException("Failing worker after irrecoverable failure: " + e.getMessage());

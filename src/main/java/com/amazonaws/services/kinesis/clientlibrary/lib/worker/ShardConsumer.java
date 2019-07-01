@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
+import com.amazonaws.services.dynamodbv2.model.AmazonDynamoDBException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -319,13 +320,14 @@ class ShardConsumer {
                 return TaskOutcome.SUCCESSFUL;
             }
             logTaskException(result);
+            throw result.getException();
         } catch (Exception e) {
+            if (e instanceof AmazonDynamoDBException) throw (AmazonDynamoDBException) e;
             throw new RuntimeException(e);
         } finally {
             // Setting future to null so we don't misinterpret task completion status in case of exceptions
             future = null;
         }
-        return TaskOutcome.FAILURE;
     }
 
     private void logTaskException(TaskResult taskResult) {
