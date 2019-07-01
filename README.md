@@ -44,7 +44,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.2.0</version>
+      <version>2.2.1</version>
   </dependency>
   ```
 
@@ -60,13 +60,11 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.2.0 - April 8, 2019)
-[Milestone#31](https://github.com/awslabs/amazon-kinesis-client/milestone/31)
-* Updated License to [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
-  * [PR#523](https://github.com/awslabs/amazon-kinesis-client/pull/523)
-* Introducing configuration for suppressing logs from ReadTimeoutExceptions caused while calling SubscribeToShard.  
-Suppression can be configured by setting `LifecycleConfig#readTimeoutsToIgnoreBeforeWarning(Count)`.
-  * [PR#528](https://github.com/awslabs/amazon-kinesis-client/issues/528)
+### Latest Release (2.2.1 - July 1, 2019)
+[Milestone#32](https://github.com/awslabs/amazon-kinesis-client/milestone/32)
+* Add periodic logging for the state of the thread pool executor service. This service executes the async tasks submitted to and by the ShardConsumer.
+* Add logging of failures from RxJava layer.
+  * [PR#559](https://github.com/awslabs/amazon-kinesis-client/pull/559)
 
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
