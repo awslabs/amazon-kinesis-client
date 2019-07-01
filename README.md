@@ -60,9 +60,9 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.2.1 - June 28, 2019)
+### Latest Release (2.2.1 - July 1, 2019)
 [Milestone#32](https://github.com/awslabs/amazon-kinesis-client/milestone/32)
-* Add periodic logging of the the state of the thread pool executor service, that executes the async tasks submitted to and by the ShardConsumer
+* Add periodic logging for the state of the thread pool executor service. This service executes the async tasks submitted to and by the ShardConsumer.
 * Add logging of failures from RxJava layer.
   * [PR#559](https://github.com/awslabs/amazon-kinesis-client/pull/559)
 
