@@ -574,7 +574,6 @@ public class ShardConsumerTest {
         do {
             try {
                 consumer.executeLifecycle();
-                Thread.sleep(100);
             } catch (Exception e) {
                 // Suppress any exception like the scheduler.
             }
