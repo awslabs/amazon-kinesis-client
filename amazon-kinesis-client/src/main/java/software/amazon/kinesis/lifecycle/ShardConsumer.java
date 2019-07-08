@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 
 import org.reactivestreams.Subscription;
@@ -164,6 +165,9 @@ public class ShardConsumer {
             } else if (needsInitialization) {
                 if (stateChangeFuture != null) {
                     if (stateChangeFuture.get()) {
+                        // Task rejection during the subscribe() call will not be propagated back as it not executed
+                        // in the context of the Scheduler thread. Hence we should not assume the subscription will
+                        // always be successful.
                         subscribe();
                         needsInitialization = false;
                     }
@@ -177,6 +181,11 @@ public class ShardConsumer {
             //
         } catch (ExecutionException e) {
             throw new RuntimeException(e);
+        } catch (RejectedExecutionException e) {
+            // It is possible the tasks submitted to the executor service by the Scheduler thread might get rejected
+            // due to various reasons. Such failed executions must be captured and marked as failure to prevent
+            // the state transitions.
+            taskOutcome = TaskOutcome.FAILURE;
         }
 
         if (ConsumerStates.ShardConsumerState.PROCESSING.equals(currentState.state())) {
