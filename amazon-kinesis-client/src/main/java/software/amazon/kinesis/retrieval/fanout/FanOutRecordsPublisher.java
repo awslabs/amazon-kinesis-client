@@ -18,6 +18,11 @@ package software.amazon.kinesis.retrieval.fanout;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -47,6 +52,7 @@ import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
+import software.amazon.kinesis.retrieval.RecordsRetrievedAck;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -74,6 +80,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     private Subscriber<? super RecordsRetrieved> subscriber;
     private long availableQueueSpace = 0;
+
+    private BlockingQueue<CompletableFuture<RecordsRetrievedAck>> recordsDeliveryQueue = new LinkedBlockingQueue<>(1);
 
     @Override
     public void start(ExtendedSequenceNumber extendedSequenceNumber,
@@ -112,8 +120,36 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 throw new IllegalArgumentException(
                         "Provided ProcessRecordsInput not created from the FanOutRecordsPublisher");
             }
-            currentSequenceNumber = ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();
+            currentSequenceNumber = recordsRetrieved.batchSequenceNumber();
         }
+    }
+
+    @Override
+    public void notify(RecordsRetrievedAck ack) {
+        final CompletableFuture<RecordsRetrievedAck> future = recordsDeliveryQueue.poll();
+        if(future != null) {
+            future.complete(ack);
+        } else {
+            log.warn("{}: Received records delivery notification for not waiting publisher. "
+                    + "SequenceNumber - {}", shardId, ack.deliveredSequenceNumber());
+        }
+    }
+
+    private Optional<CompletableFuture<RecordsRetrievedAck>> tryDeliver(Runnable onNext) {
+        if (recordsDeliveryQueue.remainingCapacity() > 0) {
+            final CompletableFuture<RecordsRetrievedAck> future = new CompletableFuture<>();
+            if(recordsDeliveryQueue.offer(future)) {
+                onNext.run();
+                return Optional.of(future);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private RecordsRetrievedAck blockOnAck(Runnable onNext) throws Exception {
+        return tryDeliver(onNext)
+                .orElseThrow(() -> new RuntimeException("Attempted to deliver an event while previous event delivery is still pending"))
+                .get(1000, TimeUnit.MILLISECONDS);
     }
 
     private boolean hasValidSubscriber() {
@@ -299,11 +335,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     recordBatchEvent.continuationSequenceNumber());
 
             try {
-                subscriber.onNext(recordsRetrieved);
                 //
                 // Only advance the currentSequenceNumber if we successfully dispatch the last received input
                 //
-                currentSequenceNumber = recordBatchEvent.continuationSequenceNumber();
+                currentSequenceNumber = blockOnAck(() -> subscriber.onNext(recordsRetrieved)).deliveredSequenceNumber();
             } catch (Throwable t) {
                 log.warn("{}: Unable to call onNext for subscriber.  Failing publisher.", shardId);
                 errorOccurred(triggeringFlow, t);
@@ -495,6 +530,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         @Override
         public ProcessRecordsInput processRecordsInput() {
             return processRecordsInput;
+        }
+
+        @Override
+        public String batchSequenceNumber() {
+            return continuationSequenceNumber;
         }
     }
 

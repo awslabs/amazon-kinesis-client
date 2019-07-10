@@ -47,4 +47,12 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
      * Shutdowns the publisher. Once this method returns the publisher should no longer provide any records.
      */
     void shutdown();
+
+    /**
+     * Notify the publisher on receipt of a data event.
+     * @param ack
+     */
+    default void notify(RecordsRetrievedAck ack) {
+        throw new UnsupportedOperationException("RecordsPublisher does not support acknowledgement from Subscriber");
+    }
 }

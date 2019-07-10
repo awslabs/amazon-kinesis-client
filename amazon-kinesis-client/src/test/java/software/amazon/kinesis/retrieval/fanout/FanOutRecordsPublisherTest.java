@@ -23,6 +23,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -31,6 +32,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.reactivex.Flowable;
 import io.reactivex.Scheduler;
 import io.reactivex.schedulers.Schedulers;
+import io.reactivex.subscribers.SafeSubscriber;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
@@ -234,6 +236,86 @@ public class FanOutRecordsPublisherTest {
 
     }
 
+    @Test
+    public void testIfEventsAreNotDeliveredToShardConsumerWhenPreviousEventDeliveryTaskGetsRejected() throws Exception {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        doNothing().when(publisher).subscribe(captor.capture());
+
+        source.start(ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
+
+        List<ProcessRecordsInput> receivedInput = new ArrayList<>();
+
+        Subscriber<RecordsRetrieved> shardConsumerSubscriber =
+                new Subscriber<RecordsRetrieved>() {
+                    Subscription subscription;
+
+                    @Override
+                    public void onSubscribe(Subscription s) {
+                        subscription = s;
+                        subscription.request(1);
+                    }
+
+                    @Override
+                    public void onNext(RecordsRetrieved input) {
+                        receivedInput.add(input.processRecordsInput());
+                        subscription.request(1);
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                        log.error("Caught throwable in subscriber", t);
+                        fail("Caught throwable in subscriber");
+                    }
+
+                    @Override
+                    public void onComplete() {
+                        fail("OnComplete called when not expected");
+                    }
+                };
+
+        Scheduler testScheduler = getScheduler(getOverwhelmedExecutor(getSpiedExecutor()));
+        int bufferSize = 8;
+
+        Flowable.fromPublisher(source).subscribeOn(testScheduler).observeOn(testScheduler, true, bufferSize)
+                .subscribe(new SafeSubscriber<>(shardConsumerSubscriber));
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        flowCaptor.getValue().onEventStream(publisher);
+        captor.getValue().onSubscribe(subscription);
+
+        List<Record> records = Stream.of(1, 2, 3).map(this::makeRecord).collect(Collectors.toList());
+        List<KinesisClientRecordMatcher> matchers = records.stream().map(KinesisClientRecordMatcher::new)
+                .collect(Collectors.toList());
+
+        Stream.of("1000", "2000", "3000")
+                .map(contSeqNum ->
+                        SubscribeToShardEvent.builder()
+                                .millisBehindLatest(100L)
+                                .continuationSequenceNumber(contSeqNum)
+                                .records(records).build())
+                .forEach(batchEvent -> captor.getValue().onNext(batchEvent));
+
+        verify(subscription, times(4)).request(1);
+        assertThat(receivedInput.size(), equalTo(3));
+
+        receivedInput.stream().map(ProcessRecordsInput::records).forEach(clientRecordsList -> {
+            assertThat(clientRecordsList.size(), equalTo(matchers.size()));
+            for (int i = 0; i < clientRecordsList.size(); ++i) {
+                assertThat(clientRecordsList.get(i), matchers.get(i));
+            }
+        });
+
+        assertThat(source.getCurrentSequenceNumber(), equalTo("3000"));
+
+    }
+
     private Scheduler getScheduler(ExecutorService executorService) {
         return Schedulers.from(executorService);
     }
@@ -246,6 +328,16 @@ public class FanOutRecordsPublisherTest {
 
     private ExecutorService getBlockingExecutor(ExecutorService executorService) {
         doAnswer(invocation -> directlyExecuteRunnable(invocation)).when(executorService).execute(any());
+        return executorService;
+    }
+
+    private ExecutorService getOverwhelmedExecutor(ExecutorService executorService) {
+        doAnswer(invocation -> directlyExecuteRunnable(invocation))
+        .doAnswer(invocation -> directlyExecuteRunnable(invocation))
+        .doAnswer(invocation -> directlyExecuteRunnable(invocation))
+        .doThrow(new RejectedExecutionException())
+        .doAnswer(invocation -> directlyExecuteRunnable(invocation))
+                .when(executorService).execute(any());
         return executorService;
     }
 

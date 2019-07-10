@@ -24,4 +24,13 @@ public interface RecordsRetrieved {
      * @return the processRecordsInput received
      */
     ProcessRecordsInput processRecordsInput();
+
+    /**
+     * Returns the sequence number that can be used as a pagination token for next batch of records.
+     *
+     * @return sequenceNumber to checkpoint
+     */
+    default String batchSequenceNumber() {
+        throw new UnsupportedOperationException("Retrieval of batch sequence number is not supported");
+    }
 }

@@ -19,6 +19,7 @@ import io.reactivex.Flowable;
 import io.reactivex.Scheduler;
 import io.reactivex.schedulers.Schedulers;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
+import software.amazon.kinesis.retrieval.RecordsRetrievedAck;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
 import java.time.Duration;
@@ -77,7 +79,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 recordsPublisher.restartFrom(lastAccepted);
             }
             Flowable.fromPublisher(recordsPublisher).subscribeOn(scheduler).observeOn(scheduler, true, bufferSize)
-                    .subscribe(this);
+                    .subscribe(new ShardConsumerNotifyingSubscriber(this));
         }
     }
 
@@ -213,6 +215,27 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     public void cancel() {
         if (subscription != null) {
             subscription.cancel();
+        }
+    }
+
+    @AllArgsConstructor
+    private class ShardConsumerNotifyingSubscriber implements NotifyingSubscriber {
+
+        private final Subscriber<RecordsRetrieved> delegate;
+
+        @Override
+        public Subscriber<RecordsRetrieved> getDelegateSubscriber() {
+            return delegate;
+        }
+
+        @Override
+        public RecordsPublisher getWaitingRecordsPublisher() {
+            return recordsPublisher;
+        }
+
+        @Override
+        public RecordsRetrievedAck getRecordsRetrievedAck(RecordsRetrieved recordsRetrieved) {
+            return () -> recordsRetrieved.batchSequenceNumber();
         }
     }
 }
