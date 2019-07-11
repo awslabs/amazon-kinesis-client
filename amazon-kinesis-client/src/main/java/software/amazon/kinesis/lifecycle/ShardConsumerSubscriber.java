@@ -44,6 +44,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
     @VisibleForTesting
     final Object lockObject = new Object();
+    // This holds the last time an attempt of request to upstream service was made including the first try to
+    // establish subscription.
     private Instant lastRequestTime = null;
     private RecordsRetrieved lastAccepted = null;
 
@@ -73,6 +75,9 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
     void startSubscriptions() {
         synchronized (lockObject) {
+            // Setting the lastRequestTime to allow for health checks to restart subscriptions if they failed to
+            // during initial try.
+            lastRequestTime = Instant.now();
             if (lastAccepted != null) {
                 recordsPublisher.restartFrom(lastAccepted);
             }
@@ -127,12 +132,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                             "{}: Last request was dispatched at {}, but no response as of {} ({}).  Cancelling subscription, and restarting.",
                             shardConsumer.shardInfo().shardId(), lastRequestTime, now, timeSinceLastResponse);
                     cancel();
-                    //
-                    // Set the last request time to now, we specifically don't null it out since we want it to
-                    // trigger a
-                    // restart if the subscription still doesn't start producing.
-                    //
-                    lastRequestTime = Instant.now();
+
+                    // Start the subscription again which will update the lastRequestTime as well.
                     startSubscriptions();
                 }
             }
