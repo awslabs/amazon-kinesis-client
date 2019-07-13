@@ -19,10 +19,10 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -63,6 +63,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private static final ThrowableCategory ACQUIRE_TIMEOUT_CATEGORY = new ThrowableCategory(
             ThrowableType.ACQUIRE_TIMEOUT);
     private static final ThrowableCategory READ_TIMEOUT_CATEGORY = new ThrowableCategory(ThrowableType.READ_TIMEOUT);
+    private static final int MAX_EVENT_BURST_FROM_SERVICE = 10;
 
     private final KinesisAsyncClient kinesis;
     private final String shardId;
@@ -81,7 +82,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private Subscriber<? super RecordsRetrieved> subscriber;
     private long availableQueueSpace = 0;
 
-    private BlockingQueue<CompletableFuture<RecordsRetrievedAck>> recordsDeliveryQueue = new LinkedBlockingQueue<>(1);
+    private BlockingQueue<RecordsRetrievedContext> recordsDeliveryQueue = new LinkedBlockingQueue<>(MAX_EVENT_BURST_FROM_SERVICE);
 
     @Override
     public void start(ExtendedSequenceNumber extendedSequenceNumber,
@@ -125,32 +126,96 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public void notify(RecordsRetrievedAck ack) {
-        final CompletableFuture<RecordsRetrievedAck> future = recordsDeliveryQueue.poll();
-        if(future != null) {
-            future.complete(ack);
-        } else {
-            log.warn("{}: Received records delivery notification for not waiting publisher. "
-                    + "SequenceNumber - {}", shardId, ack.deliveredSequenceNumber());
+    public void notify(RecordsRetrievedAck recordsRetrievedAck) {
+        boolean isNextEventScheduled = false;
+        CompletableFuture<RecordFlow> triggeringFlowFuture = new CompletableFuture<>();
+        try {
+            isNextEventScheduled = evictAckedEventAndScheduleNextEvent(recordsRetrievedAck, triggeringFlowFuture);
+        } catch (Throwable t) {
+            // TODO : Need to maintain the flow information
+            errorOccurred(triggeringFlowFuture.getNow(null), t);
         }
-    }
-
-    private Optional<CompletableFuture<RecordsRetrievedAck>> tryDeliver(Runnable onNext) {
-        if (recordsDeliveryQueue.remainingCapacity() > 0) {
-            final CompletableFuture<RecordsRetrievedAck> future = new CompletableFuture<>();
-            if(recordsDeliveryQueue.offer(future)) {
-                onNext.run();
-                return Optional.of(future);
+        if (isNextEventScheduled) {
+            final RecordFlow triggeringFlow = triggeringFlowFuture.getNow(null);
+            if (triggeringFlow != null) {
+                updateAvailableQueueSpaceAndRequestUpstream(triggeringFlow);
             }
         }
-        return Optional.empty();
     }
 
-    private RecordsRetrievedAck blockOnAck(Runnable onNext) throws Exception {
-        return tryDeliver(onNext)
-                .orElseThrow(() -> new RuntimeException("Attempted to deliver an event while previous event delivery is still pending"))
-                .get(1000, TimeUnit.MILLISECONDS);
+    private boolean evictAckedEventAndScheduleNextEvent(RecordsRetrievedAck recordsRetrievedAck,
+            CompletableFuture<RecordFlow> triggeringFlowFuture) {
+        boolean isNextEventScheduled = false;
+        // Remove the head of the queue on receiving the ack.
+        // Note : This does not block wait to retrieve an element.
+        RecordsRetrievedContext recordsRetrievedContext = recordsDeliveryQueue.poll();
+        // Check if the ack corresponds to the head of the delivery queue.
+        if (recordsRetrievedContext != null && recordsRetrievedContext.getRecordsRetrieved().batchUniqueIdentifier()
+                .equals(recordsRetrievedAck.batchUniqueIdentifier())) {
+            // Update current sequence number for the successfully delivered event.
+            currentSequenceNumber = recordsRetrievedAck.deliveredSequenceNumber();
+            // Update the triggering flow for post scheduling upstream request.
+            triggeringFlowFuture.complete(recordsRetrievedContext.getRecordFlow());
+            // Try scheduling the next event in the queue, if available.
+            if (recordsDeliveryQueue.peek() != null) {
+                subscriber.onNext(recordsDeliveryQueue.peek().getRecordsRetrieved());
+                isNextEventScheduled = true;
+            }
+        } else {
+            // TODO : toString implementation for recordsRetrievedAck
+            log.error("{}: KCL BUG: Found mismatched payload {} in the delivery queue for the ack {}  ", shardId,
+                    recordsRetrievedContext.getRecordsRetrieved(), recordsRetrievedAck);
+            throw new IllegalStateException("KCL BUG: Record delivery ack mismatch");
+        }
+        return isNextEventScheduled;
     }
+
+    private boolean bufferCurrentEventAndScheduleIfRequired(RecordsRetrieved recordsRetrieved, RecordFlow triggeringFlow) {
+        boolean isCurrentEventScheduled = false;
+        final RecordsRetrievedContext recordsRetrievedContext = new RecordsRetrievedContext(recordsRetrieved, triggeringFlow);
+        try {
+            // Try enqueueing the RecordsRetrieved batch to the queue, which would throw exception on failure.
+            // Note: This does not block wait to enqueue.
+            recordsDeliveryQueue.add(recordsRetrievedContext);
+            // If the current batch is the only element in the queue, then try scheduling the event delivery.
+            if (recordsDeliveryQueue.size() == 1) {
+                subscriber.onNext(recordsRetrieved);
+                isCurrentEventScheduled = true;
+            }
+        } catch (IllegalStateException e) {
+            log.warn("{}: Unable to enqueue the payload due to capacity restrictions in delivery queue with remaining capacity {} ",
+                    shardId, recordsDeliveryQueue.remainingCapacity());
+            throw e;
+        } catch (Throwable t) {
+            recordsDeliveryQueue.remove(recordsRetrievedContext);
+            throw t;
+        }
+        return isCurrentEventScheduled;
+    }
+
+    @Data
+    private static class RecordsRetrievedContext {
+        private final RecordsRetrieved recordsRetrieved;
+        private final RecordFlow recordFlow;
+    }
+
+
+//    private Optional<CompletableFuture<RecordsRetrievedAck>> tryDeliver(Runnable onNext) {
+//        if (recordsDeliveryQueue.remainingCapacity() > 0) {
+//            final CompletableFuture<RecordsRetrievedAck> future = new CompletableFuture<>();
+//            if(recordsDeliveryQueue.offer(future)) {
+//                onNext.run();
+//                return Optional.of(future);
+//            }
+//        }
+//        return Optional.empty();
+//    }
+//
+//    private RecordsRetrievedAck blockOnAck(Runnable onNext) throws Exception {
+//        return tryDeliver(onNext)
+//                .orElseThrow(() -> new RuntimeException("Attempted to deliver an event while previous event delivery is still pending"))
+//                .get(1000, TimeUnit.MILLISECONDS);
+//    }
 
     private boolean hasValidSubscriber() {
         return subscriber != null;
@@ -334,25 +399,31 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             FanoutRecordsRetrieved recordsRetrieved = new FanoutRecordsRetrieved(input,
                     recordBatchEvent.continuationSequenceNumber());
 
+            boolean isCurrentEventScheduled = false;
+
             try {
-                //
-                // Only advance the currentSequenceNumber if we successfully dispatch the last received input
-                //
-                currentSequenceNumber = blockOnAck(() -> subscriber.onNext(recordsRetrieved)).deliveredSequenceNumber();
+                isCurrentEventScheduled = bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, triggeringFlow);
             } catch (Throwable t) {
-                log.warn("{}: Unable to call onNext for subscriber.  Failing publisher.", shardId);
+                log.warn("{}: Unable to buffer or schedule onNext for subscriber.  Failing publisher.", shardId);
                 errorOccurred(triggeringFlow, t);
             }
 
-            if (availableQueueSpace <= 0) {
-                log.debug(
-                        "{}: [SubscriptionLifetime] (FanOutRecordsPublisher#recordsReceived) @ {} id: {} -- Attempted to decrement availableQueueSpace to below 0",
-                        shardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId);
-            } else {
-                availableQueueSpace--;
-                if (availableQueueSpace > 0) {
-                    triggeringFlow.request(1);
-                }
+            if(isCurrentEventScheduled) {
+                updateAvailableQueueSpaceAndRequestUpstream(triggeringFlow);
+            }
+
+        }
+    }
+
+    private void updateAvailableQueueSpaceAndRequestUpstream(RecordFlow triggeringFlow) {
+        if (availableQueueSpace <= 0) {
+            log.debug(
+                    "{}: [SubscriptionLifetime] (FanOutRecordsPublisher#recordsReceived) @ {} id: {} -- Attempted to decrement availableQueueSpace to below 0",
+                    shardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId);
+        } else {
+            availableQueueSpace--;
+            if (availableQueueSpace > 0) {
+                triggeringFlow.request(1);
             }
         }
     }
@@ -526,6 +597,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         private final ProcessRecordsInput processRecordsInput;
         private final String continuationSequenceNumber;
+        private final UUID batchUniqueIdentifier = UUID.randomUUID();
 
         @Override
         public ProcessRecordsInput processRecordsInput() {
@@ -535,6 +607,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         @Override
         public String batchSequenceNumber() {
             return continuationSequenceNumber;
+        }
+
+        @Override
+        public UUID batchUniqueIdentifier() {
+            return batchUniqueIdentifier;
         }
     }
 
@@ -776,5 +853,4 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         }
     }
-
 }

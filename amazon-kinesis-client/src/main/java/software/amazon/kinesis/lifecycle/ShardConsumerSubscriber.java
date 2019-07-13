@@ -32,6 +32,7 @@ import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
 @Slf4j
@@ -235,7 +236,15 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
         @Override
         public RecordsRetrievedAck getRecordsRetrievedAck(RecordsRetrieved recordsRetrieved) {
-            return () -> recordsRetrieved.batchSequenceNumber();
+            return new RecordsRetrievedAck() {
+                @Override public String deliveredSequenceNumber() {
+                    return recordsRetrieved.batchSequenceNumber();
+                }
+
+                @Override public UUID batchUniqueIdentifier() {
+                    return recordsRetrieved.batchUniqueIdentifier();
+                }
+            };
         }
     }
 }

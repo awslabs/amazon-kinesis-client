@@ -1,5 +1,7 @@
 package software.amazon.kinesis.retrieval;
 
+import java.util.UUID;
+
 public interface RecordsRetrievedAck {
 
     /**
@@ -7,5 +9,11 @@ public interface RecordsRetrievedAck {
      * @return deliveredSequenceNumber
      */
     String deliveredSequenceNumber();
+
+    /**
+     * Unique record batch identifier used to validate the ordering guarantees.
+     * @return UUID
+     */
+    UUID batchUniqueIdentifier();
 
 }

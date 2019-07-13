@@ -16,6 +16,8 @@ package software.amazon.kinesis.retrieval;
 
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 
+import java.util.UUID;
+
 public interface RecordsRetrieved {
 
     /**
@@ -32,5 +34,14 @@ public interface RecordsRetrieved {
      */
     default String batchSequenceNumber() {
         throw new UnsupportedOperationException("Retrieval of batch sequence number is not supported");
+    }
+
+    /**
+     * Returns the identifier that uniquely identifies this batch.
+     *
+     * @return UUID
+     */
+    default UUID batchUniqueIdentifier() {
+        throw new UnsupportedOperationException("Retrieval of batch unique identifier is not supported");
     }
 }
