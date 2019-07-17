@@ -109,6 +109,7 @@ class ShardSyncer {
             boolean cleanupLeasesOfCompletedShards,
             boolean ignoreUnexpectedChildShards)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+        LOG.info("syncShardLeases: begin");
         List<Shard> shards = getShardList(kinesisProxy);
         LOG.debug("Num shards: " + shards.size());
 
@@ -148,6 +149,7 @@ class ShardSyncer {
                     trackedLeases,
                     leaseManager);
         }
+        LOG.info("syncShardLeases: done");
     }
     // CHECKSTYLE:ON CyclomaticComplexity
 
@@ -303,11 +305,13 @@ class ShardSyncer {
     }
 
     private List<Shard> getShardList(IKinesisProxy kinesisProxy) throws KinesisClientLibIOException {
+        LOG.info("getShardList: begin");
         List<Shard> shards = kinesisProxy.getShardList();
         if (shards == null) {
             throw new KinesisClientLibIOException(
                     "Stream is not in ACTIVE OR UPDATING state - will retry getting the shard list.");
         }
+        LOG.info("getShardList: done");
         return shards;
     }
 
@@ -362,6 +366,7 @@ class ShardSyncer {
             List<KinesisClientLease> currentLeases,
             InitialPositionInStreamExtended initialPosition,
             Set<String> inconsistentShardIds) {
+        LOG.info("determineNewLeasesToCreate: begin");
         Map<String, KinesisClientLease> shardIdToNewLeaseMap = new HashMap<String, KinesisClientLease>();
         Map<String, Shard> shardIdToShardMapOfAllKinesisShards = constructShardIdToShardMap(shards);
 
@@ -432,6 +437,7 @@ class ShardSyncer {
         Comparator<? super KinesisClientLease> startingSequenceNumberComparator =
                 new StartingSequenceNumberAndShardIdBasedComparator(shardIdToShardMapOfAllKinesisShards);
         Collections.sort(newLeasesToCreate, startingSequenceNumberComparator);
+        LOG.info("determineNewLeasesToCreate: done");
         return newLeasesToCreate;
     }
 
@@ -585,6 +591,7 @@ class ShardSyncer {
             IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager)
             throws KinesisClientLibIOException, DependencyException, InvalidStateException, ProvisionedThroughputException {
+        LOG.info("cleanupGarbageLeases: begin");
         Set<String> kinesisShards = new HashSet<>();
         for (Shard shard : shards) {
             kinesisShards.add(shard.getShardId());
@@ -616,7 +623,7 @@ class ShardSyncer {
                 }
             }
         }
-
+        LOG.info("cleanupGarbageLeases: done");
     }
 
     /**
@@ -642,6 +649,7 @@ class ShardSyncer {
             List<KinesisClientLease> trackedLeases,
             ILeaseManager<KinesisClientLease> leaseManager)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+        LOG.info("cleanupLeasesOfFinishedShards: begin");
         Set<String> shardIdsOfClosedShards = new HashSet<>();
         List<KinesisClientLease> leasesOfClosedShards = new ArrayList<>();
         for (KinesisClientLease lease : currentLeases) {
@@ -668,6 +676,7 @@ class ShardSyncer {
                 }
             }
         }
+        LOG.info("cleanupLeasesOfFinishedShards: done");
     }
 
     /**
