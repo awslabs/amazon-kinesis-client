@@ -704,7 +704,7 @@ class ShardSyncer {
                 && (childShardLeases.size() == childShardIds.size())) {
             boolean okayToDelete = true;
             for (KinesisClientLease lease : childShardLeases) {
-                if (lease.getCheckpoint().equals(ExtendedSequenceNumber.TRIM_HORIZON)) {
+                if (!lease.getCheckpoint().equals(ExtendedSequenceNumber.SHARD_END)) {
                     okayToDelete = false;
                     break;
                 }
