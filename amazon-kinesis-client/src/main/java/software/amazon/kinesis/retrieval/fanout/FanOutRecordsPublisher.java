@@ -127,15 +127,15 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     @Override
     public void notify(RecordsRetrievedAck recordsRetrievedAck) {
-        boolean isNextEventScheduled = false;
-        CompletableFuture<RecordFlow> triggeringFlowFuture = new CompletableFuture<>();
-        try {
-            isNextEventScheduled = evictAckedEventAndScheduleNextEvent(recordsRetrievedAck, triggeringFlowFuture);
-        } catch (Throwable t) {
-            // TODO : Need to maintain the flow information
-            errorOccurred(triggeringFlowFuture.getNow(null), t);
-        }
-        if (isNextEventScheduled) {
+        synchronized (lockObject) {
+            boolean isNextEventScheduled = false;
+            CompletableFuture<RecordFlow> triggeringFlowFuture = new CompletableFuture<>();
+            try {
+                isNextEventScheduled = evictAckedEventAndScheduleNextEvent(recordsRetrievedAck, triggeringFlowFuture);
+            } catch (Throwable t) {
+                errorOccurred(triggeringFlowFuture.getNow(null), t);
+            }
+            // TODO : debug log on isNextEventScheduled
             final RecordFlow triggeringFlow = triggeringFlowFuture.getNow(null);
             if (triggeringFlow != null) {
                 updateAvailableQueueSpaceAndRequestUpstream(triggeringFlow);
@@ -199,24 +199,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         private final RecordFlow recordFlow;
     }
 
-
-//    private Optional<CompletableFuture<RecordsRetrievedAck>> tryDeliver(Runnable onNext) {
-//        if (recordsDeliveryQueue.remainingCapacity() > 0) {
-//            final CompletableFuture<RecordsRetrievedAck> future = new CompletableFuture<>();
-//            if(recordsDeliveryQueue.offer(future)) {
-//                onNext.run();
-//                return Optional.of(future);
-//            }
-//        }
-//        return Optional.empty();
-//    }
-//
-//    private RecordsRetrievedAck blockOnAck(Runnable onNext) throws Exception {
-//        return tryDeliver(onNext)
-//                .orElseThrow(() -> new RuntimeException("Attempted to deliver an event while previous event delivery is still pending"))
-//                .get(1000, TimeUnit.MILLISECONDS);
-//    }
-
     private boolean hasValidSubscriber() {
         return subscriber != null;
     }
@@ -246,6 +228,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     private void errorOccurred(RecordFlow triggeringFlow, Throwable t) {
         synchronized (lockObject) {
+
+            // Clean the delivery buffer
+            recordsDeliveryQueue.clear();
+
             if (!hasValidSubscriber()) {
                 log.warn(
                         "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- Subscriber is null",
@@ -403,15 +389,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
             try {
                 isCurrentEventScheduled = bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, triggeringFlow);
+                // TODO: debug log on isCurrentEventScheduled
             } catch (Throwable t) {
                 log.warn("{}: Unable to buffer or schedule onNext for subscriber.  Failing publisher.", shardId);
                 errorOccurred(triggeringFlow, t);
             }
-
-            if(isCurrentEventScheduled) {
-                updateAvailableQueueSpaceAndRequestUpstream(triggeringFlow);
-            }
-
         }
     }
 

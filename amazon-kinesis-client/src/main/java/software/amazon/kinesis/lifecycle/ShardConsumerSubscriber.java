@@ -19,7 +19,6 @@ import io.reactivex.Flowable;
 import io.reactivex.Scheduler;
 import io.reactivex.schedulers.Schedulers;
 import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
@@ -27,12 +26,10 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
-import software.amazon.kinesis.retrieval.RecordsRetrievedAck;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
 @Slf4j
@@ -80,7 +77,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 recordsPublisher.restartFrom(lastAccepted);
             }
             Flowable.fromPublisher(recordsPublisher).subscribeOn(scheduler).observeOn(scheduler, true, bufferSize)
-                    .subscribe(new ShardConsumerNotifyingSubscriber(this));
+                    .subscribe(new ShardConsumerNotifyingSubscriber(this, recordsPublisher));
         }
     }
 
@@ -219,32 +216,4 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         }
     }
 
-    @AllArgsConstructor
-    private class ShardConsumerNotifyingSubscriber implements NotifyingSubscriber {
-
-        private final Subscriber<RecordsRetrieved> delegate;
-
-        @Override
-        public Subscriber<RecordsRetrieved> getDelegateSubscriber() {
-            return delegate;
-        }
-
-        @Override
-        public RecordsPublisher getWaitingRecordsPublisher() {
-            return recordsPublisher;
-        }
-
-        @Override
-        public RecordsRetrievedAck getRecordsRetrievedAck(RecordsRetrieved recordsRetrieved) {
-            return new RecordsRetrievedAck() {
-                @Override public String deliveredSequenceNumber() {
-                    return recordsRetrieved.batchSequenceNumber();
-                }
-
-                @Override public UUID batchUniqueIdentifier() {
-                    return recordsRetrieved.batchUniqueIdentifier();
-                }
-            };
-        }
-    }
 }

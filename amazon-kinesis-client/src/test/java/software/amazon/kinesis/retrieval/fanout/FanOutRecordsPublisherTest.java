@@ -63,6 +63,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
@@ -103,32 +104,28 @@ public class FanOutRecordsPublisherTest {
 
         List<ProcessRecordsInput> receivedInput = new ArrayList<>();
 
-        source.subscribe(new Subscriber<RecordsRetrieved>() {
+        source.subscribe(new ShardConsumerNotifyingSubscriber(new Subscriber<RecordsRetrieved>() {
             Subscription subscription;
 
-            @Override
-            public void onSubscribe(Subscription s) {
+            @Override public void onSubscribe(Subscription s) {
                 subscription = s;
                 subscription.request(1);
             }
 
-            @Override
-            public void onNext(RecordsRetrieved input) {
+            @Override public void onNext(RecordsRetrieved input) {
                 receivedInput.add(input.processRecordsInput());
                 subscription.request(1);
             }
 
-            @Override
-            public void onError(Throwable t) {
+            @Override public void onError(Throwable t) {
                 log.error("Caught throwable in subscriber", t);
                 fail("Caught throwable in subscriber");
             }
 
-            @Override
-            public void onComplete() {
+            @Override public void onComplete() {
                 fail("OnComplete called when not expected");
             }
-        });
+        }, source));
 
         verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
         flowCaptor.getValue().onEventStream(publisher);
@@ -172,33 +169,29 @@ public class FanOutRecordsPublisherTest {
 
         List<ProcessRecordsInput> receivedInput = new ArrayList<>();
 
-        Subscriber<RecordsRetrieved> shardConsumerSubscriber =
+        Subscriber<RecordsRetrieved> shardConsumerSubscriber = new ShardConsumerNotifyingSubscriber(
                 new Subscriber<RecordsRetrieved>() {
                     Subscription subscription;
 
-                    @Override
-                    public void onSubscribe(Subscription s) {
+                    @Override public void onSubscribe(Subscription s) {
                         subscription = s;
                         subscription.request(1);
                     }
 
-                    @Override
-                    public void onNext(RecordsRetrieved input) {
+                    @Override public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
                         subscription.request(1);
                     }
 
-                    @Override
-                    public void onError(Throwable t) {
+                    @Override public void onError(Throwable t) {
                         log.error("Caught throwable in subscriber", t);
                         fail("Caught throwable in subscriber");
                     }
 
-                    @Override
-                    public void onComplete() {
+                    @Override public void onComplete() {
                         fail("OnComplete called when not expected");
                     }
-                };
+                }, source);
 
         Scheduler testScheduler = getScheduler(getBlockingExecutor(getSpiedExecutor()));
         int bufferSize = 8;
@@ -252,33 +245,29 @@ public class FanOutRecordsPublisherTest {
 
         List<ProcessRecordsInput> receivedInput = new ArrayList<>();
 
-        Subscriber<RecordsRetrieved> shardConsumerSubscriber =
+        Subscriber<RecordsRetrieved> shardConsumerSubscriber = new ShardConsumerNotifyingSubscriber(
                 new Subscriber<RecordsRetrieved>() {
                     Subscription subscription;
 
-                    @Override
-                    public void onSubscribe(Subscription s) {
+                    @Override public void onSubscribe(Subscription s) {
                         subscription = s;
                         subscription.request(1);
                     }
 
-                    @Override
-                    public void onNext(RecordsRetrieved input) {
+                    @Override public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
                         subscription.request(1);
                     }
 
-                    @Override
-                    public void onError(Throwable t) {
+                    @Override public void onError(Throwable t) {
                         log.error("Caught throwable in subscriber", t);
                         fail("Caught throwable in subscriber");
                     }
 
-                    @Override
-                    public void onComplete() {
+                    @Override public void onComplete() {
                         fail("OnComplete called when not expected");
                     }
-                };
+                }, source);
 
         Scheduler testScheduler = getScheduler(getOverwhelmedExecutor(getSpiedExecutor()));
         int bufferSize = 8;
@@ -302,8 +291,8 @@ public class FanOutRecordsPublisherTest {
                                 .records(records).build())
                 .forEach(batchEvent -> captor.getValue().onNext(batchEvent));
 
-        verify(subscription, times(4)).request(1);
-        assertThat(receivedInput.size(), equalTo(3));
+        verify(subscription, times(2)).request(1);
+        assertThat(receivedInput.size(), equalTo(1));
 
         receivedInput.stream().map(ProcessRecordsInput::records).forEach(clientRecordsList -> {
             assertThat(clientRecordsList.size(), equalTo(matchers.size()));
@@ -312,7 +301,7 @@ public class FanOutRecordsPublisherTest {
             }
         });
 
-        assertThat(source.getCurrentSequenceNumber(), equalTo("3000"));
+        assertThat(source.getCurrentSequenceNumber(), equalTo("1000"));
 
     }
 
@@ -364,32 +353,28 @@ public class FanOutRecordsPublisherTest {
 
         List<ProcessRecordsInput> receivedInput = new ArrayList<>();
 
-        source.subscribe(new Subscriber<RecordsRetrieved>() {
+        source.subscribe(new ShardConsumerNotifyingSubscriber(new Subscriber<RecordsRetrieved>() {
             Subscription subscription;
 
-            @Override
-            public void onSubscribe(Subscription s) {
+            @Override public void onSubscribe(Subscription s) {
                 subscription = s;
                 subscription.request(3);
             }
 
-            @Override
-            public void onNext(RecordsRetrieved input) {
+            @Override public void onNext(RecordsRetrieved input) {
                 receivedInput.add(input.processRecordsInput());
                 subscription.request(1);
             }
 
-            @Override
-            public void onError(Throwable t) {
+            @Override public void onError(Throwable t) {
                 log.error("Caught throwable in subscriber", t);
                 fail("Caught throwable in subscriber");
             }
 
-            @Override
-            public void onComplete() {
+            @Override public void onComplete() {
                 fail("OnComplete called when not expected");
             }
-        });
+        }, source));
 
         verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
         flowCaptor.getValue().onEventStream(publisher);
@@ -476,7 +461,7 @@ public class FanOutRecordsPublisherTest {
 
         NonFailingSubscriber nonFailingSubscriber = new NonFailingSubscriber();
 
-        source.subscribe(nonFailingSubscriber);
+        source.subscribe(new ShardConsumerNotifyingSubscriber(nonFailingSubscriber, source));
 
         SubscribeToShardRequest expected = SubscribeToShardRequest.builder().consumerARN(CONSUMER_ARN).shardId(SHARD_ID)
                 .startingPosition(StartingPosition.builder().sequenceNumber("0")
