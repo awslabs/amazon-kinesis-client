@@ -113,7 +113,8 @@ public class ShutdownTaskTest {
                 leaseManager,
                 TASK_BACKOFF_TIME_MILLIS,
                 getRecordsCache,
-                shardSyncer);
+                shardSyncer,
+                ShardSyncStrategy.SHARD_END);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
@@ -142,7 +143,8 @@ public class ShutdownTaskTest {
                 leaseManager,
                 TASK_BACKOFF_TIME_MILLIS,
                 getRecordsCache,
-                shardSyncer);
+                shardSyncer,
+                ShardSyncStrategy.SHARD_END);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof KinesisClientLibIOException);
@@ -154,7 +156,7 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testGetTaskType() {
-        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache, shardSyncer);
+        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache, shardSyncer, ShardSyncStrategy.SHARD_END);
         Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
     }
 

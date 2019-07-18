@@ -163,8 +163,8 @@ public class ShardConsumerTest {
                         taskBackoffTimeMillis,
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         config,
-                        shardSyncer);
-
+                        shardSyncer,
+                        ShardSyncStrategy.SHARD_END);
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
@@ -212,7 +212,8 @@ public class ShardConsumerTest {
                         taskBackoffTimeMillis,
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         config,
-                        shardSyncer);
+                        shardSyncer,
+                        ShardSyncStrategy.SHARD_END);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // initialize
@@ -255,7 +256,8 @@ public class ShardConsumerTest {
                         taskBackoffTimeMillis,
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         config,
-                        shardSyncer);
+                        shardSyncer,
+                        ShardSyncStrategy.SHARD_END);
 
         final ExtendedSequenceNumber checkpointSequenceNumber = new ExtendedSequenceNumber("123");
         final ExtendedSequenceNumber pendingCheckpointSequenceNumber = null;
@@ -375,7 +377,8 @@ public class ShardConsumerTest {
                         Optional.empty(),
                         Optional.empty(),
                         config,
-                        shardSyncer);
+                        shardSyncer,
+                        ShardSyncStrategy.SHARD_END);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
@@ -520,7 +523,8 @@ public class ShardConsumerTest {
                         Optional.empty(),
                         Optional.empty(),
                         config,
-                        shardSyncer);
+                        shardSyncer,
+                        ShardSyncStrategy.SHARD_END);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
@@ -658,7 +662,8 @@ public class ShardConsumerTest {
                         Optional.empty(),
                         Optional.empty(),
                         config,
-                        shardSyncer);
+                        shardSyncer,
+                        ShardSyncStrategy.SHARD_END);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
@@ -729,7 +734,8 @@ public class ShardConsumerTest {
                         taskBackoffTimeMillis,
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         config,
-                        shardSyncer);
+                        shardSyncer,
+                        ShardSyncStrategy.SHARD_END);
 
         GetRecordsCache getRecordsCache = spy(consumer.getGetRecordsCache());
 
@@ -783,7 +789,8 @@ public class ShardConsumerTest {
                         Optional.empty(),
                         Optional.empty(),
                         config,
-                        shardSyncer);
+                        shardSyncer,
+                        ShardSyncStrategy.SHARD_END);
 
         assertEquals(shardConsumer.getGetRecordsCache().getGetRecordsRetrievalStrategy().getClass(),
                 SynchronousGetRecordsRetrievalStrategy.class);
@@ -814,7 +821,8 @@ public class ShardConsumerTest {
                         Optional.of(1),
                         Optional.of(2),
                         config,
-                        shardSyncer);
+                        shardSyncer,
+                        ShardSyncStrategy.SHARD_END);
 
         assertEquals(shardConsumer.getGetRecordsCache().getGetRecordsRetrievalStrategy().getClass(),
                 AsynchronousGetRecordsRetrievalStrategy.class);
@@ -854,8 +862,8 @@ public class ShardConsumerTest {
                 taskBackoffTimeMillis,
                 KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                 config,
-                shardSyncer);
-
+                shardSyncer,
+                ShardSyncStrategy.SHARD_END);
         shardConsumer.consumeShard();
 
         Thread.sleep(sleepTime);

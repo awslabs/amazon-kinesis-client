@@ -531,7 +531,8 @@ class ConsumerStates {
                     consumer.getLeaseManager(),
                     consumer.getTaskBackoffTimeMillis(),
                     consumer.getGetRecordsCache(),
-                    consumer.getShardSyncer());
+                    consumer.getShardSyncer(),
+                    consumer.getShardSyncStrategy());
         }
 
         @Override

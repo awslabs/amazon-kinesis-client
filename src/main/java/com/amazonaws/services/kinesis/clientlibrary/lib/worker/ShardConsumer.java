@@ -64,7 +64,8 @@ class ShardConsumer {
     private ITask currentTask;
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
-
+    private ShardSyncStrategy shardSyncStrategy;
+    
     @Getter
     private final GetRecordsCache getRecordsCache;
 
@@ -117,7 +118,7 @@ class ShardConsumer {
             long backoffTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
             KinesisClientLibConfiguration config,
-            ShardSyncer shardSyncer) {
+            ShardSyncer shardSyncer, ShardSyncStrategy shardSyncStrategy) {
         this(shardInfo,
                 streamConfig,
                 checkpoint,
@@ -132,7 +133,7 @@ class ShardConsumer {
                 Optional.empty(),
                 Optional.empty(),
                 config,
-                shardSyncer);
+                shardSyncer, shardSyncStrategy);
     }
 
     /**
@@ -165,8 +166,7 @@ class ShardConsumer {
             Optional<Integer> retryGetRecordsInSeconds,
             Optional<Integer> maxGetRecordsThreadPool,
             KinesisClientLibConfiguration config,
-            ShardSyncer shardSyncer) {
-
+            ShardSyncer shardSyncer, ShardSyncStrategy shardSyncStrategy) {
         this(
                 shardInfo,
                 streamConfig,
@@ -191,7 +191,7 @@ class ShardConsumer {
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
                 config,
-                shardSyncer
+                shardSyncer, shardSyncStrategy
         );
     }
 
@@ -230,7 +230,7 @@ class ShardConsumer {
             Optional<Integer> retryGetRecordsInSeconds,
             Optional<Integer> maxGetRecordsThreadPool,
             KinesisClientLibConfiguration config,
-            ShardSyncer shardSyncer) {
+            ShardSyncer shardSyncer, ShardSyncStrategy shardSyncStrategy) {
         this.shardInfo = shardInfo;
         this.streamConfig = streamConfig;
         this.checkpoint = checkpoint;
@@ -249,6 +249,7 @@ class ShardConsumer {
                 makeStrategy(this.dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, this.shardInfo),
                 this.getShardInfo().getShardId(), this.metricsFactory, this.config.getMaxRecords());
         this.shardSyncer = shardSyncer;
+        this.shardSyncStrategy = shardSyncStrategy;
     }
 
     /**
@@ -511,5 +512,9 @@ class ShardConsumer {
 
     ShutdownNotification getShutdownNotification() {
         return shutdownNotification;
+    }
+
+    ShardSyncStrategy getShardSyncStrategy() {
+        return shardSyncStrategy;
     }
 }
