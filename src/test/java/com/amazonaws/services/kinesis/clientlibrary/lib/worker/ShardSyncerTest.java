@@ -602,9 +602,9 @@ public class ShardSyncerTest {
         leaseManager.updateLease(closedShardLease);
         expectedShardIdToCheckpointMap.remove(closedShardLease.getLeaseKey());
         KinesisClientLease childShardLease = leaseManager.getLease("shardId-6");
-        childShardLease.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
+        childShardLease.setCheckpoint(new ExtendedSequenceNumber("34290"));
         leaseManager.updateLease(childShardLease);
-        expectedShardIdToCheckpointMap.put(childShardLease.getLeaseKey(), ExtendedSequenceNumber.SHARD_END);
+        expectedShardIdToCheckpointMap.put(childShardLease.getLeaseKey(), new ExtendedSequenceNumber("34290"));
 
         retryCheckAndCreateLeaseForNewShards(kinesisProxy, exceptionMethod, exceptionTime, position);
 
@@ -1521,24 +1521,14 @@ public class ShardSyncerTest {
         shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNotNull(leaseManager.getLease(closedShardId));
 
-        // leases for both children exists, one is at TRIM_HORIZON, other at some intermediate sequence number.
+        // leases for both children exists, one is at TRIM_HORIZON
         childLease1.setCheckpoint(new ExtendedSequenceNumber("34890"));
         leaseManager.updateLease(childLease1);
         shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNotNull(leaseManager.getLease(closedShardId));
 
-        // leases for both children exists, NONE of them are at TRIM_HORIZON,
-        // nor at SHARD_END, but are being processed at some intermediate sequence number.
+        // leases for both children exists, NONE of them are at TRIM_HORIZON
         childLease2.setCheckpoint(new ExtendedSequenceNumber("43789"));
-        leaseManager.updateLease(childLease2);
-        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        Assert.assertNotNull(leaseManager.getLease(closedShardId));
-
-        // leases for both children exists, both are at SHARD_END,
-        // so parent lease (closedShardId) will now be deleted from the leases table..
-        childLease1.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
-        leaseManager.updateLease(childLease1);
-        childLease2.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
         leaseManager.updateLease(childLease2);
         shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
         Assert.assertNull(leaseManager.getLease(closedShardId));
