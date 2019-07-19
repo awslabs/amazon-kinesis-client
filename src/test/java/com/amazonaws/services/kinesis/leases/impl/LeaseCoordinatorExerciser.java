@@ -28,7 +28,6 @@ import java.util.Map;
 import javax.swing.*;
 
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -47,8 +46,8 @@ public class LeaseCoordinatorExerciser {
     private static final Log LOG = LogFactory.getLog(LeaseCoordinatorExerciser.class);
 
     public static void main(String[] args)
-            throws InterruptedException, DependencyException, InvalidStateException, ProvisionedThroughputException,
-            IOException {
+        throws InterruptedException, DependencyException, InvalidStateException, ProvisionedThroughputException,
+        IOException {
 
         int numCoordinators = 9;
         int numLeases = 73;
@@ -70,14 +69,12 @@ public class LeaseCoordinatorExerciser {
         }
 
         CWMetricsFactory metricsFactory = new CWMetricsFactory(creds, "testNamespace", 30 * 1000, 1000);
-        LeaseSelector<KinesisClientLease> leaseSelector = new GenericLeaseSelector<KinesisClientLease>();
         final List<LeaseCoordinator<KinesisClientLease>> coordinators =
                 new ArrayList<LeaseCoordinator<KinesisClientLease>>();
         for (int i = 0; i < numCoordinators; i++) {
             String workerIdentifier = "worker-" + Integer.toString(i);
 
             LeaseCoordinator<KinesisClientLease> coord = new LeaseCoordinator<KinesisClientLease>(leaseManager,
-                    leaseSelector,
                     workerIdentifier,
                     leaseDurationMillis,
                     epsilonMillis,

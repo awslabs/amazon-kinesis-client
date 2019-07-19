@@ -38,7 +38,6 @@ class ShardSyncTask implements ITask {
     private final boolean ignoreUnexpectedChildShards;
     private final long shardSyncTaskIdleTimeMillis;
     private final TaskType taskType = TaskType.SHARDSYNC;
-    private final ShardSyncer shardSyncer;
 
     /**
      * @param kinesisProxy Used to fetch information about the stream (e.g. shard list)
@@ -46,25 +45,19 @@ class ShardSyncTask implements ITask {
      * @param initialPositionInStream One of LATEST, TRIM_HORIZON or AT_TIMESTAMP. Amazon Kinesis Client Library will
      *        start processing records from this point in the stream (when an application starts up for the first time)
      *        except for shards that already have a checkpoint (and their descendant shards).
-     * @param cleanupLeasesUponShardCompletion Clean up shards we've finished processing (don't wait for expiration
-     *        in Kinesis)
-     * @param shardSyncTaskIdleTimeMillis shardSync task idle time in millis
-     * @param shardSyncer shardSyncer instance used to check and create new leases
      */
     ShardSyncTask(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesUponShardCompletion,
             boolean ignoreUnexpectedChildShards,
-            long shardSyncTaskIdleTimeMillis,
-            ShardSyncer shardSyncer) {
+            long shardSyncTaskIdleTimeMillis) {
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.initialPosition = initialPositionInStream;
         this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncTaskIdleTimeMillis = shardSyncTaskIdleTimeMillis;
-        this.shardSyncer = shardSyncer;
     }
 
     /* (non-Javadoc)
@@ -75,7 +68,7 @@ class ShardSyncTask implements ITask {
         Exception exception = null;
 
         try {
-            shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
+            ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                     leaseManager,
                     initialPosition,
                     cleanupLeasesUponShardCompletion,

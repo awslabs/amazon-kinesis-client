@@ -66,12 +66,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseBuilder;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
-import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
-import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Condition;
@@ -117,6 +111,10 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.clientlibrary.types.InitializationInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ProcessRecordsInput;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseBuilder;
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
+import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.CWMetricsFactory;
 import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
@@ -161,7 +159,6 @@ public class WorkerTest {
 
     private RecordsFetcherFactory recordsFetcherFactory;
     private KinesisClientLibConfiguration config;
-    private ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
 
     @Mock
     private KinesisClientLibLeaseCoordinator leaseCoordinator;
@@ -201,36 +198,36 @@ public class WorkerTest {
     private static final com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY =
             new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory() {
 
+        @Override
+        public com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor createProcessor() {
+            return new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor() {
+
                 @Override
-                public com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor createProcessor() {
-                    return new com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessor() {
-
-                        @Override
-                        public void shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason) {
-                            if (reason == ShutdownReason.TERMINATE) {
-                                try {
-                                    checkpointer.checkpoint();
-                                } catch (KinesisClientLibNonRetryableException e) {
-                                    throw new RuntimeException(e);
-                                }
-                            }
+                public void shutdown(IRecordProcessorCheckpointer checkpointer, ShutdownReason reason) {
+                    if (reason == ShutdownReason.TERMINATE) {
+                        try {
+                            checkpointer.checkpoint();
+                        } catch (KinesisClientLibNonRetryableException e) {
+                            throw new RuntimeException(e);
                         }
+                    }
+                }
 
-                        @Override
-                        public void processRecords(List<Record> dataRecords, IRecordProcessorCheckpointer checkpointer) {
-                            try {
-                                checkpointer.checkpoint();
-                            } catch (KinesisClientLibNonRetryableException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
+                @Override
+                public void processRecords(List<Record> dataRecords, IRecordProcessorCheckpointer checkpointer) {
+                    try {
+                        checkpointer.checkpoint();
+                    } catch (KinesisClientLibNonRetryableException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
 
-                        @Override
-                        public void initialize(String shardId) {
-                        }
-                    };
+                @Override
+                public void initialize(String shardId) {
                 }
             };
+        }
+    };
 
     private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 =
             new V1ToV2RecordProcessorFactoryAdapter(SAMPLE_RECORD_PROCESSOR_FACTORY);
@@ -506,7 +503,7 @@ public class WorkerTest {
         final int numberOfRecordsPerShard = 10;
         List<Shard> shardList = createShardListWithOneSplit();
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
-        KinesisClientLease lease = shardSyncer.newKCLLease(shardList.get(0));
+        KinesisClientLease lease = ShardSyncer.newKCLLease(shardList.get(0));
         lease.setCheckpoint(new ExtendedSequenceNumber("2"));
         initialLeases.add(lease);
         runAndTestWorker(shardList, threadPoolSize, initialLeases, callProcessRecordsForEmptyRecordList, numberOfRecordsPerShard, config);
@@ -522,7 +519,7 @@ public class WorkerTest {
         final int numberOfRecordsPerShard = 10;
         List<Shard> shardList = createShardListWithOneSplit();
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
-        KinesisClientLease lease = shardSyncer.newKCLLease(shardList.get(0));
+        KinesisClientLease lease = ShardSyncer.newKCLLease(shardList.get(0));
         lease.setCheckpoint(new ExtendedSequenceNumber("2"));
         initialLeases.add(lease);
         boolean callProcessRecordsForEmptyRecordList = true;
@@ -614,7 +611,7 @@ public class WorkerTest {
 
         final List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
-            KinesisClientLease lease = shardSyncer.newKCLLease(shard);
+            KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
             lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             initialLeases.add(lease);
         }
@@ -690,7 +687,7 @@ public class WorkerTest {
 
         final List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
-            KinesisClientLease lease = shardSyncer.newKCLLease(shard);
+            KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
             lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             initialLeases.add(lease);
         }
@@ -1498,9 +1495,9 @@ public class WorkerTest {
     public void testBuilderWithDefaultKinesisProxy() {
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
         Worker worker = new Worker.Builder()
-                .recordProcessorFactory(recordProcessorFactory)
-                .config(config)
-                .build();
+            .recordProcessorFactory(recordProcessorFactory)
+            .config(config)
+            .build();
         Assert.assertNotNull(worker.getStreamConfig().getStreamProxy());
         Assert.assertTrue(worker.getStreamConfig().getStreamProxy() instanceof KinesisProxy);
     }
@@ -1511,10 +1508,10 @@ public class WorkerTest {
         // Create an instance of KinesisLocalFileProxy for injection and validation
         IKinesisProxy kinesisProxy = mock(KinesisLocalFileProxy.class);
         Worker worker = new Worker.Builder()
-                .recordProcessorFactory(recordProcessorFactory)
-                .config(config)
-                .kinesisProxy(kinesisProxy)
-                .build();
+            .recordProcessorFactory(recordProcessorFactory)
+            .config(config)
+            .kinesisProxy(kinesisProxy)
+            .build();
         Assert.assertNotNull(worker.getStreamConfig().getStreamProxy());
         Assert.assertTrue(worker.getStreamConfig().getStreamProxy() instanceof KinesisLocalFileProxy);
     }
@@ -2016,7 +2013,7 @@ public class WorkerTest {
         Assert.assertEquals(numShards, shardList.size());
         List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
         for (Shard shard : shardList) {
-            KinesisClientLease lease = shardSyncer.newKCLLease(shard);
+            KinesisClientLease lease = ShardSyncer.newKCLLease(shard);
             lease.setCheckpoint(ExtendedSequenceNumber.AT_TIMESTAMP);
             initialLeases.add(lease);
         }
@@ -2024,11 +2021,11 @@ public class WorkerTest {
     }
 
     private void runAndTestWorker(List<Shard> shardList,
-            int threadPoolSize,
-            List<KinesisClientLease> initialLeases,
-            boolean callProcessRecordsForEmptyRecordList,
-            int numberOfRecordsPerShard,
-            KinesisClientLibConfiguration clientConfig) throws Exception {
+                                  int threadPoolSize,
+                                  List<KinesisClientLease> initialLeases,
+                                  boolean callProcessRecordsForEmptyRecordList,
+                                  int numberOfRecordsPerShard,
+                                  KinesisClientLibConfiguration clientConfig) throws Exception {
         File file = KinesisLocalFileDataCreator.generateTempDataFile(shardList, numberOfRecordsPerShard, "unitTestWT001");
         IKinesisProxy fileBasedProxy = new KinesisLocalFileProxy(file.getAbsolutePath());
 
@@ -2057,15 +2054,15 @@ public class WorkerTest {
     }
 
     private WorkerThread runWorker(List<Shard> shardList,
-            List<KinesisClientLease> initialLeases,
-            boolean callProcessRecordsForEmptyRecordList,
-            long failoverTimeMillis,
-            int numberOfRecordsPerShard,
-            IKinesisProxy kinesisProxy,
-            IRecordProcessorFactory recordProcessorFactory,
-            ExecutorService executorService,
-            IMetricsFactory metricsFactory,
-            KinesisClientLibConfiguration clientConfig) throws Exception {
+                                   List<KinesisClientLease> initialLeases,
+                                   boolean callProcessRecordsForEmptyRecordList,
+                                   long failoverTimeMillis,
+                                   int numberOfRecordsPerShard,
+                                   IKinesisProxy kinesisProxy,
+                                   IRecordProcessorFactory recordProcessorFactory,
+                                   ExecutorService executorService,
+                                   IMetricsFactory metricsFactory,
+                                   KinesisClientLibConfiguration clientConfig) throws Exception {
         final String stageName = "testStageName";
         final int maxRecords = 2;
 
@@ -2080,10 +2077,8 @@ public class WorkerTest {
             leaseManager.createLeaseIfNotExists(initialLease);
         }
 
-        LeaseSelector<KinesisClientLease> leaseSelector = new GenericLeaseSelector<>();
         KinesisClientLibLeaseCoordinator leaseCoordinator =
                 new KinesisClientLibLeaseCoordinator(leaseManager,
-                        leaseSelector,
                         stageName,
                         leaseDurationMillis,
                         epsilonMillis,
@@ -2258,7 +2253,7 @@ public class WorkerTest {
     }
 
     private Map<String, TestStreamlet>
-    findShardIdsAndStreamLetsOfShardsWithOnlyOneProcessor(TestStreamletFactory recordProcessorFactory) {
+            findShardIdsAndStreamLetsOfShardsWithOnlyOneProcessor(TestStreamletFactory recordProcessorFactory) {
         Map<String, TestStreamlet> shardIdsAndStreamLetsOfShardsWithOnlyOneProcessor =
                 new HashMap<String, TestStreamlet>();
         Set<String> seenShardIds = new HashSet<String>();

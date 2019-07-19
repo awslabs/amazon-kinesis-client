@@ -57,8 +57,7 @@ public class ShutdownTaskTest {
             defaultParentShardIds,
             ExtendedSequenceNumber.LATEST);
     IRecordProcessor defaultRecordProcessor = new TestStreamlet();
-    ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
-
+    
     @Mock
     private GetRecordsCache getRecordsCache;
 
@@ -112,8 +111,7 @@ public class ShutdownTaskTest {
                 ignoreUnexpectedChildShards,
                 leaseManager,
                 TASK_BACKOFF_TIME_MILLIS,
-                getRecordsCache,
-                shardSyncer);
+                getRecordsCache);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
@@ -141,8 +139,7 @@ public class ShutdownTaskTest {
                 ignoreUnexpectedChildShards,
                 leaseManager,
                 TASK_BACKOFF_TIME_MILLIS,
-                getRecordsCache,
-                shardSyncer);
+                getRecordsCache);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof KinesisClientLibIOException);
@@ -154,7 +151,7 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testGetTaskType() {
-        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache, shardSyncer);
+        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache);
         Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
     }
 

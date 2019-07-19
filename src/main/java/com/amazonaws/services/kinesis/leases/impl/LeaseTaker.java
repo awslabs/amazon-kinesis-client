@@ -26,7 +26,6 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -60,7 +59,6 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
     };
 
     private final ILeaseManager<T> leaseManager;
-    private final LeaseSelector<T> leaseSelector;
     private final String workerIdentifier;
     private final Map<String, T> allLeases = new HashMap<String, T>();
     private final long leaseDurationNanos;
@@ -69,18 +67,8 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
 
     private long lastScanTimeNanos = 0L;
 
-    private static <T extends Lease> LeaseSelector<T> getDefaultLeaseSelector() {
-        return new GenericLeaseSelector<>();
-    }
-
     public LeaseTaker(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis) {
-        this(leaseManager, getDefaultLeaseSelector(), workerIdentifier, leaseDurationMillis);
-    }
-
-    public LeaseTaker(ILeaseManager<T> leaseManager, LeaseSelector<T> leaseSelector,
-            String workerIdentifier, long leaseDurationMillis) {
         this.leaseManager = leaseManager;
-        this.leaseSelector = leaseSelector;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
     }
@@ -134,16 +122,16 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
      * Internal implementation of takeLeases. Takes a callable that can provide the time to enable test cases without
      * Thread.sleep. Takes a callable instead of a raw time value because the time needs to be computed as-of
      * immediately after the scan.
-     *
+     * 
      * @param timeProvider Callable that will supply the time
-     *
+     * 
      * @return map of lease key to taken lease
-     *
+     * 
      * @throws DependencyException
      * @throws InvalidStateException
      */
     synchronized Map<String, T> takeLeases(Callable<Long> timeProvider)
-            throws DependencyException, InvalidStateException {
+        throws DependencyException, InvalidStateException {
         // Key is leaseKey
         Map<String, T> takenLeases = new HashMap<String, T>();
 
@@ -171,7 +159,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
 
         if (lastException != null) {
             LOG.error("Worker " + workerIdentifier
-                            + " could not scan leases table, aborting takeLeases. Exception caught by last retry:",
+                    + " could not scan leases table, aborting takeLeases. Exception caught by last retry:",
                     lastException);
             return takenLeases;
         }
@@ -247,23 +235,23 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
             builder.append(string);
             needDelimiter = true;
         }
-
+        
         return builder.toString();
     }
 
     /**
      * Scan all leases and update lastRenewalTime. Add new leases and delete old leases.
-     *
+     * 
      * @param timeProvider callable that supplies the current time
-     *
+     * 
      * @return list of expired leases, possibly empty, never null.
-     *
+     * 
      * @throws ProvisionedThroughputException if listLeases fails due to lack of provisioned throughput
      * @throws InvalidStateException if the lease table does not exist
      * @throws DependencyException if listLeases fails in an unexpected way
      */
     private void updateAllLeases(Callable<Long> timeProvider)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         List<T> freshList = leaseManager.listLeases();
         try {
             lastScanTimeNanos = timeProvider.call();
@@ -334,7 +322,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
 
     /**
      * Compute the number of leases I should try to take based on the state of the system.
-     *
+     * 
      * @param allLeases map of shardId to lease containing all leases
      * @param expiredLeases list of leases we determined to be expired
      * @return set of leases to take.
@@ -344,7 +332,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
         Set<T> leasesToTake = new HashSet<T>();
         IMetricsScope metrics = MetricsHelper.getMetricsScope();
 
-        int numLeases = leaseSelector.getLeaseCountThatCanBeTaken(allLeases.values());
+        int numLeases = allLeases.size();
         int numWorkers = leaseCounts.size();
 
         if (numLeases == 0) {
@@ -369,8 +357,8 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
             int leaseSpillover = Math.max(0, target - maxLeasesForWorker);
             if (target > maxLeasesForWorker) {
                 LOG.warn(String.format("Worker %s target is %d leases and maxLeasesForWorker is %d."
-                                + " Resetting target to %d, lease spillover is %d. "
-                                + " Note that some shards may not be processed if no other workers are able to pick them up.",
+                        + " Resetting target to %d, lease spillover is %d. "
+                        + " Note that some shards may not be processed if no other workers are able to pick them up.",
                         workerIdentifier,
                         target,
                         maxLeasesForWorker,
@@ -394,7 +382,10 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
 
         int originalExpiredLeasesSize = expiredLeases.size();
         if (expiredLeases.size() > 0) {
-            leasesToTake = leaseSelector.getLeasesToTakeFromExpiredLeases(expiredLeases, numLeasesToReachTarget);
+            // If we have expired leases, get up to <needed> leases from expiredLeases
+            for (; numLeasesToReachTarget > 0 && expiredLeases.size() > 0; numLeasesToReachTarget--) {
+                leasesToTake.add(expiredLeases.remove(0));
+            }
         } else {
             // If there are no expired leases and we need a lease, consider stealing.
             List<T> leasesToSteal = chooseLeasesToSteal(leaseCounts, numLeasesToReachTarget, target);
@@ -410,7 +401,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
 
         if (!leasesToTake.isEmpty()) {
             LOG.info(String.format("Worker %s saw %d total leases, %d available leases, %d "
-                            + "workers. Target is %d leases, I have %d leases, I will take %d leases",
+                    + "workers. Target is %d leases, I have %d leases, I will take %d leases",
                     workerIdentifier,
                     numLeases,
                     originalExpiredLeasesSize,
@@ -432,11 +423,11 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
     /**
      * Choose leases to steal by randomly selecting one or more (up to max) from the most loaded worker.
      * Stealing rules:
-     *
+     * 
      * Steal up to maxLeasesToStealAtOneTime leases from the most loaded worker if
      * a) he has > target leases and I need >= 1 leases : steal min(leases needed, maxLeasesToStealAtOneTime)
      * b) he has == target leases and I need > 1 leases : steal 1
-     *
+     * 
      * @param leaseCounts map of workerIdentifier to lease count
      * @param needed # of leases needed to reach the target leases for the worker
      * @param target target # of leases per worker
@@ -467,7 +458,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
         if (numLeasesToSteal <= 0) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug(String.format("Worker %s not stealing from most loaded worker %s.  He has %d,"
-                                + " target is %d, and I need %d",
+                        + " target is %d, and I need %d",
                         workerIdentifier,
                         mostLoadedWorker.getKey(),
                         mostLoadedWorker.getValue(),
@@ -478,7 +469,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
         } else {
             if (LOG.isDebugEnabled()) {
                 LOG.debug(String.format("Worker %s will attempt to steal %d leases from most loaded worker %s. "
-                                + " He has %d leases, target is %d, I need %d, maxLeasesToSteatAtOneTime is %d.",
+                        + " He has %d leases, target is %d, I need %d, maxLeasesToSteatAtOneTime is %d.",
                         workerIdentifier,
                         numLeasesToSteal,
                         mostLoadedWorker.getKey(),
@@ -509,7 +500,7 @@ public class LeaseTaker<T extends Lease> implements ILeaseTaker<T> {
     /**
      * Count leases by host. Always includes myself, but otherwise only includes hosts that are currently holding
      * leases.
-     *
+     * 
      * @param expiredLeases list of leases that are currently expired
      * @return map of workerIdentifier to lease count
      */

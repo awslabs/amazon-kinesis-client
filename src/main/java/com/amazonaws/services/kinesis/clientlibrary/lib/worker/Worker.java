@@ -33,12 +33,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
-import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
-import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.amazonaws.AmazonWebServiceClient;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.client.builder.AwsClientBuilder;
@@ -70,6 +69,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import lombok.NonNull;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 
@@ -84,8 +84,6 @@ public class Worker implements Runnable {
 
     private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
     private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
-    private static final LeaseCleanupValidator DEFAULT_LEASE_CLEANUP_VALIDATOR = new KinesisLeaseCleanupValidator();
-    private static final LeaseSelector<KinesisClientLease> DEFAULT_LEASE_SELECTOR = new GenericLeaseSelector<KinesisClientLease>();
 
     private WorkerLog wlog = new WorkerLog();
 
@@ -116,7 +114,6 @@ public class Worker implements Runnable {
     private volatile boolean shutdown;
     private volatile long shutdownStartTimeMillis;
     private volatile boolean shutdownComplete = false;
-    private final ShardSyncer shardSyncer;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -391,7 +388,6 @@ public class Worker implements Runnable {
                 config.getShardSyncIntervalMillis(), config.shouldCleanupLeasesUponShardCompletion(), null,
                 new KinesisClientLibLeaseCoordinator(
                         new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient),
-                        DEFAULT_LEASE_SELECTOR,
                         config.getWorkerIdentifier(),
                         config.getFailoverTimeMillis(),
                         config.getEpsilonMillis(),
@@ -399,8 +395,8 @@ public class Worker implements Runnable {
                         config.getMaxLeasesToStealAtOneTime(),
                         config.getMaxLeaseRenewalThreads(),
                         metricsFactory)
-                        .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
-                        .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
+                    .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
+                    .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
                 execService,
                 metricsFactory,
                 config.getTaskBackoffTimeMillis(),
@@ -409,8 +405,7 @@ public class Worker implements Runnable {
                 config.getShardPrioritizationStrategy(),
                 config.getRetryGetRecordsInSeconds(),
                 config.getMaxGetRecordsThreadPool(),
-                DEFAULT_WORKER_STATE_CHANGE_LISTENER,
-                DEFAULT_LEASE_CLEANUP_VALIDATOR );
+                DEFAULT_WORKER_STATE_CHANGE_LISTENER);
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
@@ -462,7 +457,7 @@ public class Worker implements Runnable {
     // NOTE: This has package level access solely for testing
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, KinesisClientLibConfiguration config,
-            StreamConfig streamConfig, InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
+           StreamConfig streamConfig, InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
             long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
             KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
             IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
@@ -470,7 +465,7 @@ public class Worker implements Runnable {
         this(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
                 shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
                 metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
-                shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER, DEFAULT_LEASE_CLEANUP_VALIDATOR );
+                shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER);
     }
 
     /**
@@ -508,19 +503,16 @@ public class Worker implements Runnable {
      *            Time in seconds to wait before the worker retries to get a record.
      * @param maxGetRecordsThreadPool
      *            Max number of threads in the getRecords thread pool.
-     * @param leaseCleanupValidator
-     *            leaseCleanupValidator instance used to validate leases
      */
     // NOTE: This has package level access solely for testing
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, KinesisClientLibConfiguration config, StreamConfig streamConfig,
-            InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
-            long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
-            KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
-            IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
-            boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
-            Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener,
-            LeaseCleanupValidator leaseCleanupValidator) {
+           InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
+           long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
+           KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
+           IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
+           boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
+           Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.config = config;
@@ -533,10 +525,9 @@ public class Worker implements Runnable {
         this.executorService = execService;
         this.leaseCoordinator = leaseCoordinator;
         this.metricsFactory = metricsFactory;
-        this.shardSyncer = new ShardSyncer(leaseCleanupValidator);
         this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
                 initialPositionInStream, cleanupLeasesUponShardCompletion, config.shouldIgnoreUnexpectedChildShards(),
-                shardSyncIdleTimeMillis, metricsFactory, executorService, shardSyncer);
+                shardSyncIdleTimeMillis, metricsFactory, executorService);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.failoverTimeMillis = failoverTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -638,7 +629,7 @@ public class Worker implements Runnable {
                     LOG.info("Syncing Kinesis shard info");
                     ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
                             leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
-                            config.shouldIgnoreUnexpectedChildShards(), 0L, shardSyncer);
+                            config.shouldIgnoreUnexpectedChildShards(), 0L);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
                     LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
@@ -1005,8 +996,7 @@ public class Worker implements Runnable {
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
-                config,
-                shardSyncer);
+                config);
 
     }
 
@@ -1168,10 +1158,6 @@ public class Worker implements Runnable {
         private IKinesisProxy kinesisProxy;
         @Setter @Accessors(fluent = true)
         private WorkerStateChangeListener workerStateChangeListener;
-        @Setter @Accessors(fluent = true)
-        private LeaseCleanupValidator leaseCleanupValidator;
-        @Setter @Accessors(fluent = true)
-        private LeaseSelector<KinesisClientLease> leaseSelector;
 
         @VisibleForTesting
         AmazonKinesis getKinesisClient() {
@@ -1286,14 +1272,6 @@ public class Worker implements Runnable {
                 workerStateChangeListener = DEFAULT_WORKER_STATE_CHANGE_LISTENER;
             }
 
-            if(leaseCleanupValidator == null) {
-                leaseCleanupValidator = DEFAULT_LEASE_CLEANUP_VALIDATOR;
-            }
-
-            if(leaseSelector == null) {
-                leaseSelector = DEFAULT_LEASE_SELECTOR;
-            }
-
             return new Worker(config.getApplicationName(),
                     recordProcessorFactory,
                     config,
@@ -1309,7 +1287,6 @@ public class Worker implements Runnable {
                     config.shouldCleanupLeasesUponShardCompletion(),
                     null,
                     new KinesisClientLibLeaseCoordinator(leaseManager,
-                            leaseSelector,
                             config.getWorkerIdentifier(),
                             config.getFailoverTimeMillis(),
                             config.getEpsilonMillis(),
@@ -1317,8 +1294,8 @@ public class Worker implements Runnable {
                             config.getMaxLeasesToStealAtOneTime(),
                             config.getMaxLeaseRenewalThreads(),
                             metricsFactory)
-                            .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
-                            .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
+                        .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
+                        .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
                     execService,
                     metricsFactory,
                     config.getTaskBackoffTimeMillis(),
@@ -1327,15 +1304,14 @@ public class Worker implements Runnable {
                     shardPrioritization,
                     config.getRetryGetRecordsInSeconds(),
                     config.getMaxGetRecordsThreadPool(),
-                    workerStateChangeListener,
-                    leaseCleanupValidator);
+                    workerStateChangeListener);
         }
 
         <R, T extends AwsClientBuilder<T, R>> R createClient(final T builder,
-                final AWSCredentialsProvider credentialsProvider,
-                final ClientConfiguration clientConfiguration,
-                final String endpointUrl,
-                final String region) {
+                                                             final AWSCredentialsProvider credentialsProvider,
+                                                             final ClientConfiguration clientConfiguration,
+                                                             final String endpointUrl,
+                                                             final String region) {
             if (credentialsProvider != null) {
                 builder.withCredentials(credentialsProvider);
             }

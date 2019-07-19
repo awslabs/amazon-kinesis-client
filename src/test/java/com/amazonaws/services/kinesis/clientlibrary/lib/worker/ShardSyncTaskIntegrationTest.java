@@ -52,7 +52,6 @@ public class ShardSyncTaskIntegrationTest {
     private static AWSCredentialsProvider credentialsProvider;
     private IKinesisClientLeaseManager leaseManager;
     private IKinesisProxy kinesisProxy;
-    private final ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
 
     /**
      * @throws java.lang.Exception
@@ -107,7 +106,7 @@ public class ShardSyncTaskIntegrationTest {
 
     /**
      * Test method for call().
-     *
+     * 
      * @throws DependencyException
      * @throws InvalidStateException
      * @throws ProvisionedThroughputException
@@ -126,8 +125,7 @@ public class ShardSyncTaskIntegrationTest {
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST),
                 false,
                 false,
-                0L,
-                shardSyncer);
+                0L);
         syncTask.call();
         List<KinesisClientLease> leases = leaseManager.listLeases();
         Set<String> leaseKeys = new HashSet<String>();

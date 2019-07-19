@@ -19,7 +19,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
  * and state transitions is contained within the {@link ConsumerState} objects.
  *
  * <h2>State Diagram</h2>
- *
+ * 
  * <pre>
  *       +-------------------+
  *       | Waiting on Parent |                               +------------------+
@@ -94,14 +94,14 @@ class ConsumerStates {
     /**
      * Represents a the current state of the consumer. This handles the creation of tasks for the consumer, and what to
      * do when a transition occurs.
-     *
+     * 
      */
     interface ConsumerState {
         /**
          * Creates a new task for this state using the passed in consumer to build the task. If there is no task
          * required for this state it may return a null value. {@link ConsumerState}'s are allowed to modify the
          * consumer during the execution of this method.
-         *
+         * 
          * @param consumer
          *            the consumer to use build the task, or execute state.
          * @return a valid task for this state or null if there is no task required.
@@ -111,7 +111,7 @@ class ConsumerStates {
         /**
          * Provides the next state of the consumer upon success of the task return by
          * {@link ConsumerState#createTask(ShardConsumer)}.
-         *
+         * 
          * @return the next state that the consumer should transition to, this may be the same object as the current
          *         state.
          */
@@ -120,7 +120,7 @@ class ConsumerStates {
         /**
          * Provides the next state of the consumer when a shutdown has been requested. The returned state is dependent
          * on the current state, and the shutdown reason.
-         *
+         * 
          * @param shutdownReason
          *            the reason that a shutdown was requested
          * @return the next state that the consumer should transition to, this may be the same object as the current
@@ -131,7 +131,7 @@ class ConsumerStates {
         /**
          * The type of task that {@link ConsumerState#createTask(ShardConsumer)} would return. This is always a valid state
          * even if createTask would return a null value.
-         *
+         * 
          * @return the type of task that this state represents.
          */
         TaskType getTaskType();
@@ -139,7 +139,7 @@ class ConsumerStates {
         /**
          * An enumeration represent the type of this state. Different consumer states may return the same
          * {@link ShardConsumerState}.
-         *
+         * 
          * @return the type of consumer state this represents.
          */
         ShardConsumerState getState();
@@ -530,8 +530,7 @@ class ConsumerStates {
                     consumer.isIgnoreUnexpectedChildShards(),
                     consumer.getLeaseManager(),
                     consumer.getTaskBackoffTimeMillis(),
-                    consumer.getGetRecordsCache(),
-                    consumer.getShardSyncer());
+                    consumer.getGetRecordsCache());
         }
 
         @Override

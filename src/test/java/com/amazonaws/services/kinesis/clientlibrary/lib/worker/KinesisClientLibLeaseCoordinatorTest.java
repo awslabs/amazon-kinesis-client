@@ -21,9 +21,7 @@ import static org.mockito.Mockito.doReturn;
 import java.util.UUID;
 
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
-import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
+
 import junit.framework.Assert;
 
 import org.junit.Before;
@@ -59,13 +57,12 @@ public class KinesisClientLibLeaseCoordinatorTest {
         MockitoAnnotations.initMocks(this);
         // Set up lease coordinator
         doReturn(true).when(mockLeaseManager).createLeaseTableIfNotExists(anyLong(), anyLong());
-        LeaseSelector<KinesisClientLease> leaseSelector = new GenericLeaseSelector<>();
-        leaseCoordinator = new KinesisClientLibLeaseCoordinator(mockLeaseManager, WORK_ID, TEST_LONG, TEST_LONG, leaseSelector);
+        leaseCoordinator = new KinesisClientLibLeaseCoordinator(mockLeaseManager, WORK_ID, TEST_LONG, TEST_LONG);
     }
 
     @Test(expected = ShutdownException.class)
     public void testSetCheckpointWithUnownedShardId()
-            throws KinesisClientLibException, DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throws KinesisClientLibException, DependencyException, InvalidStateException, ProvisionedThroughputException {
         final boolean succeess = leaseCoordinator.setCheckpoint(SHARD_ID, TEST_CHKPT, TEST_UUID);
         Assert.assertFalse("Set Checkpoint should return failure", succeess);
         leaseCoordinator.setCheckpoint(SHARD_ID, TEST_CHKPT, TEST_UUID.toString());
@@ -73,7 +70,7 @@ public class KinesisClientLibLeaseCoordinatorTest {
 
     @Test(expected = DependencyException.class)
     public void testWaitLeaseTableTimeout()
-            throws DependencyException, ProvisionedThroughputException, IllegalStateException {
+        throws DependencyException, ProvisionedThroughputException, IllegalStateException {
         // Set mock lease manager to return false in waiting
         doReturn(false).when(mockLeaseManager).waitUntilLeaseTableExists(anyLong(), anyLong());
         leaseCoordinator.initialize();

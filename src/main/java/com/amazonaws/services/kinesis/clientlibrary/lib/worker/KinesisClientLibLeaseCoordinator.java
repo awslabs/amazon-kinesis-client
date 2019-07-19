@@ -22,8 +22,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
-import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -52,7 +50,6 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
 
     private static final long DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
     private static final long DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
-    private static final LeaseSelector<KinesisClientLease> DEFAULT_LEASE_SELECTOR = new GenericLeaseSelector<KinesisClientLease>();
 
     private final ILeaseManager<KinesisClientLease> leaseManager;
 
@@ -64,51 +61,33 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @param workerIdentifier Used to identify this worker process
      * @param leaseDurationMillis Duration of a lease in milliseconds
      * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
-     * @param leaseSelector Lease selector which decides which leases to take
-     */
-    public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
-            String workerIdentifier,
-            long leaseDurationMillis,
-            long epsilonMillis,
-            LeaseSelector<KinesisClientLease> leaseSelector) {
-        super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis);
-        this.leaseManager = leaseManager;
-    }
-
-    /**
-     * @param leaseManager Lease manager which provides CRUD lease operations.
-     * @param workerIdentifier Used to identify this worker process
-     * @param leaseDurationMillis Duration of a lease in milliseconds
-     * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
      */
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis) {
-        this(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, DEFAULT_LEASE_SELECTOR);
+        super(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis);
+        this.leaseManager = leaseManager;
     }
 
     /**
      * @param leaseManager Lease manager which provides CRUD lease operations.
-     * @param leaseSelector Lease selector which decides which leases to take
      * @param workerIdentifier Used to identify this worker process
      * @param leaseDurationMillis Duration of a lease in milliseconds
      * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
      * @param metricsFactory Metrics factory used to emit metrics
      */
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
-            LeaseSelector<KinesisClientLease> leaseSelector,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
             IMetricsFactory metricsFactory) {
-        super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis, metricsFactory);
+        super(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, metricsFactory);
         this.leaseManager = leaseManager;
     }
 
     /**
      * @param leaseManager Lease manager which provides CRUD lease operations.
-     * @param leaseSelector Lease selector which decides which leases to take
      * @param workerIdentifier Used to identify this worker process
      * @param leaseDurationMillis Duration of a lease in milliseconds
      * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
@@ -117,7 +96,6 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @param metricsFactory Metrics factory used to emit metrics
      */
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
-            LeaseSelector<KinesisClientLease> leaseSelector,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
@@ -125,7 +103,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
             int maxLeasesToStealAtOneTime,
             int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
-        super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
+        super(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
         this.leaseManager = leaseManager;
     }
@@ -158,19 +136,19 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
 
     /**
      * Sets the checkpoint for a shard and updates ownerSwitchesSinceCheckpoint.
-     *
+     * 
      * @param shardId shardId to update the checkpoint for
      * @param checkpoint checkpoint value to set
      * @param concurrencyToken obtained by calling Lease.getConcurrencyToken for a currently held lease
-     *
+     * 
      * @return true if checkpoint update succeeded, false otherwise
-     *
+     * 
      * @throws InvalidStateException if lease table does not exist
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
     boolean setCheckpoint(String shardId, ExtendedSequenceNumber checkpoint, UUID concurrencyToken)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         KinesisClientLease lease = getCurrentlyHeldLease(shardId);
         if (lease == null) {
             LOG.info(String.format(
@@ -192,7 +170,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      */
     @Override
     public void setCheckpoint(String shardId, ExtendedSequenceNumber checkpointValue, String concurrencyToken)
-            throws KinesisClientLibException {
+        throws KinesisClientLibException {
         try {
             boolean wasSuccessful = setCheckpoint(shardId, checkpointValue, UUID.fromString(concurrencyToken));
             if (!wasSuccessful) {
@@ -257,8 +235,8 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      */
     @Override
     public void prepareCheckpoint(String shardId,
-            ExtendedSequenceNumber pendingCheckpointValue,
-            String concurrencyToken) throws KinesisClientLibException {
+                                  ExtendedSequenceNumber pendingCheckpointValue,
+                                  String concurrencyToken) throws KinesisClientLibException {
         try {
             boolean wasSuccessful =
                     prepareCheckpoint(shardId, pendingCheckpointValue, UUID.fromString(concurrencyToken));
@@ -332,8 +310,8 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
                 leaseManager.createLeaseTableIfNotExists(initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity);
         if (newTableCreated) {
             LOG.info(String.format(
-                    "Created new lease table for coordinator with initial read capacity of %d and write capacity of %d.",
-                    initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity));
+                "Created new lease table for coordinator with initial read capacity of %d and write capacity of %d.",
+                initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity));
         }
         // Need to wait for table in active state.
         final long secondsBetweenPolls = 10L;
@@ -346,7 +324,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
 
     /**
      * Package access for testing.
-     *
+     * 
      * @throws DependencyException
      * @throws InvalidStateException
      */
@@ -356,7 +334,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
 
     /**
      * Package access for testing.
-     *
+     * 
      * @throws DependencyException
      * @throws InvalidStateException
      */
@@ -367,7 +345,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
     /**
      * Used to get information about leases for Kinesis shards (e.g. sync shards and leases, check on parent shard
      * completion).
-     *
+     * 
      * @return LeaseManager
      */
     ILeaseManager<KinesisClientLease> getLeaseManager() {

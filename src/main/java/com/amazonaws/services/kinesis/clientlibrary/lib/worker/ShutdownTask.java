@@ -48,24 +48,22 @@ class ShutdownTask implements ITask {
     private final TaskType taskType = TaskType.SHUTDOWN;
     private final long backoffTimeMillis;
     private final GetRecordsCache getRecordsCache;
-    private final ShardSyncer shardSyncer;
 
     /**
      * Constructor.
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     ShutdownTask(ShardInfo shardInfo,
-            IRecordProcessor recordProcessor,
-            RecordProcessorCheckpointer recordProcessorCheckpointer,
-            ShutdownReason reason,
-            IKinesisProxy kinesisProxy,
-            InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            long backoffTimeMillis,
-            GetRecordsCache getRecordsCache,
-            ShardSyncer shardSyncer) {
+                 IRecordProcessor recordProcessor,
+                 RecordProcessorCheckpointer recordProcessorCheckpointer,
+                 ShutdownReason reason,
+                 IKinesisProxy kinesisProxy,
+                 InitialPositionInStreamExtended initialPositionInStream,
+                 boolean cleanupLeasesOfCompletedShards,
+                 boolean ignoreUnexpectedChildShards,
+                 ILeaseManager<KinesisClientLease> leaseManager,
+                 long backoffTimeMillis, 
+                 GetRecordsCache getRecordsCache) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -77,13 +75,12 @@ class ShutdownTask implements ITask {
         this.leaseManager = leaseManager;
         this.backoffTimeMillis = backoffTimeMillis;
         this.getRecordsCache = getRecordsCache;
-        this.shardSyncer = shardSyncer;
     }
 
     /*
      * Invokes RecordProcessor shutdown() API.
      * (non-Javadoc)
-     *
+     * 
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ITask#call()
      */
     @Override
@@ -130,7 +127,7 @@ class ShutdownTask implements ITask {
             if (reason == ShutdownReason.TERMINATE) {
                 LOG.debug("Looking for child shards of shard " + shardInfo.getShardId());
                 // create leases for the child shards
-                shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
+                ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                         leaseManager,
                         initialPositionInStream,
                         cleanupLeasesOfCompletedShards,

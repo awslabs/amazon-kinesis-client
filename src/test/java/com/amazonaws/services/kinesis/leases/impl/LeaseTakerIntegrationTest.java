@@ -16,7 +16,6 @@ package com.amazonaws.services.kinesis.leases.impl;
 
 import java.util.Map;
 
-import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -27,11 +26,10 @@ public class LeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
     private static final long LEASE_DURATION_MILLIS = 1000L;
     private LeaseTaker<KinesisClientLease> taker;
-    private static final LeaseSelector<KinesisClientLease> leaseSelector = new GenericLeaseSelector<>();
 
     @Before
     public void setUp() {
-        taker = new LeaseTaker<KinesisClientLease>(leaseManager, leaseSelector,"foo", LEASE_DURATION_MILLIS);
+        taker = new LeaseTaker<KinesisClientLease>(leaseManager, "foo", LEASE_DURATION_MILLIS);
     }
 
     @Test
@@ -121,7 +119,7 @@ public class LeaseTakerIntegrationTest extends LeaseIntegrationTest {
     /**
      * Verify that one activity is stolen from the highest loaded server when a server needs more than one lease and no
      * expired leases are available. Setup: 4 leases, server foo holds 0, bar holds 1, baz holds 5.
-     *
+     * 
      * Foo should steal from baz.
      */
     @Test
