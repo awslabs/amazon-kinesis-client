@@ -1310,12 +1310,15 @@ public class Worker implements Runnable {
                         .withMaxLeasesToStealAtOneTime(config.getMaxLeasesToStealAtOneTime());
             }
 
-            if (leaseRenewerThreadPool == null) {
-                leaseRenewerThreadPool = LeaseCoordinator.getDefaultLeaseRenewalExecutorService(config.getMaxLeaseRenewalThreads());
+            // We expect users to either inject both LeaseRenewer and the corresponding thread-pool, or neither of them (DEFAULT).
+            if ((leaseRenewerThreadPool == null && leaseRenewer != null) || (leaseRenewerThreadPool != null && leaseRenewer == null)) {
+                throw new IllegalArgumentException("Either both LeaseRenewer and LeaseRenewerThreadPool should be injected, or neither of them.");
             }
-
-            if (leaseRenewer == null) {
-                this.leaseRenewer = new LeaseRenewer<>(leaseManager, config.getWorkerIdentifier(), config.getFailoverTimeMillis(), leaseRenewerThreadPool);
+            else {
+                if (leaseRenewerThreadPool == null) {
+                    leaseRenewerThreadPool = LeaseCoordinator.getDefaultLeaseRenewalExecutorService(config.getMaxLeaseRenewalThreads());
+                    leaseRenewer = new LeaseRenewer<>(leaseManager, config.getWorkerIdentifier(), config.getFailoverTimeMillis(), leaseRenewerThreadPool);
+                }
             }
 
             return new Worker(config.getApplicationName(),
