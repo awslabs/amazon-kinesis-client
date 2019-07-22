@@ -207,7 +207,7 @@ public class LeaseCoordinator<T extends Lease> {
             int maxLeasesToStealAtOneTime,
             int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
-        this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
+        this.leaseRenewalThreadpool = getDefaultLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
         this.leaseTaker = new LeaseTaker<T>(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis)
                 .withMaxLeasesForWorker(maxLeasesForWorker)
                 .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
@@ -226,6 +226,29 @@ public class LeaseCoordinator<T extends Lease> {
                 takerIntervalMillis,
                 maxLeasesForWorker,
                 maxLeasesToStealAtOneTime));
+    }
+
+    public LeaseCoordinator(LeaseTaker<T> leaseTaker,
+                            LeaseRenewer<T> leaseRenewer,
+                            KinesisClientLibConfiguration config,
+                            ExecutorService executorService,
+                            IMetricsFactory metricsFactory) {
+        this.leaseRenewalThreadpool = executorService;
+        this.leaseTaker = leaseTaker;
+        this.leaseRenewer = leaseRenewer;
+        this.renewerIntervalMillis = config.getFailoverTimeMillis() / 3 - config.getEpsilonMillis();
+        this.takerIntervalMillis = (config.getFailoverTimeMillis() + config.getEpsilonMillis()) * 2;
+        this.metricsFactory = metricsFactory;
+
+        LOG.info(String.format(
+                "With failover time %d ms and epsilon %d ms, LeaseCoordinator will renew leases every %d ms, take" +
+                        "leases every %d ms, process maximum of %d leases and steal %d lease(s) at a time.",
+                config.getFailoverTimeMillis(),
+                config.getEpsilonMillis(),
+                renewerIntervalMillis,
+                takerIntervalMillis,
+                config.getMaxLeasesForWorker(),
+                config.getMaxLeasesToStealAtOneTime()));
     }
 
     private class TakerRunnable implements Runnable {
@@ -437,7 +460,7 @@ public class LeaseCoordinator<T extends Lease> {
      * @param maximumPoolSize Maximum allowed thread pool size
      * @return Executor service that should be used for lease renewal.
      */
-    private static ExecutorService getLeaseRenewalExecutorService(int maximumPoolSize) {
+    public static ExecutorService getDefaultLeaseRenewalExecutorService(int maximumPoolSize) {
         int coreLeaseCount = Math.max(maximumPoolSize / 4, 2);
 
         return new ThreadPoolExecutor(coreLeaseCount, maximumPoolSize, 60, TimeUnit.SECONDS,

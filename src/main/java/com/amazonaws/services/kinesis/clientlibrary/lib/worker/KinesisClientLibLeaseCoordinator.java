@@ -21,8 +21,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 
-import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
+import com.amazonaws.services.kinesis.leases.impl.*;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -38,8 +39,6 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 
@@ -127,6 +126,16 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
             IMetricsFactory metricsFactory) {
         super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
+        this.leaseManager = leaseManager;
+    }
+
+    public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
+                                            LeaseTaker<KinesisClientLease> leaseTaker,
+                                            LeaseRenewer<KinesisClientLease> leaseRenewer,
+                                            KinesisClientLibConfiguration config,
+                                            ExecutorService executorService,
+                                            IMetricsFactory metricsFactory) {
+        super(leaseTaker, leaseRenewer, config, executorService, metricsFactory);
         this.leaseManager = leaseManager;
     }
 

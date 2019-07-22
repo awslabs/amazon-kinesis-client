@@ -48,7 +48,7 @@ import com.amazonaws.services.kinesis.model.Shard;
  * It deletes leases for shards that have been trimmed from Kinesis, or if we've completed processing it
  * and begun processing it's child shards.
  */
-class ShardSyncer {
+public class ShardSyncer {
 
     private static final Log LOG = LogFactory.getLog(ShardSyncer.class);
     private final LeaseCleanupValidator leaseCleanupValidator;
@@ -80,7 +80,7 @@ class ShardSyncer {
      * @throws ProvisionedThroughputException
      * @throws KinesisClientLibIOException
      */
-    synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
+    public synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards,
