@@ -161,7 +161,7 @@ public class WorkerTest {
 
     private RecordsFetcherFactory recordsFetcherFactory;
     private KinesisClientLibConfiguration config;
-    private ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
+    private KinesisShardSyncer shardSyncer = new KinesisShardSyncer(new KinesisLeaseCleanupValidator());
 
     @Mock
     private KinesisClientLibLeaseCoordinator leaseCoordinator;

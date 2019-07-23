@@ -59,7 +59,7 @@ import junit.framework.Assert;
  */
 // CHECKSTYLE:IGNORE JavaNCSS FOR NEXT 800 LINES
 public class ShardSyncerTest {
-    private static final Log LOG = LogFactory.getLog(ShardSyncer.class);
+    private static final Log LOG = LogFactory.getLog(KinesisShardSyncer.class);
     private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
     private static final InitialPositionInStreamExtended INITIAL_POSITION_TRIM_HORIZON =
@@ -71,7 +71,7 @@ public class ShardSyncerTest {
     LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("tempTestTable", ddbClient);
     private static final int EXPONENT = 128;
     protected static final KinesisLeaseCleanupValidator leaseCleanupValidator = new KinesisLeaseCleanupValidator();
-    private static final ShardSyncer shardSyncer = new ShardSyncer(leaseCleanupValidator);
+    private static final KinesisShardSyncer shardSyncer = new KinesisShardSyncer(leaseCleanupValidator);
     /**
      * Old/Obsolete max value of a sequence number (2^128 -1).
      */
@@ -398,7 +398,7 @@ public class ShardSyncerTest {
         for (int c = 1; c <= maxCallingCount; c = c + 2) {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.DELETELEASE, c, INITIAL_POSITION_TRIM_HORIZON);
-            // Need to clean up lease manager every time after calling ShardSyncer
+            // Need to clean up lease manager every time after calling KinesisShardSyncer
             leaseManager.deleteAll();
         }
     }
@@ -420,7 +420,7 @@ public class ShardSyncerTest {
         for (int c = 1; c <= maxCallingCount; c = c + 2) {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.LISTLEASES, c, INITIAL_POSITION_TRIM_HORIZON);
-            // Need to clean up lease manager every time after calling ShardSyncer
+            // Need to clean up lease manager every time after calling KinesisShardSyncer
             leaseManager.deleteAll();
         }
     }
@@ -442,7 +442,7 @@ public class ShardSyncerTest {
         for (int c = 1; c <= maxCallingCount; c = c + 2) {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.CREATELEASEIFNOTEXISTS, c,INITIAL_POSITION_TRIM_HORIZON);
-            // Need to clean up lease manager every time after calling ShardSyncer
+            // Need to clean up lease manager every time after calling KinesisShardSyncer
             leaseManager.deleteAll();
         }
     }
@@ -472,7 +472,7 @@ public class ShardSyncerTest {
                 } catch (LeasingException e) {
                     LOG.debug("Catch leasing exception", e);
                 }
-                // Clear throwing exception scenario every time after calling ShardSyncer
+                // Clear throwing exception scenario every time after calling KinesisShardSyncer
                 exceptionThrowingLeaseManager.clearLeaseManagerThrowingExceptionScenario();
             }
         } else {
@@ -517,7 +517,7 @@ public class ShardSyncerTest {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.DELETELEASE,
                     c, INITIAL_POSITION_AT_TIMESTAMP);
-            // Need to clean up lease manager every time after calling ShardSyncer
+            // Need to clean up lease manager every time after calling KinesisShardSyncer
             leaseManager.deleteAll();
         }
     }
@@ -540,7 +540,7 @@ public class ShardSyncerTest {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.LISTLEASES,
                     c, INITIAL_POSITION_AT_TIMESTAMP);
-            // Need to clean up lease manager every time after calling ShardSyncer
+            // Need to clean up lease manager every time after calling KinesisShardSyncer
             leaseManager.deleteAll();
         }
     }
@@ -563,7 +563,7 @@ public class ShardSyncerTest {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.CREATELEASEIFNOTEXISTS,
                     c, INITIAL_POSITION_AT_TIMESTAMP);
-            // Need to clean up lease manager every time after calling ShardSyncer
+            // Need to clean up lease manager every time after calling KinesisShardSyncer
             leaseManager.deleteAll();
         }
     }

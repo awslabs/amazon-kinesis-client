@@ -52,7 +52,7 @@ public class ShardSyncTaskIntegrationTest {
     private static AWSCredentialsProvider credentialsProvider;
     private IKinesisClientLeaseManager leaseManager;
     private IKinesisProxy kinesisProxy;
-    private final ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
+    private final KinesisShardSyncer shardSyncer = new KinesisShardSyncer(new KinesisLeaseCleanupValidator());
 
     /**
      * @throws java.lang.Exception

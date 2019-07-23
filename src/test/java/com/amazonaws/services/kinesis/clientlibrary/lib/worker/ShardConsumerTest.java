@@ -97,7 +97,7 @@ public class ShardConsumerTest {
     private final boolean skipCheckpointValidationValue = false;
     private static final InitialPositionInStreamExtended INITIAL_POSITION_LATEST =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
-    private static final ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
+    private static final KinesisShardSyncer shardSyncer = new KinesisShardSyncer(new KinesisLeaseCleanupValidator());
 
     // Use Executors.newFixedThreadPool since it returns ThreadPoolExecutor, which is
     // ... a non-final public class, and so can be mocked and spied.

@@ -408,7 +408,7 @@ public class Worker implements Runnable {
                 config.getRetryGetRecordsInSeconds(),
                 config.getMaxGetRecordsThreadPool(),
                 DEFAULT_WORKER_STATE_CHANGE_LISTENER,
-                new ShardSyncer(DEFAULT_LEASE_CLEANUP_VALIDATOR));
+                new KinesisShardSyncer(DEFAULT_LEASE_CLEANUP_VALIDATOR));
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
@@ -468,7 +468,7 @@ public class Worker implements Runnable {
         this(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
                 shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
                 metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
-                shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER, new ShardSyncer(DEFAULT_LEASE_CLEANUP_VALIDATOR));
+                shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER, new KinesisShardSyncer(DEFAULT_LEASE_CLEANUP_VALIDATOR));
     }
 
     /**
@@ -1292,16 +1292,18 @@ public class Worker implements Runnable {
                 workerStateChangeListener = DEFAULT_WORKER_STATE_CHANGE_LISTENER;
             }
 
-            if(leaseCleanupValidator == null) {
-                leaseCleanupValidator = DEFAULT_LEASE_CLEANUP_VALIDATOR;
+            if ((shardSyncer == null && leaseCleanupValidator != null) || (shardSyncer != null && leaseCleanupValidator == null)) {
+                throw new IllegalArgumentException("Either both ShardSyncer and LeaseCleanupValidator should be injected, or neither of them.");
+            }
+            else {
+                if (shardSyncer == null) {
+                    leaseCleanupValidator = DEFAULT_LEASE_CLEANUP_VALIDATOR;
+                    shardSyncer = new KinesisShardSyncer(leaseCleanupValidator);
+                }
             }
 
             if(leaseSelector == null) {
                 leaseSelector = DEFAULT_LEASE_SELECTOR;
-            }
-
-            if (shardSyncer == null) {
-                shardSyncer = new ShardSyncer(leaseCleanupValidator);
             }
 
             if (leaseTaker == null) {

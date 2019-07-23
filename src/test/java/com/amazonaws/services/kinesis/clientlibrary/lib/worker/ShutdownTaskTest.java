@@ -57,7 +57,7 @@ public class ShutdownTaskTest {
             defaultParentShardIds,
             ExtendedSequenceNumber.LATEST);
     IRecordProcessor defaultRecordProcessor = new TestStreamlet();
-    ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
+    KinesisShardSyncer shardSyncer = new KinesisShardSyncer(new KinesisLeaseCleanupValidator());
 
     @Mock
     private GetRecordsCache getRecordsCache;

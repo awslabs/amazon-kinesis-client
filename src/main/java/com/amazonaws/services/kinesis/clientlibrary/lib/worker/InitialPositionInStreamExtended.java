@@ -44,7 +44,7 @@ public class InitialPositionInStreamExtended {
      *
      * @return The initial position in stream.
      */
-    protected InitialPositionInStream getInitialPositionInStream() {
+    public InitialPositionInStream getInitialPositionInStream() {
         return this.position;
     }
 
@@ -54,7 +54,7 @@ public class InitialPositionInStreamExtended {
      *
      * @return The timestamp from where we need to start the application.
      */
-    protected Date getTimestamp() {
+    public Date getTimestamp() {
         return this.timestamp;
     }
 
