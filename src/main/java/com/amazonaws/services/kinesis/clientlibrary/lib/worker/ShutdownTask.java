@@ -49,6 +49,7 @@ class ShutdownTask implements ITask {
     private final long backoffTimeMillis;
     private final GetRecordsCache getRecordsCache;
     private final ShardSyncer shardSyncer;
+    private final ShardSyncStrategy shardSyncStrategy;
 
     /**
      * Constructor.
@@ -65,7 +66,7 @@ class ShutdownTask implements ITask {
             ILeaseManager<KinesisClientLease> leaseManager,
             long backoffTimeMillis,
             GetRecordsCache getRecordsCache,
-            ShardSyncer shardSyncer) {
+            ShardSyncer shardSyncer, ShardSyncStrategy shardSyncStrategy) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -78,6 +79,7 @@ class ShutdownTask implements ITask {
         this.backoffTimeMillis = backoffTimeMillis;
         this.getRecordsCache = getRecordsCache;
         this.shardSyncer = shardSyncer;
+        this.shardSyncStrategy = shardSyncStrategy;
     }
 
     /*
@@ -130,11 +132,11 @@ class ShutdownTask implements ITask {
             if (reason == ShutdownReason.TERMINATE) {
                 LOG.debug("Looking for child shards of shard " + shardInfo.getShardId());
                 // create leases for the child shards
-                shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
-                        leaseManager,
-                        initialPositionInStream,
-                        cleanupLeasesOfCompletedShards,
-                        ignoreUnexpectedChildShards);
+                TaskResult result = shardSyncStrategy.onShutDown();
+                if (result.getException() != null) {
+                    LOG.debug("Exception while trying to sync shards on the shutdown of shard: " + shardInfo.getShardId());
+                    throw result.getException();
+                }
                 LOG.debug("Finished checking for child shards of shard " + shardInfo.getShardId());
             }
 
