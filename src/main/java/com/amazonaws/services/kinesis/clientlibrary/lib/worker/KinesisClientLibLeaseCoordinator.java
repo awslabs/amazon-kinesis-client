@@ -23,7 +23,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 
-import com.amazonaws.services.kinesis.leases.impl.*;
+import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
+import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
+import com.amazonaws.services.kinesis.leases.impl.LeaseTaker;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;

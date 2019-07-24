@@ -33,7 +33,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
-import com.amazonaws.services.kinesis.leases.impl.*;
+import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
+import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
+import com.amazonaws.services.kinesis.leases.impl.LeaseTaker;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
