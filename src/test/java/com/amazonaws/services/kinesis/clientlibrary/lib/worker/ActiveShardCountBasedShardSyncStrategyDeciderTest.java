@@ -17,11 +17,17 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ActiveShardCountBasedShardSyncStrategyDecider.MIN_ACTIVE_SHARDS_FOR_PERIODIC_SYNC;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.LeaderElectionStrategy;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -34,6 +40,33 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 public class ActiveShardCountBasedShardSyncStrategyDeciderTest extends PeriodicShardSyncTestBase {
     @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
+    @Mock
+    private LeaderElectionStrategy leaderElectionStrategy;
+    @Mock
+    private IKinesisProxy kinesisProxy;
+    @Mock
+    private KinesisClientLibConfiguration config;
+    @Mock
+    private ShardSyncer shardSyncer;
+    @Mock
+    private IMetricsFactory metricsFactory;
+    @Mock
+    private ExecutorService executorService;
+    private ShardSyncStrategyDecider shardSyncStrategyDecider;
+
+    @Before
+    public void setup() {
+        shardSyncStrategyDecider = ActiveShardCountBasedShardSyncStrategyDecider.getBuilder().withLeaseManager(leaseManager)
+                                       .withLeaderElectionStrategy(leaderElectionStrategy)
+                                       .withkinesisProxy(kinesisProxy)
+                                       .withConfig(config)
+                                       .withWorkerId(config.getWorkerIdentifier())
+                                       .withShardSyncer(shardSyncer)
+                                       .withMetricsFactory(metricsFactory)
+                                       .withExecutorService(executorService)
+                                       .build();
+        when(config.getEnablePeriodicShardSync()).thenReturn(true);
+    }
 
     @Test
     public void testShardEndStrategyResultReturnedWhenActiveLeasesLessThanRequired()
@@ -41,10 +74,8 @@ public class ActiveShardCountBasedShardSyncStrategyDeciderTest extends PeriodicS
         List<KinesisClientLease> leases = getLeases(MIN_ACTIVE_SHARDS_FOR_PERIODIC_SYNC - 1,
                 false /* duplicateLeaseOwner */, true /* activeLeases */);
         when(leaseManager.listLeases()).thenReturn(leases);
-        ShardSyncStrategyDecider shardSyncStrategyDecider = new ActiveShardCountBasedShardSyncStrategyDecider(leaseManager);
         ShardSyncStrategy actualShardSyncStrategy = shardSyncStrategyDecider.getShardSyncStrategy();
-        assertEquals(String.format("%s Shard sync strategy expected", ShardSyncStrategy.SHARD_END.toString()), ShardSyncStrategy.SHARD_END,
-                actualShardSyncStrategy);
+        assertTrue("Unexpected Shard sync strategy", actualShardSyncStrategy instanceof ShardEndShardSyncStrategy);
     }
 
     @Test
@@ -52,11 +83,8 @@ public class ActiveShardCountBasedShardSyncStrategyDeciderTest extends PeriodicS
         List<KinesisClientLease> leases = getLeases(MIN_ACTIVE_SHARDS_FOR_PERIODIC_SYNC + 1,
                 false /* duplicateLeaseOwner */, true /* activeLeases */);
         when(leaseManager.listLeases()).thenReturn(leases);
-        ShardSyncStrategyDecider shardSyncStrategyDecider = new ActiveShardCountBasedShardSyncStrategyDecider(
-                leaseManager);
         ShardSyncStrategy actualShardSyncStrategy = shardSyncStrategyDecider.getShardSyncStrategy();
-        assertEquals(String.format("%s Shard sync strategy expected", ShardSyncStrategy.PERIODIC.toString()),
-                ShardSyncStrategy.PERIODIC, actualShardSyncStrategy);
+        assertTrue("Unexpected Shard sync strategy", actualShardSyncStrategy instanceof PeriodicShardSyncStrategy);
     }
 
     @Test
@@ -64,11 +92,18 @@ public class ActiveShardCountBasedShardSyncStrategyDeciderTest extends PeriodicS
         List<KinesisClientLease> leases = getLeases(MIN_ACTIVE_SHARDS_FOR_PERIODIC_SYNC,
                 false /* duplicateLeaseOwner */, true /* activeLeases */);
         when(leaseManager.listLeases()).thenReturn(leases);
-        ShardSyncStrategyDecider shardSyncStrategyDecider = new ActiveShardCountBasedShardSyncStrategyDecider(
-                leaseManager);
         ShardSyncStrategy actualShardSyncStrategy = shardSyncStrategyDecider.getShardSyncStrategy();
-        assertEquals(String.format("%s Shard sync strategy expected", ShardSyncStrategy.PERIODIC.toString()),
-                ShardSyncStrategy.PERIODIC, actualShardSyncStrategy);
+        assertTrue("Unexpected Shard sync strategy", actualShardSyncStrategy instanceof PeriodicShardSyncStrategy);
+    }
+
+    @Test
+    public void testShardEndStrategyReturnedWhenActiveLeasesGreaterThanRequiredButFlagNotSet() throws Exception {
+        List<KinesisClientLease> leases = getLeases(MIN_ACTIVE_SHARDS_FOR_PERIODIC_SYNC + 1,
+            false /* duplicateLeaseOwner */, true /* activeLeases */);
+        when(leaseManager.listLeases()).thenReturn(leases);
+        when(config.getEnablePeriodicShardSync()).thenReturn(false);
+        ShardSyncStrategy actualShardSyncStrategy = shardSyncStrategyDecider.getShardSyncStrategy();
+        assertTrue("Unexpected Shard sync strategy", actualShardSyncStrategy instanceof ShardEndShardSyncStrategy);
     }
 
 

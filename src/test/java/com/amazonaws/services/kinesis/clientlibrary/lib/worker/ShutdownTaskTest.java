@@ -21,7 +21,9 @@ import static org.mockito.Mockito.when;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -59,8 +61,11 @@ public class ShutdownTaskTest {
     IRecordProcessor defaultRecordProcessor = new TestStreamlet();
     ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
 
+
     @Mock
     private GetRecordsCache getRecordsCache;
+    @Mock
+    private ShardSyncStrategy shardSyncStrategy;
 
     /**
      * @throws java.lang.Exception
@@ -114,7 +119,7 @@ public class ShutdownTaskTest {
                 TASK_BACKOFF_TIME_MILLIS,
                 getRecordsCache,
                 shardSyncer,
-                ShardSyncStrategy.SHARD_END);
+                shardSyncStrategy);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
@@ -132,6 +137,7 @@ public class ShutdownTaskTest {
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
+        when(shardSyncStrategy.onShutDown()).thenReturn(new TaskResult(new KinesisClientLibIOException("")));
         ShutdownTask task = new ShutdownTask(defaultShardInfo,
                 defaultRecordProcessor,
                 checkpointer,
@@ -144,8 +150,9 @@ public class ShutdownTaskTest {
                 TASK_BACKOFF_TIME_MILLIS,
                 getRecordsCache,
                 shardSyncer,
-                ShardSyncStrategy.SHARD_END);
+                shardSyncStrategy);
         TaskResult result = task.call();
+        verify(shardSyncStrategy).onShutDown();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof KinesisClientLibIOException);
         verify(getRecordsCache).shutdown();
@@ -156,7 +163,7 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testGetTaskType() {
-        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache, shardSyncer, ShardSyncStrategy.SHARD_END);
+        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache, shardSyncer, shardSyncStrategy);
         Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
     }
 

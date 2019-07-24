@@ -18,7 +18,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.LeaderElectionStrategy;
-import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.LeaderPoller;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -28,7 +27,7 @@ import org.apache.commons.logging.LogFactory;
  * for frequency and concurrency
  *
  */
-class ScheduledLeaseLeaderPoller implements LeaderPoller<KinesisClientLease> {
+class ScheduledLeaseLeaderPoller {
 
     private final LeaderElectionStrategy<KinesisClientLease> leaderElectionStrategy;
     private final KinesisClientLibConfiguration config;
@@ -48,18 +47,15 @@ class ScheduledLeaseLeaderPoller implements LeaderPoller<KinesisClientLease> {
         this.scheduledExecutor = scheduledThreadPoolExecutor;
     }
 
-    @Override
+    public Boolean isLeader(String workerId) {
+        return leaderElectionStrategy.isLeader(workerId);
+    }
+
     public void pollForLeaders() {
         scheduledExecutor.scheduleWithFixedDelay(leaderElectionStrategy, POLLER_INITIAL_DELAY_MINS,
                                                  PERIODIC_SHARD_SYNC_LEADER_POLLER_FREQUENCY_IN_MINS, TimeUnit.MINUTES);
     }
 
-    @Override
-    public LeaderElectionStrategy<KinesisClientLease> getLeaderElectionStrategy() {
-        return leaderElectionStrategy;
-    }
-
-    @Override
     public synchronized void stop() {
         try {
             scheduledExecutor.shutdown();
@@ -70,6 +66,7 @@ class ScheduledLeaseLeaderPoller implements LeaderPoller<KinesisClientLease> {
                 LOG.info(String.format("Stopped leader polling threads after awaiting termination for %d seconds",
                                        AWAIT_TERMINATION_SECS));
             }
+
         } catch (InterruptedException e) {
             LOG.debug("Encountered InterruptedException while awaiting leader polling threadpool termination");
         }

@@ -129,14 +129,14 @@ class ShutdownTask implements ITask {
                         MetricsLevel.SUMMARY);
             }
 
-            if (reason == ShutdownReason.TERMINATE && ShardSyncStrategy.SHARD_END.equals(shardSyncStrategy)) {
+            if (reason == ShutdownReason.TERMINATE) {
                 LOG.debug("Looking for child shards of shard " + shardInfo.getShardId());
                 // create leases for the child shards
-                shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
-                        leaseManager,
-                        initialPositionInStream,
-                        cleanupLeasesOfCompletedShards,
-                        ignoreUnexpectedChildShards);
+                TaskResult result = shardSyncStrategy.onShutDown();
+                if (result.getException() != null) {
+                    LOG.debug("Exception while trying to sync shards on the shutdown of shard: " + shardInfo.getShardId());
+                    throw result.getException();
+                }
                 LOG.debug("Finished checking for child shards of shard " + shardInfo.getShardId());
             }
 

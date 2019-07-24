@@ -58,11 +58,7 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.ICheckpoint;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotificationAware;
-import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.IShardSyncManager;
 import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.LeaderElectionStrategy;
-import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.LeaderPoller;
-import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.LeadersElectionListener;
-import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.TaskSchedulerStrategy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.KinesisProxy;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
@@ -145,7 +141,8 @@ public class Worker implements Runnable {
     private WorkerStateChangeListener workerStateChangeListener;
 
     // Periodic Shard Sync related fields
-    private IShardSyncManager<KinesisClientLease> periodicShardSyncManager;
+    private static LeaderElectionStrategy defaultLeaderElectionStrategy;
+    private LeaderElectionStrategy leaderElectionStrategy;
     private ShardSyncStrategyDecider shardSyncStrategyDecider;
     private ShardSyncStrategy shardSyncStrategy;
 
@@ -410,7 +407,7 @@ public class Worker implements Runnable {
                 config.getMaxGetRecordsThreadPool(),
                 DEFAULT_WORKER_STATE_CHANGE_LISTENER,
                 DEFAULT_LEASE_CLEANUP_VALIDATOR,
-                null /* periodicShardSyncManager */,
+                null /* leaderElectionStrategy */,
                 null /* shardSyncStrategyDecider */);
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
@@ -495,7 +492,7 @@ public class Worker implements Runnable {
                 shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
                 metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
                 shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER, DEFAULT_LEASE_CLEANUP_VALIDATOR,
-             null /* periodicShardSyncManager */, null /* shardSyncStrategyDecider */);
+                null, /* leaderElectionStrategy */ null /* shardSyncStrategyDecider */);
     }
 
     /**
@@ -545,8 +542,7 @@ public class Worker implements Runnable {
             IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
             Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener,
-            LeaseCleanupValidator leaseCleanupValidator, IShardSyncManager<KinesisClientLease> periodicShardSyncManager,
-           ShardSyncStrategyDecider shardSyncStrategyDecider) {
+            LeaseCleanupValidator leaseCleanupValidator, LeaderElectionStrategy leaderElectionStrategy, ShardSyncStrategyDecider shardSyncStrategyDecider) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.config = config;
@@ -571,20 +567,8 @@ public class Worker implements Runnable {
         this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
         this.workerStateChangeListener = workerStateChangeListener;
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.CREATED);
-
-        this.periodicShardSyncManager = periodicShardSyncManager != null ? periodicShardSyncManager : getDefaultPeriodicShardSyncManager(config, metricsFactory,
-                                                                                                                                         leaseCoordinator.getLeaseManager(),
-                                                                                                                                         streamConfig.getStreamProxy(), shardSyncer);
-        registerLeaderElectionListeners();
-        this.shardSyncStrategyDecider = shardSyncStrategyDecider != null ? shardSyncStrategyDecider : getDefaultShardSyncStrategyDecider(leaseCoordinator.getLeaseManager());
-    }
-
-    private void registerLeaderElectionListeners() {
-        LeaderElectionStrategy<KinesisClientLease> leaderElectionStrategy = periodicShardSyncManager.getLeaderPoller()
-                                                                                                    .getLeaderElectionStrategy();
-        if (periodicShardSyncManager instanceof LeadersElectionListener) {
-            leaderElectionStrategy.registerLeadersElectionListener((LeadersElectionListener) this.periodicShardSyncManager);
-        }
+        this.leaderElectionStrategy = leaderElectionStrategy != null ? leaderElectionStrategy : getDefaultLeaderElectionStrategy();
+        this.shardSyncStrategyDecider = shardSyncStrategyDecider != null ? shardSyncStrategyDecider : getDefaultShardSyncStrategyDecider();
     }
 
     /**
@@ -640,8 +624,8 @@ public class Worker implements Runnable {
                 assignedShards.add(shardInfo);
             }
 
-            if (foundCompletedShard && ShardSyncStrategy.SHARD_END.equals(shardSyncStrategy)) {
-                controlServer.syncShardAndLeaseInfo(null);
+            if (foundCompletedShard) {
+                shardSyncStrategy.foundCompletedShard();
             }
 
             // clean up shard consumers for unassigned shards
@@ -692,16 +676,10 @@ public class Worker implements Runnable {
                         LOG.info("LeaseCoordinator is already running. No need to start it.");
                     }
                     LOG.info("Checking the shardSyncStrategy");
-                    shardSyncStrategy = ShardSyncStrategy.SHARD_END;
-                    if (config.getEnablePeriodicShardSync()) {
-                        shardSyncStrategy = shardSyncStrategyDecider.getShardSyncStrategy();
-                        if (ShardSyncStrategy.PERIODIC.equals(shardSyncStrategy)) {
-                            LOG.info("Starting the periodic shard sync");
-                            periodicShardSyncManager.start();
-                        }
-                    }
+                    shardSyncStrategy = shardSyncStrategyDecider.getShardSyncStrategy();
+                    shardSyncStrategy.onWorkerInitialization();
                     if (shardSyncStrategy != null) {
-                        LOG.info(String.format("Shard sync strategy determined as %s, marking initialization as done", shardSyncStrategy.name()));
+                        LOG.info(String.format("Shard sync strategy determined as %s, marking initialization as done", shardSyncStrategy.getName()));
                         isDone = true;
                     }
                 } else {
@@ -973,7 +951,9 @@ public class Worker implements Runnable {
         // Worker.run().
         leaseCoordinator.stop();
         // Stop the periodicShardSyncManager for the worker
-        periodicShardSyncManager.stop();
+        if (shardSyncStrategy != null) {
+            shardSyncStrategy.stop();
+        }
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
     }
 
@@ -1127,31 +1107,23 @@ public class Worker implements Runnable {
         return streamConfig;
     }
 
-    private TaskSchedulerStrategy getTaskSchedulerStrategy(IKinesisProxy kinesisProxy,
-                                                                  KinesisClientLibConfiguration config, ILeaseManager<KinesisClientLease> leaseManager, ShardSyncer shardSyncer) {
-        return new ConfigBasedPeriodicSyncScheduler(kinesisProxy, leaseManager, config.getInitialPositionInStreamExtended(), config,
-                                                    new ScheduledThreadPoolExecutor(PERIODIC_SHARD_SYNC_THREAD_COUNT), shardSyncer);
+    private LeaderElectionStrategy getDefaultLeaderElectionStrategy() {
+        if (defaultLeaderElectionStrategy == null) {
+            defaultLeaderElectionStrategy = new DeterministicShuffleLeaderElection(config, leaseCoordinator.getLeaseManager());
+        }
+        return defaultLeaderElectionStrategy;
     }
 
-    private LeaderPoller<KinesisClientLease> getLeaderPoller(
-            ILeaseManager<KinesisClientLease> leaseManager, KinesisClientLibConfiguration config) {
-        return new ScheduledLeaseLeaderPoller(
-                new LeaderElectionStrategyFactory(config, leaseManager).getLeaderElectionStrategy(), config,
-                new ScheduledThreadPoolExecutor(LEADER_POLLER_THREAD_COUNT));
-    }
-
-    private IShardSyncManager<KinesisClientLease> getDefaultPeriodicShardSyncManager(
-            KinesisClientLibConfiguration config, IMetricsFactory metricsFactory,
-            ILeaseManager<KinesisClientLease> leaseManager, IKinesisProxy kinesisProxy, ShardSyncer shardSyncer) {
-        return PeriodicShardSyncManager.getBuilder().withLeaderPoller(getLeaderPoller(leaseManager, config))
-                                       .withMetricsFactory(metricsFactory)
-                                       .withTaskSchedulerStrategy(getTaskSchedulerStrategy(kinesisProxy, config, leaseManager, shardSyncer))
-                                       .withWorkerId(config.getWorkerIdentifier()).build();
-    }
-
-    private ShardSyncStrategyDecider getDefaultShardSyncStrategyDecider(
-            ILeaseManager<KinesisClientLease> leaseManager) {
-        return new ActiveShardCountBasedShardSyncStrategyDecider(leaseManager);
+    private ShardSyncStrategyDecider getDefaultShardSyncStrategyDecider() {
+        return ActiveShardCountBasedShardSyncStrategyDecider.getBuilder().withLeaseManager(leaseCoordinator.getLeaseManager())
+            .withLeaderElectionStrategy(leaderElectionStrategy)
+            .withkinesisProxy(streamConfig.getStreamProxy())
+            .withConfig(config)
+            .withWorkerId(config.getWorkerIdentifier())
+            .withShardSyncer(shardSyncer)
+            .withMetricsFactory(metricsFactory)
+            .withExecutorService(executorService)
+            .build();
     }
 
     /**
@@ -1255,7 +1227,7 @@ public class Worker implements Runnable {
         @Setter @Accessors(fluent = true)
         private LeaseSelector<KinesisClientLease> leaseSelector;
         @Setter @Accessors(fluent = true)
-        private IShardSyncManager<KinesisClientLease> periodicShardSyncManager;
+        private LeaderElectionStrategy leaderElectionStrategy;
         @Setter @Accessors(fluent = true)
         private ShardSyncStrategyDecider shardSyncStrategyDecider;
 
@@ -1415,7 +1387,7 @@ public class Worker implements Runnable {
                     config.getMaxGetRecordsThreadPool(),
                     workerStateChangeListener,
                     leaseCleanupValidator,
-                    periodicShardSyncManager,
+                    leaderElectionStrategy,
                     shardSyncStrategyDecider);
         }
 

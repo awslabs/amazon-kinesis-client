@@ -33,7 +33,7 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
-public class ConfigBasedPeriodicSyncSchedulerTest {
+public class PeriodicShardSyncSchedulerTest {
     @Mock
     private IKinesisProxy kinesisProxy;
     @Mock
@@ -46,24 +46,27 @@ public class ConfigBasedPeriodicSyncSchedulerTest {
     private ScheduledThreadPoolExecutor scheduledExecutor;
     @Mock
     private ShardSyncer shardSyncer;
+    @Mock
+    private ScheduledLeaseLeaderPoller leaderPoller;
+    private static final String WORKER_ID = "wprkerId";
     
     @Test
     public void testStartSchedulesTask() {
-        ConfigBasedPeriodicSyncScheduler scheduler = spy(new ConfigBasedPeriodicSyncScheduler(kinesisProxy,
-                leaseManager, initialPosition, config, scheduledExecutor, shardSyncer));
+        PeriodicShardSyncScheduler scheduler = spy(new PeriodicShardSyncScheduler(kinesisProxy,
+                leaseManager, initialPosition, config, scheduledExecutor, shardSyncer, leaderPoller, WORKER_ID));
         scheduler.start();
-        verify(scheduler, times(1)).scheduleTask(any(ShardSyncTask.class));
+        verify(scheduler, times(1)).scheduleTask(any());
         verify(scheduledExecutor, times(1)).scheduleAtFixedRate(any(ShardSyncTask.class), anyLong(), anyLong(),
                 any(TimeUnit.class));
     }
 
     @Test
     public void testShutdownWithAwaitTerminationTrue() throws InterruptedException {
-        ConfigBasedPeriodicSyncScheduler scheduler = spy(new ConfigBasedPeriodicSyncScheduler(kinesisProxy,
-                leaseManager, initialPosition, config, scheduledExecutor, shardSyncer));
+        PeriodicShardSyncScheduler scheduler = spy(new PeriodicShardSyncScheduler(kinesisProxy,
+            leaseManager, initialPosition, config, scheduledExecutor, shardSyncer, leaderPoller, WORKER_ID));
         when(scheduledExecutor.awaitTermination(anyLong(), any(TimeUnit.class))).thenReturn(true);
         scheduler.start();
-        verify(scheduler, times(1)).scheduleTask(any(ShardSyncTask.class));
+        verify(scheduler, times(1)).scheduleTask(any());
         scheduler.shutdown();
         verify(scheduledExecutor, times(1)).shutdown();
         verify(scheduledExecutor, times(0)).shutdownNow();
@@ -71,11 +74,11 @@ public class ConfigBasedPeriodicSyncSchedulerTest {
 
     @Test
     public void testShutdownWithAwaitTerminationFalse() throws InterruptedException {
-        ConfigBasedPeriodicSyncScheduler scheduler = spy(new ConfigBasedPeriodicSyncScheduler(kinesisProxy,
-                leaseManager, initialPosition, config, scheduledExecutor, shardSyncer));
+        PeriodicShardSyncScheduler scheduler = spy(new PeriodicShardSyncScheduler(kinesisProxy,
+            leaseManager, initialPosition, config, scheduledExecutor, shardSyncer, leaderPoller, WORKER_ID));
         when(scheduledExecutor.awaitTermination(anyLong(), any(TimeUnit.class))).thenReturn(false);
         scheduler.start();
-        verify(scheduler, times(1)).scheduleTask(any(ShardSyncTask.class));
+        verify(scheduler, times(1)).scheduleTask(any());
         scheduler.shutdown();
         verify(scheduledExecutor, times(1)).shutdown();
         verify(scheduledExecutor, times(1)).shutdownNow();

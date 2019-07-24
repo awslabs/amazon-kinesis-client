@@ -14,6 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -22,10 +25,13 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.ILeasesCache;
 import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.LeaderElectionStrategy;
-import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.LeadersElectionListener;
+import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
+import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
@@ -50,31 +56,36 @@ class DeterministicShuffleLeaderElection
     // Fixed seed so that the shuffle order is preserved across workers
     static final int DETERMINISTIC_SHUFFLE_SEED = 1947;
     private static final int PERIODIC_SHARD_SYNC_MAX_WORKERS = 5;
+    private long leasesLastFetchTime;
+    private List<KinesisClientLease> leases;
+    private Clock clock;
+
+    private static final int LEADER_ELECTION_LEASES_CACHE_TTL_MILLIS = 60000;
 
     private static final Log LOG = LogFactory.getLog(DeterministicShuffleLeaderElection.class);
     private KinesisClientLibConfiguration config;
-    private Set<LeadersElectionListener> leadersElectionListeners;
-    private ILeasesCache<KinesisClientLease> leasesCache;
+    private final ILeaseManager<KinesisClientLease> leaseManager;
 
     DeterministicShuffleLeaderElection(KinesisClientLibConfiguration config,
-                                       ILeasesCache<KinesisClientLease> leasesCache) {
+        ILeaseManager<KinesisClientLease> leaseManager) {
         this.config = config;
-        this.leasesCache = leasesCache;
-
-        this.leadersElectionListeners = new HashSet<LeadersElectionListener>();
+        this.leaseManager = leaseManager;
+        clock = Clock.systemUTC();
+        leasesLastFetchTime = clock.instant().toEpochMilli();
+        updateLeases();
     }
 
     @Override
     public void run() {
-        List<KinesisClientLease> leases = getLeases();
-        if (leases != null) {
-            electLeaders(leases);
-        }
+        updateLeases();
     }
 
-    @Override
-    public void registerLeadersElectionListener(LeadersElectionListener listener) {
-        leadersElectionListeners.add(listener);
+    synchronized long getLeasesLastFetchTime() {
+        return leasesLastFetchTime;
+    }
+
+    synchronized void setLeasesLastFetchTime(long instant) {
+        leasesLastFetchTime = instant;
     }
 
     /*
@@ -95,8 +106,13 @@ class DeterministicShuffleLeaderElection
         Set<String> leaders = leases.stream()
                                     .limit(Math.min(PERIODIC_SHARD_SYNC_MAX_WORKERS, getUniqueWorkerIds(leases).size()))
                                     .map(lease -> lease.getLeaseOwner()).collect(Collectors.toSet());
-        leadersElectionListeners.forEach(listener -> listener.leadersElected(leaders));
         return leaders;
+    }
+
+    @Override
+    public Boolean isLeader(String workerId) {
+        Set<String> leaders = electLeaders(leases);
+        return leaders.contains(workerId);
     }
 
     private Set<String> getUniqueWorkerIds(List<KinesisClientLease> leases) {
@@ -109,16 +125,15 @@ class DeterministicShuffleLeaderElection
         return workers;
     }
 
-    private List<KinesisClientLease> getLeases() {
-        List<KinesisClientLease> leases = null;
+    void updateLeases() {
         try {
-            //The leases are cached to keep a check on the IOPS consumption on the leases table
-            // caching is feasible as the worker composition should remain fairly constant 
-            leases = leasesCache.getLeases(LEAES_CACHE_KEY);
-        } catch (LeasesCacheException e) {
-            LOG.error("Exception occurred while trying to fetch all leases for leader election", e.getCause());
+            if (clock.instant().toEpochMilli() - getLeasesLastFetchTime() > LEADER_ELECTION_LEASES_CACHE_TTL_MILLIS) {
+                leases = leaseManager.listLeases();
+                setLeasesLastFetchTime(clock.instant().toEpochMilli());
+            }
+        } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
+            LOG.error("Exception occurred while trying to fetch all leases for leader election", e);
         }
-        return leases;
     }
 
     @Override

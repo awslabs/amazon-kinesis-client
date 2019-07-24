@@ -15,33 +15,114 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.LeaderElectionStrategy;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 /**
  * ShardSyncStrategyDecider implementation which looks at the active shard count
  * to decide the strategy for shard sync
- *
  */
 class ActiveShardCountBasedShardSyncStrategyDecider implements ShardSyncStrategyDecider {
 
     private static final Object LOCK = new Object();
     private static final Log LOG = LogFactory.getLog(ActiveShardCountBasedShardSyncStrategyDecider.class);
-    private ILeaseManager<KinesisClientLease> leaseManager;
+    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final LeaderElectionStrategy leaderElectionStrategy;
+    private final IKinesisProxy kinesisProxy;
+    private final KinesisClientLibConfiguration config;
+    private final String workerId;
+    private final ShardSyncer shardSyncer;
+    private final IMetricsFactory metricsFactory;
+    private final ExecutorService executorService;
+    private ScheduledLeaseLeaderPoller leaderPoller;
     private volatile List<KinesisClientLease> leases;
 
-    ActiveShardCountBasedShardSyncStrategyDecider(ILeaseManager<KinesisClientLease> leaseManager) {
-        this.leaseManager = leaseManager;
+    static final int MIN_ACTIVE_SHARDS_FOR_PERIODIC_SYNC = 3000;
+    private static final int LEADER_POLLER_THREAD_COUNT = 1;
+    private static final int PERIODIC_SHARD_SYNC_THREAD_COUNT = 2;
+
+    private ActiveShardCountBasedShardSyncStrategyDecider(Builder builder) {
+        this.leaseManager = builder.leaseManager;
+        this.leaderElectionStrategy = builder.leaderElectionStrategy;
+        this.kinesisProxy = builder.kinesisProxy;
+        this.config = builder.config;
+        this.workerId = builder.workerId;
+        this.shardSyncer = builder.shardSyncer;
+        this.metricsFactory = builder.metricsFactory;
+        this.executorService = builder.executorService;
     }
 
-    static final int MIN_ACTIVE_SHARDS_FOR_PERIODIC_SYNC = 3000;
+    static Builder getBuilder() {
+        return new Builder();
+    }
+
+    static class Builder {
+        private ILeaseManager<KinesisClientLease> leaseManager;
+        private LeaderElectionStrategy leaderElectionStrategy;
+        private IKinesisProxy kinesisProxy;
+        private KinesisClientLibConfiguration config;
+        private String workerId;
+        private ShardSyncer shardSyncer;
+        private IMetricsFactory metricsFactory;
+        private ExecutorService executorService;
+
+        public Builder withLeaseManager(ILeaseManager<KinesisClientLease> leaseManager) {
+            this.leaseManager = leaseManager;
+            return this;
+        }
+
+        public Builder withLeaderElectionStrategy(LeaderElectionStrategy leaderElectionStrategy) {
+            this.leaderElectionStrategy = leaderElectionStrategy;
+            return this;
+        }
+
+        public Builder withkinesisProxy(IKinesisProxy kinesisProxy) {
+            this.kinesisProxy = kinesisProxy;
+            return this;
+        }
+
+        public Builder withConfig(KinesisClientLibConfiguration config) {
+            this.config = config;
+            return this;
+        }
+
+        public Builder withWorkerId(String workerId) {
+            this.workerId = workerId;
+            return this;
+        }
+
+        public Builder withShardSyncer(ShardSyncer shardSyncer) {
+            this.shardSyncer = shardSyncer;
+            return this;
+        }
+
+        public Builder withMetricsFactory(IMetricsFactory metricsFactory) {
+            this.metricsFactory = metricsFactory;
+            return this;
+        }
+
+        public Builder withExecutorService(ExecutorService executorService) {
+            this.executorService = executorService;
+            return this;
+        }
+
+        public ActiveShardCountBasedShardSyncStrategyDecider build() {
+            return new ActiveShardCountBasedShardSyncStrategyDecider(this);
+        }
+
+    }
 
     /*
      * Gets the active shards count and decides the shard sync strategy based on the threshold
@@ -52,14 +133,59 @@ class ActiveShardCountBasedShardSyncStrategyDecider implements ShardSyncStrategy
     @Override
     public ShardSyncStrategy getShardSyncStrategy()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        if (!config.getEnablePeriodicShardSync()) {
+            return createShardEndShardSyncStrategy();
+        }
         ShardSyncStrategy shardSyncStrategy = null;
         int activeShardleasesCount = getActiveShardleasesCount();
         if (activeShardleasesCount != 0) {
-            shardSyncStrategy = activeShardleasesCount >= MIN_ACTIVE_SHARDS_FOR_PERIODIC_SYNC ? ShardSyncStrategy.PERIODIC
-                                        : ShardSyncStrategy.SHARD_END;
+            shardSyncStrategy = activeShardleasesCount >= MIN_ACTIVE_SHARDS_FOR_PERIODIC_SYNC ? createPeriodicShardSyncStrategy()
+                                        : createShardEndShardSyncStrategy();
         }
-        LOG.debug(String.format("ActiveShardLeasesCount: %d, ShardSyncStrategy: %s", activeShardleasesCount, shardSyncStrategy.name()));
+        LOG.debug(String.format("ActiveShardLeasesCount: %d, ShardSyncStrategy: %s", activeShardleasesCount, shardSyncStrategy.getName()));
         return shardSyncStrategy;
+    }
+
+    private ScheduledLeaseLeaderPoller getLeaderPoller() {
+        if (leaderPoller == null) {
+            leaderPoller =
+                new ScheduledLeaseLeaderPoller(leaderElectionStrategy,
+                    config,
+                    new ScheduledThreadPoolExecutor(LEADER_POLLER_THREAD_COUNT));
+        }
+        return leaderPoller;
+    }
+
+    private PeriodicShardSyncScheduler getShardSyncScheduler() {
+        return new PeriodicShardSyncScheduler(kinesisProxy,
+            leaseManager,
+            config.getInitialPositionInStreamExtended(),
+            config,
+            new ScheduledThreadPoolExecutor(PERIODIC_SHARD_SYNC_THREAD_COUNT),
+            shardSyncer,
+            getLeaderPoller(),
+            workerId);
+    }
+
+    private PeriodicShardSyncStrategy createPeriodicShardSyncStrategy() {
+        return new PeriodicShardSyncStrategy(PeriodicShardSyncManager.getBuilder()
+                                                 .withWorkerId(workerId)
+                                                 .withLeaderPoller(getLeaderPoller())
+                                                 .withPeriodicShardSyncScheduler(getShardSyncScheduler())
+                                                 .build());
+    }
+
+
+    private ShardEndShardSyncStrategy createShardEndShardSyncStrategy() {
+        return new ShardEndShardSyncStrategy(new ShardSyncTaskManager(kinesisProxy,
+            leaseManager,
+            config.getInitialPositionInStreamExtended(),
+            config.shouldCleanupLeasesUponShardCompletion(),
+            config.shouldIgnoreUnexpectedChildShards(),
+            config.getShardSyncIntervalMillis(),
+            metricsFactory,
+            executorService,
+            shardSyncer));
     }
 
     /**

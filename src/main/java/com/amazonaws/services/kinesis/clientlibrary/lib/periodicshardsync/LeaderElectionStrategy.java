@@ -28,13 +28,10 @@ import com.amazonaws.services.kinesis.leases.impl.Lease;
 public interface LeaderElectionStrategy<T extends Lease> extends Runnable {
 	
     /**
-     * @param listener Listener interested in being notified on leader election
-     */
-    void registerLeadersElectionListener(LeadersElectionListener listener);
-
-    /**
      * @param leases Leases held by workers from which the leaders are chsoen
      * @return Elected set of leaders based on the concrete leader election strategy implementation
      */
     Set<String> electLeaders(List<T> leases);
+
+    Boolean isLeader(String workerId);
 }

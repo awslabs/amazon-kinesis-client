@@ -19,7 +19,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.kinesis.clientlibrary.lib.periodicshardsync.TaskSchedulerStrategy;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
@@ -31,7 +30,7 @@ import org.apache.commons.logging.LogFactory;
  * worker based on the values such as Max concurrency, jitter, frequency etc set
  * by the client in the config
  */
-class ConfigBasedPeriodicSyncScheduler implements TaskSchedulerStrategy<ShardSyncTask> {
+class PeriodicShardSyncScheduler {
 
     private final IKinesisProxy kinesisProxy;
     private final ILeaseManager<KinesisClientLease> leaseManager;
@@ -41,55 +40,76 @@ class ConfigBasedPeriodicSyncScheduler implements TaskSchedulerStrategy<ShardSyn
     private final ScheduledThreadPoolExecutor scheduledExecutor;
     private ScheduledFuture scheduledFuture;
     private boolean isRunning;
+    private ScheduledLeaseLeaderPoller leaderPoller;
+    private String workerId;
 
     private static final Log LOG = LogFactory.getLog(ScheduledLeaseLeaderPoller.class);
-    private static final long SHARD_SYNC_TASK_IDLE_TIME_MILIS = 0;
+    private static final long SHARD_SYNC_TASK_IDLE_TIME_MILLIS = 0;
     private static final long INITIAL_DELAY = 0;
     private static final int AWAIT_TERMINATION_SECS = 5;
     private static final long PERIODIC_SHARD_SYNC_FREQUENCY_MILLIS = 10000;
     private static final int PERIODIC_SHARD_SYNC_MAX_JITTER_MILLIS = 10;
 
-    ConfigBasedPeriodicSyncScheduler(IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
-                                     InitialPositionInStreamExtended initialPosition, KinesisClientLibConfiguration config,
-                                     ScheduledThreadPoolExecutor scheduledThreadPoolExecutor, ShardSyncer shardSyncer) {
+    PeriodicShardSyncScheduler(IKinesisProxy kinesisProxy,
+        ILeaseManager<KinesisClientLease> leaseManager,
+        InitialPositionInStreamExtended initialPosition,
+        KinesisClientLibConfiguration config,
+        ScheduledThreadPoolExecutor scheduledThreadPoolExecutor,
+        ShardSyncer shardSyncer,
+        ScheduledLeaseLeaderPoller leaderPoller,
+        String workerId) {
         this.initialPosition = initialPosition;
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.config = config;
         this.scheduledExecutor = scheduledThreadPoolExecutor;
         this.shardSyncer = shardSyncer;
+        this.leaderPoller = leaderPoller;
+        this.workerId = workerId;
     }
 
-    @Override
-    public void scheduleTask(ShardSyncTask task) {
+    static class ShardSyncWithLeaderCheck implements Runnable {
+        private ShardSyncTask shardSyncTask;
+        private ScheduledLeaseLeaderPoller leaderPoller;
+        private String workerId;
+
+        private ShardSyncWithLeaderCheck(ShardSyncTask shardSyncTask,
+            ScheduledLeaseLeaderPoller leaderPoller,
+            String workerId) {
+            this.shardSyncTask = shardSyncTask;
+            this.leaderPoller = leaderPoller;
+            this.workerId = workerId;
+        }
+
+        @Override public void run() {
+            if (leaderPoller.isLeader(workerId)) {
+                LOG.debug(String.format("WorkerId %s is a leader, running the shard sync task", workerId));
+                shardSyncTask.run();
+            } else {
+                LOG.debug(String.format("WorkerId %s is not a leader, not running the shard sync task", workerId));
+            }
+        }
+    }
+
+    void scheduleTask(ShardSyncWithLeaderCheck task) {
         // adding jitter to stagger the syncs across workers
         Random jitterDelayGen = new Random();
         int jitterDelay = jitterDelayGen.nextInt(PERIODIC_SHARD_SYNC_MAX_JITTER_MILLIS);
         scheduledFuture = scheduledExecutor.scheduleAtFixedRate(task, INITIAL_DELAY,
-                                                                PERIODIC_SHARD_SYNC_FREQUENCY_MILLIS + jitterDelay,
-                                                                TimeUnit.MILLISECONDS);
+            PERIODIC_SHARD_SYNC_FREQUENCY_MILLIS + jitterDelay,
+            TimeUnit.MILLISECONDS);
     }
 
-    @Override
     public void start() {
         if (!isRunning) {
-            ShardSyncTask shardSyncTask = new ShardSyncTask(kinesisProxy, leaseManager, initialPosition,
-                                                            config.shouldCleanupLeasesUponShardCompletion(), config.shouldIgnoreUnexpectedChildShards(),
-                                                            SHARD_SYNC_TASK_IDLE_TIME_MILIS, shardSyncer);
-            scheduleTask(shardSyncTask);
+            ShardSyncWithLeaderCheck shardSyncTaskWithLeaderCheck = new ShardSyncWithLeaderCheck (new ShardSyncTask(kinesisProxy, leaseManager, initialPosition,
+                config.shouldCleanupLeasesUponShardCompletion(), config.shouldIgnoreUnexpectedChildShards(),
+                SHARD_SYNC_TASK_IDLE_TIME_MILLIS, shardSyncer), leaderPoller, workerId);
+            scheduleTask(shardSyncTaskWithLeaderCheck);
             isRunning = true;
         }
     }
 
-    @Override
-    public void stop() {
-        if (isRunning && scheduledFuture != null) {
-            scheduledFuture.cancel(true /* mayInterruptIfRunning */);
-            isRunning = false;
-        }
-    }
-
-    @Override
     public void shutdown() {
         try {
             scheduledExecutor.shutdown();
@@ -98,8 +118,9 @@ class ConfigBasedPeriodicSyncScheduler implements TaskSchedulerStrategy<ShardSyn
             } else {
                 scheduledExecutor.shutdownNow();
                 LOG.info(String.format("Stopped leader polling threads after awaiting termination for %d seconds",
-                                       AWAIT_TERMINATION_SECS));
+                    AWAIT_TERMINATION_SECS));
             }
+            isRunning = false;
         } catch (InterruptedException e) {
             LOG.debug("Encountered InterruptedException while awaiting leader polling threadpool termination");
         }
