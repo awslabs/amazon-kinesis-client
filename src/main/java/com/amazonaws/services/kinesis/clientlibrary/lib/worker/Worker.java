@@ -1300,11 +1300,9 @@ public class Worker implements Runnable {
             if ((shardSyncer == null && leaseCleanupValidator != null) || (shardSyncer != null && leaseCleanupValidator == null)) {
                 throw new IllegalArgumentException("Either both ShardSyncer and LeaseCleanupValidator should be injected, or neither of them.");
             }
-            else {
-                if (shardSyncer == null) {
-                    leaseCleanupValidator = DEFAULT_LEASE_CLEANUP_VALIDATOR;
-                    shardSyncer = new KinesisShardSyncer(leaseCleanupValidator);
-                }
+            else if (shardSyncer == null) {
+                leaseCleanupValidator = DEFAULT_LEASE_CLEANUP_VALIDATOR;
+                shardSyncer = new KinesisShardSyncer(leaseCleanupValidator);
             }
 
             if(leaseSelector == null) {
@@ -1321,11 +1319,9 @@ public class Worker implements Runnable {
             if ((leaseRenewerThreadPool == null && leaseRenewer != null) || (leaseRenewerThreadPool != null && leaseRenewer == null)) {
                 throw new IllegalArgumentException("Either both LeaseRenewer and LeaseRenewerThreadPool should be injected, or neither of them.");
             }
-            else {
-                if (leaseRenewerThreadPool == null) {
-                    leaseRenewerThreadPool = LeaseCoordinator.getDefaultLeaseRenewalExecutorService(config.getMaxLeaseRenewalThreads());
-                    leaseRenewer = new LeaseRenewer<>(leaseManager, config.getWorkerIdentifier(), config.getFailoverTimeMillis(), leaseRenewerThreadPool);
-                }
+            else if (leaseRenewer == null){
+                leaseRenewerThreadPool = LeaseCoordinator.getDefaultLeaseRenewalExecutorService(config.getMaxLeaseRenewalThreads());
+                leaseRenewer = new LeaseRenewer<>(leaseManager, config.getWorkerIdentifier(), config.getFailoverTimeMillis(), leaseRenewerThreadPool);
             }
 
             return new Worker(config.getApplicationName(),
