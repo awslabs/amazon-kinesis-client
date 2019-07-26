@@ -61,10 +61,11 @@ class ShardSyncer {
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
+            boolean ignoreUnexpectedChildShards,
+            boolean dontCreateLeaseIfDescendantExists)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
         syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
-                ignoreUnexpectedChildShards);
+                ignoreUnexpectedChildShards, dontCreateLeaseIfDescendantExists);
     }
 
     /**
@@ -84,9 +85,11 @@ class ShardSyncer {
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
+            boolean ignoreUnexpectedChildShards,
+            boolean dontCreateLeaseIfDescendantExists)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards);
+        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards, dontCreateLeaseIfDescendantExists);
     }
 
     /**
@@ -107,7 +110,8 @@ class ShardSyncer {
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPosition,
             boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
+            boolean ignoreUnexpectedChildShards,
+            boolean dontCreateLeaseIfDescendantExists)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
         List<Shard> shards = getShardList(kinesisProxy);
         LOG.debug("Num shards: " + shards.size());
@@ -123,6 +127,13 @@ class ShardSyncer {
 
         List<KinesisClientLease> newLeasesToCreate = determineNewLeasesToCreate(shards, currentLeases, initialPosition,
                 inconsistentShardIds);
+
+        if (dontCreateLeaseIfDescendantExists) {
+            newLeasesToCreate = new ShardReprocessingDetectionUtil(newLeasesToCreate, currentLeases, shardIdToChildShardIdsMap)
+                    .removeShardsWhoseDescendantsExist();
+        }
+
+
         LOG.debug("Num new leases to create: " + newLeasesToCreate.size());
         for (KinesisClientLease lease : newLeasesToCreate) {
             long startTimeMillis = System.currentTimeMillis();

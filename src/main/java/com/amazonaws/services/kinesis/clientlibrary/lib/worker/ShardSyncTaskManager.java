@@ -47,6 +47,7 @@ class ShardSyncTaskManager {
     private boolean ignoreUnexpectedChildShards;
     private final long shardSyncIdleTimeMillis;
     private final ShardSyncer shardSyncer;
+    private final boolean dontCreateLeaseIfDescendantExists;
 
 
     /**
@@ -71,7 +72,8 @@ class ShardSyncTaskManager {
             final long shardSyncIdleTimeMillis,
             final IMetricsFactory metricsFactory,
             ExecutorService executorService,
-            ShardSyncer shardSyncer) {
+            ShardSyncer shardSyncer,
+            final boolean dontCreateLeaseIfDescendantExists) {
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.metricsFactory = metricsFactory;
@@ -81,6 +83,7 @@ class ShardSyncTaskManager {
         this.executorService = executorService;
         this.initialPositionInStream = initialPositionInStream;
         this.shardSyncer = shardSyncer;
+        this.dontCreateLeaseIfDescendantExists = dontCreateLeaseIfDescendantExists;
     }
 
     synchronized boolean syncShardAndLeaseInfo(Set<String> closedShardIds) {
@@ -109,7 +112,8 @@ class ShardSyncTaskManager {
                             cleanupLeasesUponShardCompletion,
                             ignoreUnexpectedChildShards,
                             shardSyncIdleTimeMillis,
-                            shardSyncer), metricsFactory);
+                            shardSyncer,
+                            dontCreateLeaseIfDescendantExists), metricsFactory);
             future = executorService.submit(currentTask);
             submittedNewTask = true;
             if (LOG.isDebugEnabled()) {

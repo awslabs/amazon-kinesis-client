@@ -512,4 +512,8 @@ class ShardConsumer {
     ShutdownNotification getShutdownNotification() {
         return shutdownNotification;
     }
+
+    boolean shouldNotCreateLeaseIfDescendantExists() {
+        return config.shouldNotCreateLeaseIfDescendantExists();
+    }
 }

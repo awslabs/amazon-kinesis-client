@@ -230,6 +230,7 @@ public class KinesisClientLibConfiguration {
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
     private long shutdownGraceMillis;
+    private boolean dontCreateLeaseIfDescendantExists;
 
     @Getter
     private Optional<Integer> timeoutInSeconds = Optional.empty();
@@ -898,6 +899,14 @@ public class KinesisClientLibConfiguration {
         return shutdownGraceMillis;
     }
 
+    /**
+     *
+     * @return true if KCL will not create lease for any shard if its descendant already exists and is being processed.
+     */
+    public boolean shouldNotCreateLeaseIfDescendantExists() {
+        return dontCreateLeaseIfDescendantExists;
+    }
+
     /*
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 190 LINES
     /**
@@ -1414,6 +1423,16 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withMaxListShardsRetryAttempts(int maxListShardsRetryAttempts) {
         checkIsValuePositive("maxListShardsRetryAttempts", maxListShardsRetryAttempts);
         this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
+        return this;
+    }
+
+    /**
+     * @param dontCreateLeaseIfDescendantExists Don't create lease for a shard if any descendant lease already exists
+     *                                          and is being processed.
+     * @return
+     */
+    public KinesisClientLibConfiguration withDontCreateLeaseIfDescendantExists(boolean dontCreateLeaseIfDescendantExists) {
+        this.dontCreateLeaseIfDescendantExists = dontCreateLeaseIfDescendantExists;
         return this;
     }
 }

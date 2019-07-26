@@ -83,6 +83,9 @@ public class ConsumerStatesTest {
     private boolean cleanupLeasesOfCompletedShards = true;
     private long taskBackoffTimeMillis = 0xBEEF;
     private ShutdownReason reason = ShutdownReason.TERMINATE;
+    private boolean dontCreateLeaseIfDescendantExists = true;
+    private boolean dontCreateLeaseIfDescendantExistsss = false;
+
 
     @Before
     public void setup() {
@@ -101,6 +104,7 @@ public class ConsumerStatesTest {
         when(consumer.getTaskBackoffTimeMillis()).thenReturn(taskBackoffTimeMillis);
         when(consumer.getShutdownReason()).thenReturn(reason);
         when(consumer.getGetRecordsCache()).thenReturn(getRecordsCache);
+        when(consumer.shouldNotCreateLeaseIfDescendantExists()).thenReturn(dontCreateLeaseIfDescendantExists);
     }
 
     private static final Class<ILeaseManager<KinesisClientLease>> LEASE_MANAGER_CLASS = (Class<ILeaseManager<KinesisClientLease>>) (Class<?>) ILeaseManager.class;
@@ -302,7 +306,8 @@ public class ConsumerStatesTest {
         assertThat(task, shutdownTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));
 
         assertThat(state.successTransition(), equalTo(ShardConsumerState.SHUTDOWN_COMPLETE.getConsumerState()));
-
+        assertThat(task,
+                shutdownTask(Boolean.class, "dontCreateLeaseIfDescendantExists", equalTo(dontCreateLeaseIfDescendantExists)));
         for (ShutdownReason reason : ShutdownReason.values()) {
             assertThat(state.shutdownTransition(reason),
                     equalTo(ShardConsumerState.SHUTDOWN_COMPLETE.getConsumerState()));

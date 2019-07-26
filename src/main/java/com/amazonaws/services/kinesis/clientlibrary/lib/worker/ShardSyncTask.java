@@ -39,6 +39,7 @@ class ShardSyncTask implements ITask {
     private final long shardSyncTaskIdleTimeMillis;
     private final TaskType taskType = TaskType.SHARDSYNC;
     private final ShardSyncer shardSyncer;
+    private final boolean dontCreateLeaseIfDescendantExists;
 
     /**
      * @param kinesisProxy Used to fetch information about the stream (e.g. shard list)
@@ -57,7 +58,8 @@ class ShardSyncTask implements ITask {
             boolean cleanupLeasesUponShardCompletion,
             boolean ignoreUnexpectedChildShards,
             long shardSyncTaskIdleTimeMillis,
-            ShardSyncer shardSyncer) {
+            ShardSyncer shardSyncer,
+            boolean dontCreateLeaseIfDescendantExists) {
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.initialPosition = initialPositionInStream;
@@ -65,6 +67,7 @@ class ShardSyncTask implements ITask {
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncTaskIdleTimeMillis = shardSyncTaskIdleTimeMillis;
         this.shardSyncer = shardSyncer;
+        this.dontCreateLeaseIfDescendantExists = dontCreateLeaseIfDescendantExists;
     }
 
     /* (non-Javadoc)
@@ -79,7 +82,8 @@ class ShardSyncTask implements ITask {
                     leaseManager,
                     initialPosition,
                     cleanupLeasesUponShardCompletion,
-                    ignoreUnexpectedChildShards);
+                    ignoreUnexpectedChildShards,
+                    dontCreateLeaseIfDescendantExists);
             if (shardSyncTaskIdleTimeMillis > 0) {
                 Thread.sleep(shardSyncTaskIdleTimeMillis);
             }

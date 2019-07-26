@@ -127,7 +127,8 @@ public class ShardSyncTaskIntegrationTest {
                 false,
                 false,
                 0L,
-                shardSyncer);
+                shardSyncer,
+                false);
         syncTask.call();
         List<KinesisClientLease> leases = leaseManager.listLeases();
         Set<String> leaseKeys = new HashSet<String>();
