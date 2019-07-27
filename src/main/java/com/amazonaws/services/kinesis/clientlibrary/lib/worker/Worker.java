@@ -1342,7 +1342,10 @@ public class Worker implements Runnable {
                             leaseManager,
                             leaseTaker,
                             leaseRenewer,
-                            config,
+                            config.getFailoverTimeMillis(),
+                            config.getEpsilonMillis(),
+                            config.getMaxLeasesForWorker(),
+                            config.getMaxLeasesToStealAtOneTime(),
                             leaseRenewerThreadPool,
                             metricsFactory)
                             .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())

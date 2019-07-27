@@ -160,7 +160,7 @@ public class LeaseCoordinator<T extends Lease> {
             IMetricsFactory metricsFactory) {
         this(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis,
                 DEFAULT_MAX_LEASES_FOR_WORKER, DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME,
-                KinesisClientLibConfiguration.DEFAULT_MAX_LEASE_RENEWAL_THREADS, metricsFactory);
+                getDefaultLeaseRenewalExecutorService(KinesisClientLibConfiguration.DEFAULT_MAX_LEASE_RENEWAL_THREADS), metricsFactory);
     }
 
     /**
@@ -174,7 +174,7 @@ public class LeaseCoordinator<T extends Lease> {
      * @param maxLeasesToStealAtOneTime Steal up to these many leases at a time (for load balancing)
      * @param metricsFactory Used to publish metrics about lease operations
      */
-    public LeaseCoordinator(ILeaseManager<T> leaseManager,
+    LeaseCoordinator(ILeaseManager<T> leaseManager,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
@@ -183,72 +183,54 @@ public class LeaseCoordinator<T extends Lease> {
             int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
         this(leaseManager, getDefaultLeaseSelector(), workerIdentifier, leaseDurationMillis, epsilonMillis,
-                maxLeasesForWorker, maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
+                maxLeasesForWorker, maxLeasesToStealAtOneTime, getDefaultLeaseRenewalExecutorService(maxLeaseRenewerThreadCount), metricsFactory);
     }
 
-    /**
-     * Constructor.
-     *
-     * @param leaseManager LeaseManager instance to use
-     * @param leaseSelector LeaseSelector instance to use
-     * @param workerIdentifier Identifies the worker (e.g. useful to track lease ownership)
-     * @param leaseDurationMillis Duration of a lease
-     * @param epsilonMillis Allow for some variance when calculating lease expirations
-     * @param maxLeasesForWorker Max leases this Worker can handle at a time
-     * @param maxLeasesToStealAtOneTime Steal up to these many leases at a time (for load balancing)
-     * @param metricsFactory Used to publish metrics about lease operations
-     */
     public LeaseCoordinator(ILeaseManager<T> leaseManager,
-            LeaseSelector<T> leaseSelector,
-            String workerIdentifier,
-            long leaseDurationMillis,
-            long epsilonMillis,
-            int maxLeasesForWorker,
-            int maxLeasesToStealAtOneTime,
-            int maxLeaseRenewerThreadCount,
-            IMetricsFactory metricsFactory) {
-        this.leaseRenewalThreadpool = getDefaultLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
-        this.leaseTaker = new LeaseTaker<T>(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis)
-                .withMaxLeasesForWorker(maxLeasesForWorker)
-                .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
-        this.leaseRenewer = new LeaseRenewer<T>(
-                leaseManager, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool);
+                     LeaseSelector<T> leaseSelector,
+                     String workerIdentifier,
+                     long leaseDurationMillis,
+                     long epsilonMillis,
+                     int maxLeasesForWorker,
+                     int maxLeasesToStealAtOneTime,
+                     ExecutorService executorService,
+                     IMetricsFactory metricsFactory) {
+        this(new LeaseTaker<T>(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis)
+                        .withMaxLeasesForWorker(maxLeasesForWorker)
+                        .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime),
+                new LeaseRenewer<>(leaseManager, workerIdentifier, leaseDurationMillis, executorService),
+                leaseDurationMillis,
+                epsilonMillis,
+                maxLeasesForWorker,
+                maxLeasesToStealAtOneTime,
+                executorService,
+                metricsFactory);
+    }
+
+    public LeaseCoordinator(final LeaseTaker<T> leaseTaker,
+                     final LeaseRenewer<T> leaseRenewer,
+                     final long leaseDurationMillis,
+                     final long epsilonMillis,
+                     final int maxLeasesForWorker,
+                     final int maxLeasesToStealAtOneTime,
+                     final ExecutorService executorService,
+                     final IMetricsFactory metricsFactory) {
+        this.leaseTaker = leaseTaker;
+        this.leaseRenewer = leaseRenewer;
+        this.leaseRenewalThreadpool = executorService;
+        this.metricsFactory = metricsFactory;
         this.renewerIntervalMillis = leaseDurationMillis / 3 - epsilonMillis;
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
-        this.metricsFactory = metricsFactory;
 
         LOG.info(String.format(
                 "With failover time %d ms and epsilon %d ms, LeaseCoordinator will renew leases every %d ms, take" +
                         "leases every %d ms, process maximum of %d leases and steal %d lease(s) at a time.",
                 leaseDurationMillis,
                 epsilonMillis,
-                renewerIntervalMillis,
-                takerIntervalMillis,
+                this.renewerIntervalMillis,
+                this.takerIntervalMillis,
                 maxLeasesForWorker,
                 maxLeasesToStealAtOneTime));
-    }
-
-    public LeaseCoordinator(LeaseTaker<T> leaseTaker,
-                            LeaseRenewer<T> leaseRenewer,
-                            KinesisClientLibConfiguration config,
-                            ExecutorService executorService,
-                            IMetricsFactory metricsFactory) {
-        this.leaseRenewalThreadpool = executorService;
-        this.leaseTaker = leaseTaker;
-        this.leaseRenewer = leaseRenewer;
-        this.renewerIntervalMillis = config.getFailoverTimeMillis() / 3 - config.getEpsilonMillis();
-        this.takerIntervalMillis = (config.getFailoverTimeMillis() + config.getEpsilonMillis()) * 2;
-        this.metricsFactory = metricsFactory;
-
-        LOG.info(String.format(
-                "With failover time %d ms and epsilon %d ms, LeaseCoordinator will renew leases every %d ms, take" +
-                        "leases every %d ms, process maximum of %d leases and steal %d lease(s) at a time.",
-                config.getFailoverTimeMillis(),
-                config.getEpsilonMillis(),
-                renewerIntervalMillis,
-                takerIntervalMillis,
-                config.getMaxLeasesForWorker(),
-                config.getMaxLeasesToStealAtOneTime()));
     }
 
     private class TakerRunnable implements Runnable {
