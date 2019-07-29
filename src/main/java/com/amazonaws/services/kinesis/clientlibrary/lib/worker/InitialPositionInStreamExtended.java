@@ -58,7 +58,7 @@ public class InitialPositionInStreamExtended {
         return this.timestamp;
     }
 
-    protected static InitialPositionInStreamExtended newInitialPosition(final InitialPositionInStream position) {
+    public static InitialPositionInStreamExtended newInitialPosition(final InitialPositionInStream position) {
         switch (position) {
             case LATEST:
                 return new InitialPositionInStreamExtended(InitialPositionInStream.LATEST, null);
@@ -69,7 +69,7 @@ public class InitialPositionInStreamExtended {
         }
     }
 
-    protected static InitialPositionInStreamExtended newInitialPositionAtTimestamp(final Date timestamp) {
+    public static InitialPositionInStreamExtended newInitialPositionAtTimestamp(final Date timestamp) {
         if (timestamp == null) {
             throw new IllegalArgumentException("Timestamp must be specified for InitialPosition AT_TIMESTAMP");
         }

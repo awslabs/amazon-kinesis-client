@@ -1297,10 +1297,7 @@ public class Worker implements Runnable {
                 workerStateChangeListener = DEFAULT_WORKER_STATE_CHANGE_LISTENER;
             }
 
-            if ((shardSyncer == null && leaseCleanupValidator != null) || (shardSyncer != null && leaseCleanupValidator == null)) {
-                throw new IllegalArgumentException("Either both ShardSyncer and LeaseCleanupValidator should be injected, or neither of them.");
-            }
-            else if (shardSyncer == null) {
+            if (shardSyncer == null) {
                 leaseCleanupValidator = DEFAULT_LEASE_CLEANUP_VALIDATOR;
                 shardSyncer = new KinesisShardSyncer(leaseCleanupValidator);
             }
