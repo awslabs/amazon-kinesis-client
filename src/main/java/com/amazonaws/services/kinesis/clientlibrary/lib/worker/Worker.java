@@ -37,6 +37,8 @@ import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
 import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
 import com.amazonaws.services.kinesis.leases.impl.LeaseTaker;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseTaker;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
@@ -1226,9 +1228,9 @@ public class Worker implements Runnable {
         private LeaseSelector<KinesisClientLease> leaseSelector;
         @Setter @Accessors(fluent = true) private LeaderDecider leaderDecider;
         @Setter @Accessors(fluent = true)
-        private LeaseTaker<KinesisClientLease> leaseTaker;
+        private ILeaseTaker<KinesisClientLease> leaseTaker;
         @Setter @Accessors(fluent = true)
-        private LeaseRenewer<KinesisClientLease> leaseRenewer;
+        private ILeaseRenewer<KinesisClientLease> leaseRenewer;
         @Setter @Accessors(fluent = true)
         private ExecutorService leaseRenewerThreadPool;
         @Setter @Accessors(fluent = true)
@@ -1394,11 +1396,11 @@ public class Worker implements Runnable {
                     config.getShardSyncIntervalMillis(),
                     config.shouldCleanupLeasesUponShardCompletion(),
                     null,
-                    new KinesisClientLibLeaseCoordinator(leaseManager, leaseSelector, config.getWorkerIdentifier(),
+                    new KinesisClientLibLeaseCoordinator(leaseManager, leaseTaker, leaseRenewer,
                             config.getFailoverTimeMillis(),
                             config.getEpsilonMillis(),
                             config.getMaxLeasesForWorker(),
-                            config.getMaxLeasesToStealAtOneTime(), config.getMaxLeaseRenewalThreads(),
+                            config.getMaxLeasesToStealAtOneTime(), leaseRenewerThreadPool,
                             metricsFactory)
                             .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
                             .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
