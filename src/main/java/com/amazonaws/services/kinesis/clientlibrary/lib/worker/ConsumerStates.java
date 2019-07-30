@@ -530,8 +530,7 @@ class ConsumerStates {
                     consumer.isIgnoreUnexpectedChildShards(),
                     consumer.getLeaseManager(),
                     consumer.getTaskBackoffTimeMillis(),
-                    consumer.getGetRecordsCache(),
-                    consumer.getShardSyncer());
+                    consumer.getGetRecordsCache(), consumer.getShardSyncer(), consumer.getShardSyncStrategy());
         }
 
         @Override

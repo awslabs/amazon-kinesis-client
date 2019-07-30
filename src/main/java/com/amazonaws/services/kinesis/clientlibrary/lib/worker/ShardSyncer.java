@@ -24,11 +24,9 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 
 public interface ShardSyncer {
 
-    void checkAndCreateLeasesForNewShards(
-            IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards,
+    void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
+            InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesOfCompletedShards,
             boolean ignoreUnexpectedChildShards)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException;
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException,
+            KinesisClientLibIOException;
 }

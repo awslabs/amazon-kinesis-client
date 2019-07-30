@@ -57,12 +57,11 @@ class KinesisShardSyncer implements ShardSyncer {
         this.leaseCleanupValidator = leaseCleanupValidator;
     }
 
-    synchronized void bootstrapShardLeases(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards,
+    synchronized void bootstrapShardLeases(IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
+            InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesOfCompletedShards,
             boolean ignoreUnexpectedChildShards)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException,
+            KinesisClientLibIOException {
         syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
                 ignoreUnexpectedChildShards);
     }
@@ -81,11 +80,10 @@ class KinesisShardSyncer implements ShardSyncer {
      * @throws KinesisClientLibIOException
      */
     public synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+            ILeaseManager<KinesisClientLease> leaseManager, InitialPositionInStreamExtended initialPositionInStream,
+            boolean cleanupLeasesOfCompletedShards, boolean ignoreUnexpectedChildShards)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException,
+            KinesisClientLibIOException {
         syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards);
     }
 
@@ -104,11 +102,10 @@ class KinesisShardSyncer implements ShardSyncer {
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
     private synchronized void syncShardLeases(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPosition,
-            boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+            ILeaseManager<KinesisClientLease> leaseManager, InitialPositionInStreamExtended initialPosition,
+            boolean cleanupLeasesOfCompletedShards, boolean ignoreUnexpectedChildShards)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException,
+            KinesisClientLibIOException {
         List<Shard> shards = getShardList(kinesisProxy);
         LOG.debug("Num shards: " + shards.size());
 
@@ -142,10 +139,7 @@ class KinesisShardSyncer implements ShardSyncer {
         trackedLeases.addAll(newLeasesToCreate);
         cleanupGarbageLeases(shards, trackedLeases, kinesisProxy, leaseManager);
         if (cleanupLeasesOfCompletedShards) {
-            cleanupLeasesOfFinishedShards(currentLeases,
-                    shardIdToShardMap,
-                    shardIdToChildShardIdsMap,
-                    trackedLeases,
+            cleanupLeasesOfFinishedShards(currentLeases, shardIdToShardMap, shardIdToChildShardIdsMap, trackedLeases,
                     leaseManager);
         }
     }
@@ -156,8 +150,7 @@ class KinesisShardSyncer implements ShardSyncer {
      * @param inconsistentShardIds
      * @throws KinesisClientLibIOException
      */
-    private void assertAllParentShardsAreClosed(Set<String> inconsistentShardIds)
-            throws KinesisClientLibIOException {
+    private void assertAllParentShardsAreClosed(Set<String> inconsistentShardIds) throws KinesisClientLibIOException {
         if (!inconsistentShardIds.isEmpty()) {
             String ids = StringUtils.join(inconsistentShardIds, ' ');
             throw new KinesisClientLibIOException(String.format("%d open child shards (%s) are inconsistent. "
@@ -207,8 +200,8 @@ class KinesisShardSyncer implements ShardSyncer {
      * is covered by its child shards.
      */
     synchronized void assertClosedShardsAreCoveredOrAbsent(Map<String, Shard> shardIdToShardMap,
-            Map<String, Set<String>> shardIdToChildShardIdsMap,
-            Set<String> shardIdsOfClosedShards) throws KinesisClientLibIOException {
+            Map<String, Set<String>> shardIdToChildShardIdsMap, Set<String> shardIdsOfClosedShards)
+            throws KinesisClientLibIOException {
         String exceptionMessageSuffix = "This can happen if we constructed the list of shards "
                 + " while a reshard operation was in progress.";
 
@@ -221,8 +214,8 @@ class KinesisShardSyncer implements ShardSyncer {
 
             String endingSequenceNumber = shard.getSequenceNumberRange().getEndingSequenceNumber();
             if (endingSequenceNumber == null) {
-                throw new KinesisClientLibIOException("Shard " + shardIdsOfClosedShards
-                        + " is not closed. " + exceptionMessageSuffix);
+                throw new KinesisClientLibIOException("Shard " + shardIdsOfClosedShards + " is not closed. "
+                        + exceptionMessageSuffix);
             }
 
             Set<String> childShardIds = shardIdToChildShardIdsMap.get(shardId);
@@ -236,8 +229,7 @@ class KinesisShardSyncer implements ShardSyncer {
     }
 
     private synchronized void assertHashRangeOfClosedShardIsCovered(Shard closedShard,
-            Map<String, Shard> shardIdToShardMap,
-            Set<String> childShardIds) throws KinesisClientLibIOException {
+            Map<String, Shard> shardIdToShardMap, Set<String> childShardIds) throws KinesisClientLibIOException {
 
         BigInteger startingHashKeyOfClosedShard = new BigInteger(closedShard.getHashKeyRange().getStartingHashKey());
         BigInteger endingHashKeyOfClosedShard = new BigInteger(closedShard.getHashKeyRange().getEndingHashKey());
@@ -247,22 +239,21 @@ class KinesisShardSyncer implements ShardSyncer {
         for (String childShardId : childShardIds) {
             Shard childShard = shardIdToShardMap.get(childShardId);
             BigInteger startingHashKey = new BigInteger(childShard.getHashKeyRange().getStartingHashKey());
-            if ((minStartingHashKeyOfChildren == null)
-                    || (startingHashKey.compareTo(minStartingHashKeyOfChildren) < 0)) {
+            if ((minStartingHashKeyOfChildren == null) || (startingHashKey.compareTo(minStartingHashKeyOfChildren)
+                    < 0)) {
                 minStartingHashKeyOfChildren = startingHashKey;
             }
             BigInteger endingHashKey = new BigInteger(childShard.getHashKeyRange().getEndingHashKey());
-            if ((maxEndingHashKeyOfChildren == null)
-                    || (endingHashKey.compareTo(maxEndingHashKeyOfChildren) > 0)) {
+            if ((maxEndingHashKeyOfChildren == null) || (endingHashKey.compareTo(maxEndingHashKeyOfChildren) > 0)) {
                 maxEndingHashKeyOfChildren = endingHashKey;
             }
         }
 
-        if ((minStartingHashKeyOfChildren == null) || (maxEndingHashKeyOfChildren == null)
-                || (minStartingHashKeyOfChildren.compareTo(startingHashKeyOfClosedShard) > 0)
-                || (maxEndingHashKeyOfChildren.compareTo(endingHashKeyOfClosedShard) < 0)) {
-            throw new KinesisClientLibIOException("Incomplete shard list: hash key range of shard "
-                    + closedShard.getShardId() + " is not covered by its child shards.");
+        if ((minStartingHashKeyOfChildren == null) || (maxEndingHashKeyOfChildren == null) || (
+                minStartingHashKeyOfChildren.compareTo(startingHashKeyOfClosedShard) > 0) || (
+                maxEndingHashKeyOfChildren.compareTo(endingHashKeyOfClosedShard) < 0)) {
+            throw new KinesisClientLibIOException("Incomplete shard list: hash key range of shard " + closedShard
+                    .getShardId() + " is not covered by its child shards.");
         }
 
     }
@@ -273,8 +264,7 @@ class KinesisShardSyncer implements ShardSyncer {
      * @param shardIdToShardMap
      * @return
      */
-    Map<String, Set<String>> constructShardIdToChildShardIdsMap(
-            Map<String, Shard> shardIdToShardMap) {
+    Map<String, Set<String>> constructShardIdToChildShardIdsMap(Map<String, Shard> shardIdToShardMap) {
         Map<String, Set<String>> shardIdToChildShardIdsMap = new HashMap<>();
         for (Map.Entry<String, Shard> entry : shardIdToShardMap.entrySet()) {
             String shardId = entry.getKey();
@@ -358,10 +348,8 @@ class KinesisShardSyncer implements ShardSyncer {
      * @param inconsistentShardIds Set of child shard ids having open parents.
      * @return List of new leases to create sorted by starting sequenceNumber of the corresponding shard
      */
-    List<KinesisClientLease> determineNewLeasesToCreate(List<Shard> shards,
-            List<KinesisClientLease> currentLeases,
-            InitialPositionInStreamExtended initialPosition,
-            Set<String> inconsistentShardIds) {
+    List<KinesisClientLease> determineNewLeasesToCreate(List<Shard> shards, List<KinesisClientLease> currentLeases,
+            InitialPositionInStreamExtended initialPosition, Set<String> inconsistentShardIds) {
         Map<String, KinesisClientLease> shardIdToNewLeaseMap = new HashMap<String, KinesisClientLease>();
         Map<String, Shard> shardIdToShardMapOfAllKinesisShards = constructShardIdToShardMap(shards);
 
@@ -385,13 +373,9 @@ class KinesisShardSyncer implements ShardSyncer {
             } else {
                 LOG.debug("Need to create a lease for shardId " + shardId);
                 KinesisClientLease newLease = newKCLLease(shard);
-                boolean isDescendant =
-                        checkIfDescendantAndAddNewLeasesForAncestors(shardId,
-                                initialPosition,
-                                shardIdsOfCurrentLeases,
-                                shardIdToShardMapOfAllKinesisShards,
-                                shardIdToNewLeaseMap,
-                                memoizationContext);
+                boolean isDescendant = checkIfDescendantAndAddNewLeasesForAncestors(shardId, initialPosition,
+                        shardIdsOfCurrentLeases, shardIdToShardMapOfAllKinesisShards, shardIdToNewLeaseMap,
+                        memoizationContext);
 
                 /**
                  * If the shard is a descendant and the specified initial position is AT_TIMESTAMP, then the
@@ -429,8 +413,8 @@ class KinesisShardSyncer implements ShardSyncer {
 
         List<KinesisClientLease> newLeasesToCreate = new ArrayList<KinesisClientLease>();
         newLeasesToCreate.addAll(shardIdToNewLeaseMap.values());
-        Comparator<? super KinesisClientLease> startingSequenceNumberComparator =
-                new StartingSequenceNumberAndShardIdBasedComparator(shardIdToShardMapOfAllKinesisShards);
+        Comparator<? super KinesisClientLease> startingSequenceNumberComparator = new StartingSequenceNumberAndShardIdBasedComparator(
+                shardIdToShardMapOfAllKinesisShards);
         Collections.sort(newLeasesToCreate, startingSequenceNumberComparator);
         return newLeasesToCreate;
     }
@@ -439,8 +423,7 @@ class KinesisShardSyncer implements ShardSyncer {
      * Determine new leases to create and their initial checkpoint.
      * Note: Package level access only for testing purposes.
      */
-    List<KinesisClientLease> determineNewLeasesToCreate(List<Shard> shards,
-            List<KinesisClientLease> currentLeases,
+    List<KinesisClientLease> determineNewLeasesToCreate(List<Shard> shards, List<KinesisClientLease> currentLeases,
             InitialPositionInStreamExtended initialPosition) {
         Set<String> inconsistentShardIds = new HashSet<String>();
         return determineNewLeasesToCreate(shards, currentLeases, initialPosition, inconsistentShardIds);
@@ -463,11 +446,9 @@ class KinesisShardSyncer implements ShardSyncer {
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
     boolean checkIfDescendantAndAddNewLeasesForAncestors(String shardId,
-            InitialPositionInStreamExtended initialPosition,
-            Set<String> shardIdsOfCurrentLeases,
+            InitialPositionInStreamExtended initialPosition, Set<String> shardIdsOfCurrentLeases,
             Map<String, Shard> shardIdToShardMapOfAllKinesisShards,
-            Map<String, KinesisClientLease> shardIdToLeaseMapOfNewShards,
-            Map<String, Boolean> memoizationContext) {
+            Map<String, KinesisClientLease> shardIdToLeaseMapOfNewShards, Map<String, Boolean> memoizationContext) {
 
         Boolean previousValue = memoizationContext.get(shardId);
         if (previousValue != null) {
@@ -490,11 +471,8 @@ class KinesisShardSyncer implements ShardSyncer {
                 parentShardIds = getParentShardIds(shard, shardIdToShardMapOfAllKinesisShards);
                 for (String parentShardId : parentShardIds) {
                     // Check if the parent is a descendant, and include its ancestors.
-                    if (checkIfDescendantAndAddNewLeasesForAncestors(parentShardId,
-                            initialPosition,
-                            shardIdsOfCurrentLeases,
-                            shardIdToShardMapOfAllKinesisShards,
-                            shardIdToLeaseMapOfNewShards,
+                    if (checkIfDescendantAndAddNewLeasesForAncestors(parentShardId, initialPosition,
+                            shardIdsOfCurrentLeases, shardIdToShardMapOfAllKinesisShards, shardIdToLeaseMapOfNewShards,
                             memoizationContext)) {
                         isDescendant = true;
                         descendantParentShardIds.add(parentShardId);
@@ -515,9 +493,8 @@ class KinesisShardSyncer implements ShardSyncer {
                                 shardIdToLeaseMapOfNewShards.put(parentShardId, lease);
                             }
 
-                            if (descendantParentShardIds.contains(parentShardId)
-                                    && !initialPosition.getInitialPositionInStream()
-                                    .equals(InitialPositionInStream.AT_TIMESTAMP)) {
+                            if (descendantParentShardIds.contains(parentShardId) && !initialPosition
+                                    .getInitialPositionInStream().equals(InitialPositionInStream.AT_TIMESTAMP)) {
                                 lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
                             } else {
                                 lease.setCheckpoint(convertToCheckpoint(initialPosition));
@@ -580,11 +557,10 @@ class KinesisShardSyncer implements ShardSyncer {
      * @throws InvalidStateException
      * @throws DependencyException
      */
-    private void cleanupGarbageLeases(List<Shard> shards,
-            List<KinesisClientLease> trackedLeases,
-            IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager)
-            throws KinesisClientLibIOException, DependencyException, InvalidStateException, ProvisionedThroughputException {
+    private void cleanupGarbageLeases(List<Shard> shards, List<KinesisClientLease> trackedLeases,
+            IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager)
+            throws KinesisClientLibIOException, DependencyException, InvalidStateException,
+            ProvisionedThroughputException {
         Set<String> kinesisShards = new HashSet<>();
         for (Shard shard : shards) {
             kinesisShards.add(shard.getShardId());
@@ -599,8 +575,7 @@ class KinesisShardSyncer implements ShardSyncer {
         }
 
         if (!garbageLeases.isEmpty()) {
-            LOG.info("Found " + garbageLeases.size()
-                    + " candidate leases for cleanup. Refreshing list of"
+            LOG.info("Found " + garbageLeases.size() + " candidate leases for cleanup. Refreshing list of"
                     + " Kinesis shards to pick up recent/latest shards");
             List<Shard> currentShardList = getShardList(kinesisProxy);
             Set<String> currentKinesisShardIds = new HashSet<>();
@@ -637,11 +612,10 @@ class KinesisShardSyncer implements ShardSyncer {
      * @throws KinesisClientLibIOException
      */
     private synchronized void cleanupLeasesOfFinishedShards(Collection<KinesisClientLease> currentLeases,
-            Map<String, Shard> shardIdToShardMap,
-            Map<String, Set<String>> shardIdToChildShardIdsMap,
-            List<KinesisClientLease> trackedLeases,
-            ILeaseManager<KinesisClientLease> leaseManager)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+            Map<String, Shard> shardIdToShardMap, Map<String, Set<String>> shardIdToChildShardIdsMap,
+            List<KinesisClientLease> trackedLeases, ILeaseManager<KinesisClientLease> leaseManager)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException,
+            KinesisClientLibIOException {
         Set<String> shardIdsOfClosedShards = new HashSet<>();
         List<KinesisClientLease> leasesOfClosedShards = new ArrayList<>();
         for (KinesisClientLease lease : currentLeases) {
@@ -652,11 +626,9 @@ class KinesisShardSyncer implements ShardSyncer {
         }
 
         if (!leasesOfClosedShards.isEmpty()) {
-            assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap,
-                    shardIdToChildShardIdsMap,
-                    shardIdsOfClosedShards);
-            Comparator<? super KinesisClientLease> startingSequenceNumberComparator =
-                    new StartingSequenceNumberAndShardIdBasedComparator(shardIdToShardMap);
+            assertClosedShardsAreCoveredOrAbsent(shardIdToShardMap, shardIdToChildShardIdsMap, shardIdsOfClosedShards);
+            Comparator<? super KinesisClientLease> startingSequenceNumberComparator = new StartingSequenceNumberAndShardIdBasedComparator(
+                    shardIdToShardMap);
             Collections.sort(leasesOfClosedShards, startingSequenceNumberComparator);
             Map<String, KinesisClientLease> trackedLeaseMap = constructShardIdToKCLLeaseMap(trackedLeases);
 
@@ -684,10 +656,8 @@ class KinesisShardSyncer implements ShardSyncer {
      * @throws InvalidStateException
      * @throws DependencyException
      */
-    synchronized void cleanupLeaseForClosedShard(String closedShardId,
-            Set<String> childShardIds,
-            Map<String, KinesisClientLease> trackedLeases,
-            ILeaseManager<KinesisClientLease> leaseManager)
+    synchronized void cleanupLeaseForClosedShard(String closedShardId, Set<String> childShardIds,
+            Map<String, KinesisClientLease> trackedLeases, ILeaseManager<KinesisClientLease> leaseManager)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         KinesisClientLease leaseForClosedShard = trackedLeases.get(closedShardId);
         List<KinesisClientLease> childShardLeases = new ArrayList<>();
@@ -699,9 +669,8 @@ class KinesisShardSyncer implements ShardSyncer {
             }
         }
 
-        if ((leaseForClosedShard != null)
-                && (leaseForClosedShard.getCheckpoint().equals(ExtendedSequenceNumber.SHARD_END))
-                && (childShardLeases.size() == childShardIds.size())) {
+        if ((leaseForClosedShard != null) && (leaseForClosedShard.getCheckpoint()
+                .equals(ExtendedSequenceNumber.SHARD_END)) && (childShardLeases.size() == childShardIds.size())) {
             boolean okayToDelete = true;
             for (KinesisClientLease lease : childShardLeases) {
                 if (lease.getCheckpoint().equals(ExtendedSequenceNumber.TRIM_HORIZON)) {
@@ -824,10 +793,10 @@ class KinesisShardSyncer implements ShardSyncer {
 
             // If we found shards for the two leases, use comparison of the starting sequence numbers
             if ((shard1 != null) && (shard2 != null)) {
-                BigInteger sequenceNumber1 =
-                        new BigInteger(shard1.getSequenceNumberRange().getStartingSequenceNumber());
-                BigInteger sequenceNumber2 =
-                        new BigInteger(shard2.getSequenceNumberRange().getStartingSequenceNumber());
+                BigInteger sequenceNumber1 = new BigInteger(
+                        shard1.getSequenceNumberRange().getStartingSequenceNumber());
+                BigInteger sequenceNumber2 = new BigInteger(
+                        shard2.getSequenceNumberRange().getStartingSequenceNumber());
                 result = sequenceNumber1.compareTo(sequenceNumber2);
             }
 

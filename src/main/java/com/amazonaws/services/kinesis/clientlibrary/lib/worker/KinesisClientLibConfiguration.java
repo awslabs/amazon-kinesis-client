@@ -168,6 +168,11 @@ public class KinesisClientLibConfiguration {
     public static final boolean DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST = false;
 
     /**
+     * Opt in for periodic shard sync by setting this flag to true.
+     */
+    public static final boolean DEFAULT_ENABLE_PERIODIC_SHARD_SYNC = false;
+
+    /**
      * Default Shard prioritization strategy.
      */
     public static final ShardPrioritization DEFAULT_SHARD_PRIORITIZATION = new NoOpShardPrioritization();
@@ -230,6 +235,7 @@ public class KinesisClientLibConfiguration {
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
     private long shutdownGraceMillis;
+    private boolean enablePeriodicShardSync;
 
     @Getter
     private Optional<Integer> timeoutInSeconds = Optional.empty();
@@ -492,6 +498,7 @@ public class KinesisClientLibConfiguration {
         this.initialPositionInStreamExtended =
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
+        this.enablePeriodicShardSync = DEFAULT_ENABLE_PERIODIC_SHARD_SYNC;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = new SimpleRecordsFetcherFactory();
     }
@@ -600,6 +607,7 @@ public class KinesisClientLibConfiguration {
         this.initialPositionInStreamExtended =
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
+        this.enablePeriodicShardSync = DEFAULT_ENABLE_PERIODIC_SHARD_SYNC;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = recordsFetcherFactory;
         this.shutdownGraceMillis = shutdownGraceMillis;
@@ -838,6 +846,13 @@ public class KinesisClientLibConfiguration {
      */
     public boolean getSkipShardSyncAtWorkerInitializationIfLeasesExist() {
         return skipShardSyncAtWorkerInitializationIfLeasesExist;
+    }
+
+    /**
+     * @return true if periodic shard sync is enabled
+     */
+    public boolean getEnablePeriodicShardSync() {
+        return enablePeriodicShardSync;
     }
 
     /**
@@ -1196,6 +1211,15 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withSkipShardSyncAtStartupIfLeasesExist(
             boolean skipShardSyncAtStartupIfLeasesExist) {
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtStartupIfLeasesExist;
+        return this;
+    }
+
+    /**
+     * @param enablePeriodicShardSync whether to opt in for enabling periodic shard sync.
+     * @return {@link KinesisClientLibConfiguration}
+     */
+    public KinesisClientLibConfiguration withEnablePeriodicShardSync(boolean enablePeriodicShardSync) {
+        this.enablePeriodicShardSync = enablePeriodicShardSync;
         return this;
     }
 
