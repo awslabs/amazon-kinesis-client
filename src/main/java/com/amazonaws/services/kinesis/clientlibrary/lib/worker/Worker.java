@@ -39,6 +39,8 @@ import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
 import com.amazonaws.services.kinesis.leases.impl.LeaseTaker;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseTaker;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
@@ -1176,9 +1178,9 @@ public class Worker implements Runnable {
         @Setter @Accessors(fluent = true)
         private LeaseSelector<KinesisClientLease> leaseSelector;
         @Setter @Accessors(fluent = true)
-        private LeaseTaker<KinesisClientLease> leaseTaker;
+        private ILeaseTaker<KinesisClientLease> leaseTaker;
         @Setter @Accessors(fluent = true)
-        private LeaseRenewer<KinesisClientLease> leaseRenewer;
+        private ILeaseRenewer<KinesisClientLease> leaseRenewer;
         @Setter @Accessors(fluent = true)
         private ExecutorService leaseRenewerThreadPool;
         @Setter @Accessors(fluent = true)

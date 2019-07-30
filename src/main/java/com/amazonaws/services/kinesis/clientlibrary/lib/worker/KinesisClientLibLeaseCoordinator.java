@@ -28,6 +28,8 @@ import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
 import com.amazonaws.services.kinesis.leases.impl.LeaseTaker;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseTaker;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -134,8 +136,8 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
     }
 
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
-                                            LeaseTaker<KinesisClientLease> leaseTaker,
-                                            LeaseRenewer<KinesisClientLease> leaseRenewer,
+                                            ILeaseTaker<KinesisClientLease> leaseTaker,
+                                            ILeaseRenewer<KinesisClientLease> leaseRenewer,
                                             final long leaseDurationMillis,
                                             final long epsilonMillis,
                                             final int maxLeasesForWorker,

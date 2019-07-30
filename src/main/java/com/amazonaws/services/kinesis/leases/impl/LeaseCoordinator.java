@@ -207,8 +207,8 @@ public class LeaseCoordinator<T extends Lease> {
                 metricsFactory);
     }
 
-    public LeaseCoordinator(final LeaseTaker<T> leaseTaker,
-                     final LeaseRenewer<T> leaseRenewer,
+    public LeaseCoordinator(final ILeaseTaker<T> leaseTaker,
+                     final ILeaseRenewer<T> leaseRenewer,
                      final long leaseDurationMillis,
                      final long epsilonMillis,
                      final int maxLeasesForWorker,
