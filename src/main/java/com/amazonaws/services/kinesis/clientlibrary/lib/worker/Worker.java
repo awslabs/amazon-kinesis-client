@@ -87,6 +87,7 @@ public class Worker implements Runnable {
 
     private static final Log LOG = LogFactory.getLog(Worker.class);
 
+    private static final int SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC = 0;
     private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
     private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
     private static final LeaseCleanupValidator DEFAULT_LEASE_CLEANUP_VALIDATOR = new KinesisLeaseCleanupValidator();
@@ -559,8 +560,7 @@ public class Worker implements Runnable {
         this.shardSyncStrategy = config.getEnablePeriodicShardSync() ?
                 createPeriodicShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager()) :
                 createShardEndShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager());
-        LOG.info(String.format("Shard sync strategy determined as %s, marking initialization as done",
-                shardSyncStrategy.getName()));
+        LOG.info(String.format("Shard sync strategy determined as %s.", shardSyncStrategy.getName()));
     }
 
     private static KinesisClientLibLeaseCoordinator getLeaseCoordinator(KinesisClientLibConfiguration config,
@@ -1158,7 +1158,7 @@ public class Worker implements Runnable {
                         .withLeaderDecider(leaderDecider).withShardSyncTask(
                         new ShardSyncTask(kinesisProxy, leaseManager, config.getInitialPositionInStreamExtended(),
                                 config.shouldCleanupLeasesUponShardCompletion(),
-                                config.shouldIgnoreUnexpectedChildShards(), config.getShardSyncIntervalMillis(),
+                                config.shouldIgnoreUnexpectedChildShards(), SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
                                 shardSyncer)).build());
     }
 
@@ -1226,7 +1226,8 @@ public class Worker implements Runnable {
         private LeaseCleanupValidator leaseCleanupValidator;
         @Setter @Accessors(fluent = true)
         private LeaseSelector<KinesisClientLease> leaseSelector;
-        @Setter @Accessors(fluent = true) private LeaderDecider leaderDecider;
+        @Setter @Accessors(fluent = true)
+        private LeaderDecider leaderDecider;
         @Setter @Accessors(fluent = true)
         private ILeaseTaker<KinesisClientLease> leaseTaker;
         @Setter @Accessors(fluent = true)
