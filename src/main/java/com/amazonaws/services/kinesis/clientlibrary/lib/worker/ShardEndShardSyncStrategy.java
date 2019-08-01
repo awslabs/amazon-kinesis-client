@@ -6,21 +6,23 @@ import java.util.concurrent.Future;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-public class ShardEndShardSyncStrategy implements ShardSyncStrategy {
+class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
-    public static final String NAME = "ShardEndShardSyncStrategy";
+    private static final String NAME = "ShardEndShardSyncStrategy";
     private static final Log LOG = LogFactory.getLog(Worker.class);
     private ShardSyncTaskManager shardSyncTaskManager;
 
-    public ShardEndShardSyncStrategy(ShardSyncTaskManager shardSyncTaskManager) {
+    ShardEndShardSyncStrategy(ShardSyncTaskManager shardSyncTaskManager) {
         this.shardSyncTaskManager = shardSyncTaskManager;
     }
 
-    @Override public String getName() {
+    @Override
+    public String getName() {
         return NAME;
     }
 
-    @Override public TaskResult syncShards() {
+    @Override
+    public TaskResult syncShards() {
         Future<TaskResult> taskResultFuture = null;
         TaskResult result = null;
         while (taskResultFuture == null) {
@@ -34,20 +36,24 @@ public class ShardEndShardSyncStrategy implements ShardSyncStrategy {
         return result;
     }
 
-    @Override public TaskResult onWorkerInitialization() {
+    @Override
+    public TaskResult onWorkerInitialization() {
         LOG.debug(String.format("onWorkerInitialization is NoOp for %s", NAME));
         return new TaskResult(null);
     }
 
-    @Override public TaskResult onFoundCompletedShard() {
+    @Override
+    public TaskResult onFoundCompletedShard() {
         return syncShards();
     }
 
-    @Override public TaskResult onShardConsumerShutDown() {
+    @Override
+    public TaskResult onShardConsumerShutDown() {
         return syncShards();
     }
 
-    @Override public void onWorkerShutDown() {
+    @Override
+    public void onWorkerShutDown() {
         LOG.debug(String.format("Stop is NoOp for %s", NAME));
     }
 }

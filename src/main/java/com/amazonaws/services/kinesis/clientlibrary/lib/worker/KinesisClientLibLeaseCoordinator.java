@@ -118,17 +118,15 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
             long epsilonMillis, int maxLeasesForWorker, int maxLeasesToStealAtOneTime, int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
         super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
-                maxLeasesToStealAtOneTime, getDefaultLeaseRenewalExecutorService(maxLeaseRenewerThreadCount),
-                metricsFactory);
+                maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
         this.leaseManager = leaseManager;
     }
 
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
             ILeaseTaker<KinesisClientLease> leaseTaker, ILeaseRenewer<KinesisClientLease> leaseRenewer,
             final long leaseDurationMillis, final long epsilonMillis, final int maxLeasesForWorker,
-            final int maxLeasesToStealAtOneTime, final ExecutorService executorService,
-            final IMetricsFactory metricsFactory) {
-        super(leaseTaker, leaseRenewer, leaseDurationMillis, epsilonMillis, maxLeasesForWorker, maxLeasesToStealAtOneTime , executorService, metricsFactory);
+            final int maxLeasesToStealAtOneTime, final IMetricsFactory metricsFactory) {
+        super(leaseTaker, leaseRenewer, leaseDurationMillis, epsilonMillis, maxLeasesForWorker, maxLeasesToStealAtOneTime, metricsFactory);
         this.leaseManager = leaseManager;
     }
 

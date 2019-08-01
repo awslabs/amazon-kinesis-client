@@ -14,11 +14,11 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.apache.commons.lang3.Validate;
 import org.apache.commons.logging.Log;
@@ -28,7 +28,9 @@ import org.apache.commons.logging.LogFactory;
  * The top level orchestrator for coordinating the periodic shard sync related
  * activities.
  */
-@Getter class PeriodicShardSyncManager {
+@Getter
+@EqualsAndHashCode
+class PeriodicShardSyncManager {
     private static final Log LOG = LogFactory.getLog(PeriodicShardSyncManager.class);
     private static final long INITIAL_DELAY = 0;
     private static final long PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 1000;
@@ -81,29 +83,13 @@ import org.apache.commons.logging.LogFactory;
         try {
             if (leaderDecider.isLeader(workerId)) {
                 LOG.debug(String.format("WorkerId %s is a leader, running the shard sync task", workerId));
-                shardSyncTask.run();
+                shardSyncTask.call();
             } else {
                 LOG.debug(String.format("WorkerId %s is not a leader, not running the shard sync task", workerId));
             }
         } catch (Throwable t) {
             LOG.error("Error during runShardSync.", t);
         }
-    }
-
-    @Override public int hashCode() {
-        return Objects.hash(workerId);
-    }
-
-    @Override public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null || obj.getClass() != getClass()) {
-            return false;
-        }
-        PeriodicShardSyncManager other = (PeriodicShardSyncManager) obj;
-
-        return Objects.equals(workerId, other.workerId);
     }
 
     static class PeriodicShardSyncManagerBuilder {

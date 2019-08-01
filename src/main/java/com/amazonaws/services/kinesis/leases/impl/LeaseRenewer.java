@@ -404,6 +404,10 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
         addLeasesToRenew(myLeases);
     }
 
+    public void shutdown() {
+        executorService.shutdownNow();
+    }
+
     private void verifyNotNull(Object object, String message) {
         if (object == null) {
             throw new IllegalArgumentException(message);

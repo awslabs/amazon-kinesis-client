@@ -82,7 +82,6 @@ public class LeaseCoordinator<T extends Lease> {
     protected final IMetricsFactory metricsFactory;
 
     private ScheduledExecutorService leaseCoordinatorThreadPool;
-    private final ExecutorService leaseRenewalThreadpool;
 
     private volatile boolean running = false;
     private ScheduledFuture<?> takerFuture;
@@ -160,7 +159,7 @@ public class LeaseCoordinator<T extends Lease> {
             IMetricsFactory metricsFactory) {
         this(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis,
                 DEFAULT_MAX_LEASES_FOR_WORKER, DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME,
-                getDefaultLeaseRenewalExecutorService(KinesisClientLibConfiguration.DEFAULT_MAX_LEASE_RENEWAL_THREADS), metricsFactory);
+                KinesisClientLibConfiguration.DEFAULT_MAX_LEASE_RENEWAL_THREADS, metricsFactory);
     }
 
     /**
@@ -183,7 +182,7 @@ public class LeaseCoordinator<T extends Lease> {
             int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
         this(leaseManager, getDefaultLeaseSelector(), workerIdentifier, leaseDurationMillis, epsilonMillis,
-                maxLeasesForWorker, maxLeasesToStealAtOneTime, getDefaultLeaseRenewalExecutorService(maxLeaseRenewerThreadCount), metricsFactory);
+                maxLeasesForWorker, maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
     }
 
     public LeaseCoordinator(ILeaseManager<T> leaseManager,
@@ -193,17 +192,16 @@ public class LeaseCoordinator<T extends Lease> {
                      long epsilonMillis,
                      int maxLeasesForWorker,
                      int maxLeasesToStealAtOneTime,
-                     ExecutorService executorService,
+                     int maxLeaseRenewerThreadCount,
                      IMetricsFactory metricsFactory) {
-        this(new LeaseTaker<T>(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis)
+        this(new LeaseTaker<>(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis)
                         .withMaxLeasesForWorker(maxLeasesForWorker)
                         .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime),
-                new LeaseRenewer<>(leaseManager, workerIdentifier, leaseDurationMillis, executorService),
+                new LeaseRenewer<>(leaseManager, workerIdentifier, leaseDurationMillis,  getDefaultLeaseRenewalExecutorService(maxLeaseRenewerThreadCount)),
                 leaseDurationMillis,
                 epsilonMillis,
                 maxLeasesForWorker,
                 maxLeasesToStealAtOneTime,
-                executorService,
                 metricsFactory);
     }
 
@@ -213,11 +211,9 @@ public class LeaseCoordinator<T extends Lease> {
                      final long epsilonMillis,
                      final int maxLeasesForWorker,
                      final int maxLeasesToStealAtOneTime,
-                     final ExecutorService executorService,
                      final IMetricsFactory metricsFactory) {
         this.leaseTaker = leaseTaker;
         this.leaseRenewer = leaseRenewer;
-        this.leaseRenewalThreadpool = executorService;
         this.metricsFactory = metricsFactory;
         this.renewerIntervalMillis = leaseDurationMillis / 3 - epsilonMillis;
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
@@ -385,7 +381,7 @@ public class LeaseCoordinator<T extends Lease> {
             LOG.debug("Threadpool was null, no need to shutdown/terminate threadpool.");
         }
 
-        leaseRenewalThreadpool.shutdownNow();
+        leaseRenewer.shutdown();
         synchronized (shutdownLock) {
             leaseRenewer.clearCurrentlyHeldLeases();
             running = false;
@@ -446,6 +442,6 @@ public class LeaseCoordinator<T extends Lease> {
         int coreLeaseCount = Math.max(maximumPoolSize / 4, 2);
 
         return new ThreadPoolExecutor(coreLeaseCount, maximumPoolSize, 60, TimeUnit.SECONDS,
-                new LinkedTransferQueue<Runnable>(), LEASE_RENEWAL_THREAD_FACTORY);
+                new LinkedTransferQueue<>(), LEASE_RENEWAL_THREAD_FACTORY);
     }
 }

@@ -27,7 +27,7 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
  * It will clean up leases/activities for shards that have been completely processed (if
  * cleanupLeasesUponShardCompletion is true).
  */
-class ShardSyncTask implements ITask, Runnable {
+class ShardSyncTask implements ITask {
 
     private static final Log LOG = LogFactory.getLog(ShardSyncTask.class);
 
@@ -100,7 +100,4 @@ class ShardSyncTask implements ITask, Runnable {
         return taskType;
     }
 
-    @Override public void run() {
-        call();
-    }
 }

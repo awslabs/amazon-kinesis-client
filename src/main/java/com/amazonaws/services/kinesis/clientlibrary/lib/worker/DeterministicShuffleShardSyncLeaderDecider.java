@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.time.Instant;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -50,7 +51,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
     static final int DETERMINISTIC_SHUFFLE_SEED = 1947;
     static final int PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT = 1; //Default for KCL.
     private static final Log LOG = LogFactory.getLog(DeterministicShuffleShardSyncLeaderDecider.class);
-    private static final int LEADER_DECIDER_THREAD_COUNT = 1;
+
     private static final long ELECTION_INITIAL_DELAY_MILLIS = 60 * 1000;
     private static final long ELECTION_SCHEDULING_INTERVAL = 5 * 60 * 1000;
     private static final int AWAIT_TERMINATION_MILLIS = 5000;
@@ -86,10 +87,9 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
      * @param leaseManager                LeaseManager instance.
      * @param numPeriodicShardSyncWorkers Max number of periodic shard sync workers.
      */
-    public DeterministicShuffleShardSyncLeaderDecider(KinesisClientLibConfiguration config,
+    DeterministicShuffleShardSyncLeaderDecider(KinesisClientLibConfiguration config,
             ILeaseManager<KinesisClientLease> leaseManager, int numPeriodicShardSyncWorkers) {
-        this(config, leaseManager, Executors.newScheduledThreadPool(LEADER_DECIDER_THREAD_COUNT),
-                numPeriodicShardSyncWorkers);
+        this(config, leaseManager, Executors.newSingleThreadScheduledExecutor(), numPeriodicShardSyncWorkers);
     }
 
     DeterministicShuffleShardSyncLeaderDecider(KinesisClientLibConfiguration config,
@@ -107,7 +107,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
      */
     private void electLeaders() {
         try {
-            LOG.debug("Started leader election: " + System.currentTimeMillis());
+            LOG.debug("Started leader election:" + Instant.now());
             List<KinesisClientLease> leases = leaseManager.listLeases();
             List<String> uniqueHosts = leases.stream().map(KinesisClientLease::getLeaseOwner)
                     .filter(owner -> owner != null).distinct().sorted().collect(Collectors.toList());
@@ -118,7 +118,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
             // This is to prevent any ConcurrentModificationException exceptions.
             readWriteLock.writeLock().lock();
             leaders = new HashSet<>(uniqueHosts.subList(0, numShardSyncWorkers));
-            LOG.debug("Elected leaders: " + String.join(", ", leaders));
+            LOG.info("Elected leaders: " + String.join(", ", leaders));
             LOG.debug("Completed leader election: " + System.currentTimeMillis());
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
             LOG.error("Exception occurred while trying to fetch all leases for leader election", e);
@@ -140,7 +140,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
         }
     }
 
-    private boolean workerIdInLeaders(String workerId) {
+    private boolean leadersContainWorkerId(String workerId) {
         try {
             readWriteLock.readLock().lock();
             // If leaders is still null or empty fall back to this host being a "leader". This ensures that a brief
@@ -163,7 +163,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
             leaderElectionThreadPool.scheduleWithFixedDelay(this::electLeaders, ELECTION_INITIAL_DELAY_MILLIS,
                     ELECTION_SCHEDULING_INTERVAL, TimeUnit.MILLISECONDS);
         }
-        return workerIdInLeaders(workerId);
+        return leadersContainWorkerId(workerId);
     }
 
     @Override public synchronized void shutdown() {

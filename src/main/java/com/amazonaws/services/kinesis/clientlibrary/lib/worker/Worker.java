@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
+import com.amazonaws.services.kinesis.clientlibrary.proxies.MetricsCollectingKinesisProxyDecorator;
 import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
 import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
@@ -557,10 +558,18 @@ public class Worker implements Runnable {
         this.workerStateChangeListener = workerStateChangeListener;
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.CREATED);
         this.leaderDecider = leaderDecider;
-        this.shardSyncStrategy = config.getEnablePeriodicShardSync() ?
-                createPeriodicShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager()) :
-                createShardEndShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager());
+        this.shardSyncStrategy = createShardSyncStrategy(config.getShardSyncStrategyType());
         LOG.info(String.format("Shard sync strategy determined as %s.", shardSyncStrategy.getName()));
+    }
+
+    private ShardSyncStrategy createShardSyncStrategy(ShardSyncStrategy.StrategyType strategyType) {
+        switch (strategyType) {
+            case PERIODIC:
+               return createPeriodicShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager());
+            case SHARD_END:
+            default:
+                return createShardEndShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager());
+        }
     }
 
     private static KinesisClientLibLeaseCoordinator getLeaseCoordinator(KinesisClientLibConfiguration config,
@@ -1233,8 +1242,6 @@ public class Worker implements Runnable {
         @Setter @Accessors(fluent = true)
         private ILeaseRenewer<KinesisClientLease> leaseRenewer;
         @Setter @Accessors(fluent = true)
-        private ExecutorService leaseRenewerThreadPool;
-        @Setter @Accessors(fluent = true)
         private ShardSyncer shardSyncer;
 
 
@@ -1371,11 +1378,8 @@ public class Worker implements Runnable {
             }
 
             // We expect users to either inject both LeaseRenewer and the corresponding thread-pool, or neither of them (DEFAULT).
-            if ((leaseRenewerThreadPool == null && leaseRenewer != null) || (leaseRenewerThreadPool != null && leaseRenewer == null)) {
-                throw new IllegalArgumentException("Either both LeaseRenewer and LeaseRenewerThreadPool should be injected, or neither of them.");
-            }
-            else if (leaseRenewer == null){
-                leaseRenewerThreadPool = LeaseCoordinator.getDefaultLeaseRenewalExecutorService(config.getMaxLeaseRenewalThreads());
+           if (leaseRenewer == null){
+                ExecutorService leaseRenewerThreadPool = LeaseCoordinator.getDefaultLeaseRenewalExecutorService(config.getMaxLeaseRenewalThreads());
                 leaseRenewer = new LeaseRenewer<>(leaseManager, config.getWorkerIdentifier(), config.getFailoverTimeMillis(), leaseRenewerThreadPool);
             }
 
@@ -1401,7 +1405,7 @@ public class Worker implements Runnable {
                             config.getFailoverTimeMillis(),
                             config.getEpsilonMillis(),
                             config.getMaxLeasesForWorker(),
-                            config.getMaxLeasesToStealAtOneTime(), leaseRenewerThreadPool,
+                            config.getMaxLeasesToStealAtOneTime(),
                             metricsFactory)
                             .withInitialLeaseTableReadCapacity(config.getInitialLeaseTableReadCapacity())
                             .withInitialLeaseTableWriteCapacity(config.getInitialLeaseTableWriteCapacity()),
