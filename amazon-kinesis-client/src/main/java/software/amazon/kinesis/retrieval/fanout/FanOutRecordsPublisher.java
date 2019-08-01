@@ -74,7 +74,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private final Object lockObject = new Object();
 
     private final AtomicInteger subscribeToShardId = new AtomicInteger(0);
-    @Setter @VisibleForTesting
     private RecordFlow flow;
     @Getter @VisibleForTesting
     private String currentSequenceNumber;
@@ -214,8 +213,13 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         this.subscriber = s;
     }
 
+    @VisibleForTesting
+    void setFlowForTesting(RecordFlow flow) {
+        this.flow = flow;
+    }
+
     @Data
-    private static class RecordsRetrievedContext {
+    private static final class RecordsRetrievedContext {
         private final RecordsRetrieved recordsRetrieved;
         private final RecordFlow recordFlow;
         private final Instant enqueueTimestamp;

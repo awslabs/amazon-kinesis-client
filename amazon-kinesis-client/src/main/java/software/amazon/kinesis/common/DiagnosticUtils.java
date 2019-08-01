@@ -33,10 +33,13 @@ public class DiagnosticUtils {
     public static void takeDelayedDeliveryActionIfRequired(String shardId, Instant enqueueTimestamp, Logger log) {
         final long durationBetweenEnqueueAndAckInMillis = Duration
                 .between(enqueueTimestamp, Instant.now()).toMillis();
-        if (durationBetweenEnqueueAndAckInMillis > MAX_TIME_BETWEEN_REQUEST_RESPONSE / 2) {
-            // TODO : Use DelayedDeliveryEvent to aggregate and notify on this delay event.
-            log.debug("{}: Record delivery time to shard consumer is high at {} millis", shardId,
-                    durationBetweenEnqueueAndAckInMillis);
+        if (durationBetweenEnqueueAndAckInMillis > MAX_TIME_BETWEEN_REQUEST_RESPONSE / 3) {
+            // The above condition logs the warn msg if the delivery time exceeds 11 seconds.
+            log.warn(
+                    "{}: Record delivery time to shard consumer is high at {} millis. Check the ExecutorStateEvent logs"
+                            + " to see the state of the executor service. Also check if the RecordProcessor's processing "
+                            + "time is high. ",
+                    shardId, durationBetweenEnqueueAndAckInMillis);
         } else if (log.isDebugEnabled()) {
             log.debug("{}: Record delivery time to shard consumer is {} millis", shardId,
                     durationBetweenEnqueueAndAckInMillis);

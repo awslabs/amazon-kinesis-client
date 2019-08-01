@@ -949,7 +949,7 @@ public class FanOutRecordsPublisherTest {
         FanOutRecordsPublisher fanOutRecordsPublisher = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
-        fanOutRecordsPublisher.setFlow(recordFlow);
+        fanOutRecordsPublisher.setFlowForTesting(recordFlow);
         final int[] totalRecordsRetrieved = { 0 };
         BlockingQueue<BatchUniqueIdentifier> ackQueue = new LinkedBlockingQueue<>();
         fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {

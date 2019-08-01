@@ -49,7 +49,7 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
 
     /**
      * Notify the publisher on receipt of a data event.
-     * @param ack
+     * @param ack acknowledgement received from the subscriber.
      */
     default void notify(RecordsDeliveryAck ack) {
         throw new UnsupportedOperationException("RecordsPublisher does not support acknowledgement from Subscriber");

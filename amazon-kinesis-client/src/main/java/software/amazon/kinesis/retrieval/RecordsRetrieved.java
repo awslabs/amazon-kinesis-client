@@ -30,7 +30,7 @@ public interface RecordsRetrieved {
     /**
      * Returns the identifier that uniquely identifies this batch.
      *
-     * @return UUID
+     * @return batchUniqueIdentifier that uniquely identifies the records batch and its source.
      */
     default BatchUniqueIdentifier batchUniqueIdentifier() {
         throw new UnsupportedOperationException("Retrieval of batch unique identifier is not supported");
