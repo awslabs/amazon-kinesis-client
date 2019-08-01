@@ -15,27 +15,16 @@
 
 package software.amazon.kinesis.retrieval.fanout;
 
-import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
-
 import com.google.common.annotations.VisibleForTesting;
-import lombok.Getter;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
-
 import lombok.Data;
+import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
@@ -48,13 +37,26 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.retrieval.BatchUniqueIdentifier;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
-import software.amazon.kinesis.retrieval.RecordsRetrievedAck;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDeliveryActionIfRequired;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -72,7 +74,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private final Object lockObject = new Object();
 
     private final AtomicInteger subscribeToShardId = new AtomicInteger(0);
-
+    @Setter @VisibleForTesting
     private RecordFlow flow;
     @Getter @VisibleForTesting
     private String currentSequenceNumber;
@@ -110,6 +112,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     @Override
     public void restartFrom(RecordsRetrieved recordsRetrieved) {
         synchronized (lockObject) {
+            // Clear the delivery buffer so that current subscription don't yield duplicate records.
+            clearRecordsDeliveryQueue();
             if (flow != null) {
                 //
                 // The flow should not be running at this time
@@ -121,21 +125,19 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 throw new IllegalArgumentException(
                         "Provided ProcessRecordsInput not created from the FanOutRecordsPublisher");
             }
-            currentSequenceNumber = recordsRetrieved.batchSequenceNumber();
+            currentSequenceNumber = ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();
         }
     }
 
     @Override
-    public void notify(RecordsRetrievedAck recordsRetrievedAck) {
+    public void notify(RecordsDeliveryAck recordsDeliveryAck) {
         synchronized (lockObject) {
-            boolean isNextEventScheduled = false;
             CompletableFuture<RecordFlow> triggeringFlowFuture = new CompletableFuture<>();
             try {
-                isNextEventScheduled = evictAckedEventAndScheduleNextEvent(recordsRetrievedAck, triggeringFlowFuture);
+                evictAckedEventAndScheduleNextEvent(recordsDeliveryAck, triggeringFlowFuture);
             } catch (Throwable t) {
                 errorOccurred(triggeringFlowFuture.getNow(null), t);
             }
-            // TODO : debug log on isNextEventScheduled
             final RecordFlow triggeringFlow = triggeringFlowFuture.getNow(null);
             if (triggeringFlow != null) {
                 updateAvailableQueueSpaceAndRequestUpstream(triggeringFlow);
@@ -143,36 +145,52 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    private boolean evictAckedEventAndScheduleNextEvent(RecordsRetrievedAck recordsRetrievedAck,
+    // This method is not thread-safe. You need to acquire a lock in the caller in order to execute this.
+    @VisibleForTesting
+    void evictAckedEventAndScheduleNextEvent(RecordsDeliveryAck recordsDeliveryAck,
             CompletableFuture<RecordFlow> triggeringFlowFuture) {
-        boolean isNextEventScheduled = false;
-        // Remove the head of the queue on receiving the ack.
+        // Peek the head of the queue on receiving the ack.
         // Note : This does not block wait to retrieve an element.
-        RecordsRetrievedContext recordsRetrievedContext = recordsDeliveryQueue.poll();
+        final RecordsRetrievedContext recordsRetrievedContext = recordsDeliveryQueue.peek();
         // Check if the ack corresponds to the head of the delivery queue.
         if (recordsRetrievedContext != null && recordsRetrievedContext.getRecordsRetrieved().batchUniqueIdentifier()
-                .equals(recordsRetrievedAck.batchUniqueIdentifier())) {
+                .equals(recordsDeliveryAck.batchUniqueIdentifier())) {
+            // It is now safe to remove the element
+            recordsDeliveryQueue.poll();
+            // Take action based on the time spent by the event in queue.
+            takeDelayedDeliveryActionIfRequired(shardId, recordsRetrievedContext.getEnqueueTimestamp(), log);
             // Update current sequence number for the successfully delivered event.
-            currentSequenceNumber = recordsRetrievedAck.deliveredSequenceNumber();
+            currentSequenceNumber = ((FanoutRecordsRetrieved)recordsRetrievedContext.getRecordsRetrieved()).continuationSequenceNumber();
             // Update the triggering flow for post scheduling upstream request.
             triggeringFlowFuture.complete(recordsRetrievedContext.getRecordFlow());
             // Try scheduling the next event in the queue, if available.
             if (recordsDeliveryQueue.peek() != null) {
                 subscriber.onNext(recordsDeliveryQueue.peek().getRecordsRetrieved());
-                isNextEventScheduled = true;
             }
         } else {
-            // TODO : toString implementation for recordsRetrievedAck
-            log.error("{}: KCL BUG: Found mismatched payload {} in the delivery queue for the ack {}  ", shardId,
-                    recordsRetrievedContext.getRecordsRetrieved(), recordsRetrievedAck);
-            throw new IllegalStateException("KCL BUG: Record delivery ack mismatch");
+            // Check if the mismatched event belongs to active flow. If publisher receives an ack for a
+            // missing event in active flow, then it means the event was already acked or cleared
+            // from the queue due to a potential bug.
+            if (flow != null && recordsDeliveryAck.batchUniqueIdentifier().getFlowIdentifier()
+                    .equals(flow.getSubscribeToShardId())) {
+                log.error(
+                        "{}: KCL BUG: Publisher found mismatched ack for subscription {}  ",
+                        shardId, recordsDeliveryAck.batchUniqueIdentifier().getFlowIdentifier());
+                throw new IllegalStateException("KCL BUG: Record delivery ack mismatch");
+            }
+            // Otherwise publisher received a stale ack.
+            else {
+                log.info("{}: Publisher received duplicate ack or an ack for stale subscription {}. Ignoring.", shardId,
+                        recordsDeliveryAck.batchUniqueIdentifier().getFlowIdentifier());
+            }
         }
-        return isNextEventScheduled;
     }
 
-    private boolean bufferCurrentEventAndScheduleIfRequired(RecordsRetrieved recordsRetrieved, RecordFlow triggeringFlow) {
-        boolean isCurrentEventScheduled = false;
-        final RecordsRetrievedContext recordsRetrievedContext = new RecordsRetrievedContext(recordsRetrieved, triggeringFlow);
+    // This method is not thread-safe. You need to acquire a lock in the caller in order to execute this.
+    @VisibleForTesting
+    void bufferCurrentEventAndScheduleIfRequired(RecordsRetrieved recordsRetrieved, RecordFlow triggeringFlow) {
+        final RecordsRetrievedContext recordsRetrievedContext =
+                new RecordsRetrievedContext(recordsRetrieved, triggeringFlow, Instant.now());
         try {
             // Try enqueueing the RecordsRetrieved batch to the queue, which would throw exception on failure.
             // Note: This does not block wait to enqueue.
@@ -180,7 +198,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             // If the current batch is the only element in the queue, then try scheduling the event delivery.
             if (recordsDeliveryQueue.size() == 1) {
                 subscriber.onNext(recordsRetrieved);
-                isCurrentEventScheduled = true;
             }
         } catch (IllegalStateException e) {
             log.warn("{}: Unable to enqueue the payload due to capacity restrictions in delivery queue with remaining capacity {} ",
@@ -190,17 +207,26 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             recordsDeliveryQueue.remove(recordsRetrievedContext);
             throw t;
         }
-        return isCurrentEventScheduled;
+    }
+
+    @VisibleForTesting
+    void setSubscriberForTesting(Subscriber<RecordsRetrieved> s) {
+        this.subscriber = s;
     }
 
     @Data
     private static class RecordsRetrievedContext {
         private final RecordsRetrieved recordsRetrieved;
         private final RecordFlow recordFlow;
+        private final Instant enqueueTimestamp;
     }
 
     private boolean hasValidSubscriber() {
         return subscriber != null;
+    }
+
+    private boolean hasValidFlow() {
+        return flow != null;
     }
 
     private void subscribeToShard(String sequenceNumber) {
@@ -229,15 +255,22 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private void errorOccurred(RecordFlow triggeringFlow, Throwable t) {
         synchronized (lockObject) {
 
-            // Clean the delivery buffer
-            recordsDeliveryQueue.clear();
-
             if (!hasValidSubscriber()) {
-                log.warn(
-                        "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- Subscriber is null",
-                        shardId, flow.connectionStartedAt, flow.subscribeToShardId);
+                if(hasValidFlow()) {
+                    log.warn(
+                            "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- Subscriber is null",
+                            shardId, flow.connectionStartedAt, flow.subscribeToShardId);
+                } else {
+                    log.warn(
+                            "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) -- Subscriber and flow are null",
+                            shardId);
+                }
                 return;
             }
+
+            // Clear the delivery buffer so that next subscription don't yield duplicate records.
+            clearRecordsDeliveryQueue();
+
             Throwable propagationThrowable = t;
             ThrowableCategory category = throwableCategory(propagationThrowable);
 
@@ -267,7 +300,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 availableQueueSpace = 0;
 
                 try {
-                    handleFlowError(propagationThrowable);
+                    handleFlowError(propagationThrowable, triggeringFlow);
                 } catch (Throwable innerThrowable) {
                     log.warn("{}: Exception while calling subscriber.onError", shardId, innerThrowable);
                 }
@@ -286,6 +319,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         }
     }
 
+    private void clearRecordsDeliveryQueue() {
+        recordsDeliveryQueue.clear();
+    }
+
     protected void logAcquireTimeoutMessage(Throwable t) {
         log.error("An acquire timeout occurred which usually indicates that the KinesisAsyncClient supplied has a " +
                 "low maximum streams limit.  " +
@@ -293,13 +330,16 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 "or refer to the class to setup the client manually.");
     }
 
-    private void handleFlowError(Throwable t) {
+    private void handleFlowError(Throwable t, RecordFlow triggeringFlow) {
         if (t.getCause() instanceof ResourceNotFoundException) {
             log.debug(
                     "{}: Could not call SubscribeToShard successfully because shard no longer exists. Marking shard for completion.",
                     shardId);
+            // The ack received for this onNext event will be ignored by the publisher as the global flow object should
+            // be either null or renewed when the ack's flow identifier is evaluated.
             FanoutRecordsRetrieved response = new FanoutRecordsRetrieved(
-                    ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true).build(), null);
+                    ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true).build(), null,
+                    triggeringFlow != null ? triggeringFlow.getSubscribeToShardId() : shardId + "-no-flow-found");
             subscriber.onNext(response);
             subscriber.onComplete();
         } else {
@@ -383,13 +423,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     .millisBehindLatest(recordBatchEvent.millisBehindLatest())
                     .isAtShardEnd(recordBatchEvent.continuationSequenceNumber() == null).records(records).build();
             FanoutRecordsRetrieved recordsRetrieved = new FanoutRecordsRetrieved(input,
-                    recordBatchEvent.continuationSequenceNumber());
-
-            boolean isCurrentEventScheduled = false;
+                    recordBatchEvent.continuationSequenceNumber(), triggeringFlow.subscribeToShardId);
 
             try {
-                isCurrentEventScheduled = bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, triggeringFlow);
-                // TODO: debug log on isCurrentEventScheduled
+                bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, triggeringFlow);
             } catch (Throwable t) {
                 log.warn("{}: Unable to buffer or schedule onNext for subscriber.  Failing publisher.", shardId);
                 errorOccurred(triggeringFlow, t);
@@ -579,7 +616,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         private final ProcessRecordsInput processRecordsInput;
         private final String continuationSequenceNumber;
-        private final UUID batchUniqueIdentifier = UUID.randomUUID();
+        private final String flowIdentifier;
+        private final String batchUniqueIdentifier = UUID.randomUUID().toString();
 
         @Override
         public ProcessRecordsInput processRecordsInput() {
@@ -587,13 +625,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         }
 
         @Override
-        public String batchSequenceNumber() {
-            return continuationSequenceNumber;
-        }
-
-        @Override
-        public UUID batchUniqueIdentifier() {
-            return batchUniqueIdentifier;
+        public BatchUniqueIdentifier batchUniqueIdentifier() {
+            return new BatchUniqueIdentifier(batchUniqueIdentifier, flowIdentifier);
         }
     }
 
@@ -603,6 +636,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         private final FanOutRecordsPublisher parent;
         private final Instant connectionStartedAt;
+        @Getter @VisibleForTesting
         private final String subscribeToShardId;
 
         private RecordSubscription subscription;

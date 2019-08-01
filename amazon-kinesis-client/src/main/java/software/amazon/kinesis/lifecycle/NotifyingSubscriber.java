@@ -1,10 +1,25 @@
+/*
+ * Copyright 2019 Amazon.com, Inc. or its affiliates.
+ * Licensed under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package software.amazon.kinesis.lifecycle;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
-import software.amazon.kinesis.retrieval.RecordsRetrievedAck;
+import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 
 /**
  * Subscriber that notifies its publisher on receipt of the onNext event.
@@ -25,10 +40,10 @@ public interface NotifyingSubscriber extends Subscriber<RecordsRetrieved> {
 
     /**
      * Construct RecordsRetrievedAck object from the incoming data and return it
-     * @param t type of data
+     * @param recordsRetrieved for which we need the ack.
      * @return RecordsRetrievedAck
      */
-    RecordsRetrievedAck getRecordsRetrievedAck(RecordsRetrieved recordsRetrieved);
+    RecordsDeliveryAck getRecordsRetrievedAck(RecordsRetrieved recordsRetrieved);
 
     @Override
     default void onSubscribe(Subscription subscription) {

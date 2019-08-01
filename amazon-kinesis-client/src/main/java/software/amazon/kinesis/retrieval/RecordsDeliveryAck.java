@@ -12,27 +12,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package software.amazon.kinesis.retrieval;
 
-import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-
-import java.util.UUID;
-
-public interface RecordsRetrieved {
+public interface RecordsDeliveryAck {
 
     /**
-     * Retrieves the records that have been received via one of the publishers
-     * 
-     * @return the processRecordsInput received
+     * Unique record batch identifier used to ensure the durability and ordering guarantees.
+     * @return id that uniquely determines a record batch and its source.
      */
-    ProcessRecordsInput processRecordsInput();
+    BatchUniqueIdentifier batchUniqueIdentifier();
 
-    /**
-     * Returns the identifier that uniquely identifies this batch.
-     *
-     * @return UUID
-     */
-    default BatchUniqueIdentifier batchUniqueIdentifier() {
-        throw new UnsupportedOperationException("Retrieval of batch unique identifier is not supported");
-    }
 }

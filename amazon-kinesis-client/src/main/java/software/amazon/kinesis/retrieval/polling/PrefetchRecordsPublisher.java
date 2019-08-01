@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -49,10 +50,13 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDeliveryActionIfRequired;
 
 /**
  * This is the prefetch caching class, this class spins up a thread if prefetching is enabled. That thread fetches the
@@ -92,6 +96,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     private final ReentrantReadWriteLock resetLock = new ReentrantReadWriteLock();
     private boolean wasReset = false;
+
+    private final Semaphore eventDeliveryLock = new Semaphore(1);
+    private Instant eventDeliveryLockAcquireTime = Instant.EPOCH;
 
     /**
      * Constructor for the PrefetchRecordsPublisher. This cache prefetches records from Kinesis and stores them in a
@@ -216,6 +223,13 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         });
     }
 
+    @Override
+    public void notify(RecordsDeliveryAck ack) {
+        eventDeliveryLock.release();
+        // Take action based on the time spent by the event in queue.
+        takeDelayedDeliveryActionIfRequired(shardId, eventDeliveryLockAcquireTime, log);
+    }
+
     private void addArrivedRecordsInput(PrefetchRecordsRetrieved recordsRetrieved) throws InterruptedException {
         wasReset = false;
         while (!getRecordsResultQueue.offer(recordsRetrieved, idleMillisBetweenCalls, TimeUnit.MILLISECONDS)) {
@@ -236,6 +250,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     private synchronized void drainQueueForRequests() {
         while (requestedResponses.get() > 0 && !getRecordsResultQueue.isEmpty()) {
+            eventDeliveryLock.acquireUninterruptibly();
+            eventDeliveryLockAcquireTime = Instant.now();
             subscriber.onNext(getNextResult());
         }
     }

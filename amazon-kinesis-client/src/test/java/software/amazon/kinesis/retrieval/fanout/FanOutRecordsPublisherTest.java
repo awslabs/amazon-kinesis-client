@@ -1,38 +1,14 @@
 package software.amazon.kinesis.retrieval.fanout;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-
-import java.nio.ByteBuffer;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import io.netty.handler.timeout.ReadTimeoutException;
 import io.reactivex.Flowable;
 import io.reactivex.Scheduler;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subscribers.SafeSubscriber;
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
@@ -40,16 +16,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
-import org.mockito.stubbing.Answer;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
-
-import io.netty.handler.timeout.ReadTimeoutException;
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.core.exception.SdkClientException;
@@ -65,10 +35,48 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.retrieval.BatchUniqueIdentifier;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @RunWith(MockitoJUnitRunner.class)
 @Slf4j
@@ -193,7 +201,7 @@ public class FanOutRecordsPublisherTest {
                     }
                 }, source);
 
-        Scheduler testScheduler = getScheduler(getBlockingExecutor(getSpiedExecutor()));
+        Scheduler testScheduler = getScheduler(getBlockingExecutor(getSpiedExecutor(getTestExecutor())));
         int bufferSize = 8;
 
         Flowable.fromPublisher(source).subscribeOn(testScheduler).observeOn(testScheduler, true, bufferSize)
@@ -269,7 +277,7 @@ public class FanOutRecordsPublisherTest {
                     }
                 }, source);
 
-        Scheduler testScheduler = getScheduler(getOverwhelmedExecutor(getSpiedExecutor()));
+        Scheduler testScheduler = getScheduler(getOverwhelmedBlockingExecutor(getSpiedExecutor(getTestExecutor())));
         int bufferSize = 8;
 
         Flowable.fromPublisher(source).subscribeOn(testScheduler).observeOn(testScheduler, true, bufferSize)
@@ -305,13 +313,288 @@ public class FanOutRecordsPublisherTest {
 
     }
 
+    @Test
+    public void testIfStreamOfEventsAreDeliveredInOrderWithBackpressureAdheringServicePublisher() throws Exception {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        List<Record> records = Stream.of(1, 2, 3).map(this::makeRecord).collect(Collectors.toList());
+
+        Consumer<Integer> servicePublisherAction = contSeqNum -> captor.getValue().onNext(
+                SubscribeToShardEvent.builder()
+                        .millisBehindLatest(100L)
+                        .continuationSequenceNumber(contSeqNum + "")
+                        .records(records)
+                        .build());
+
+        CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(2);
+        int totalServicePublisherEvents = 1000;
+        int initialDemand = 0;
+        BackpressureAdheringServicePublisher servicePublisher =
+                new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch, initialDemand);
+
+        doNothing().when(publisher).subscribe(captor.capture());
+
+        source.start(ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
+
+        List<ProcessRecordsInput> receivedInput = new ArrayList<>();
+
+        Subscriber<RecordsRetrieved> shardConsumerSubscriber = new ShardConsumerNotifyingSubscriber(
+                new Subscriber<RecordsRetrieved>() {
+                    private Subscription subscription;
+                    private int lastSeenSeqNum = 0;
+
+                    @Override public void onSubscribe(Subscription s) {
+                        subscription = s;
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                    }
+
+                    @Override public void onNext(RecordsRetrieved input) {
+                        receivedInput.add(input.processRecordsInput());
+                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                        if(receivedInput.size() == totalServicePublisherEvents) {
+                            servicePublisherTaskCompletionLatch.countDown();
+                        }
+                    }
+
+                    @Override public void onError(Throwable t) {
+                        log.error("Caught throwable in subscriber", t);
+                        fail("Caught throwable in subscriber");
+                    }
+
+                    @Override public void onComplete() {
+                        fail("OnComplete called when not expected");
+                    }
+                }, source);
+
+        ExecutorService executorService = getTestExecutor();
+        Scheduler testScheduler = getScheduler(getInitiallyBlockingExecutor(getSpiedExecutor(executorService)));
+        int bufferSize = 8;
+
+        Flowable.fromPublisher(source).subscribeOn(testScheduler).observeOn(testScheduler, true, bufferSize)
+                .subscribe(shardConsumerSubscriber);
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        flowCaptor.getValue().onEventStream(publisher);
+        captor.getValue().onSubscribe(subscription);
+
+        List<KinesisClientRecordMatcher> matchers = records.stream().map(KinesisClientRecordMatcher::new)
+                .collect(Collectors.toList());
+
+        executorService.submit(servicePublisher);
+        servicePublisherTaskCompletionLatch.await(5000, TimeUnit.MILLISECONDS);
+
+        assertThat(receivedInput.size(), equalTo(totalServicePublisherEvents));
+
+        receivedInput.stream().map(ProcessRecordsInput::records).forEach(clientRecordsList -> {
+            assertThat(clientRecordsList.size(), equalTo(matchers.size()));
+            for (int i = 0; i < clientRecordsList.size(); ++i) {
+                assertThat(clientRecordsList.get(i), matchers.get(i));
+            }
+        });
+
+        assertThat(source.getCurrentSequenceNumber(), equalTo(totalServicePublisherEvents + ""));
+
+    }
+
+    @Test
+    public void testIfStreamOfEventsAreDeliveredInOrderWithBackpressureAdheringServicePublisherHavingInitialBurstWithinLimit() throws Exception {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        List<Record> records = Stream.of(1, 2, 3).map(this::makeRecord).collect(Collectors.toList());
+
+        Consumer<Integer> servicePublisherAction = contSeqNum -> captor.getValue().onNext(
+                SubscribeToShardEvent.builder()
+                        .millisBehindLatest(100L)
+                        .continuationSequenceNumber(contSeqNum + "")
+                        .records(records)
+                        .build());
+
+        CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(2);
+        int totalServicePublisherEvents = 1000;
+        int initialDemand = 9;
+        BackpressureAdheringServicePublisher servicePublisher =
+                new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch, initialDemand);
+
+        doNothing().when(publisher).subscribe(captor.capture());
+
+        source.start(ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
+
+        List<ProcessRecordsInput> receivedInput = new ArrayList<>();
+
+        Subscriber<RecordsRetrieved> shardConsumerSubscriber = new ShardConsumerNotifyingSubscriber(
+                new Subscriber<RecordsRetrieved>() {
+                    private Subscription subscription;
+                    private int lastSeenSeqNum = 0;
+
+                    @Override public void onSubscribe(Subscription s) {
+                        subscription = s;
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                    }
+
+                    @Override public void onNext(RecordsRetrieved input) {
+                        receivedInput.add(input.processRecordsInput());
+                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                        if(receivedInput.size() == totalServicePublisherEvents) {
+                            servicePublisherTaskCompletionLatch.countDown();
+                        }
+                    }
+
+                    @Override public void onError(Throwable t) {
+                        log.error("Caught throwable in subscriber", t);
+                        fail("Caught throwable in subscriber");
+                    }
+
+                    @Override public void onComplete() {
+                        fail("OnComplete called when not expected");
+                    }
+                }, source);
+
+        ExecutorService executorService = getTestExecutor();
+        Scheduler testScheduler = getScheduler(getInitiallyBlockingExecutor(getSpiedExecutor(executorService)));
+        int bufferSize = 8;
+
+        Flowable.fromPublisher(source).subscribeOn(testScheduler).observeOn(testScheduler, true, bufferSize)
+                .subscribe(shardConsumerSubscriber);
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        flowCaptor.getValue().onEventStream(publisher);
+        captor.getValue().onSubscribe(subscription);
+
+        List<KinesisClientRecordMatcher> matchers = records.stream().map(KinesisClientRecordMatcher::new)
+                .collect(Collectors.toList());
+
+        executorService.submit(servicePublisher);
+        servicePublisherTaskCompletionLatch.await(5000, TimeUnit.MILLISECONDS);
+
+        assertThat(receivedInput.size(), equalTo(totalServicePublisherEvents));
+
+        receivedInput.stream().map(ProcessRecordsInput::records).forEach(clientRecordsList -> {
+            assertThat(clientRecordsList.size(), equalTo(matchers.size()));
+            for (int i = 0; i < clientRecordsList.size(); ++i) {
+                assertThat(clientRecordsList.get(i), matchers.get(i));
+            }
+        });
+
+        assertThat(source.getCurrentSequenceNumber(), equalTo(totalServicePublisherEvents + ""));
+
+    }
+
+    @Test
+    public void testIfStreamOfEventsAreDeliveredInOrderWithBackpressureAdheringServicePublisherHavingInitialBurstOverLimit() throws Exception {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        List<Record> records = Stream.of(1, 2, 3).map(this::makeRecord).collect(Collectors.toList());
+
+        Consumer<Integer> servicePublisherAction = contSeqNum -> captor.getValue().onNext(
+                SubscribeToShardEvent.builder()
+                        .millisBehindLatest(100L)
+                        .continuationSequenceNumber(contSeqNum + "")
+                        .records(records)
+                        .build());
+
+        CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(1);
+        int totalServicePublisherEvents = 1000;
+        int initialDemand = 10;
+        BackpressureAdheringServicePublisher servicePublisher =
+                new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch, initialDemand);
+
+        doNothing().when(publisher).subscribe(captor.capture());
+
+        source.start(ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
+
+        List<ProcessRecordsInput> receivedInput = new ArrayList<>();
+        AtomicBoolean onErrorSet = new AtomicBoolean(false);
+
+        Subscriber<RecordsRetrieved> shardConsumerSubscriber = new ShardConsumerNotifyingSubscriber(
+                new Subscriber<RecordsRetrieved>() {
+                    private Subscription subscription;
+                    private int lastSeenSeqNum = 0;
+
+                    @Override public void onSubscribe(Subscription s) {
+                        subscription = s;
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                    }
+
+                    @Override public void onNext(RecordsRetrieved input) {
+                        receivedInput.add(input.processRecordsInput());
+                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                    }
+
+                    @Override public void onError(Throwable t) {
+                        log.error("Caught throwable in subscriber", t);
+                        onErrorSet.set(true);
+                        servicePublisherTaskCompletionLatch.countDown();
+                    }
+
+                    @Override public void onComplete() {
+                        fail("OnComplete called when not expected");
+                    }
+                }, source);
+
+        ExecutorService executorService = getTestExecutor();
+        Scheduler testScheduler = getScheduler(getInitiallyBlockingExecutor(getSpiedExecutor(executorService)));
+        int bufferSize = 8;
+
+        Flowable.fromPublisher(source).subscribeOn(testScheduler).observeOn(testScheduler, true, bufferSize)
+                .subscribe(shardConsumerSubscriber);
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        flowCaptor.getValue().onEventStream(publisher);
+        captor.getValue().onSubscribe(subscription);
+
+        List<KinesisClientRecordMatcher> matchers = records.stream().map(KinesisClientRecordMatcher::new)
+                .collect(Collectors.toList());
+
+        executorService.submit(servicePublisher);
+        servicePublisherTaskCompletionLatch.await(5000, TimeUnit.MILLISECONDS);
+
+        assertTrue("onError should have triggered", onErrorSet.get());
+
+        receivedInput.stream().map(ProcessRecordsInput::records).forEach(clientRecordsList -> {
+            assertThat(clientRecordsList.size(), equalTo(matchers.size()));
+            for (int i = 0; i < clientRecordsList.size(); ++i) {
+                assertThat(clientRecordsList.get(i), matchers.get(i));
+            }
+        });
+    }
+
     private Scheduler getScheduler(ExecutorService executorService) {
         return Schedulers.from(executorService);
     }
 
-    private ExecutorService getSpiedExecutor() {
-        ExecutorService executorService = Executors.newFixedThreadPool(8,
+    private ExecutorService getTestExecutor() {
+        return Executors.newFixedThreadPool(8,
                 new ThreadFactoryBuilder().setNameFormat("test-fanout-record-publisher-%04d").setDaemon(true).build());
+    }
+
+    private ExecutorService getSpiedExecutor(ExecutorService executorService) {
         return spy(executorService);
     }
 
@@ -320,7 +603,15 @@ public class FanOutRecordsPublisherTest {
         return executorService;
     }
 
-    private ExecutorService getOverwhelmedExecutor(ExecutorService executorService) {
+    private ExecutorService getInitiallyBlockingExecutor(ExecutorService executorService) {
+        doAnswer(invocation -> directlyExecuteRunnable(invocation))
+        .doAnswer(invocation -> directlyExecuteRunnable(invocation))
+        .doCallRealMethod()
+        .when(executorService).execute(any());
+        return executorService;
+    }
+
+    private ExecutorService getOverwhelmedBlockingExecutor(ExecutorService executorService) {
         doAnswer(invocation -> directlyExecuteRunnable(invocation))
         .doAnswer(invocation -> directlyExecuteRunnable(invocation))
         .doAnswer(invocation -> directlyExecuteRunnable(invocation))
@@ -519,6 +810,175 @@ public class FanOutRecordsPublisherTest {
     }
 
     @Test
+    public void testIfBufferingRecordsWithinCapacityPublishesOneEvent() {
+        FanOutRecordsPublisher fanOutRecordsPublisher = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        RecordsRetrieved recordsRetrieved = ProcessRecordsInput.builder()::build;
+        FanOutRecordsPublisher.RecordFlow recordFlow =
+                new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001-001");
+        final int[] totalRecordsRetrieved = { 0 };
+        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+            @Override public void onSubscribe(Subscription subscription) {}
+            @Override public void onNext(RecordsRetrieved recordsRetrieved) {
+                totalRecordsRetrieved[0]++;
+            }
+            @Override public void onError(Throwable throwable) {}
+            @Override public void onComplete() {}
+        });
+        IntStream.rangeClosed(1, 10).forEach(i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, recordFlow));
+        assertEquals(1, totalRecordsRetrieved[0]);
+    }
+
+    @Test
+    public void testIfBufferingRecordsOverCapacityPublishesOneEventAndThrows() {
+        FanOutRecordsPublisher fanOutRecordsPublisher = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        RecordsRetrieved recordsRetrieved = ProcessRecordsInput.builder()::build;
+        FanOutRecordsPublisher.RecordFlow recordFlow =
+                new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
+        final int[] totalRecordsRetrieved = { 0 };
+        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+            @Override public void onSubscribe(Subscription subscription) {}
+            @Override public void onNext(RecordsRetrieved recordsRetrieved) {
+                totalRecordsRetrieved[0]++;
+            }
+            @Override public void onError(Throwable throwable) {}
+            @Override public void onComplete() {}
+        });
+        try {
+            IntStream.rangeClosed(1, 11).forEach(
+                    i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, recordFlow));
+            fail("Should throw Queue full exception");
+        } catch (IllegalStateException e) {
+            assertEquals("Queue full", e.getMessage());
+        }
+        assertEquals(1, totalRecordsRetrieved[0]);
+    }
+
+    @Test
+    public void testIfPublisherAlwaysPublishesWhenQueueIsEmpty() {
+        FanOutRecordsPublisher fanOutRecordsPublisher = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher.RecordFlow recordFlow =
+                new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
+        final int[] totalRecordsRetrieved = { 0 };
+        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+            @Override public void onSubscribe(Subscription subscription) {}
+            @Override public void onNext(RecordsRetrieved recordsRetrieved) {
+                totalRecordsRetrieved[0]++;
+                // This makes sure the queue is immediately made empty, so that the next event enqueued will
+                // be the only element in the queue.
+                fanOutRecordsPublisher
+                        .evictAckedEventAndScheduleNextEvent(() -> recordsRetrieved.batchUniqueIdentifier(), new CompletableFuture<>());
+            }
+            @Override public void onError(Throwable throwable) {}
+            @Override public void onComplete() {}
+        });
+        IntStream.rangeClosed(1, 137).forEach(i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(
+                new FanOutRecordsPublisher.FanoutRecordsRetrieved(ProcessRecordsInput.builder().build(), i + "", recordFlow.getSubscribeToShardId()),
+                recordFlow));
+        assertEquals(137, totalRecordsRetrieved[0]);
+    }
+
+    @Test
+    public void testIfPublisherIgnoresStaleEventsAndContinuesWithNextFlow() {
+        FanOutRecordsPublisher fanOutRecordsPublisher = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher.RecordFlow recordFlow =
+                new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
+        final int[] totalRecordsRetrieved = { 0 };
+        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+            @Override public void onSubscribe(Subscription subscription) {}
+            @Override public void onNext(RecordsRetrieved recordsRetrieved) {
+                totalRecordsRetrieved[0]++;
+                // This makes sure the queue is immediately made empty, so that the next event enqueued will
+                // be the only element in the queue.
+                fanOutRecordsPublisher
+                        .evictAckedEventAndScheduleNextEvent(() -> recordsRetrieved.batchUniqueIdentifier(), new CompletableFuture<>());
+                // Send stale event periodically
+                if(totalRecordsRetrieved[0] % 10 == 0) {
+                    fanOutRecordsPublisher.evictAckedEventAndScheduleNextEvent(
+                            () -> new BatchUniqueIdentifier("some_uuid_str", "some_old_flow"),
+                            new CompletableFuture<>());
+                }
+            }
+            @Override public void onError(Throwable throwable) {}
+            @Override public void onComplete() {}
+        });
+        IntStream.rangeClosed(1, 100).forEach(i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(
+                new FanOutRecordsPublisher.FanoutRecordsRetrieved(ProcessRecordsInput.builder().build(), i + "", recordFlow.getSubscribeToShardId()),
+                recordFlow));
+        assertEquals(100, totalRecordsRetrieved[0]);
+    }
+
+    @Test
+    public void testIfPublisherIgnoresStaleEventsAndContinuesWithNextFlowWhenDeliveryQueueIsNotEmpty()
+            throws InterruptedException {
+        FanOutRecordsPublisher fanOutRecordsPublisher = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher.RecordFlow recordFlow =
+                new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
+        final int[] totalRecordsRetrieved = { 0 };
+        BlockingQueue<BatchUniqueIdentifier> ackQueue = new LinkedBlockingQueue<>();
+        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+            @Override public void onSubscribe(Subscription subscription) {}
+            @Override public void onNext(RecordsRetrieved recordsRetrieved) {
+                totalRecordsRetrieved[0]++;
+                // Enqueue the ack for bursty delivery
+                ackQueue.add(recordsRetrieved.batchUniqueIdentifier());
+                // Send stale event periodically
+            }
+            @Override public void onError(Throwable throwable) {}
+            @Override public void onComplete() {}
+        });
+        IntStream.rangeClosed(1, 10).forEach(i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(
+                new FanOutRecordsPublisher.FanoutRecordsRetrieved(ProcessRecordsInput.builder().build(), i + "", recordFlow.getSubscribeToShardId()),
+                recordFlow));
+        BatchUniqueIdentifier batchUniqueIdentifierQueued;
+        int count = 0;
+        // Now that we allowed upto 10 elements queued up, send a pair of good and stale ack to verify records
+        // delivered as expected.
+        while(count++ < 10 && (batchUniqueIdentifierQueued = ackQueue.take()) != null) {
+            final BatchUniqueIdentifier batchUniqueIdentifierFinal = batchUniqueIdentifierQueued;
+            fanOutRecordsPublisher
+                    .evictAckedEventAndScheduleNextEvent(() -> batchUniqueIdentifierFinal, new CompletableFuture<>());
+            fanOutRecordsPublisher.evictAckedEventAndScheduleNextEvent(
+                    () -> new BatchUniqueIdentifier("some_uuid_str", "some_old_flow"),
+                    new CompletableFuture<>());
+        }
+        assertEquals(10, totalRecordsRetrieved[0]);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testIfPublisherThrowsWhenMismatchAckforActiveFlowSeen() throws InterruptedException {
+        FanOutRecordsPublisher fanOutRecordsPublisher = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+        FanOutRecordsPublisher.RecordFlow recordFlow =
+                new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
+        fanOutRecordsPublisher.setFlow(recordFlow);
+        final int[] totalRecordsRetrieved = { 0 };
+        BlockingQueue<BatchUniqueIdentifier> ackQueue = new LinkedBlockingQueue<>();
+        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+            @Override public void onSubscribe(Subscription subscription) {}
+            @Override public void onNext(RecordsRetrieved recordsRetrieved) {
+                totalRecordsRetrieved[0]++;
+                // Enqueue the ack for bursty delivery
+                ackQueue.add(recordsRetrieved.batchUniqueIdentifier());
+                // Send stale event periodically
+            }
+            @Override public void onError(Throwable throwable) {}
+            @Override public void onComplete() {}
+        });
+        IntStream.rangeClosed(1, 10).forEach(i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(
+                new FanOutRecordsPublisher.FanoutRecordsRetrieved(ProcessRecordsInput.builder().build(), i + "", recordFlow.getSubscribeToShardId()),
+                recordFlow));
+        BatchUniqueIdentifier batchUniqueIdentifierQueued;
+        int count = 0;
+        // Now that we allowed upto 10 elements queued up, send a pair of good and stale ack to verify records
+        // delivered as expected.
+        while(count++ < 2 && (batchUniqueIdentifierQueued = ackQueue.poll(1000, TimeUnit.MILLISECONDS)) != null) {
+            final BatchUniqueIdentifier batchUniqueIdentifierFinal = batchUniqueIdentifierQueued;
+            fanOutRecordsPublisher.evictAckedEventAndScheduleNextEvent(
+                    () -> new BatchUniqueIdentifier("some_uuid_str", batchUniqueIdentifierFinal.getFlowIdentifier()),
+                    new CompletableFuture<>());
+        }
+    }
+
+    @Test
     public void acquireTimeoutTriggersLogMethodForActiveFlow() {
         AtomicBoolean acquireTimeoutLogged = new AtomicBoolean(false);
         FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN) {
@@ -665,6 +1125,32 @@ public class FanOutRecordsPublisherTest {
         @Override
         public void onComplete() {
             fail("OnComplete called when not expected");
+        }
+    }
+
+    @RequiredArgsConstructor
+    private static class BackpressureAdheringServicePublisher implements Runnable {
+
+        private final Consumer<Integer> action;
+        private final Integer numOfTimes;
+        private final CountDownLatch taskCompletionLatch;
+        private final Semaphore demandNotifier;
+
+        BackpressureAdheringServicePublisher(Consumer<Integer> action, Integer numOfTimes,
+                CountDownLatch taskCompletionLatch, Integer initialDemand) {
+            this(action, numOfTimes, taskCompletionLatch, new Semaphore(initialDemand));
+        }
+
+        public void request(int n) {
+            demandNotifier.release(n);
+        }
+
+        public void run() {
+            for (int i = 1; i <= numOfTimes; ) {
+                demandNotifier.acquireUninterruptibly();
+                action.accept(i++);
+            }
+            taskCompletionLatch.countDown();
         }
     }
 
