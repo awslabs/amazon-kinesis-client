@@ -8,7 +8,6 @@ import org.apache.commons.logging.LogFactory;
 
 class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
-    private static final String NAME = "ShardEndShardSyncStrategy";
     private static final Log LOG = LogFactory.getLog(Worker.class);
     private ShardSyncTaskManager shardSyncTaskManager;
 
@@ -17,8 +16,8 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
     }
 
     @Override
-    public String getName() {
-        return NAME;
+    public ShardSyncStrategyType getStrategyType() {
+        return ShardSyncStrategyType.SHARD_END;
     }
 
     @Override
@@ -38,7 +37,7 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
     @Override
     public TaskResult onWorkerInitialization() {
-        LOG.debug(String.format("onWorkerInitialization is NoOp for %s", NAME));
+        LOG.debug(String.format("onWorkerInitialization is NoOp for ShardSyncStrategyType %s", getStrategyType().toString()));
         return new TaskResult(null);
     }
 
@@ -54,6 +53,6 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
     @Override
     public void onWorkerShutDown() {
-        LOG.debug(String.format("Stop is NoOp for %s", NAME));
+        LOG.debug(String.format("Stop is NoOp for ShardSyncStrategyType %s", getStrategyType().toString()));
     }
 }

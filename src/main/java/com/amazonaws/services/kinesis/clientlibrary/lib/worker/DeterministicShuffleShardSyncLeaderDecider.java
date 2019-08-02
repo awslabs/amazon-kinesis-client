@@ -25,6 +25,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
@@ -53,7 +54,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
     private static final Log LOG = LogFactory.getLog(DeterministicShuffleShardSyncLeaderDecider.class);
 
     private static final long ELECTION_INITIAL_DELAY_MILLIS = 60 * 1000;
-    private static final long ELECTION_SCHEDULING_INTERVAL = 5 * 60 * 1000;
+    private static final long ELECTION_SCHEDULING_INTERVAL_MILLIS = 5 * 60 * 1000;
     private static final int AWAIT_TERMINATION_MILLIS = 5000;
 
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
@@ -107,7 +108,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
      */
     private void electLeaders() {
         try {
-            LOG.debug("Started leader election:" + Instant.now());
+            LOG.debug("Started leader election at:" + Instant.now());
             List<KinesisClientLease> leases = leaseManager.listLeases();
             List<String> uniqueHosts = leases.stream().map(KinesisClientLease::getLeaseOwner)
                     .filter(owner -> owner != null).distinct().sorted().collect(Collectors.toList());
@@ -119,7 +120,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
             readWriteLock.writeLock().lock();
             leaders = new HashSet<>(uniqueHosts.subList(0, numShardSyncWorkers));
             LOG.info("Elected leaders: " + String.join(", ", leaders));
-            LOG.debug("Completed leader election: " + System.currentTimeMillis());
+            LOG.debug("Completed leader election at: " + System.currentTimeMillis());
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
             LOG.error("Exception occurred while trying to fetch all leases for leader election", e);
         } catch (Throwable t) {
@@ -129,41 +130,23 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
         }
     }
 
-    // Utility methods to ensure we acquire a readLock in case an election has completed
-    // and some thread is trying to update leaders variable.
-    private boolean leadersNullOrEmpty() {
-        try {
-            readWriteLock.readLock().lock();
-            return CollectionUtils.isNullOrEmpty(leaders);
-        } finally {
-            readWriteLock.readLock().unlock();
-        }
-    }
-
-    private boolean leadersContainWorkerId(String workerId) {
-        try {
-            readWriteLock.readLock().lock();
-            // If leaders is still null or empty fall back to this host being a "leader". This ensures that a brief
-            // unavailability or throttling on the leases table does not cause a stall.
-            return CollectionUtils.isNullOrEmpty(leaders) || (!CollectionUtils.isNullOrEmpty(leaders) && leaders
-                    .contains(workerId));
-        } finally {
-            readWriteLock.readLock().unlock();
-        }
+    private boolean isWorkerLeaderForShardSync(String workerId) {
+        return CollectionUtils.isNullOrEmpty(leaders) ||
+            (!CollectionUtils.isNullOrEmpty(leaders) && leaders.contains(workerId));
     }
 
     @Override public synchronized Boolean isLeader(String workerId) {
         // if no leaders yet, synchronously get leaders. This will happen at first Shard Sync.
-        if (leadersNullOrEmpty()) {
+        if (executeConditionCheckWithReadLock(() -> CollectionUtils.isNullOrEmpty(leaders))) {
             electLeaders();
             // start a scheduled executor that will periodically update leaders.
             // The first run will be after a minute.
             // We don't need jitter since it is scheduled with a fixed delay and time taken to scan leases
             // will be different at different times and on different hosts/workers.
             leaderElectionThreadPool.scheduleWithFixedDelay(this::electLeaders, ELECTION_INITIAL_DELAY_MILLIS,
-                    ELECTION_SCHEDULING_INTERVAL, TimeUnit.MILLISECONDS);
+                ELECTION_SCHEDULING_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
         }
-        return leadersContainWorkerId(workerId);
+        return executeConditionCheckWithReadLock(() -> isWorkerLeaderForShardSync(workerId));
     }
 
     @Override public synchronized void shutdown() {
@@ -179,6 +162,16 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
 
         } catch (InterruptedException e) {
             LOG.debug("Encountered InterruptedException while awaiting leader election threadPool termination");
+        }
+    }
+
+    // Utility method to execute condition checks using shared variables under a read-write lock.
+    private boolean executeConditionCheckWithReadLock(BooleanSupplier action) {
+        try {
+            readWriteLock.readLock().lock();
+            return action.getAsBoolean();
+        } finally {
+            readWriteLock.readLock().unlock();
         }
     }
 }

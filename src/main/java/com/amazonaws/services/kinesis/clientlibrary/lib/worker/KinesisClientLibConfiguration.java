@@ -168,9 +168,9 @@ public class KinesisClientLibConfiguration {
     public static final boolean DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST = false;
 
     /**
-     * Opt in for periodic shard sync by setting this flag to true.
+     * Default ShardSyncStrategy to be used for discovering new shards in the Stream.
      */
-    public static final ShardSyncStrategy.StrategyType DEFAULT_SHARD_SYNC_STRATEGY_TYPE = ShardSyncStrategy.StrategyType.SHARD_END;
+    public static final ShardSyncStrategyType DEFAULT_SHARD_SYNC_STRATEGY_TYPE = ShardSyncStrategyType.SHARD_END;
 
     /**
      * Default Shard prioritization strategy.
@@ -235,7 +235,7 @@ public class KinesisClientLibConfiguration {
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
     private long shutdownGraceMillis;
-    private ShardSyncStrategy.StrategyType shardSyncStrategyType;
+    private ShardSyncStrategyType shardSyncStrategyType;
 
     @Getter
     private Optional<Integer> timeoutInSeconds = Optional.empty();
@@ -849,9 +849,9 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
-     * @return true if periodic shard sync is enabled
+     * @return ShardSyncStrategyType to be used by KCL to process the Stream.
      */
-    public ShardSyncStrategy.StrategyType getShardSyncStrategyType() {
+    public ShardSyncStrategyType getShardSyncStrategyType() {
         return shardSyncStrategyType;
     }
 
@@ -1218,7 +1218,7 @@ public class KinesisClientLibConfiguration {
      * @param shardSyncStrategyType ShardSyncStrategy type for KCL.
      * @return {@link KinesisClientLibConfiguration}
      */
-    public KinesisClientLibConfiguration withShardSyncStrategyType(ShardSyncStrategy.StrategyType shardSyncStrategyType) {
+    public KinesisClientLibConfiguration withShardSyncStrategyType(ShardSyncStrategyType shardSyncStrategyType) {
         this.shardSyncStrategyType = shardSyncStrategyType;
         return this;
     }

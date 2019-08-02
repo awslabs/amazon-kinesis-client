@@ -6,17 +6,12 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
  */
 public interface ShardSyncStrategy {
 
-    enum StrategyType {
-        PERIODIC,
-        SHARD_END
-    }
-
     /**
      * Can be used to provide a custom name for the implemented strategy.
      *
      * @return Name of the strategy.
      */
-    String getName();
+    ShardSyncStrategyType getStrategyType();
 
     /**
      * Invoked when the KCL application wants to execute shard-sync.

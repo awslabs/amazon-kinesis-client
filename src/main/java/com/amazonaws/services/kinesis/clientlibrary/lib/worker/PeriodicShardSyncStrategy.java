@@ -5,7 +5,6 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
  */
 class PeriodicShardSyncStrategy implements ShardSyncStrategy {
 
-    private static final String NAME = "PeriodicShardSyncStrategy";
     private PeriodicShardSyncManager periodicShardSyncManager;
 
     PeriodicShardSyncStrategy(PeriodicShardSyncManager periodicShardSyncManager) {
@@ -13,8 +12,8 @@ class PeriodicShardSyncStrategy implements ShardSyncStrategy {
     }
 
     @Override
-    public String getName() {
-        return NAME;
+    public ShardSyncStrategyType getStrategyType() {
+        return ShardSyncStrategyType.PERIODIC;
     }
 
     @Override

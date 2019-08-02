@@ -27,7 +27,7 @@ public interface LeaderDecider {
      * designated to execute shard-syncs periodically.
      *
      * @param workerId ID of the worker
-     * @return True of the worker with ID workerId can execute shard-sync. False otherwise.
+     * @return True if the worker with ID workerId can execute shard-sync. False otherwise.
      */
     Boolean isLeader(String workerId);
 

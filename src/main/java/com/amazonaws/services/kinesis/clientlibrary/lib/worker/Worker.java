@@ -559,10 +559,10 @@ public class Worker implements Runnable {
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.CREATED);
         this.leaderDecider = leaderDecider;
         this.shardSyncStrategy = createShardSyncStrategy(config.getShardSyncStrategyType());
-        LOG.info(String.format("Shard sync strategy determined as %s.", shardSyncStrategy.getName()));
+        LOG.info(String.format("Shard sync strategy determined as %s.", shardSyncStrategy.getStrategyType().toString()));
     }
 
-    private ShardSyncStrategy createShardSyncStrategy(ShardSyncStrategy.StrategyType strategyType) {
+    private ShardSyncStrategy createShardSyncStrategy(ShardSyncStrategyType strategyType) {
         switch (strategyType) {
             case PERIODIC:
                return createPeriodicShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager());
