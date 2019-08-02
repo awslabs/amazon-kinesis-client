@@ -111,8 +111,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     @Override
     public void restartFrom(RecordsRetrieved recordsRetrieved) {
         synchronized (lockObject) {
-            // Clear the delivery buffer so that current subscription don't yield duplicate records.
-            clearRecordsDeliveryQueue();
             if (flow != null) {
                 //
                 // The flow should not be running at this time
@@ -235,6 +233,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     private void subscribeToShard(String sequenceNumber) {
         synchronized (lockObject) {
+            // Clear the queue so that any stale entries from previous subscription are discarded.
+            clearRecordsDeliveryQueue();
             SubscribeToShardRequest.Builder builder = KinesisRequestsBuilder.subscribeToShardRequestBuilder()
                     .shardId(shardId).consumerARN(consumerArn);
             SubscribeToShardRequest request;
