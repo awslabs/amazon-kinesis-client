@@ -15,7 +15,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.DeterministicShuffleShardSyncLeaderDecider.DETERMINISTIC_SHUFFLE_SEED;
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.DeterministicShuffleShardSyncLeaderDecider.PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
@@ -42,7 +41,6 @@ import org.mockito.runners.MockitoJUnitRunner;
 public class DeterministicShuffleShardSyncLeaderDeciderTest extends PeriodicShardSyncTestBase {
     private static final String WORKER_ID = "worker-id";
 
-    private KinesisClientLibConfiguration config;
     private DeterministicShuffleShardSyncLeaderDecider leaderDecider;
 
     @Mock
@@ -55,9 +53,8 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest extends PeriodicShar
 
     @Before
     public void setup() {
-        numShardSyncWorkers = PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT;
-        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(config, leaseManager, scheduledExecutorService, numShardSyncWorkers);
-        config = new KinesisClientLibConfiguration("Test", null, null, null);
+        numShardSyncWorkers = 1;
+        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseManager, scheduledExecutorService, numShardSyncWorkers);
     }
 
     @Test
@@ -91,7 +88,7 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest extends PeriodicShar
     @Test
     public void testElectedLeadersAsPerExpectedShufflingOrderWhenUniqueWorkersLessThanMaxLeaders() {
         this.numShardSyncWorkers = 5; // More than number of unique lease owners
-        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(config, leaseManager, scheduledExecutorService, numShardSyncWorkers);
+        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseManager, scheduledExecutorService, numShardSyncWorkers);
         List<KinesisClientLease> leases = getLeases(3, false /* duplicateLeaseOwner */, true /* activeLeases */);
         Set<String> expectedLeaders = getExpectedLeaders(leases);
         // All lease owners should be present in expected leaders set, and they should all be leaders.

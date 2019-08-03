@@ -20,7 +20,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -47,10 +46,9 @@ import org.apache.commons.logging.LogFactory;
  * we don't end up choosing all 3 for shard sync as a result of natural ordering of Strings.
  * This ensures redundancy for shard-sync during host failures.
  */
-public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
+class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
     // Fixed seed so that the shuffle order is preserved across workers
     static final int DETERMINISTIC_SHUFFLE_SEED = 1947;
-    static final int PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT = 1; //Default for KCL.
     private static final Log LOG = LogFactory.getLog(DeterministicShuffleShardSyncLeaderDecider.class);
 
     private static final long ELECTION_INITIAL_DELAY_MILLIS = 60 * 1000;
@@ -59,7 +57,6 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
 
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
-    private final KinesisClientLibConfiguration config;
     private final ILeaseManager<KinesisClientLease> leaseManager;
     private final int numPeriodicShardSyncWorkers;
     private final ScheduledExecutorService leaderElectionThreadPool;
@@ -67,36 +64,13 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
     private volatile Set<String> leaders;
 
     /**
-     * Create an instance using the default periodic shard sync worker count (1).
-     * This constructor is package-private to ensure external users use the public
-     * constructor and are thereby aware of the number of periodic shard sync workers
-     * they want in their application.
      *
-     * @param config       KinesisClientLibConfiguration instance
-     * @param leaseManager LeaseManager instance.
+     * @param leaseManager LeaseManager instance used to fetch leases.
+     * @param leaderElectionThreadPool Thread-pool to be used for leaderElection.
+     * @param numPeriodicShardSyncWorkers Number of leaders that will be elected to perform periodic shard syncs.
      */
-    DeterministicShuffleShardSyncLeaderDecider(KinesisClientLibConfiguration config,
-            ILeaseManager<KinesisClientLease> leaseManager) {
-        this(config, leaseManager, PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
-    }
-
-    /**
-     * Create an instance overriding the default periodic shard sync worker count.
-     * This is public for use outside KCL.
-     *
-     * @param config                      KinesisClientLibConfiguration instance
-     * @param leaseManager                LeaseManager instance.
-     * @param numPeriodicShardSyncWorkers Max number of periodic shard sync workers.
-     */
-    DeterministicShuffleShardSyncLeaderDecider(KinesisClientLibConfiguration config,
-            ILeaseManager<KinesisClientLease> leaseManager, int numPeriodicShardSyncWorkers) {
-        this(config, leaseManager, Executors.newSingleThreadScheduledExecutor(), numPeriodicShardSyncWorkers);
-    }
-
-    DeterministicShuffleShardSyncLeaderDecider(KinesisClientLibConfiguration config,
-            ILeaseManager<KinesisClientLease> leaseManager, ScheduledExecutorService leaderElectionThreadPool,
+    DeterministicShuffleShardSyncLeaderDecider(ILeaseManager<KinesisClientLease> leaseManager, ScheduledExecutorService leaderElectionThreadPool,
             int numPeriodicShardSyncWorkers) {
-        this.config = config;
         this.leaseManager = leaseManager;
         this.leaderElectionThreadPool = leaderElectionThreadPool;
         this.numPeriodicShardSyncWorkers = numPeriodicShardSyncWorkers;
@@ -108,7 +82,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
      */
     private void electLeaders() {
         try {
-            LOG.debug("Started leader election at:" + Instant.now());
+            LOG.debug("Started leader election at: " + Instant.now());
             List<KinesisClientLease> leases = leaseManager.listLeases();
             List<String> uniqueHosts = leases.stream().map(KinesisClientLease::getLeaseOwner)
                     .filter(owner -> owner != null).distinct().sorted().collect(Collectors.toList());
@@ -165,7 +139,7 @@ public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider
         }
     }
 
-    // Utility method to execute condition checks using shared variables under a read-write lock.
+    // Execute condition checks using shared variables under a read-write lock.
     private boolean executeConditionCheckWithReadLock(BooleanSupplier action) {
         try {
             readWriteLock.readLock().lock();

@@ -6,6 +6,9 @@ import java.util.concurrent.Future;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+/**
+ * Implementation of ShardSyncStrategy that facilitates shard syncs when a shard completes processing.
+ */
 class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
     private static final Log LOG = LogFactory.getLog(Worker.class);

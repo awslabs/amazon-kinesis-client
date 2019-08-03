@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
@@ -33,7 +34,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
-import com.amazonaws.services.kinesis.clientlibrary.proxies.MetricsCollectingKinesisProxyDecorator;
 import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
 import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
@@ -90,6 +90,7 @@ public class Worker implements Runnable {
 
     private static final int SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC = 0;
     private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
+    private static final int PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT = 1; //Default for KCL.
     private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
     private static final LeaseCleanupValidator DEFAULT_LEASE_CLEANUP_VALIDATOR = new KinesisLeaseCleanupValidator();
     private static final LeaseSelector<KinesisClientLease> DEFAULT_LEASE_SELECTOR = new GenericLeaseSelector<KinesisClientLease>();
@@ -1384,7 +1385,8 @@ public class Worker implements Runnable {
             }
 
             if (leaderDecider == null) {
-                leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(config, leaseManager);
+                leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseManager,
+                    Executors.newSingleThreadScheduledExecutor(), PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
             }
 
             return new Worker(config.getApplicationName(),
