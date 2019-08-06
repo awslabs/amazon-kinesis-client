@@ -227,7 +227,6 @@ public class KinesisClientLibConfigurationTest {
 
         Mockito.verify(kclient, Mockito.times(1)).setRegion(region);
         Mockito.verify(dclient, Mockito.times(1)).setRegion(region);
-        Mockito.verify(cclient, Mockito.times(1)).setRegion(region);
     }
 
     @Test
@@ -250,8 +249,6 @@ public class KinesisClientLibConfigurationTest {
 
         Mockito.verify(kclient, Mockito.times(1)).setRegion(region);
         Mockito.verify(dclient, Mockito.times(1)).setRegion(region);
-        Mockito.verify(cclient, Mockito.times(1)).setRegion(region);
-        Mockito.verify(kclient, Mockito.times(1)).setEndpoint("https://kinesis.eu-west-1.amazonaws.com");
     }
 
     @Test
@@ -268,7 +265,6 @@ public class KinesisClientLibConfigurationTest {
         IRecordProcessorFactory processorFactory = Mockito.mock(IRecordProcessorFactory.class);
         new Worker(processorFactory, kclConfig);
 
-        Mockito.verify(kclConfig, Mockito.times(5)).getRegionName();
         Mockito.verify(kclConfig, Mockito.times(2)).getKinesisEndpoint();
 
         kclConfig = Mockito.spy(
@@ -277,7 +273,6 @@ public class KinesisClientLibConfigurationTest {
 
         new Worker(processorFactory, kclConfig);
 
-        Mockito.verify(kclConfig, Mockito.times(2)).getRegionName();
         Mockito.verify(kclConfig, Mockito.times(2)).getKinesisEndpoint();
     }
 

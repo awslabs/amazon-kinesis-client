@@ -1087,9 +1087,6 @@ public class Worker implements Runnable {
         if (config.getMetricsLevel() == MetricsLevel.NONE) {
             metricsFactory = new NullMetricsFactory();
         } else {
-            if (config.getRegionName() != null) {
-                setField(cloudWatchClient, "region", cloudWatchClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
-            }
             metricsFactory = new WorkerCWMetricsFactory(cloudWatchClient, config.getApplicationName(),
                     config.getMetricsBufferTimeMillis(), config.getMetricsMaxQueueSize(), config.getMetricsLevel(),
                     config.getMetricsEnabledDimensions());
@@ -1240,6 +1237,16 @@ public class Worker implements Runnable {
                         config.getKinesisClientConfiguration(),
                         config.getKinesisEndpoint(),
                         config.getRegionName());
+            } else {
+                // If a region name was explicitly specified, use it to set region of Kinesis
+                if (config.getRegionName() != null) {
+                    // Don't set region for immutable client which could be already built above
+                    setField(kinesisClient, "region", kinesisClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
+                }
+                // If a kinesis endpoint was explicitly specified, use it to set the region of Kinesis.
+                if (config.getKinesisEndpoint() != null) {
+                    setField(kinesisClient, "endpoint", kinesisClient::setEndpoint, config.getKinesisEndpoint());
+                }
             }
             if (dynamoDBClient == null) {
                 dynamoDBClient = createClient(AmazonDynamoDBClientBuilder.standard(),
@@ -1247,28 +1254,29 @@ public class Worker implements Runnable {
                         config.getDynamoDBClientConfiguration(),
                         config.getDynamoDBEndpoint(),
                         config.getRegionName());
+            } else {
+                // If a region name was explicitly specified, use it to set region of DynamoDb
+                if (config.getRegionName() != null) {
+                    // Don't set region for immutable client which could be already built above
+                    setField(dynamoDBClient, "region", dynamoDBClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
+                }
+                // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
+                if (config.getDynamoDBEndpoint() != null) {
+                    setField(dynamoDBClient, "endpoint", dynamoDBClient::setEndpoint, config.getDynamoDBEndpoint());
+                }
             }
+
             if (cloudWatchClient == null) {
                 cloudWatchClient = createClient(AmazonCloudWatchClientBuilder.standard(),
                         config.getCloudWatchCredentialsProvider(),
                         config.getCloudWatchClientConfiguration(),
                         null,
                         config.getRegionName());
-            }
-            // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
-            if (config.getRegionName() != null) {
+            } else if (config.getRegionName() != null) { // If a region name was explicitly specified, use it
+                // Don't set region for immutable client which could be already built above
                 setField(cloudWatchClient, "region", cloudWatchClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
-                setField(kinesisClient, "region", kinesisClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
-                setField(dynamoDBClient, "region", dynamoDBClient::setRegion, RegionUtils.getRegion(config.getRegionName()));
             }
-            // If a dynamoDB endpoint was explicitly specified, use it to set the DynamoDB endpoint.
-            if (config.getDynamoDBEndpoint() != null) {
-                setField(dynamoDBClient, "endpoint", dynamoDBClient::setEndpoint, config.getDynamoDBEndpoint());
-            }
-            // If a kinesis endpoint was explicitly specified, use it to set the region of kinesis.
-            if (config.getKinesisEndpoint() != null) {
-                setField(kinesisClient, "endpoint", kinesisClient::setEndpoint, config.getKinesisEndpoint());
-            }
+
             if (metricsFactory == null) {
                 metricsFactory = getMetricsFactory(cloudWatchClient, config);
             }
