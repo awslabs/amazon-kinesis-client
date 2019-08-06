@@ -1,5 +1,15 @@
 # Changelog
-### Release 1.10.0 (April 8, 2019)
+## Release 1.11.0 (August 7, 2019)
+[Milestone#33](https://github.com/awslabs/amazon-kinesis-client/milestone/33)
+* Updated the version of the AWS Java SDK to 1.11.603
+* Improved exception handling and logging in `KinesisClientLibLeaseCoordinator` to avoid `NullPointerExceptions` when no leases are found.
+  * [Issue #476](https://github.com/awslabs/amazon-kinesis-client/issues/476)
+  * [PR #558](https://github.com/awslabs/amazon-kinesis-client/pull/558)
+* Introducing new periodic shard sync strategy to perform shard discovery and lease cleanup on a single worker, rather than the default of all workers. This change allows horizontal scaling of KCL fleet without increasing calls to `DescribeStream` or `ListShard` APIs.
+  * [PR #576](https://github.com/awslabs/amazon-kinesis-client/pull/576)
+  * [PR #579](https://github.com/awslabs/amazon-kinesis-client/pull/579)
+  
+## Release 1.10.0 (April 8, 2019)
 [Milestone#31](https://github.com/awslabs/amazon-kinesis-client/milestone/31)
 * Updated License to [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
   * [PR#522](https://github.com/awslabs/amazon-kinesis-client/pull/522)	
