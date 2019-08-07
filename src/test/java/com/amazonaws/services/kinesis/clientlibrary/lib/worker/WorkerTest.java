@@ -164,7 +164,6 @@ public class WorkerTest {
     private RecordsFetcherFactory recordsFetcherFactory;
     private KinesisClientLibConfiguration config;
     private KinesisShardSyncer shardSyncer = new KinesisShardSyncer(new KinesisLeaseCleanupValidator());
-    private static final LeaseCleanupValidator DEFAULT_LEASE_CLEANUP_VALIDATOR = new KinesisLeaseCleanupValidator();
 
     @Mock
     private KinesisClientLibLeaseCoordinator leaseCoordinator;
