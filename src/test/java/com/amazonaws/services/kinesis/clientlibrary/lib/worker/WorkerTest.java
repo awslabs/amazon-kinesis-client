@@ -21,6 +21,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
@@ -52,6 +53,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -161,7 +163,7 @@ public class WorkerTest {
 
     private RecordsFetcherFactory recordsFetcherFactory;
     private KinesisClientLibConfiguration config;
-    private ShardSyncer shardSyncer = new ShardSyncer(new KinesisLeaseCleanupValidator());
+    private KinesisShardSyncer shardSyncer = new KinesisShardSyncer(new KinesisLeaseCleanupValidator());
 
     @Mock
     private KinesisClientLibLeaseCoordinator leaseCoordinator;
@@ -189,6 +191,8 @@ public class WorkerTest {
     private TaskResult taskResult;
     @Mock
     private WorkerStateChangeListener workerStateChangeListener;
+    @Mock
+    private ShardSyncStrategy shardSyncStrategy;
 
     @Before
     public void setup() {
@@ -521,7 +525,7 @@ public class WorkerTest {
         final int threadPoolSize = 2;
         final int numberOfRecordsPerShard = 10;
         List<Shard> shardList = createShardListWithOneSplit();
-        List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
+        List<KinesisClientLease> initialLeases = new ArrayList<>();
         KinesisClientLease lease = shardSyncer.newKCLLease(shardList.get(0));
         lease.setCheckpoint(new ExtendedSequenceNumber("2"));
         initialLeases.add(lease);

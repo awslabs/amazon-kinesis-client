@@ -36,7 +36,7 @@ public interface ILeaseRenewer<T extends Lease> {
      * @throws InvalidStateException if lease table doesn't exist
      * @throws ProvisionedThroughputException if DynamoDB reads fail due to insufficient capacity
      */
-    public void initialize() throws DependencyException, InvalidStateException, ProvisionedThroughputException;   
+    void initialize() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
      * Attempt to renew all currently held leases.
@@ -44,21 +44,21 @@ public interface ILeaseRenewer<T extends Lease> {
      * @throws DependencyException on unexpected DynamoDB failures
      * @throws InvalidStateException if lease table does not exist
      */
-    public void renewLeases() throws DependencyException, InvalidStateException;
+    void renewLeases() throws DependencyException, InvalidStateException;
 
     /**
      * @return currently held leases. Key is shardId, value is corresponding Lease object. A lease is currently held if
      *         we successfully renewed it on the last run of renewLeases(). Lease objects returned are deep copies -
      *         their lease counters will not tick.
      */
-    public Map<String, T> getCurrentlyHeldLeases();
+    Map<String, T> getCurrentlyHeldLeases();
 
     /**
      * @param leaseKey key of the lease to retrieve
      * 
      * @return a deep copy of a currently held lease, or null if we don't hold the lease
      */
-    public T getCurrentlyHeldLease(String leaseKey);
+    T getCurrentlyHeldLease(String leaseKey);
 
     /**
      * Adds leases to this LeaseRenewer's set of currently held leases. Leases must have lastRenewalNanos set to the
@@ -66,12 +66,12 @@ public interface ILeaseRenewer<T extends Lease> {
      * 
      * @param newLeases new leases.
      */
-    public void addLeasesToRenew(Collection<T> newLeases);
+    void addLeasesToRenew(Collection<T> newLeases);
 
     /**
      * Clears this LeaseRenewer's set of currently held leases.
      */
-    public void clearCurrentlyHeldLeases();
+    void clearCurrentlyHeldLeases();
 
     /**
      * Stops the lease renewer from continunig to maintain the given lease.
@@ -96,5 +96,12 @@ public interface ILeaseRenewer<T extends Lease> {
      */
     boolean updateLease(T lease, UUID concurrencyToken)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+
+    /**
+     * Shutdown any clients and thread-pools.
+     */
+    default void shutdown() {
+        // Does nothing.
+    }
 
 }

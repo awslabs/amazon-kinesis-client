@@ -21,8 +21,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 
 import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
+import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
+import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
+import com.amazonaws.services.kinesis.leases.impl.LeaseTaker;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseTaker;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -38,8 +45,6 @@ import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 
@@ -66,11 +71,8 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
      * @param leaseSelector Lease selector which decides which leases to take
      */
-    public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
-            String workerIdentifier,
-            long leaseDurationMillis,
-            long epsilonMillis,
-            LeaseSelector<KinesisClientLease> leaseSelector) {
+    public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager, String workerIdentifier,
+            long leaseDurationMillis, long epsilonMillis, LeaseSelector<KinesisClientLease> leaseSelector) {
         super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis);
         this.leaseManager = leaseManager;
     }
@@ -81,10 +83,8 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @param leaseDurationMillis Duration of a lease in milliseconds
      * @param epsilonMillis Delta for timing operations (e.g. checking lease expiry)
      */
-    public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
-            String workerIdentifier,
-            long leaseDurationMillis,
-            long epsilonMillis) {
+    public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager, String workerIdentifier,
+            long leaseDurationMillis, long epsilonMillis) {
         this(leaseManager, workerIdentifier, leaseDurationMillis, epsilonMillis, DEFAULT_LEASE_SELECTOR);
     }
 
@@ -97,11 +97,8 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @param metricsFactory Metrics factory used to emit metrics
      */
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
-            LeaseSelector<KinesisClientLease> leaseSelector,
-            String workerIdentifier,
-            long leaseDurationMillis,
-            long epsilonMillis,
-            IMetricsFactory metricsFactory) {
+            LeaseSelector<KinesisClientLease> leaseSelector, String workerIdentifier, long leaseDurationMillis,
+            long epsilonMillis, IMetricsFactory metricsFactory) {
         super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis, metricsFactory);
         this.leaseManager = leaseManager;
     }
@@ -117,16 +114,19 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @param metricsFactory Metrics factory used to emit metrics
      */
     public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
-            LeaseSelector<KinesisClientLease> leaseSelector,
-            String workerIdentifier,
-            long leaseDurationMillis,
-            long epsilonMillis,
-            int maxLeasesForWorker,
-            int maxLeasesToStealAtOneTime,
-            int maxLeaseRenewerThreadCount,
+            LeaseSelector<KinesisClientLease> leaseSelector, String workerIdentifier, long leaseDurationMillis,
+            long epsilonMillis, int maxLeasesForWorker, int maxLeasesToStealAtOneTime, int maxLeaseRenewerThreadCount,
             IMetricsFactory metricsFactory) {
         super(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
+        this.leaseManager = leaseManager;
+    }
+
+    public KinesisClientLibLeaseCoordinator(ILeaseManager<KinesisClientLease> leaseManager,
+            ILeaseTaker<KinesisClientLease> leaseTaker, ILeaseRenewer<KinesisClientLease> leaseRenewer,
+            final long leaseDurationMillis, final long epsilonMillis, final int maxLeasesForWorker,
+            final int maxLeasesToStealAtOneTime, final IMetricsFactory metricsFactory) {
+        super(leaseTaker, leaseRenewer, leaseDurationMillis, epsilonMillis, maxLeasesForWorker, maxLeasesToStealAtOneTime, metricsFactory);
         this.leaseManager = leaseManager;
     }
 
@@ -175,8 +175,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
         if (lease == null) {
             LOG.info(String.format(
                     "Worker %s could not update checkpoint for shard %s because it does not hold the lease",
-                    getWorkerIdentifier(),
-                    shardId));
+                    getWorkerIdentifier(), shardId));
             return false;
         }
 
@@ -242,8 +241,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
         if (lease == null) {
             LOG.info(String.format(
                     "Worker %s could not prepare checkpoint for shard %s because it does not hold the lease",
-                    getWorkerIdentifier(),
-                    shardId));
+                    getWorkerIdentifier(), shardId));
             return false;
         }
 
@@ -256,12 +254,11 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * {@inheritDoc}
      */
     @Override
-    public void prepareCheckpoint(String shardId,
-            ExtendedSequenceNumber pendingCheckpointValue,
+    public void prepareCheckpoint(String shardId, ExtendedSequenceNumber pendingCheckpointValue,
             String concurrencyToken) throws KinesisClientLibException {
         try {
-            boolean wasSuccessful =
-                    prepareCheckpoint(shardId, pendingCheckpointValue, UUID.fromString(concurrencyToken));
+            boolean wasSuccessful = prepareCheckpoint(shardId, pendingCheckpointValue,
+                    UUID.fromString(concurrencyToken));
             if (!wasSuccessful) {
                 throw new ShutdownException(
                         "Can't prepare checkpoint - instance doesn't hold the lease for this shard");
@@ -328,8 +325,8 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      * @throws ProvisionedThroughputException
      */
     void initialize() throws ProvisionedThroughputException, DependencyException, IllegalStateException {
-        final boolean newTableCreated =
-                leaseManager.createLeaseTableIfNotExists(initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity);
+        final boolean newTableCreated = leaseManager
+                .createLeaseTableIfNotExists(initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity);
         if (newTableCreated) {
             LOG.info(String.format(
                     "Created new lease table for coordinator with initial read capacity of %d and write capacity of %d.",

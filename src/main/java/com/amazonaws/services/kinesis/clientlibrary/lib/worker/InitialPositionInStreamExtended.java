@@ -20,7 +20,7 @@ import java.util.Date;
  * Class that houses the entities needed to specify the position in the stream from where a new application should
  * start.
  */
-class InitialPositionInStreamExtended {
+public class InitialPositionInStreamExtended {
 
     private final InitialPositionInStream position;
     private final Date timestamp;
@@ -44,7 +44,7 @@ class InitialPositionInStreamExtended {
      *
      * @return The initial position in stream.
      */
-    protected InitialPositionInStream getInitialPositionInStream() {
+    public InitialPositionInStream getInitialPositionInStream() {
         return this.position;
     }
 
@@ -54,11 +54,11 @@ class InitialPositionInStreamExtended {
      *
      * @return The timestamp from where we need to start the application.
      */
-    protected Date getTimestamp() {
+    public Date getTimestamp() {
         return this.timestamp;
     }
 
-    protected static InitialPositionInStreamExtended newInitialPosition(final InitialPositionInStream position) {
+    public static InitialPositionInStreamExtended newInitialPosition(final InitialPositionInStream position) {
         switch (position) {
             case LATEST:
                 return new InitialPositionInStreamExtended(InitialPositionInStream.LATEST, null);
@@ -69,7 +69,7 @@ class InitialPositionInStreamExtended {
         }
     }
 
-    protected static InitialPositionInStreamExtended newInitialPositionAtTimestamp(final Date timestamp) {
+    public static InitialPositionInStreamExtended newInitialPositionAtTimestamp(final Date timestamp) {
         if (timestamp == null) {
             throw new IllegalArgumentException("Timestamp must be specified for InitialPosition AT_TIMESTAMP");
         }

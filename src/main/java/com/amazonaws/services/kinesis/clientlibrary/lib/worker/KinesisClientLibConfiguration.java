@@ -22,7 +22,6 @@ import org.apache.commons.lang3.Validate;
 
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
@@ -168,6 +167,11 @@ public class KinesisClientLibConfiguration {
     public static final boolean DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST = false;
 
     /**
+     * Default ShardSyncStrategy to be used for discovering new shards in the Stream.
+     */
+    public static final ShardSyncStrategyType DEFAULT_SHARD_SYNC_STRATEGY_TYPE = ShardSyncStrategyType.SHARD_END;
+
+    /**
      * Default Shard prioritization strategy.
      */
     public static final ShardPrioritization DEFAULT_SHARD_PRIORITIZATION = new NoOpShardPrioritization();
@@ -230,6 +234,7 @@ public class KinesisClientLibConfiguration {
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private ShardPrioritization shardPrioritization;
     private long shutdownGraceMillis;
+    private ShardSyncStrategyType shardSyncStrategyType;
 
     @Getter
     private Optional<Integer> timeoutInSeconds = Optional.empty();
@@ -492,6 +497,7 @@ public class KinesisClientLibConfiguration {
         this.initialPositionInStreamExtended =
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
+        this.shardSyncStrategyType = DEFAULT_SHARD_SYNC_STRATEGY_TYPE;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = new SimpleRecordsFetcherFactory();
     }
@@ -600,6 +606,7 @@ public class KinesisClientLibConfiguration {
         this.initialPositionInStreamExtended =
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
+        this.shardSyncStrategyType = DEFAULT_SHARD_SYNC_STRATEGY_TYPE;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = recordsFetcherFactory;
         this.shutdownGraceMillis = shutdownGraceMillis;
@@ -838,6 +845,13 @@ public class KinesisClientLibConfiguration {
      */
     public boolean getSkipShardSyncAtWorkerInitializationIfLeasesExist() {
         return skipShardSyncAtWorkerInitializationIfLeasesExist;
+    }
+
+    /**
+     * @return ShardSyncStrategyType to be used by KCL to process the Stream.
+     */
+    public ShardSyncStrategyType getShardSyncStrategyType() {
+        return shardSyncStrategyType;
     }
 
     /**
@@ -1196,6 +1210,15 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withSkipShardSyncAtStartupIfLeasesExist(
             boolean skipShardSyncAtStartupIfLeasesExist) {
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtStartupIfLeasesExist;
+        return this;
+    }
+
+    /**
+     * @param shardSyncStrategyType ShardSyncStrategy type for KCL.
+     * @return {@link KinesisClientLibConfiguration}
+     */
+    public KinesisClientLibConfiguration withShardSyncStrategyType(ShardSyncStrategyType shardSyncStrategyType) {
+        this.shardSyncStrategyType = shardSyncStrategyType;
         return this;
     }
 
