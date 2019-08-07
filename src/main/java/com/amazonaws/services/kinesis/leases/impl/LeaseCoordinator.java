@@ -173,7 +173,7 @@ public class LeaseCoordinator<T extends Lease> {
      * @param maxLeasesToStealAtOneTime Steal up to these many leases at a time (for load balancing)
      * @param metricsFactory Used to publish metrics about lease operations
      */
-    LeaseCoordinator(ILeaseManager<T> leaseManager,
+    public LeaseCoordinator(ILeaseManager<T> leaseManager,
             String workerIdentifier,
             long leaseDurationMillis,
             long epsilonMillis,
@@ -185,6 +185,18 @@ public class LeaseCoordinator<T extends Lease> {
                 maxLeasesForWorker, maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount, metricsFactory);
     }
 
+    /**
+     *
+     * @param leaseManager LeaseManager instance to use
+     * @param leaseSelector LeaseSelector instance to be used for filtering leases during LeaseTaker execution.
+     * @param workerIdentifier Identifies the worker (e.g. useful to track lease ownership)
+     * @param leaseDurationMillis Duration of a lease
+     * @param epsilonMillis Allow for some variance when calculating lease expirations
+     * @param maxLeasesForWorker Max leases this Worker can handle at a time
+     * @param maxLeasesToStealAtOneTime Steal up to these many leases at a time (for load balancing)
+     * @param maxLeaseRenewerThreadCount Number of threads to use for lease renewal calls
+     * @param metricsFactory Used to publish metrics about lease operations
+     */
     public LeaseCoordinator(ILeaseManager<T> leaseManager,
                      LeaseSelector<T> leaseSelector,
                      String workerIdentifier,
@@ -205,6 +217,16 @@ public class LeaseCoordinator<T extends Lease> {
                 metricsFactory);
     }
 
+    /**
+     *
+     * @param leaseTaker LeaseTaker instance to be used.
+     * @param leaseRenewer LeaseRenewer instance to be used.
+     * @param leaseDurationMillis Duration of a lease
+     * @param epsilonMillis Allow for some variance when calculating lease expirations
+     * @param maxLeasesForWorker Max leases this Worker can handle at a time
+     * @param maxLeasesToStealAtOneTime Steal up to these many leases at a time (for load balancing)
+     * @param metricsFactory Used to publish metrics about lease operations
+     */
     public LeaseCoordinator(final ILeaseTaker<T> leaseTaker,
                      final ILeaseRenewer<T> leaseRenewer,
                      final long leaseDurationMillis,

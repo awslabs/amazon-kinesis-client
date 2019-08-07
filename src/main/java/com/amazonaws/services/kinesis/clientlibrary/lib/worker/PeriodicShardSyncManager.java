@@ -41,22 +41,18 @@ class PeriodicShardSyncManager {
     private final ScheduledExecutorService shardSyncThreadPool;
     private boolean isRunning;
 
-    private PeriodicShardSyncManager(PeriodicShardSyncManagerBuilder builder) {
-        Validate.notBlank(builder.workerId, "WorkerID is required to initialize PeriodicShardSyncManager.");
-        Validate.notNull(builder.leaderDecider, "LeaderDecider is required to initialize PeriodicShardSyncManager.");
-        Validate.notNull(builder.shardSyncTask, "ShardSyncTask is required to initialize PeriodicShardSyncManager.");
-        this.workerId = builder.workerId;
-        this.leaderDecider = builder.leaderDecider;
-        this.shardSyncTask = builder.shardSyncTask;
-        if (builder.shardSyncThreadPool == null) {
-            this.shardSyncThreadPool = Executors.newSingleThreadScheduledExecutor();
-        } else {
-            this.shardSyncThreadPool = builder.shardSyncThreadPool;
-        }
+    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, ShardSyncTask shardSyncTask) {
+       this(workerId, leaderDecider, shardSyncTask, Executors.newSingleThreadScheduledExecutor());
     }
 
-    static PeriodicShardSyncManagerBuilder getBuilder() {
-        return new PeriodicShardSyncManagerBuilder();
+    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, ShardSyncTask shardSyncTask, ScheduledExecutorService shardSyncThreadPool) {
+        Validate.notBlank(workerId, "WorkerID is required to initialize PeriodicShardSyncManager.");
+        Validate.notNull(leaderDecider, "LeaderDecider is required to initialize PeriodicShardSyncManager.");
+        Validate.notNull(shardSyncTask, "ShardSyncTask is required to initialize PeriodicShardSyncManager.");
+        this.workerId = workerId;
+        this.leaderDecider = leaderDecider;
+        this.shardSyncTask = shardSyncTask;
+        this.shardSyncThreadPool = shardSyncThreadPool;
     }
 
     public synchronized TaskResult start() {
@@ -89,40 +85,6 @@ class PeriodicShardSyncManager {
             }
         } catch (Throwable t) {
             LOG.error("Error during runShardSync.", t);
-        }
-    }
-
-    static class PeriodicShardSyncManagerBuilder {
-        private String workerId;
-        private LeaderDecider leaderDecider;
-        private ShardSyncTask shardSyncTask;
-        private ScheduledExecutorService shardSyncThreadPool;
-
-        private PeriodicShardSyncManagerBuilder() {
-        }
-
-        public PeriodicShardSyncManagerBuilder withWorkerId(String workerId) {
-            this.workerId = workerId;
-            return this;
-        }
-
-        public PeriodicShardSyncManagerBuilder withLeaderDecider(LeaderDecider leaderDecider) {
-            this.leaderDecider = leaderDecider;
-            return this;
-        }
-
-        public PeriodicShardSyncManagerBuilder withShardSyncTask(ShardSyncTask shardSyncTask) {
-            this.shardSyncTask = shardSyncTask;
-            return this;
-        }
-
-        public PeriodicShardSyncManagerBuilder withShardSyncThreadPool(ScheduledExecutorService shardSyncThreadPool) {
-            this.shardSyncThreadPool = shardSyncThreadPool;
-            return this;
-        }
-
-        public PeriodicShardSyncManager build() {
-            return new PeriodicShardSyncManager(this);
         }
     }
 }

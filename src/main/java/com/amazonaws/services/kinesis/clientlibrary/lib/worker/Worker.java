@@ -467,7 +467,7 @@ public class Worker implements Runnable {
                 shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
                 metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
                 shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER,
-                DEFAULT_LEASE_CLEANUP_VALIDATOR, null/* leaderDecider */);
+                DEFAULT_LEASE_CLEANUP_VALIDATOR, null);
     }
 
     /**
@@ -701,7 +701,6 @@ public class Worker implements Runnable {
                 LOG.error("Caught exception when initializing LeaseCoordinator", e);
                 lastException = e;
             } catch (Exception e) {
-                LOG.error("Caught exception when initializing worker", e);
                 lastException = e;
             }
 
@@ -1164,12 +1163,11 @@ public class Worker implements Runnable {
     private PeriodicShardSyncStrategy createPeriodicShardSyncStrategy(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager) {
         return new PeriodicShardSyncStrategy(
-                PeriodicShardSyncManager.getBuilder().withWorkerId(config.getWorkerIdentifier())
-                        .withLeaderDecider(leaderDecider).withShardSyncTask(
+                new PeriodicShardSyncManager(config.getWorkerIdentifier(), leaderDecider,
                         new ShardSyncTask(kinesisProxy, leaseManager, config.getInitialPositionInStreamExtended(),
                                 config.shouldCleanupLeasesUponShardCompletion(),
                                 config.shouldIgnoreUnexpectedChildShards(), SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
-                                shardSyncer)).build());
+                                shardSyncer)));
     }
 
     private ShardEndShardSyncStrategy createShardEndShardSyncStrategy(IKinesisProxy kinesisProxy,
@@ -1363,8 +1361,11 @@ public class Worker implements Runnable {
                 workerStateChangeListener = DEFAULT_WORKER_STATE_CHANGE_LISTENER;
             }
 
-            if (shardSyncer == null) {
+            if (leaseCleanupValidator == null) {
                 leaseCleanupValidator = DEFAULT_LEASE_CLEANUP_VALIDATOR;
+            }
+
+            if (shardSyncer == null) {
                 shardSyncer = new KinesisShardSyncer(leaseCleanupValidator);
             }
 

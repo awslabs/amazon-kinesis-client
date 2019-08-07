@@ -5,7 +5,8 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
  */
 public enum ShardSyncStrategyType {
 
-        PERIODIC, /* Shard sync are performed periodically */
-        SHARD_END /* Shard syncs are performed when processing of a shard completes */
-
+    /* Shard sync are performed periodically */
+    PERIODIC,
+    /* Shard syncs are performed when processing of a shard completes */
+    SHARD_END
 }

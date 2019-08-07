@@ -109,7 +109,8 @@ class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
             (!CollectionUtils.isNullOrEmpty(leaders) && leaders.contains(workerId));
     }
 
-    @Override public synchronized Boolean isLeader(String workerId) {
+    @Override
+    public synchronized Boolean isLeader(String workerId) {
         // if no leaders yet, synchronously get leaders. This will happen at first Shard Sync.
         if (executeConditionCheckWithReadLock(() -> CollectionUtils.isNullOrEmpty(leaders))) {
             electLeaders();
@@ -123,7 +124,8 @@ class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
         return executeConditionCheckWithReadLock(() -> isWorkerLeaderForShardSync(workerId));
     }
 
-    @Override public synchronized void shutdown() {
+    @Override
+    public synchronized void shutdown() {
         try {
             leaderElectionThreadPool.shutdown();
             if (leaderElectionThreadPool.awaitTermination(AWAIT_TERMINATION_MILLIS, TimeUnit.MILLISECONDS)) {

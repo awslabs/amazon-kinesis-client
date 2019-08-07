@@ -100,6 +100,8 @@ public interface ILeaseRenewer<T extends Lease> {
     /**
      * Shutdown any clients and thread-pools.
      */
-    void shutdown();
+    default void shutdown() {
+        // Does nothing.
+    }
 
 }

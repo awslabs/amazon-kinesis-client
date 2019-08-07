@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
+import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 
@@ -38,7 +39,9 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
-public class DeterministicShuffleShardSyncLeaderDeciderTest extends PeriodicShardSyncTestBase {
+public class DeterministicShuffleShardSyncLeaderDeciderTest {
+    private static final String LEASE_KEY = "lease_key";
+    private static final String LEASE_OWNER = "lease_owner";
     private static final String WORKER_ID = "worker-id";
 
     private DeterministicShuffleShardSyncLeaderDecider leaderDecider;
@@ -96,6 +99,19 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest extends PeriodicShar
             assertTrue(leaderDecider.isLeader(lease.getLeaseOwner()));
             assertTrue(expectedLeaders.contains(lease.getLeaseOwner()));
         }
+    }
+
+    private List<KinesisClientLease> getLeases(int count, boolean duplicateLeaseOwner, boolean activeLeases) {
+        List<KinesisClientLease> leases = new ArrayList<>();
+        for (int i=0;i<count;i++) {
+            KinesisClientLease lease = new KinesisClientLease();
+            lease.setLeaseKey(LEASE_KEY + i);
+            lease.setCheckpoint(activeLeases ? ExtendedSequenceNumber.LATEST : ExtendedSequenceNumber.SHARD_END);
+            lease.setLeaseCounter(new Random().nextLong());
+            lease.setLeaseOwner(LEASE_OWNER + (duplicateLeaseOwner ? "" : i));
+            leases.add(lease);
+        }
+        return leases;
     }
 
     private Set<String> getExpectedLeaders(List<KinesisClientLease> leases) {

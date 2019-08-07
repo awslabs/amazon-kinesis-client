@@ -529,7 +529,7 @@ public class WorkerTest {
         final int threadPoolSize = 2;
         final int numberOfRecordsPerShard = 10;
         List<Shard> shardList = createShardListWithOneSplit();
-        List<KinesisClientLease> initialLeases = new ArrayList<KinesisClientLease>();
+        List<KinesisClientLease> initialLeases = new ArrayList<>();
         KinesisClientLease lease = shardSyncer.newKCLLease(shardList.get(0));
         lease.setCheckpoint(new ExtendedSequenceNumber("2"));
         initialLeases.add(lease);
