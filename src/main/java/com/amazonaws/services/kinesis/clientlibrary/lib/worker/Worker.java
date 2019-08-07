@@ -569,7 +569,7 @@ public class Worker implements Runnable {
                return createPeriodicShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager());
             case SHARD_END:
             default:
-                return createShardEndShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager());
+                return createShardEndShardSyncStrategy(controlServer);
         }
     }
 
@@ -1170,12 +1170,8 @@ public class Worker implements Runnable {
                                 shardSyncer)));
     }
 
-    private ShardEndShardSyncStrategy createShardEndShardSyncStrategy(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager) {
-        return new ShardEndShardSyncStrategy(
-                new ShardSyncTaskManager(kinesisProxy, leaseManager, config.getInitialPositionInStreamExtended(),
-                        config.shouldCleanupLeasesUponShardCompletion(), config.shouldIgnoreUnexpectedChildShards(),
-                        config.getShardSyncIntervalMillis(), metricsFactory, executorService, shardSyncer));
+    private ShardEndShardSyncStrategy createShardEndShardSyncStrategy(ShardSyncTaskManager shardSyncTaskManager) {
+        return new ShardEndShardSyncStrategy(shardSyncTaskManager);
     }
 
     /**

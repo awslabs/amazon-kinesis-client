@@ -83,7 +83,6 @@ import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.hamcrest.TypeSafeMatcher;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -522,8 +521,6 @@ public class WorkerTest {
      * Runs worker with threadPoolSize < numShards
      * Test method for {@link Worker#run()}.
      */
-    //TODO: Fix this failing test
-    @Ignore
     @Test
     public final void testOneSplitShard2ThreadsWithCallsForEmptyRecords() throws Exception {
         final int threadPoolSize = 2;

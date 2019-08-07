@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import lombok.Getter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -32,6 +33,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
  * Kinesis shards, remove obsolete leases). We'll have at most one outstanding sync task at any time.
  * Worker will use this class to kick off a sync task when it finds shards which have been completely processed.
  */
+@Getter
 class ShardSyncTaskManager {
 
     private static final Log LOG = LogFactory.getLog(ShardSyncTaskManager.class);
@@ -121,5 +123,22 @@ class ShardSyncTaskManager {
             }
         }
         return submittedTaskFuture;
+    }
+
+    synchronized TaskResult runShardSyncer() {
+        Exception exception = null;
+
+        try {
+            shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
+                leaseManager,
+                initialPositionInStream,
+                cleanupLeasesUponShardCompletion,
+                ignoreUnexpectedChildShards);
+        } catch (Exception e) {
+            LOG.error("Caught exception while sync'ing Kinesis shards and leases", e);
+            exception = e;
+        }
+
+        return new TaskResult(exception);
     }
 }
