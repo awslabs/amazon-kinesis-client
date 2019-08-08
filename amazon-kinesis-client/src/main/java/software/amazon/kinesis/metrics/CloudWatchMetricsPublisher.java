@@ -22,7 +22,7 @@ import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;d
+import java.util.concurrent.TimeUnit;
 
 /**
  * Publisher that contains the logic to publish metrics.
