@@ -14,14 +14,15 @@
  */
 package software.amazon.kinesis.metrics;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
-import software.amazon.awssdk.services.cloudwatch.model.CloudWatchException;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;d
 
 /**
  * Publisher that contains the logic to publish metrics.
@@ -30,6 +31,7 @@ import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
 public class CloudWatchMetricsPublisher {
     // CloudWatch API has a limit of 20 MetricDatums per request
     private static final int BATCH_SIZE = 20;
+    private static final int PUT_TIMEOUT_MILLIS = 5000;
 
     private final String namespace;
     private final CloudWatchAsyncClient cloudWatchClient;
@@ -60,11 +62,11 @@ public class CloudWatchMetricsPublisher {
             request = request.metricData(metricData);
 
             try {
-                cloudWatchClient.putMetricData(request.build());
-
-                log.debug("Successfully published {} datums.", endIndex - startIndex);
-            } catch (CloudWatchException e) {
-                log.warn("Could not publish {} datums to CloudWatch", endIndex - startIndex, e);
+                // This needs to be blocking. Making it asynchronous leads to increased throttling.
+                cloudWatchClient.putMetricData(request.build()).get(PUT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
+                log.warn("Could not publish {} datums to CloudWatch", endIndex - startIndex,
+                        e instanceof ExecutionException ? e.getCause() : e);
             }
         }
     }

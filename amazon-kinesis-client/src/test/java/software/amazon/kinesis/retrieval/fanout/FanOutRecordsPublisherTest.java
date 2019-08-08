@@ -816,7 +816,7 @@ public class FanOutRecordsPublisherTest {
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001-001");
         final int[] totalRecordsRetrieved = { 0 };
-        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+        fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override public void onSubscribe(Subscription subscription) {}
             @Override public void onNext(RecordsRetrieved recordsRetrieved) {
                 totalRecordsRetrieved[0]++;
@@ -835,7 +835,7 @@ public class FanOutRecordsPublisherTest {
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = { 0 };
-        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+        fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override public void onSubscribe(Subscription subscription) {}
             @Override public void onNext(RecordsRetrieved recordsRetrieved) {
                 totalRecordsRetrieved[0]++;
@@ -859,14 +859,14 @@ public class FanOutRecordsPublisherTest {
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = { 0 };
-        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+        fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override public void onSubscribe(Subscription subscription) {}
             @Override public void onNext(RecordsRetrieved recordsRetrieved) {
                 totalRecordsRetrieved[0]++;
                 // This makes sure the queue is immediately made empty, so that the next event enqueued will
                 // be the only element in the queue.
                 fanOutRecordsPublisher
-                        .evictAckedEventAndScheduleNextEvent(() -> recordsRetrieved.batchUniqueIdentifier(), new CompletableFuture<>());
+                        .evictAckedEventAndScheduleNextEvent(() -> recordsRetrieved.batchUniqueIdentifier());
             }
             @Override public void onError(Throwable throwable) {}
             @Override public void onComplete() {}
@@ -883,19 +883,18 @@ public class FanOutRecordsPublisherTest {
         FanOutRecordsPublisher.RecordFlow recordFlow =
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = { 0 };
-        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+        fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override public void onSubscribe(Subscription subscription) {}
             @Override public void onNext(RecordsRetrieved recordsRetrieved) {
                 totalRecordsRetrieved[0]++;
                 // This makes sure the queue is immediately made empty, so that the next event enqueued will
                 // be the only element in the queue.
                 fanOutRecordsPublisher
-                        .evictAckedEventAndScheduleNextEvent(() -> recordsRetrieved.batchUniqueIdentifier(), new CompletableFuture<>());
+                        .evictAckedEventAndScheduleNextEvent(() -> recordsRetrieved.batchUniqueIdentifier());
                 // Send stale event periodically
                 if(totalRecordsRetrieved[0] % 10 == 0) {
                     fanOutRecordsPublisher.evictAckedEventAndScheduleNextEvent(
-                            () -> new BatchUniqueIdentifier("some_uuid_str", "some_old_flow"),
-                            new CompletableFuture<>());
+                            () -> new BatchUniqueIdentifier("some_uuid_str", "some_old_flow"));
                 }
             }
             @Override public void onError(Throwable throwable) {}
@@ -915,7 +914,7 @@ public class FanOutRecordsPublisherTest {
                 new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
         final int[] totalRecordsRetrieved = { 0 };
         BlockingQueue<BatchUniqueIdentifier> ackQueue = new LinkedBlockingQueue<>();
-        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+        fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override public void onSubscribe(Subscription subscription) {}
             @Override public void onNext(RecordsRetrieved recordsRetrieved) {
                 totalRecordsRetrieved[0]++;
@@ -936,10 +935,9 @@ public class FanOutRecordsPublisherTest {
         while(count++ < 10 && (batchUniqueIdentifierQueued = ackQueue.take()) != null) {
             final BatchUniqueIdentifier batchUniqueIdentifierFinal = batchUniqueIdentifierQueued;
             fanOutRecordsPublisher
-                    .evictAckedEventAndScheduleNextEvent(() -> batchUniqueIdentifierFinal, new CompletableFuture<>());
+                    .evictAckedEventAndScheduleNextEvent(() -> batchUniqueIdentifierFinal);
             fanOutRecordsPublisher.evictAckedEventAndScheduleNextEvent(
-                    () -> new BatchUniqueIdentifier("some_uuid_str", "some_old_flow"),
-                    new CompletableFuture<>());
+                    () -> new BatchUniqueIdentifier("some_uuid_str", "some_old_flow"));
         }
         assertEquals(10, totalRecordsRetrieved[0]);
     }
@@ -948,11 +946,10 @@ public class FanOutRecordsPublisherTest {
     public void testIfPublisherThrowsWhenMismatchAckforActiveFlowSeen() throws InterruptedException {
         FanOutRecordsPublisher fanOutRecordsPublisher = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
         FanOutRecordsPublisher.RecordFlow recordFlow =
-                new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "shard-001");
-        fanOutRecordsPublisher.setFlowForTesting(recordFlow);
+                new FanOutRecordsPublisher.RecordFlow(fanOutRecordsPublisher, Instant.now(), "Shard-001-1");
         final int[] totalRecordsRetrieved = { 0 };
         BlockingQueue<BatchUniqueIdentifier> ackQueue = new LinkedBlockingQueue<>();
-        fanOutRecordsPublisher.setSubscriberForTesting(new Subscriber<RecordsRetrieved>() {
+        fanOutRecordsPublisher.subscribe(new Subscriber<RecordsRetrieved>() {
             @Override public void onSubscribe(Subscription subscription) {}
             @Override public void onNext(RecordsRetrieved recordsRetrieved) {
                 totalRecordsRetrieved[0]++;
@@ -973,8 +970,7 @@ public class FanOutRecordsPublisherTest {
         while(count++ < 2 && (batchUniqueIdentifierQueued = ackQueue.poll(1000, TimeUnit.MILLISECONDS)) != null) {
             final BatchUniqueIdentifier batchUniqueIdentifierFinal = batchUniqueIdentifierQueued;
             fanOutRecordsPublisher.evictAckedEventAndScheduleNextEvent(
-                    () -> new BatchUniqueIdentifier("some_uuid_str", batchUniqueIdentifierFinal.getFlowIdentifier()),
-                    new CompletableFuture<>());
+                    () -> new BatchUniqueIdentifier("some_uuid_str", batchUniqueIdentifierFinal.getFlowIdentifier()));
         }
     }
 

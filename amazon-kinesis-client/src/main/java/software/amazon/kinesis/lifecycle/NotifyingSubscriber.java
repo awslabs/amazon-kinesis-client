@@ -36,14 +36,14 @@ public interface NotifyingSubscriber extends Subscriber<RecordsRetrieved> {
      * Return the publisher to be notified
      * @return RecordsPublisher to be notified.
      */
-    RecordsPublisher getWaitingRecordsPublisher();
+    RecordsPublisher getRecordsPublisher();
 
     /**
-     * Construct RecordsRetrievedAck object from the incoming data and return it
+     * Construct RecordsDeliveryAck object from the incoming data and return it
      * @param recordsRetrieved for which we need the ack.
-     * @return RecordsRetrievedAck
+     * @return getRecordsDeliveryAck
      */
-    RecordsDeliveryAck getRecordsRetrievedAck(RecordsRetrieved recordsRetrieved);
+    RecordsDeliveryAck getRecordsDeliveryAck(RecordsRetrieved recordsRetrieved);
 
     @Override
     default void onSubscribe(Subscription subscription) {
@@ -52,7 +52,7 @@ public interface NotifyingSubscriber extends Subscriber<RecordsRetrieved> {
 
     @Override
     default void onNext(RecordsRetrieved recordsRetrieved) {
-        getWaitingRecordsPublisher().notify(getRecordsRetrievedAck(recordsRetrieved));
+        getRecordsPublisher().notify(getRecordsDeliveryAck(recordsRetrieved));
         getDelegateSubscriber().onNext(recordsRetrieved);
     }
 

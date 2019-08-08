@@ -129,13 +129,12 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     @Override
     public void notify(RecordsDeliveryAck recordsDeliveryAck) {
         synchronized (lockObject) {
-            CompletableFuture<RecordFlow> triggeringFlowFuture = new CompletableFuture<>();
+            RecordFlow triggeringFlow = null;
             try {
-                evictAckedEventAndScheduleNextEvent(recordsDeliveryAck, triggeringFlowFuture);
+                triggeringFlow = evictAckedEventAndScheduleNextEvent(recordsDeliveryAck);
             } catch (Throwable t) {
-                errorOccurred(triggeringFlowFuture.getNow(null), t);
+                errorOccurred(triggeringFlow, t);
             }
-            final RecordFlow triggeringFlow = triggeringFlowFuture.getNow(null);
             if (triggeringFlow != null) {
                 updateAvailableQueueSpaceAndRequestUpstream(triggeringFlow);
             }
@@ -144,11 +143,13 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     // This method is not thread-safe. You need to acquire a lock in the caller in order to execute this.
     @VisibleForTesting
-    void evictAckedEventAndScheduleNextEvent(RecordsDeliveryAck recordsDeliveryAck,
-            CompletableFuture<RecordFlow> triggeringFlowFuture) {
+    RecordFlow evictAckedEventAndScheduleNextEvent(RecordsDeliveryAck recordsDeliveryAck) {
         // Peek the head of the queue on receiving the ack.
         // Note : This does not block wait to retrieve an element.
         final RecordsRetrievedContext recordsRetrievedContext = recordsDeliveryQueue.peek();
+        // RecordFlow of the current event that needs to be returned
+        RecordFlow flowToBeReturned = null;
+
         // Check if the ack corresponds to the head of the delivery queue.
         if (recordsRetrievedContext != null && recordsRetrievedContext.getRecordsRetrieved().batchUniqueIdentifier()
                 .equals(recordsDeliveryAck.batchUniqueIdentifier())) {
@@ -159,7 +160,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             // Update current sequence number for the successfully delivered event.
             currentSequenceNumber = ((FanoutRecordsRetrieved)recordsRetrievedContext.getRecordsRetrieved()).continuationSequenceNumber();
             // Update the triggering flow for post scheduling upstream request.
-            triggeringFlowFuture.complete(recordsRetrievedContext.getRecordFlow());
+            flowToBeReturned = recordsRetrievedContext.getRecordFlow();
             // Try scheduling the next event in the queue, if available.
             if (recordsDeliveryQueue.peek() != null) {
                 subscriber.onNext(recordsDeliveryQueue.peek().getRecordsRetrieved());
@@ -171,16 +172,17 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             if (flow != null && recordsDeliveryAck.batchUniqueIdentifier().getFlowIdentifier()
                     .equals(flow.getSubscribeToShardId())) {
                 log.error(
-                        "{}: KCL BUG: Publisher found mismatched ack for subscription {}  ",
+                        "{}: Received unexpected ack for the active subscription {}. Throwing.  ",
                         shardId, recordsDeliveryAck.batchUniqueIdentifier().getFlowIdentifier());
-                throw new IllegalStateException("KCL BUG: Record delivery ack mismatch");
+                throw new IllegalStateException("Unexpected ack for the active subscription");
             }
             // Otherwise publisher received a stale ack.
             else {
-                log.info("{}: Publisher received duplicate ack or an ack for stale subscription {}. Ignoring.", shardId,
+                log.info("{}: Publisher received an ack for stale subscription {}. Ignoring.", shardId,
                         recordsDeliveryAck.batchUniqueIdentifier().getFlowIdentifier());
             }
         }
+        return flowToBeReturned;
     }
 
     // This method is not thread-safe. You need to acquire a lock in the caller in order to execute this.
@@ -201,19 +203,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     shardId, recordsDeliveryQueue.remainingCapacity());
             throw e;
         } catch (Throwable t) {
-            recordsDeliveryQueue.remove(recordsRetrievedContext);
+            log.error("{}: Unable to deliver event to the shard consumer.", shardId, t);
             throw t;
         }
-    }
-
-    @VisibleForTesting
-    void setSubscriberForTesting(Subscriber<RecordsRetrieved> s) {
-        this.subscriber = s;
-    }
-
-    @VisibleForTesting
-    void setFlowForTesting(RecordFlow flow) {
-        this.flow = flow;
     }
 
     @Data

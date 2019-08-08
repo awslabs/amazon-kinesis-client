@@ -34,12 +34,12 @@ public class ShardConsumerNotifyingSubscriber implements NotifyingSubscriber {
     }
 
     @Override
-    public RecordsPublisher getWaitingRecordsPublisher() {
+    public RecordsPublisher getRecordsPublisher() {
         return recordsPublisher;
     }
 
     @Override
-    public RecordsDeliveryAck getRecordsRetrievedAck(RecordsRetrieved recordsRetrieved) {
+    public RecordsDeliveryAck getRecordsDeliveryAck(RecordsRetrieved recordsRetrieved) {
         return () -> recordsRetrieved.batchUniqueIdentifier();
     }
 }
