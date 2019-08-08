@@ -71,12 +71,15 @@ class KinesisDataFetcher {
         
         if (nextIterator != null) {
             try {
-                return new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
+                GetRecordsResult getRecordsResult = kinesisProxy.get(nextIterator, maxRecords);
+                LOG.info("Successfully fetched records from Kinesis for shard " + shardId + ": " + getRecordsResult);
+                return new AdvancingResult(getRecordsResult);
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
                 return TERMINAL_RESULT;
             }
         } else {
+            LOG.info("Cannot fetch records from Kinesis for shard " + shardId + ": nextIterator is null.");
             return TERMINAL_RESULT;
         }
     }
@@ -117,6 +120,7 @@ class KinesisDataFetcher {
                 lastKnownSequenceNumber = Iterables.getLast(result.getRecords()).getSequenceNumber();
             }
             if (nextIterator == null) {
+                LOG.info("Reached shard end: nextIterator is null in AdvancingResult.accept for shard " + shardId);
                 isShardEndReached = true;
             }
             return getResult();
@@ -167,6 +171,7 @@ class KinesisDataFetcher {
             nextIterator = getIterator(ShardIteratorType.AT_SEQUENCE_NUMBER.toString(), sequenceNumber);
         }
         if (nextIterator == null) {
+            LOG.info("Reached shard end: cannot advance iterator for shard " + shardId);
             isShardEndReached = true;
         }
         this.lastKnownSequenceNumber = sequenceNumber;
