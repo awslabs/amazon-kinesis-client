@@ -33,7 +33,6 @@ To make it easier for developers to write record processors in other languages, 
 
 ### Latest Release (1.11.0 - August 7, 2019)
 [Milestone#33](https://github.com/awslabs/amazon-kinesis-client/milestone/33)
-* Updated the version of the AWS Java SDK to 1.11.603
 * Improved exception handling and logging in `KinesisClientLibLeaseCoordinator` to avoid `NullPointerExceptions` when no leases are found.
   * [PR #558](https://github.com/awslabs/amazon-kinesis-client/pull/558)
 * Introducing optional new periodic shard sync strategy to perform shard discovery and lease cleanup on a single worker.
