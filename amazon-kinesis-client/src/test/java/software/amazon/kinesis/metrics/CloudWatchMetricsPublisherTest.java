@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -31,7 +32,11 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
+import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataResponse;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class CloudWatchMetricsPublisherTest {
@@ -51,6 +56,10 @@ public class CloudWatchMetricsPublisherTest {
      */
     @Test
     public void testMetricsPublisher() {
+        final CompletableFuture<PutMetricDataResponse> putResponseFuture = new CompletableFuture<>();
+        putResponseFuture.complete(PutMetricDataResponse.builder().build());
+        when(cloudWatchClient.putMetricData(any(PutMetricDataRequest.class))).thenReturn(putResponseFuture);
+
         List<MetricDatumWithKey<CloudWatchMetricKey>> dataToPublish = constructMetricDatumWithKeyList(25);
         List<Map<String, MetricDatum>> expectedData = constructMetricDatumListMap(dataToPublish);
         publisher.publishMetrics(dataToPublish);
