@@ -71,15 +71,13 @@ class KinesisDataFetcher {
         
         if (nextIterator != null) {
             try {
-                GetRecordsResult getRecordsResult = kinesisProxy.get(nextIterator, maxRecords);
-                LOG.info("Successfully fetched records from Kinesis for shard " + shardId + ": " + getRecordsResult);
-                return new AdvancingResult(getRecordsResult);
+                return new AdvancingResult(kinesisProxy.get(nextIterator, maxRecords));
             } catch (ResourceNotFoundException e) {
                 LOG.info("Caught ResourceNotFoundException when fetching records for shard " + shardId);
                 return TERMINAL_RESULT;
             }
         } else {
-            LOG.info("Cannot fetch records from Kinesis for shard " + shardId + ": nextIterator is null.");
+            LOG.info("Skipping fetching records from Kinesis for shard " + shardId + ": nextIterator is null.");
             return TERMINAL_RESULT;
         }
     }
