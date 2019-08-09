@@ -31,7 +31,14 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.11.0 - August 7, 2019)
+### Latest Release (1.11.1 - August 9, 2019)
+[Milestone#34](https://github.com/awslabs/amazon-kinesis-client/milestone/34)
+* Updated the version of the AWS Java SDK to 1.11.603.
+  * [PR #587](https://github.com/awslabs/amazon-kinesis-client/pull/587)
+* Added logging to `KinesisDataFetcher` when reaching the end of a shard due to a null next iterator.
+  * [PR #585](https://github.com/awslabs/amazon-kinesis-client/pull/585)
+  
+### Release 1.11.0 (August 7, 2019)
 [Milestone#33](https://github.com/awslabs/amazon-kinesis-client/milestone/33)
 * Improved exception handling and logging in `KinesisClientLibLeaseCoordinator` to avoid `NullPointerExceptions` when no leases are found.
   * [PR #558](https://github.com/awslabs/amazon-kinesis-client/pull/558)
