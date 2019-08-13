@@ -52,7 +52,7 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
     @Override
     public TaskResult onShardConsumerShutDown() {
-        return shardSyncTaskManager.runShardSyncer();
+        return onFoundCompletedShard();
     }
 
     @Override

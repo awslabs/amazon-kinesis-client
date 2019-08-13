@@ -124,21 +124,4 @@ class ShardSyncTaskManager {
         }
         return submittedTaskFuture;
     }
-
-    synchronized TaskResult runShardSyncer() {
-        Exception exception = null;
-
-        try {
-            shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
-                leaseManager,
-                initialPositionInStream,
-                cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards);
-        } catch (Exception e) {
-            LOG.error("Caught exception while sync'ing Kinesis shards and leases", e);
-            exception = e;
-        }
-
-        return new TaskResult(exception);
-    }
 }
