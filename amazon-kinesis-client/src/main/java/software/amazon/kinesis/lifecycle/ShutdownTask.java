@@ -106,8 +106,9 @@ public class ShutdownTask implements ConsumerTask {
                         ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.lastCheckpointValue();
                         if (lastCheckpointValue == null
                                 || !lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END)) {
-                            throw new IllegalArgumentException(
-                                    "Application didn't checkpoint at end of shard " + shardInfo.shardId());
+                            throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
+                                    + shardInfo.getShardId() + ". Application must checkpoint upon shard end. " +
+                                    "See ShardRecordProcessor.shardEnded javadocs for more information.");
                         }
                     } else {
                         shardRecordProcessor.leaseLost(LeaseLostInput.builder().build());
