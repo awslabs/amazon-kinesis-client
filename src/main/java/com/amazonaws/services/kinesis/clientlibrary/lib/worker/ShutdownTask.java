@@ -114,7 +114,8 @@ class ShutdownTask implements ITask {
                     if ((lastCheckpointValue == null)
                             || (!lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END))) {
                         throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
-                                + shardInfo.getShardId());
+                                + shardInfo.getShardId() + ". Application must checkpoint upon shutdown. " +
+                                "See IRecordProcessor.shutdown javadocs for more information.");
                     }
                 }
                 LOG.debug("Shutting down retrieval strategy.");
