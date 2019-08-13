@@ -1167,7 +1167,7 @@ public class Worker implements Runnable {
                         new ShardSyncTask(kinesisProxy, leaseManager, config.getInitialPositionInStreamExtended(),
                                 config.shouldCleanupLeasesUponShardCompletion(),
                                 config.shouldIgnoreUnexpectedChildShards(), SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
-                                shardSyncer)));
+                                shardSyncer), metricsFactory));
     }
 
     private ShardEndShardSyncStrategy createShardEndShardSyncStrategy(ShardSyncTaskManager shardSyncTaskManager) {

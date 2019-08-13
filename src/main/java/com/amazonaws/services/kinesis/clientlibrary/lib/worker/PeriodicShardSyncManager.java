@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.apache.commons.lang3.Validate;
@@ -37,21 +38,21 @@ class PeriodicShardSyncManager {
 
     private final String workerId;
     private final LeaderDecider leaderDecider;
-    private final ShardSyncTask shardSyncTask;
+    private final ITask metricsEmittingShardSyncTask;
     private final ScheduledExecutorService shardSyncThreadPool;
     private boolean isRunning;
 
-    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, ShardSyncTask shardSyncTask) {
-       this(workerId, leaderDecider, shardSyncTask, Executors.newSingleThreadScheduledExecutor());
+    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, ShardSyncTask shardSyncTask, IMetricsFactory metricsFactory) {
+       this(workerId, leaderDecider, shardSyncTask, Executors.newSingleThreadScheduledExecutor(), metricsFactory);
     }
 
-    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, ShardSyncTask shardSyncTask, ScheduledExecutorService shardSyncThreadPool) {
+    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, ShardSyncTask shardSyncTask, ScheduledExecutorService shardSyncThreadPool, IMetricsFactory metricsFactory) {
         Validate.notBlank(workerId, "WorkerID is required to initialize PeriodicShardSyncManager.");
         Validate.notNull(leaderDecider, "LeaderDecider is required to initialize PeriodicShardSyncManager.");
         Validate.notNull(shardSyncTask, "ShardSyncTask is required to initialize PeriodicShardSyncManager.");
         this.workerId = workerId;
         this.leaderDecider = leaderDecider;
-        this.shardSyncTask = shardSyncTask;
+        this.metricsEmittingShardSyncTask = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory);
         this.shardSyncThreadPool = shardSyncThreadPool;
     }
 
@@ -79,7 +80,7 @@ class PeriodicShardSyncManager {
         try {
             if (leaderDecider.isLeader(workerId)) {
                 LOG.debug(String.format("WorkerId %s is a leader, running the shard sync task", workerId));
-                shardSyncTask.call();
+                metricsEmittingShardSyncTask.call();
             } else {
                 LOG.debug(String.format("WorkerId %s is not a leader, not running the shard sync task", workerId));
             }
