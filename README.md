@@ -31,7 +31,12 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.11.1 - August 9, 2019)
+## Latest Release (1.11.2 - August 15, 2019)
+[Milestone#35](https://github.com/awslabs/amazon-kinesis-client/milestone/35)
+* Added support for metrics emission in `PeriodicShardSyncer`.
+  * [PR #592](https://github.com/awslabs/amazon-kinesis-client/pull/592)
+
+### Release 1.11.1 (August 9, 2019)
 [Milestone#34](https://github.com/awslabs/amazon-kinesis-client/milestone/34)
 * Updated the version of the AWS Java SDK to 1.11.603.
   * [PR #587](https://github.com/awslabs/amazon-kinesis-client/pull/587)
