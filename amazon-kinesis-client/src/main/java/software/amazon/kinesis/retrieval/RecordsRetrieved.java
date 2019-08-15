@@ -16,8 +16,6 @@ package software.amazon.kinesis.retrieval;
 
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 
-import java.util.UUID;
-
 public interface RecordsRetrieved {
 
     /**

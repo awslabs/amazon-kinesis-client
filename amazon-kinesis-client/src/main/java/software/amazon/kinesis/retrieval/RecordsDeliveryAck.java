@@ -15,6 +15,9 @@
 
 package software.amazon.kinesis.retrieval;
 
+/**
+ * Interface to supply all the meta information for record delivery ack.
+ */
 public interface RecordsDeliveryAck {
 
     /**
