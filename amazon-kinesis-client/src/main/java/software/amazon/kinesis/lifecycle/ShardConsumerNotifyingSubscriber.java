@@ -17,10 +17,12 @@ package software.amazon.kinesis.lifecycle;
 
 import lombok.AllArgsConstructor;
 import org.reactivestreams.Subscriber;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 
+@KinesisClientInternalApi
 @AllArgsConstructor
 public class ShardConsumerNotifyingSubscriber implements NotifyingSubscriber {
 

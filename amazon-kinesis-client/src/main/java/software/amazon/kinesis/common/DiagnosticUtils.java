@@ -16,12 +16,14 @@
 package software.amazon.kinesis.common;
 
 import org.slf4j.Logger;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
 import java.time.Duration;
 import java.time.Instant;
 
 import static software.amazon.kinesis.lifecycle.ShardConsumer.MAX_TIME_BETWEEN_REQUEST_RESPONSE;
 
+@KinesisClientInternalApi
 public class DiagnosticUtils {
 
     /**

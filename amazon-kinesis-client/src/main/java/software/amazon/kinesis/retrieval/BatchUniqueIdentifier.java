@@ -16,7 +16,9 @@
 package software.amazon.kinesis.retrieval;
 
 import lombok.Data;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
+@KinesisClientInternalApi
 @Data
 public class BatchUniqueIdentifier {
     private final String recordBatchIdentifier;
