@@ -71,6 +71,7 @@ import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -299,7 +300,7 @@ public class PrefetchRecordsPublisherTest {
 
         Object lock = new Object();
 
-        Subscriber<RecordsRetrieved> subscriber = new Subscriber<RecordsRetrieved>() {
+        Subscriber<RecordsRetrieved> delegateSubscriber = new Subscriber<RecordsRetrieved>() {
             Subscription sub;
 
             @Override
@@ -333,6 +334,8 @@ public class PrefetchRecordsPublisherTest {
                 fail("onComplete not expected in this test");
             }
         };
+
+        Subscriber<RecordsRetrieved> subscriber = new ShardConsumerNotifyingSubscriber(delegateSubscriber, getRecordsCache);
 
         synchronized (lock) {
             log.info("Awaiting notification");

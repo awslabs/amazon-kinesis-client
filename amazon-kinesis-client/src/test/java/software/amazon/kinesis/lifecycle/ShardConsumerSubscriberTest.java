@@ -64,6 +64,7 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -551,6 +552,11 @@ public class ShardConsumerSubscriberTest {
                     break;
                 }
             }
+
+        }
+
+        @Override
+        public void notify(RecordsDeliveryAck ack) {
 
         }
 

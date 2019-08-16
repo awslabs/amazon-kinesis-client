@@ -18,7 +18,6 @@ package software.amazon.kinesis.retrieval;
 import org.reactivestreams.Publisher;
 
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -47,4 +46,12 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
      * Shutdowns the publisher. Once this method returns the publisher should no longer provide any records.
      */
     void shutdown();
+
+    /**
+     * Notify the publisher on receipt of a data event.
+     * @param ack acknowledgement received from the subscriber.
+     */
+    default void notify(RecordsDeliveryAck ack) {
+        throw new UnsupportedOperationException("RecordsPublisher does not support acknowledgement from Subscriber");
+    }
 }

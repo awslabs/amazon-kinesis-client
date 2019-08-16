@@ -82,7 +82,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 recordsPublisher.restartFrom(lastAccepted);
             }
             Flowable.fromPublisher(recordsPublisher).subscribeOn(scheduler).observeOn(scheduler, true, bufferSize)
-                    .subscribe(this);
+                    .subscribe(new ShardConsumerNotifyingSubscriber(this, recordsPublisher));
         }
     }
 
@@ -216,4 +216,5 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
             subscription.cancel();
         }
     }
+
 }
