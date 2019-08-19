@@ -170,7 +170,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             // Update the triggering flow for post scheduling upstream request.
             flowToBeReturned = recordsRetrievedContext.getRecordFlow();
             // Try scheduling the next event in the queue, if available.
-            if (recordsDeliveryQueue.peek() != null) {
+            if (!recordsDeliveryQueue.isEmpty()) {
                 scheduleNextEvent(recordsDeliveryQueue.peek().getRecordsRetrieved());
             }
         } else {
