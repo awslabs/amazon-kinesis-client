@@ -321,14 +321,18 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     // This method is not thread safe. This needs to be executed after acquiring lock on this.lockObject
     private void clearRecordsDeliveryQueue(boolean isSubscriptionCompleting) {
+        // If the queue is empty, we can immediately return without any further action.
+        if (recordsDeliveryQueue.isEmpty()) {
+            return;
+        }
+
+        // Wait for final event notification during the end of the subscription.
         if(isSubscriptionCompleting) {
-            // This will prevent further events from getting scheduled
+            // This will prevent further events from getting scheduled, during the wait period.
             isAwaitingFinalAckForCurrentSubscription = true;
             try {
-                if (!recordsDeliveryQueue.isEmpty()) {
-                    // Wait for the configured time to get a notification for already delivered event, if any.
-                    lockObject.wait(TIME_TO_WAIT_FOR_FINAL_ACK_MILLIS);
-                }
+                // Wait for the configured time to get a notification for already delivered event, if any.
+                lockObject.wait(TIME_TO_WAIT_FOR_FINAL_ACK_MILLIS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
