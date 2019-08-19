@@ -83,7 +83,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private long availableQueueSpace = 0;
 
     private BlockingQueue<RecordsRetrievedContext> recordsDeliveryQueue = new LinkedBlockingQueue<>(MAX_EVENT_BURST_FROM_SERVICE);
-    private boolean isAwaitingFinalAckForCurrentSubscription = false;
+    // Flag to indicate if the active subscription is being torn down.
+    private boolean pendingActiveSubscriptionShutdown = false;
 
     @Override
     public void start(ExtendedSequenceNumber extendedSequenceNumber,
@@ -135,7 +136,10 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             } catch (Throwable t) {
                 errorOccurred(triggeringFlow, t);
             } finally {
-                if(isAwaitingFinalAckForCurrentSubscription) {
+                // Notify all the actors who are waiting for the records ack event.
+                // Here, when the active subscription is being torn down, the completing thread will
+                // wait for the last delivered records to send back the ack, to prevent sending duplicate records.
+                if(pendingActiveSubscriptionShutdown) {
                     lockObject.notifyAll();
                 }
             }
@@ -166,8 +170,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             // Update the triggering flow for post scheduling upstream request.
             flowToBeReturned = recordsRetrievedContext.getRecordFlow();
             // Try scheduling the next event in the queue, if available.
-            if (!isAwaitingFinalAckForCurrentSubscription && recordsDeliveryQueue.peek() != null) {
-                subscriber.onNext(recordsDeliveryQueue.peek().getRecordsRetrieved());
+            if (recordsDeliveryQueue.peek() != null) {
+                scheduleNextEvent(recordsDeliveryQueue.peek().getRecordsRetrieved());
             }
         } else {
             // Check if the mismatched event belongs to active flow. If publisher receives an ack for a
@@ -199,8 +203,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             // Note: This does not block wait to enqueue.
             recordsDeliveryQueue.add(recordsRetrievedContext);
             // If the current batch is the only element in the queue, then try scheduling the event delivery.
-            if (!isAwaitingFinalAckForCurrentSubscription && recordsDeliveryQueue.size() == 1) {
-                subscriber.onNext(recordsRetrieved);
+            if (recordsDeliveryQueue.size() == 1) {
+                scheduleNextEvent(recordsRetrieved);
             }
         } catch (IllegalStateException e) {
             log.warn("{}: Unable to enqueue the payload due to capacity restrictions in delivery queue with remaining capacity {} ",
@@ -209,6 +213,14 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         } catch (Throwable t) {
             log.error("{}: Unable to deliver event to the shard consumer.", shardId, t);
             throw t;
+        }
+    }
+
+    // This method is not thread-safe. You need to acquire a lock in the caller in order to execute this.
+    // Schedule the next event only when the active subscription is not pending shutdown.
+    private void scheduleNextEvent(RecordsRetrieved recordsRetrieved) {
+        if (!pendingActiveSubscriptionShutdown) {
+            subscriber.onNext(recordsRetrieved);
         }
     }
 
@@ -229,8 +241,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
     private void subscribeToShard(String sequenceNumber) {
         synchronized (lockObject) {
-            // Clear the queue so that any stale entries from previous subscription are discarded.
-            clearRecordsDeliveryQueue(false);
+            // Clear the delivery queue so that any stale entries from previous subscription are discarded.
+            resetRecordsDeliveryStateOnSubscriptionInit();
             SubscribeToShardRequest.Builder builder = KinesisRequestsBuilder.subscribeToShardRequestBuilder()
                     .shardId(shardId).consumerARN(consumerArn);
             SubscribeToShardRequest request;
@@ -269,7 +281,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             }
 
             // Clear the delivery buffer so that next subscription don't yield duplicate records.
-            clearRecordsDeliveryQueue(true);
+            resetRecordsDeliveryStateOnSubscriptionShutdown();
 
             Throwable propagationThrowable = t;
             ThrowableCategory category = throwableCategory(propagationThrowable);
@@ -320,27 +332,32 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     }
 
     // This method is not thread safe. This needs to be executed after acquiring lock on this.lockObject
-    private void clearRecordsDeliveryQueue(boolean isSubscriptionCompleting) {
-        // If the queue is empty, we can immediately return without any further action.
-        if (recordsDeliveryQueue.isEmpty()) {
-            return;
+    private void resetRecordsDeliveryStateOnSubscriptionInit() {
+        // Clear any lingering records in the queue.
+        if (!recordsDeliveryQueue.isEmpty()) {
+            recordsDeliveryQueue.clear();
         }
+        // Set pendingActiveSubscriptionShutdown to default value.
+        pendingActiveSubscriptionShutdown = false;
+    }
 
+    // This method is not thread safe. This needs to be executed after acquiring lock on this.lockObject
+    private void resetRecordsDeliveryStateOnSubscriptionShutdown() {
         // Wait for final event notification during the end of the subscription.
-        if(isSubscriptionCompleting) {
+        if (!recordsDeliveryQueue.isEmpty()) {
             // This will prevent further events from getting scheduled, during the wait period.
-            isAwaitingFinalAckForCurrentSubscription = true;
+            pendingActiveSubscriptionShutdown = true;
             try {
                 // Wait for the configured time to get a notification for already delivered event, if any.
                 lockObject.wait(TIME_TO_WAIT_FOR_FINAL_ACK_MILLIS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+            // Clear the queue to remove any remaining entries from the queue.
+            recordsDeliveryQueue.clear();
+            // Set pendingActiveSubscriptionShutdown to default value.
+            pendingActiveSubscriptionShutdown = false;
         }
-        // Clear the queue to remove any remaining entries from the queue.
-        recordsDeliveryQueue.clear();
-        // Set isAwaitingFinalAckForCurrentSubscription to default value.
-        isAwaitingFinalAckForCurrentSubscription = false;
     }
 
     protected void logAcquireTimeoutMessage(Throwable t) {
@@ -472,7 +489,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             log.debug("{}: [SubscriptionLifetime]: (FanOutRecordsPublisher#onComplete) @ {} id: {}", shardId,
                     triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId);
 
-            clearRecordsDeliveryQueue(true);
+            resetRecordsDeliveryStateOnSubscriptionShutdown();
 
             triggeringFlow.cancel();
             if (!hasValidSubscriber()) {
