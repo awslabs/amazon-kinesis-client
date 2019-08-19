@@ -242,7 +242,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private void subscribeToShard(String sequenceNumber) {
         synchronized (lockObject) {
             // Clear the delivery queue so that any stale entries from previous subscription are discarded.
-            resetRecordsDeliveryStateOnSubscriptionInit();
+            resetRecordsDeliveryStateOnSubscriptionOnInit();
             SubscribeToShardRequest.Builder builder = KinesisRequestsBuilder.subscribeToShardRequestBuilder()
                     .shardId(shardId).consumerARN(consumerArn);
             SubscribeToShardRequest request;
@@ -332,13 +332,19 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     }
 
     // This method is not thread safe. This needs to be executed after acquiring lock on this.lockObject
-    private void resetRecordsDeliveryStateOnSubscriptionInit() {
+    private void resetRecordsDeliveryStateOnSubscriptionOnInit() {
         // Clear any lingering records in the queue.
         if (!recordsDeliveryQueue.isEmpty()) {
+            log.warn("{}: Found non-empty queue while starting subscription. This indicates unsuccessful clean up of"
+                    + "previous subscription - {} ", shardId, subscribeToShardId);
             recordsDeliveryQueue.clear();
         }
-        // Set pendingActiveSubscriptionShutdown to default value.
-        pendingActiveSubscriptionShutdown = false;
+        if(pendingActiveSubscriptionShutdown) {
+            log.warn("{}: Found current subscription to be in pendingShutdown state while initializing. This indicates unsuccessful clean up of"
+                    + "previous subscription - {} ", shardId, subscribeToShardId);
+            // Set pendingActiveSubscriptionShutdown to default value.
+            pendingActiveSubscriptionShutdown = false;
+        }
     }
 
     // This method is not thread safe. This needs to be executed after acquiring lock on this.lockObject
