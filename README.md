@@ -44,7 +44,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.2.1</version>
+      <version>2.2.2</version>
   </dependency>
   ```
 
@@ -54,17 +54,26 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>1.10.0</version>
+      <version>1.11.2</version>
   </dependency>
   ```
 
 ## Release Notes
 
-### Latest Release (2.2.1 - July 1, 2019)
-[Milestone#32](https://github.com/awslabs/amazon-kinesis-client/milestone/32)
-* Add periodic logging for the state of the thread pool executor service. This service executes the async tasks submitted to and by the ShardConsumer.
-* Add logging of failures from RxJava layer.
-  * [PR#559](https://github.com/awslabs/amazon-kinesis-client/pull/559)
+### Latest Release (2.2.2 - August 19, 2019)
+[Milestone#36](https://github.com/awslabs/amazon-kinesis-client/milestone/36)
+* Fix to prevent invalid ShardConsumer state transitions due to rejected executor service executions.
+  * [PR#560](https://github.com/awslabs/amazon-kinesis-client/pull/560)
+* Fixing a bug in which initial subscription failure caused a shard consumer to get stuck.
+  * [PR#562](https://github.com/awslabs/amazon-kinesis-client/pull/562)
+* Making CW publish failures visible by executing the async publish calls in a blocking manner and logging on exception.
+  * [PR#584](https://github.com/awslabs/amazon-kinesis-client/pull/584)
+* Update shard end checkpoint failure messaging.
+  * [PR#591](https://github.com/awslabs/amazon-kinesis-client/pull/591)
+* A fix for resiliency and durability issues that occur in the reduced thread mode - Nonblocking approach.
+  * [PR#573](https://github.com/awslabs/amazon-kinesis-client/pull/573)
+* Preventing duplicate delivery due to unacknowledged event, while completing the subscription.
+  * [PR#596](https://github.com/awslabs/amazon-kinesis-client/pull/596)
 
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
