@@ -27,12 +27,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.utils.BlockingUtils.blockUntilRecordsAvailable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -123,13 +122,15 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput processRecordsInput1 = getRecordsCache.getNextResult().processRecordsInput();
+        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(getRecordsCache::evictNextResult, 1000L)
+                .processRecordsInput();
 
         assertTrue(processRecordsInput1.records().isEmpty());
         assertEquals(processRecordsInput1.millisBehindLatest(), new Long(1000));
         assertNotNull(processRecordsInput1.cacheEntryTime());
 
-        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult().processRecordsInput();
+        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(getRecordsCache::evictNextResult, 1000L)
+                .processRecordsInput();
 
         assertNotEquals(processRecordsInput1, processRecordsInput2);
     }
@@ -141,8 +142,10 @@ public class PrefetchRecordsPublisherIntegrationTest {
 
         assertEquals(getRecordsCache.getRecordsResultQueue.size(), MAX_SIZE);
 
-        ProcessRecordsInput processRecordsInput1 = getRecordsCache.getNextResult().processRecordsInput();
-        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult().processRecordsInput();
+        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(getRecordsCache::evictNextResult, 1000L)
+                .processRecordsInput();
+        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(getRecordsCache::evictNextResult, 1000L)
+                .processRecordsInput();
 
         assertNotEquals(processRecordsInput1, processRecordsInput2);
     }
@@ -181,9 +184,9 @@ public class PrefetchRecordsPublisherIntegrationTest {
 
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput p1 = getRecordsCache.getNextResult().processRecordsInput();
+        ProcessRecordsInput p1 = getRecordsCache.evictNextResult().processRecordsInput();
 
-        ProcessRecordsInput p2 = recordsPublisher2.getNextResult().processRecordsInput();
+        ProcessRecordsInput p2 = recordsPublisher2.evictNextResult().processRecordsInput();
 
         assertNotEquals(p1, p2);
         assertTrue(p1.records().isEmpty());
@@ -209,7 +212,8 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult().processRecordsInput();
+        ProcessRecordsInput processRecordsInput = blockUntilRecordsAvailable(getRecordsCache::evictNextResult, 1000L)
+                .processRecordsInput();
 
         assertNotNull(processRecordsInput);
         assertTrue(processRecordsInput.records().isEmpty());
