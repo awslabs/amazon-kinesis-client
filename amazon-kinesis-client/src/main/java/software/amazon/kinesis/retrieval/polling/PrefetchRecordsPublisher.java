@@ -179,12 +179,13 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    RecordsRetrieved peekNextResult() {
+    private RecordsRetrieved peekNextResult() {
         throwOnIllegalState();
         final PrefetchRecordsRetrieved result = getRecordsResultQueue.peek();
         return result == null ? result : result.prepareForPublish();
     }
 
+    @VisibleForTesting
     RecordsRetrieved pollNextResultAndUpdatePrefetchCounters() {
         throwOnIllegalState();
         final PrefetchRecordsRetrieved result = getRecordsResultQueue.poll();
