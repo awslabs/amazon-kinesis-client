@@ -68,6 +68,12 @@ import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDelivery
  * i.e. the byte size of the records stored in the cache and maxRecordsCount i.e. the max number of records that should
  * be present in the cache across multiple GetRecordsResult object. If no data is available in the cache, the call from
  * the record processor is blocked till records are retrieved from Kinesis.
+ *
+ * There are three threads namely publisher, demand-notifier and ack-notifier which will contend to drain the events
+ * to the Subscriber (ShardConsumer in KCL). The publisher/demand-notifier thread gains the control to drain only when
+ * there is no pending event in the prefetch queue waiting for the ack. Otherwise, it will be the ack-notifier thread
+ * which will drain an event on the receipt of an ack.
+ *
  */
 @Slf4j
 @KinesisClientInternalApi
@@ -104,7 +110,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     // This flag controls who should drain the next request in the prefetch queue.
     // When set to false, the publisher and demand-notifier thread would have the control.
     // When set to true, the event-notifier thread would have the control.
-    private AtomicBoolean shouldDrainEventOnAck = new AtomicBoolean(false);
+    private AtomicBoolean shouldDrainEventOnlyOnAck = new AtomicBoolean(false);
 
     /**
      * Constructor for the PrefetchRecordsPublisher. This cache prefetches records from Kinesis and stores them in a
@@ -179,15 +185,16 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         return result == null ? result : result.prepareForPublish();
     }
 
-    RecordsRetrieved evictNextResult() {
+    RecordsRetrieved pollNextResultAndUpdatePrefetchCounters() {
         throwOnIllegalState();
         final PrefetchRecordsRetrieved result = getRecordsResultQueue.poll();
         if (result != null) {
             prefetchCounters.removed(result.processRecordsInput);
             requestedResponses.decrementAndGet();
         } else {
-            log.info("{}: No record batch found while evicting from the prefetch queue. This indicates the prefetch buffer"
-                    + "was reset.", shardId);
+            log.info(
+                    "{}: No record batch found while evicting from the prefetch queue. This indicates the prefetch buffer"
+                            + "was reset.", shardId);
         }
         return result;
     }
@@ -213,7 +220,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             // Give the drain control to publisher/demand-notifier thread.
             log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}", shardId,
                     getRecordsResultQueue.size(), requestedResponses.get());
-            shouldDrainEventOnAck.set(false);
+            shouldDrainEventOnlyOnAck.set(false);
 
             prefetchCounters.reset();
 
@@ -233,7 +240,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             @Override
             public void request(long n) {
                 requestedResponses.addAndGet(n);
-                initiateDrainQueueForRequests();
+                drainQueueForRequestsIfAllowed();
             }
 
             @Override
@@ -249,12 +256,12 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         // Verify if the ack matches the head of the queue and evict it.
         if (recordsToCheck != null && recordsToCheck.batchUniqueIdentifier()
                 .equals(recordsDeliveryAck.batchUniqueIdentifier())) {
-            evictNextResult();
+            pollNextResultAndUpdatePrefetchCounters();
             // Upon evicting, check if queue is empty. if yes, then give the drain control back to publisher thread.
-            if(getRecordsResultQueue.isEmpty()) {
-                log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}", shardId,
-                        getRecordsResultQueue.size(), requestedResponses.get());
-                shouldDrainEventOnAck.set(false);
+            if (getRecordsResultQueue.isEmpty()) {
+                log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}",
+                        shardId, getRecordsResultQueue.size(), requestedResponses.get());
+                shouldDrainEventOnlyOnAck.set(false);
             } else {
                 // Else attempt to drain the queue.
                 drainQueueForRequests();
@@ -263,9 +270,10 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             // Log and ignore any other ack received. As long as an ack is received for head of the queue
             // we are good. Any stale or future ack received can be ignored, though the latter is not feasible
             // to happen.
-            final BatchUniqueIdentifier peekedBatchUniqueIdentifier = recordsToCheck == null ? null : recordsToCheck.batchUniqueIdentifier();
-            log.info("{} :  Received a stale notification with id {} instead of expected id {} at {}. Will ignore.", shardId,
-                    recordsDeliveryAck.batchUniqueIdentifier(), peekedBatchUniqueIdentifier, Instant.now());
+            final BatchUniqueIdentifier peekedBatchUniqueIdentifier =
+                    recordsToCheck == null ? null : recordsToCheck.batchUniqueIdentifier();
+            log.info("{} :  Received a stale notification with id {} instead of expected id {} at {}. Will ignore.",
+                    shardId, recordsDeliveryAck.batchUniqueIdentifier(), peekedBatchUniqueIdentifier, Instant.now());
         }
         // Take action based on the time spent by the event in queue.
         takeDelayedDeliveryActionIfRequired(shardId, lastEventDeliveryTime, log);
@@ -294,8 +302,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
      * Method that will be called by the 'publisher thread' and the 'demand notifying thread',
      * to drain the events if the 'event notifying thread' do not have the control.
      */
-    private synchronized void initiateDrainQueueForRequests() {
-        if(!shouldDrainEventOnAck.get()) {
+    private synchronized void drainQueueForRequestsIfAllowed() {
+        if (!shouldDrainEventOnlyOnAck.get()) {
             drainQueueForRequests();
         }
     }
@@ -310,18 +318,18 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         if (requestedResponses.get() > 0 && recordsToDeliver != null) {
             lastEventDeliveryTime = Instant.now();
             subscriber.onNext(recordsToDeliver);
-            if(!shouldDrainEventOnAck.get()) {
+            if (!shouldDrainEventOnlyOnAck.get()) {
                 log.debug("{} : Notifier thread takes over the draining control. Queue Size : {}, Demand : {}", shardId,
                         getRecordsResultQueue.size(), requestedResponses.get());
-                shouldDrainEventOnAck.set(true);
+                shouldDrainEventOnlyOnAck.set(true);
             }
         } else {
             // Since we haven't scheduled the event delivery, give the drain control back to publisher/demand-notifier
             // thread.
-            if(shouldDrainEventOnAck.get()){
-                log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}", shardId,
-                        getRecordsResultQueue.size(), requestedResponses.get());
-                shouldDrainEventOnAck.set(false);
+            if (shouldDrainEventOnlyOnAck.get()) {
+                log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}",
+                        shardId, getRecordsResultQueue.size(), requestedResponses.get());
+                shouldDrainEventOnlyOnAck.set(false);
             }
         }
     }
@@ -416,7 +424,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                             PrefetchRecordsRetrieved.generateBatchUniqueIdentifier());
                     highestSequenceNumber = recordsRetrieved.lastBatchSequenceNumber;
                     addArrivedRecordsInput(recordsRetrieved);
-                    initiateDrainQueueForRequests();
+                    drainQueueForRequestsIfAllowed();
                 } catch (PositionResetException pse) {
                     throw pse;
                 } catch (RetryableRetrievalException rre) {
