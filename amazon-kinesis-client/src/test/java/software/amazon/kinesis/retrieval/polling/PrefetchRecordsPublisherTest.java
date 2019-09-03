@@ -33,6 +33,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.utils.BlockingUtils.blockUntilRecordsAvailable;
 import static software.amazon.kinesis.utils.ProcessRecordsInputMatcher.eqProcessRecordsInput;
 
 import java.time.Duration;
@@ -44,12 +45,15 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import io.reactivex.plugins.RxJavaPlugins;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -76,6 +80,7 @@ import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -143,7 +148,8 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput result = getRecordsCache.getNextResult().processRecordsInput();
+        ProcessRecordsInput result = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000L)
+                .processRecordsInput();
 
         assertEquals(expectedRecords, result.records());
 
@@ -183,7 +189,7 @@ public class PrefetchRecordsPublisherTest {
 //        TODO: fix this verification
 //        verify(getRecordsRetrievalStrategy, times(callRate)).getRecords(MAX_RECORDS_PER_CALL);
 //        assertEquals(spyQueue.size(), callRate);
-        assertTrue(callRate < MAX_SIZE);
+        assertTrue("Call Rate is "+callRate,callRate < MAX_SIZE);
     }
 
     @Test
@@ -212,7 +218,7 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput processRecordsInput = getRecordsCache.getNextResult().processRecordsInput();
+        ProcessRecordsInput processRecordsInput = getRecordsCache.pollNextResultAndUpdatePrefetchCounters().processRecordsInput();
 
         verify(executorService).execute(any());
         assertEquals(expectedRecords, processRecordsInput.records());
@@ -221,7 +227,7 @@ public class PrefetchRecordsPublisherTest {
 
         sleep(2000);
 
-        ProcessRecordsInput processRecordsInput2 = getRecordsCache.getNextResult().processRecordsInput();
+        ProcessRecordsInput processRecordsInput2 = getRecordsCache.pollNextResultAndUpdatePrefetchCounters().processRecordsInput();
         assertNotEquals(processRecordsInput, processRecordsInput2);
         assertEquals(expectedRecords, processRecordsInput2.records());
         assertNotEquals(processRecordsInput2.timeSpentInCache(), Duration.ZERO);
@@ -232,13 +238,13 @@ public class PrefetchRecordsPublisherTest {
     @Test(expected = IllegalStateException.class)
     public void testGetNextRecordsWithoutStarting() {
         verify(executorService, times(0)).execute(any());
-        getRecordsCache.getNextResult();
+        getRecordsCache.pollNextResultAndUpdatePrefetchCounters();
     }
 
     @Test(expected = IllegalStateException.class)
     public void testCallAfterShutdown() {
         when(executorService.isShutdown()).thenReturn(true);
-        getRecordsCache.getNextResult();
+        getRecordsCache.pollNextResultAndUpdatePrefetchCounters();
     }
 
     @Test
@@ -251,7 +257,7 @@ public class PrefetchRecordsPublisherTest {
 
         doNothing().when(dataFetcher).restartIterator();
 
-        getRecordsCache.getNextResult();
+        blockUntilRecordsAvailable(() -> getRecordsCache.pollNextResultAndUpdatePrefetchCounters(), 1000L);
 
         sleep(1000);
 
@@ -266,11 +272,11 @@ public class PrefetchRecordsPublisherTest {
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
-        RecordsRetrieved records = getRecordsCache.getNextResult();
+        RecordsRetrieved records = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
         assertThat(records.processRecordsInput().millisBehindLatest(), equalTo(response.millisBehindLatest()));
     }
 
-    @Test(timeout = 1000L)
+    @Test(timeout = 20000L)
     public void testNoDeadlockOnFullQueue() {
         //
         // Fixes https://github.com/awslabs/amazon-kinesis-client/issues/448
@@ -284,6 +290,8 @@ public class PrefetchRecordsPublisherTest {
                 .build();
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
 
+        RxJavaPlugins.setErrorHandler(e -> e.printStackTrace());
+
         getRecordsCache.start(sequenceNumber, initialPosition);
 
         //
@@ -296,7 +304,7 @@ public class PrefetchRecordsPublisherTest {
 
         log.info("Queue is currently at {} starting subscriber", getRecordsCache.getRecordsResultQueue.size());
         AtomicInteger receivedItems = new AtomicInteger(0);
-        final int expectedItems = MAX_SIZE * 3;
+        final int expectedItems = MAX_SIZE * 1000;
 
         Object lock = new Object();
 
@@ -351,6 +359,85 @@ public class PrefetchRecordsPublisherTest {
         assertThat(receivedItems.get(), equalTo(expectedItems));
     }
 
+    @Test(timeout = 20000L)
+    public void testNoDeadlockOnFullQueueAndLossOfNotification() {
+        //
+        // Fixes https://github.com/awslabs/amazon-kinesis-client/issues/602
+        //
+        // This test is to verify that the data consumption is not stuck in the case of an failed event delivery
+        // to the subscriber.
+        GetRecordsResponse response = GetRecordsResponse.builder().records(
+                Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
+                .build();
+        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        //
+        // Wait for the queue to fill up, and the publisher to block on adding items to the queue.
+        //
+        log.info("Waiting for queue to fill up");
+        while (getRecordsCache.getRecordsResultQueue.size() < MAX_SIZE) {
+            Thread.yield();
+        }
+
+        log.info("Queue is currently at {} starting subscriber", getRecordsCache.getRecordsResultQueue.size());
+        AtomicInteger receivedItems = new AtomicInteger(0);
+        final int expectedItems = MAX_SIZE * 100;
+
+        Object lock = new Object();
+
+        Subscriber<RecordsRetrieved> delegateSubscriber = new Subscriber<RecordsRetrieved>() {
+            Subscription sub;
+
+            @Override
+            public void onSubscribe(Subscription s) {
+                sub = s;
+                s.request(1);
+            }
+
+            @Override
+            public void onNext(RecordsRetrieved recordsRetrieved) {
+                receivedItems.incrementAndGet();
+                if (receivedItems.get() >= expectedItems) {
+                    synchronized (lock) {
+                        log.info("Notifying waiters");
+                        lock.notifyAll();
+                    }
+                    sub.cancel();
+                } else {
+                    sub.request(1);
+                }
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                log.error("Caught error", t);
+                throw new RuntimeException(t);
+            }
+
+            @Override
+            public void onComplete() {
+                fail("onComplete not expected in this test");
+            }
+        };
+
+        Subscriber<RecordsRetrieved> subscriber = new LossyNotificationSubscriber(delegateSubscriber, getRecordsCache);
+
+        synchronized (lock) {
+            log.info("Awaiting notification");
+            Flowable.fromPublisher(getRecordsCache).subscribeOn(Schedulers.computation())
+                    .observeOn(Schedulers.computation(), true, 8).subscribe(subscriber);
+            try {
+                lock.wait();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        verify(getRecordsRetrievalStrategy, atLeast(expectedItems)).getRecords(anyInt());
+        assertThat(receivedItems.get(), equalTo(expectedItems));
+    }
+
     @Test
     public void testResetClearsRemainingData() {
         List<GetRecordsResponse> responses = Stream.iterate(0, i -> i + 1).limit(10).map(i -> {
@@ -372,14 +459,14 @@ public class PrefetchRecordsPublisherTest {
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
-        RecordsRetrieved lastProcessed = getRecordsCache.getNextResult();
-        RecordsRetrieved expected = getRecordsCache.getNextResult();
+        RecordsRetrieved lastProcessed = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
+        RecordsRetrieved expected = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
 
         //
         // Skip some of the records the cache
         //
-        getRecordsCache.getNextResult();
-        getRecordsCache.getNextResult();
+        blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
+        blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
 
         verify(getRecordsRetrievalStrategy, atLeast(2)).getRecords(anyInt());
 
@@ -388,7 +475,7 @@ public class PrefetchRecordsPublisherTest {
         }
 
         getRecordsCache.restartFrom(lastProcessed);
-        RecordsRetrieved postRestart = getRecordsCache.getNextResult();
+        RecordsRetrieved postRestart = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
 
         assertThat(postRestart.processRecordsInput(), eqProcessRecordsInput(expected.processRecordsInput()));
         verify(dataFetcher).resetIterator(eq(responses.get(0).nextShardIterator()),
@@ -432,6 +519,33 @@ public class PrefetchRecordsPublisherTest {
         }
     }
 
+    private static class LossyNotificationSubscriber extends ShardConsumerNotifyingSubscriber {
+
+        private static final int LOSS_EVERY_NTH_RECORD = 100;
+        private static int recordCounter = 0;
+        private static final ScheduledExecutorService consumerHealthChecker = Executors.newScheduledThreadPool(1);
+
+        public LossyNotificationSubscriber(Subscriber<RecordsRetrieved> delegate, RecordsPublisher recordsPublisher) {
+            super(delegate, recordsPublisher);
+        }
+
+        @Override
+        public void onNext(RecordsRetrieved recordsRetrieved) {
+            log.info("Subscriber received onNext");
+            if (!(recordCounter % LOSS_EVERY_NTH_RECORD == LOSS_EVERY_NTH_RECORD - 1)) {
+                getRecordsPublisher().notify(getRecordsDeliveryAck(recordsRetrieved));
+                getDelegateSubscriber().onNext(recordsRetrieved);
+            } else {
+                log.info("Record Loss Triggered");
+                consumerHealthChecker.schedule(() ->  {
+                    getRecordsPublisher().restartFrom(recordsRetrieved);
+                    Flowable.fromPublisher(getRecordsPublisher()).subscribeOn(Schedulers.computation())
+                            .observeOn(Schedulers.computation(), true, 8).subscribe(this);
+                }, 1000, TimeUnit.MILLISECONDS);
+            }
+            recordCounter++;
+        }
+    }
     @After
     public void shutdown() {
         getRecordsCache.shutdown();
