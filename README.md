@@ -61,10 +61,24 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 ## Release Notes
 
 ### Latest Release (2.2.3 - September 04, 2019)
-
 [Milestone#38](https://github.com/awslabs/amazon-kinesis-client/milestone/38)
 * Fix to prevent data loss and stuck shards in the event of failed records delivery in Polling readers
   * [PR#603](https://github.com/awslabs/amazon-kinesis-client/pull/603)
+
+### Related Prior Release (2.2.2 - August 19, 2019)
+[Milestone#36](https://github.com/awslabs/amazon-kinesis-client/milestone/36)
+* Fix to prevent invalid ShardConsumer state transitions due to rejected executor service executions.
+  * [PR#560](https://github.com/awslabs/amazon-kinesis-client/pull/560)
+* Fixing a bug in which initial subscription failure caused a shard consumer to get stuck.
+  * [PR#562](https://github.com/awslabs/amazon-kinesis-client/pull/562)
+* Making CW publish failures visible by executing the async publish calls in a blocking manner and logging on exception.
+  * [PR#584](https://github.com/awslabs/amazon-kinesis-client/pull/584)
+* Update shard end checkpoint failure messaging.
+  * [PR#591](https://github.com/awslabs/amazon-kinesis-client/pull/591)
+* A fix for resiliency and durability issues that occur in the reduced thread mode - Nonblocking approach.
+  * [PR#573](https://github.com/awslabs/amazon-kinesis-client/pull/573)
+* Preventing duplicate delivery due to unacknowledged event, while completing the subscription.
+  * [PR#596](https://github.com/awslabs/amazon-kinesis-client/pull/596)
 
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
