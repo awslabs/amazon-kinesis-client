@@ -44,7 +44,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.2.2</version>
+      <version>2.2.3</version>
   </dependency>
   ```
 
@@ -60,7 +60,12 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.2.2 - August 19, 2019)
+### Latest Release (2.2.3 - September 04, 2019)
+[Milestone#38](https://github.com/awslabs/amazon-kinesis-client/milestone/38)
+* Fix to prevent data loss and stuck shards in the event of failed records delivery in Polling readers
+  * [PR#603](https://github.com/awslabs/amazon-kinesis-client/pull/603)
+
+### Related Prior Release (2.2.2 - August 19, 2019)
 [Milestone#36](https://github.com/awslabs/amazon-kinesis-client/milestone/36)
 * Fix to prevent invalid ShardConsumer state transitions due to rejected executor service executions.
   * [PR#560](https://github.com/awslabs/amazon-kinesis-client/pull/560)

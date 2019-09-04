@@ -1,5 +1,11 @@
 # Changelog
 
+### Release 2.2.3 (September 04, 2019)
+
+[Milestone#38](https://github.com/awslabs/amazon-kinesis-client/milestone/38)
+* Fix to prevent data loss and stuck shards in the event of failed records delivery in Polling readers
+  * [PR#603](https://github.com/awslabs/amazon-kinesis-client/pull/603)
+
 ### Release 2.2.2 (August 19, 2019)
 
 [Milestone#36](https://github.com/awslabs/amazon-kinesis-client/milestone/36)
