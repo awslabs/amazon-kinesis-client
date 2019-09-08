@@ -517,7 +517,7 @@ public class FanOutRecordsPublisherTest {
 
         CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(1);
         int totalServicePublisherEvents = 1000;
-        int initialDemand = 10;
+        int initialDemand = 11;
         BackpressureAdheringServicePublisher servicePublisher =
                 new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch, initialDemand);
 
@@ -844,7 +844,7 @@ public class FanOutRecordsPublisherTest {
             @Override public void onComplete() {}
         });
         try {
-            IntStream.rangeClosed(1, 11).forEach(
+            IntStream.rangeClosed(1, 12).forEach(
                     i -> fanOutRecordsPublisher.bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, recordFlow));
             fail("Should throw Queue full exception");
         } catch (IllegalStateException e) {
