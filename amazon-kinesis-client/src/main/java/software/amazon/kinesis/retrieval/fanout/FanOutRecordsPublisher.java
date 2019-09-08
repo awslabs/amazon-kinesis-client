@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
+import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
@@ -63,8 +64,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private static final ThrowableCategory ACQUIRE_TIMEOUT_CATEGORY = new ThrowableCategory(
             ThrowableType.ACQUIRE_TIMEOUT);
     private static final ThrowableCategory READ_TIMEOUT_CATEGORY = new ThrowableCategory(ThrowableType.READ_TIMEOUT);
-    private static final int MAX_EVENT_BURST_FROM_SERVICE = 10;
-    private static final long TIME_TO_WAIT_FOR_FINAL_ACK_MILLIS = 1000;
+    // Max burst of 10 payload events + 1 terminal event (onError/onComplete) from the service.
+    private static final int MAX_EVENT_BURST_FROM_SERVICE = 10 + 1;
 
     private final KinesisAsyncClient kinesis;
     private final String shardId;
@@ -82,9 +83,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private Subscriber<? super RecordsRetrieved> subscriber;
     private long availableQueueSpace = 0;
 
-    private BlockingQueue<RecordsRetrievedContext> recordsDeliveryQueue = new LinkedBlockingQueue<>(MAX_EVENT_BURST_FROM_SERVICE);
-    // Flag to indicate if the active subscription is being torn down.
-    private boolean pendingActiveSubscriptionShutdown = false;
+    private BlockingQueue<RecordsRetrievedContext> recordsDeliveryQueue = new LinkedBlockingQueue<>(
+            MAX_EVENT_BURST_FROM_SERVICE);
 
     @Override
     public void start(ExtendedSequenceNumber extendedSequenceNumber,
@@ -135,13 +135,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 triggeringFlow = evictAckedEventAndScheduleNextEvent(recordsDeliveryAck);
             } catch (Throwable t) {
                 errorOccurred(triggeringFlow, t);
-            } finally {
-                // Notify all the actors who are waiting for the records ack event.
-                // Here, when the active subscription is being torn down, the completing thread will
-                // wait for the last delivered records to send back the ack, to prevent sending duplicate records.
-                if(pendingActiveSubscriptionShutdown) {
-                    lockObject.notifyAll();
-                }
             }
             if (triggeringFlow != null) {
                 updateAvailableQueueSpaceAndRequestUpstream(triggeringFlow);
@@ -158,20 +151,26 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         // RecordFlow of the current event that needs to be returned
         RecordFlow flowToBeReturned = null;
 
+        final RecordsRetrieved recordsRetrieved = recordsRetrievedContext != null ?
+                recordsRetrievedContext.getRecordsOrShutDownEvent()
+                        .map(recordsEvent -> recordsEvent, shutDownEvent -> null) : null;
+
         // Check if the ack corresponds to the head of the delivery queue.
-        if (recordsRetrievedContext != null && recordsRetrievedContext.getRecordsRetrieved().batchUniqueIdentifier()
+        if (recordsRetrieved != null && recordsRetrieved.batchUniqueIdentifier()
                 .equals(recordsDeliveryAck.batchUniqueIdentifier())) {
             // It is now safe to remove the element
             recordsDeliveryQueue.poll();
             // Take action based on the time spent by the event in queue.
             takeDelayedDeliveryActionIfRequired(shardId, recordsRetrievedContext.getEnqueueTimestamp(), log);
             // Update current sequence number for the successfully delivered event.
-            currentSequenceNumber = ((FanoutRecordsRetrieved)recordsRetrievedContext.getRecordsRetrieved()).continuationSequenceNumber();
+            currentSequenceNumber = ((FanoutRecordsRetrieved)recordsRetrieved).continuationSequenceNumber();
             // Update the triggering flow for post scheduling upstream request.
             flowToBeReturned = recordsRetrievedContext.getRecordFlow();
-            // Try scheduling the next event in the queue, if available.
+            // Try scheduling the next event in the queue or execute the subscription shutdown action.
             if (!recordsDeliveryQueue.isEmpty()) {
-                scheduleNextEvent(recordsDeliveryQueue.peek().getRecordsRetrieved());
+                recordsDeliveryQueue.peek().getRecordsOrShutDownEvent()
+                        .apply(recordsEvent -> scheduleNextEvent(recordsEvent),
+                                shutDownEvent -> shutDownEvent.getSubscriptionShutDownAction().run());
             }
         } else {
             // Check if the mismatched event belongs to active flow. If publisher receives an ack for a
@@ -197,7 +196,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     @VisibleForTesting
     void bufferCurrentEventAndScheduleIfRequired(RecordsRetrieved recordsRetrieved, RecordFlow triggeringFlow) {
         final RecordsRetrievedContext recordsRetrievedContext =
-                new RecordsRetrievedContext(recordsRetrieved, triggeringFlow, Instant.now());
+                new RecordsRetrievedContext(Either.left(recordsRetrieved), triggeringFlow, Instant.now());
         try {
             // Try enqueueing the RecordsRetrieved batch to the queue, which would throw exception on failure.
             // Note: This does not block wait to enqueue.
@@ -217,18 +216,33 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     }
 
     // This method is not thread-safe. You need to acquire a lock in the caller in order to execute this.
-    // Schedule the next event only when the active subscription is not pending shutdown.
     private void scheduleNextEvent(RecordsRetrieved recordsRetrieved) {
-        if (!pendingActiveSubscriptionShutdown) {
-            subscriber.onNext(recordsRetrieved);
-        }
+        subscriber.onNext(recordsRetrieved);
     }
 
     @Data
     private static final class RecordsRetrievedContext {
-        private final RecordsRetrieved recordsRetrieved;
+        private final Either<RecordsRetrieved, SubscriptionShutDownEvent> recordsOrShutDownEvent;
         private final RecordFlow recordFlow;
         private final Instant enqueueTimestamp;
+    }
+
+    @Getter
+    private static final class SubscriptionShutDownEvent {
+        private final Runnable subscriptionShutDownAction;
+        private final String eventIdentifier;
+        private final Throwable shutDownEventThrowableOptional;
+
+        SubscriptionShutDownEvent(Runnable subscriptionShutDownAction, String eventIdentifier, Throwable shutDownEventThrowableOptional) {
+            this.subscriptionShutDownAction = subscriptionShutDownAction;
+            this.eventIdentifier = eventIdentifier;
+            this.shutDownEventThrowableOptional = shutDownEventThrowableOptional;
+        }
+
+        SubscriptionShutDownEvent(Runnable subscriptionShutDownAction, String eventIdentifier) {
+            this(subscriptionShutDownAction, eventIdentifier, null);
+        }
+
     }
 
     private boolean hasValidSubscriber() {
@@ -279,9 +293,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 }
                 return;
             }
-
-            // Clear the delivery buffer so that next subscription don't yield duplicate records.
-            resetRecordsDeliveryStateOnSubscriptionShutdown();
 
             Throwable propagationThrowable = t;
             ThrowableCategory category = throwableCategory(propagationThrowable);
@@ -338,31 +349,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             log.warn("{}: Found non-empty queue while starting subscription. This indicates unsuccessful clean up of"
                     + "previous subscription - {} ", shardId, subscribeToShardId);
             recordsDeliveryQueue.clear();
-        }
-        if(pendingActiveSubscriptionShutdown) {
-            log.warn("{}: Found current subscription to be in pendingShutdown state while initializing. This indicates unsuccessful clean up of"
-                    + "previous subscription - {} ", shardId, subscribeToShardId);
-            // Set pendingActiveSubscriptionShutdown to default value.
-            pendingActiveSubscriptionShutdown = false;
-        }
-    }
-
-    // This method is not thread safe. This needs to be executed after acquiring lock on this.lockObject
-    private void resetRecordsDeliveryStateOnSubscriptionShutdown() {
-        // Wait for final event notification during the end of the subscription.
-        if (!recordsDeliveryQueue.isEmpty()) {
-            // This will prevent further events from getting scheduled, during the wait period.
-            pendingActiveSubscriptionShutdown = true;
-            try {
-                // Wait for the configured time to get a notification for already delivered event, if any.
-                lockObject.wait(TIME_TO_WAIT_FOR_FINAL_ACK_MILLIS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            // Clear the queue to remove any remaining entries from the queue.
-            recordsDeliveryQueue.clear();
-            // Set pendingActiveSubscriptionShutdown to default value.
-            pendingActiveSubscriptionShutdown = false;
         }
     }
 
@@ -490,12 +476,14 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         }
     }
 
+    private boolean shouldShutDownSubscriptionNow() {
+        return recordsDeliveryQueue.isEmpty();
+    }
+
     private void onComplete(RecordFlow triggeringFlow) {
         synchronized (lockObject) {
             log.debug("{}: [SubscriptionLifetime]: (FanOutRecordsPublisher#onComplete) @ {} id: {}", shardId,
                     triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId);
-
-            resetRecordsDeliveryStateOnSubscriptionShutdown();
 
             triggeringFlow.cancel();
             if (!hasValidSubscriber()) {
@@ -733,6 +721,18 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         @Override
         public void exceptionOccurred(Throwable throwable) {
             synchronized (parent.lockObject) {
+                if (parent.shouldShutDownSubscriptionNow()) {
+                    executeExceptionOccurred(throwable);
+                } else {
+                    final SubscriptionShutDownEvent subscriptionShutDownEvent = new SubscriptionShutDownEvent(
+                            () -> executeExceptionOccurred(throwable), "onError", throwable);
+                    tryEnqueueSubscriptionShutDownEvent(subscriptionShutDownEvent);
+                }
+            }
+        }
+
+        private void executeExceptionOccurred(Throwable throwable) {
+            synchronized (parent.lockObject) {
 
                 log.debug("{}: [SubscriptionLifetime]: (RecordFlow#exceptionOccurred) @ {} id: {} -- {}: {}",
                         parent.shardId, connectionStartedAt, subscribeToShardId, throwable.getClass().getName(),
@@ -759,6 +759,32 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         @Override
         public void complete() {
+            synchronized (parent.lockObject) {
+                if (parent.shouldShutDownSubscriptionNow()) {
+                    executeComplete();
+                } else {
+                    final SubscriptionShutDownEvent subscriptionShutDownEvent = new SubscriptionShutDownEvent(
+                            () -> executeComplete(), "onComplete");
+                    tryEnqueueSubscriptionShutDownEvent(subscriptionShutDownEvent);
+                }
+            }
+        }
+
+        // This method is not thread safe. This needs to be executed after acquiring lock on parent.lockObject
+        private void tryEnqueueSubscriptionShutDownEvent(SubscriptionShutDownEvent subscriptionShutDownEvent) {
+            try {
+                parent.recordsDeliveryQueue
+                        .add(new RecordsRetrievedContext(Either.right(subscriptionShutDownEvent), this, Instant.now()));
+            } catch (Exception e) {
+                log.warn(
+                        "{}: Unable to enqueue the {} shutdown event due to capacity restrictions in delivery queue with remaining capacity {}. Ignoring. ",
+                        parent.shardId, subscriptionShutDownEvent.getEventIdentifier(),
+                        parent.recordsDeliveryQueue.remainingCapacity(),
+                        subscriptionShutDownEvent.getShutDownEventThrowableOptional());
+            }
+        }
+
+        private void executeComplete() {
             synchronized (parent.lockObject) {
                 log.debug("{}: [SubscriptionLifetime]: (RecordFlow#complete) @ {} id: {} -- Connection completed",
                         parent.shardId, connectionStartedAt, subscribeToShardId);
