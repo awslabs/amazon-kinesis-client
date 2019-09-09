@@ -500,7 +500,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             }
 
             if (currentSequenceNumber != null) {
-                log.debug("{}: Shard hasn't ended resubscribing.", shardId);
+                log.debug("{}: Shard hasn't ended. Resubscribing.", shardId);
                 subscribeToShard(currentSequenceNumber);
             } else {
                 log.debug("{}: Shard has ended completing subscriber.", shardId);

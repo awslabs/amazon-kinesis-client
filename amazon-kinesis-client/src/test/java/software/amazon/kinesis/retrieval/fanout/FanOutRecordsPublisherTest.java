@@ -8,6 +8,7 @@ import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subscribers.SafeSubscriber;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -65,6 +66,7 @@ import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -402,6 +404,312 @@ public class FanOutRecordsPublisherTest {
         });
 
         assertThat(source.getCurrentSequenceNumber(), equalTo(totalServicePublisherEvents + ""));
+
+    }
+
+    @Test
+    public void testIfStreamOfEventsAndOnCompleteAreDeliveredInOrderWithBackpressureAdheringServicePublisher() throws Exception {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        List<Record> records = Stream.of(1, 2, 3).map(this::makeRecord).collect(Collectors.toList());
+
+        Consumer<Integer> servicePublisherAction = contSeqNum -> captor.getValue().onNext(
+                SubscribeToShardEvent.builder()
+                        .millisBehindLatest(100L)
+                        .continuationSequenceNumber(contSeqNum + "")
+                        .records(records)
+                        .build());
+
+        CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(2);
+        int totalServicePublisherEvents = 1000;
+        int initialDemand = 10;
+        int triggerCompleteAtNthEvent = 200;
+        BackpressureAdheringServicePublisher servicePublisher = new BackpressureAdheringServicePublisher(
+                servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch,
+                initialDemand);
+        servicePublisher.setCompleteTrigger(triggerCompleteAtNthEvent, () -> flowCaptor.getValue().complete());
+
+        doNothing().when(publisher).subscribe(captor.capture());
+
+        source.start(ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
+
+        List<ProcessRecordsInput> receivedInput = new ArrayList<>();
+
+        Subscriber<RecordsRetrieved> shardConsumerSubscriber = new ShardConsumerNotifyingSubscriber(
+                new Subscriber<RecordsRetrieved>() {
+                    private Subscription subscription;
+                    private int lastSeenSeqNum = 0;
+
+                    @Override public void onSubscribe(Subscription s) {
+                        subscription = s;
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                    }
+
+                    @Override public void onNext(RecordsRetrieved input) {
+                        receivedInput.add(input.processRecordsInput());
+                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                        if(receivedInput.size() == triggerCompleteAtNthEvent) {
+                            servicePublisherTaskCompletionLatch.countDown();
+                        }
+                    }
+
+                    @Override public void onError(Throwable t) {
+                        log.error("Caught throwable in subscriber", t);
+                        fail("Caught throwable in subscriber");
+                    }
+
+                    @Override public void onComplete() {
+                        fail("OnComplete called when not expected");
+                    }
+                }, source);
+
+        ExecutorService executorService = getTestExecutor();
+        Scheduler testScheduler = getScheduler(getInitiallyBlockingExecutor(getSpiedExecutor(executorService)));
+        int bufferSize = 8;
+
+        Flowable.fromPublisher(source).subscribeOn(testScheduler).observeOn(testScheduler, true, bufferSize)
+                .subscribe(shardConsumerSubscriber);
+
+        verify(kinesisClient, times(1)).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+
+        flowCaptor.getValue().onEventStream(publisher);
+        captor.getValue().onSubscribe(subscription);
+
+        List<KinesisClientRecordMatcher> matchers = records.stream().map(KinesisClientRecordMatcher::new)
+                .collect(Collectors.toList());
+
+        executorService.submit(servicePublisher);
+        servicePublisherTaskCompletionLatch.await(5000, TimeUnit.MILLISECONDS);
+
+        assertThat(receivedInput.size(), equalTo(triggerCompleteAtNthEvent));
+
+        receivedInput.stream().map(ProcessRecordsInput::records).forEach(clientRecordsList -> {
+            assertThat(clientRecordsList.size(), equalTo(matchers.size()));
+            for (int i = 0; i < clientRecordsList.size(); ++i) {
+                assertThat(clientRecordsList.get(i), matchers.get(i));
+            }
+        });
+
+        assertThat(source.getCurrentSequenceNumber(), equalTo(triggerCompleteAtNthEvent + ""));
+        // In non-shard end cases, upon successful completion, the publisher would re-subscribe to service.
+        verify(kinesisClient, times(2)).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+
+    }
+
+    @Test
+    public void testIfShardEndEventAndOnCompleteAreDeliveredInOrderWithBackpressureAdheringServicePublisher() throws Exception {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        List<Record> records = Stream.of(1, 2, 3).map(this::makeRecord).collect(Collectors.toList());
+
+        Consumer<Integer> servicePublisherAction = contSeqNum -> captor.getValue().onNext(
+                SubscribeToShardEvent.builder()
+                        .millisBehindLatest(100L)
+                        .continuationSequenceNumber(contSeqNum + "")
+                        .records(records)
+                        .build());
+
+        Consumer<Integer> servicePublisherShardEndAction = contSeqNum -> captor.getValue().onNext(
+                SubscribeToShardEvent.builder()
+                        .millisBehindLatest(100L)
+                        .continuationSequenceNumber(null)
+                        .records(records)
+                        .build());
+
+        CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(2);
+        int totalServicePublisherEvents = 1000;
+        int initialDemand = 10;
+        int triggerCompleteAtNthEvent = 200;
+        BackpressureAdheringServicePublisher servicePublisher = new BackpressureAdheringServicePublisher(
+                servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch,
+                initialDemand);
+
+        servicePublisher
+                .setShardEndAndCompleteTrigger(triggerCompleteAtNthEvent, () -> flowCaptor.getValue().complete(),
+                        servicePublisherShardEndAction);
+
+        doNothing().when(publisher).subscribe(captor.capture());
+
+        source.start(ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
+
+        List<ProcessRecordsInput> receivedInput = new ArrayList<>();
+
+        final boolean[] isOnCompleteTriggered = { false };
+
+        Subscriber<RecordsRetrieved> shardConsumerSubscriber = new ShardConsumerNotifyingSubscriber(
+                new Subscriber<RecordsRetrieved>() {
+                    private Subscription subscription;
+                    private int lastSeenSeqNum = 0;
+
+                    @Override public void onSubscribe(Subscription s) {
+                        subscription = s;
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                    }
+
+                    @Override public void onNext(RecordsRetrieved input) {
+                        receivedInput.add(input.processRecordsInput());
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                        if(receivedInput.size() == triggerCompleteAtNthEvent) {
+                            servicePublisherTaskCompletionLatch.countDown();
+                        }
+                    }
+
+                    @Override public void onError(Throwable t) {
+                        log.error("Caught throwable in subscriber", t);
+                        fail("Caught throwable in subscriber");
+                    }
+
+                    @Override public void onComplete() {
+                        isOnCompleteTriggered[0] = true;
+                    }
+                }, source);
+
+        ExecutorService executorService = getTestExecutor();
+        Scheduler testScheduler = getScheduler(getInitiallyBlockingExecutor(getSpiedExecutor(executorService)));
+        int bufferSize = 8;
+
+        Flowable.fromPublisher(source).subscribeOn(testScheduler).observeOn(testScheduler, true, bufferSize)
+                .subscribe(shardConsumerSubscriber);
+
+        verify(kinesisClient, times(1)).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+
+        flowCaptor.getValue().onEventStream(publisher);
+        captor.getValue().onSubscribe(subscription);
+
+        List<KinesisClientRecordMatcher> matchers = records.stream().map(KinesisClientRecordMatcher::new)
+                .collect(Collectors.toList());
+
+        executorService.submit(servicePublisher);
+        servicePublisherTaskCompletionLatch.await(5000, TimeUnit.MILLISECONDS);
+
+        assertThat(receivedInput.size(), equalTo(triggerCompleteAtNthEvent));
+
+        receivedInput.stream().map(ProcessRecordsInput::records).forEach(clientRecordsList -> {
+            assertThat(clientRecordsList.size(), equalTo(matchers.size()));
+            for (int i = 0; i < clientRecordsList.size(); ++i) {
+                assertThat(clientRecordsList.get(i), matchers.get(i));
+            }
+        });
+
+        assertNull(source.getCurrentSequenceNumber());
+        // With shard end event, onComplete must be propagated to the subscriber.
+        assertTrue("OnComplete should be triggered", isOnCompleteTriggered[0]);
+
+    }
+
+    @Test
+    public void testIfStreamOfEventsAndOnErrorAreDeliveredInOrderWithBackpressureAdheringServicePublisher() throws Exception {
+        FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
+
+        ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordSubscription.class);
+        ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor = ArgumentCaptor
+                .forClass(FanOutRecordsPublisher.RecordFlow.class);
+
+        List<Record> records = Stream.of(1, 2, 3).map(this::makeRecord).collect(Collectors.toList());
+
+        Consumer<Integer> servicePublisherAction = contSeqNum -> captor.getValue().onNext(
+                SubscribeToShardEvent.builder()
+                        .millisBehindLatest(100L)
+                        .continuationSequenceNumber(contSeqNum + "")
+                        .records(records)
+                        .build());
+
+        CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(2);
+        int totalServicePublisherEvents = 1000;
+        int initialDemand = 10;
+        int triggerErrorAtNthEvent = 241;
+        BackpressureAdheringServicePublisher servicePublisher = new BackpressureAdheringServicePublisher(
+                servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch,
+                initialDemand);
+        servicePublisher.setErrorTrigger(triggerErrorAtNthEvent,
+                () -> flowCaptor.getValue().exceptionOccurred(new RuntimeException("Service Exception")));
+
+        doNothing().when(publisher).subscribe(captor.capture());
+
+        source.start(ExtendedSequenceNumber.LATEST,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
+
+        final boolean[] isOnErrorThrown = { false };
+
+        List<ProcessRecordsInput> receivedInput = new ArrayList<>();
+
+        Subscriber<RecordsRetrieved> shardConsumerSubscriber = new ShardConsumerNotifyingSubscriber(
+                new Subscriber<RecordsRetrieved>() {
+                    private Subscription subscription;
+                    private int lastSeenSeqNum = 0;
+
+                    @Override public void onSubscribe(Subscription s) {
+                        subscription = s;
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                    }
+
+                    @Override public void onNext(RecordsRetrieved input) {
+                        receivedInput.add(input.processRecordsInput());
+                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        subscription.request(1);
+                        servicePublisher.request(1);
+                        if(receivedInput.size() == triggerErrorAtNthEvent) {
+                            servicePublisherTaskCompletionLatch.countDown();
+                        }
+                    }
+
+                    @Override public void onError(Throwable t) {
+                        log.error("Caught throwable in subscriber", t);
+                        isOnErrorThrown[0] = true;
+                    }
+
+                    @Override public void onComplete() {
+                        fail("OnComplete called when not expected");
+                    }
+                }, source);
+
+        ExecutorService executorService = getTestExecutor();
+        Scheduler testScheduler = getScheduler(getInitiallyBlockingExecutor(getSpiedExecutor(executorService)));
+        int bufferSize = 8;
+
+        Flowable.fromPublisher(source).subscribeOn(testScheduler).observeOn(testScheduler, true, bufferSize)
+                .subscribe(shardConsumerSubscriber);
+
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
+        flowCaptor.getValue().onEventStream(publisher);
+        captor.getValue().onSubscribe(subscription);
+
+        List<KinesisClientRecordMatcher> matchers = records.stream().map(KinesisClientRecordMatcher::new)
+                .collect(Collectors.toList());
+
+        executorService.submit(servicePublisher);
+        servicePublisherTaskCompletionLatch.await(5000, TimeUnit.MILLISECONDS);
+
+        assertThat(receivedInput.size(), equalTo(triggerErrorAtNthEvent));
+
+        receivedInput.stream().map(ProcessRecordsInput::records).forEach(clientRecordsList -> {
+            assertThat(clientRecordsList.size(), equalTo(matchers.size()));
+            for (int i = 0; i < clientRecordsList.size(); ++i) {
+                assertThat(clientRecordsList.get(i), matchers.get(i));
+            }
+        });
+
+        assertThat(source.getCurrentSequenceNumber(), equalTo(triggerErrorAtNthEvent + ""));
+        assertTrue("OnError should have been thrown", isOnErrorThrown[0]);
 
     }
 
@@ -1131,10 +1439,17 @@ public class FanOutRecordsPublisherTest {
         private final Integer numOfTimes;
         private final CountDownLatch taskCompletionLatch;
         private final Semaphore demandNotifier;
+        private Integer sendCompletionAt;
+        private Runnable completeAction;
+        private Integer sendErrorAt;
+        private Runnable errorAction;
+        private Consumer<Integer> shardEndAction;
 
         BackpressureAdheringServicePublisher(Consumer<Integer> action, Integer numOfTimes,
                 CountDownLatch taskCompletionLatch, Integer initialDemand) {
             this(action, numOfTimes, taskCompletionLatch, new Semaphore(initialDemand));
+            sendCompletionAt = Integer.MAX_VALUE;
+            sendErrorAt = Integer.MAX_VALUE;
         }
 
         public void request(int n) {
@@ -1144,9 +1459,38 @@ public class FanOutRecordsPublisherTest {
         public void run() {
             for (int i = 1; i <= numOfTimes; ) {
                 demandNotifier.acquireUninterruptibly();
+                if(i == sendCompletionAt) {
+                    if(shardEndAction != null) {
+                        shardEndAction.accept(i++);
+                    } else {
+                        action.accept(i++);
+                    }
+                    completeAction.run();
+                    break;
+                }
+                if(i == sendErrorAt) {
+                    action.accept(i++);
+                    errorAction.run();
+                    break;
+                }
                 action.accept(i++);
             }
             taskCompletionLatch.countDown();
+        }
+
+        public void setCompleteTrigger(Integer sendCompletionAt, Runnable completeAction) {
+            this.sendCompletionAt = sendCompletionAt;
+            this.completeAction = completeAction;
+        }
+
+        public void setShardEndAndCompleteTrigger(Integer sendCompletionAt, Runnable completeAction, Consumer<Integer> shardEndAction) {
+            setCompleteTrigger(sendCompletionAt, completeAction);
+            this.shardEndAction = shardEndAction;
+        }
+
+        public void setErrorTrigger(Integer sendErrorAt, Runnable errorAction) {
+            this.sendErrorAt = sendErrorAt;
+            this.errorAction = errorAction;
         }
     }
 
