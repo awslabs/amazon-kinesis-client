@@ -276,7 +276,7 @@ public class PrefetchRecordsPublisherTest {
         assertThat(records.processRecordsInput().millisBehindLatest(), equalTo(response.millisBehindLatest()));
     }
 
-    @Test(timeout = 20000L)
+    @Test(timeout = 10000L)
     public void testNoDeadlockOnFullQueue() {
         //
         // Fixes https://github.com/awslabs/amazon-kinesis-client/issues/448
@@ -304,7 +304,7 @@ public class PrefetchRecordsPublisherTest {
 
         log.info("Queue is currently at {} starting subscriber", getRecordsCache.getRecordsResultQueue.size());
         AtomicInteger receivedItems = new AtomicInteger(0);
-        final int expectedItems = MAX_SIZE * 1000;
+        final int expectedItems = MAX_SIZE * 20;
 
         Object lock = new Object();
 
@@ -359,7 +359,7 @@ public class PrefetchRecordsPublisherTest {
         assertThat(receivedItems.get(), equalTo(expectedItems));
     }
 
-    @Test(timeout = 20000L)
+    @Test(timeout = 10000L)
     public void testNoDeadlockOnFullQueueAndLossOfNotification() {
         //
         // Fixes https://github.com/awslabs/amazon-kinesis-client/issues/602
@@ -383,7 +383,7 @@ public class PrefetchRecordsPublisherTest {
 
         log.info("Queue is currently at {} starting subscriber", getRecordsCache.getRecordsResultQueue.size());
         AtomicInteger receivedItems = new AtomicInteger(0);
-        final int expectedItems = MAX_SIZE * 100;
+        final int expectedItems = MAX_SIZE * 50;
 
         Object lock = new Object();
 
@@ -521,7 +521,7 @@ public class PrefetchRecordsPublisherTest {
 
     private static class LossyNotificationSubscriber extends ShardConsumerNotifyingSubscriber {
 
-        private static final int LOSS_EVERY_NTH_RECORD = 100;
+        private static final int LOSS_EVERY_NTH_RECORD = 50;
         private static int recordCounter = 0;
         private static final ScheduledExecutorService consumerHealthChecker = Executors.newScheduledThreadPool(1);
 

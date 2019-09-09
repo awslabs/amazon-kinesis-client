@@ -216,12 +216,15 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         PrefetchRecordsRetrieved prefetchRecordsRetrieved = (PrefetchRecordsRetrieved) recordsRetrieved;
         resetLock.writeLock().lock();
         try {
+            // Reset the demand from ShardConsumer, to prevent this publisher from delivering events to stale RX-Java
+            // Subscriber. Publishing will be unblocked when the demand is communicated by the new Rx-Java subscriber.
+            requestedResponses.set(0);
+
+            // Clear the queue, so that the publisher repopulates the queue based on sequence number from subscriber.
             getRecordsResultQueue.clear();
 
             // Give the drain control to publisher/demand-notifier thread.
-            log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}", shardId,
-                    getRecordsResultQueue.size(), requestedResponses.get());
-            shouldDrainEventOnlyOnAck.set(false);
+            giveDrainingControlToPublisherOrDemandNotifier();
 
             prefetchCounters.reset();
 
@@ -260,9 +263,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             pollNextResultAndUpdatePrefetchCounters();
             // Upon evicting, check if queue is empty. if yes, then give the drain control back to publisher thread.
             if (getRecordsResultQueue.isEmpty()) {
-                log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}",
-                        shardId, getRecordsResultQueue.size(), requestedResponses.get());
-                shouldDrainEventOnlyOnAck.set(false);
+                giveDrainingControlToPublisherOrDemandNotifier();
             } else {
                 // Else attempt to drain the queue.
                 drainQueueForRequests();
@@ -317,21 +318,29 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         // If there is an event available to drain and if there is at least one demand,
         // then schedule it for delivery
         if (requestedResponses.get() > 0 && recordsToDeliver != null) {
-            lastEventDeliveryTime = Instant.now();
             subscriber.onNext(recordsToDeliver);
-            if (!shouldDrainEventOnlyOnAck.get()) {
-                log.debug("{} : Notifier thread takes over the draining control. Queue Size : {}, Demand : {}", shardId,
-                        getRecordsResultQueue.size(), requestedResponses.get());
-                shouldDrainEventOnlyOnAck.set(true);
-            }
+            lastEventDeliveryTime = Instant.now();
+            giveDrainingControlToEventNotifier();
         } else {
             // Since we haven't scheduled the event delivery, give the drain control back to publisher/demand-notifier
             // thread.
-            if (shouldDrainEventOnlyOnAck.get()) {
-                log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}",
-                        shardId, getRecordsResultQueue.size(), requestedResponses.get());
-                shouldDrainEventOnlyOnAck.set(false);
-            }
+            giveDrainingControlToPublisherOrDemandNotifier();
+        }
+    }
+
+    private void giveDrainingControlToEventNotifier() {
+        if (!shouldDrainEventOnlyOnAck.get()) {
+            log.debug("{} : Notifier thread takes over the draining control. Queue Size : {}, Demand : {}", shardId,
+                    getRecordsResultQueue.size(), requestedResponses.get());
+            shouldDrainEventOnlyOnAck.set(true);
+        }
+    }
+
+    private void giveDrainingControlToPublisherOrDemandNotifier() {
+        if (shouldDrainEventOnlyOnAck.get()) {
+            log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}",
+                    shardId, getRecordsResultQueue.size(), requestedResponses.get());
+            shouldDrainEventOnlyOnAck.set(false);
         }
     }
 
