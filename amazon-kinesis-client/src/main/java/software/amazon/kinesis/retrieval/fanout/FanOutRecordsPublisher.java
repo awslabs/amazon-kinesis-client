@@ -16,6 +16,7 @@
 package software.amazon.kinesis.retrieval.fanout;
 
 import com.google.common.annotations.VisibleForTesting;
+import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
@@ -152,8 +153,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         RecordFlow flowToBeReturned = null;
 
         final RecordsRetrieved recordsRetrieved = recordsRetrievedContext != null ?
-                recordsRetrievedContext.getRecordsOrShutDownEvent()
-                        .map(recordsEvent -> recordsEvent, shutDownEvent -> null) : null;
+                recordsRetrievedContext.getRecordsRetrieved() : null;
 
         // Check if the ack corresponds to the head of the delivery queue.
         if (recordsRetrieved != null && recordsRetrieved.batchUniqueIdentifier()
@@ -168,9 +168,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             flowToBeReturned = recordsRetrievedContext.getRecordFlow();
             // Try scheduling the next event in the queue or execute the subscription shutdown action.
             if (!recordsDeliveryQueue.isEmpty()) {
-                recordsDeliveryQueue.peek().getRecordsOrShutDownEvent()
-                        .apply(recordsEvent -> scheduleNextEvent(recordsEvent),
-                                shutDownEvent -> shutDownEvent.getSubscriptionShutDownAction().run());
+                recordsDeliveryQueue.peek().executeEventAction(subscriber);
             }
         } else {
             // Check if the mismatched event belongs to active flow. If publisher receives an ack for a
@@ -203,7 +201,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             recordsDeliveryQueue.add(recordsRetrievedContext);
             // If the current batch is the only element in the queue, then try scheduling the event delivery.
             if (recordsDeliveryQueue.size() == 1) {
-                scheduleNextEvent(recordsRetrieved);
+                subscriber.onNext(recordsRetrieved);
             }
         } catch (IllegalStateException e) {
             log.warn("{}: Unable to enqueue the payload due to capacity restrictions in delivery queue with remaining capacity {} ",
@@ -215,32 +213,38 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    // This method is not thread-safe. You need to acquire a lock in the caller in order to execute this.
-    private void scheduleNextEvent(RecordsRetrieved recordsRetrieved) {
-        subscriber.onNext(recordsRetrieved);
-    }
-
     @Data
     private static final class RecordsRetrievedContext {
-        private final Either<RecordsRetrieved, SubscriptionShutDownEvent> recordsOrShutDownEvent;
+        @Getter(AccessLevel.NONE)
+        private final Either<RecordsRetrieved, SubscriptionShutdownEvent> recordsOrShutdownEvent;
         private final RecordFlow recordFlow;
         private final Instant enqueueTimestamp;
+
+        RecordsRetrieved getRecordsRetrieved() {
+            return recordsOrShutdownEvent.map(recordsEvent -> recordsEvent, shutdownEvent -> null);
+        }
+
+        // This method is not thread-safe. You need to acquire a lock in the caller in order to execute this.
+        void executeEventAction(Subscriber<? super RecordsRetrieved> subscriber) {
+            recordsOrShutdownEvent.apply(recordsEvent -> subscriber.onNext(recordsEvent),
+                    shutdownEvent -> shutdownEvent.getSubscriptionShutdownAction().run());
+        }
     }
 
     @Getter
-    private static final class SubscriptionShutDownEvent {
-        private final Runnable subscriptionShutDownAction;
+    private static final class SubscriptionShutdownEvent {
+        private final Runnable subscriptionShutdownAction;
         private final String eventIdentifier;
-        private final Throwable shutDownEventThrowableOptional;
+        private final Throwable shutdownEventThrowableOptional;
 
-        SubscriptionShutDownEvent(Runnable subscriptionShutDownAction, String eventIdentifier, Throwable shutDownEventThrowableOptional) {
-            this.subscriptionShutDownAction = subscriptionShutDownAction;
+        SubscriptionShutdownEvent(Runnable subscriptionShutdownAction, String eventIdentifier, Throwable shutdownEventThrowableOptional) {
+            this.subscriptionShutdownAction = subscriptionShutdownAction;
             this.eventIdentifier = eventIdentifier;
-            this.shutDownEventThrowableOptional = shutDownEventThrowableOptional;
+            this.shutdownEventThrowableOptional = shutdownEventThrowableOptional;
         }
 
-        SubscriptionShutDownEvent(Runnable subscriptionShutDownAction, String eventIdentifier) {
-            this(subscriptionShutDownAction, eventIdentifier, null);
+        SubscriptionShutdownEvent(Runnable subscriptionShutdownAction, String eventIdentifier) {
+            this(subscriptionShutdownAction, eventIdentifier, null);
         }
 
     }
@@ -476,7 +480,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    private boolean shouldShutDownSubscriptionNow() {
+    private boolean shouldShutdownSubscriptionNow() {
         return recordsDeliveryQueue.isEmpty();
     }
 
@@ -721,12 +725,12 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         @Override
         public void exceptionOccurred(Throwable throwable) {
             synchronized (parent.lockObject) {
-                if (parent.shouldShutDownSubscriptionNow()) {
+                if (parent.shouldShutdownSubscriptionNow()) {
                     executeExceptionOccurred(throwable);
                 } else {
-                    final SubscriptionShutDownEvent subscriptionShutDownEvent = new SubscriptionShutDownEvent(
+                    final SubscriptionShutdownEvent subscriptionShutdownEvent = new SubscriptionShutdownEvent(
                             () -> executeExceptionOccurred(throwable), "onError", throwable);
-                    tryEnqueueSubscriptionShutDownEvent(subscriptionShutDownEvent);
+                    tryEnqueueSubscriptionShutdownEvent(subscriptionShutdownEvent);
                 }
             }
         }
@@ -760,27 +764,27 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         @Override
         public void complete() {
             synchronized (parent.lockObject) {
-                if (parent.shouldShutDownSubscriptionNow()) {
+                if (parent.shouldShutdownSubscriptionNow()) {
                     executeComplete();
                 } else {
-                    final SubscriptionShutDownEvent subscriptionShutDownEvent = new SubscriptionShutDownEvent(
+                    final SubscriptionShutdownEvent subscriptionShutdownEvent = new SubscriptionShutdownEvent(
                             () -> executeComplete(), "onComplete");
-                    tryEnqueueSubscriptionShutDownEvent(subscriptionShutDownEvent);
+                    tryEnqueueSubscriptionShutdownEvent(subscriptionShutdownEvent);
                 }
             }
         }
 
         // This method is not thread safe. This needs to be executed after acquiring lock on parent.lockObject
-        private void tryEnqueueSubscriptionShutDownEvent(SubscriptionShutDownEvent subscriptionShutDownEvent) {
+        private void tryEnqueueSubscriptionShutdownEvent(SubscriptionShutdownEvent subscriptionShutdownEvent) {
             try {
                 parent.recordsDeliveryQueue
-                        .add(new RecordsRetrievedContext(Either.right(subscriptionShutDownEvent), this, Instant.now()));
+                        .add(new RecordsRetrievedContext(Either.right(subscriptionShutdownEvent), this, Instant.now()));
             } catch (Exception e) {
                 log.warn(
                         "{}: Unable to enqueue the {} shutdown event due to capacity restrictions in delivery queue with remaining capacity {}. Ignoring. ",
-                        parent.shardId, subscriptionShutDownEvent.getEventIdentifier(),
+                        parent.shardId, subscriptionShutdownEvent.getEventIdentifier(),
                         parent.recordsDeliveryQueue.remainingCapacity(),
-                        subscriptionShutDownEvent.getShutDownEventThrowableOptional());
+                        subscriptionShutdownEvent.getShutdownEventThrowableOptional());
             }
         }
 
