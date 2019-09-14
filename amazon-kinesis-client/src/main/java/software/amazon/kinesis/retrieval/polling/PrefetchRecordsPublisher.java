@@ -72,10 +72,7 @@ import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDelivery
  * the record processor is blocked till records are retrieved from Kinesis.
  *
  * There are three threads namely publisher, demand-notifier and ack-notifier which will contend to drain the events
- * to the Subscriber (ShardConsumer in KCL). The publisher/demand-notifier thread gains the control to drain only when
- * there is no pending event in the prefetch queue waiting for the ack. Otherwise, it will be the ack-notifier thread
- * which will drain an event on the receipt of an ack.
- *
+ * to the Subscriber (ShardConsumer in KCL).
  */
 @Slf4j
 @KinesisClientInternalApi
@@ -134,8 +131,29 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     initialPositionInStreamExtended);
         }
 
-        // Take action on successful event delivery.
-        RecordsRetrieved eventDeliveredAction(String shardId) {
+        // Handle records delivery ack and execute nextEventDispatchAction.
+        // This method is not thread-safe and needs to be called after acquiring a monitor.
+        void handleRecordsDeliveryAck(RecordsDeliveryAck recordsDeliveryAck, String shardId, Runnable nextEventDispatchAction) {
+            final PrefetchRecordsRetrieved recordsToCheck = peekNextRecord();
+            // Verify if the ack matches the head of the queue and evict it.
+            if (recordsToCheck != null && recordsToCheck.batchUniqueIdentifier().equals(recordsDeliveryAck.batchUniqueIdentifier())) {
+                evictPublishedRecordAndUpdateDemand(shardId);
+                nextEventDispatchAction.run();
+            } else {
+                // Log and ignore any other ack received. As long as an ack is received for head of the queue
+                // we are good. Any stale or future ack received can be ignored, though the latter is not feasible
+                // to happen.
+                final BatchUniqueIdentifier peekedBatchUniqueIdentifier =
+                        recordsToCheck == null ? null : recordsToCheck.batchUniqueIdentifier();
+                log.info("{} :  Received a stale notification with id {} instead of expected id {} at {}. Will ignore.",
+                        shardId, recordsDeliveryAck.batchUniqueIdentifier(), peekedBatchUniqueIdentifier, Instant.now());
+            }
+        }
+
+        // Evict the published record from the prefetch queue.
+        // This method is not thread-safe and needs to be called after acquiring a monitor.
+        @VisibleForTesting
+        RecordsRetrieved evictPublishedRecordAndUpdateDemand(String shardId) {
             final PrefetchRecordsRetrieved result = prefetchRecordsQueue.poll();
             if (result != null) {
                 updateDemandTrackersOnPublish(result);
@@ -151,10 +169,19 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             return requestedResponses.get() > 0;
         }
 
+        PrefetchRecordsRetrieved peekNextRecord() {
+            return prefetchRecordsQueue.peek();
+        }
+
+        boolean offerRecords(PrefetchRecordsRetrieved recordsRetrieved, long idleMillisBetweenCalls) throws InterruptedException {
+            return prefetchRecordsQueue.offer(recordsRetrieved, idleMillisBetweenCalls, TimeUnit.MILLISECONDS);
+        }
+
         private void updateDemandTrackersOnPublish(PrefetchRecordsRetrieved result) {
             prefetchCounters.removed(result.processRecordsInput);
             requestedResponses.decrementAndGet();
         }
+
     }
 
     /**
@@ -221,15 +248,15 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    private RecordsRetrieved peekNextResult() {
+    private PrefetchRecordsRetrieved peekNextResult() {
         throwOnIllegalState();
-        return publisherSession.prefetchRecordsQueue().peek();
+        return publisherSession.peekNextRecord();
     }
 
     @VisibleForTesting
     RecordsRetrieved evictPublishedEvent() {
         throwOnIllegalState();
-        return publisherSession.eventDeliveredAction(shardId);
+        return publisherSession.evictPublishedRecordAndUpdateDemand(shardId);
     }
 
     @Override
@@ -273,22 +300,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     @Override
     public synchronized void notify(RecordsDeliveryAck recordsDeliveryAck) {
-        final RecordsRetrieved recordsToCheck = peekNextResult();
-        // Verify if the ack matches the head of the queue and evict it.
-        if (recordsToCheck != null && recordsToCheck.batchUniqueIdentifier()
-                .equals(recordsDeliveryAck.batchUniqueIdentifier())) {
-            evictPublishedEvent();
-            // Upon evicting, check if queue is empty. if yes, then give the drain control back to publisher thread.
-            drainQueueForRequests();
-        } else {
-            // Log and ignore any other ack received. As long as an ack is received for head of the queue
-            // we are good. Any stale or future ack received can be ignored, though the latter is not feasible
-            // to happen.
-            final BatchUniqueIdentifier peekedBatchUniqueIdentifier =
-                    recordsToCheck == null ? null : recordsToCheck.batchUniqueIdentifier();
-            log.info("{} :  Received a stale notification with id {} instead of expected id {} at {}. Will ignore.",
-                    shardId, recordsDeliveryAck.batchUniqueIdentifier(), peekedBatchUniqueIdentifier, Instant.now());
-        }
+        publisherSession.handleRecordsDeliveryAck(recordsDeliveryAck, shardId, () -> drainQueueForRequests());
         // Take action based on the time spent by the event in queue.
         takeDelayedDeliveryActionIfRequired(shardId, lastEventDeliveryTime, log);
     }
@@ -296,7 +308,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     // Note : Do not make this method synchronous as notify() will not be able to evict any entry from the queue.
     private void addArrivedRecordsInput(PrefetchRecordsRetrieved recordsRetrieved) throws InterruptedException {
         wasReset = false;
-        while (!publisherSession.prefetchRecordsQueue().offer(recordsRetrieved, idleMillisBetweenCalls, TimeUnit.MILLISECONDS)) {
+        while (!publisherSession.offerRecords(recordsRetrieved, idleMillisBetweenCalls)) {
             //
             // Unlocking the read lock, and then reacquiring the read lock, should allow any waiters on the write lock a
             // chance to run. If the write lock is acquired by restartFrom than the readLock will now block until
@@ -316,7 +328,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
      * Method to drain the queue based on the demand and the events availability in the queue.
      */
     private synchronized void drainQueueForRequests() {
-        final PrefetchRecordsRetrieved recordsToDeliver = (PrefetchRecordsRetrieved) peekNextResult();
+        final PrefetchRecordsRetrieved recordsToDeliver = peekNextResult();
         // If there is an event available to drain and if there is at least one demand,
         // then schedule it for delivery
         if (publisherSession.hasDemandToPublish() && canDispatchRecord(recordsToDeliver)) {
@@ -326,6 +338,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         }
     }
 
+    // This method is thread-safe and informs the caller on whether this record is eligible to be dispatched.
+    // If this record was already dispatched earlier, then this method would return false.
     private static boolean canDispatchRecord(PrefetchRecordsRetrieved recordsToDeliver) {
         return recordsToDeliver != null && !recordsToDeliver.isDispatched();
     }
