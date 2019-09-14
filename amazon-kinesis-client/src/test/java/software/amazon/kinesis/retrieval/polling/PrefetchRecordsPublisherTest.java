@@ -304,7 +304,7 @@ public class PrefetchRecordsPublisherTest {
 
         log.info("Queue is currently at {} starting subscriber", getRecordsCache.getRecordsResultQueue.size());
         AtomicInteger receivedItems = new AtomicInteger(0);
-        final int expectedItems = MAX_SIZE * 1000;
+        final int expectedItems = MAX_SIZE * 10;
 
         Object lock = new Object();
 
@@ -383,7 +383,7 @@ public class PrefetchRecordsPublisherTest {
 
         log.info("Queue is currently at {} starting subscriber", getRecordsCache.getRecordsResultQueue.size());
         AtomicInteger receivedItems = new AtomicInteger(0);
-        final int expectedItems = MAX_SIZE * 100;
+        final int expectedItems = MAX_SIZE * 20;
 
         Object lock = new Object();
 
@@ -521,7 +521,7 @@ public class PrefetchRecordsPublisherTest {
 
     private static class LossyNotificationSubscriber extends ShardConsumerNotifyingSubscriber {
 
-        private static final int LOSS_EVERY_NTH_RECORD = 100;
+        private static final int LOSS_EVERY_NTH_RECORD = 50;
         private static int recordCounter = 0;
         private static final ScheduledExecutorService consumerHealthChecker = Executors.newScheduledThreadPool(1);
 
@@ -531,7 +531,6 @@ public class PrefetchRecordsPublisherTest {
 
         @Override
         public void onNext(RecordsRetrieved recordsRetrieved) {
-            log.info("Subscriber received onNext");
             if (!(recordCounter % LOSS_EVERY_NTH_RECORD == LOSS_EVERY_NTH_RECORD - 1)) {
                 getRecordsPublisher().notify(getRecordsDeliveryAck(recordsRetrieved));
                 getDelegateSubscriber().onNext(recordsRetrieved);
