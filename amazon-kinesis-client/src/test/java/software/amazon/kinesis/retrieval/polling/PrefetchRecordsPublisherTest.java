@@ -54,6 +54,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -148,7 +149,7 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput result = blockUntilRecordsAvailable(getRecordsCache::evictPublishedEvent, 1000L)
+        ProcessRecordsInput result = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertEquals(expectedRecords, result.records());
@@ -218,7 +219,7 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput processRecordsInput = getRecordsCache.evictPublishedEvent().processRecordsInput();
+        ProcessRecordsInput processRecordsInput = evictPublishedEvent(getRecordsCache, "shardId").processRecordsInput();
 
         verify(executorService).execute(any());
         assertEquals(expectedRecords, processRecordsInput.records());
@@ -227,7 +228,7 @@ public class PrefetchRecordsPublisherTest {
 
         sleep(2000);
 
-        ProcessRecordsInput processRecordsInput2 = getRecordsCache.evictPublishedEvent().processRecordsInput();
+        ProcessRecordsInput processRecordsInput2 = evictPublishedEvent(getRecordsCache, "shardId").processRecordsInput();
         assertNotEquals(processRecordsInput, processRecordsInput2);
         assertEquals(expectedRecords, processRecordsInput2.records());
         assertNotEquals(processRecordsInput2.timeSpentInCache(), Duration.ZERO);
@@ -238,13 +239,13 @@ public class PrefetchRecordsPublisherTest {
     @Test(expected = IllegalStateException.class)
     public void testGetNextRecordsWithoutStarting() {
         verify(executorService, times(0)).execute(any());
-        getRecordsCache.evictPublishedEvent();
+        getRecordsCache.drainQueueForRequests();
     }
 
     @Test(expected = IllegalStateException.class)
     public void testCallAfterShutdown() {
         when(executorService.isShutdown()).thenReturn(true);
-        getRecordsCache.evictPublishedEvent();
+        getRecordsCache.drainQueueForRequests();
     }
 
     @Test
@@ -257,7 +258,7 @@ public class PrefetchRecordsPublisherTest {
 
         doNothing().when(dataFetcher).restartIterator();
 
-        blockUntilRecordsAvailable(() -> getRecordsCache.evictPublishedEvent(), 1000L);
+        blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L);
 
         sleep(1000);
 
@@ -272,7 +273,7 @@ public class PrefetchRecordsPublisherTest {
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
-        RecordsRetrieved records = blockUntilRecordsAvailable(getRecordsCache::evictPublishedEvent, 1000);
+        RecordsRetrieved records = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
         assertThat(records.processRecordsInput().millisBehindLatest(), equalTo(response.millisBehindLatest()));
     }
 
@@ -471,14 +472,14 @@ public class PrefetchRecordsPublisherTest {
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
-        RecordsRetrieved lastProcessed = blockUntilRecordsAvailable(getRecordsCache::evictPublishedEvent, 1000);
-        RecordsRetrieved expected = blockUntilRecordsAvailable(getRecordsCache::evictPublishedEvent, 1000);
+        RecordsRetrieved lastProcessed = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
+        RecordsRetrieved expected = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
 
         //
         // Skip some of the records the cache
         //
-        blockUntilRecordsAvailable(getRecordsCache::evictPublishedEvent, 1000);
-        blockUntilRecordsAvailable(getRecordsCache::evictPublishedEvent, 1000);
+        blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
+        blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
 
         verify(getRecordsRetrievalStrategy, atLeast(2)).getRecords(anyInt());
 
@@ -487,12 +488,16 @@ public class PrefetchRecordsPublisherTest {
         }
 
         getRecordsCache.restartFrom(lastProcessed);
-        RecordsRetrieved postRestart = blockUntilRecordsAvailable(getRecordsCache::evictPublishedEvent, 1000);
+        RecordsRetrieved postRestart = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
 
         assertThat(postRestart.processRecordsInput(), eqProcessRecordsInput(expected.processRecordsInput()));
         verify(dataFetcher).resetIterator(eq(responses.get(0).nextShardIterator()),
                 eq(responses.get(0).records().get(0).sequenceNumber()), any());
 
+    }
+
+    private RecordsRetrieved evictPublishedEvent(PrefetchRecordsPublisher publisher, String shardId) {
+        return publisher.getPublisherSession().evictPublishedRecordAndUpdateDemand(shardId);
     }
 
     private static class RetrieverAnswer implements Answer<GetRecordsResponse> {

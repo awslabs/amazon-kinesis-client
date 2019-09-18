@@ -253,12 +253,6 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         return publisherSession.peekNextRecord();
     }
 
-    @VisibleForTesting
-    RecordsRetrieved evictPublishedEvent() {
-        throwOnIllegalState();
-        return publisherSession.evictPublishedRecordAndUpdateDemand(shardId);
-    }
-
     @Override
     public void shutdown() {
         defaultGetRecordsCacheDaemon.isShutdown = true;
@@ -293,6 +287,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
             @Override
             public void cancel() {
+                // When the subscription is cancelled, the demand is set to 0, to prevent further
+                // records from being dispatched to the consumer/subscriber. The publisher session state will be
+                // reset when restartFrom(*) is called by the consumer/subscriber.
                 publisherSession.requestedResponses().set(0);
             }
         });
@@ -327,7 +324,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     /**
      * Method to drain the queue based on the demand and the events availability in the queue.
      */
-    private synchronized void drainQueueForRequests() {
+    @VisibleForTesting
+    synchronized void drainQueueForRequests() {
         final PrefetchRecordsRetrieved recordsToDeliver = peekNextResult();
         // If there is an event available to drain and if there is at least one demand,
         // then schedule it for delivery
