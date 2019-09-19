@@ -62,6 +62,7 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -122,14 +123,14 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000L)
+        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertTrue(processRecordsInput1.records().isEmpty());
         assertEquals(processRecordsInput1.millisBehindLatest(), new Long(1000));
         assertNotNull(processRecordsInput1.cacheEntryTime());
 
-        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000L)
+        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertNotEquals(processRecordsInput1, processRecordsInput2);
@@ -140,11 +141,11 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(MAX_SIZE * IDLE_MILLIS_BETWEEN_CALLS);
 
-        assertEquals(getRecordsCache.getRecordsResultQueue.size(), MAX_SIZE);
+        assertEquals(getRecordsCache.getPublisherSession().prefetchRecordsQueue().size(), MAX_SIZE);
 
-        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000L)
+        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
-        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000L)
+        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertNotEquals(processRecordsInput1, processRecordsInput2);
@@ -184,9 +185,9 @@ public class PrefetchRecordsPublisherIntegrationTest {
 
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput p1 = getRecordsCache.pollNextResultAndUpdatePrefetchCounters().processRecordsInput();
+        ProcessRecordsInput p1 = evictPublishedEvent(getRecordsCache, shardId).processRecordsInput();
 
-        ProcessRecordsInput p2 = recordsPublisher2.pollNextResultAndUpdatePrefetchCounters().processRecordsInput();
+        ProcessRecordsInput p2 = evictPublishedEvent(recordsPublisher2, shardId).processRecordsInput();
 
         assertNotEquals(p1, p2);
         assertTrue(p1.records().isEmpty());
@@ -212,12 +213,16 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput processRecordsInput = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000L)
+        ProcessRecordsInput processRecordsInput = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertNotNull(processRecordsInput);
         assertTrue(processRecordsInput.records().isEmpty());
         verify(dataFetcher).restartIterator();
+    }
+
+    private RecordsRetrieved evictPublishedEvent(PrefetchRecordsPublisher publisher, String shardId) {
+        return publisher.getPublisherSession().evictPublishedRecordAndUpdateDemand(shardId);
     }
 
     @After

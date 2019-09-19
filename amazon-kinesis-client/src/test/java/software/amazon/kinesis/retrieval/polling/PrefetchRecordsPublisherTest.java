@@ -18,6 +18,7 @@ package software.amazon.kinesis.retrieval.polling;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -53,7 +54,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import io.reactivex.plugins.RxJavaPlugins;
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -131,7 +132,7 @@ public class PrefetchRecordsPublisherTest {
                 new NullMetricsFactory(),
                 operation,
                 "shardId");
-        spyQueue = spy(getRecordsCache.getRecordsResultQueue);
+        spyQueue = spy(getRecordsCache.getPublisherSession().prefetchRecordsQueue());
         records = spy(new ArrayList<>());
         getRecordsResponse = GetRecordsResponse.builder().records(records).build();
 
@@ -148,7 +149,7 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput result = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000L)
+        ProcessRecordsInput result = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertEquals(expectedRecords, result.records());
@@ -218,7 +219,7 @@ public class PrefetchRecordsPublisherTest {
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        ProcessRecordsInput processRecordsInput = getRecordsCache.pollNextResultAndUpdatePrefetchCounters().processRecordsInput();
+        ProcessRecordsInput processRecordsInput = evictPublishedEvent(getRecordsCache, "shardId").processRecordsInput();
 
         verify(executorService).execute(any());
         assertEquals(expectedRecords, processRecordsInput.records());
@@ -227,7 +228,7 @@ public class PrefetchRecordsPublisherTest {
 
         sleep(2000);
 
-        ProcessRecordsInput processRecordsInput2 = getRecordsCache.pollNextResultAndUpdatePrefetchCounters().processRecordsInput();
+        ProcessRecordsInput processRecordsInput2 = evictPublishedEvent(getRecordsCache, "shardId").processRecordsInput();
         assertNotEquals(processRecordsInput, processRecordsInput2);
         assertEquals(expectedRecords, processRecordsInput2.records());
         assertNotEquals(processRecordsInput2.timeSpentInCache(), Duration.ZERO);
@@ -238,13 +239,13 @@ public class PrefetchRecordsPublisherTest {
     @Test(expected = IllegalStateException.class)
     public void testGetNextRecordsWithoutStarting() {
         verify(executorService, times(0)).execute(any());
-        getRecordsCache.pollNextResultAndUpdatePrefetchCounters();
+        getRecordsCache.drainQueueForRequests();
     }
 
     @Test(expected = IllegalStateException.class)
     public void testCallAfterShutdown() {
         when(executorService.isShutdown()).thenReturn(true);
-        getRecordsCache.pollNextResultAndUpdatePrefetchCounters();
+        getRecordsCache.drainQueueForRequests();
     }
 
     @Test
@@ -257,7 +258,7 @@ public class PrefetchRecordsPublisherTest {
 
         doNothing().when(dataFetcher).restartIterator();
 
-        blockUntilRecordsAvailable(() -> getRecordsCache.pollNextResultAndUpdatePrefetchCounters(), 1000L);
+        blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L);
 
         sleep(1000);
 
@@ -272,11 +273,11 @@ public class PrefetchRecordsPublisherTest {
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
-        RecordsRetrieved records = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
+        RecordsRetrieved records = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
         assertThat(records.processRecordsInput().millisBehindLatest(), equalTo(response.millisBehindLatest()));
     }
 
-    @Test(timeout = 20000L)
+    @Test(timeout = 10000L)
     public void testNoDeadlockOnFullQueue() {
         //
         // Fixes https://github.com/awslabs/amazon-kinesis-client/issues/448
@@ -285,12 +286,12 @@ public class PrefetchRecordsPublisherTest {
         // If the test times out before starting the subscriber it means something went wrong while filling the queue.
         // After the subscriber is started one of the things that can trigger a timeout is a deadlock.
         //
-        GetRecordsResponse response = GetRecordsResponse.builder().records(
-                Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
-                .build();
-        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
 
-        RxJavaPlugins.setErrorHandler(e -> e.printStackTrace());
+        final int[] sequenceNumberInResponse = { 0 };
+
+        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenAnswer( i -> GetRecordsResponse.builder().records(
+                Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber(++sequenceNumberInResponse[0] + "").build())
+                .build());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -298,18 +299,23 @@ public class PrefetchRecordsPublisherTest {
         // Wait for the queue to fill up, and the publisher to block on adding items to the queue.
         //
         log.info("Waiting for queue to fill up");
-        while (getRecordsCache.getRecordsResultQueue.size() < MAX_SIZE) {
+        while (getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() < MAX_SIZE) {
             Thread.yield();
         }
 
-        log.info("Queue is currently at {} starting subscriber", getRecordsCache.getRecordsResultQueue.size());
+        log.info("Queue is currently at {} starting subscriber", getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
         AtomicInteger receivedItems = new AtomicInteger(0);
+        
         final int expectedItems = MAX_SIZE * 10;
 
         Object lock = new Object();
 
+        final boolean[] isRecordNotInorder = { false };
+        final String[] recordNotInOrderMessage = { "" };
+
         Subscriber<RecordsRetrieved> delegateSubscriber = new Subscriber<RecordsRetrieved>() {
             Subscription sub;
+            int receivedSeqNum = 0;
 
             @Override
             public void onSubscribe(Subscription s) {
@@ -320,6 +326,13 @@ public class PrefetchRecordsPublisherTest {
             @Override
             public void onNext(RecordsRetrieved recordsRetrieved) {
                 receivedItems.incrementAndGet();
+                if (Integer.parseInt(((PrefetchRecordsPublisher.PrefetchRecordsRetrieved) recordsRetrieved)
+                        .lastBatchSequenceNumber()) != ++receivedSeqNum) {
+                    isRecordNotInorder[0] = true;
+                    recordNotInOrderMessage[0] = "Expected : " + receivedSeqNum + " Actual : "
+                            + ((PrefetchRecordsPublisher.PrefetchRecordsRetrieved) recordsRetrieved)
+                            .lastBatchSequenceNumber();
+                }
                 if (receivedItems.get() >= expectedItems) {
                     synchronized (lock) {
                         log.info("Notifying waiters");
@@ -357,9 +370,10 @@ public class PrefetchRecordsPublisherTest {
         }
         verify(getRecordsRetrievalStrategy, atLeast(expectedItems)).getRecords(anyInt());
         assertThat(receivedItems.get(), equalTo(expectedItems));
+        assertFalse(recordNotInOrderMessage[0], isRecordNotInorder[0]);
     }
 
-    @Test(timeout = 20000L)
+    @Test(timeout = 10000L)
     public void testNoDeadlockOnFullQueueAndLossOfNotification() {
         //
         // Fixes https://github.com/awslabs/amazon-kinesis-client/issues/602
@@ -377,12 +391,13 @@ public class PrefetchRecordsPublisherTest {
         // Wait for the queue to fill up, and the publisher to block on adding items to the queue.
         //
         log.info("Waiting for queue to fill up");
-        while (getRecordsCache.getRecordsResultQueue.size() < MAX_SIZE) {
+        while (getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() < MAX_SIZE) {
             Thread.yield();
         }
 
-        log.info("Queue is currently at {} starting subscriber", getRecordsCache.getRecordsResultQueue.size());
+        log.info("Queue is currently at {} starting subscriber", getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
         AtomicInteger receivedItems = new AtomicInteger(0);
+
         final int expectedItems = MAX_SIZE * 20;
 
         Object lock = new Object();
@@ -459,28 +474,32 @@ public class PrefetchRecordsPublisherTest {
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
-        RecordsRetrieved lastProcessed = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
-        RecordsRetrieved expected = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
+        RecordsRetrieved lastProcessed = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
+        RecordsRetrieved expected = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
 
         //
         // Skip some of the records the cache
         //
-        blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
-        blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
+        blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
+        blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
 
         verify(getRecordsRetrievalStrategy, atLeast(2)).getRecords(anyInt());
 
-        while(getRecordsCache.getRecordsResultQueue.remainingCapacity() > 0) {
+        while(getRecordsCache.getPublisherSession().prefetchRecordsQueue().remainingCapacity() > 0) {
             Thread.yield();
         }
 
         getRecordsCache.restartFrom(lastProcessed);
-        RecordsRetrieved postRestart = blockUntilRecordsAvailable(getRecordsCache::pollNextResultAndUpdatePrefetchCounters, 1000);
+        RecordsRetrieved postRestart = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
 
         assertThat(postRestart.processRecordsInput(), eqProcessRecordsInput(expected.processRecordsInput()));
         verify(dataFetcher).resetIterator(eq(responses.get(0).nextShardIterator()),
                 eq(responses.get(0).records().get(0).sequenceNumber()), any());
 
+    }
+
+    private RecordsRetrieved evictPublishedEvent(PrefetchRecordsPublisher publisher, String shardId) {
+        return publisher.getPublisherSession().evictPublishedRecordAndUpdateDemand(shardId);
     }
 
     private static class RetrieverAnswer implements Answer<GetRecordsResponse> {

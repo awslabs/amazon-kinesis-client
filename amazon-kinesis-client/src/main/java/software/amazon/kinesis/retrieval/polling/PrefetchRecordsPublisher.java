@@ -22,11 +22,13 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 import org.reactivestreams.Subscriber;
@@ -70,17 +72,12 @@ import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDelivery
  * the record processor is blocked till records are retrieved from Kinesis.
  *
  * There are three threads namely publisher, demand-notifier and ack-notifier which will contend to drain the events
- * to the Subscriber (ShardConsumer in KCL). The publisher/demand-notifier thread gains the control to drain only when
- * there is no pending event in the prefetch queue waiting for the ack. Otherwise, it will be the ack-notifier thread
- * which will drain an event on the receipt of an ack.
- *
+ * to the Subscriber (ShardConsumer in KCL).
  */
 @Slf4j
 @KinesisClientInternalApi
 public class PrefetchRecordsPublisher implements RecordsPublisher {
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
-    @VisibleForTesting
-    LinkedBlockingQueue<PrefetchRecordsRetrieved> getRecordsResultQueue;
     private int maxPendingProcessRecordsInput;
     private int maxByteSize;
     private int maxRecordsCount;
@@ -91,26 +88,101 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private final long idleMillisBetweenCalls;
     private Instant lastSuccessfulCall;
     private final DefaultGetRecordsCacheDaemon defaultGetRecordsCacheDaemon;
-    private PrefetchCounters prefetchCounters;
     private boolean started = false;
     private final String operation;
-    private final KinesisDataFetcher dataFetcher;
     private final String shardId;
-
     private Subscriber<? super RecordsRetrieved> subscriber;
-    private final AtomicLong requestedResponses = new AtomicLong(0);
-
-    private String highestSequenceNumber;
-    private InitialPositionInStreamExtended initialPositionInStreamExtended;
-
+    @VisibleForTesting @Getter
+    private final PublisherSession publisherSession;
     private final ReentrantReadWriteLock resetLock = new ReentrantReadWriteLock();
     private boolean wasReset = false;
 
     private Instant lastEventDeliveryTime = Instant.EPOCH;
-    // This flag controls who should drain the next request in the prefetch queue.
-    // When set to false, the publisher and demand-notifier thread would have the control.
-    // When set to true, the event-notifier thread would have the control.
-    private AtomicBoolean shouldDrainEventOnlyOnAck = new AtomicBoolean(false);
+
+    @Data
+    @Accessors(fluent = true)
+    static final class PublisherSession {
+        private final AtomicLong requestedResponses = new AtomicLong(0);
+        @VisibleForTesting @Getter
+        private final LinkedBlockingQueue<PrefetchRecordsRetrieved> prefetchRecordsQueue;
+        private final PrefetchCounters prefetchCounters;
+        private final KinesisDataFetcher dataFetcher;
+        private InitialPositionInStreamExtended initialPositionInStreamExtended;
+        private String highestSequenceNumber;
+
+        // Initialize the session on publisher start.
+        void init(ExtendedSequenceNumber extendedSequenceNumber,
+                InitialPositionInStreamExtended initialPositionInStreamExtended) {
+            this.initialPositionInStreamExtended = initialPositionInStreamExtended;
+            this.highestSequenceNumber = extendedSequenceNumber.sequenceNumber();
+            this.dataFetcher.initialize(extendedSequenceNumber, initialPositionInStreamExtended);
+        }
+
+        // Reset the session when publisher restarts.
+        void reset(PrefetchRecordsRetrieved prefetchRecordsRetrieved) {
+            // Reset the demand from ShardConsumer, to prevent this publisher from delivering events to stale RX-Java
+            // Subscriber. Publishing will be unblocked when the demand is communicated by the new Rx-Java subscriber.
+            requestedResponses.set(0);
+            // Clear the queue, so that the publisher repopulates the queue based on sequence number from subscriber.
+            prefetchRecordsQueue.clear();
+            prefetchCounters.reset();
+            highestSequenceNumber = prefetchRecordsRetrieved.lastBatchSequenceNumber();
+            dataFetcher.resetIterator(prefetchRecordsRetrieved.shardIterator(), highestSequenceNumber,
+                    initialPositionInStreamExtended);
+        }
+
+        // Handle records delivery ack and execute nextEventDispatchAction.
+        // This method is not thread-safe and needs to be called after acquiring a monitor.
+        void handleRecordsDeliveryAck(RecordsDeliveryAck recordsDeliveryAck, String shardId, Runnable nextEventDispatchAction) {
+            final PrefetchRecordsRetrieved recordsToCheck = peekNextRecord();
+            // Verify if the ack matches the head of the queue and evict it.
+            if (recordsToCheck != null && recordsToCheck.batchUniqueIdentifier().equals(recordsDeliveryAck.batchUniqueIdentifier())) {
+                evictPublishedRecordAndUpdateDemand(shardId);
+                nextEventDispatchAction.run();
+            } else {
+                // Log and ignore any other ack received. As long as an ack is received for head of the queue
+                // we are good. Any stale or future ack received can be ignored, though the latter is not feasible
+                // to happen.
+                final BatchUniqueIdentifier peekedBatchUniqueIdentifier =
+                        recordsToCheck == null ? null : recordsToCheck.batchUniqueIdentifier();
+                log.info("{} :  Received a stale notification with id {} instead of expected id {} at {}. Will ignore.",
+                        shardId, recordsDeliveryAck.batchUniqueIdentifier(), peekedBatchUniqueIdentifier, Instant.now());
+            }
+        }
+
+        // Evict the published record from the prefetch queue.
+        // This method is not thread-safe and needs to be called after acquiring a monitor.
+        @VisibleForTesting
+        RecordsRetrieved evictPublishedRecordAndUpdateDemand(String shardId) {
+            final PrefetchRecordsRetrieved result = prefetchRecordsQueue.poll();
+            if (result != null) {
+                updateDemandTrackersOnPublish(result);
+            } else {
+                log.info(
+                        "{}: No record batch found while evicting from the prefetch queue. This indicates the prefetch buffer"
+                                + "was reset.", shardId);
+            }
+            return result;
+        }
+
+        boolean hasDemandToPublish() {
+            return requestedResponses.get() > 0;
+        }
+
+        PrefetchRecordsRetrieved peekNextRecord() {
+            return prefetchRecordsQueue.peek();
+        }
+
+        boolean offerRecords(PrefetchRecordsRetrieved recordsRetrieved, long idleMillisBetweenCalls) throws InterruptedException {
+            return prefetchRecordsQueue.offer(recordsRetrieved, idleMillisBetweenCalls, TimeUnit.MILLISECONDS);
+        }
+
+        private void updateDemandTrackersOnPublish(PrefetchRecordsRetrieved result) {
+            prefetchCounters.removed(result.processRecordsInput);
+            requestedResponses.decrementAndGet();
+        }
+
+    }
 
     /**
      * Constructor for the PrefetchRecordsPublisher. This cache prefetches records from Kinesis and stores them in a
@@ -140,15 +212,14 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
         this.maxByteSize = maxByteSize;
         this.maxRecordsCount = maxRecordsCount;
-        this.getRecordsResultQueue = new LinkedBlockingQueue<>(this.maxPendingProcessRecordsInput);
-        this.prefetchCounters = new PrefetchCounters();
+        this.publisherSession = new PublisherSession(new LinkedBlockingQueue<>(this.maxPendingProcessRecordsInput),
+                new PrefetchCounters(), this.getRecordsRetrievalStrategy.getDataFetcher());
         this.executorService = executorService;
         this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
         this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
         Validate.notEmpty(operation, "Operation cannot be empty");
         this.operation = operation;
-        this.dataFetcher = this.getRecordsRetrievalStrategy.getDataFetcher();
         this.shardId = shardId;
     }
 
@@ -158,9 +229,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             throw new IllegalStateException("ExecutorService has been shutdown.");
         }
 
-        this.initialPositionInStreamExtended = initialPositionInStreamExtended;
-        highestSequenceNumber = extendedSequenceNumber.sequenceNumber();
-        dataFetcher.initialize(extendedSequenceNumber, initialPositionInStreamExtended);
+        publisherSession.init(extendedSequenceNumber, initialPositionInStreamExtended);
 
         if (!started) {
             log.info("{} : Starting prefetching thread.", shardId);
@@ -179,25 +248,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         }
     }
 
-    private RecordsRetrieved peekNextResult() {
+    private PrefetchRecordsRetrieved peekNextResult() {
         throwOnIllegalState();
-        final PrefetchRecordsRetrieved result = getRecordsResultQueue.peek();
-        return result == null ? result : result.prepareForPublish();
-    }
-
-    @VisibleForTesting
-    RecordsRetrieved pollNextResultAndUpdatePrefetchCounters() {
-        throwOnIllegalState();
-        final PrefetchRecordsRetrieved result = getRecordsResultQueue.poll();
-        if (result != null) {
-            prefetchCounters.removed(result.processRecordsInput);
-            requestedResponses.decrementAndGet();
-        } else {
-            log.info(
-                    "{}: No record batch found while evicting from the prefetch queue. This indicates the prefetch buffer"
-                            + "was reset.", shardId);
-        }
-        return result;
+        return publisherSession.peekNextRecord();
     }
 
     @Override
@@ -213,21 +266,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             throw new IllegalArgumentException(
                     "Provided RecordsRetrieved was not produced by the PrefetchRecordsPublisher");
         }
-        PrefetchRecordsRetrieved prefetchRecordsRetrieved = (PrefetchRecordsRetrieved) recordsRetrieved;
         resetLock.writeLock().lock();
         try {
-            getRecordsResultQueue.clear();
-
-            // Give the drain control to publisher/demand-notifier thread.
-            log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}", shardId,
-                    getRecordsResultQueue.size(), requestedResponses.get());
-            shouldDrainEventOnlyOnAck.set(false);
-
-            prefetchCounters.reset();
-
-            highestSequenceNumber = prefetchRecordsRetrieved.lastBatchSequenceNumber();
-            dataFetcher.resetIterator(prefetchRecordsRetrieved.shardIterator(), highestSequenceNumber,
-                    initialPositionInStreamExtended);
+            publisherSession.reset((PrefetchRecordsRetrieved)recordsRetrieved);
             wasReset = true;
         } finally {
             resetLock.writeLock().unlock();
@@ -240,42 +281,23 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         subscriber.onSubscribe(new Subscription() {
             @Override
             public void request(long n) {
-                requestedResponses.addAndGet(n);
-                drainQueueForRequestsIfAllowed();
+                publisherSession.requestedResponses().addAndGet(n);
+                drainQueueForRequests();
             }
 
             @Override
             public void cancel() {
-                requestedResponses.set(0);
+                // When the subscription is cancelled, the demand is set to 0, to prevent further
+                // records from being dispatched to the consumer/subscriber. The publisher session state will be
+                // reset when restartFrom(*) is called by the consumer/subscriber.
+                publisherSession.requestedResponses().set(0);
             }
         });
     }
 
     @Override
     public synchronized void notify(RecordsDeliveryAck recordsDeliveryAck) {
-        final RecordsRetrieved recordsToCheck = peekNextResult();
-        // Verify if the ack matches the head of the queue and evict it.
-        if (recordsToCheck != null && recordsToCheck.batchUniqueIdentifier()
-                .equals(recordsDeliveryAck.batchUniqueIdentifier())) {
-            pollNextResultAndUpdatePrefetchCounters();
-            // Upon evicting, check if queue is empty. if yes, then give the drain control back to publisher thread.
-            if (getRecordsResultQueue.isEmpty()) {
-                log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}",
-                        shardId, getRecordsResultQueue.size(), requestedResponses.get());
-                shouldDrainEventOnlyOnAck.set(false);
-            } else {
-                // Else attempt to drain the queue.
-                drainQueueForRequests();
-            }
-        } else {
-            // Log and ignore any other ack received. As long as an ack is received for head of the queue
-            // we are good. Any stale or future ack received can be ignored, though the latter is not feasible
-            // to happen.
-            final BatchUniqueIdentifier peekedBatchUniqueIdentifier =
-                    recordsToCheck == null ? null : recordsToCheck.batchUniqueIdentifier();
-            log.info("{} :  Received a stale notification with id {} instead of expected id {} at {}. Will ignore.",
-                    shardId, recordsDeliveryAck.batchUniqueIdentifier(), peekedBatchUniqueIdentifier, Instant.now());
-        }
+        publisherSession.handleRecordsDeliveryAck(recordsDeliveryAck, shardId, () -> drainQueueForRequests());
         // Take action based on the time spent by the event in queue.
         takeDelayedDeliveryActionIfRequired(shardId, lastEventDeliveryTime, log);
     }
@@ -283,7 +305,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     // Note : Do not make this method synchronous as notify() will not be able to evict any entry from the queue.
     private void addArrivedRecordsInput(PrefetchRecordsRetrieved recordsRetrieved) throws InterruptedException {
         wasReset = false;
-        while (!getRecordsResultQueue.offer(recordsRetrieved, idleMillisBetweenCalls, TimeUnit.MILLISECONDS)) {
+        while (!publisherSession.offerRecords(recordsRetrieved, idleMillisBetweenCalls)) {
             //
             // Unlocking the read lock, and then reacquiring the read lock, should allow any waiters on the write lock a
             // chance to run. If the write lock is acquired by restartFrom than the readLock will now block until
@@ -296,43 +318,28 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 throw new PositionResetException();
             }
         }
-        prefetchCounters.added(recordsRetrieved.processRecordsInput);
-    }
-
-    /**
-     * Method that will be called by the 'publisher thread' and the 'demand notifying thread',
-     * to drain the events if the 'event notifying thread' do not have the control.
-     */
-    private synchronized void drainQueueForRequestsIfAllowed() {
-        if (!shouldDrainEventOnlyOnAck.get()) {
-            drainQueueForRequests();
-        }
+        publisherSession.prefetchCounters().added(recordsRetrieved.processRecordsInput);
     }
 
     /**
      * Method to drain the queue based on the demand and the events availability in the queue.
      */
-    private synchronized void drainQueueForRequests() {
-        final RecordsRetrieved recordsToDeliver = peekNextResult();
+    @VisibleForTesting
+    synchronized void drainQueueForRequests() {
+        final PrefetchRecordsRetrieved recordsToDeliver = peekNextResult();
         // If there is an event available to drain and if there is at least one demand,
         // then schedule it for delivery
-        if (requestedResponses.get() > 0 && recordsToDeliver != null) {
+        if (publisherSession.hasDemandToPublish() && canDispatchRecord(recordsToDeliver)) {
+            subscriber.onNext(recordsToDeliver.prepareForPublish());
+            recordsToDeliver.dispatched();
             lastEventDeliveryTime = Instant.now();
-            subscriber.onNext(recordsToDeliver);
-            if (!shouldDrainEventOnlyOnAck.get()) {
-                log.debug("{} : Notifier thread takes over the draining control. Queue Size : {}, Demand : {}", shardId,
-                        getRecordsResultQueue.size(), requestedResponses.get());
-                shouldDrainEventOnlyOnAck.set(true);
-            }
-        } else {
-            // Since we haven't scheduled the event delivery, give the drain control back to publisher/demand-notifier
-            // thread.
-            if (shouldDrainEventOnlyOnAck.get()) {
-                log.debug("{} : Publisher thread takes over the draining control. Queue Size : {}, Demand : {}",
-                        shardId, getRecordsResultQueue.size(), requestedResponses.get());
-                shouldDrainEventOnlyOnAck.set(false);
-            }
         }
+    }
+
+    // This method is thread-safe and informs the caller on whether this record is eligible to be dispatched.
+    // If this record was already dispatched earlier, then this method would return false.
+    private static boolean canDispatchRecord(PrefetchRecordsRetrieved recordsToDeliver) {
+        return recordsToDeliver != null && !recordsToDeliver.isDispatched();
     }
 
     @Accessors(fluent = true)
@@ -343,6 +350,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         final String lastBatchSequenceNumber;
         final String shardIterator;
         final BatchUniqueIdentifier batchUniqueIdentifier;
+        @Accessors() @Setter(AccessLevel.NONE) boolean dispatched = false;
 
         PrefetchRecordsRetrieved prepareForPublish() {
             return new PrefetchRecordsRetrieved(processRecordsInput.toBuilder().cacheExitTime(Instant.now()).build(),
@@ -354,6 +362,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             return batchUniqueIdentifier;
         }
 
+        // Indicates if this record batch was already dispatched for delivery.
+        void dispatched() { dispatched = true; }
+
         /**
          * Generate batch unique identifier for PrefetchRecordsRetrieved, where flow will be empty.
          * @return BatchUniqueIdentifier
@@ -362,10 +373,11 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             return new BatchUniqueIdentifier(UUID.randomUUID().toString(),
                     StringUtils.EMPTY);
         }
+
     }
 
     private String calculateHighestSequenceNumber(ProcessRecordsInput processRecordsInput) {
-        String result = this.highestSequenceNumber;
+        String result = publisherSession.highestSequenceNumber();
         if (processRecordsInput.records() != null && !processRecordsInput.records().isEmpty()) {
             result = processRecordsInput.records().get(processRecordsInput.records().size() - 1).sequenceNumber();
         }
@@ -404,7 +416,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
         private void makeRetrievalAttempt() {
             MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, operation);
-            if (prefetchCounters.shouldGetNewRecords()) {
+            if (publisherSession.prefetchCounters().shouldGetNewRecords()) {
                 try {
                     sleepBeforeNextCall();
                     GetRecordsResponse getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
@@ -419,13 +431,12 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                             .isAtShardEnd(getRecordsRetrievalStrategy.getDataFetcher().isShardEndReached())
                             .build();
 
-                    highestSequenceNumber = calculateHighestSequenceNumber(processRecordsInput);
                     PrefetchRecordsRetrieved recordsRetrieved = new PrefetchRecordsRetrieved(processRecordsInput,
-                            highestSequenceNumber, getRecordsResult.nextShardIterator(),
+                            calculateHighestSequenceNumber(processRecordsInput), getRecordsResult.nextShardIterator(),
                             PrefetchRecordsRetrieved.generateBatchUniqueIdentifier());
-                    highestSequenceNumber = recordsRetrieved.lastBatchSequenceNumber;
+                    publisherSession.highestSequenceNumber(recordsRetrieved.lastBatchSequenceNumber);
                     addArrivedRecordsInput(recordsRetrieved);
-                    drainQueueForRequestsIfAllowed();
+                    drainQueueForRequests();
                 } catch (PositionResetException pse) {
                     throw pse;
                 } catch (RetryableRetrievalException rre) {
@@ -438,7 +449,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
                     scope.addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
-                    dataFetcher.restartIterator();
+                    publisherSession.dataFetcher().restartIterator();
                 } catch (SdkException e) {
                     log.error("{} :  Exception thrown while fetching records from Kinesis", shardId, e);
                 } catch (Throwable e) {
@@ -454,7 +465,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 // Consumer isn't ready to receive new records will allow prefetch counters to pause
                 //
                 try {
-                    prefetchCounters.waitForConsumer();
+                    publisherSession.prefetchCounters().waitForConsumer();
                 } catch (InterruptedException ie) {
                     log.info("{} :  Thread was interrupted while waiting for the consumer.  " +
                             "Shutdown has probably been started", shardId);
@@ -523,7 +534,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
         @Override
         public String toString() {
-            return String.format("{ Requests: %d, Records: %d, Bytes: %d }", getRecordsResultQueue.size(), size,
+            return String.format("{ Requests: %d, Records: %d, Bytes: %d }", publisherSession.prefetchRecordsQueue().size(), size,
                     byteSize);
         }
     }
