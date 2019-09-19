@@ -305,7 +305,8 @@ public class PrefetchRecordsPublisherTest {
 
         log.info("Queue is currently at {} starting subscriber", getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
         AtomicInteger receivedItems = new AtomicInteger(0);
-        final int expectedItems = MAX_SIZE * 20;
+        
+        final int expectedItems = MAX_SIZE * 10;
 
         Object lock = new Object();
 
@@ -396,7 +397,8 @@ public class PrefetchRecordsPublisherTest {
 
         log.info("Queue is currently at {} starting subscriber", getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
         AtomicInteger receivedItems = new AtomicInteger(0);
-        final int expectedItems = MAX_SIZE * 50;
+
+        final int expectedItems = MAX_SIZE * 20;
 
         Object lock = new Object();
 
