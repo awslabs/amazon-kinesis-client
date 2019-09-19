@@ -438,7 +438,7 @@ public class FanOutRecordsPublisherTest {
 
         CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(2);
         int totalServicePublisherEvents = 1000;
-        int initialDemand = 10;
+        int initialDemand = 9;
         int triggerCompleteAtNthEvent = 200;
         BackpressureAdheringServicePublisher servicePublisher = new BackpressureAdheringServicePublisher(
                 servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch,
@@ -546,7 +546,7 @@ public class FanOutRecordsPublisherTest {
         CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(2);
         CountDownLatch onCompleteLatch = new CountDownLatch(1);
         int totalServicePublisherEvents = 1000;
-        int initialDemand = 10;
+        int initialDemand = 9;
         int triggerCompleteAtNthEvent = 200;
         BackpressureAdheringServicePublisher servicePublisher = new BackpressureAdheringServicePublisher(
                 servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch,
@@ -651,7 +651,7 @@ public class FanOutRecordsPublisherTest {
         CountDownLatch servicePublisherTaskCompletionLatch = new CountDownLatch(2);
         CountDownLatch onErrorReceiveLatch = new CountDownLatch(1);
         int totalServicePublisherEvents = 1000;
-        int initialDemand = 10;
+        int initialDemand = 9;
         int triggerErrorAtNthEvent = 241;
         BackpressureAdheringServicePublisher servicePublisher = new BackpressureAdheringServicePublisher(
                 servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch,
