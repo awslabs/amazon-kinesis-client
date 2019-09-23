@@ -60,7 +60,16 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.2.3 - September 04, 2019)
+### Latest Release (2.2.4 - September 23, 2019)
+[Milestone#39](https://github.com/awslabs/amazon-kinesis-client/milestone/39)
+* Making FanoutRecordsPublisher test cases resilient to delayed thread operations
+  * [PR#612](https://github.com/awslabs/amazon-kinesis-client/pull/612)
+* Drain delivery queue in the FanoutRecordsPublisher to make slow consumers consume events at their pace
+  * [PR#607](https://github.com/awslabs/amazon-kinesis-client/pull/607)
+* Fix to prevent the onNext event going to stale subscription when restart happens in PrefetchRecordsPublisher
+  * [PR#606](https://github.com/awslabs/amazon-kinesis-client/pull/606)
+
+### Related Prior Release (2.2.3 - September 04, 2019)
 [Milestone#38](https://github.com/awslabs/amazon-kinesis-client/milestone/38)
 * Fix to prevent data loss and stuck shards in the event of failed records delivery in Polling readers
   * [PR#603](https://github.com/awslabs/amazon-kinesis-client/pull/603)
