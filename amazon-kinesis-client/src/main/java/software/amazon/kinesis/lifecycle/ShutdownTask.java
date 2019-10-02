@@ -16,9 +16,11 @@ package software.amazon.kinesis.lifecycle;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import com.sun.org.apache.bcel.internal.generic.LUSHR;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -35,6 +37,9 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Task for invoking the ShardRecordProcessor shutdown() callback.
@@ -55,7 +60,7 @@ public class ShutdownTask implements ConsumerTask {
     @NonNull
     private final ShardRecordProcessorCheckpointer recordProcessorCheckpointer;
     @NonNull
-    private final ShutdownReason reason;
+    private ShutdownReason reason;
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
@@ -88,6 +93,15 @@ public class ShutdownTask implements ConsumerTask {
 
         try {
             try {
+                List<Shard> allShards = new ArrayList<>();
+                if(reason == ShutdownReason.SHARD_END) {
+                    allShards = shardDetector.listShards();
+
+                    if(!isRealShardEnd(allShards)) {
+                        reason = ShutdownReason.LEASE_LOST;
+                    }
+                }
+
                 // If we reached end of the shard, set sequence number to SHARD_END.
                 if (reason == ShutdownReason.SHARD_END) {
                     recordProcessorCheckpointer
@@ -126,7 +140,7 @@ public class ShutdownTask implements ConsumerTask {
                 if (reason == ShutdownReason.SHARD_END) {
                     log.debug("Looking for child shards of shard {}", shardInfo.shardId());
                     // create leases for the child shards
-                    hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher,
+                    hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(allShards, shardDetector, leaseRefresher,
                             initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
                     log.debug("Finished checking for child shards of shard {}", shardInfo.shardId());
                 }
@@ -167,6 +181,19 @@ public class ShutdownTask implements ConsumerTask {
     @VisibleForTesting
     public ShutdownReason getReason() {
         return reason;
+    }
+
+    private boolean isRealShardEnd(List<Shard> shards) {
+        boolean realShardEnd = false;
+
+        for(Shard shard : shards) {
+            if(shard.parentShardId() != null && shard.parentShardId().equals(shardInfo.shardId())
+                    || shard.adjacentParentShardId() != null && shard.adjacentParentShardId().equals(shardInfo.shardId())) {
+                realShardEnd = true;
+                break;
+            }
+        }
+        return realShardEnd;
     }
 
 }
