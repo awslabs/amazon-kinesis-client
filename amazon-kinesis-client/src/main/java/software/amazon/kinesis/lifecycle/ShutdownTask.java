@@ -21,6 +21,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -94,10 +95,15 @@ public class ShutdownTask implements ConsumerTask {
         try {
             try {
                 List<Shard> allShards = new ArrayList<>();
-                if(reason == ShutdownReason.SHARD_END) {
+                /*
+                 * Revalidate if the current shard is closed before shutting down the shard consumer with reason SHARD_END
+                 * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows other
+                 * shard consumer to subscribe to this shard.
+                 */
+                if (reason == ShutdownReason.SHARD_END) {
                     allShards = shardDetector.listShards();
 
-                    if(!isRealShardEnd(allShards)) {
+                    if (!CollectionUtils.isNullOrEmpty(allShards) && !shardEndValidated(allShards)) {
                         reason = ShutdownReason.LEASE_LOST;
                     }
                 }
@@ -183,17 +189,18 @@ public class ShutdownTask implements ConsumerTask {
         return reason;
     }
 
-    private boolean isRealShardEnd(List<Shard> shards) {
-        boolean realShardEnd = false;
-
+    private boolean shardEndValidated(List<Shard> shards) {
         for(Shard shard : shards) {
-            if(shard.parentShardId() != null && shard.parentShardId().equals(shardInfo.shardId())
-                    || shard.adjacentParentShardId() != null && shard.adjacentParentShardId().equals(shardInfo.shardId())) {
-                realShardEnd = true;
-                break;
+            if (isChildShard(shard)) {
+                return true;
             }
         }
-        return realShardEnd;
+        return false;
+    }
+
+    private boolean isChildShard(Shard shard) {
+        return (shard.parentShardId() != null && shard.parentShardId().equals(shardInfo.shardId())
+                || shard.adjacentParentShardId() != null && shard.adjacentParentShardId().equals(shardInfo.shardId()));
     }
 
 }

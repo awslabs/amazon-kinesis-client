@@ -88,7 +88,7 @@ public class HierarchicalShardSyncer {
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition, final boolean cleanupLeasesOfCompletedShards,
             final boolean ignoreUnexpectedChildShards, final MetricsScope scope)throws DependencyException, InvalidStateException,
             ProvisionedThroughputException, KinesisClientLibIOException {
-        if(CollectionUtils.isNullOrEmpty(shards)) {
+        if (CollectionUtils.isNullOrEmpty(shards)) {
             shards = getShardList(shardDetector);
         }
         log.debug("Num shards: {}", shards.size());
