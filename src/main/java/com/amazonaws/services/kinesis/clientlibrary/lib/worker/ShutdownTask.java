@@ -14,6 +14,8 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.model.Shard;
+import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -26,6 +28,9 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Task for invoking the RecordProcessor shutdown() callback.
@@ -93,24 +98,40 @@ class ShutdownTask implements ITask {
         boolean applicationException = false;
 
         try {
+            ShutdownReason localReason = reason;
+            List<Shard> allShards = new ArrayList<>();
+            /*
+             * Revalidate if the current shard is closed before shutting down the shard consumer with reason SHARD_END
+             * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows other
+             * shard consumer to subscribe to this shard.
+             */
+            if(localReason == ShutdownReason.TERMINATE) {
+                allShards = kinesisProxy.getShardList();
+
+                if(!CollectionUtils.isNullOrEmpty(allShards) && !shardEndValidated(allShards)) {
+                    localReason = ShutdownReason.ZOMBIE;
+                }
+            }
+
+
             // If we reached end of the shard, set sequence number to SHARD_END.
-            if (reason == ShutdownReason.TERMINATE) {
+            if (localReason == ShutdownReason.TERMINATE) {
                 recordProcessorCheckpointer.setSequenceNumberAtShardEnd(
                         recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
                 recordProcessorCheckpointer.setLargestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
             }
 
             LOG.debug("Invoking shutdown() for shard " + shardInfo.getShardId() + ", concurrencyToken "
-                    + shardInfo.getConcurrencyToken() + ". Shutdown reason: " + reason);
+                    + shardInfo.getConcurrencyToken() + ". Shutdown reason: " + localReason);
             final ShutdownInput shutdownInput = new ShutdownInput()
-                    .withShutdownReason(reason)
+                    .withShutdownReason(localReason)
                     .withCheckpointer(recordProcessorCheckpointer);
             final long recordProcessorStartTimeMillis = System.currentTimeMillis();
             try {
                 recordProcessor.shutdown(shutdownInput);
                 ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
 
-                if (reason == ShutdownReason.TERMINATE) {
+                if (localReason == ShutdownReason.TERMINATE) {
                     if ((lastCheckpointValue == null)
                             || (!lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END))) {
                         throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
@@ -129,10 +150,10 @@ class ShutdownTask implements ITask {
                         MetricsLevel.SUMMARY);
             }
 
-            if (reason == ShutdownReason.TERMINATE) {
+            if (localReason == ShutdownReason.TERMINATE) {
                 LOG.debug("Looking for child shards of shard " + shardInfo.getShardId());
                 // create leases for the child shards
-                TaskResult result = shardSyncStrategy.onShardConsumerShutDown();
+                TaskResult result = shardSyncStrategy.onShardConsumerShutDown(allShards);
                 if (result.getException() != null) {
                     LOG.debug("Exception while trying to sync shards on the shutdown of shard: " + shardInfo
                             .getShardId());
@@ -175,4 +196,17 @@ class ShutdownTask implements ITask {
         return reason;
     }
 
+    private boolean shardEndValidated(List<Shard> shards) {
+        for(Shard shard : shards) {
+            if (isChildShard(shard)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isChildShard(Shard shard) {
+        return (shard.getParentShardId() != null && shard.getParentShardId().equals(shardInfo.getShardId())
+                || shard.getAdjacentParentShardId() != null && shard.getAdjacentParentShardId().equals(shardInfo.getShardId()));
+    }
 }

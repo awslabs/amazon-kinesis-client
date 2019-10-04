@@ -14,12 +14,15 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.model.Shard;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+
+import java.util.List;
 
 /**
  * This task syncs leases/activies with shards of the stream.
@@ -39,6 +42,7 @@ class ShardSyncTask implements ITask {
     private final long shardSyncTaskIdleTimeMillis;
     private final TaskType taskType = TaskType.SHARDSYNC;
     private final ShardSyncer shardSyncer;
+    private final List<Shard> shards;
 
     /**
      * @param kinesisProxy Used to fetch information about the stream (e.g. shard list)
@@ -51,13 +55,14 @@ class ShardSyncTask implements ITask {
      * @param shardSyncTaskIdleTimeMillis shardSync task idle time in millis
      * @param shardSyncer shardSyncer instance used to check and create new leases
      */
-    ShardSyncTask(IKinesisProxy kinesisProxy,
+    ShardSyncTask(List<Shard> shards, IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesUponShardCompletion,
             boolean ignoreUnexpectedChildShards,
             long shardSyncTaskIdleTimeMillis,
             ShardSyncer shardSyncer) {
+        this.shards = shards;
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.initialPosition = initialPositionInStream;
@@ -75,7 +80,7 @@ class ShardSyncTask implements ITask {
         Exception exception = null;
 
         try {
-            shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
+            shardSyncer.checkAndCreateLeasesForNewShards(shards, kinesisProxy,
                     leaseManager,
                     initialPosition,
                     cleanupLeasesUponShardCompletion,

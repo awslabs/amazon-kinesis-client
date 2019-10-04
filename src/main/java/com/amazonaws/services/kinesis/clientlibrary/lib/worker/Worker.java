@@ -677,7 +677,7 @@ public class Worker implements Runnable {
                 if (!skipShardSyncAtWorkerInitializationIfLeasesExist
                         || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
                     LOG.info("Syncing Kinesis shard info");
-                    ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
+                    ShardSyncTask shardSyncTask = new ShardSyncTask(null, streamConfig.getStreamProxy(),
                             leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
                             config.shouldIgnoreUnexpectedChildShards(), 0L, shardSyncer);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
@@ -1164,7 +1164,7 @@ public class Worker implements Runnable {
             ILeaseManager<KinesisClientLease> leaseManager) {
         return new PeriodicShardSyncStrategy(
                 new PeriodicShardSyncManager(config.getWorkerIdentifier(), leaderDecider,
-                        new ShardSyncTask(kinesisProxy, leaseManager, config.getInitialPositionInStreamExtended(),
+                        new ShardSyncTask(null, kinesisProxy, leaseManager, config.getInitialPositionInStreamExtended(),
                                 config.shouldCleanupLeasesUponShardCompletion(),
                                 config.shouldIgnoreUnexpectedChildShards(), SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
                                 shardSyncer), metricsFactory));

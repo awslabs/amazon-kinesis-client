@@ -1,5 +1,9 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.model.Shard;
+
+import java.util.List;
+
 /**
  * An implementation of ShardSyncStrategy.
  */
@@ -33,6 +37,11 @@ class PeriodicShardSyncStrategy implements ShardSyncStrategy {
 
     @Override
     public TaskResult onShardConsumerShutDown() {
+        return new TaskResult(null);
+    }
+
+    @Override
+    public TaskResult onShardConsumerShutDown(List<Shard> shards) {
         return new TaskResult(null);
     }
 

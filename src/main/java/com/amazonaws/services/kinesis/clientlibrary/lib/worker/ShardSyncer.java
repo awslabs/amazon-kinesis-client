@@ -21,12 +21,15 @@ import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import com.amazonaws.services.kinesis.model.Shard;
+
+import java.util.List;
 
 public interface ShardSyncer {
 
-    void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
-            InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
+    void checkAndCreateLeasesForNewShards(List<Shard> shards, IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
+                                          InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesOfCompletedShards,
+                                          boolean ignoreUnexpectedChildShards)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException;
 }
