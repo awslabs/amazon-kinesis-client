@@ -903,16 +903,12 @@ public class Worker implements Runnable {
                         lease, notificationCompleteLatch, shutdownCompleteLatch);
                 ShardInfo shardInfo = KinesisClientLibLeaseCoordinator.convertLeaseToAssignment(lease);
                 ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
-                if (consumer != null) {
-                    consumer.notifyShutdownRequested(shutdownNotification);
-                } else {
-                    //
-                    // There is a race condition between retrieving the current assignments, and creating the
-                    // notification. If the a lease is lost in between these two points, we explicitly decrement the
-                    // notification latches to clear the shutdown.
-                    //
+
+                if (consumer == null || ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE.equals(consumer.getCurrentState())) {
                     notificationCompleteLatch.countDown();
                     shutdownCompleteLatch.countDown();
+                } else {
+                    consumer.notifyShutdownRequested(shutdownNotification);
                 }
             }
             return new GracefulShutdownContext(shutdownCompleteLatch, notificationCompleteLatch, this);
