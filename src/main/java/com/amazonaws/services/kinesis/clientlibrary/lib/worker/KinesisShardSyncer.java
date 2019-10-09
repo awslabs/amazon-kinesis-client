@@ -115,7 +115,7 @@ class KinesisShardSyncer implements ShardSyncer {
         } else {
             shards = allShards;
         }
-        LOG.debug("Num shards: " + shards.size());
+        LOG.debug("Start shard syncing... The total number of shards found: " + shards.size());
 
         Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(shards);
         Map<String, Set<String>> shardIdToChildShardIdsMap = constructShardIdToChildShardIdsMap(shardIdToShardMap);

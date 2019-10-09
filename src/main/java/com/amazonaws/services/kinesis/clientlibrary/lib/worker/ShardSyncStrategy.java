@@ -47,9 +47,8 @@ public interface ShardSyncStrategy {
 
     /**
      * Invoked when ShardConsumer is shutdown and all shards are provided.
-     * Shards can be passed in from a previous listShards call.
      *
-     * @param shards
+     * @param shards - Optional parameter, can be null. Pass in parameter to reuse output from ListShards API.
      *
      * @return
      */
