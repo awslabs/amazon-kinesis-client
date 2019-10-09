@@ -70,6 +70,7 @@ class KinesisShardSyncer implements ShardSyncer {
     /**
      * Check and create leases for any new shards (e.g. following a reshard operation).
      *
+     * @param shards
      * @param kinesisProxy
      * @param leaseManager
      * @param initialPositionInStream
@@ -91,6 +92,7 @@ class KinesisShardSyncer implements ShardSyncer {
     /**
      * Sync leases with Kinesis shards (e.g. at startup, or when we reach end of a shard).
      *
+     * @param allShards
      * @param kinesisProxy
      * @param leaseManager
      * @param initialPosition
@@ -108,12 +110,12 @@ class KinesisShardSyncer implements ShardSyncer {
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException {
         List<Shard> shards;
-        if(!CollectionUtils.isNullOrEmpty(allShards)) {
-            shards = allShards;
-        } else {
+        if(CollectionUtils.isNullOrEmpty(allShards)) {
             shards = getShardList((kinesisProxy));
+        } else {
+            shards = allShards;
         }
-        //LOG.debug("Num shards: " + shards.size());
+        LOG.debug("Num shards: " + shards.size());
 
         Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(shards);
         Map<String, Set<String>> shardIdToChildShardIdsMap = constructShardIdToChildShardIdsMap(shardIdToShardMap);

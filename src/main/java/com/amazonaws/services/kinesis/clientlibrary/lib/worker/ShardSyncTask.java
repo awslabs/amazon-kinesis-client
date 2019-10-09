@@ -45,6 +45,7 @@ class ShardSyncTask implements ITask {
     private final List<Shard> shards;
 
     /**
+     * @param shards Used to provide a list of all shards
      * @param kinesisProxy Used to fetch information about the stream (e.g. shard list)
      * @param leaseManager Used to fetch and create leases
      * @param initialPositionInStream One of LATEST, TRIM_HORIZON or AT_TIMESTAMP. Amazon Kinesis Client Library will

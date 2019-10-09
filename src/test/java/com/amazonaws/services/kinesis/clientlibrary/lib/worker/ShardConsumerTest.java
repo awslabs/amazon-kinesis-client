@@ -458,7 +458,7 @@ public class ShardConsumerTest {
 
     /**
      * Test method for {@link ShardConsumer#consumeShard()} that ensures a transient error thrown from the record
-     * processor's shutdown method with reason terminate will be retried.
+     * processor's shutdown method with reason zombie will be retried.
      */
     @Test
     public final void testConsumeShardWithTransientTerminateError() throws Exception {
@@ -595,6 +595,11 @@ public class ShardConsumerTest {
     }
 
 
+
+    /**
+     * Test method for {@link ShardConsumer#consumeShard()} that ensures the shardConsumer gets shutdown with shutdown
+     * reason TERMINATE when the shard end is reached.
+     */
     @Test
     public final void testConsumeShardWithShardEnd() throws Exception {
         int numRecs = 10;
