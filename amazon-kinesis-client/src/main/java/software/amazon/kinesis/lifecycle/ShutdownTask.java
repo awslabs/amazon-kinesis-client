@@ -104,7 +104,7 @@ public class ShutdownTask implements ConsumerTask {
                 if (localReason == ShutdownReason.SHARD_END) {
                     allShards = shardDetector.listShards();
 
-                    if (!CollectionUtils.isNullOrEmpty(allShards) && !shardEndValidated(allShards)) {
+                    if (!CollectionUtils.isNullOrEmpty(allShards) && !validateShardEnd(allShards)) {
                         localReason = ShutdownReason.LEASE_LOST;
                     }
                 }
@@ -190,16 +190,16 @@ public class ShutdownTask implements ConsumerTask {
         return reason;
     }
 
-    private boolean shardEndValidated(List<Shard> shards) {
+    private boolean validateShardEnd(List<Shard> shards) {
         for(Shard shard : shards) {
-            if (isChildShard(shard)) {
+            if (isChildShardOfCurrentShard(shard)) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean isChildShard(Shard shard) {
+    private boolean isChildShardOfCurrentShard(Shard shard) {
         return (shard.parentShardId() != null && shard.parentShardId().equals(shardInfo.shardId())
                 || shard.adjacentParentShardId() != null && shard.adjacentParentShardId().equals(shardInfo.shardId()));
     }
