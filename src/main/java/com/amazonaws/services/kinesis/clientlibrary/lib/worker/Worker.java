@@ -1042,7 +1042,7 @@ public class Worker implements Runnable {
                 streamConfig,
                 checkpointTracker,
                 recordProcessor,
-                leaseCoordinator.getLeaseManager(),
+                leaseCoordinator,
                 parentShardPollIntervalMillis,
                 cleanupLeasesUponShardCompletion,
                 executorService,

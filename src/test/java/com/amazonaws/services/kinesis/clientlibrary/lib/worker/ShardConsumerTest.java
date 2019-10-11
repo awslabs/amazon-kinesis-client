@@ -50,8 +50,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.kinesis.model.HashKeyRange;
-import com.amazonaws.services.kinesis.model.SequenceNumberRange;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Description;
@@ -60,6 +58,7 @@ import org.hamcrest.TypeSafeMatcher;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
@@ -118,6 +117,8 @@ public class ShardConsumerTest {
     private IKinesisProxy streamProxy;
     @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
+    @InjectMocks
+    private KinesisClientLibLeaseCoordinator leaseCoordinator = new KinesisClientLibLeaseCoordinator(leaseManager, "testCoordinator", 1000, 1000);
     @Mock
     private ICheckpoint checkpoint;
     @Mock
@@ -159,7 +160,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
-                        null,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         executorService,
@@ -208,7 +209,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
-                        null,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         spyExecutorService,
@@ -252,7 +253,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
-                        null,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         executorService,
@@ -370,7 +371,7 @@ public class ShardConsumerTest {
                         checkpoint,
                         processor,
                         recordProcessorCheckpointer,
-                        leaseManager,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         executorService,
@@ -516,7 +517,7 @@ public class ShardConsumerTest {
                         checkpoint,
                         processor,
                         recordProcessorCheckpointer,
-                        leaseManager,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         executorService,
@@ -658,7 +659,7 @@ public class ShardConsumerTest {
                                   checkpoint,
                                   processor,
                                   recordProcessorCheckpointer,
-                                  leaseManager,
+                                  leaseCoordinator,
                                   parentShardPollIntervalMillis,
                                   cleanupLeasesOfCompletedShards,
                                   executorService,
@@ -799,7 +800,7 @@ public class ShardConsumerTest {
                         checkpoint,
                         processor,
                         recordProcessorCheckpointer,
-                        leaseManager,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         executorService,
@@ -874,7 +875,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
-                        null,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         executorService,
@@ -927,7 +928,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
-                        null,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         executorService,
@@ -959,7 +960,7 @@ public class ShardConsumerTest {
                         streamConfig,
                         checkpoint,
                         processor,
-                        null,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         executorService,
@@ -1002,7 +1003,7 @@ public class ShardConsumerTest {
                 streamConfig,
                 checkpoint,
                 processor,
-                null,
+                leaseCoordinator,
                 parentShardPollIntervalMillis,
                 cleanupLeasesOfCompletedShards,
                 mockExecutorService,

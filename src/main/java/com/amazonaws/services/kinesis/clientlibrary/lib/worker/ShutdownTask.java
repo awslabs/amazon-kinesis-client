@@ -30,6 +30,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -47,6 +48,7 @@ class ShutdownTask implements ITask {
     private final ShutdownReason reason;
     private final IKinesisProxy kinesisProxy;
     private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
     private final boolean ignoreUnexpectedChildShards;
@@ -68,7 +70,7 @@ class ShutdownTask implements ITask {
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards,
             boolean ignoreUnexpectedChildShards,
-            ILeaseManager<KinesisClientLease> leaseManager,
+            KinesisClientLibLeaseCoordinator leaseCoordinator,
             long backoffTimeMillis,
             GetRecordsCache getRecordsCache, ShardSyncer shardSyncer, ShardSyncStrategy shardSyncStrategy) {
         this.shardInfo = shardInfo;
@@ -79,7 +81,8 @@ class ShutdownTask implements ITask {
         this.initialPositionInStream = initialPositionInStream;
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
-        this.leaseManager = leaseManager;
+        this.leaseManager = leaseCoordinator.getLeaseManager();
+        this.leaseCoordinator = leaseCoordinator;
         this.backoffTimeMillis = backoffTimeMillis;
         this.getRecordsCache = getRecordsCache;
         this.shardSyncer = shardSyncer;
@@ -108,8 +111,10 @@ class ShutdownTask implements ITask {
             if(localReason == ShutdownReason.TERMINATE) {
                 allShards = kinesisProxy.getShardList();
 
-                if(!CollectionUtils.isNullOrEmpty(allShards) && !shardEndValidated(allShards)) {
+                if(!CollectionUtils.isNullOrEmpty(allShards) && !validateShardEnd(allShards)) {
                     localReason = ShutdownReason.ZOMBIE;
+                    forceLoseLease();
+                    LOG.debug("Force the lease to be lost before shutting down the consumer.");
                 }
             }
 
@@ -196,17 +201,28 @@ class ShutdownTask implements ITask {
         return reason;
     }
 
-    private boolean shardEndValidated(List<Shard> shards) {
+    private boolean validateShardEnd(List<Shard> shards) {
         for(Shard shard : shards) {
-            if (isChildShard(shard)) {
+            if (isChildShardOfCurrentShard(shard)) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean isChildShard(Shard shard) {
+    private boolean isChildShardOfCurrentShard(Shard shard) {
         return (shard.getParentShardId() != null && shard.getParentShardId().equals(shardInfo.getShardId())
                 || shard.getAdjacentParentShardId() != null && shard.getAdjacentParentShardId().equals(shardInfo.getShardId()));
+    }
+
+    private void forceLoseLease() {
+        Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
+        if(leases != null && !leases.isEmpty()) {
+            for(KinesisClientLease lease : leases) {
+                if(lease.getLeaseKey().equals(shardInfo.getShardId())) {
+                    leaseCoordinator.dropLease(lease);
+                }
+            }
+        }
     }
 }
