@@ -21,6 +21,7 @@ import lombok.experimental.Accessors;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -42,7 +43,7 @@ public class ShardConsumerArgument {
     @NonNull
     private final String streamName;
     @NonNull
-    private final LeaseRefresher leaseRefresher;
+    private final LeaseCoordinator leaseCoordinator;
     @NonNull
     private final ExecutorService executorService;
     @NonNull

@@ -135,7 +135,7 @@ class ConsumerStates {
         @Override
         public ConsumerTask createTask(ShardConsumerArgument consumerArgument, ShardConsumer consumer, ProcessRecordsInput input) {
             return new BlockOnParentShardTask(consumerArgument.shardInfo(),
-                    consumerArgument.leaseRefresher(),
+                    consumerArgument.leaseCoordinator().leaseRefresher(),
                     consumerArgument.parentShardPollIntervalMillis());
         }
 
@@ -492,7 +492,7 @@ class ConsumerStates {
                     argument.initialPositionInStream(),
                     argument.cleanupLeasesOfCompletedShards(),
                     argument.ignoreUnexpectedChildShards(),
-                    argument.leaseRefresher(),
+                    argument.leaseCoordinator(),
                     argument.taskBackoffTimeMillis(),
                     argument.recordsPublisher(),
                     argument.hierarchicalShardSyncer(),

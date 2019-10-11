@@ -25,6 +25,8 @@ import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -40,6 +42,7 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -67,7 +70,7 @@ public class ShutdownTask implements ConsumerTask {
     private final boolean cleanupLeasesOfCompletedShards;
     private final boolean ignoreUnexpectedChildShards;
     @NonNull
-    private final LeaseRefresher leaseRefresher;
+    private final LeaseCoordinator leaseCoordinator;
     private final long backoffTimeMillis;
     @NonNull
     private final RecordsPublisher recordsPublisher;
@@ -106,6 +109,8 @@ public class ShutdownTask implements ConsumerTask {
 
                     if (!CollectionUtils.isNullOrEmpty(allShards) && !validateShardEnd(allShards)) {
                         localReason = ShutdownReason.LEASE_LOST;
+                        forceLoseLease();
+                        log.debug("Force the lease to be lost before shutting down the consumer.");
                     }
                 }
 
@@ -147,7 +152,7 @@ public class ShutdownTask implements ConsumerTask {
                 if (localReason == ShutdownReason.SHARD_END) {
                     log.debug("Looking for child shards of shard {}", shardInfo.shardId());
                     // create leases for the child shards
-                    hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(allShards, shardDetector, leaseRefresher,
+                    hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(allShards, shardDetector, leaseCoordinator.leaseRefresher(),
                             initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
                     log.debug("Finished checking for child shards of shard {}", shardInfo.shardId());
                 }
@@ -202,6 +207,17 @@ public class ShutdownTask implements ConsumerTask {
     private boolean isChildShardOfCurrentShard(Shard shard) {
         return (shard.parentShardId() != null && shard.parentShardId().equals(shardInfo.shardId())
                 || shard.adjacentParentShardId() != null && shard.adjacentParentShardId().equals(shardInfo.shardId()));
+    }
+
+    private void forceLoseLease() {
+        Collection<Lease> leases = leaseCoordinator.getAssignments();
+        if(leases != null && !leases.isEmpty()) {
+            for(Lease lease : leases) {
+                if(lease.leaseKey().equals(shardInfo.shardId())) {
+                    leaseCoordinator.dropLease(lease);
+                }
+            }
+        }
     }
 
 }
