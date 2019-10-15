@@ -56,13 +56,13 @@ class ShardSyncTask implements ITask {
      * @param shardSyncTaskIdleTimeMillis shardSync task idle time in millis
      * @param shardSyncer shardSyncer instance used to check and create new leases
      */
-    ShardSyncTask(List<Shard> shards, IKinesisProxy kinesisProxy,
+    ShardSyncTask(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesUponShardCompletion,
             boolean ignoreUnexpectedChildShards,
             long shardSyncTaskIdleTimeMillis,
-            ShardSyncer shardSyncer) {
+            ShardSyncer shardSyncer, List<Shard> shards) {
         this.shards = shards;
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
@@ -81,11 +81,12 @@ class ShardSyncTask implements ITask {
         Exception exception = null;
 
         try {
-            shardSyncer.checkAndCreateLeasesForNewShards(shards, kinesisProxy,
+            shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                     leaseManager,
                     initialPosition,
                     cleanupLeasesUponShardCompletion,
-                    ignoreUnexpectedChildShards);
+                    ignoreUnexpectedChildShards,
+                    shards);
             if (shardSyncTaskIdleTimeMillis > 0) {
                 Thread.sleep(shardSyncTaskIdleTimeMillis);
             }

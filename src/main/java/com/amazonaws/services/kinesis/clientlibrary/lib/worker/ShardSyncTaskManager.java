@@ -107,13 +107,13 @@ class ShardSyncTaskManager {
             }
 
             currentTask =
-                    new MetricsCollectingTaskDecorator(new ShardSyncTask(shards, kinesisProxy,
+                    new MetricsCollectingTaskDecorator(new ShardSyncTask(kinesisProxy,
                             leaseManager,
                             initialPositionInStream,
                             cleanupLeasesUponShardCompletion,
                             ignoreUnexpectedChildShards,
                             shardSyncIdleTimeMillis,
-                            shardSyncer), metricsFactory);
+                            shardSyncer, shards), metricsFactory);
             future = executorService.submit(currentTask);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Submitted new " + currentTask.getTaskType() + " task.");

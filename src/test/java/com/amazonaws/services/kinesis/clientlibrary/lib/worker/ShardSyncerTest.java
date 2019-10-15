@@ -230,8 +230,8 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        shardSyncer.checkAndCreateLeasesForNewShards(shards, kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
-                cleanupLeasesOfCompletedShards, false);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
+                cleanupLeasesOfCompletedShards, false, shards);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         expectedLeaseShardIds.add("shardId-4");
@@ -262,8 +262,8 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        shardSyncer.checkAndCreateLeasesForNewShards(shards, kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
-                cleanupLeasesOfCompletedShards, false);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
+                cleanupLeasesOfCompletedShards, false, shards);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         for (int i = 0; i < 11; i++) {
@@ -293,8 +293,8 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        shardSyncer.checkAndCreateLeasesForNewShards(shards, kinesisProxy, leaseManager, INITIAL_POSITION_AT_TIMESTAMP,
-                cleanupLeasesOfCompletedShards, false);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_AT_TIMESTAMP,
+                cleanupLeasesOfCompletedShards, false, shards);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         for (int i = 0; i < 11; i++) {
@@ -327,8 +327,8 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        shardSyncer.checkAndCreateLeasesForNewShards(shards, kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
-                cleanupLeasesOfCompletedShards, false);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
+                cleanupLeasesOfCompletedShards, false, shards);
         dataFile.delete();
     }
 
@@ -352,8 +352,8 @@ public class ShardSyncerTest {
         File dataFile = KinesisLocalFileDataCreator.generateTempDataFile(shards, 2, "testBootstrap1");
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
-        shardSyncer.checkAndCreateLeasesForNewShards(shards, kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
-                cleanupLeasesOfCompletedShards, true);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
+                cleanupLeasesOfCompletedShards, true, shards);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         expectedLeaseShardIds.add("shardId-4");
@@ -464,11 +464,11 @@ public class ShardSyncerTest {
             // Only need to try two times.
             for (int i = 1; i <= 2; i++) {
                 try {
-                    shardSyncer.checkAndCreateLeasesForNewShards(null, kinesisProxy,
+                    shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                             exceptionThrowingLeaseManager,
                             position,
                             cleanupLeasesOfCompletedShards,
-                            false);
+                            false, null);
                     return;
                 } catch (LeasingException e) {
                     LOG.debug("Catch leasing exception", e);
@@ -477,11 +477,11 @@ public class ShardSyncerTest {
                 exceptionThrowingLeaseManager.clearLeaseManagerThrowingExceptionScenario();
             }
         } else {
-            shardSyncer.checkAndCreateLeasesForNewShards(null, kinesisProxy,
+            shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                     leaseManager,
                     position,
                     cleanupLeasesOfCompletedShards,
-                    false);
+                    false, null);
         }
     }
 

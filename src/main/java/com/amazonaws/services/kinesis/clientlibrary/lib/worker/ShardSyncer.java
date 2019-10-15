@@ -27,9 +27,9 @@ import java.util.List;
 
 public interface ShardSyncer {
 
-    void checkAndCreateLeasesForNewShards(List<Shard> shards, IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
+    void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
                                           InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesOfCompletedShards,
-                                          boolean ignoreUnexpectedChildShards)
+                                          boolean ignoreUnexpectedChildShards, List<Shard> shards)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException;
 }

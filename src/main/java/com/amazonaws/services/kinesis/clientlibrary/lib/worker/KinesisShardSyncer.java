@@ -63,50 +63,50 @@ class KinesisShardSyncer implements ShardSyncer {
             boolean ignoreUnexpectedChildShards)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException {
-        syncShardLeases(null, kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
-                ignoreUnexpectedChildShards);
+        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards, null);
     }
 
     /**
      * Check and create leases for any new shards (e.g. following a reshard operation).
      *
-     * @param shards
      * @param kinesisProxy
      * @param leaseManager
      * @param initialPositionInStream
      * @param cleanupLeasesOfCompletedShards
      * @param ignoreUnexpectedChildShards
+     * @param shards This parameter is to reuse the listShards result from Shutdown Task
      * @throws DependencyException
      * @throws InvalidStateException
      * @throws ProvisionedThroughputException
      * @throws KinesisClientLibIOException
      */
-    public synchronized void checkAndCreateLeasesForNewShards(List<Shard> shards, IKinesisProxy kinesisProxy,
+    public synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager, InitialPositionInStreamExtended initialPositionInStream,
-            boolean cleanupLeasesOfCompletedShards, boolean ignoreUnexpectedChildShards)
+            boolean cleanupLeasesOfCompletedShards, boolean ignoreUnexpectedChildShards, List<Shard> shards)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException {
-        syncShardLeases(shards, kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards);
+        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shards);
     }
 
     /**
      * Sync leases with Kinesis shards (e.g. at startup, or when we reach end of a shard).
      *
-     * @param allShards
      * @param kinesisProxy
      * @param leaseManager
      * @param initialPosition
      * @param cleanupLeasesOfCompletedShards
      * @param ignoreUnexpectedChildShards
+     * @param allShards This parameter is to reuse the listShards result from Shutdown Task
      * @throws DependencyException
      * @throws InvalidStateException
      * @throws ProvisionedThroughputException
      * @throws KinesisClientLibIOException
      */
     // CHECKSTYLE:OFF CyclomaticComplexity
-    private synchronized void syncShardLeases(List<Shard> allShards, IKinesisProxy kinesisProxy,
+    private synchronized void syncShardLeases(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager, InitialPositionInStreamExtended initialPosition,
-            boolean cleanupLeasesOfCompletedShards, boolean ignoreUnexpectedChildShards)
+            boolean cleanupLeasesOfCompletedShards, boolean ignoreUnexpectedChildShards, List<Shard> allShards)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException {
         List<Shard> shards;
@@ -115,7 +115,7 @@ class KinesisShardSyncer implements ShardSyncer {
         } else {
             shards = allShards;
         }
-        LOG.debug("Start shard syncing... The total number of shards found: " + shards.size());
+        LOG.debug("Num Shards: " + shards.size());
 
         Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(shards);
         Map<String, Set<String>> shardIdToChildShardIdsMap = constructShardIdToChildShardIdsMap(shardIdToShardMap);
