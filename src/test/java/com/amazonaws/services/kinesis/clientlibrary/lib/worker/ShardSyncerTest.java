@@ -26,7 +26,9 @@ import java.util.Map;
 import java.util.Set;
 
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.After;
@@ -67,8 +69,7 @@ public class ShardSyncerTest {
     private static final InitialPositionInStreamExtended INITIAL_POSITION_AT_TIMESTAMP =
             InitialPositionInStreamExtended.newInitialPositionAtTimestamp(new Date(1000L));
     private final boolean cleanupLeasesOfCompletedShards = true;
-    AmazonDynamoDBClient ddbClient =
-            new AmazonDynamoDBClient(new DefaultAWSCredentialsProviderChain());
+    AmazonDynamoDB ddbClient = DynamoDBEmbedded.create().amazonDynamoDB();
     LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("tempTestTable", ddbClient);
     private static final int EXPONENT = 128;
     protected static final KinesisLeaseCleanupValidator leaseCleanupValidator = new KinesisLeaseCleanupValidator();
