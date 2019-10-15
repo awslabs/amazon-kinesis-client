@@ -20,6 +20,7 @@ import com.sun.org.apache.bcel.internal.generic.LUSHR;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -101,16 +102,16 @@ public class ShutdownTask implements ConsumerTask {
                 List<Shard> allShards = new ArrayList<>();
                 /*
                  * Revalidate if the current shard is closed before shutting down the shard consumer with reason SHARD_END
-                 * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows other
-                 * shard consumer to subscribe to this shard.
+                 * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows active
+                 * workers to contend for the lease of this shard.
                  */
                 if (localReason == ShutdownReason.SHARD_END) {
                     allShards = shardDetector.listShards();
 
                     if (!CollectionUtils.isNullOrEmpty(allShards) && !validateShardEnd(allShards)) {
                         localReason = ShutdownReason.LEASE_LOST;
-                        forceLoseLease();
-                        log.debug("Force the lease to be lost before shutting down the consumer.");
+                        dropLease();
+                        log.info("Force the lease to be lost before shutting down the consumer for Shard: " + shardInfo.shardId());
                     }
                 }
 
@@ -152,8 +153,8 @@ public class ShutdownTask implements ConsumerTask {
                 if (localReason == ShutdownReason.SHARD_END) {
                     log.debug("Looking for child shards of shard {}", shardInfo.shardId());
                     // create leases for the child shards
-                    hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(allShards, shardDetector, leaseCoordinator.leaseRefresher(),
-                            initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
+                    hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseCoordinator.leaseRefresher(),
+                            initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, allShards);
                     log.debug("Finished checking for child shards of shard {}", shardInfo.shardId());
                 }
 
@@ -205,16 +206,18 @@ public class ShutdownTask implements ConsumerTask {
     }
 
     private boolean isChildShardOfCurrentShard(Shard shard) {
-        return (shard.parentShardId() != null && shard.parentShardId().equals(shardInfo.shardId())
-                || shard.adjacentParentShardId() != null && shard.adjacentParentShardId().equals(shardInfo.shardId()));
+        return (StringUtils.equals(shard.parentShardId(), shardInfo.shardId())
+                || StringUtils.equals(shard.adjacentParentShardId(), shardInfo.shardId()));
     }
 
-    private void forceLoseLease() {
+    private void dropLease() {
         Collection<Lease> leases = leaseCoordinator.getAssignments();
         if(leases != null && !leases.isEmpty()) {
             for(Lease lease : leases) {
                 if(lease.leaseKey().equals(shardInfo.shardId())) {
                     leaseCoordinator.dropLease(lease);
+                    log.warn("Dropped lease for shutting down ShardConsumer: " + lease.leaseKey());
+                    break;
                 }
             }
         }
