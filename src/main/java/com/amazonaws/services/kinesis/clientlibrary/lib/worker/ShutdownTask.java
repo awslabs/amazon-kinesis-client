@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.util.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -105,16 +106,16 @@ class ShutdownTask implements ITask {
             List<Shard> allShards = new ArrayList<>();
             /*
              * Revalidate if the current shard is closed before shutting down the shard consumer with reason SHARD_END
-             * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows other
-             * shard consumer to subscribe to this shard.
+             * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows active
+             * workers to contend for the lease of this shard.
              */
             if(localReason == ShutdownReason.TERMINATE) {
                 allShards = kinesisProxy.getShardList();
 
                 if(!CollectionUtils.isNullOrEmpty(allShards) && !validateShardEnd(allShards)) {
                     localReason = ShutdownReason.ZOMBIE;
-                    forceLoseLease();
-                    LOG.debug("Force the lease to be lost before shutting down the consumer.");
+                    droplease();
+                    LOG.info("Force the lease to be lost before shutting down the consumer for Shard: " + shardInfo.getShardId());
                 }
             }
 
@@ -211,16 +212,18 @@ class ShutdownTask implements ITask {
     }
 
     private boolean isChildShardOfCurrentShard(Shard shard) {
-        return (shard.getParentShardId() != null && shard.getParentShardId().equals(shardInfo.getShardId())
-                || shard.getAdjacentParentShardId() != null && shard.getAdjacentParentShardId().equals(shardInfo.getShardId()));
+        return (StringUtils.equals(shard.getParentShardId(), shardInfo.getShardId())
+                || StringUtils.equals(shard.getAdjacentParentShardId(), shardInfo.getShardId()));
     }
 
-    private void forceLoseLease() {
+    private void droplease() {
         Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
         if(leases != null && !leases.isEmpty()) {
             for(KinesisClientLease lease : leases) {
                 if(lease.getLeaseKey().equals(shardInfo.getShardId())) {
                     leaseCoordinator.dropLease(lease);
+                    LOG.warn("Dropped lease for shutting down ShardConsumer: " + lease.getLeaseKey());
+                    break;
                 }
             }
         }
