@@ -41,11 +41,6 @@ class PeriodicShardSyncStrategy implements ShardSyncStrategy {
     }
 
     @Override
-    public TaskResult onShardConsumerShutDown(List<Shard> shards) {
-        return new TaskResult(null);
-    }
-
-    @Override
     public void onWorkerShutDown() {
         periodicShardSyncManager.stop();
     }

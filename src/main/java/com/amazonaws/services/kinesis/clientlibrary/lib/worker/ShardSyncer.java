@@ -29,7 +29,15 @@ public interface ShardSyncer {
 
     void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
                                           InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesOfCompletedShards,
-                                          boolean ignoreUnexpectedChildShards, List<Shard> shards)
+                                          boolean ignoreUnexpectedChildShards)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException;
+
+    default void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
+                                          InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesOfCompletedShards,
+                                          boolean ignoreUnexpectedChildShards, List<Shard> latestShards)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException,
+            KinesisClientLibIOException {
+        checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards);
+    }
 }

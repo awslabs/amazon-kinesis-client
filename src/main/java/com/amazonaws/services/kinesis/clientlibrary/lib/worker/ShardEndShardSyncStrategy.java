@@ -57,6 +57,7 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
         return onFoundCompletedShard();
     }
 
+    @Override
     public TaskResult onShardConsumerShutDown(List<Shard> shards) {
         shardSyncTaskManager.syncShardAndLeaseInfo(shards);
         return new TaskResult(null);

@@ -53,7 +53,7 @@ public interface ShardSyncStrategy {
      * @return
      */
     default TaskResult onShardConsumerShutDown(List<Shard> shards) {
-        return new TaskResult(null);
+        return onShardConsumerShutDown();
     }
 
     /**
