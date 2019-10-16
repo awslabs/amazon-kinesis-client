@@ -109,7 +109,7 @@ class ShutdownTask implements ITask {
             if(localReason == ShutdownReason.TERMINATE) {
                 allShards = kinesisProxy.getShardList();
 
-                if(!CollectionUtils.isNullOrEmpty(allShards) && !validateShardEnd(allShards)) {
+                if(!CollectionUtils.isNullOrEmpty(allShards) && !isShardInContextParentOfAny(allShards)) {
                     localReason = ShutdownReason.ZOMBIE;
                     dropLease();
                     LOG.info("Forcing the lease to be lost before shutting down the consumer for Shard: " + shardInfo.getShardId());
@@ -199,16 +199,16 @@ class ShutdownTask implements ITask {
         return reason;
     }
 
-    private boolean validateShardEnd(List<Shard> shards) {
+    private boolean isShardInContextParentOfAny(List<Shard> shards) {
         for(Shard shard : shards) {
-            if (isChildShardOfCurrentShard(shard)) {
+            if (isChildShardOfShardInContext(shard)) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean isChildShardOfCurrentShard(Shard shard) {
+    private boolean isChildShardOfShardInContext(Shard shard) {
         return (StringUtils.equals(shard.getParentShardId(), shardInfo.getShardId())
                 || StringUtils.equals(shard.getAdjacentParentShardId(), shardInfo.getShardId()));
     }
