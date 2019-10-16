@@ -98,7 +98,7 @@ class ShardConsumer {
      * @param checkpoint Checkpoint tracker
      * @param recordProcessor Record processor used to process the data records for the shard
      * @param config Kinesis library configuration
-     * @param leaseCoordinator Used to pass in leaseManager and force losing lease for some shutdown scenarios
+     * @param leaseCoordinator Used to manage the leases
      * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
      * @param executorService ExecutorService used to execute process tasks for this shard
      * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard

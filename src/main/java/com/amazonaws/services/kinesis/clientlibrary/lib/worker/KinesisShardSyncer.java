@@ -64,7 +64,7 @@ class KinesisShardSyncer implements ShardSyncer {
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException {
         syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
-                ignoreUnexpectedChildShards, null);
+                ignoreUnexpectedChildShards);
     }
 
     /**
@@ -97,6 +97,28 @@ class KinesisShardSyncer implements ShardSyncer {
      * @param initialPosition
      * @param cleanupLeasesOfCompletedShards
      * @param ignoreUnexpectedChildShards
+     * @throws DependencyException
+     * @throws InvalidStateException
+     * @throws ProvisionedThroughputException
+     * @throws KinesisClientLibIOException
+     */
+    private synchronized void syncShardLeases(IKinesisProxy kinesisProxy,
+            ILeaseManager<KinesisClientLease> leaseManager, InitialPositionInStreamExtended initialPosition,
+            boolean cleanupLeasesOfCompletedShards, boolean ignoreUnexpectedChildShards)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException,
+            KinesisClientLibIOException {
+        List<Shard> shards = getShardList(kinesisProxy);
+        syncShardLeases(kinesisProxy, leaseManager, initialPosition, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shards);
+    }
+
+    /**
+     * Sync leases with Kinesis shards (e.g. at startup, or when we reach end of a shard).
+     *
+     * @param kinesisProxy
+     * @param leaseManager
+     * @param initialPosition
+     * @param cleanupLeasesOfCompletedShards
+     * @param ignoreUnexpectedChildShards
      * @param allShards This parameter is to reuse the listShards result from Shutdown Task
      * @throws DependencyException
      * @throws InvalidStateException
@@ -111,7 +133,7 @@ class KinesisShardSyncer implements ShardSyncer {
             KinesisClientLibIOException {
         List<Shard> shards;
         if(CollectionUtils.isNullOrEmpty(allShards)) {
-            shards = getShardList((kinesisProxy));
+            shards = getShardList(kinesisProxy);
         } else {
             shards = allShards;
         }

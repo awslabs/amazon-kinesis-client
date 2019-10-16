@@ -25,7 +25,6 @@ import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
@@ -48,7 +47,6 @@ class ShutdownTask implements ITask {
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ShutdownReason reason;
     private final IKinesisProxy kinesisProxy;
-    private final ILeaseManager<KinesisClientLease> leaseManager;
     private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
@@ -82,7 +80,6 @@ class ShutdownTask implements ITask {
         this.initialPositionInStream = initialPositionInStream;
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
-        this.leaseManager = leaseCoordinator.getLeaseManager();
         this.leaseCoordinator = leaseCoordinator;
         this.backoffTimeMillis = backoffTimeMillis;
         this.getRecordsCache = getRecordsCache;
@@ -114,8 +111,8 @@ class ShutdownTask implements ITask {
 
                 if(!CollectionUtils.isNullOrEmpty(allShards) && !validateShardEnd(allShards)) {
                     localReason = ShutdownReason.ZOMBIE;
-                    droplease();
-                    LOG.info("Force the lease to be lost before shutting down the consumer for Shard: " + shardInfo.getShardId());
+                    dropLease();
+                    LOG.info("Forcing the lease to be lost before shutting down the consumer for Shard: " + shardInfo.getShardId());
                 }
             }
 
@@ -216,7 +213,7 @@ class ShutdownTask implements ITask {
                 || StringUtils.equals(shard.getAdjacentParentShardId(), shardInfo.getShardId()));
     }
 
-    private void droplease() {
+    private void dropLease() {
         Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
         if(leases != null && !leases.isEmpty()) {
             for(KinesisClientLease lease : leases) {
