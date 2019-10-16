@@ -52,7 +52,9 @@ public interface ShardSyncStrategy {
      *
      * @return
      */
-    TaskResult onShardConsumerShutDown(List<Shard> shards);
+    default TaskResult onShardConsumerShutDown(List<Shard> shards) {
+        return new TaskResult(null);
+    }
 
     /**
      * Invoked when worker is shutdown.
