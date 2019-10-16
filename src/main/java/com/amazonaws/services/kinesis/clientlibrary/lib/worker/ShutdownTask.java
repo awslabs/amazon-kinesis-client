@@ -100,16 +100,16 @@ class ShutdownTask implements ITask {
 
         try {
             ShutdownReason localReason = reason;
-            List<Shard> allShards = new ArrayList<>();
+            List<Shard> latestShards = null;
             /*
              * Revalidate if the current shard is closed before shutting down the shard consumer with reason SHARD_END
              * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows active
              * workers to contend for the lease of this shard.
              */
             if(localReason == ShutdownReason.TERMINATE) {
-                allShards = kinesisProxy.getShardList();
+                latestShards = kinesisProxy.getShardList();
 
-                if(!CollectionUtils.isNullOrEmpty(allShards) && !isShardInContextParentOfAny(allShards)) {
+                if(!CollectionUtils.isNullOrEmpty(latestShards) && !isShardInContextParentOfAny(latestShards)) {
                     localReason = ShutdownReason.ZOMBIE;
                     dropLease();
                     LOG.info("Forcing the lease to be lost before shutting down the consumer for Shard: " + shardInfo.getShardId());
@@ -156,7 +156,7 @@ class ShutdownTask implements ITask {
             if (localReason == ShutdownReason.TERMINATE) {
                 LOG.debug("Looking for child shards of shard " + shardInfo.getShardId());
                 // create leases for the child shards
-                TaskResult result = shardSyncStrategy.onShardConsumerShutDown(allShards);
+                TaskResult result = shardSyncStrategy.onShardConsumerShutDown(latestShards);
                 if (result.getException() != null) {
                     LOG.debug("Exception while trying to sync shards on the shutdown of shard: " + shardInfo
                             .getShardId());

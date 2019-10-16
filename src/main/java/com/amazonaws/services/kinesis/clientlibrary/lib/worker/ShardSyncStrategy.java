@@ -48,11 +48,10 @@ public interface ShardSyncStrategy {
     /**
      * Invoked when ShardConsumer is shutdown and all shards are provided.
      *
-     * @param shards - Optional parameter, can be null. Pass in parameter to reuse output from ListShards API.
-     *
+     * @param latestShards - Optional parameter, can be null. Pass in parameter to reuse output from ListShards API.
      * @return
      */
-    default TaskResult onShardConsumerShutDown(List<Shard> shards) {
+    default TaskResult onShardConsumerShutDown(List<Shard> latestShards) {
         return onShardConsumerShutDown();
     }
 

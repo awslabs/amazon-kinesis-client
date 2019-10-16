@@ -1,8 +1,5 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.model.Shard;
-
-import java.util.List;
 
 /**
  * An implementation of ShardSyncStrategy.

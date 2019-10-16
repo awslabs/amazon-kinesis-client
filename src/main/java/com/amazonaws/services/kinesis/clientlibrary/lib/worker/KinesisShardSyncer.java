@@ -80,6 +80,7 @@ class KinesisShardSyncer implements ShardSyncer {
      * @throws ProvisionedThroughputException
      * @throws KinesisClientLibIOException
      */
+    @Override
     public synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy, ILeaseManager<KinesisClientLease> leaseManager,
                                           InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesOfCompletedShards,
                                           boolean ignoreUnexpectedChildShards)
@@ -96,7 +97,7 @@ class KinesisShardSyncer implements ShardSyncer {
      * @param initialPositionInStream
      * @param cleanupLeasesOfCompletedShards
      * @param ignoreUnexpectedChildShards
-     * @param latestShards latestShards latest snapshot of shards to reuse
+     * @param latestShards latest snapshot of shards to reuse
      * @throws DependencyException
      * @throws InvalidStateException
      * @throws ProvisionedThroughputException
@@ -141,7 +142,7 @@ class KinesisShardSyncer implements ShardSyncer {
      * @param initialPosition
      * @param cleanupLeasesOfCompletedShards
      * @param ignoreUnexpectedChildShards
-     * @param latestShards latestShards latest snapshot of shards to reuse
+     * @param latestShards latest snapshot of shards to reuse
      * @throws DependencyException
      * @throws InvalidStateException
      * @throws ProvisionedThroughputException

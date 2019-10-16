@@ -42,10 +42,9 @@ class ShardSyncTask implements ITask {
     private final long shardSyncTaskIdleTimeMillis;
     private final TaskType taskType = TaskType.SHARDSYNC;
     private final ShardSyncer shardSyncer;
-    private final List<Shard> shards;
+    private final List<Shard> latestShards;
 
     /**
-     * @param shards Used to provide a list of all shards
      * @param kinesisProxy Used to fetch information about the stream (e.g. shard list)
      * @param leaseManager Used to fetch and create leases
      * @param initialPositionInStream One of LATEST, TRIM_HORIZON or AT_TIMESTAMP. Amazon Kinesis Client Library will
@@ -55,6 +54,7 @@ class ShardSyncTask implements ITask {
      *        in Kinesis)
      * @param shardSyncTaskIdleTimeMillis shardSync task idle time in millis
      * @param shardSyncer shardSyncer instance used to check and create new leases
+     * @param latestShards Used to provide a list of all shards
      */
     ShardSyncTask(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
@@ -62,8 +62,8 @@ class ShardSyncTask implements ITask {
             boolean cleanupLeasesUponShardCompletion,
             boolean ignoreUnexpectedChildShards,
             long shardSyncTaskIdleTimeMillis,
-            ShardSyncer shardSyncer, List<Shard> shards) {
-        this.shards = shards;
+            ShardSyncer shardSyncer, List<Shard> latestShards) {
+        this.latestShards = latestShards;
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.initialPosition = initialPositionInStream;
@@ -86,7 +86,7 @@ class ShardSyncTask implements ITask {
                     initialPosition,
                     cleanupLeasesUponShardCompletion,
                     ignoreUnexpectedChildShards,
-                    shards);
+                    latestShards);
             if (shardSyncTaskIdleTimeMillis > 0) {
                 Thread.sleep(shardSyncTaskIdleTimeMillis);
             }

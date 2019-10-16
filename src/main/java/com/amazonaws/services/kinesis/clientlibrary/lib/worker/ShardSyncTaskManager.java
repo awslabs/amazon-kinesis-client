@@ -87,11 +87,11 @@ class ShardSyncTaskManager {
         this.shardSyncer = shardSyncer;
     }
 
-    synchronized Future<TaskResult> syncShardAndLeaseInfo(List<Shard> shards) {
-        return checkAndSubmitNextTask(shards);
+    synchronized Future<TaskResult> syncShardAndLeaseInfo(List<Shard> latestShards) {
+        return checkAndSubmitNextTask(latestShards);
     }
 
-    private synchronized Future<TaskResult> checkAndSubmitNextTask(List<Shard> shards) {
+    private synchronized Future<TaskResult> checkAndSubmitNextTask(List<Shard> latestShards) {
         Future<TaskResult> submittedTaskFuture = null;
         if ((future == null) || future.isCancelled() || future.isDone()) {
             if ((future != null) && future.isDone()) {
@@ -113,7 +113,7 @@ class ShardSyncTaskManager {
                             cleanupLeasesUponShardCompletion,
                             ignoreUnexpectedChildShards,
                             shardSyncIdleTimeMillis,
-                            shardSyncer, shards), metricsFactory);
+                            shardSyncer, latestShards), metricsFactory);
             future = executorService.submit(currentTask);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Submitted new " + currentTask.getTaskType() + " task.");
