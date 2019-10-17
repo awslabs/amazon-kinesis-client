@@ -54,7 +54,7 @@ class ShardSyncTask implements ITask {
      *        in Kinesis)
      * @param shardSyncTaskIdleTimeMillis shardSync task idle time in millis
      * @param shardSyncer shardSyncer instance used to check and create new leases
-     * @param latestShards Used to provide a list of all shards
+     * @param latestShards latest snapshot of shards to reuse
      */
     ShardSyncTask(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,

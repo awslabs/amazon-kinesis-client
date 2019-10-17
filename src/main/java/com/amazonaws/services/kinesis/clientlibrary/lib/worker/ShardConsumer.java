@@ -98,7 +98,7 @@ class ShardConsumer {
      * @param checkpoint Checkpoint tracker
      * @param recordProcessor Record processor used to process the data records for the shard
      * @param config Kinesis library configuration
-     * @param leaseCoordinator Used to manage the leases
+     * @param leaseCoordinator Used to manage leases for current worker
      * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
      * @param executorService ExecutorService used to execute process tasks for this shard
      * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
@@ -139,7 +139,7 @@ class ShardConsumer {
      * @param streamConfig Stream configuration to use
      * @param checkpoint Checkpoint tracker
      * @param recordProcessor Record processor used to process the data records for the shard
-     * @param leaseCoordinator Used to create leases for new shards
+     * @param leaseCoordinator Used to manage leases for current worker
      * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
      * @param executorService ExecutorService used to execute process tasks for this shard
      * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
@@ -197,7 +197,7 @@ class ShardConsumer {
      * @param checkpoint Checkpoint tracker
      * @param recordProcessor Record processor used to process the data records for the shard
      * @param recordProcessorCheckpointer RecordProcessorCheckpointer to use to checkpoint progress
-     * @param leaseCoordinator Used to create leases for new shards
+     * @param leaseCoordinator Used to manage leases for current worker
      * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
      * @param cleanupLeasesOfCompletedShards  clean up the leases of completed shards
      * @param executorService ExecutorService used to execute process tasks for this shard

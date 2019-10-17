@@ -117,8 +117,8 @@ public class ShardConsumerTest {
     private IKinesisProxy streamProxy;
     @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
-    @InjectMocks
-    private KinesisClientLibLeaseCoordinator leaseCoordinator = new KinesisClientLibLeaseCoordinator(leaseManager, "testCoordinator", 1000, 1000);
+    @Mock
+    private KinesisClientLibLeaseCoordinator leaseCoordinator;
     @Mock
     private ICheckpoint checkpoint;
     @Mock
@@ -148,6 +148,7 @@ public class ShardConsumerTest {
         when(checkpoint.getCheckpointObject(anyString())).thenThrow(NullPointerException.class);
 
         when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         StreamConfig streamConfig =
                 new StreamConfig(streamProxy,
                         1,
@@ -197,6 +198,7 @@ public class ShardConsumerTest {
         when(checkpoint.getCheckpoint(anyString())).thenThrow(NullPointerException.class);
         when(checkpoint.getCheckpointObject(anyString())).thenThrow(NullPointerException.class);
         when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         StreamConfig streamConfig =
                 new StreamConfig(streamProxy,
                         1,
@@ -267,6 +269,7 @@ public class ShardConsumerTest {
         final ExtendedSequenceNumber checkpointSequenceNumber = new ExtendedSequenceNumber("123");
         final ExtendedSequenceNumber pendingCheckpointSequenceNumber = null;
         when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(
                 new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));
 
@@ -335,6 +338,7 @@ public class ShardConsumerTest {
         ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
         checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.TRIM_HORIZON, testConcurrencyToken);
         when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         TestStreamlet processor = new TestStreamlet();
 
         StreamConfig streamConfig =
@@ -479,7 +483,7 @@ public class ShardConsumerTest {
         final int idleTimeMS = 0; // keep unit tests fast
         ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
         checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.TRIM_HORIZON, testConcurrencyToken);
-        when(leaseManager.getLease(anyString())).thenReturn(null);
+
 
         TransientShutdownErrorTestStreamlet processor = new TransientShutdownErrorTestStreamlet();
 
@@ -499,6 +503,9 @@ public class ShardConsumerTest {
         when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),
                 any(IMetricsFactory.class), anyInt()))
                 .thenReturn(getRecordsCache);
+        when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId())).thenReturn(new KinesisClientLease());
 
         RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
                 shardInfo,
@@ -622,6 +629,7 @@ public class ShardConsumerTest {
         ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
         checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.TRIM_HORIZON, testConcurrencyToken);
         when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
 
         TransientShutdownErrorTestStreamlet processor = new TransientShutdownErrorTestStreamlet();
 
@@ -763,6 +771,7 @@ public class ShardConsumerTest {
         ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
         checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.AT_TIMESTAMP, testConcurrencyToken);
         when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         TestStreamlet processor = new TestStreamlet();
 
         StreamConfig streamConfig =
@@ -891,6 +900,7 @@ public class ShardConsumerTest {
         final ExtendedSequenceNumber checkpointSequenceNumber = new ExtendedSequenceNumber("123");
         final ExtendedSequenceNumber pendingCheckpointSequenceNumber = new ExtendedSequenceNumber("999");
         when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         when(config.getRecordsFetcherFactory()).thenReturn(new SimpleRecordsFetcherFactory());
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(
                 new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));

@@ -109,7 +109,9 @@ class ShutdownTask implements ITask {
             if(localReason == ShutdownReason.TERMINATE) {
                 latestShards = kinesisProxy.getShardList();
 
-                if(!CollectionUtils.isNullOrEmpty(latestShards) && !isShardInContextParentOfAny(latestShards)) {
+                //If latestShards is null or empty, we should still shut down the ShardConsumer with Zombie state which avoid
+                // checking point with SHARD_END sequence number.
+                if(CollectionUtils.isNullOrEmpty(latestShards) || !isShardInContextParentOfAny(latestShards)) {
                     localReason = ShutdownReason.ZOMBIE;
                     dropLease();
                     LOG.info("Forcing the lease to be lost before shutting down the consumer for Shard: " + shardInfo.getShardId());
@@ -214,15 +216,8 @@ class ShutdownTask implements ITask {
     }
 
     private void dropLease() {
-        Collection<KinesisClientLease> leases = leaseCoordinator.getAssignments();
-        if(leases != null && !leases.isEmpty()) {
-            for(KinesisClientLease lease : leases) {
-                if(lease.getLeaseKey().equals(shardInfo.getShardId())) {
-                    leaseCoordinator.dropLease(lease);
-                    LOG.warn("Dropped lease for shutting down ShardConsumer: " + lease.getLeaseKey());
-                    break;
-                }
-            }
-        }
+        KinesisClientLease lease = leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId());
+        leaseCoordinator.dropLease(lease);
+        LOG.warn("Dropped lease for shutting down ShardConsumer: " + lease.getLeaseKey());
     }
 }
