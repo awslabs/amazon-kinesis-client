@@ -345,7 +345,7 @@ class KinesisShardSyncer implements ShardSyncer {
         return shardIdToChildShardIdsMap;
     }
 
-    public List<Shard> getShardList(IKinesisProxy kinesisProxy) throws KinesisClientLibIOException {
+    private List<Shard> getShardList(IKinesisProxy kinesisProxy) throws KinesisClientLibIOException {
         List<Shard> shards = kinesisProxy.getShardList();
         if (shards == null) {
             throw new KinesisClientLibIOException(
