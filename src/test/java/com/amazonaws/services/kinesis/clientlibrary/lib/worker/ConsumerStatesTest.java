@@ -35,6 +35,7 @@ import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
@@ -66,6 +67,8 @@ public class ConsumerStatesTest {
     private KinesisDataFetcher dataFetcher;
     @Mock
     private ILeaseManager<KinesisClientLease> leaseManager;
+    @InjectMocks
+    private KinesisClientLibLeaseCoordinator leaseCoordinator = new KinesisClientLibLeaseCoordinator(leaseManager, "testCoordinator", 1000, 1000);
     @Mock
     private ICheckpoint checkpoint;
     @Mock
@@ -93,6 +96,7 @@ public class ConsumerStatesTest {
         when(consumer.getShardInfo()).thenReturn(shardInfo);
         when(consumer.getDataFetcher()).thenReturn(dataFetcher);
         when(consumer.getLeaseManager()).thenReturn(leaseManager);
+        when(consumer.getLeaseCoordinator()).thenReturn(leaseCoordinator);
         when(consumer.getCheckpoint()).thenReturn(checkpoint);
         when(consumer.getFuture()).thenReturn(future);
         when(consumer.getShutdownNotification()).thenReturn(shutdownNotification);
@@ -294,7 +298,7 @@ public class ConsumerStatesTest {
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, shutdownTask(ShutdownReason.class, "reason", equalTo(reason)));
         assertThat(task, shutdownTask(IKinesisProxy.class, "kinesisProxy", equalTo(kinesisProxy)));
-        assertThat(task, shutdownTask(LEASE_MANAGER_CLASS, "leaseManager", equalTo(leaseManager)));
+        assertThat(task, shutdownTask(KinesisClientLibLeaseCoordinator.class, "leaseCoordinator", equalTo(leaseCoordinator)));
         assertThat(task, shutdownTask(InitialPositionInStreamExtended.class, "initialPositionInStream",
                 equalTo(initialPositionInStream)));
         assertThat(task,

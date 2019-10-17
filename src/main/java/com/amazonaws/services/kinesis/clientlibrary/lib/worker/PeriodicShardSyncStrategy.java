@@ -1,5 +1,6 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+
 /**
  * An implementation of ShardSyncStrategy.
  */

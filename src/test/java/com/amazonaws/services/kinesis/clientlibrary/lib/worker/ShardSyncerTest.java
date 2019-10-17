@@ -25,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -34,7 +37,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ExceptionThrowingLeaseManager.ExceptionThrowingLeaseManagerMethods;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
@@ -230,7 +232,7 @@ public class ShardSyncerTest {
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
         shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
-                cleanupLeasesOfCompletedShards, false);
+                cleanupLeasesOfCompletedShards, false, shards);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         expectedLeaseShardIds.add("shardId-4");
@@ -262,7 +264,7 @@ public class ShardSyncerTest {
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
         shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
-                cleanupLeasesOfCompletedShards, false);
+                cleanupLeasesOfCompletedShards, false, shards);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         for (int i = 0; i < 11; i++) {
@@ -293,7 +295,7 @@ public class ShardSyncerTest {
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
         shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_AT_TIMESTAMP,
-                cleanupLeasesOfCompletedShards, false);
+                cleanupLeasesOfCompletedShards, false, shards);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         for (int i = 0; i < 11; i++) {
@@ -327,7 +329,7 @@ public class ShardSyncerTest {
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
         shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_TRIM_HORIZON,
-                cleanupLeasesOfCompletedShards, false);
+                cleanupLeasesOfCompletedShards, false, shards);
         dataFile.delete();
     }
 
@@ -352,7 +354,7 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
         shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
-                cleanupLeasesOfCompletedShards, true);
+                cleanupLeasesOfCompletedShards, true, shards);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         expectedLeaseShardIds.add("shardId-4");
@@ -467,7 +469,7 @@ public class ShardSyncerTest {
                             exceptionThrowingLeaseManager,
                             position,
                             cleanupLeasesOfCompletedShards,
-                            false);
+                            false, null);
                     return;
                 } catch (LeasingException e) {
                     LOG.debug("Catch leasing exception", e);
@@ -480,7 +482,7 @@ public class ShardSyncerTest {
                     leaseManager,
                     position,
                     cleanupLeasesOfCompletedShards,
-                    false);
+                    false, null);
         }
     }
 

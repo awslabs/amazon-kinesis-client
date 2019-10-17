@@ -1,8 +1,10 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import com.amazonaws.services.kinesis.model.Shard;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -53,6 +55,12 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
     @Override
     public TaskResult onShardConsumerShutDown() {
         return onFoundCompletedShard();
+    }
+
+    @Override
+    public TaskResult onShardConsumerShutDown(List<Shard> latestShards) {
+        shardSyncTaskManager.syncShardAndLeaseInfo(latestShards);
+        return new TaskResult(null);
     }
 
     @Override
