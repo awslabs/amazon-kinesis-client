@@ -1,4 +1,17 @@
 # Changelog
+## Release 1.12.0 (October 17, 2019)
+[Milestone#41](https://github.com/awslabs/amazon-kinesis-client/milestone/41)
+* Adding logging around shard end codepaths.
+  * [PR #585](https://github.com/awslabs/amazon-kinesis-client/pull/585)
+* Updating checkpointing failure message to refer to javadocs.
+  * [PR #590](https://github.com/awslabs/amazon-kinesis-client/pull/590)
+* Updating Sonatype to dedicated AWS endpoint.
+  * [PR #618](https://github.com/awslabs/amazon-kinesis-client/pull/618)
+* Introducing a validation step to verify if ShardEnd is reached, to prevent shard consumer stuck scenarios in the event of malformed response from service.
+  * [PR #623](https://github.com/awslabs/amazon-kinesis-client/pull/623)
+* Updating AWS SDK to 1.11.655
+  * [PR #626](https://github.com/awslabs/amazon-kinesis-client/pull/626)
+
 ## Release 1.11.2 (August 15, 2019)
 [Milestone#35](https://github.com/awslabs/amazon-kinesis-client/milestone/35)
 * Added support for metrics emission in `PeriodicShardSyncer`.
