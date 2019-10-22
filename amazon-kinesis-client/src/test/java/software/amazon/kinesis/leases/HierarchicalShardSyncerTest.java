@@ -171,6 +171,9 @@ public class HierarchicalShardSyncerTest {
         testCheckAndCreateLeasesForShardsIfMissing(INITIAL_POSITION_LATEST);
     }
 
+    /**
+     * Test checkAndCreateLeaseForNewShards while not providing a pre-fetched list of shards
+     */
     @Test
     public void testCheckAndCreateLeasesForShardsIfMissingAtLatest() throws Exception {
         final List<Shard> shards = constructShardListForGraphA();
@@ -205,6 +208,10 @@ public class HierarchicalShardSyncerTest {
 
     }
 
+    /**
+     * Test checkAndCreateLeaseForNewShards with a pre-fetched list of shards. In this scenario, shardDetector.listShards()
+     * should never be called.
+     */
     @Test
     public void testCheckAndCreateLeasesForShardsWithShardList() throws Exception {
         final List<Shard> latestShards = constructShardListForGraphA();
@@ -237,6 +244,10 @@ public class HierarchicalShardSyncerTest {
         verify(dynamoDBLeaseRefresher, never()).deleteLease(any(Lease.class));
     }
 
+    /**
+     * Test checkAndCreateLeaseForNewShards with an empty list of shards. In this scenario, shardDetector.listShards()
+     * should never be called.
+     */
     @Test
     public void testCheckAndCreateLeasesForShardsWithEmptyShardList() throws Exception {
         final List<Shard> shards = constructShardListForGraphA();

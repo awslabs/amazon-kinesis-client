@@ -109,6 +109,7 @@ public class ShutdownTaskTest {
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that customer doesn't implement checkpoint in their implementation
      */
     @Test
     public final void testCallWhenApplicationDoesNotCheckpoint() {
@@ -122,6 +123,7 @@ public class ShutdownTaskTest {
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that checkAndCreateLeaseForNewShards throws an exception.
      */
     @Test
     public final void testCallWhenSyncingShardsThrows() throws Exception {
@@ -147,6 +149,7 @@ public class ShutdownTaskTest {
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that ShutdownTask is created for ShardConsumer reaching the Shard End.
      */
     @Test
     public final void testCallWhenTrueShardEnd() {
@@ -171,6 +174,7 @@ public class ShutdownTaskTest {
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that a ShutdownTask is created for detecting a false Shard End.
      */
     @Test
     public final void testCallWhenFalseShardEnd() {
@@ -194,6 +198,7 @@ public class ShutdownTaskTest {
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that a ShutdownTask is created for the ShardConsumer losing the lease.
      */
     @Test
     public final void testCallWhenLeaseLost() {
