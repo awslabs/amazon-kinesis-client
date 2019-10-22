@@ -42,6 +42,7 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
+import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
@@ -124,8 +125,8 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testCallWhenSyncingShardsThrows() throws Exception {
-        List<Shard> shards = constructShardListGraphA();
-        when(shardDetector.listShards()).thenReturn(shards);
+        List<Shard> latestShards = constructShardListGraphA();
+        when(shardDetector.listShards()).thenReturn(latestShards);
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
@@ -134,7 +135,7 @@ public class ShutdownTaskTest {
         }).when(hierarchicalShardSyncer)
                 .checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, INITIAL_POSITION_TRIM_HORIZON,
                         cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
-                        NULL_METRICS_FACTORY.createMetrics(), shards);
+                        NULL_METRICS_FACTORY.createMetrics(), latestShards);
 
         final TaskResult result = task.call();
         assertNotNull(result.getException());
@@ -188,7 +189,7 @@ public class ShutdownTaskTest {
         verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor).leaseLost(LeaseLostInput.builder().build());
         verify(shardDetector, times(1)).listShards();
-        verify(leaseCoordinator).getAssignments();
+        verify(leaseCoordinator).getCurrentlyHeldLease(shardInfo.shardId());
     }
 
     /**

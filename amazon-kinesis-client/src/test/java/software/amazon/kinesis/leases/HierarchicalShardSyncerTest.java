@@ -207,16 +207,16 @@ public class HierarchicalShardSyncerTest {
 
     @Test
     public void testCheckAndCreateLeasesForShardsWithShardList() throws Exception {
-        final List<Shard> shards = constructShardListForGraphA();
+        final List<Shard> latestShards = constructShardListForGraphA();
 
         final ArgumentCaptor<Lease> leaseCaptor = ArgumentCaptor.forClass(Lease.class);
-        when(shardDetector.listShards()).thenReturn(shards);
+        when(shardDetector.listShards()).thenReturn(latestShards);
         when(dynamoDBLeaseRefresher.listLeases()).thenReturn(Collections.emptyList());
         when(dynamoDBLeaseRefresher.createLeaseIfNotExists(leaseCaptor.capture())).thenReturn(true);
 
         hierarchicalShardSyncer
                 .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
-                                                 cleanupLeasesOfCompletedShards, false, SCOPE, shards);
+                                                 cleanupLeasesOfCompletedShards, false, SCOPE, latestShards);
 
         final Set<String> expectedShardIds = new HashSet<>(
                 Arrays.asList("shardId-4", "shardId-8", "shardId-9", "shardId-10"));
