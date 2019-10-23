@@ -43,6 +43,7 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -54,6 +55,8 @@ import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+
+import javax.swing.*;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ConsumerStatesTest {
@@ -72,6 +75,8 @@ public class ConsumerStatesTest {
     private ExecutorService executorService;
     @Mock
     private ShardInfo shardInfo;
+    @Mock
+    private LeaseCoordinator leaseCoordinator;
     @Mock
     private LeaseRefresher leaseRefresher;
     @Mock
@@ -109,7 +114,7 @@ public class ConsumerStatesTest {
 
     @Before
     public void setup() {
-        argument = new ShardConsumerArgument(shardInfo, STREAM_NAME, leaseRefresher, executorService, recordsPublisher,
+        argument = new ShardConsumerArgument(shardInfo, STREAM_NAME, leaseCoordinator, executorService, recordsPublisher,
                 shardRecordProcessor, checkpointer, recordProcessorCheckpointer, parentShardPollIntervalMillis,
                 taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,
@@ -127,6 +132,7 @@ public class ConsumerStatesTest {
     @Test
     public void blockOnParentStateTest() {
         ConsumerState state = ShardConsumerState.WAITING_ON_PARENT_SHARDS.consumerState();
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         ConsumerTask task = state.createTask(argument, consumer, null);
 
@@ -309,7 +315,7 @@ public class ConsumerStatesTest {
         assertThat(task, shutdownTask(ShardRecordProcessorCheckpointer.class, "recordProcessorCheckpointer",
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, shutdownTask(ShutdownReason.class, "reason", equalTo(reason)));
-        assertThat(task, shutdownTask(LEASE_REFRESHER_CLASS, "leaseRefresher", equalTo(leaseRefresher)));
+        assertThat(task, shutdownTask(LeaseCoordinator.class, "leaseCoordinator", equalTo(leaseCoordinator)));
         assertThat(task, shutdownTask(InitialPositionInStreamExtended.class, "initialPositionInStream",
                 equalTo(initialPositionInStream)));
         assertThat(task,

@@ -78,22 +78,21 @@ public class HierarchicalShardSyncer {
             final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
             final MetricsScope scope) throws DependencyException, InvalidStateException,
             ProvisionedThroughputException, KinesisClientLibIOException {
-        final List<Shard> shards = getShardList(shardDetector);
-        checkAndCreateLeaseForNewShards(shards, shardDetector, leaseRefresher, initialPosition, cleanupLeasesOfCompletedShards,
-                                        ignoreUnexpectedChildShards, scope);
+        final List<Shard> latestShards = getShardList(shardDetector);
+        checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition, cleanupLeasesOfCompletedShards,
+                                        ignoreUnexpectedChildShards, scope, latestShards);
     }
 
     //Provide a pre-collcted list of shards to avoid calling ListShards API
-    public synchronized void checkAndCreateLeaseForNewShards(List<Shard> shards, @NonNull final ShardDetector shardDetector,
+    public synchronized void checkAndCreateLeaseForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition, final boolean cleanupLeasesOfCompletedShards,
-            final boolean ignoreUnexpectedChildShards, final MetricsScope scope)throws DependencyException, InvalidStateException,
+            final boolean ignoreUnexpectedChildShards, final MetricsScope scope, List<Shard> latestShards)throws DependencyException, InvalidStateException,
             ProvisionedThroughputException, KinesisClientLibIOException {
-        if(CollectionUtils.isNullOrEmpty(shards)) {
-            shards = getShardList(shardDetector);
+        if (!CollectionUtils.isNullOrEmpty(latestShards)) {
+            log.debug("Num shards: {}", latestShards.size());
         }
-        log.debug("Num shards: {}", shards.size());
 
-        final Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(shards);
+        final Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(latestShards);
         final Map<String, Set<String>> shardIdToChildShardIdsMap = constructShardIdToChildShardIdsMap(
                 shardIdToShardMap);
         final Set<String> inconsistentShardIds = findInconsistentShardIds(shardIdToChildShardIdsMap, shardIdToShardMap);
@@ -103,8 +102,7 @@ public class HierarchicalShardSyncer {
 
         final List<Lease> currentLeases = leaseRefresher.listLeases();
 
-        final List<Lease> newLeasesToCreate = determineNewLeasesToCreate(shards, currentLeases, initialPosition,
-                                                                         inconsistentShardIds);
+        final List<Lease> newLeasesToCreate = determineNewLeasesToCreate(latestShards, currentLeases, initialPosition, inconsistentShardIds);
         log.debug("Num new leases to create: {}", newLeasesToCreate.size());
         for (Lease lease : newLeasesToCreate) {
             long startTime = System.currentTimeMillis();
@@ -116,13 +114,11 @@ public class HierarchicalShardSyncer {
                 MetricsUtil.addSuccessAndLatency(scope, "CreateLease", success, startTime, MetricsLevel.DETAILED);
             }
         }
-
         final List<Lease> trackedLeases = new ArrayList<>(currentLeases);
         trackedLeases.addAll(newLeasesToCreate);
-        cleanupGarbageLeases(shardDetector, shards, trackedLeases, leaseRefresher);
+        cleanupGarbageLeases(shardDetector, latestShards, trackedLeases, leaseRefresher);
         if (cleanupLeasesOfCompletedShards) {
-            cleanupLeasesOfFinishedShards(currentLeases, shardIdToShardMap, shardIdToChildShardIdsMap, trackedLeases,
-                                          leaseRefresher);
+            cleanupLeasesOfFinishedShards(currentLeases, shardIdToShardMap, shardIdToChildShardIdsMap, trackedLeases, leaseRefresher);
         }
 
     }

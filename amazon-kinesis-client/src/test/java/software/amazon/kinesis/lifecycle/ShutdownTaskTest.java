@@ -42,6 +42,8 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -83,6 +85,8 @@ public class ShutdownTaskTest {
     @Mock
     private LeaseRefresher leaseRefresher;
     @Mock
+    private LeaseCoordinator leaseCoordinator;
+    @Mock
     private ShardDetector shardDetector;
     @Mock
     private HierarchicalShardSyncer hierarchicalShardSyncer;
@@ -99,12 +103,13 @@ public class ShutdownTaskTest {
 
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
-                ignoreUnexpectedChildShards, leaseRefresher, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
                 hierarchicalShardSyncer, NULL_METRICS_FACTORY);
     }
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that customer doesn't implement checkpoint in their implementation
      */
     @Test
     public final void testCallWhenApplicationDoesNotCheckpoint() {
@@ -118,19 +123,21 @@ public class ShutdownTaskTest {
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that checkAndCreateLeaseForNewShards throws an exception.
      */
     @Test
     public final void testCallWhenSyncingShardsThrows() throws Exception {
-        List<Shard> shards = constructShardListGraphA();
-        when(shardDetector.listShards()).thenReturn(shards);
+        List<Shard> latestShards = constructShardListGraphA();
+        when(shardDetector.listShards()).thenReturn(latestShards);
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         doAnswer((invocation) -> {
             throw new KinesisClientLibIOException("KinesisClientLibIOException");
         }).when(hierarchicalShardSyncer)
-                .checkAndCreateLeaseForNewShards(shards, shardDetector, leaseRefresher, INITIAL_POSITION_TRIM_HORIZON,
+                .checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, INITIAL_POSITION_TRIM_HORIZON,
                         cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
-                        NULL_METRICS_FACTORY.createMetrics());
+                        NULL_METRICS_FACTORY.createMetrics(), latestShards);
 
         final TaskResult result = task.call();
         assertNotNull(result.getException());
@@ -142,6 +149,7 @@ public class ShutdownTaskTest {
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that ShutdownTask is created for ShardConsumer reaching the Shard End.
      */
     @Test
     public final void testCallWhenTrueShardEnd() {
@@ -149,7 +157,7 @@ public class ShutdownTaskTest {
                                   ExtendedSequenceNumber.LATEST);
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
-                                ignoreUnexpectedChildShards, leaseRefresher, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
                                 hierarchicalShardSyncer, NULL_METRICS_FACTORY);
 
         when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
@@ -161,10 +169,12 @@ public class ShutdownTaskTest {
         verify(shardRecordProcessor).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
         verify(shardDetector, times(1)).listShards();
+        verify(leaseCoordinator, never()).getAssignments();
     }
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that a ShutdownTask is created for detecting a false Shard End.
      */
     @Test
     public final void testCallWhenFalseShardEnd() {
@@ -172,7 +182,7 @@ public class ShutdownTaskTest {
                                   ExtendedSequenceNumber.LATEST);
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
-                                ignoreUnexpectedChildShards, leaseRefresher, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
                                 hierarchicalShardSyncer, NULL_METRICS_FACTORY);
 
         when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
@@ -183,10 +193,12 @@ public class ShutdownTaskTest {
         verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor).leaseLost(LeaseLostInput.builder().build());
         verify(shardDetector, times(1)).listShards();
+        verify(leaseCoordinator).getCurrentlyHeldLease(shardInfo.shardId());
     }
 
     /**
      * Test method for {@link ShutdownTask#call()}.
+     * This test is for the scenario that a ShutdownTask is created for the ShardConsumer losing the lease.
      */
     @Test
     public final void testCallWhenLeaseLost() {
@@ -194,7 +206,7 @@ public class ShutdownTaskTest {
                                   ExtendedSequenceNumber.LATEST);
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 LEASE_LOST_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
-                                ignoreUnexpectedChildShards, leaseRefresher, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
                                 hierarchicalShardSyncer, NULL_METRICS_FACTORY);
 
         when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
@@ -205,6 +217,7 @@ public class ShutdownTaskTest {
         verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor).leaseLost(LeaseLostInput.builder().build());
         verify(shardDetector, never()).listShards();
+        verify(leaseCoordinator, never()).getAssignments();
     }
 
     /**
