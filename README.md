@@ -60,6 +60,13 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
+### Latest Release (2.2.5 - October 23, 2019)
+[Milestone#40](https://github.com/awslabs/amazon-kinesis-client/milestone/40)
+* Updating Sonatype to dedicated AWS endpoint.
+  * [PR#619](https://github.com/awslabs/amazon-kinesis-client/pull/619)
+* Introducing a validation step to verify if ShardEnd is reached, to prevent shard consumer stuck scenarios in the event of malformed response from service.
+  * [PR#624](https://github.com/awslabs/amazon-kinesis-client/pull/624)
+
 ### Latest Release (2.2.4 - September 23, 2019)
 [Milestone#39](https://github.com/awslabs/amazon-kinesis-client/milestone/39)
 * Making FanoutRecordsPublisher test cases resilient to delayed thread operations
