@@ -588,7 +588,7 @@ public class Scheduler implements Runnable {
                         checkpoint);
         ShardConsumerArgument argument = new ShardConsumerArgument(shardInfo,
                 streamName,
-                leaseRefresher,
+                leaseCoordinator,
                 executorService,
                 cache,
                 shardRecordProcessorFactory.shardRecordProcessor(),

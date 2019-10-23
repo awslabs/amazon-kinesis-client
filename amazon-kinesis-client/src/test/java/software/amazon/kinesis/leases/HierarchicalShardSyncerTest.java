@@ -171,6 +171,9 @@ public class HierarchicalShardSyncerTest {
         testCheckAndCreateLeasesForShardsIfMissing(INITIAL_POSITION_LATEST);
     }
 
+    /**
+     * Test checkAndCreateLeaseForNewShards while not providing a pre-fetched list of shards
+     */
     @Test
     public void testCheckAndCreateLeasesForShardsIfMissingAtLatest() throws Exception {
         final List<Shard> shards = constructShardListForGraphA();
@@ -203,6 +206,74 @@ public class HierarchicalShardSyncerTest {
         verify(dynamoDBLeaseRefresher, times(expectedShardIds.size())).createLeaseIfNotExists(any(Lease.class));
         verify(dynamoDBLeaseRefresher, never()).deleteLease(any(Lease.class));
 
+    }
+
+    /**
+     * Test checkAndCreateLeaseForNewShards with a pre-fetched list of shards. In this scenario, shardDetector.listShards()
+     * should never be called.
+     */
+    @Test
+    public void testCheckAndCreateLeasesForShardsWithShardList() throws Exception {
+        final List<Shard> latestShards = constructShardListForGraphA();
+
+        final ArgumentCaptor<Lease> leaseCaptor = ArgumentCaptor.forClass(Lease.class);
+        when(shardDetector.listShards()).thenReturn(latestShards);
+        when(dynamoDBLeaseRefresher.listLeases()).thenReturn(Collections.emptyList());
+        when(dynamoDBLeaseRefresher.createLeaseIfNotExists(leaseCaptor.capture())).thenReturn(true);
+
+        hierarchicalShardSyncer
+                .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
+                                                 cleanupLeasesOfCompletedShards, false, SCOPE, latestShards);
+
+        final Set<String> expectedShardIds = new HashSet<>(
+                Arrays.asList("shardId-4", "shardId-8", "shardId-9", "shardId-10"));
+
+        final List<Lease> requestLeases = leaseCaptor.getAllValues();
+        final Set<String> requestLeaseKeys = requestLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
+        final Set<ExtendedSequenceNumber> extendedSequenceNumbers = requestLeases.stream().map(Lease::checkpoint)
+                                                                                 .collect(Collectors.toSet());
+
+        assertThat(requestLeases.size(), equalTo(expectedShardIds.size()));
+        assertThat(requestLeaseKeys, equalTo(expectedShardIds));
+        assertThat(extendedSequenceNumbers.size(), equalTo(1));
+
+        extendedSequenceNumbers.forEach(seq -> assertThat(seq, equalTo(ExtendedSequenceNumber.LATEST)));
+
+        verify(shardDetector, never()).listShards();
+        verify(dynamoDBLeaseRefresher, times(expectedShardIds.size())).createLeaseIfNotExists(any(Lease.class));
+        verify(dynamoDBLeaseRefresher, never()).deleteLease(any(Lease.class));
+    }
+
+    /**
+     * Test checkAndCreateLeaseForNewShards with an empty list of shards. In this scenario, shardDetector.listShards()
+     * should never be called.
+     */
+    @Test
+    public void testCheckAndCreateLeasesForShardsWithEmptyShardList() throws Exception {
+        final List<Shard> shards = constructShardListForGraphA();
+
+        final ArgumentCaptor<Lease> leaseCaptor = ArgumentCaptor.forClass(Lease.class);
+        when(shardDetector.listShards()).thenReturn(shards);
+        when(dynamoDBLeaseRefresher.listLeases()).thenReturn(Collections.emptyList());
+        when(dynamoDBLeaseRefresher.createLeaseIfNotExists(leaseCaptor.capture())).thenReturn(true);
+
+        hierarchicalShardSyncer
+                .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
+                                                 cleanupLeasesOfCompletedShards, false, SCOPE, new ArrayList<Shard>());
+
+        final Set<String> expectedShardIds = new HashSet<>();
+
+        final List<Lease> requestLeases = leaseCaptor.getAllValues();
+        final Set<String> requestLeaseKeys = requestLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
+        final Set<ExtendedSequenceNumber> extendedSequenceNumbers = requestLeases.stream().map(Lease::checkpoint)
+                                                                                 .collect(Collectors.toSet());
+
+        assertThat(requestLeases.size(), equalTo(expectedShardIds.size()));
+        assertThat(extendedSequenceNumbers.size(), equalTo(0));
+
+        verify(shardDetector, never()).listShards();
+        verify(dynamoDBLeaseRefresher, never()).createLeaseIfNotExists(any(Lease.class));
+        verify(dynamoDBLeaseRefresher, never()).deleteLease(any(Lease.class));
     }
 
     @Test
@@ -1035,7 +1106,11 @@ public class HierarchicalShardSyncerTest {
 
     /*
      * Helper method to construct a shard list for graph A. Graph A is defined below. Shard structure (y-axis is
-     * epochs): 0 1 2 3 4 5- shards till epoch 102 \ / \ / | | 6 7 4 5- shards from epoch 103 - 205 \ / | /\ 8 4 9 10 -
+     * epochs): 0 1 2 3 4   5- shards till
+     *          \ / \ / |   |
+     *           6   7  4   5- shards from epoch 103 - 205
+     *            \ /   |  /\
+     *             8    4 9 10 -
      * shards from epoch 206 (open - no ending sequenceNumber)
      */
     private List<Shard> constructShardListForGraphA() {
