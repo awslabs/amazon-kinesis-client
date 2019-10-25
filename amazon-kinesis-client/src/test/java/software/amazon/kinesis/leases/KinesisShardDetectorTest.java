@@ -95,7 +95,7 @@ public class KinesisShardDetectorTest {
         final List<Shard> shards = shardDetector.listShards();
 
         assertThat(shards, equalTo(expectedShards));
-        verify(client).listShards(eq(ListShardsRequest.builder().streamName(STREAM_NAME).build()));
+        verify(client).listShards(any(ListShardsRequest.class));
     }
 
     @Test(expected = IllegalStateException.class)
@@ -108,7 +108,7 @@ public class KinesisShardDetectorTest {
             shardDetector.listShards();
         } finally {
             verify(client, times(MAX_LIST_SHARDS_RETRY_ATTEMPTS))
-                    .listShards(eq(ListShardsRequest.builder().streamName(STREAM_NAME).build()));
+                    .listShards(any(ListShardsRequest.class));
         }
     }
 
@@ -123,7 +123,7 @@ public class KinesisShardDetectorTest {
         final List<Shard> shards = shardDetector.listShards();
 
         assertThat(shards, nullValue());
-        verify(client).listShards(eq(ListShardsRequest.builder().streamName(STREAM_NAME).build()));
+        verify(client).listShards(any(ListShardsRequest.class));
 
     }
 
@@ -139,7 +139,7 @@ public class KinesisShardDetectorTest {
             shardDetector.listShards();
         } finally {
             verify(client, times(MAX_LIST_SHARDS_RETRY_ATTEMPTS))
-                    .listShards(eq(ListShardsRequest.builder().streamName(STREAM_NAME).build()));
+                    .listShards(any(ListShardsRequest.class));
         }
     }
 
@@ -154,7 +154,7 @@ public class KinesisShardDetectorTest {
         try {
             shardDetector.listShards();
         } finally {
-            verify(client).listShards(eq(ListShardsRequest.builder().streamName(STREAM_NAME).build()));
+            verify(client).listShards(any(ListShardsRequest.class));
         }
     }
 
@@ -194,7 +194,7 @@ public class KinesisShardDetectorTest {
         final Shard shard = shardDetector.shard(shardId);
 
         assertThat(shard, equalTo(Shard.builder().shardId(shardId).build()));
-        verify(client).listShards(eq(ListShardsRequest.builder().streamName(STREAM_NAME).build()));
+        verify(client).listShards(any(ListShardsRequest.class));
     }
 
     @Test
@@ -231,7 +231,7 @@ public class KinesisShardDetectorTest {
         });
 
         assertThat(responses.get(MAX_CACHE_MISSES_BEFORE_RELOAD), equalTo(Shard.builder().shardId(shardId).build()));
-        verify(client).listShards(eq(ListShardsRequest.builder().streamName(STREAM_NAME).build()));
+        verify(client).listShards(any(ListShardsRequest.class));
     }
 
     @Test
@@ -249,7 +249,7 @@ public class KinesisShardDetectorTest {
 
         responses.forEach(response -> assertThat(response, nullValue()));
         assertThat(shardDetector.cacheMisses().get(), equalTo(0));
-        verify(client).listShards(eq(ListShardsRequest.builder().streamName(STREAM_NAME).build()));
+        verify(client).listShards(any(ListShardsRequest.class));
     }
 
     private List<Shard> createShardList() {

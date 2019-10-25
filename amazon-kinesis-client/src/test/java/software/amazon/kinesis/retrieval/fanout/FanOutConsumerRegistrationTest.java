@@ -90,8 +90,8 @@ public class FanOutConsumerRegistrationTest {
 
         assertThat(consumerArn, equalTo(CONSUMER_ARN));
 
-        verify(client).describeStreamConsumer(eq(createDescribeStreamConsumerRequest(null)));
-        verify(client).describeStreamSummary(eq(createDescribeStreamSummaryRequest()));
+        verify(client, times(2)).describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
+        verify(client).describeStreamSummary(any(DescribeStreamSummaryRequest.class));
         verify(client, never()).registerStreamConsumer(any(RegisterStreamConsumerRequest.class));
     }
 
@@ -112,8 +112,8 @@ public class FanOutConsumerRegistrationTest {
         assertThat(firstCall, equalTo(CONSUMER_ARN));
         assertThat(secondCall, equalTo(CONSUMER_ARN));
 
-        verify(client).describeStreamConsumer(eq(createDescribeStreamConsumerRequest(null)));
-        verify(client).describeStreamSummary(eq(createDescribeStreamSummaryRequest()));
+        verify(client, times(2)).describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
+        verify(client).describeStreamSummary(any(DescribeStreamSummaryRequest.class));
         verify(client, never()).registerStreamConsumer(any(RegisterStreamConsumerRequest.class));
     }
 
@@ -131,9 +131,9 @@ public class FanOutConsumerRegistrationTest {
         try {
             consumerRegistration.getOrCreateStreamConsumerArn();
         } finally {
-            verify(client).describeStreamSummary(eq(createDescribeStreamSummaryRequest()));
+            verify(client).describeStreamSummary(any(DescribeStreamSummaryRequest.class));
             verify(client, times(MAX_DSC_RETRIES))
-                    .describeStreamConsumer(eq(createDescribeStreamConsumerRequest(null)));
+                    .describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
         }
     }
 
@@ -156,9 +156,9 @@ public class FanOutConsumerRegistrationTest {
             consumerRegistration.getOrCreateStreamConsumerArn();
         } finally {
             verify(client, times(RSC_RETRIES))
-                    .registerStreamConsumer(eq(createRegisterStreamConsumerRequest()));
+                    .registerStreamConsumer(any(RegisterStreamConsumerRequest.class));
             // Verify that DescribeStreamConsumer was called for at least RegisterStreamConsumer retries + 1 at start.
-            verify(client).describeStreamConsumer(eq(createDescribeStreamConsumerRequest(null)));
+            verify(client).describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
         }
     }
 
@@ -188,11 +188,10 @@ public class FanOutConsumerRegistrationTest {
         assertThat(consumerArn, equalTo(CONSUMER_ARN));
         assertThat(endTime - startTime, greaterThanOrEqualTo(2 * BACKOFF_MILLIS));
 
-        verify(client).registerStreamConsumer(eq(createRegisterStreamConsumerRequest()));
-        verify(client).describeStreamSummary(eq(createDescribeStreamSummaryRequest()));
-        verify(client).describeStreamConsumer(eq(createDescribeStreamConsumerRequest(null)));
-        verify(client, times(2))
-                .describeStreamConsumer(eq(createDescribeStreamConsumerRequest(CONSUMER_ARN)));
+        verify(client).registerStreamConsumer(any(RegisterStreamConsumerRequest.class));
+        verify(client).describeStreamSummary(any(DescribeStreamSummaryRequest.class));
+        verify(client, times(3))
+                .describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
     }
 
     @Test(expected = IllegalStateException.class)
@@ -208,11 +207,10 @@ public class FanOutConsumerRegistrationTest {
         try {
             consumerRegistration.getOrCreateStreamConsumerArn();
         } finally {
-            verify(client).describeStreamSummary(eq(createDescribeStreamSummaryRequest()));
+            verify(client).describeStreamSummary(any(DescribeStreamSummaryRequest.class));
             // Verify that the call to DSC was made for the max retry attempts and one for the initial response object.
-            verify(client).describeStreamConsumer(eq(createDescribeStreamConsumerRequest(null)));
-            verify(client, times(MAX_DSC_RETRIES))
-                    .describeStreamConsumer(eq(createDescribeStreamConsumerRequest(CONSUMER_ARN)));
+            verify(client, times(MAX_DSC_RETRIES + 1))
+                    .describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
             verify(client, never()).registerStreamConsumer(any(RegisterStreamConsumerRequest.class));
         }
 

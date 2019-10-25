@@ -1086,7 +1086,7 @@ public class FanOutRecordsPublisherTest {
                         .type(ShardIteratorType.AT_SEQUENCE_NUMBER).build())
                 .build();
 
-        verify(kinesisClient).subscribeToShard(eq(expected), flowCaptor.capture());
+        verify(kinesisClient).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
 
         flowCaptor.getValue().onEventStream(publisher);
         captor.getValue().onSubscribe(subscription);
@@ -1112,7 +1112,7 @@ public class FanOutRecordsPublisherTest {
                         .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER).build())
                 .build();
 
-        verify(kinesisClient).subscribeToShard(eq(nextExpected), nextFlowCaptor.capture());
+        verify(kinesisClient, times(2)).subscribeToShard(any(SubscribeToShardRequest.class), nextFlowCaptor.capture());
         reset(publisher);
         doNothing().when(publisher).subscribe(nextSubscribeCaptor.capture());
 
