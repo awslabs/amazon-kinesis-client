@@ -42,6 +42,7 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.utils.SubscribeToShardRequestMatcher;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -72,6 +73,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
@@ -1086,7 +1088,7 @@ public class FanOutRecordsPublisherTest {
                         .type(ShardIteratorType.AT_SEQUENCE_NUMBER).build())
                 .build();
 
-        verify(kinesisClient).subscribeToShard(eq(expected), flowCaptor.capture());
+        verify(kinesisClient).subscribeToShard(argThat(new SubscribeToShardRequestMatcher(expected)), flowCaptor.capture());
 
         flowCaptor.getValue().onEventStream(publisher);
         captor.getValue().onSubscribe(subscription);
@@ -1112,7 +1114,7 @@ public class FanOutRecordsPublisherTest {
                         .type(ShardIteratorType.AFTER_SEQUENCE_NUMBER).build())
                 .build();
 
-        verify(kinesisClient).subscribeToShard(eq(nextExpected), nextFlowCaptor.capture());
+        verify(kinesisClient).subscribeToShard(argThat(new SubscribeToShardRequestMatcher(nextExpected)), nextFlowCaptor.capture());
         reset(publisher);
         doNothing().when(publisher).subscribe(nextSubscribeCaptor.capture());
 
