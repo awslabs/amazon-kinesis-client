@@ -905,6 +905,13 @@ public class Worker implements Runnable {
                 ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
 
                 if (consumer == null || ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE.equals(consumer.getCurrentState())) {
+                    //
+                    // CASE1: There is a race condition between retrieving the current assignments, and creating the
+                    // notification. If the a lease is lost in between these two points, we explicitly decrement the
+                    // notification latches to clear the shutdown.
+                    //
+                    // CASE2: The shard consumer is in SHUTDOWN_COMPLETE state and will not decrement the latches by itself.
+                    //
                     notificationCompleteLatch.countDown();
                     shutdownCompleteLatch.countDown();
                 } else {
