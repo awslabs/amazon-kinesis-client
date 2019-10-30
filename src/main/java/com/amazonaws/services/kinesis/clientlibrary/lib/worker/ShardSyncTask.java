@@ -14,12 +14,15 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.model.Shard;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+
+import java.util.List;
 
 /**
  * This task syncs leases/activies with shards of the stream.
@@ -39,6 +42,7 @@ class ShardSyncTask implements ITask {
     private final long shardSyncTaskIdleTimeMillis;
     private final TaskType taskType = TaskType.SHARDSYNC;
     private final ShardSyncer shardSyncer;
+    private final List<Shard> latestShards;
 
     /**
      * @param kinesisProxy Used to fetch information about the stream (e.g. shard list)
@@ -50,6 +54,7 @@ class ShardSyncTask implements ITask {
      *        in Kinesis)
      * @param shardSyncTaskIdleTimeMillis shardSync task idle time in millis
      * @param shardSyncer shardSyncer instance used to check and create new leases
+     * @param latestShards latest snapshot of shards to reuse
      */
     ShardSyncTask(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
@@ -57,7 +62,8 @@ class ShardSyncTask implements ITask {
             boolean cleanupLeasesUponShardCompletion,
             boolean ignoreUnexpectedChildShards,
             long shardSyncTaskIdleTimeMillis,
-            ShardSyncer shardSyncer) {
+            ShardSyncer shardSyncer, List<Shard> latestShards) {
+        this.latestShards = latestShards;
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.initialPosition = initialPositionInStream;
@@ -79,7 +85,8 @@ class ShardSyncTask implements ITask {
                     leaseManager,
                     initialPosition,
                     cleanupLeasesUponShardCompletion,
-                    ignoreUnexpectedChildShards);
+                    ignoreUnexpectedChildShards,
+                    latestShards);
             if (shardSyncTaskIdleTimeMillis > 0) {
                 Thread.sleep(shardSyncTaskIdleTimeMillis);
             }

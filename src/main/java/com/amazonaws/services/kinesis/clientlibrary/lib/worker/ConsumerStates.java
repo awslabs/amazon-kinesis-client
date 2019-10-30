@@ -528,7 +528,7 @@ class ConsumerStates {
                     consumer.getStreamConfig().getInitialPositionInStream(),
                     consumer.isCleanupLeasesOfCompletedShards(),
                     consumer.isIgnoreUnexpectedChildShards(),
-                    consumer.getLeaseManager(),
+                    consumer.getLeaseCoordinator(),
                     consumer.getTaskBackoffTimeMillis(),
                     consumer.getGetRecordsCache(), consumer.getShardSyncer(), consumer.getShardSyncStrategy());
         }

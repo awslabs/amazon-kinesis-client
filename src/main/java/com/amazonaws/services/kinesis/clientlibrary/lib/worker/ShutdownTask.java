@@ -14,6 +14,9 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.model.Shard;
+import com.amazonaws.util.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -22,10 +25,13 @@ import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * Task for invoking the RecordProcessor shutdown() callback.
@@ -41,7 +47,7 @@ class ShutdownTask implements ITask {
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ShutdownReason reason;
     private final IKinesisProxy kinesisProxy;
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
     private final boolean ignoreUnexpectedChildShards;
@@ -63,7 +69,7 @@ class ShutdownTask implements ITask {
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards,
             boolean ignoreUnexpectedChildShards,
-            ILeaseManager<KinesisClientLease> leaseManager,
+            KinesisClientLibLeaseCoordinator leaseCoordinator,
             long backoffTimeMillis,
             GetRecordsCache getRecordsCache, ShardSyncer shardSyncer, ShardSyncStrategy shardSyncStrategy) {
         this.shardInfo = shardInfo;
@@ -74,7 +80,7 @@ class ShutdownTask implements ITask {
         this.initialPositionInStream = initialPositionInStream;
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
-        this.leaseManager = leaseManager;
+        this.leaseCoordinator = leaseCoordinator;
         this.backoffTimeMillis = backoffTimeMillis;
         this.getRecordsCache = getRecordsCache;
         this.shardSyncer = shardSyncer;
@@ -93,24 +99,44 @@ class ShutdownTask implements ITask {
         boolean applicationException = false;
 
         try {
+            ShutdownReason localReason = reason;
+            List<Shard> latestShards = null;
+            /*
+             * Revalidate if the current shard is closed before shutting down the shard consumer with reason SHARD_END
+             * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows active
+             * workers to contend for the lease of this shard.
+             */
+            if(localReason == ShutdownReason.TERMINATE) {
+                latestShards = kinesisProxy.getShardList();
+
+                //If latestShards is null or empty, we should still shut down the ShardConsumer with Zombie state which avoid
+                // checking point with SHARD_END sequence number.
+                if(CollectionUtils.isNullOrEmpty(latestShards) || !isShardInContextParentOfAny(latestShards)) {
+                    localReason = ShutdownReason.ZOMBIE;
+                    dropLease();
+                    LOG.info("Forcing the lease to be lost before shutting down the consumer for Shard: " + shardInfo.getShardId());
+                }
+            }
+
+
             // If we reached end of the shard, set sequence number to SHARD_END.
-            if (reason == ShutdownReason.TERMINATE) {
+            if (localReason == ShutdownReason.TERMINATE) {
                 recordProcessorCheckpointer.setSequenceNumberAtShardEnd(
                         recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
                 recordProcessorCheckpointer.setLargestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
             }
 
             LOG.debug("Invoking shutdown() for shard " + shardInfo.getShardId() + ", concurrencyToken "
-                    + shardInfo.getConcurrencyToken() + ". Shutdown reason: " + reason);
+                    + shardInfo.getConcurrencyToken() + ". Shutdown reason: " + localReason);
             final ShutdownInput shutdownInput = new ShutdownInput()
-                    .withShutdownReason(reason)
+                    .withShutdownReason(localReason)
                     .withCheckpointer(recordProcessorCheckpointer);
             final long recordProcessorStartTimeMillis = System.currentTimeMillis();
             try {
                 recordProcessor.shutdown(shutdownInput);
                 ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
 
-                if (reason == ShutdownReason.TERMINATE) {
+                if (localReason == ShutdownReason.TERMINATE) {
                     if ((lastCheckpointValue == null)
                             || (!lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END))) {
                         throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
@@ -129,10 +155,10 @@ class ShutdownTask implements ITask {
                         MetricsLevel.SUMMARY);
             }
 
-            if (reason == ShutdownReason.TERMINATE) {
+            if (localReason == ShutdownReason.TERMINATE) {
                 LOG.debug("Looking for child shards of shard " + shardInfo.getShardId());
                 // create leases for the child shards
-                TaskResult result = shardSyncStrategy.onShardConsumerShutDown();
+                TaskResult result = shardSyncStrategy.onShardConsumerShutDown(latestShards);
                 if (result.getException() != null) {
                     LOG.debug("Exception while trying to sync shards on the shutdown of shard: " + shardInfo
                             .getShardId());
@@ -175,4 +201,23 @@ class ShutdownTask implements ITask {
         return reason;
     }
 
+    private boolean isShardInContextParentOfAny(List<Shard> shards) {
+        for(Shard shard : shards) {
+            if (isChildShardOfShardInContext(shard)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isChildShardOfShardInContext(Shard shard) {
+        return (StringUtils.equals(shard.getParentShardId(), shardInfo.getShardId())
+                || StringUtils.equals(shard.getAdjacentParentShardId(), shardInfo.getShardId()));
+    }
+
+    private void dropLease() {
+        KinesisClientLease lease = leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId());
+        leaseCoordinator.dropLease(lease);
+        LOG.warn("Dropped lease for shutting down ShardConsumer: " + lease.getLeaseKey());
+    }
 }

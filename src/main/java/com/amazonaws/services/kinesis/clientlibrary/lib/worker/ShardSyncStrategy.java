@@ -1,5 +1,9 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.model.Shard;
+
+import java.util.List;
+
 /**
  * Facade of methods that can be invoked at different points
  * in KCL application execution to perform certain actions related to shard-sync.
@@ -40,6 +44,16 @@ public interface ShardSyncStrategy {
      * @return
      */
     TaskResult onShardConsumerShutDown();
+
+    /**
+     * Invoked when ShardConsumer is shutdown and all shards are provided.
+     *
+     * @param latestShards latest snapshot of shards to reuse
+     * @return
+     */
+    default TaskResult onShardConsumerShutDown(List<Shard> latestShards) {
+        return onShardConsumerShutDown();
+    }
 
     /**
      * Invoked when worker is shutdown.

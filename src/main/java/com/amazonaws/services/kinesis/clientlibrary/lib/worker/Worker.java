@@ -679,7 +679,7 @@ public class Worker implements Runnable {
                     LOG.info("Syncing Kinesis shard info");
                     ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
                             leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
-                            config.shouldIgnoreUnexpectedChildShards(), 0L, shardSyncer);
+                            config.shouldIgnoreUnexpectedChildShards(), 0L, shardSyncer, null);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
                     LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
@@ -1045,7 +1045,7 @@ public class Worker implements Runnable {
                 streamConfig,
                 checkpointTracker,
                 recordProcessor,
-                leaseCoordinator.getLeaseManager(),
+                leaseCoordinator,
                 parentShardPollIntervalMillis,
                 cleanupLeasesUponShardCompletion,
                 executorService,
@@ -1170,7 +1170,7 @@ public class Worker implements Runnable {
                         new ShardSyncTask(kinesisProxy, leaseManager, config.getInitialPositionInStreamExtended(),
                                 config.shouldCleanupLeasesUponShardCompletion(),
                                 config.shouldIgnoreUnexpectedChildShards(), SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
-                                shardSyncer), metricsFactory));
+                                shardSyncer, null), metricsFactory));
     }
 
     private ShardEndShardSyncStrategy createShardEndShardSyncStrategy(ShardSyncTaskManager shardSyncTaskManager) {

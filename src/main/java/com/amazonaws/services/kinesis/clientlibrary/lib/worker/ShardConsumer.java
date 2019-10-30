@@ -50,7 +50,7 @@ class ShardConsumer {
     private final ShardInfo shardInfo;
     private final KinesisDataFetcher dataFetcher;
     private final IMetricsFactory metricsFactory;
-    private final ILeaseManager<KinesisClientLease> leaseManager;
+    private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private ICheckpoint checkpoint;
     // Backoff time when polling to check if application has finished processing parent shards
     private final long parentShardPollIntervalMillis;
@@ -98,7 +98,7 @@ class ShardConsumer {
      * @param checkpoint Checkpoint tracker
      * @param recordProcessor Record processor used to process the data records for the shard
      * @param config Kinesis library configuration
-     * @param leaseManager Used to create leases for new shards
+     * @param leaseCoordinator Used to manage leases for current worker
      * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
      * @param executorService ExecutorService used to execute process tasks for this shard
      * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
@@ -110,7 +110,7 @@ class ShardConsumer {
             StreamConfig streamConfig,
             ICheckpoint checkpoint,
             IRecordProcessor recordProcessor,
-            ILeaseManager<KinesisClientLease> leaseManager,
+            KinesisClientLibLeaseCoordinator leaseCoordinator,
             long parentShardPollIntervalMillis,
             boolean cleanupLeasesOfCompletedShards,
             ExecutorService executorService,
@@ -122,7 +122,7 @@ class ShardConsumer {
                 streamConfig,
                 checkpoint,
                 recordProcessor,
-                leaseManager,
+                leaseCoordinator,
                 parentShardPollIntervalMillis,
                 cleanupLeasesOfCompletedShards,
                 executorService,
@@ -139,7 +139,7 @@ class ShardConsumer {
      * @param streamConfig Stream configuration to use
      * @param checkpoint Checkpoint tracker
      * @param recordProcessor Record processor used to process the data records for the shard
-     * @param leaseManager Used to create leases for new shards
+     * @param leaseCoordinator Used to manage leases for current worker
      * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
      * @param executorService ExecutorService used to execute process tasks for this shard
      * @param metricsFactory IMetricsFactory used to construct IMetricsScopes for this shard
@@ -154,7 +154,7 @@ class ShardConsumer {
             StreamConfig streamConfig,
             ICheckpoint checkpoint,
             IRecordProcessor recordProcessor,
-            ILeaseManager<KinesisClientLease> leaseManager,
+            KinesisClientLibLeaseCoordinator leaseCoordinator,
             long parentShardPollIntervalMillis,
             boolean cleanupLeasesOfCompletedShards,
             ExecutorService executorService,
@@ -177,7 +177,7 @@ class ShardConsumer {
                                 shardInfo.getShardId(),
                                 streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
                         metricsFactory),
-                leaseManager,
+                leaseCoordinator,
                 parentShardPollIntervalMillis,
                 cleanupLeasesOfCompletedShards,
                 executorService,
@@ -197,7 +197,7 @@ class ShardConsumer {
      * @param checkpoint Checkpoint tracker
      * @param recordProcessor Record processor used to process the data records for the shard
      * @param recordProcessorCheckpointer RecordProcessorCheckpointer to use to checkpoint progress
-     * @param leaseManager Used to create leases for new shards
+     * @param leaseCoordinator Used to manage leases for current worker
      * @param parentShardPollIntervalMillis Wait for this long if parent shards are not done (or we get an exception)
      * @param cleanupLeasesOfCompletedShards  clean up the leases of completed shards
      * @param executorService ExecutorService used to execute process tasks for this shard
@@ -215,7 +215,7 @@ class ShardConsumer {
             ICheckpoint checkpoint,
             IRecordProcessor recordProcessor,
             RecordProcessorCheckpointer recordProcessorCheckpointer,
-            ILeaseManager<KinesisClientLease> leaseManager,
+            KinesisClientLibLeaseCoordinator leaseCoordinator,
             long parentShardPollIntervalMillis,
             boolean cleanupLeasesOfCompletedShards,
             ExecutorService executorService,
@@ -231,7 +231,7 @@ class ShardConsumer {
         this.checkpoint = checkpoint;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
-        this.leaseManager = leaseManager;
+        this.leaseCoordinator = leaseCoordinator;
         this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
         this.cleanupLeasesOfCompletedShards = cleanupLeasesOfCompletedShards;
         this.executorService = executorService;
@@ -480,7 +480,11 @@ class ShardConsumer {
     }
 
     ILeaseManager<KinesisClientLease> getLeaseManager() {
-        return leaseManager;
+        return leaseCoordinator.getLeaseManager();
+    }
+
+    KinesisClientLibLeaseCoordinator getLeaseCoordinator() {
+        return leaseCoordinator;
     }
 
     ICheckpoint getCheckpoint() {

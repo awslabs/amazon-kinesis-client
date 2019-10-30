@@ -14,11 +14,13 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import com.amazonaws.services.kinesis.model.Shard;
 import lombok.Getter;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -85,11 +87,11 @@ class ShardSyncTaskManager {
         this.shardSyncer = shardSyncer;
     }
 
-    synchronized Future<TaskResult> syncShardAndLeaseInfo(Set<String> closedShardIds) {
-        return checkAndSubmitNextTask(closedShardIds);
+    synchronized Future<TaskResult> syncShardAndLeaseInfo(List<Shard> latestShards) {
+        return checkAndSubmitNextTask(latestShards);
     }
 
-    private synchronized Future<TaskResult> checkAndSubmitNextTask(Set<String> closedShardIds) {
+    private synchronized Future<TaskResult> checkAndSubmitNextTask(List<Shard> latestShards) {
         Future<TaskResult> submittedTaskFuture = null;
         if ((future == null) || future.isCancelled() || future.isDone()) {
             if ((future != null) && future.isDone()) {
@@ -111,7 +113,7 @@ class ShardSyncTaskManager {
                             cleanupLeasesUponShardCompletion,
                             ignoreUnexpectedChildShards,
                             shardSyncIdleTimeMillis,
-                            shardSyncer), metricsFactory);
+                            shardSyncer, latestShards), metricsFactory);
             future = executorService.submit(currentTask);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Submitted new " + currentTask.getTaskType() + " task.");
