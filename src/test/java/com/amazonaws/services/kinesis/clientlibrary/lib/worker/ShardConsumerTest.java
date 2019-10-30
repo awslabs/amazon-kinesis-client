@@ -470,15 +470,17 @@ public class ShardConsumerTest {
         final KinesisClientLease parentLease = mock(KinesisClientLease.class);
         when(shardInfo.getShardId()).thenReturn(shardId);
         when(shardInfo.getParentShardIds()).thenReturn(Arrays.asList(parentShardId));
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         when(leaseManager.getLease(eq(parentShardId))).thenReturn(parentLease);
         when(parentLease.getCheckpoint()).thenReturn(ExtendedSequenceNumber.TRIM_HORIZON);
 
-        final ShardConsumer consumer = new ShardConsumer(shardInfo,
+        final ShardConsumer consumer =
+                new ShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
                         recordProcessorCheckpointer,
-                        leaseManager,
+                        leaseCoordinator,
                         parentShardPollIntervalMillis,
                         cleanupLeasesOfCompletedShards,
                         executorService,
