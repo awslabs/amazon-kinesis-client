@@ -1,4 +1,9 @@
 # Changelog
+## Release 1.13.0 (November 5, 2019)
+[Milestone#42](https://github.com/awslabs/amazon-kinesis-client/milestone/42)
+* Handling completed and blocked tasks better during graceful shutdown
+  * [PR #640](https://github.com/awslabs/amazon-kinesis-client/pull/640)
+
 ## Release 1.12.0 (October 17, 2019)
 [Milestone#41](https://github.com/awslabs/amazon-kinesis-client/milestone/41)
 * Adding logging around shard end codepaths.
