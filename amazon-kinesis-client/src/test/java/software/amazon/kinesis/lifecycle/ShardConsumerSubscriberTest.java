@@ -19,7 +19,6 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -126,7 +125,7 @@ public class ShardConsumerSubscriberTest {
             processedNotifier.wait(5000);
         }
 
-        verify(shardConsumer).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)), any(Subscription.class));
+        verify(shardConsumer).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
     }
 
     @Test
@@ -140,8 +139,7 @@ public class ShardConsumerSubscriberTest {
             processedNotifier.wait(5000);
         }
 
-        verify(shardConsumer, times(100)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(100)).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
     }
 
     @Test
@@ -176,8 +174,7 @@ public class ShardConsumerSubscriberTest {
         assertThat(subscriber.getAndResetDispatchFailure(), equalTo(testException));
         assertThat(subscriber.getAndResetDispatchFailure(), nullValue());
 
-        verify(shardConsumer, times(20)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(20)).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
 
     }
 
@@ -202,8 +199,7 @@ public class ShardConsumerSubscriberTest {
             Thread.sleep(10);
         }
 
-        verify(shardConsumer, times(10)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(10)).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
         assertThat(subscriber.retrievalFailure(), equalTo(expected));
     }
 
@@ -239,8 +235,7 @@ public class ShardConsumerSubscriberTest {
         }
 
         assertThat(recordsPublisher.restartedFrom, equalTo(edgeRecord));
-        verify(shardConsumer, times(20)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(20)).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
     }
 
     @Test
@@ -304,8 +299,7 @@ public class ShardConsumerSubscriberTest {
             processedNotifier.wait(5000);
         }
 
-        verify(shardConsumer, times(100)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(100)).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
 
         assertThat(received.size(), equalTo(recordsPublisher.responses.size()));
         Stream.iterate(0, i -> i + 1).limit(received.size()).forEach(i -> assertThat(received.get(i),
@@ -325,11 +319,9 @@ public class ShardConsumerSubscriberTest {
         subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
 
-        log.info("recordsPublisher and subscriber is created successfully.");
         List<ProcessRecordsInput> received = new ArrayList<>();
         doAnswer(a -> {
             ProcessRecordsInput input = a.getArgumentAt(0, ProcessRecordsInput.class);
-            log.info("Handling input for: {}", input.toString());
             received.add(input);
             if (input.records().stream().anyMatch(r -> StringUtils.startsWith(r.partitionKey(), TERMINAL_MARKER))) {
                 synchronized (processedNotifier) {
@@ -346,9 +338,7 @@ public class ShardConsumerSubscriberTest {
 
         // Verifying that there are no interactions with shardConsumer mock indicating no records were sent back and
         // subscription has not started correctly.
-        verify(shardConsumer, never()).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
-        log.info("Verified no records were sent back and subscription has not started correctly");
+        verify(shardConsumer, never()).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
 
         Stream.iterate(2, i -> i + 1).limit(98).forEach(this::addUniqueItem);
 
@@ -356,7 +346,6 @@ public class ShardConsumerSubscriberTest {
 
         // Doing the health check to allow the subscription to restart.
         assertThat(subscriber.healthCheck(1), nullValue());
-        log.info("Health check was successful without exceptions");
 
         // Allow time for processing of the records to end in the executor thread which call notifyAll as it gets the
         // terminal record. Keeping the timeout pretty high for avoiding test failures on slow machines.
@@ -365,9 +354,7 @@ public class ShardConsumerSubscriberTest {
         }
 
         // Verify that shardConsumer mock was called 100 times and all 100 input records are processed.
-        verify(shardConsumer, times(100)).handleInput(any(ProcessRecordsInput.class),
-                any(Subscription.class));
-        log.info("Verified that handleInput was called 100 times");
+        verify(shardConsumer, times(100)).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
 
         // Verify that received records in the subscriber are equal to the ones sent by the record publisher.
         assertThat(received.size(), equalTo(recordsPublisher.responses.size()));
@@ -411,8 +398,7 @@ public class ShardConsumerSubscriberTest {
 
         // Verifying that there are no interactions with shardConsumer mock indicating no records were sent back and
         // subscription has not started correctly.
-        verify(shardConsumer, never()).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, never()).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
 
         Stream.iterate(2, i -> i + 1).limit(98).forEach(this::addUniqueItem);
 
@@ -428,8 +414,7 @@ public class ShardConsumerSubscriberTest {
         }
 
         // Verify that shardConsumer mock was called 100 times and all 100 input records are processed.
-        verify(shardConsumer, times(100)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
-                any(Subscription.class));
+        verify(shardConsumer, times(100)).handleInput(any(ProcessRecordsInput.class), any(Subscription.class));
 
         // Verify that received records in the subscriber are equal to the ones sent by the record publisher.
         assertThat(received.size(), equalTo(recordsPublisher.responses.size()));

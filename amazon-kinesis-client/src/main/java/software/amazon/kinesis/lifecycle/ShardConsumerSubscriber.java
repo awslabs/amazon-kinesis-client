@@ -80,7 +80,6 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
             lastRequestTime = Instant.now();
             if (lastAccepted != null) {
                 recordsPublisher.restartFrom(lastAccepted);
-                log.warn("Last record was accepted! Record Publisher restarted from the last accepted record.");
             }
             Flowable.fromPublisher(recordsPublisher).subscribeOn(scheduler).observeOn(scheduler, true, bufferSize)
                     .subscribe(new ShardConsumerNotifyingSubscriber(this, recordsPublisher));
@@ -91,7 +90,6 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         Throwable result = restartIfFailed();
         if (result == null) {
             restartIfRequestTimerExpired(maxTimeBetweenRequests);
-            log.warn("healthCheck result is null, called restartIfRequestTimerExpired");
         }
         return result;
     }
@@ -111,7 +109,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests",
                         shardConsumer.shardInfo().shardId());
                 if (retrievalFailure instanceof RetryableRetrievalException) {
-                    log.info(logMessage, retrievalFailure.getCause());
+                    log.debug(logMessage, retrievalFailure.getCause());
                 } else {
                     log.warn(logMessage, retrievalFailure);
                 }
@@ -137,7 +135,6 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
                     // Start the subscription again which will update the lastRequestTime as well.
                     startSubscriptions();
-                    log.info("No responses. Called previous subscription and called startSubscriptions.");
                 }
             }
         }
