@@ -325,6 +325,7 @@ public class ShardConsumerSubscriberTest {
         subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, shardConsumer, 0);
         addUniqueItem(1);
 
+        log.info("recordsPublisher and subscriber is created successfully.");
         List<ProcessRecordsInput> received = new ArrayList<>();
         doAnswer(a -> {
             ProcessRecordsInput input = a.getArgumentAt(0, ProcessRecordsInput.class);
@@ -346,6 +347,7 @@ public class ShardConsumerSubscriberTest {
         // subscription has not started correctly.
         verify(shardConsumer, never()).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
                 any(Subscription.class));
+        log.info("Verified no records were sent back and subscription has not started correctly");
 
         Stream.iterate(2, i -> i + 1).limit(98).forEach(this::addUniqueItem);
 
@@ -353,6 +355,7 @@ public class ShardConsumerSubscriberTest {
 
         // Doing the health check to allow the subscription to restart.
         assertThat(subscriber.healthCheck(1), nullValue());
+        log.info("Health check was successful without exceptions");
 
         // Allow time for processing of the records to end in the executor thread which call notifyAll as it gets the
         // terminal record. Keeping the timeout pretty high for avoiding test failures on slow machines.
@@ -363,6 +366,7 @@ public class ShardConsumerSubscriberTest {
         // Verify that shardConsumer mock was called 100 times and all 100 input records are processed.
         verify(shardConsumer, times(100)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)),
                 any(Subscription.class));
+        log.info("Verified that handleInput was called 100 times");
 
         // Verify that received records in the subscriber are equal to the ones sent by the record publisher.
         assertThat(received.size(), equalTo(recordsPublisher.responses.size()));
