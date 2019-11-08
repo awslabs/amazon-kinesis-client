@@ -1,6 +1,6 @@
 # Changelog
 
-### Release 2.2.6 (November 6, 2019)
+### Release 2.2.6 (November 7, 2019)
 [Milestone#43](https://github.com/awslabs/amazon-kinesis-client/milestone/43)
 * Updating the SDK version to 2.9.25.
   * [PR#638](https://github.com/awslabs/amazon-kinesis-client/pull/638)

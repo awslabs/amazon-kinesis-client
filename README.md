@@ -60,7 +60,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.2.6 - November 6, 2019)
+### Latest Release (2.2.6 - November 7, 2019)
 [Milestone#43](https://github.com/awslabs/amazon-kinesis-client/milestone/43)
 * Updating the SDK version to 2.9.25.
   * [PR#638](https://github.com/awslabs/amazon-kinesis-client/pull/638)
