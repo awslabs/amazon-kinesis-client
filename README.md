@@ -60,14 +60,30 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.2.5 - October 23, 2019)
+### Latest Release (2.2.6 - November 7, 2019)
+[Milestone#43](https://github.com/awslabs/amazon-kinesis-client/milestone/43)
+* Updating the SDK version to 2.9.25.
+  * [PR#638](https://github.com/awslabs/amazon-kinesis-client/pull/638)
+* Clearing the local cache on a subscription termination, to avoid noisy logs on new subscriptions.
+  * [PR#642](https://github.com/awslabs/amazon-kinesis-client/pull/642)
+* Updating the SDK version to 2.10.0 in order to fix the premature H2 stream close issue.
+  * [PR#649](https://github.com/awslabs/amazon-kinesis-client/pull/649)
+  * NOTE: SDK has a known connection teardown issue when multiple H2 streams are used within a connection. This might result in shard consumers sticking to a stale service host and not progressing. If your shard consumer gets stuck, use the following configuration as a workaround. This configuration might result in up to 5X increase in total connections.
+  ```
+  KinesisAsyncClient kinesisClient = KinesisAsyncClient.builder()
+                                                       .region(region)
+                                                       .httpClientBuilder(NettyNioAsyncHttpClient.builder().maxConcurrency(Integer.MAX_VALUE).maxHttp2Streams(1))
+                                                       .build()
+  ```
+
+### Related Prior Release (2.2.5 - October 23, 2019)
 [Milestone#40](https://github.com/awslabs/amazon-kinesis-client/milestone/40)
 * Updating Sonatype to dedicated AWS endpoint.
   * [PR#619](https://github.com/awslabs/amazon-kinesis-client/pull/619)
 * Introducing a validation step to verify if ShardEnd is reached, to prevent shard consumer stuck scenarios in the event of malformed response from service.
   * [PR#624](https://github.com/awslabs/amazon-kinesis-client/pull/624)
 
-### Latest Release (2.2.4 - September 23, 2019)
+### Related Prior Release (2.2.4 - September 23, 2019)
 [Milestone#39](https://github.com/awslabs/amazon-kinesis-client/milestone/39)
 * Making FanoutRecordsPublisher test cases resilient to delayed thread operations
   * [PR#612](https://github.com/awslabs/amazon-kinesis-client/pull/612)
