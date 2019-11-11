@@ -486,6 +486,7 @@ public class KinesisClientLibConfiguration {
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.metricsBufferTimeMillis = metricsBufferTimeMillis;
         this.metricsMaxQueueSize = metricsMaxQueueSize;
+        this.shutdownGraceMillis = shutdownGraceMillis;
         this.metricsLevel = DEFAULT_METRICS_LEVEL;
         this.metricsEnabledDimensions = DEFAULT_METRICS_ENABLED_DIMENSIONS;
         this.validateSequenceNumberBeforeCheckpointing = validateSequenceNumberBeforeCheckpointing;
