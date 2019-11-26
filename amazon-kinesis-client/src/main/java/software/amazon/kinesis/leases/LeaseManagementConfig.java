@@ -28,6 +28,7 @@ import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -165,6 +166,8 @@ public class LeaseManagementConfig {
 
     private Duration dynamoDbRequestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
+    private BillingMode billingMode = BillingMode.PROVISIONED;
+
     /**
      * The initial position for getting records from Kinesis streams.
      *
@@ -267,7 +270,7 @@ public class LeaseManagementConfig {
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
                     hierarchicalShardSyncer(),
-                    tableCreatorCallback(), dynamoDbRequestTimeout());
+                    tableCreatorCallback(), dynamoDbRequestTimeout(), billingMode());
         }
         return leaseManagementFactory;
     }

@@ -14,28 +14,29 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertThat;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseIntegrationBillingModePayPerRequestTest;
+import software.amazon.kinesis.leases.LeaseRenewer;
+import software.amazon.kinesis.leases.exceptions.LeasingException;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
-import org.junit.Before;
-import org.junit.Test;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.junit.Assert.assertThat;
 
-import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
-import software.amazon.kinesis.leases.Lease;
-import software.amazon.kinesis.leases.LeaseIntegrationTest;
-import software.amazon.kinesis.leases.LeaseRenewer;
-import software.amazon.kinesis.leases.exceptions.LeasingException;
-import software.amazon.kinesis.metrics.NullMetricsFactory;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @RunWith(MockitoJUnitRunner.class)
-public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
+public class DynamoDBLeaseRenewerIntegrationBillingModePayPerRequestTest extends
+        LeaseIntegrationBillingModePayPerRequestTest {
     private final String TEST_METRIC = "TestOperation";
 
     // This test case's leases last 2 seconds

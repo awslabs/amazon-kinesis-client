@@ -25,26 +25,7 @@ import java.util.concurrent.TimeoutException;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
-import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
-import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
-import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
-import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
-import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
-import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
-import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
-import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
-import software.amazon.awssdk.services.dynamodb.model.LimitExceededException;
-import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
-import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughputExceededException;
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
-import software.amazon.awssdk.services.dynamodb.model.ResourceInUseException;
-import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
-import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
-import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
-import software.amazon.awssdk.services.dynamodb.model.TableStatus;
-import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.*;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
@@ -57,6 +38,7 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 
 /**
  * An implementation of {@link LeaseRefresher} that uses DynamoDB.
@@ -72,6 +54,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     private final TableCreatorCallback tableCreatorCallback;
 
     private final Duration dynamoDbRequestTimeout;
+    private final BillingMode billingMode;
 
     private boolean newTableCreated = false;
 
@@ -111,22 +94,41 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
     /**
      * Constructor.
-     *  @param table
+     * @param table
      * @param dynamoDBClient
      * @param serializer
      * @param consistentReads
      * @param tableCreatorCallback
      * @param dynamoDbRequestTimeout
      */
+    @Deprecated
     public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
                                   final LeaseSerializer serializer, final boolean consistentReads,
                                   @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout) {
+        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout, BillingMode.PROVISIONED);
+    }
+
+    /**
+     * Constructor.
+     * @param table
+     * @param dynamoDBClient
+     * @param serializer
+     * @param consistentReads
+     * @param tableCreatorCallback
+     * @param dynamoDbRequestTimeout
+     * @param billingMode
+     */
+    public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
+                                  final LeaseSerializer serializer, final boolean consistentReads,
+                                  @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout,
+                                  final BillingMode billingMode) {
         this.table = table;
         this.dynamoDBClient = dynamoDBClient;
         this.serializer = serializer;
         this.consistentReads = consistentReads;
         this.tableCreatorCallback = tableCreatorCallback;
         this.dynamoDbRequestTimeout = dynamoDbRequestTimeout;
+        this.billingMode = billingMode;
     }
 
     /**
@@ -147,8 +149,17 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         }
         ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
                 .writeCapacityUnits(writeCapacity).build();
-        CreateTableRequest request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput).build();
+        final CreateTableRequest request;
+        if(BillingMode.PAY_PER_REQUEST.equals(billingMode)){
+            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                    .attributeDefinitions(serializer.getAttributeDefinitions())
+                    .billingMode(billingMode).build();
+        }else{
+            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                    .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput)
+                    .billingMode(billingMode).build();
+        }
+
 
         final AWSExceptionManager exceptionManager = createExceptionManager();
         exceptionManager.add(ResourceInUseException.class, t -> t);

@@ -22,13 +22,14 @@ import org.mockito.Mock;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 
 @Slf4j
 public class LeaseIntegrationTest {
-    private LeaseSerializer leaseSerializer = new DynamoDBLeaseSerializer();
+    protected LeaseSerializer leaseSerializer = new DynamoDBLeaseSerializer();
 
     protected static DynamoDBLeaseRefresher leaseRefresher;
     protected static DynamoDbAsyncClient ddbClient = DynamoDbAsyncClient.builder()
@@ -47,8 +48,7 @@ public class LeaseIntegrationTest {
             if (leaseRefresher == null) {
                 // Do some static setup once per class.
 
-                leaseRefresher = new DynamoDBLeaseRefresher(tableName, ddbClient, leaseSerializer, true,
-                        tableCreatorCallback);
+                leaseRefresher = getLeaseRefresher();
             }
 
             try {
@@ -71,6 +71,11 @@ public class LeaseIntegrationTest {
             }
         }
     };
+
+    protected DynamoDBLeaseRefresher getLeaseRefresher() {
+        return new DynamoDBLeaseRefresher(tableName, ddbClient, leaseSerializer, true,
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED);
+    }
 
 }
 
