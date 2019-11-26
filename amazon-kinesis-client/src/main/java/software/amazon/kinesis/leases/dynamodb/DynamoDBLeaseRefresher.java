@@ -38,6 +38,7 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 
 /**
  * An implementation of {@link LeaseRefresher} that uses DynamoDB.
@@ -148,9 +149,17 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         }
         ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
                 .writeCapacityUnits(writeCapacity).build();
-        CreateTableRequest request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput)
-                .billingMode(billingMode).build();
+        final CreateTableRequest request;
+        if(BillingMode.PAY_PER_REQUEST.equals(billingMode)){
+            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                    .attributeDefinitions(serializer.getAttributeDefinitions())
+                    .billingMode(billingMode).build();
+        }else{
+            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                    .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput)
+                    .billingMode(billingMode).build();
+        }
+
 
         final AWSExceptionManager exceptionManager = createExceptionManager();
         exceptionManager.add(ResourceInUseException.class, t -> t);

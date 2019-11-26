@@ -56,10 +56,12 @@ import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
-
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseRefresherTest {
 
@@ -220,6 +222,23 @@ public class DynamoDBLeaseRefresherTest {
 
     @Test
     public void testCreateLeaseTableTimesOut() throws Exception {
+        TimeoutException te = setRuleForDependencyTimeout();
+
+        when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(anyLong(), any()))
+                .thenThrow(ResourceNotFoundException.builder().message("Table doesn't exist").build());
+
+        when(dynamoDbClient.createTable(any(CreateTableRequest.class))).thenReturn(mockCreateTableFuture);
+        when(mockCreateTableFuture.get(anyLong(), any())).thenThrow(te);
+
+        verifyCancel(mockCreateTableFuture, () -> leaseRefresher.createLeaseTableIfNotExists(10L, 10L));
+    }
+
+    @Test
+    public void testCreateLeaseTableBillingMode() throws Exception {
+        leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PAY_PER_REQUEST);
+
         TimeoutException te = setRuleForDependencyTimeout();
 
         when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
