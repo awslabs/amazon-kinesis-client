@@ -61,7 +61,8 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
         if (leaseManager == null) {
             AmazonDynamoDBClient ddb = new AmazonDynamoDBClient(new DefaultAWSCredentialsProviderChain());
             leaseManager =
-                    new KinesisClientLeaseManager(TABLE_NAME, ddb, useConsistentReads);
+                    new KinesisClientLeaseManager(TABLE_NAME, ddb, useConsistentReads,
+                            KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE);
         }
         leaseManager.createLeaseTableIfNotExists(10L, 10L);
         leaseManager.deleteAll();

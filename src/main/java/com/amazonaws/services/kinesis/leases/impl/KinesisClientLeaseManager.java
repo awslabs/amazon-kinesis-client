@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.leases.impl;
 
+import com.amazonaws.services.dynamodbv2.model.BillingMode;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -38,8 +39,8 @@ public class KinesisClientLeaseManager extends LeaseManager<KinesisClientLease> 
      * @param table Leases table
      * @param dynamoDBClient DynamoDB client to use
      */
-    public KinesisClientLeaseManager(String table, AmazonDynamoDB dynamoDBClient) {
-        this(table, dynamoDBClient, false);
+    public KinesisClientLeaseManager(String table, AmazonDynamoDB dynamoDBClient, BillingMode billingMode) {
+        this(table, dynamoDBClient, false, billingMode);
     }
 
     /**
@@ -50,8 +51,8 @@ public class KinesisClientLeaseManager extends LeaseManager<KinesisClientLease> 
      * @param dynamoDBClient DynamoDB client to use
      * @param consistentReads true if we want consistent reads for testing purposes.
      */
-    public KinesisClientLeaseManager(String table, AmazonDynamoDB dynamoDBClient, boolean consistentReads) {
-        super(table, dynamoDBClient, new KinesisClientLeaseSerializer(), consistentReads);
+    public KinesisClientLeaseManager(String table, AmazonDynamoDB dynamoDBClient, boolean consistentReads, BillingMode billingMode) {
+        super(table, dynamoDBClient, new KinesisClientLeaseSerializer(), consistentReads, billingMode);
     }
 
     /**

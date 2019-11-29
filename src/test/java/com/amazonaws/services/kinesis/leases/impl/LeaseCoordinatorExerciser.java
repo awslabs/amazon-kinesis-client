@@ -28,6 +28,7 @@ import java.util.Map;
 import javax.swing.*;
 
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -59,7 +60,8 @@ public class LeaseCoordinatorExerciser {
                 new DefaultAWSCredentialsProviderChain();
         AmazonDynamoDBClient ddb = new AmazonDynamoDBClient(creds);
 
-        ILeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("nagl_ShardProgress", ddb);
+        ILeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("nagl_ShardProgress", ddb,
+                KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE);
 
         if (leaseManager.createLeaseTableIfNotExists(10L, 50L)) {
             LOG.info("Waiting for newly created lease table");

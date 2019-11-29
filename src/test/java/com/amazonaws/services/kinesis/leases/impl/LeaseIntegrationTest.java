@@ -16,6 +16,7 @@ package com.amazonaws.services.kinesis.leases.impl;
 
 import java.util.logging.Logger;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -46,7 +47,8 @@ public class LeaseIntegrationTest {
             if (leaseManager == null) {
                 // Do some static setup once per class.
 
-                leaseManager = new KinesisClientLeaseManager("nagl_ShardProgress", ddbClient, true);
+                leaseManager = new KinesisClientLeaseManager("nagl_ShardProgress", ddbClient, true,
+                        KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE);
 
                 MetricsHelper.startScope(new NullMetricsFactory());
             }

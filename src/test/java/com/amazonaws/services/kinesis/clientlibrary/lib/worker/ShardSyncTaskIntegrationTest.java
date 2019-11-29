@@ -18,10 +18,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.junit.After;
+import com.amazonaws.services.dynamodbv2.model.BillingMode;
+import com.amazonaws.services.dynamodbv2.model.DescribeTableResult;
+import com.amazonaws.services.dynamodbv2.model.ListTablesResult;
+import org.joda.time.DateTime;
 import org.junit.AfterClass;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -40,6 +42,8 @@ import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.IKinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.model.StreamStatus;
+
+import static junit.framework.TestCase.fail;
 
 /**
  * WARN: to run this integration test you'll have to provide a AwsCredentials.properties file on the classpath.
@@ -84,13 +88,13 @@ public class ShardSyncTaskIntegrationTest {
     /**
      * @throws java.lang.Exception
      */
-    @Before
-    public void setUp() throws Exception {
+    public void setUp(BillingMode billingMode, String tableName) throws Exception {
         boolean useConsistentReads = true;
         leaseManager =
-                new KinesisClientLeaseManager("ShardSyncTaskIntegrationTest",
+                new KinesisClientLeaseManager(tableName,
                         new AmazonDynamoDBClient(credentialsProvider),
-                        useConsistentReads);
+                        useConsistentReads,
+                        billingMode);
 
         kinesisProxy =
                 new KinesisProxy(STREAM_NAME,
@@ -99,25 +103,79 @@ public class ShardSyncTaskIntegrationTest {
     }
 
     /**
-     * @throws java.lang.Exception
+     * Test method for call().
+     *
+     * @throws Exception
      */
-    @After
-    public void tearDown() throws Exception {
+    @Test
+    public final void testCall_ProvisionedDDB() throws Exception {
+        BillingMode billingMode = BillingMode.PROVISIONED;
+        String tableName = "ShardSyncTaskIntegrationTest" + billingMode.name();
+        try {
+            setUp(billingMode, tableName);
+            runTest();
+            checkBillingMode(billingMode, tableName);
+        }
+        finally {
+            cleanUpTable(tableName);
+        }
     }
 
     /**
      * Test method for call().
      *
-     * @throws DependencyException
-     * @throws InvalidStateException
-     * @throws ProvisionedThroughputException
+     * @throws Exception
      */
     @Test
-    public final void testCall() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public final void testCall_PayPerRequestDDB() throws Exception {
+        BillingMode billingMode = BillingMode.PAY_PER_REQUEST;
+        String tableName = "ShardSyncTaskIntegrationTest" + billingMode.name();
+        try {
+            setUp(billingMode, tableName);
+            runTest();
+            checkBillingMode(billingMode, tableName);
+        } finally {
+            cleanUpTable(tableName);
+        }
+    }
+
+    private void cleanUpTable(String tableName) throws DependencyException {
+        AmazonDynamoDBClient client = new AmazonDynamoDBClient(DefaultAWSCredentialsProviderChain.getInstance());
+        ListTablesResult tables = client.listTables();
+        if(tables.getTableNames().contains(tableName)){
+            leaseManager.waitUntilLeaseTableExists(2,20);
+            client.deleteTable(tableName);
+            DateTime endTime = DateTime.now().plusSeconds(30);
+            while(client.listTables().getTableNames().contains(tableName)){
+                if( endTime.isBeforeNow()){
+                    fail("Could not clean up DDB tables in time. Please retry. If these failures continue increase the endTime.");
+                }
+                try {
+                    Thread.sleep(333L);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private void checkBillingMode(BillingMode billingMode, String tableName) {
+        AmazonDynamoDBClient client = new AmazonDynamoDBClient(DefaultAWSCredentialsProviderChain.getInstance());
+        DescribeTableResult tableDetails = client.describeTable(tableName);
+        if(BillingMode.PAY_PER_REQUEST.equals(billingMode)) {
+            Assert.assertEquals(tableDetails.getTable().getBillingModeSummary().getBillingMode(), billingMode.name());
+        }else{
+            Assert.assertTrue(tableDetails.getTable().getProvisionedThroughput().getWriteCapacityUnits() == 10);
+            Assert.assertTrue(tableDetails.getTable().getProvisionedThroughput().getReadCapacityUnits() == 10);
+        }
+    }
+
+    public void runTest() throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         if (!leaseManager.leaseTableExists()) {
             final Long readCapacity = 10L;
             final Long writeCapacity = 10L;
             leaseManager.createLeaseTableIfNotExists(readCapacity, writeCapacity);
+            leaseManager.waitUntilLeaseTableExists(2,20);
         }
         leaseManager.deleteAll();
         Set<String> shardIds = kinesisProxy.getAllShardIds();
