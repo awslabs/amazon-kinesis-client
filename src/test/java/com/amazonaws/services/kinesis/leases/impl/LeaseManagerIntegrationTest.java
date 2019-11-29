@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amazonaws.services.dynamodbv2.model.BillingMode;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import junit.framework.Assert;
 
@@ -251,7 +252,7 @@ public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
     @Test
     public void testWaitUntilLeaseTableExistsPayPerRequest() throws LeasingException {
         KinesisClientLeaseManager manager = new KinesisClientLeaseManager("nagl_ShardProgress_PayPerRequest", ddbClient, true,
-                KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE) {
+                BillingMode.PAY_PER_REQUEST) {
 
             @Override
             long sleep(long timeToSleepMillis) {

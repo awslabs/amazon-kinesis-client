@@ -70,6 +70,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
      * @param table leases table
      * @param dynamoDBClient DynamoDB client to use
      * @param serializer LeaseSerializer to use to convert to/from DynamoDB objects.
+     * @param billingMode The DDB Billing mode to set for lease table creation.
      */
     public LeaseManager(String table, AmazonDynamoDB dynamoDBClient, ILeaseSerializer<T> serializer, BillingMode billingMode) {
         this(table, dynamoDBClient, serializer, false, billingMode);
@@ -85,6 +86,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
      * @param dynamoDBClient DynamoDB client to use
      * @param serializer lease serializer to use
      * @param consistentReads true if we want consistent reads for testing purposes.
+     * @param billingMode The DDB Billing mode to set for lease table creation.
      */
     public LeaseManager(String table, AmazonDynamoDB dynamoDBClient, ILeaseSerializer<T> serializer, boolean consistentReads, BillingMode billingMode) {
         verifyNotNull(table, "Table name cannot be null");

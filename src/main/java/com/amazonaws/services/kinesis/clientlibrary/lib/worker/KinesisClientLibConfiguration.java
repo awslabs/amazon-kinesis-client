@@ -361,6 +361,7 @@ public class KinesisClientLibConfiguration {
      *        {@link RecordProcessorCheckpointer#checkpoint(String)}
      * @param regionName The region name for the service
      * @param shutdownGraceMillis The number of milliseconds before graceful shutdown terminates forcefully
+     * @param billingMode The DDB Billing mode to set for lease table creation.
      */
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
@@ -431,6 +432,7 @@ public class KinesisClientLibConfiguration {
      *        with a call to Amazon Kinesis before checkpointing for calls to
      *        {@link RecordProcessorCheckpointer#checkpoint(String)}
      * @param regionName The region name for the service
+     * @param billingMode The DDB Billing mode to set for lease table creation.
      */
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
@@ -507,7 +509,7 @@ public class KinesisClientLibConfiguration {
         this.shardSyncStrategyType = DEFAULT_SHARD_SYNC_STRATEGY_TYPE;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = new SimpleRecordsFetcherFactory();
-        this.billingMode=billingMode;
+        this.billingMode = billingMode;
     }
 
     /**
@@ -1162,6 +1164,11 @@ public class KinesisClientLibConfiguration {
         return this;
     }
 
+    /**
+     * The DDB Billing mode to set for lease table creation.
+     * @param billingMode - Either PAY_PER_REQUEST, or PROVISIONED; Defaults to PROVISIONED
+     * @return
+     */
     public KinesisClientLibConfiguration withBillingMode(BillingMode billingMode){
         this.billingMode = billingMode == null ? DEFAULT_DDB_BILLING_MODE : billingMode;
         return this;
