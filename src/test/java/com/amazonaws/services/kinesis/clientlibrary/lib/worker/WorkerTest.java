@@ -2133,7 +2133,8 @@ public class WorkerTest {
         final long idleTimeInMilliseconds = 2L;
 
         AmazonDynamoDB ddbClient = DynamoDBEmbedded.create().amazonDynamoDB();
-        LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("foo", ddbClient);
+        LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("foo", ddbClient,
+                KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE);
         leaseManager.createLeaseTableIfNotExists(1L, 1L);
         for (KinesisClientLease initialLease : initialLeases) {
             leaseManager.createLeaseIfNotExists(initialLease);

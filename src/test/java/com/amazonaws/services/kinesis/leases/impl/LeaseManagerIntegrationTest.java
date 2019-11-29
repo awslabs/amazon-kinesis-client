@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import junit.framework.Assert;
 
 import org.junit.Test;
@@ -233,7 +234,24 @@ public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
 
     @Test
     public void testWaitUntilLeaseTableExists() throws LeasingException {
-        KinesisClientLeaseManager manager = new KinesisClientLeaseManager("nagl_ShardProgress", ddbClient, true) {
+        KinesisClientLeaseManager manager = new KinesisClientLeaseManager("nagl_ShardProgress", ddbClient, true,
+                KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE) {
+
+            @Override
+            long sleep(long timeToSleepMillis) {
+                Assert.fail("Should not sleep");
+                return 0L;
+            }
+
+        };
+
+        Assert.assertTrue(manager.waitUntilLeaseTableExists(1, 1));
+    }
+
+    @Test
+    public void testWaitUntilLeaseTableExistsPayPerRequest() throws LeasingException {
+        KinesisClientLeaseManager manager = new KinesisClientLeaseManager("nagl_ShardProgress_PayPerRequest", ddbClient, true,
+                KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE) {
 
             @Override
             long sleep(long timeToSleepMillis) {
@@ -252,7 +270,8 @@ public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
          * Just using AtomicInteger for the indirection it provides.
          */
         final AtomicInteger sleepCounter = new AtomicInteger(0);
-        KinesisClientLeaseManager manager = new KinesisClientLeaseManager("nonexistentTable", ddbClient, true) {
+        KinesisClientLeaseManager manager = new KinesisClientLeaseManager("nonexistentTable", ddbClient, true,
+                KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE) {
 
             @Override
             long sleep(long timeToSleepMillis) {

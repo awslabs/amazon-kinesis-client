@@ -576,7 +576,7 @@ public class Worker implements Runnable {
     private static KinesisClientLibLeaseCoordinator getLeaseCoordinator(KinesisClientLibConfiguration config,
             AmazonDynamoDB dynamoDBClient, IMetricsFactory metricsFactory) {
         return new KinesisClientLibLeaseCoordinator(
-                new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient), DEFAULT_LEASE_SELECTOR,
+                new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient, config.getBillingMode()), DEFAULT_LEASE_SELECTOR,
                 config.getWorkerIdentifier(), config.getFailoverTimeMillis(), config.getEpsilonMillis(),
                 config.getMaxLeasesForWorker(), config.getMaxLeasesToStealAtOneTime(),
                 config.getMaxLeaseRenewalThreads(), metricsFactory);
@@ -1345,7 +1345,7 @@ public class Worker implements Runnable {
             }
 
             if (leaseManager == null) {
-                leaseManager = new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient);
+                leaseManager = new KinesisClientLeaseManager(config.getTableName(), dynamoDBClient, config.getBillingMode());
             }
 
             if (shardPrioritization == null) {

@@ -70,7 +70,7 @@ public class ShardSyncerTest {
             InitialPositionInStreamExtended.newInitialPositionAtTimestamp(new Date(1000L));
     private final boolean cleanupLeasesOfCompletedShards = true;
     AmazonDynamoDB ddbClient = DynamoDBEmbedded.create().amazonDynamoDB();
-    LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("tempTestTable", ddbClient);
+    LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("tempTestTable", ddbClient, KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE);
     private static final int EXPONENT = 128;
     protected static final KinesisLeaseCleanupValidator leaseCleanupValidator = new KinesisLeaseCleanupValidator();
     private static final KinesisShardSyncer shardSyncer = new KinesisShardSyncer(leaseCleanupValidator);
