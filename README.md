@@ -60,57 +60,12 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.2.6 - November 7, 2019)
-[Milestone#43](https://github.com/awslabs/amazon-kinesis-client/milestone/43)
-* Updating the SDK version to 2.9.25.
-  * [PR#638](https://github.com/awslabs/amazon-kinesis-client/pull/638)
-* Clearing the local cache on a subscription termination, to avoid noisy logs on new subscriptions.
-  * [PR#642](https://github.com/awslabs/amazon-kinesis-client/pull/642)
-* Updating the SDK version to 2.10.0 in order to fix the premature H2 stream close issue.
-  * [PR#649](https://github.com/awslabs/amazon-kinesis-client/pull/649)
-  * NOTE: SDK has a known connection teardown issue when multiple H2 streams are used within a connection. This might result in shard consumers sticking to a stale service host and not progressing. If your shard consumer gets stuck, use the following configuration as a workaround. This configuration might result in up to 5X increase in total connections.
-  ```
-  KinesisAsyncClient kinesisClient = KinesisAsyncClient.builder()
-                                                       .region(region)
-                                                       .httpClientBuilder(NettyNioAsyncHttpClient.builder().maxConcurrency(Integer.MAX_VALUE).maxHttp2Streams(1))
-                                                       .build()
-  ```
-
-### Related Prior Release (2.2.5 - October 23, 2019)
-[Milestone#40](https://github.com/awslabs/amazon-kinesis-client/milestone/40)
-* Updating Sonatype to dedicated AWS endpoint.
-  * [PR#619](https://github.com/awslabs/amazon-kinesis-client/pull/619)
-* Introducing a validation step to verify if ShardEnd is reached, to prevent shard consumer stuck scenarios in the event of malformed response from service.
-  * [PR#624](https://github.com/awslabs/amazon-kinesis-client/pull/624)
-
-### Related Prior Release (2.2.4 - September 23, 2019)
-[Milestone#39](https://github.com/awslabs/amazon-kinesis-client/milestone/39)
-* Making FanoutRecordsPublisher test cases resilient to delayed thread operations
-  * [PR#612](https://github.com/awslabs/amazon-kinesis-client/pull/612)
-* Drain delivery queue in the FanoutRecordsPublisher to make slow consumers consume events at their pace
-  * [PR#607](https://github.com/awslabs/amazon-kinesis-client/pull/607)
-* Fix to prevent the onNext event going to stale subscription when restart happens in PrefetchRecordsPublisher
-  * [PR#606](https://github.com/awslabs/amazon-kinesis-client/pull/606)
-
-### Related Prior Release (2.2.3 - September 04, 2019)
-[Milestone#38](https://github.com/awslabs/amazon-kinesis-client/milestone/38)
-* Fix to prevent data loss and stuck shards in the event of failed records delivery in Polling readers
-  * [PR#603](https://github.com/awslabs/amazon-kinesis-client/pull/603)
-
-### Related Prior Release (2.2.2 - August 19, 2019)
-[Milestone#36](https://github.com/awslabs/amazon-kinesis-client/milestone/36)
-* Fix to prevent invalid ShardConsumer state transitions due to rejected executor service executions.
-  * [PR#560](https://github.com/awslabs/amazon-kinesis-client/pull/560)
-* Fixing a bug in which initial subscription failure caused a shard consumer to get stuck.
-  * [PR#562](https://github.com/awslabs/amazon-kinesis-client/pull/562)
-* Making CW publish failures visible by executing the async publish calls in a blocking manner and logging on exception.
-  * [PR#584](https://github.com/awslabs/amazon-kinesis-client/pull/584)
-* Update shard end checkpoint failure messaging.
-  * [PR#591](https://github.com/awslabs/amazon-kinesis-client/pull/591)
-* A fix for resiliency and durability issues that occur in the reduced thread mode - Nonblocking approach.
-  * [PR#573](https://github.com/awslabs/amazon-kinesis-client/pull/573)
-* Preventing duplicate delivery due to unacknowledged event, while completing the subscription.
-  * [PR#596](https://github.com/awslabs/amazon-kinesis-client/pull/596)
+### Latest Release (2.2.7 - December 2, 2019)
+[Milestone#45](https://github.com/awslabs/amazon-kinesis-client/milestone/45)
+* Updating the AWS SDK version to 2.10.25
+  * [PR#657](https://github.com/awslabs/amazon-kinesis-client/pull/657)
+* Adding a configurable DynamoDB billing mode
+  * [PR#582](https://github.com/awslabs/amazon-kinesis-client/pull/582)
 
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
