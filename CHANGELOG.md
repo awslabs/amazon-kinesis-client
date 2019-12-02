@@ -1,5 +1,13 @@
 # Changelog
 
+### Release 2.2.7 (December 2, 2019)
+[Milestone#45](https://github.com/awslabs/amazon-kinesis-client/milestone/45)
+* Updating the AWS SDK version to 2.10.25
+  * [PR#657](https://github.com/awslabs/amazon-kinesis-client/pull/657)
+* Adding a configurable DynamoDB billing mode
+  * [PR#582](https://github.com/awslabs/amazon-kinesis-client/pull/582)
+
+
 ### Release 2.2.6 (November 7, 2019)
 [Milestone#43](https://github.com/awslabs/amazon-kinesis-client/milestone/43)
 * Updating the SDK version to 2.9.25.
