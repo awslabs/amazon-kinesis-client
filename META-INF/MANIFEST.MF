@@ -13,7 +13,7 @@ Require-Bundle: org.apache.commons.codec;bundle-version="1.6",
  org.apache.httpcomponents.httpcore;bundle-version="4.3.3",
  org.apache.httpcomponents.httpclient;bundle-version="4.3.6"
  com.amazonaws.sdk;bundle-version="1.11.319",
-Export-Package: com.amazonaws.services.kinesis,
+Export-Package: com.fivetran.external.com.amazonaws.services.kinesis,
  com.fivetran.external.com.amazonaws.services.kinesis.clientlibrary,
  com.fivetran.external.com.amazonaws.services.kinesis.clientlibrary.config,
  com.fivetran.external.com.amazonaws.services.kinesis.clientlibrary.exceptions,
