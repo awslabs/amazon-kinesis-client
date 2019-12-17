@@ -85,7 +85,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
         this.initialPositionInStream = initialPositionInStream;
         this.shardSyncer = shardSyncer;
         this.shardSyncRequestPending = new AtomicBoolean(false);
-        this.lock = new ReentrantLock(Boolean.TRUE);
+        this.lock = new ReentrantLock();
     }
 
     Future<TaskResult> syncShardAndLeaseInfo(List<Shard> latestShards) {
@@ -117,30 +117,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
                             cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, shardSyncIdleTimeMillis,
                             shardSyncer, latestShards), metricsFactory);
             future = CompletableFuture.supplyAsync(() -> currentTask.call(), executorService)
-                    .whenComplete((taskResult, exception) -> {
-                        if (exception != null) {
-                            LOG.error("Caught exception running " + currentTask.getTaskType() + " task: ", exception);
-                        }
-                        // Acquire lock here. If shardSyncRequestPending is false in this completionStage and
-                        // syncShardAndLeaseInfo is invoked, before completion stage exits (future completes)
-                        // but right after the value of shardSyncRequestPending is checked, it will result in
-                        // shardSyncRequestPending being set to true, but no pending futures to trigger the next
-                        // ShardSyncTask. By executing this stage in a Reentrant lock, we ensure that if the
-                        // previous task is in this completion stage, checkAndSubmitNextTask is not invoked
-                        // until this completionStage exits.
-                        try {
-                            lock.lock();
-                            if (shardSyncRequestPending.get()) {
-                                shardSyncRequestPending.set(false);
-                                // reset future to null, so next call creates a new one
-                                // without trying to get results from the old future.
-                                future = null;
-                                checkAndSubmitNextTask(latestShards);
-                            }
-                        } finally {
-                            lock.unlock();
-                        }
-                    });
+                    .whenComplete((taskResult, exception) -> handlePendingShardSyncs(latestShards, exception));
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Submitted new " + currentTask.getTaskType() + " task.");
             }
@@ -153,5 +130,30 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
             shardSyncRequestPending.compareAndSet(false /*expected*/, true /*update*/);
         }
         return submittedTaskFuture;
+    }
+
+    private void handlePendingShardSyncs(List<Shard> latestShards, Throwable exception) {
+        if (exception != null) {
+            LOG.error("Caught exception running " + currentTask.getTaskType() + " task: ", exception);
+        }
+        // Acquire lock here. If shardSyncRequestPending is false in this completionStage and
+        // syncShardAndLeaseInfo is invoked, before completion stage exits (future completes)
+        // but right after the value of shardSyncRequestPending is checked, it will result in
+        // shardSyncRequestPending being set to true, but no pending futures to trigger the next
+        // ShardSyncTask. By executing this stage in a Reentrant lock, we ensure that if the
+        // previous task is in this completion stage, checkAndSubmitNextTask is not invoked
+        // until this completionStage exits.
+        try {
+            lock.lock();
+            if (shardSyncRequestPending.get()) {
+                shardSyncRequestPending.set(false);
+                // reset future to null, so next call creates a new one
+                // without trying to get results from the old future.
+                future = null;
+                checkAndSubmitNextTask(latestShards);
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 }
