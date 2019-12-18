@@ -35,7 +35,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.junit.Assert.assertThat;
 
 @RunWith(MockitoJUnitRunner.class)
-public class DynamoDBLeaseRenewerIntegrationBillingModePayPerRequestTest extends
+public class DynamoDBLeaseRenewerBillingModePayPerRequestIntegrationTest extends
         LeaseIntegrationBillingModePayPerRequestTest {
     private final String TEST_METRIC = "TestOperation";
 
