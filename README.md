@@ -28,7 +28,9 @@ Please open an issue if you have any questions.
 
 ## Building from Source
 
-After you've downloaded the code from GitHub, you can build it using Maven. To disable GPG signing in the build, use this command: `mvn clean install -Dgpg.skip=true`
+After you've downloaded the code from GitHub, you can build it using Maven. To disable GPG signing in the build, use
+ this command: `mvn clean install -Dgpg.skip=true -DskipITs`. To run integration tests, remove the `-DskipITs` option
+  from the command. Note: Integration tests create AWS resources and require valid AWS credentials to be discovered at runtime.
 
 ## Integration with the Kinesis Producer Library
 For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesis-guide-kpl]**, the KCL integrates without additional effort. When the KCL retrieves an aggregated Amazon Kinesis record consisting of multiple KPL user records, it will automatically invoke the KPL to extract the individual user records before returning them to the user.
