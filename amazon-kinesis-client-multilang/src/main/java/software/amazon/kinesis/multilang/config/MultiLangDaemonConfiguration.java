@@ -130,6 +130,8 @@ public class MultiLangDaemonConfiguration {
     private ShardPrioritization shardPrioritization;
     @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
+    @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
+    private long schedulerInitializationBackoffTimeMillis;
 
     @ConfigurationSettable(configurationClass = LifecycleConfig.class)
     private long taskBackoffTimeMillis;

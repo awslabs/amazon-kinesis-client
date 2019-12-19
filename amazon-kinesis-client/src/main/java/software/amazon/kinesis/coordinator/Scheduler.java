@@ -118,6 +118,7 @@ public class Scheduler implements Runnable {
     private final boolean ignoreUnexpetedChildShards;
     private final AggregatorUtil aggregatorUtil;
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
+    private final long schedulerInitializationBackoffTimeMillis;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -220,6 +221,7 @@ public class Scheduler implements Runnable {
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
         this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer();
+        this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
     }
 
     /**
@@ -291,10 +293,12 @@ public class Scheduler implements Runnable {
                     lastException = e;
                 }
 
-                try {
-                    Thread.sleep(parentShardPollIntervalMillis);
-                } catch (InterruptedException e) {
-                    log.debug("Sleep interrupted while initializing worker.");
+                if (!isDone) {
+                    try {
+                        Thread.sleep(schedulerInitializationBackoffTimeMillis);
+                    } catch (InterruptedException e) {
+                        log.debug("Sleep interrupted while initializing worker.");
+                    }
                 }
             }
 

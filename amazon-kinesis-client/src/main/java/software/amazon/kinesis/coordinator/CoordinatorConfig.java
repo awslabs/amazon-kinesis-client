@@ -90,4 +90,11 @@ public class CoordinatorConfig {
 
     private CoordinatorFactory coordinatorFactory = new SchedulerCoordinatorFactory();
 
+    /**
+     * Interval in milliseconds between retrying the scheduler initialization.
+     *
+     * <p>Default value: 1000L</p>
+     */
+    private long schedulerInitializationBackoffTimeMillis = 1000L;
+
 }
