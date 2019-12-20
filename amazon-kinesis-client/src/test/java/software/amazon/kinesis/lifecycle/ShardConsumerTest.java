@@ -816,6 +816,10 @@ public class ShardConsumerTest {
         assertThat(consumer.taskRunningTime(), nullValue());
         cache.requestBarrier.reset();
 
+        // Sleep for 10 millis before processing next task. If we don't; then the following
+        // assertion on time fails. This happens if cache.publish() is executed in the
+        // same millisecond as that of previousTaskStartTime, resulting in the unit test failure.
+        Thread.sleep(10);
         cache.publish();
 
         awaitAndResetBarrier(taskArriveBarrier);
