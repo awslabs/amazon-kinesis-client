@@ -31,7 +31,16 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-## Latest Release (1.13.0 November 5, 2019)
+## Latest Release (1.13.1 December 30, 2019)
+[Milestone#44](https://github.com/awslabs/amazon-kinesis-client/milestone/44)
+* Adding BillingMode Support to KCL 1.x. This enables the customer to specify if they want provisioned capacity for DDB, or pay per request.
+  * [PR #656](https://github.com/awslabs/amazon-kinesis-client/pull/656)
+* Ensure ShardSyncTask invocation from ShardSyncTaskManager for pending ShardEnd events.
+  * [PR #659](https://github.com/awslabs/amazon-kinesis-client/pull/659)
+* Fix the LeaseManagementIntegrationTest failure.
+  * [PR #670](https://github.com/awslabs/amazon-kinesis-client/pull/670)
+
+## Release (1.13.0 November 5, 2019)
 [Milestone#42](https://github.com/awslabs/amazon-kinesis-client/milestone/42)
 * Handling completed and blocked tasks better during graceful shutdown
   * [PR #640](https://github.com/awslabs/amazon-kinesis-client/pull/640)
