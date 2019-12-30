@@ -31,7 +31,16 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-## Latest Release (1.13.0 November 5, 2019)
+## Latest Release (1.13.1 December 30, 2019)
+[Milestone#44](https://github.com/awslabs/amazon-kinesis-client/milestone/44)
+* Adding BillingMode Support to KCL 1.x. This enables the customer to specify if they want provisioned capacity for DDB, or pay per request.
+  * [PR #656](https://github.com/awslabs/amazon-kinesis-client/pull/656)
+* Ensure ShardSyncTask invocation from ShardSyncTaskManager for pending ShardEnd events.
+  * [PR #659](https://github.com/awslabs/amazon-kinesis-client/pull/659)
+* Fix the LeaseManagementIntegrationTest failure.
+  * [PR #670](https://github.com/awslabs/amazon-kinesis-client/pull/670)
+
+## Release (1.13.0 November 5, 2019)
 [Milestone#42](https://github.com/awslabs/amazon-kinesis-client/milestone/42)
 * Handling completed and blocked tasks better during graceful shutdown
   * [PR #640](https://github.com/awslabs/amazon-kinesis-client/pull/640)
@@ -48,25 +57,6 @@ To make it easier for developers to write record processors in other languages, 
   * [PR #623](https://github.com/awslabs/amazon-kinesis-client/pull/623)
 * Updating AWS SDK to 1.11.655
   * [PR #626](https://github.com/awslabs/amazon-kinesis-client/pull/626)
-
-## Release 1.11.2 (August 15, 2019)
-[Milestone#35](https://github.com/awslabs/amazon-kinesis-client/milestone/35)
-* Added support for metrics emission in `PeriodicShardSyncer`.
-  * [PR #592](https://github.com/awslabs/amazon-kinesis-client/pull/592)
-
-### Release 1.11.1 (August 9, 2019)
-[Milestone#34](https://github.com/awslabs/amazon-kinesis-client/milestone/34)
-* Updated the version of the AWS Java SDK to 1.11.603.
-  * [PR #587](https://github.com/awslabs/amazon-kinesis-client/pull/587)
-* Added logging to `KinesisDataFetcher` when reaching the end of a shard due to a null next iterator.
-  * [PR #585](https://github.com/awslabs/amazon-kinesis-client/pull/585)
-  
-### Release 1.11.0 (August 7, 2019)
-[Milestone#33](https://github.com/awslabs/amazon-kinesis-client/milestone/33)
-* Improved exception handling and logging in `KinesisClientLibLeaseCoordinator` to avoid `NullPointerExceptions` when no leases are found.
-  * [PR #558](https://github.com/awslabs/amazon-kinesis-client/pull/558)
-* Introducing optional new periodic shard sync strategy to perform shard discovery and lease cleanup on a single worker.
-  * [PR #579](https://github.com/awslabs/amazon-kinesis-client/pull/579)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
