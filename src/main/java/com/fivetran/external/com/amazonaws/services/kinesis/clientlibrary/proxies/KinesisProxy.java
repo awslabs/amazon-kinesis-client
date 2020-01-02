@@ -217,7 +217,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
         this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
 
         try {
-            if (Class.forName("com.fivetran.external.com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient")
+            if (Class.forName("com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient")
                     .isAssignableFrom(client.getClass())) {
                 isKinesisClient = false;
                 LOG.debug("Client is DynamoDb client, will use DescribeStream.");
