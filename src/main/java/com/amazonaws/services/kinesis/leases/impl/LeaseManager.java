@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.dynamodbv2.model.BillingMode;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.leases.util.DynamoUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -63,6 +64,18 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
     protected ILeaseSerializer<T> serializer;
     protected boolean consistentReads;
     private BillingMode billingMode;
+
+    /**
+     * Constructor.
+     *
+     * @param table leases table
+     * @param dynamoDBClient DynamoDB client to use
+     * @param serializer LeaseSerializer to use to convert to/from DynamoDB objects.
+     */
+    @Deprecated
+    public LeaseManager(String table, AmazonDynamoDB dynamoDBClient, ILeaseSerializer<T> serializer) {
+        this(table, dynamoDBClient, serializer, false, KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE);
+    }
 
     /**
      * Constructor.
