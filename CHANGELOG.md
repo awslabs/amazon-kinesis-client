@@ -1,4 +1,8 @@
 # Changelog
+## Latest Release (1.13.2 Janurary 13, 2020)
+* Adding backward compatible constructors that use the default DDB Billing Mode (#673)
+  * [PR #673](https://github.com/awslabs/amazon-kinesis-client/pull/673)
+
 ## Release 1.13.1 (December 31, 2019)
 [Milestone#44](https://github.com/awslabs/amazon-kinesis-client/milestone/44)
 * Adding BillingMode Support to KCL 1.x. This enables the customer to specify if they want provisioned capacity for DDB, or pay per request.

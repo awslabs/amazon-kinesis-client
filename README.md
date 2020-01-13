@@ -31,8 +31,11 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-## Latest Release (1.13.1 December 30, 2019)
-[Milestone#44](https://github.com/awslabs/amazon-kinesis-client/milestone/44)
+#### Latest Release (1.13.2 Janurary 13, 2020)
+* Adding backward compatible constructors that use the default DDB Billing Mode (#673)
+  * [PR #673](https://github.com/awslabs/amazon-kinesis-client/pull/673)
+
+#### Release (1.13.1 December 30, 2019)
 * Adding BillingMode Support to KCL 1.x. This enables the customer to specify if they want provisioned capacity for DDB, or pay per request.
   * [PR #656](https://github.com/awslabs/amazon-kinesis-client/pull/656)
 * Ensure ShardSyncTask invocation from ShardSyncTaskManager for pending ShardEnd events.
@@ -40,13 +43,11 @@ To make it easier for developers to write record processors in other languages, 
 * Fix the LeaseManagementIntegrationTest failure.
   * [PR #670](https://github.com/awslabs/amazon-kinesis-client/pull/670)
 
-## Release (1.13.0 November 5, 2019)
-[Milestone#42](https://github.com/awslabs/amazon-kinesis-client/milestone/42)
+#### Release (1.13.0 November 5, 2019)
 * Handling completed and blocked tasks better during graceful shutdown
   * [PR #640](https://github.com/awslabs/amazon-kinesis-client/pull/640)
 
-## Release 1.12.0 (October 17, 2019)
-[Milestone#41](https://github.com/awslabs/amazon-kinesis-client/milestone/41)
+#### Release 1.12.0 (October 17, 2019)
 * Adding logging around shard end codepaths
   * [PR #585](https://github.com/awslabs/amazon-kinesis-client/pull/585)
 * Updating checkpointing failure message to refer to javadocs
@@ -58,7 +59,7 @@ To make it easier for developers to write record processors in other languages, 
 * Updating AWS SDK to 1.11.655
   * [PR #626](https://github.com/awslabs/amazon-kinesis-client/pull/626)
 
-### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
+###### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
 [kinesis]: http://aws.amazon.com/kinesis
 [kinesis-forum]: http://developer.amazonwebservices.com/connect/forum.jspa?forumID=169
