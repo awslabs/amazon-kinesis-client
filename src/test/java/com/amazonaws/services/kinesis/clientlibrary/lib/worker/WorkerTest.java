@@ -66,11 +66,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseBuilder;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
+import com.amazonaws.services.kinesis.leases.interfaces.ILeaseTaker;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -1820,6 +1822,125 @@ public class WorkerTest {
                 any(AwsClientBuilder.class), eq(null), any(ClientConfiguration.class), eq(endpointUrl), eq(region));
         verify(builder, times(1)).createClient(
                 any(AwsClientBuilder.class), eq(null), any(ClientConfiguration.class), eq(null), eq(region));
+    }
+
+    @Test
+    public void testBuilderWithInitializeOnCreationNotSet() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        IKinesisProxy kinesisProxy = mock(KinesisLocalFileProxy.class);
+        AmazonKinesis kinesisClient = mock(AmazonKinesis.class);
+        AmazonDynamoDB dynamoDBClient = mock(AmazonDynamoDB.class);
+        AmazonCloudWatch amazonCloudWatchClient = mock(AmazonCloudWatch.class);
+        ILeaseTaker<KinesisClientLease> leaseTaker = mock(ILeaseTaker.class);
+        LeaderDecider leaderDecider = mock(LeaderDecider.class);
+        Worker worker = new Worker.Builder()
+                .execService(executorService)
+                .recordProcessorFactory(recordProcessorFactory)
+                .kinesisClient(kinesisClient)
+                .dynamoDBClient(dynamoDBClient)
+                .cloudWatchClient(amazonCloudWatchClient)
+                .metricsFactory(nullMetricsFactory)
+                .leaseManager(leaseManager)
+                .shardPrioritization(shardPrioritization)
+                .config(config)
+                .kinesisProxy(kinesisProxy)
+                .shardSyncer(shardSyncer)
+                .leaseTaker(leaseTaker)
+                .leaderDecider(leaderDecider)
+                .build();
+        Assert.assertTrue(!worker.isInitialized);
+    }
+
+    @Test
+    public void testBuilderWithInitializeOnCreationNotEnabled() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        IKinesisProxy kinesisProxy = mock(KinesisLocalFileProxy.class);
+        AmazonKinesis kinesisClient = mock(AmazonKinesis.class);
+        AmazonDynamoDB dynamoDBClient = mock(AmazonDynamoDB.class);
+        AmazonCloudWatch amazonCloudWatchClient = mock(AmazonCloudWatch.class);
+        ILeaseTaker<KinesisClientLease> leaseTaker = mock(ILeaseTaker.class);
+        LeaderDecider leaderDecider = mock(LeaderDecider.class);
+        Worker worker = new Worker.Builder()
+                .execService(executorService)
+                .recordProcessorFactory(recordProcessorFactory)
+                .kinesisClient(kinesisClient)
+                .dynamoDBClient(dynamoDBClient)
+                .cloudWatchClient(amazonCloudWatchClient)
+                .metricsFactory(nullMetricsFactory)
+                .leaseManager(leaseManager)
+                .shardPrioritization(shardPrioritization)
+                .config(config)
+                .kinesisProxy(kinesisProxy)
+                .shardSyncer(shardSyncer)
+                .leaseTaker(leaseTaker)
+                .leaderDecider(leaderDecider)
+                .initializeOnCreation(false)
+                .build();
+        Assert.assertTrue(!worker.isInitialized);
+    }
+
+    @Test
+    public void testBuilderWithInitializeOnCreationEnabled() throws DependencyException {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        IKinesisProxy kinesisProxy = mock(KinesisLocalFileProxy.class);
+        AmazonKinesis kinesisClient = mock(AmazonKinesis.class);
+        AmazonDynamoDB dynamoDBClient = mock(AmazonDynamoDB.class);
+        AmazonCloudWatch amazonCloudWatchClient = mock(AmazonCloudWatch.class);
+        ILeaseTaker<KinesisClientLease> leaseTaker = mock(ILeaseTaker.class);
+        LeaderDecider leaderDecider = mock(LeaderDecider.class);
+
+        when(leaseManager.waitUntilLeaseTableExists(anyLong(), anyLong())).thenReturn(true);
+
+        Worker worker = new Worker.Builder()
+                .execService(executorService)
+                .recordProcessorFactory(recordProcessorFactory)
+                .kinesisClient(kinesisClient)
+                .dynamoDBClient(dynamoDBClient)
+                .cloudWatchClient(amazonCloudWatchClient)
+                .metricsFactory(nullMetricsFactory)
+                .leaseManager(leaseManager)
+                .shardPrioritization(shardPrioritization)
+                .config(config)
+                .kinesisProxy(kinesisProxy)
+                .shardSyncer(shardSyncer)
+                .leaseTaker(leaseTaker)
+                .leaderDecider(leaderDecider)
+                .initializeOnCreation(true)
+                .build();
+
+        Assert.assertTrue(worker.isInitialized);
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void testBuilderWithInitializeOnCreationEnabled_Exception() throws DependencyException {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        IKinesisProxy kinesisProxy = mock(KinesisLocalFileProxy.class);
+        AmazonKinesis kinesisClient = mock(AmazonKinesis.class);
+        AmazonDynamoDB dynamoDBClient = mock(AmazonDynamoDB.class);
+        AmazonCloudWatch amazonCloudWatchClient = mock(AmazonCloudWatch.class);
+        ILeaseTaker<KinesisClientLease> leaseTaker = mock(ILeaseTaker.class);
+        LeaderDecider leaderDecider = mock(LeaderDecider.class);
+
+        when(leaseManager.waitUntilLeaseTableExists(anyLong(), anyLong())).thenThrow(new RuntimeException(
+                "Failed to initialize the lease table."));
+        when(config.getParentShardPollIntervalMillis()).thenReturn(1L);
+
+        Worker worker = new Worker.Builder()
+                .execService(executorService)
+                .recordProcessorFactory(recordProcessorFactory)
+                .kinesisClient(kinesisClient)
+                .dynamoDBClient(dynamoDBClient)
+                .cloudWatchClient(amazonCloudWatchClient)
+                .metricsFactory(nullMetricsFactory)
+                .leaseManager(leaseManager)
+                .shardPrioritization(shardPrioritization)
+                .config(config)
+                .kinesisProxy(kinesisProxy)
+                .shardSyncer(shardSyncer)
+                .leaseTaker(leaseTaker)
+                .leaderDecider(leaderDecider)
+                .initializeOnCreation(true)
+                .build();
     }
 
     private abstract class InjectableWorker extends Worker {
