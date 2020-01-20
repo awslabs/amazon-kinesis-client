@@ -641,8 +641,12 @@ public class Worker implements Runnable {
             return;
         }
 
-        initialize();
-        LOG.info("Starting worker loop.");
+        try {
+            initialize();
+            LOG.info("Starting worker loop.");
+        } catch (RuntimeException e1) {
+            LOG.error("Could not start worker loop as worker is failed to initialize.");
+        }
 
         while (!shouldShutdown()) {
             runProcessLoop();
