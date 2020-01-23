@@ -15,6 +15,8 @@
 
 package software.amazon.kinesis.retrieval;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.reactivestreams.Publisher;
 
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -23,7 +25,11 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 /**
  * Provides a record publisher that will retrieve records from Kinesis for processing
  */
-public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
+public abstract class RecordsPublisher implements Publisher<RecordsRetrieved> {
+
+    @Getter @Setter
+    private String lastRequestId;
+
     /**
      * Initializes the publisher with where to start processing. If there is a stored sequence number the publisher will
      * begin from that sequence number, otherwise it will use the initial position.
@@ -33,25 +39,25 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
      * @param initialPositionInStreamExtended
      *            if there is no sequence number the initial position to use
      */
-    void start(ExtendedSequenceNumber extendedSequenceNumber, InitialPositionInStreamExtended initialPositionInStreamExtended);
+    public abstract void start(ExtendedSequenceNumber extendedSequenceNumber, InitialPositionInStreamExtended initialPositionInStreamExtended);
 
     /**
      * Restart from the last accepted and processed
      * @param recordsRetrieved the processRecordsInput to restart from
      */
-    void restartFrom(RecordsRetrieved recordsRetrieved);
+    public abstract void restartFrom(RecordsRetrieved recordsRetrieved);
     
 
     /**
      * Shutdowns the publisher. Once this method returns the publisher should no longer provide any records.
      */
-    void shutdown();
+    public abstract void shutdown();
 
     /**
      * Notify the publisher on receipt of a data event.
      * @param ack acknowledgement received from the subscriber.
      */
-    default void notify(RecordsDeliveryAck ack) {
+    public void notify(RecordsDeliveryAck ack) {
         throw new UnsupportedOperationException("RecordsPublisher does not support acknowledgement from Subscriber");
     }
 }

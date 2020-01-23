@@ -490,7 +490,7 @@ public class ShardConsumerSubscriberTest {
         }
     }
 
-    private class TestPublisher implements RecordsPublisher {
+    private class TestPublisher extends RecordsPublisher {
 
         private final LinkedList<ResponseItem> responses = new LinkedList<>();
         protected volatile long requested = 0;

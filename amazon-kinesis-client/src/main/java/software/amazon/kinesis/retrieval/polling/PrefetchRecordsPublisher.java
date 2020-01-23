@@ -76,7 +76,7 @@ import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDelivery
  */
 @Slf4j
 @KinesisClientInternalApi
-public class PrefetchRecordsPublisher implements RecordsPublisher {
+public class PrefetchRecordsPublisher extends RecordsPublisher {
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     private int maxPendingProcessRecordsInput;
     private int maxByteSize;

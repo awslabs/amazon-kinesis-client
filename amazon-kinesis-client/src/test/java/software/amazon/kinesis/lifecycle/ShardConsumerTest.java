@@ -168,7 +168,7 @@ public class ShardConsumerTest {
         assertThat(remainder.isEmpty(), equalTo(true));
     }
 
-    private class TestPublisher implements RecordsPublisher {
+    private class TestPublisher extends RecordsPublisher {
 
         final CyclicBarrier barrier = new CyclicBarrier(2);
         final CyclicBarrier requestBarrier = new CyclicBarrier(2);

@@ -35,7 +35,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * GetRecordsRetrievalStrategy class.
  */
 @KinesisClientInternalApi
-public class BlockingRecordsPublisher implements RecordsPublisher {
+public class BlockingRecordsPublisher extends RecordsPublisher {
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
