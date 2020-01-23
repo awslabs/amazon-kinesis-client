@@ -718,8 +718,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         @Override
         public void responseReceived(SubscribeToShardResponse response) {
-            log.debug("{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Response received",
-                    parent.shardId, connectionStartedAt, subscribeToShardId);
+            log.debug("{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Response received. rid: {}, erid: {}, sdkfields: {}",
+                    parent.shardId, connectionStartedAt, subscribeToShardId, response.responseMetadata().requestId(), response.responseMetadata().extendedRequestId(), response.sdkFields());
         }
 
         @Override
