@@ -33,7 +33,7 @@
   </scm>
 
   <properties>
-    <awssdk.version>2.10.25</awssdk.version>
+    <awssdk.version>2.10.56</awssdk.version>
   </properties>
 
   <licenses>
