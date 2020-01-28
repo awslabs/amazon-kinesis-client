@@ -1,5 +1,14 @@
 # Changelog
 
+### Release 2.2.8 (January 28, 2020)
+[Milestone#46](https://github.com/awslabs/amazon-kinesis-client/milestone/45)
+* Updating the AWS SDK version to 2.10.56.
+  * [PR#679](https://github.com/awslabs/amazon-kinesis-client/pull/679)
+* Making ShardConsumerTest resilient to race conditions.
+  * [PR#668](https://github.com/awslabs/amazon-kinesis-client/pull/668)
+* Updating integration test naming.
+  * [PR#667](https://github.com/awslabs/amazon-kinesis-client/pull/667)
+
 ### Release 2.2.7 (December 2, 2019)
 [Milestone#45](https://github.com/awslabs/amazon-kinesis-client/milestone/45)
 * Updating the AWS SDK version to 2.10.25
