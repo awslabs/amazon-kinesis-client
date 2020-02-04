@@ -14,9 +14,8 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.clientlibrary.proxies.ShardClosureVerificationResponse;
 import com.amazonaws.services.kinesis.model.Shard;
-import com.amazonaws.util.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -29,8 +28,6 @@ import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -107,11 +104,13 @@ class ShutdownTask implements ITask {
              * workers to contend for the lease of this shard.
              */
             if(localReason == ShutdownReason.TERMINATE) {
-                latestShards = kinesisProxy.getShardList();
+                ShardClosureVerificationResponse shardClosureVerificationResponse = kinesisProxy.verifyShardClosure(shardInfo.getShardId());
+                latestShards = shardClosureVerificationResponse.getLatestShards();
 
-                //If latestShards is null or empty, we should still shut down the ShardConsumer with Zombie state which avoid
-                // checking point with SHARD_END sequence number.
-                if(CollectionUtils.isNullOrEmpty(latestShards) || !isShardInContextParentOfAny(latestShards)) {
+                // If latestShards is null or empty, it means shard in context is not closed yet.
+                // We should shut down the ShardConsumer with Zombie state which avoids checkpoint-ing
+                // with SHARD_END sequence number.
+                if(!shardClosureVerificationResponse.isVerifiedShardWasClosed()) {
                     localReason = ShutdownReason.ZOMBIE;
                     dropLease();
                     LOG.info("Forcing the lease to be lost before shutting down the consumer for Shard: " + shardInfo.getShardId());
@@ -199,20 +198,6 @@ class ShutdownTask implements ITask {
     @VisibleForTesting
     ShutdownReason getReason() {
         return reason;
-    }
-
-    private boolean isShardInContextParentOfAny(List<Shard> shards) {
-        for(Shard shard : shards) {
-            if (isChildShardOfShardInContext(shard)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isChildShardOfShardInContext(Shard shard) {
-        return (StringUtils.equals(shard.getParentShardId(), shardInfo.getShardId())
-                || StringUtils.equals(shard.getAdjacentParentShardId(), shardInfo.getShardId()));
     }
 
     private void dropLease() {

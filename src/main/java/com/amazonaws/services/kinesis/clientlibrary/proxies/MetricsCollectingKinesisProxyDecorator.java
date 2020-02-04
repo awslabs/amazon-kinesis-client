@@ -180,6 +180,14 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
     }
 
     /**
+     * @param shardId Id of the shard that needs to be verified.
+     * @return
+     */
+    @Override public ShardClosureVerificationResponse verifyShardClosure(String shardId) {
+        return other.verifyShardClosure(shardId);
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override

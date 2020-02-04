@@ -33,6 +33,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.amazonaws.util.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -421,6 +423,31 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
         List<Shard> shards = new LinkedList<Shard>();
         shards.addAll(shardList);
         return shards;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override public ShardClosureVerificationResponse verifyShardClosure(String shardId) {
+        List<Shard> shards = this.getShardList();
+        if (!CollectionUtils.isNullOrEmpty(shards) && isShardParentOfAny(shardId, shards)) {
+            return new ShardClosureVerificationResponse(true /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
+        }
+        return new ShardClosureVerificationResponse(false /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
+    }
+
+    private boolean isShardParentOfAny(String shardId, List<Shard> shards) {
+        for(Shard shard : shards) {
+            if (isChildShardOfShard(shard, shardId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isChildShardOfShard(Shard shard, String shardId) {
+        return (StringUtils.equals(shard.getParentShardId(), shardId)
+                || StringUtils.equals(shard.getAdjacentParentShardId(), shardId));
     }
 
     /**

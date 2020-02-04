@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -27,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.amazonaws.services.kinesis.clientlibrary.proxies.ShardClosureVerificationResponse;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
 import com.amazonaws.services.kinesis.model.Shard;
@@ -112,6 +114,7 @@ public class ShutdownTaskTest {
         IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
         List<Shard> shards = constructShardListForGraphA();
         when(kinesisProxy.getShardList()).thenReturn(shards);
+        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardClosureVerificationResponse(true, shards));
         KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
@@ -145,6 +148,7 @@ public class ShutdownTaskTest {
         List<Shard> shards = constructShardListForGraphA();
         IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
         when(kinesisProxy.getShardList()).thenReturn(shards);
+        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardClosureVerificationResponse(true, shards));
         KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
@@ -180,6 +184,7 @@ public class ShutdownTaskTest {
         List<Shard> shards = constructShardListForGraphA();
         IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
         when(kinesisProxy.getShardList()).thenReturn(shards);
+        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardClosureVerificationResponse(true, shards));
         KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
@@ -203,7 +208,7 @@ public class ShutdownTaskTest {
                                              shardSyncStrategy);
         TaskResult result = task.call();
         verify(shardSyncStrategy).onShardConsumerShutDown(shards);
-        verify(kinesisProxy, times(1)).getShardList();
+        verify(kinesisProxy, times(1)).verifyShardClosure(anyString());
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
         verify(leaseCoordinator, never()).dropLease(any());
@@ -220,6 +225,7 @@ public class ShutdownTaskTest {
         List<Shard> shards = constructShardListForGraphA();
         IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
         when(kinesisProxy.getShardList()).thenReturn(shards);
+        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardClosureVerificationResponse(false, shards));
         KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
@@ -244,7 +250,7 @@ public class ShutdownTaskTest {
                                              shardSyncStrategy);
         TaskResult result = task.call();
         verify(shardSyncStrategy, never()).onShardConsumerShutDown(shards);
-        verify(kinesisProxy, times(1)).getShardList();
+        verify(kinesisProxy, times(1)).verifyShardClosure(anyString());
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
         verify(leaseCoordinator).dropLease(any());
@@ -257,6 +263,7 @@ public class ShutdownTaskTest {
         List<Shard> shards = constructShardListForGraphA();
         IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
         when(kinesisProxy.getShardList()).thenReturn(shards);
+        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardClosureVerificationResponse(false, shards));
         KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
         ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
