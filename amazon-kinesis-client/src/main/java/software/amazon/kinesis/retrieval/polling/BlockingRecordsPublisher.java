@@ -16,6 +16,7 @@
 package software.amazon.kinesis.retrieval.polling;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.reactivestreams.Subscriber;
@@ -23,6 +24,7 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
@@ -35,7 +37,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  * GetRecordsRetrievalStrategy class.
  */
 @KinesisClientInternalApi
-public class BlockingRecordsPublisher extends RecordsPublisher {
+public class BlockingRecordsPublisher implements RecordsPublisher {
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
@@ -68,6 +70,21 @@ public class BlockingRecordsPublisher extends RecordsPublisher {
     @Override
     public void shutdown() {
         getRecordsRetrievalStrategy.shutdown();
+    }
+
+    @Override
+    public Optional<RequestDetails> getLastSuccessfulResponseDetails() {
+        return Optional.empty();
+    }
+
+    @Override
+    public String getLastSuccessfulResponseRequestId() {
+        return NONE;
+    }
+
+    @Override
+    public String getLastSuccessfulResponseTimestamp() {
+        return NONE;
     }
 
     @Override

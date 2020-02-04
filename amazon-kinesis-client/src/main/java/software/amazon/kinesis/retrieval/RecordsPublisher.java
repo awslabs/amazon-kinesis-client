@@ -15,49 +15,74 @@
 
 package software.amazon.kinesis.retrieval;
 
-import lombok.Getter;
-import lombok.Setter;
 import org.reactivestreams.Publisher;
 
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import java.util.Optional;
 
 /**
  * Provides a record publisher that will retrieve records from Kinesis for processing
  */
-public abstract class RecordsPublisher implements Publisher<RecordsRetrieved> {
+public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
 
-    @Getter @Setter
-    private String lastRequestId;
+    /**
+     * Placeholder for logging when no successful request has been made.
+     */
+    String NONE = "NONE";
 
     /**
      * Initializes the publisher with where to start processing. If there is a stored sequence number the publisher will
      * begin from that sequence number, otherwise it will use the initial position.
-     * 
+     *
      * @param extendedSequenceNumber
      *            the sequence number to start processing from
      * @param initialPositionInStreamExtended
      *            if there is no sequence number the initial position to use
      */
-    public abstract void start(ExtendedSequenceNumber extendedSequenceNumber, InitialPositionInStreamExtended initialPositionInStreamExtended);
+    void start(ExtendedSequenceNumber extendedSequenceNumber, InitialPositionInStreamExtended initialPositionInStreamExtended);
 
     /**
      * Restart from the last accepted and processed
      * @param recordsRetrieved the processRecordsInput to restart from
      */
-    public abstract void restartFrom(RecordsRetrieved recordsRetrieved);
-    
+    void restartFrom(RecordsRetrieved recordsRetrieved);
+
 
     /**
      * Shutdowns the publisher. Once this method returns the publisher should no longer provide any records.
      */
-    public abstract void shutdown();
+    void shutdown();
+
+    /**
+     * Gets last successful response details.
+     *
+     * @return details associated with last successful response.
+     */
+    Optional<RequestDetails> getLastSuccessfulResponseDetails();
+
+    /**
+     * Gets last successful response's request id.
+     *
+     * @return requestId associated with last succesful response.
+     */
+    String getLastSuccessfulResponseRequestId();
+
+    /**
+     * Gets last successful response's timestamp.
+     *
+     * @return timestamp associated with last successful response.
+     */
+    String getLastSuccessfulResponseTimestamp();
 
     /**
      * Notify the publisher on receipt of a data event.
+     *
      * @param ack acknowledgement received from the subscriber.
      */
-    public void notify(RecordsDeliveryAck ack) {
+    default void notify(RecordsDeliveryAck ack) {
         throw new UnsupportedOperationException("RecordsPublisher does not support acknowledgement from Subscriber");
     }
 }

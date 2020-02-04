@@ -70,6 +70,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
@@ -168,7 +169,7 @@ public class ShardConsumerTest {
         assertThat(remainder.isEmpty(), equalTo(true));
     }
 
-    private class TestPublisher extends RecordsPublisher {
+    private class TestPublisher implements RecordsPublisher {
 
         final CyclicBarrier barrier = new CyclicBarrier(2);
         final CyclicBarrier requestBarrier = new CyclicBarrier(2);
@@ -207,6 +208,21 @@ public class ShardConsumerTest {
         @Override
         public void shutdown() {
 
+        }
+
+        @Override
+        public Optional<RequestDetails> getLastSuccessfulResponseDetails() {
+            return Optional.empty();
+        }
+
+        @Override
+        public String getLastSuccessfulResponseRequestId() {
+            return NONE;
+        }
+
+        @Override
+        public String getLastSuccessfulResponseTimestamp() {
+            return NONE;
         }
 
         @Override

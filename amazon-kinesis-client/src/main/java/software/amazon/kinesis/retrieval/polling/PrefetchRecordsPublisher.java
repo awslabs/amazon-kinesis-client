@@ -18,6 +18,7 @@ package software.amazon.kinesis.retrieval.polling;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -46,6 +47,7 @@ import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
@@ -76,7 +78,7 @@ import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDelivery
  */
 @Slf4j
 @KinesisClientInternalApi
-public class PrefetchRecordsPublisher extends RecordsPublisher {
+public class PrefetchRecordsPublisher implements RecordsPublisher {
     private static final String EXPIRED_ITERATOR_METRIC = "ExpiredIterator";
     private int maxPendingProcessRecordsInput;
     private int maxByteSize;
@@ -258,6 +260,21 @@ public class PrefetchRecordsPublisher extends RecordsPublisher {
         defaultGetRecordsCacheDaemon.isShutdown = true;
         executorService.shutdownNow();
         started = false;
+    }
+
+    @Override
+    public Optional<RequestDetails> getLastSuccessfulResponseDetails() {
+        return Optional.empty();
+    }
+
+    @Override
+    public String getLastSuccessfulResponseRequestId() {
+        return NONE;
+    }
+
+    @Override
+    public String getLastSuccessfulResponseTimestamp() {
+        return NONE;
     }
 
     @Override
