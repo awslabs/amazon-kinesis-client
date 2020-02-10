@@ -78,16 +78,6 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public String getLastSuccessfulResponseRequestId() {
-        return NONE;
-    }
-
-    @Override
-    public String getLastSuccessfulResponseTimestamp() {
-        return NONE;
-    }
-
-    @Override
     public void subscribe(Subscriber<? super RecordsRetrieved> s) {
         subscriber = s;
     }

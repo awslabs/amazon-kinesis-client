@@ -68,14 +68,18 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
      *
      * @return requestId associated with last succesful response.
      */
-    String getLastSuccessfulResponseRequestId();
+    default String getLastSuccessfulResponseRequestId() {
+        return getLastSuccessfulResponseDetails().map(RequestDetails::requestId).orElse(NONE);
+    }
 
     /**
      * Gets last successful response's timestamp.
      *
      * @return timestamp associated with last successful response.
      */
-    String getLastSuccessfulResponseTimestamp();
+    default String getLastSuccessfulResponseTimestamp() {
+        return getLastSuccessfulResponseDetails().map(RequestDetails::timestamp).orElse(NONE);
+    }
 
     /**
      * Notify the publisher on receipt of a data event.

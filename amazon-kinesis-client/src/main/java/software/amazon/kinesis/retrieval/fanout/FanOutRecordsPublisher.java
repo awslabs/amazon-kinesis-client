@@ -156,16 +156,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         lastSuccessfulRequestDetails = Optional.of(requestDetails);
     }
 
-    @Override
-    public String getLastSuccessfulResponseRequestId() {
-        return getLastSuccessfulResponseDetails().map(RequestDetails::requestId).orElse(NONE);
-    }
-
-    @Override
-    public String getLastSuccessfulResponseTimestamp() {
-        return getLastSuccessfulResponseDetails().map(RequestDetails::timestamp).orElse(NONE);
-    }
-
     // This method is not thread-safe. You need to acquire a lock in the caller in order to execute this.
     @VisibleForTesting
     RecordFlow evictAckedEventAndScheduleNextEvent(RecordsDeliveryAck recordsDeliveryAck) {

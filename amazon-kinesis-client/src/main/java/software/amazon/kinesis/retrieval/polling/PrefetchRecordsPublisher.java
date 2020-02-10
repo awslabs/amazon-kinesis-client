@@ -268,16 +268,6 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public String getLastSuccessfulResponseRequestId() {
-        return NONE;
-    }
-
-    @Override
-    public String getLastSuccessfulResponseTimestamp() {
-        return NONE;
-    }
-
-    @Override
     public void restartFrom(RecordsRetrieved recordsRetrieved) {
         if (!(recordsRetrieved instanceof PrefetchRecordsRetrieved)) {
             throw new IllegalArgumentException(
