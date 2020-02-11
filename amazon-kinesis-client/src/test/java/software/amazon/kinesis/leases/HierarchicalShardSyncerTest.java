@@ -844,11 +844,11 @@ public class HierarchicalShardSyncerTest {
 //    /**
 //     * Test CheckIfDescendantAndAddNewLeasesForAncestors (initial position Latest)
 //     * Shard structure (each level depicts a stream segment):
-//     * 0 1 2 3 4 5- shards till epoch 102
-//     * \ / \ / | |
-//     * 6 7 4 5- shards from epoch 103 - 205
-//     * \ / | /\
-//     * 8 4 9 10 - shards from epoch 206 (open - no ending sequenceNumber)
+//     * 0 1 2 3 4   5- shards till epoch 102
+//     * \ / \ / |   |
+//     *  6   7  4   5- shards from epoch 103 - 205
+//     *   \ /   |  /\
+//     *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
 //     * Current leases: (3, 4, 5)
 //     */
     @Test
@@ -879,11 +879,11 @@ public class HierarchicalShardSyncerTest {
 //    /**
 //     * Test CheckIfDescendantAndAddNewLeasesForAncestors (initial position Latest)
 //     * Shard structure (each level depicts a stream segment):
-//     * 0 1 2 3 4 5- shards till epoch 102
-//     * \ / \ / | |
-//     * 6 7 4 5- shards from epoch 103 - 205
-//     * \ / | /\
-//     * 8 4 9 10 - shards from epoch 206 (open - no ending sequenceNumber)
+//     * 0 1 2 3 4   5- shards till epoch 102
+//     * \ / \ / |   |
+//     *  6   7  4   5- shards from epoch 103 - 205
+//     *   \ /   |  /\
+//     *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
 //     * Current leases: (4, 5, 7)
 //     */
     @Test
@@ -912,11 +912,11 @@ public class HierarchicalShardSyncerTest {
 //    /**
 //     * Test CheckIfDescendantAndAddNewLeasesForAncestors (initial position TrimHorizon)
 //     * Shard structure (each level depicts a stream segment):
-//     * 0 1 2 3 4 5- shards till epoch 102
-//     * \ / \ / | |
-//     * 6 7 4 5- shards from epoch 103 - 205
-//     * \ / | /\
-//     * 8 4 9 10 - shards from epoch 206 (open - no ending sequenceNumber)
+//     * 0 1 2 3 4   5- shards till epoch 102
+//     * \ / \ / |   |
+//     *  6   7  4   5- shards from epoch 103 - 205
+//     *   \ /   |  /\
+//     *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
 //     * Current leases: (3, 4, 5)
 //     */
     @Test
@@ -947,11 +947,11 @@ public class HierarchicalShardSyncerTest {
 //    /**
 //     * Test CheckIfDescendantAndAddNewLeasesForAncestors (initial position TrimHorizon)
 //     * Shard structure (each level depicts a stream segment):
-//     * 0 1 2 3 4 5- shards till epoch 102
-//     * \ / \ / | |
-//     * 6 7 4 5- shards from epoch 103 - 205
-//     * \ / | /\
-//     * 8 4 9 10 - shards from epoch 206 (open - no ending sequenceNumber)
+//     * 0 1 2 3 4   5- shards till epoch 102
+//     * \ / \ / |   |
+//     *  6   7  4   5- shards from epoch 103 - 205
+//     *   \ /   |  /\
+//     *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
 //     * Current leases: (4, 5, 7)
 //     */
     @Test
@@ -1148,11 +1148,11 @@ public class HierarchicalShardSyncerTest {
 //    /*
 //     * Helper method to construct a shard list for graph B. Graph B is defined below.
 //     * Shard structure (x-axis is epochs):
-//     * 0 3 6 9
+//     * 0  3   6   9
 //     * \ / \ / \ /
-//     * 2 5 8
+//     *  2   5   8
 //     * / \ / \ / \
-//     * 1 4 7 10
+//     * 1  4   7  10
 //     */
     private List<Shard> constructShardListForGraphB() {
         final SequenceNumberRange range0 = ShardObjectHelper.newSequenceNumberRange("1000", "1049");
