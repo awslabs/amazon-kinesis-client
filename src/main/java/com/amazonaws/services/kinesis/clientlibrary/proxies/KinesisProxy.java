@@ -479,29 +479,29 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
     /**
      * Used to verify during ShardConsumer shutdown if the provided shardId is for a shard that has been closed.
-     * Returns the list of shards so it can be used for lease creation (instead of calling getShardList() again)
-     * along with the result of verification.
+     * Also returns the list of shards wrapped in the response so that it can be used for lease creation
+     * (instead of calling getShardList() again).
      * @param shardId Id of the shard that needs to be verified.
      * @return an Object of type ShardClosureVerificationResponse.
      */
     @Override public ShardClosureVerificationResponse verifyShardClosure(String shardId) {
         List<Shard> shards = this.getShardList();
         if (!CollectionUtils.isNullOrEmpty(shards) && isShardParentOfAny(shardId, shards)) {
-            return new ShardClosureVerificationResponse(true /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
+            return new ShardListWrappingShardClosureVerificationResponse(true /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
         }
-        return new ShardClosureVerificationResponse(false /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
+        return new ShardListWrappingShardClosureVerificationResponse(false /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
     }
 
     private boolean isShardParentOfAny(String shardId, List<Shard> shards) {
         for(Shard shard : shards) {
-            if (isChildShardOfShard(shard, shardId)) {
+            if (isShardAParent(shard, shardId)) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean isChildShardOfShard(Shard shard, String shardId) {
+    private boolean isShardAParent(Shard shard, String shardId) {
         return (StringUtils.equals(shard.getParentShardId(), shardId)
                 || StringUtils.equals(shard.getAdjacentParentShardId(), shardId));
     }

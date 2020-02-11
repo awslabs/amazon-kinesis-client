@@ -17,7 +17,6 @@ package com.amazonaws.services.kinesis.clientlibrary.proxies;
 import java.nio.ByteBuffer;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import com.amazonaws.services.kinesis.model.DescribeStreamResult;
@@ -81,15 +80,10 @@ public interface IKinesisProxy {
 
     /**
      * Used to verify during ShardConsumer shutdown if the provided shardId is for a shard that has been closed.
-     * Returns the list of shards so it can be used for lease creation (instead of calling getShardList() again)
-     * along with the result of verification.
-     * Note that DynamoDBStreamsProxy does not implement this check and hence resorts to the default response.
      * @param shardId Id of the shard that needs to be verified.
      * @return an Object of type ShardClosureVerificationResponse.
      */
-    default ShardClosureVerificationResponse verifyShardClosure(String shardId) {
-        return new ShardClosureVerificationResponse(true /*isVerifiedShardWasClosed*/, null /*latestShards*/);
-    }
+    ShardClosureVerificationResponse verifyShardClosure(String shardId);
 
     /**
      * Fetch a shard iterator from the specified position in the shard.

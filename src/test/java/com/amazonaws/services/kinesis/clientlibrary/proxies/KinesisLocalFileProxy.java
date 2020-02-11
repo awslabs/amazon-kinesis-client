@@ -428,24 +428,24 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
     /**
      * {@inheritDoc}
      */
-    @Override public ShardClosureVerificationResponse verifyShardClosure(String shardId) {
+    @Override public ShardListWrappingShardClosureVerificationResponse verifyShardClosure(String shardId) {
         List<Shard> shards = this.getShardList();
         if (!CollectionUtils.isNullOrEmpty(shards) && isShardParentOfAny(shardId, shards)) {
-            return new ShardClosureVerificationResponse(true /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
+            return new ShardListWrappingShardClosureVerificationResponse(true /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
         }
-        return new ShardClosureVerificationResponse(false /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
+        return new ShardListWrappingShardClosureVerificationResponse(false /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
     }
 
     private boolean isShardParentOfAny(String shardId, List<Shard> shards) {
         for(Shard shard : shards) {
-            if (isChildShardOfShard(shard, shardId)) {
+            if (isShardAParent(shard, shardId)) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean isChildShardOfShard(Shard shard, String shardId) {
+    private boolean isShardAParent(Shard shard, String shardId) {
         return (StringUtils.equals(shard.getParentShardId(), shardId)
                 || StringUtils.equals(shard.getAdjacentParentShardId(), shardId));
     }

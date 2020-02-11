@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.services.kinesis.clientlibrary.proxies.ShardClosureVerificationResponse;
+import com.amazonaws.services.kinesis.clientlibrary.proxies.ShardListWrappingShardClosureVerificationResponse;
 import com.amazonaws.services.kinesis.model.Shard;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -105,12 +106,13 @@ class ShutdownTask implements ITask {
              */
             if(localReason == ShutdownReason.TERMINATE) {
                 ShardClosureVerificationResponse shardClosureVerificationResponse = kinesisProxy.verifyShardClosure(shardInfo.getShardId());
-                latestShards = shardClosureVerificationResponse.getLatestShards();
+                if (shardClosureVerificationResponse instanceof ShardListWrappingShardClosureVerificationResponse) {
+                    latestShards = ((ShardListWrappingShardClosureVerificationResponse)shardClosureVerificationResponse).getLatestShards();
+                }
 
-                // If latestShards is null or empty, it means shard in context is not closed yet.
-                // We should shut down the ShardConsumer with Zombie state which avoids checkpoint-ing
-                // with SHARD_END sequence number.
-                if(!shardClosureVerificationResponse.isVerifiedShardWasClosed()) {
+                // If shard in context is not closed yet we should shut down the ShardConsumer with Zombie state
+                // which avoids checkpoint-ing with SHARD_END sequence number.
+                if(!shardClosureVerificationResponse.isShardClosed()) {
                     localReason = ShutdownReason.ZOMBIE;
                     dropLease();
                     LOG.info("Forcing the lease to be lost before shutting down the consumer for Shard: " + shardInfo.getShardId());
