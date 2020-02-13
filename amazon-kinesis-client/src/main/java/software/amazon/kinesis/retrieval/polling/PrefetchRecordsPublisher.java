@@ -100,6 +100,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private boolean wasReset = false;
 
     private Instant lastEventDeliveryTime = Instant.EPOCH;
+    private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
 
     @Data
     @Accessors(fluent = true)
@@ -263,8 +264,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public Optional<RequestDetails> getLastSuccessfulResponseDetails() {
-        return Optional.empty();
+    public RequestDetails getLastSuccessfulResponseDetails() {
+        return lastSuccessfulRequestDetails;
     }
 
     @Override

@@ -28,10 +28,7 @@ import java.util.Optional;
  */
 public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
 
-    /**
-     * Placeholder for logging when no successful request has been made.
-     */
-    String NONE = "NONE";
+
 
     /**
      * Initializes the publisher with where to start processing. If there is a stored sequence number the publisher will
@@ -61,25 +58,7 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
      *
      * @return details associated with last successful response.
      */
-    Optional<RequestDetails> getLastSuccessfulResponseDetails();
-
-    /**
-     * Gets last successful response's request id.
-     *
-     * @return requestId associated with last succesful response.
-     */
-    default String getLastSuccessfulResponseRequestId() {
-        return getLastSuccessfulResponseDetails().map(RequestDetails::requestId).orElse(NONE);
-    }
-
-    /**
-     * Gets last successful response's timestamp.
-     *
-     * @return timestamp associated with last successful response.
-     */
-    default String getLastSuccessfulResponseTimestamp() {
-        return getLastSuccessfulResponseDetails().map(RequestDetails::timestamp).orElse(NONE);
-    }
+    RequestDetails getLastSuccessfulResponseDetails();
 
     /**
      * Notify the publisher on receipt of a data event.

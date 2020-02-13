@@ -79,6 +79,8 @@ public class ShardConsumerSubscriberTest {
 
     private static final String TERMINAL_MARKER = "Terminal";
 
+    private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
+
     @Mock
     private ShardConsumer shardConsumer;
     @Mock
@@ -559,8 +561,8 @@ public class ShardConsumerSubscriberTest {
         }
 
         @Override
-        public Optional<RequestDetails> getLastSuccessfulResponseDetails() {
-            return Optional.empty();
+        public RequestDetails getLastSuccessfulResponseDetails() {
+            return lastSuccessfulRequestDetails;
         }
 
         @Override

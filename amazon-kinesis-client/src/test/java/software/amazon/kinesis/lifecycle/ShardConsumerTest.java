@@ -89,6 +89,7 @@ public class ShardConsumerTest {
 
     private final String shardId = "shardId-0-0";
     private final String concurrencyToken = "TestToken";
+    private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
     private ShardInfo shardInfo;
     private TaskExecutionListenerInput initialTaskInput;
     private TaskExecutionListenerInput processTaskInput;
@@ -211,8 +212,8 @@ public class ShardConsumerTest {
         }
 
         @Override
-        public Optional<RequestDetails> getLastSuccessfulResponseDetails() {
-            return Optional.empty();
+        public RequestDetails getLastSuccessfulResponseDetails() {
+            return lastSuccessfulRequestDetails;
         }
 
         @Override

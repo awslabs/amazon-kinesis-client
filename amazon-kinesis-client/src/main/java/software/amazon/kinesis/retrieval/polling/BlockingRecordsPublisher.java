@@ -42,6 +42,7 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
     private Subscriber<? super RecordsRetrieved> subscriber;
+    private final RequestDetails lastSuccessfulResponseDetails = new RequestDetails();
 
     public BlockingRecordsPublisher(final int maxRecordsPerCall,
                                     final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
@@ -73,8 +74,8 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public Optional<RequestDetails> getLastSuccessfulResponseDetails() {
-        return Optional.empty();
+    public RequestDetails getLastSuccessfulResponseDetails() {
+        return lastSuccessfulResponseDetails;
     }
 
     @Override
