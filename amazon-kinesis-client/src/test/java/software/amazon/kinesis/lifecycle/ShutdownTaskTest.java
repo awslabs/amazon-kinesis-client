@@ -37,6 +37,8 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.model.SequenceNumberRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -75,6 +77,7 @@ public class ShutdownTaskTest {
     private boolean ignoreUnexpectedChildShards = false;
     private ShardInfo shardInfo;
     private ShutdownTask task;
+    private ShardFilter shardFilter = ShardFilter.builder().type(ShardFilterType.AT_LATEST).build();
     
     @Mock
     private RecordsPublisher recordsPublisher;
@@ -104,7 +107,7 @@ public class ShutdownTaskTest {
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY, shardFilter);
     }
 
     /**
@@ -158,7 +161,7 @@ public class ShutdownTaskTest {
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
+                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, shardFilter);
 
         when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
@@ -183,7 +186,7 @@ public class ShutdownTaskTest {
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
+                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, shardFilter);
 
         when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
 
@@ -207,7 +210,7 @@ public class ShutdownTaskTest {
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 LEASE_LOST_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
+                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, shardFilter);
 
         when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
 

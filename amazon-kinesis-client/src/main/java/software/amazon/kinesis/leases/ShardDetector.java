@@ -16,8 +16,10 @@
 package software.amazon.kinesis.leases;
 
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  *
@@ -26,5 +28,4 @@ public interface ShardDetector {
     Shard shard(String shardId);
 
     List<Shard> listShards();
-
 }

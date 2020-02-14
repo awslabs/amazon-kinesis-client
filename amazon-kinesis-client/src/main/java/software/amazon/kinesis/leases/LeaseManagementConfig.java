@@ -30,6 +30,8 @@ import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
@@ -176,6 +178,17 @@ public class LeaseManagementConfig {
     private InitialPositionInStreamExtended initialPositionInStream =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
 
+    /**
+     * Shard filter ot use for bootstrap. This needs to align with initialPositionInStreamExtended. i.e
+     *
+     * InitialPositionInStream.LATEST => ShardFilterType.AT_LATEST
+     * InitialPositionInStream.TRIM_HORIZON => ShardFilterType.FROM_TRIM_HORIZON
+     * InitialPositionInStream.AT_TIMESTAMP => ShardFilterType.FROM_TIMESTAMP
+     *
+     */
+
+    private ShardFilter bootstrapShardFilter = ShardFilter.builder().type(ShardFilterType.FROM_TRIM_HORIZON).build();
+
     private int maxCacheMissesBeforeReload = 1000;
     private long listShardsCacheAllowedAgeInSeconds = 30;
     private int cacheMissWarningModulus = 250;
@@ -270,7 +283,8 @@ public class LeaseManagementConfig {
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
                     hierarchicalShardSyncer(),
-                    tableCreatorCallback(), dynamoDbRequestTimeout(), billingMode());
+                    tableCreatorCallback(), dynamoDbRequestTimeout(), billingMode(),
+                    bootstrapShardFilter);
         }
         return leaseManagementFactory;
     }

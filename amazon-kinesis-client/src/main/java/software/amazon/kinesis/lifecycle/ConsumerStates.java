@@ -269,7 +269,8 @@ class ConsumerStates {
                     input,
                     argument.shouldCallProcessRecordsEvenForEmptyRecordList(),
                     argument.idleTimeInMilliseconds(),
-                    argument.aggregatorUtil(), argument.metricsFactory()
+                    argument.aggregatorUtil(), argument.metricsFactory(),
+                    argument.shardFilter()
             );
         }
 
@@ -496,7 +497,8 @@ class ConsumerStates {
                     argument.taskBackoffTimeMillis(),
                     argument.recordsPublisher(),
                     argument.hierarchicalShardSyncer(),
-                    argument.metricsFactory());
+                    argument.metricsFactory(),
+                    argument.shardFilter());
         }
 
         @Override

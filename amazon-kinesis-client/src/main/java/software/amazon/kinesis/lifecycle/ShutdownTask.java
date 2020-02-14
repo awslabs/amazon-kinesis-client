@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -79,6 +80,8 @@ public class ShutdownTask implements ConsumerTask {
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
     @NonNull
     private final MetricsFactory metricsFactory;
+    @NonNull
+    private final ShardFilter shardFilter;
 
     private final TaskType taskType = TaskType.SHUTDOWN;
 

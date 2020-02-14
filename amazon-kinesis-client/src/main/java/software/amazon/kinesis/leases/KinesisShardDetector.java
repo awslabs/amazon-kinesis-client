@@ -43,6 +43,7 @@ import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
@@ -72,19 +73,21 @@ public class KinesisShardDetector implements ShardDetector {
     private volatile Instant lastCacheUpdateTime;
     @Getter(AccessLevel.PACKAGE)
     private AtomicInteger cacheMisses = new AtomicInteger(0);
+    @NonNull
+    private final ShardFilter shardFilter;
 
     @Deprecated
     public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
             int maxListShardsRetryAttempts, long listShardsCacheAllowedAgeInSeconds, int maxCacheMissesBeforeReload,
-            int cacheMissWarningModulus) {
+            int cacheMissWarningModulus, ShardFilter shardFilter) {
         this(kinesisClient, streamName, listShardsBackoffTimeInMillis, maxListShardsRetryAttempts,
                 listShardsCacheAllowedAgeInSeconds, maxCacheMissesBeforeReload, cacheMissWarningModulus,
-                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, shardFilter);
     }
 
     public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
             int maxListShardsRetryAttempts, long listShardsCacheAllowedAgeInSeconds, int maxCacheMissesBeforeReload,
-            int cacheMissWarningModulus, Duration kinesisRequestTimeout) {
+            int cacheMissWarningModulus, Duration kinesisRequestTimeout, ShardFilter shardFilter) {
         this.kinesisClient = kinesisClient;
         this.streamName = streamName;
         this.listShardsBackoffTimeInMillis = listShardsBackoffTimeInMillis;
@@ -93,6 +96,7 @@ public class KinesisShardDetector implements ShardDetector {
         this.maxCacheMissesBeforeReload = maxCacheMissesBeforeReload;
         this.cacheMissWarningModulus = cacheMissWarningModulus;
         this.kinesisRequestTimeout = kinesisRequestTimeout;
+        this.shardFilter = shardFilter;
     }
 
     @Override
@@ -154,7 +158,7 @@ public class KinesisShardDetector implements ShardDetector {
         String nextToken = null;
 
         do {
-            result = listShards(nextToken);
+            result = listShards(nextToken, shardFilter);
 
             if (result == null) {
                 /*
@@ -172,7 +176,7 @@ public class KinesisShardDetector implements ShardDetector {
         return shards;
     }
 
-    private ListShardsResponse listShards(final String nextToken) {
+    private ListShardsResponse listShards(final String nextToken, final ShardFilter shardFilter) {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
         exceptionManager.add(LimitExceededException.class, t -> t);
         exceptionManager.add(ResourceInUseException.class, t -> t);

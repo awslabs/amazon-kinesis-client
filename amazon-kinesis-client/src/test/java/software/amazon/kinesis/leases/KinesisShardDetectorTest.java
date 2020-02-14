@@ -51,6 +51,8 @@ import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 
 /**
  *
@@ -67,6 +69,7 @@ public class KinesisShardDetectorTest {
     private static final String SHARD_ID = "shardId-%012d";
 
     private KinesisShardDetector shardDetector;
+    private ShardFilter shardFilter = ShardFilter.builder().type(ShardFilterType.AT_LATEST).build();
 
     @Rule
     public ExpectedException expectedExceptionRule = ExpectedException.none();
@@ -80,7 +83,7 @@ public class KinesisShardDetectorTest {
     public void setup() {
         shardDetector = new KinesisShardDetector(client, STREAM_NAME, LIST_SHARDS_BACKOFF_TIME_IN_MILLIS,
                 MAX_LIST_SHARDS_RETRY_ATTEMPTS, LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS,
-                MAX_CACHE_MISSES_BEFORE_RELOAD, CACHE_MISS_WARNING_MODULUS);
+                MAX_CACHE_MISSES_BEFORE_RELOAD, CACHE_MISS_WARNING_MODULUS, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, shardFilter);
     }
 
     @Test

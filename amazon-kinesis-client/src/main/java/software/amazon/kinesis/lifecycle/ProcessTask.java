@@ -21,6 +21,7 @@ import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardDetector;
@@ -60,6 +61,7 @@ public class ProcessTask implements ConsumerTask {
     private final ProcessRecordsInput processRecordsInput;
     private final MetricsFactory metricsFactory;
     private final AggregatorUtil aggregatorUtil;
+    private final ShardFilter shardFilter;
 
     public ProcessTask(@NonNull ShardInfo shardInfo,
                        @NonNull ShardRecordProcessor shardRecordProcessor,
@@ -72,7 +74,8 @@ public class ProcessTask implements ConsumerTask {
                        boolean shouldCallProcessRecordsEvenForEmptyRecordList,
                        long idleTimeInMilliseconds,
                        @NonNull AggregatorUtil aggregatorUtil,
-                       @NonNull MetricsFactory metricsFactory) {
+                       @NonNull MetricsFactory metricsFactory,
+                       @NonNull ShardFilter shardFilter) {
         this.shardInfo = shardInfo;
         this.shardRecordProcessor = shardRecordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -82,6 +85,7 @@ public class ProcessTask implements ConsumerTask {
         this.shouldCallProcessRecordsEvenForEmptyRecordList = shouldCallProcessRecordsEvenForEmptyRecordList;
         this.idleTimeInMilliseconds = idleTimeInMilliseconds;
         this.metricsFactory = metricsFactory;
+        this.shardFilter = shardFilter;
 
         if (!skipShardSyncAtWorkerInitializationIfLeasesExist) {
             this.shard = shardDetector.shard(shardInfo.shardId());

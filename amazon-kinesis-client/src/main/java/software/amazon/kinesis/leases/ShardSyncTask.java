@@ -17,6 +17,8 @@ package software.amazon.kinesis.leases;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.ConsumerTask;
@@ -48,11 +50,13 @@ public class ShardSyncTask implements ConsumerTask {
     private final boolean ignoreUnexpectedChildShards;
     private final long shardSyncTaskIdleTimeMillis;
     @NonNull
-    private final HierarchicalShardSyncer hierarchicalShardSyncer;
+    private final HierarchicalShardSyncer hierarchicalShardSyncerShardSyncTask;
     @NonNull
     private final MetricsFactory metricsFactory;
 
     private final TaskType taskType = TaskType.SHARDSYNC;
+    @NonNull
+    private final ShardFilter shardFilter;
 
     /*
      * (non-Javadoc)
@@ -64,8 +68,8 @@ public class ShardSyncTask implements ConsumerTask {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, SHARD_SYNC_TASK_OPERATION);
 
         try {
-            hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
-                    cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, scope);
+            hierarchicalShardSyncerShardSyncTask.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
+                    cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, scope, shardFilter);
             if (shardSyncTaskIdleTimeMillis > 0) {
                 Thread.sleep(shardSyncTaskIdleTimeMillis);
             }

@@ -40,6 +40,8 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -66,6 +68,7 @@ public class ConsumerStatesTest {
 
     private ShardConsumer consumer;
     private ShardConsumerArgument argument;
+    private ShardFilter shardFilter = ShardFilter.builder().type(ShardFilterType.AT_LATEST).build();
 
     @Mock
     private ShardRecordProcessor shardRecordProcessor;
@@ -119,7 +122,7 @@ public class ConsumerStatesTest {
                 taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,
                 INITIAL_POSITION_IN_STREAM, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector,
-                new AggregatorUtil(), hierarchicalShardSyncer, metricsFactory);
+                new AggregatorUtil(), hierarchicalShardSyncer, metricsFactory, shardFilter);
         consumer = spy(new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis,
                 argument, taskExecutionListener, 0));
 

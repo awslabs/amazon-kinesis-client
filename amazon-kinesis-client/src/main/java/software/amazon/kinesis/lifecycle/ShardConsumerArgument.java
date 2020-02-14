@@ -18,6 +18,7 @@ package software.amazon.kinesis.lifecycle;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -71,4 +72,6 @@ public class ShardConsumerArgument {
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
     @NonNull
     private final MetricsFactory metricsFactory;
+    @NonNull
+    private final ShardFilter shardFilter;
 }

@@ -62,6 +62,8 @@ import lombok.Data;
 import lombok.Getter;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -83,6 +85,7 @@ public class ProcessTaskTest {
     private boolean shouldCallProcessRecordsEvenForEmptyRecordList = true;
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist = true;
     private ShardInfo shardInfo;
+    private ShardFilter shardFilter = ShardFilter.builder().type(ShardFilterType.AT_LATEST).build();
 
     @Mock
     private ProcessRecordsInput processRecordsInput;
@@ -122,7 +125,7 @@ public class ProcessTaskTest {
         return new ProcessTask(shardInfo, shardRecordProcessor, checkpointer, taskBackoffTimeMillis,
                 skipShardSync, shardDetector, throttlingReporter,
                 processRecordsInput, shouldCallProcessRecordsEvenForEmptyRecordList, IDLE_TIME_IN_MILLISECONDS,
-                aggregatorUtil, new NullMetricsFactory());
+                aggregatorUtil, new NullMetricsFactory(), shardFilter);
     }
 
     @Test

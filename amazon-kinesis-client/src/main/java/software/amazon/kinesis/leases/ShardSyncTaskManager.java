@@ -18,6 +18,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 
 import lombok.Data;
@@ -53,6 +54,8 @@ public class ShardSyncTaskManager {
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
     @NonNull
     private final MetricsFactory metricsFactory;
+    @NonNull
+    private final ShardFilter shardFilter;
 
     /**
      * Constructor.
@@ -72,7 +75,7 @@ public class ShardSyncTaskManager {
     public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher,
             InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesUponShardCompletion,
             boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis, ExecutorService executorService,
-            MetricsFactory metricsFactory) {
+            MetricsFactory metricsFactory, ShardFilter shardFilter) {
         this.shardDetector = shardDetector;
         this.leaseRefresher = leaseRefresher;
         this.initialPositionInStream = initialPositionInStream;
@@ -82,6 +85,7 @@ public class ShardSyncTaskManager {
         this.executorService = executorService;
         this.hierarchicalShardSyncer = new HierarchicalShardSyncer();
         this.metricsFactory = metricsFactory;
+        this.shardFilter = shardFilter;
     }
 
     /**
@@ -100,7 +104,7 @@ public class ShardSyncTaskManager {
     public ShardSyncTaskManager(ShardDetector shardDetector, LeaseRefresher leaseRefresher,
             InitialPositionInStreamExtended initialPositionInStream, boolean cleanupLeasesUponShardCompletion,
             boolean ignoreUnexpectedChildShards, long shardSyncIdleTimeMillis, ExecutorService executorService,
-            HierarchicalShardSyncer hierarchicalShardSyncer, MetricsFactory metricsFactory) {
+            HierarchicalShardSyncer hierarchicalShardSyncer, MetricsFactory metricsFactory, ShardFilter shardFilter) {
         this.shardDetector = shardDetector;
         this.leaseRefresher = leaseRefresher;
         this.initialPositionInStream = initialPositionInStream;
@@ -110,6 +114,7 @@ public class ShardSyncTaskManager {
         this.executorService = executorService;
         this.hierarchicalShardSyncer = hierarchicalShardSyncer;
         this.metricsFactory = metricsFactory;
+        this.shardFilter = shardFilter;
     }
 
     private ConsumerTask currentTask;
@@ -143,7 +148,8 @@ public class ShardSyncTaskManager {
                                     ignoreUnexpectedChildShards,
                                     shardSyncIdleTimeMillis,
                                     hierarchicalShardSyncer,
-                                    metricsFactory),
+                                    metricsFactory,
+                                    shardFilter),
                             metricsFactory);
             future = executorService.submit(currentTask);
             submittedNewTask = true;

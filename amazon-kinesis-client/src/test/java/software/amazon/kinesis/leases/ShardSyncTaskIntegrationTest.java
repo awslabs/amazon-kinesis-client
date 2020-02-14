@@ -35,6 +35,8 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.KinesisException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.awssdk.services.kinesis.model.StreamStatus;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -60,6 +62,7 @@ public class ShardSyncTaskIntegrationTest {
     private static final int CACHE_MISS_WARNING_MODULUS = 250;
     private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
     private static KinesisAsyncClient kinesisClient;
+    private static ShardFilter shardFilter = ShardFilter.builder().type(ShardFilterType.AT_LATEST).build();
 
     private LeaseRefresher leaseRefresher;
     private ShardDetector shardDetector;
@@ -97,7 +100,7 @@ public class ShardSyncTaskIntegrationTest {
                         USE_CONSISTENT_READS, TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
 
         shardDetector = new KinesisShardDetector(kinesisClient, STREAM_NAME, 500L, 50,
-                LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS, MAX_CACHE_MISSES_BEFORE_RELOAD, CACHE_MISS_WARNING_MODULUS);
+                LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS, MAX_CACHE_MISSES_BEFORE_RELOAD, CACHE_MISS_WARNING_MODULUS, shardFilter);
         hierarchicalShardSyncer = new HierarchicalShardSyncer();
     }
 
@@ -119,7 +122,7 @@ public class ShardSyncTaskIntegrationTest {
         Set<String> shardIds = shardDetector.listShards().stream().map(Shard::shardId).collect(Collectors.toSet());
         ShardSyncTask syncTask = new ShardSyncTask(shardDetector, leaseRefresher,
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST), false, false, 0L,
-                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY, shardFilter);
         syncTask.call();
         List<Lease> leases = leaseRefresher.listLeases();
         Set<String> leaseKeys = new HashSet<>();
