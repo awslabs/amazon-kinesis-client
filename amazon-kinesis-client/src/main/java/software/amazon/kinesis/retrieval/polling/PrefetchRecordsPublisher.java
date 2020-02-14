@@ -264,7 +264,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public RequestDetails getLastSuccessfulResponseDetails() {
+    public RequestDetails getLastSuccessfulRequestDetails() {
         return lastSuccessfulRequestDetails;
     }
 

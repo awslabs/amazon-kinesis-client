@@ -148,11 +148,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     }
 
     @Override
-    public RequestDetails getLastSuccessfulResponseDetails() {
+    public RequestDetails getLastSuccessfulRequestDetails() {
         return lastSuccessfulRequestDetails;
     }
 
-    private void setLastSuccessfulResponseDetails(RequestDetails requestDetails) {
+    private void setLastSuccessfulRequestDetails(RequestDetails requestDetails) {
         lastSuccessfulRequestDetails = requestDetails;
     }
 
@@ -218,7 +218,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             }
         } catch (IllegalStateException e) {
 
-            log.warn("{}: Unable to enqueue the payload due to capacity restrictions in delivery queue with remaining capacity {}. Last successful response details: {}",
+            log.warn("{}: Unable to enqueue the payload due to capacity restrictions in delivery queue with remaining capacity {}. Last successful request details -- {}",
                     shardId, recordsDeliveryQueue.remainingCapacity(), lastSuccessfulRequestDetails);
             throw e;
         } catch (Throwable t) {
@@ -303,12 +303,12 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 if(hasValidFlow()) {
                     log.warn(
                             "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- Subscriber is null." +
-                                    " Last successful response details: {}", shardId, flow.connectionStartedAt,
+                                    " Last successful request details -- {}", shardId, flow.connectionStartedAt,
                             flow.subscribeToShardId, lastSuccessfulRequestDetails);
                 } else {
                     log.warn(
                             "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) -- Subscriber and flow are null." +
-                                    " Last successful response details: {}", shardId, lastSuccessfulRequestDetails);
+                                    " Last successful request details -- {}", shardId, lastSuccessfulRequestDetails);
                 }
                 return;
             }
@@ -320,7 +320,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 if (flow != null) {
                     String logMessage = String.format(
                             "%s: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ %s id: %s -- %s." +
-                                    " Last successful response details: {}",
+                                    " Last successful request details -- {}",
                             shardId, flow.connectionStartedAt, flow.subscribeToShardId, category.throwableTypeString, lastSuccessfulRequestDetails);
                     switch (category.throwableType) {
                     case READ_TIMEOUT:
@@ -345,8 +345,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 try {
                     handleFlowError(propagationThrowable, triggeringFlow);
                 } catch (Throwable innerThrowable) {
-                    log.warn("{}: Exception while calling subscriber.onError. Last successful response:" +
-                            "Last successful response details: {}", shardId, innerThrowable, lastSuccessfulRequestDetails);
+                    log.warn("{}: Exception while calling subscriber.onError. Last successful request:" +
+                            "Last successful request details -- {}", shardId, innerThrowable, lastSuccessfulRequestDetails);
                 }
                 subscriber = null;
                 flow = null;
@@ -368,7 +368,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         // Clear any lingering records in the queue.
         if (!recordsDeliveryQueue.isEmpty()) {
             log.warn("{}: Found non-empty queue while starting subscription. This indicates unsuccessful clean up of"
-                    + "previous subscription - {}. Last successful response details: {}", shardId, subscribeToShardId, lastSuccessfulRequestDetails);
+                    + "previous subscription - {}. Last successful request details -- {}", shardId, subscribeToShardId, lastSuccessfulRequestDetails);
             recordsDeliveryQueue.clear();
         }
     }
@@ -479,7 +479,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, triggeringFlow);
             } catch (Throwable t) {
                 log.warn("{}: Unable to buffer or schedule onNext for subscriber.  Failing publisher." +
-                        " Last successful response details: {}", shardId, lastSuccessfulRequestDetails);
+                        " Last successful request details -- {}", shardId, lastSuccessfulRequestDetails);
                 errorOccurred(triggeringFlow, t);
             }
         }
@@ -575,7 +575,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     synchronized (lockObject) {
                         if (subscriber != s) {
                             log.warn(
-                                    "{}: (FanOutRecordsPublisher/Subscription#request) - Rejected an attempt to request({}), because subscribers don't match. Last successful response details: {}",
+                                    "{}: (FanOutRecordsPublisher/Subscription#request) - Rejected an attempt to request({}), because subscribers don't match. Last successful request details -- {}",
                                     shardId, n, lastSuccessfulRequestDetails);
                             return;
                         }
@@ -602,13 +602,13 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     synchronized (lockObject) {
                         if (subscriber != s) {
                             log.warn(
-                                    "{}: (FanOutRecordsPublisher/Subscription#cancel) - Rejected attempt to cancel subscription, because subscribers don't match. Last successful response details: {}",
+                                    "{}: (FanOutRecordsPublisher/Subscription#cancel) - Rejected attempt to cancel subscription, because subscribers don't match. Last successful request details -- {}",
                                     shardId, lastSuccessfulRequestDetails);
                             return;
                         }
                         if (!hasValidSubscriber()) {
                             log.warn(
-                                    "{}: (FanOutRecordsPublisher/Subscription#cancel) - Cancelled called even with an invalid subscriber. Last successful response details: {}",
+                                    "{}: (FanOutRecordsPublisher/Subscription#cancel) - Cancelled called even with an invalid subscriber. Last successful request details -- {}",
                                     shardId, lastSuccessfulRequestDetails);
                         }
                         subscriber = null;
@@ -699,7 +699,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         private boolean isDisposed = false;
         private boolean isErrorDispatched = false;
         private boolean isCancelled = false;
-        private RequestDetails lastSuccessfulResponseDetails;
+        private RequestDetails recordFlowLastSuccessfuRequestDetails;
 
         @Override
         public void onEventStream(SdkPublisher<SubscribeToShardEventStream> publisher) {
@@ -737,11 +737,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         @Override
         public void responseReceived(SubscribeToShardResponse response) {
-            log.debug("{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Response received. Last successful response details: {}, ExtendedLast successful response: RequestId - {}, Timestamp - {}",
-                    parent.shardId, connectionStartedAt, subscribeToShardId, response.responseMetadata().requestId(), response.responseMetadata().extendedRequestId(), connectionStartedAt);
+            log.debug("{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Response received. RequestId - {} -- Last successful request details -- {} ",
+                    parent.shardId, connectionStartedAt, subscribeToShardId, response.responseMetadata().requestId(), parent.lastSuccessfulRequestDetails);
 
-            lastSuccessfulResponseDetails = new RequestDetails(Optional.of(response.responseMetadata().requestId()), Optional.of(connectionStartedAt.toString()));
-            parent.setLastSuccessfulResponseDetails(lastSuccessfulResponseDetails);
+            recordFlowLastSuccessfuRequestDetails = new RequestDetails(Optional.of(response.responseMetadata().requestId()), Optional.of(connectionStartedAt.toString()));
+            parent.setLastSuccessfulRequestDetails(this.recordFlowLastSuccessfuRequestDetails);
         }
 
         @Override
@@ -803,7 +803,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         .add(new RecordsRetrievedContext(Either.right(subscriptionShutdownEvent), this, Instant.now()));
             } catch (Exception e) {
                 log.warn(
-                        "{}: Unable to enqueue the {} shutdown event due to capacity restrictions in delivery queue with remaining capacity {}. Ignoring. Last successful response details: {}",
+                        "{}: Unable to enqueue the {} shutdown event due to capacity restrictions in delivery queue with remaining capacity {}. Ignoring. Last successful request details -- {}",
                         parent.shardId, subscriptionShutdownEvent.getEventIdentifier(), parent.recordsDeliveryQueue.remainingCapacity(),
                         subscriptionShutdownEvent.getShutdownEventThrowableOptional(), parent.lastSuccessfulRequestDetails);
             }
@@ -821,13 +821,13 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     // the
                     // subscription, which was cancelled for a reason (usually queue overflow).
                     //
-                    log.warn("{}: complete called on a cancelled subscription. Ignoring completion. Last successful response details: {}",
+                    log.warn("{}: complete called on a cancelled subscription. Ignoring completion. Last successful request details -- {}",
                             parent.shardId, parent.lastSuccessfulRequestDetails);
                     return;
                 }
                 if (this.isDisposed) {
                     log.warn(
-                            "{}: [SubscriptionLifetime]: (RecordFlow#complete) @ {} id: {} -- This flow has been disposed not dispatching completion. Last successful response details: {}",
+                            "{}: [SubscriptionLifetime]: (RecordFlow#complete) @ {} id: {} -- This flow has been disposed not dispatching completion. Last successful request details -- {}",
                             parent.shardId, connectionStartedAt, subscribeToShardId, parent.lastSuccessfulRequestDetails);
                     return;
                 }

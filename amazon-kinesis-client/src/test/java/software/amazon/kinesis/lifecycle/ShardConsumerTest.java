@@ -212,7 +212,7 @@ public class ShardConsumerTest {
         }
 
         @Override
-        public RequestDetails getLastSuccessfulResponseDetails() {
+        public RequestDetails getLastSuccessfulRequestDetails() {
             return lastSuccessfulRequestDetails;
         }
 

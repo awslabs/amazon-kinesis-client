@@ -54,11 +54,11 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
     void shutdown();
 
     /**
-     * Gets last successful response details.
+     * Gets last successful request details.
      *
-     * @return details associated with last successful response.
+     * @return details associated with last successful request.
      */
-    RequestDetails getLastSuccessfulResponseDetails();
+    RequestDetails getLastSuccessfulRequestDetails();
 
     /**
      * Notify the publisher on receipt of a data event.

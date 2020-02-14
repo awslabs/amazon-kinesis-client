@@ -29,26 +29,26 @@ public class RequestDetails {
     }
 
     /**
-     * Gets last successful response's request id.
+     * Gets last successful request's request id.
      *
-     * @return requestId associated with last succesful response.
+     * @return requestId associated with last successful request.
      */
-    public String getLastSuccessfulResponseRequestId() {
+    public String getRequestId() {
         return requestId.orElse(NONE);
     }
 
     /**
-     * Gets last successful response's timestamp.
+     * Gets last successful request's timestamp.
      *
-     * @return timestamp associated with last successful response.
+     * @return timestamp associated with last successful request.
      */
-    public String getLastSuccessfulResponseTimestamp() {
+    public String getTimestamp() {
         return timestamp.orElse(NONE);
     }
 
     @Override
     public String toString() {
-        return String.format("request id - %s, timestamp - %s", getLastSuccessfulResponseRequestId(), getLastSuccessfulResponseTimestamp());
+        return String.format("request id - %s, timestamp - %s", getRequestId(), getTimestamp());
     }
 
 }
