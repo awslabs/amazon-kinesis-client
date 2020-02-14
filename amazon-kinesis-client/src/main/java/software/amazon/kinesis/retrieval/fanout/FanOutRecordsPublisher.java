@@ -345,8 +345,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 try {
                     handleFlowError(propagationThrowable, triggeringFlow);
                 } catch (Throwable innerThrowable) {
-                    log.warn("{}: Exception while calling subscriber.onError. Last successful request:" +
-                            "Last successful request details -- {}", shardId, innerThrowable, lastSuccessfulRequestDetails);
+                    log.warn("{}: Exception while calling subscriber.onError. Last successful request details -- {}", shardId, lastSuccessfulRequestDetails, innerThrowable);
                 }
                 subscriber = null;
                 flow = null;
@@ -805,7 +804,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 log.warn(
                         "{}: Unable to enqueue the {} shutdown event due to capacity restrictions in delivery queue with remaining capacity {}. Ignoring. Last successful request details -- {}",
                         parent.shardId, subscriptionShutdownEvent.getEventIdentifier(), parent.recordsDeliveryQueue.remainingCapacity(),
-                        subscriptionShutdownEvent.getShutdownEventThrowableOptional(), parent.lastSuccessfulRequestDetails);
+                        parent.lastSuccessfulRequestDetails, subscriptionShutdownEvent.getShutdownEventThrowableOptional());
             }
         }
 
