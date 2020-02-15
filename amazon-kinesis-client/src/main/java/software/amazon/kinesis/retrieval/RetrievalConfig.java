@@ -21,6 +21,7 @@ import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
 
 /**
@@ -50,6 +51,11 @@ public class RetrievalConfig {
 
     @NonNull
     private final String applicationName;
+
+    /**
+     * StreamTracker for multi streaming support
+     */
+    private MultiStreamTracker multiStreamTracker;
 
     /**
      * Backoff time between consecutive ListShards calls.

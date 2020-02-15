@@ -23,7 +23,6 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
 import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
-import software.amazon.kinesis.leases.Lease;
 
 /**
  * Utility class that manages the mapping of Lease objects/operations to records in DynamoDB.
@@ -45,6 +44,11 @@ public interface LeaseSerializer {
      * @return a deserialized lease object representing the attribute value map
      */
     Lease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord);
+
+
+    default Lease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord, Lease leaseToUpdate) {
+        throw new UnsupportedOperationException();
+    }
 
     /**
      * @param lease

@@ -36,6 +36,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @ToString
 public class ShardInfo {
 
+    private final String streamName;
     private final String shardId;
     private final String concurrencyToken;
     // Sorted list of parent shardIds.
@@ -54,11 +55,18 @@ public class ShardInfo {
      * @param checkpoint
      *            the latest checkpoint from lease
      */
-    // TODO: check what values can be null
     public ShardInfo(@NonNull final String shardId,
             final String concurrencyToken,
             final Collection<String> parentShardIds,
             final ExtendedSequenceNumber checkpoint) {
+        this(shardId, concurrencyToken, parentShardIds, checkpoint, null);
+    }
+
+    public ShardInfo(@NonNull final String shardId,
+            final String concurrencyToken,
+            final Collection<String> parentShardIds,
+            final ExtendedSequenceNumber checkpoint,
+            final String streamName) {
         this.shardId = shardId;
         this.concurrencyToken = concurrencyToken;
         this.parentShardIds = new LinkedList<>();
@@ -69,6 +77,7 @@ public class ShardInfo {
         // This makes it easy to check for equality in ShardInfo.equals method.
         Collections.sort(this.parentShardIds);
         this.checkpoint = checkpoint;
+        this.streamName = streamName;
     }
 
     /**
@@ -94,7 +103,8 @@ public class ShardInfo {
      */
     @Override
     public int hashCode() {
-        return new HashCodeBuilder().append(concurrencyToken).append(parentShardIds).append(shardId).toHashCode();
+        return new HashCodeBuilder()
+                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamName).toHashCode();
     }
 
     /**
@@ -118,7 +128,8 @@ public class ShardInfo {
         }
         ShardInfo other = (ShardInfo) obj;
         return new EqualsBuilder().append(concurrencyToken, other.concurrencyToken)
-                .append(parentShardIds, other.parentShardIds).append(shardId, other.shardId).isEquals();
+                .append(parentShardIds, other.parentShardIds).append(shardId, other.shardId)
+                .append(streamName, other.streamName).isEquals();
 
     }
 

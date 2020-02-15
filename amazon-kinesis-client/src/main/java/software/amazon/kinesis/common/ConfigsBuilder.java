@@ -30,6 +30,7 @@ import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
+import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
 /**
@@ -108,6 +109,8 @@ public class ConfigsBuilder {
         return namespace;
     }
 
+    private MultiStreamTracker multiStreamTracker;
+
     /**
      * Creates a new instance of CheckpointConfig
      *
@@ -170,6 +173,10 @@ public class ConfigsBuilder {
      * @return RetrievalConfig
      */
     public RetrievalConfig retrievalConfig() {
-        return new RetrievalConfig(kinesisClient(), streamName(), applicationName());
+        final RetrievalConfig retrievalConfig = new RetrievalConfig(kinesisClient(), streamName(), applicationName());
+        if(this.multiStreamTracker != null) {
+            retrievalConfig.multiStreamTracker(multiStreamTracker);
+        }
+        return retrievalConfig;
     }
 }

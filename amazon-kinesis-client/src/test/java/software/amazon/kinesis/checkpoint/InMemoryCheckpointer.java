@@ -39,14 +39,14 @@ public class InMemoryCheckpointer implements Checkpointer {
      * {@inheritDoc}
      */
     @Override
-    public void setCheckpoint(String shardId, ExtendedSequenceNumber checkpointValue, String concurrencyToken)
+    public void setCheckpoint(String leaseKey, ExtendedSequenceNumber checkpointValue, String concurrencyToken)
         throws KinesisClientLibException {
-        checkpoints.put(shardId, checkpointValue);
-        flushpoints.put(shardId, checkpointValue);
-        pendingCheckpoints.remove(shardId);
+        checkpoints.put(leaseKey, checkpointValue);
+        flushpoints.put(leaseKey, checkpointValue);
+        pendingCheckpoints.remove(leaseKey);
 
         if (log.isDebugEnabled()) {
-            log.debug("shardId: {} checkpoint: {}", shardId, checkpointValue);
+            log.debug("shardId: {} checkpoint: {}", leaseKey, checkpointValue);
         }
 
     }
@@ -55,25 +55,25 @@ public class InMemoryCheckpointer implements Checkpointer {
      * {@inheritDoc}
      */
     @Override
-    public ExtendedSequenceNumber getCheckpoint(String shardId) throws KinesisClientLibException {
-        ExtendedSequenceNumber checkpoint = flushpoints.get(shardId);
-        log.debug("checkpoint shardId: {} checkpoint: {}",  shardId, checkpoint);
+    public ExtendedSequenceNumber getCheckpoint(String leaseKey) throws KinesisClientLibException {
+        ExtendedSequenceNumber checkpoint = flushpoints.get(leaseKey);
+        log.debug("checkpoint shardId: {} checkpoint: {}", leaseKey, checkpoint);
         return checkpoint;
     }
 
     @Override
-    public void prepareCheckpoint(String shardId, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
+    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
             throws KinesisClientLibException {
-        pendingCheckpoints.put(shardId, pendingCheckpoint);
+        pendingCheckpoints.put(leaseKey, pendingCheckpoint);
     }
 
     @Override
-    public Checkpoint getCheckpointObject(String shardId) throws KinesisClientLibException {
-        ExtendedSequenceNumber checkpoint = flushpoints.get(shardId);
-        ExtendedSequenceNumber pendingCheckpoint = pendingCheckpoints.get(shardId);
+    public Checkpoint getCheckpointObject(String leaseKey) throws KinesisClientLibException {
+        ExtendedSequenceNumber checkpoint = flushpoints.get(leaseKey);
+        ExtendedSequenceNumber pendingCheckpoint = pendingCheckpoints.get(leaseKey);
 
         Checkpoint checkpointObj = new Checkpoint(checkpoint, pendingCheckpoint);
-        log.debug("getCheckpointObject shardId: {}, {}", shardId, checkpointObj);
+        log.debug("getCheckpointObject shardId: {}, {}", leaseKey, checkpointObj);
         return checkpointObj;
     }
 

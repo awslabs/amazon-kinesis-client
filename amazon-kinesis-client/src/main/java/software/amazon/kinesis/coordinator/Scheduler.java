@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import com.google.common.collect.ImmutableList;
 import io.reactivex.plugins.RxJavaPlugins;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -36,6 +37,8 @@ import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.Validate;
+import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -43,6 +46,7 @@ import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.LeaseSerializer;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardPrioritization;
@@ -50,6 +54,8 @@ import software.amazon.kinesis.leases.ShardSyncTask;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBMultiStreamLeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
@@ -66,6 +72,7 @@ import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.ShutdownNotificationAware;
+import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
@@ -100,7 +107,7 @@ public class Scheduler implements Runnable {
     private final DiagnosticEventHandler diagnosticEventHandler;
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final LeaseCoordinator leaseCoordinator;
-    private final ShardSyncTaskManager shardSyncTaskManager;
+//    private final ShardSyncTaskManager shardSyncTaskManager;
     private final ShardPrioritization shardPrioritization;
     private final boolean cleanupLeasesUponShardCompletion;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -110,11 +117,12 @@ public class Scheduler implements Runnable {
     private final MetricsFactory metricsFactory;
     private final long failoverTimeMillis;
     private final long taskBackoffTimeMillis;
-    private final String streamName;
+    private final List<String> listOfStreams;
+    private final MultiStreamTracker multiStreamTracker;
     private final long listShardsBackoffTimeMillis;
     private final int maxListShardsRetryAttempts;
     private final LeaseRefresher leaseRefresher;
-    private final ShardDetector shardDetector;
+//    private final ShardDetector shardDetector;
     private final boolean ignoreUnexpetedChildShards;
     private final AggregatorUtil aggregatorUtil;
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
@@ -170,9 +178,18 @@ public class Scheduler implements Runnable {
         this.retrievalConfig = retrievalConfig;
 
         this.applicationName = this.coordinatorConfig.applicationName();
+        this.multiStreamTracker = this.retrievalConfig.multiStreamTracker();
+        this.listOfStreams = this.multiStreamTracker == null ?
+                ImmutableList.of(this.retrievalConfig.streamName()) :
+                this.multiStreamTracker.listStreamsToProcess();
+        Validate.isTrue(!CollectionUtils.isNullOrEmpty(this.listOfStreams), "No stream configured to process.");
         this.maxInitializationAttempts = this.coordinatorConfig.maxInitializationAttempts();
         this.metricsFactory = this.metricsConfig.metricsFactory();
-        this.leaseCoordinator = this.leaseManagementConfig.leaseManagementFactory()
+        // Determine leaseSerializer based on MultiStreamTracker
+        final LeaseSerializer leaseSerializer = this.multiStreamTracker == null ?
+                new DynamoDBMultiStreamLeaseSerializer() :
+                new DynamoDBLeaseSerializer();
+        this.leaseCoordinator = this.leaseManagementConfig.leaseManagementFactory(leaseSerializer)
                 .createLeaseCoordinator(this.metricsFactory);
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
@@ -191,8 +208,8 @@ public class Scheduler implements Runnable {
         this.diagnosticEventFactory = diagnosticEventFactory;
         this.diagnosticEventHandler = new DiagnosticEventLogger();
 
-        this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory()
-                .createShardSyncTaskManager(this.metricsFactory);
+//        this.shardSyncTaskManager = this.leaseManagementConfig.leaseManagementFactory()
+//                .createShardSyncTaskManager(this.metricsFactory);
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
@@ -214,10 +231,9 @@ public class Scheduler implements Runnable {
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
 //        this.retryGetRecordsInSeconds = this.retrievalConfig.retryGetRecordsInSeconds();
 //        this.maxGetRecordsThreadPool = this.retrievalConfig.maxGetRecordsThreadPool();
-        this.streamName = this.retrievalConfig.streamName();
         this.listShardsBackoffTimeMillis = this.retrievalConfig.listShardsBackoffTimeInMillis();
         this.maxListShardsRetryAttempts = this.retrievalConfig.maxListShardsRetryAttempts();
-        this.shardDetector = this.shardSyncTaskManager.shardDetector();
+//        this.shardDetector = this.shardSyncTaskManager.shardDetector();
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
         this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer();
@@ -264,28 +280,35 @@ public class Scheduler implements Runnable {
                     log.info("Initializing LeaseCoordinator");
                     leaseCoordinator.initialize();
 
-                    TaskResult result = null;
+                    TaskResult result;
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
-                        log.info("Syncing Kinesis shard info");
-                        ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetector, leaseRefresher, initialPosition,
-                                cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L, hierarchicalShardSyncer,
-                                metricsFactory);
-                        result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
+                        // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
+                        // TODO: for already synced streams
+                        for(String streamName : this.listOfStreams) {
+                            log.info("Syncing Kinesis shard info");
+                            ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetector, leaseRefresher,
+                                    initialPosition, cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L,
+                                    hierarchicalShardSyncer, metricsFactory);
+                            result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
+                            // Throwing the exception, to prevent further syncs for other stream.
+                            if (result.getException() != null) {
+                                log.error("Caught exception when sync'ing info for " + streamName, result.getException());
+                                throw result.getException();
+                            }
+                        }
                     } else {
                         log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
                     }
 
-                    if (result == null || result.getException() == null) {
-                        if (!leaseCoordinator.isRunning()) {
-                            log.info("Starting LeaseCoordinator");
-                            leaseCoordinator.start();
-                        } else {
-                            log.info("LeaseCoordinator is already running. No need to start it.");
-                        }
-                        isDone = true;
+                    // If we reach this point, then we either skipped the lease sync or did not have any exception
+                    // for any of the shard sync in the previous attempt.
+                    if (!leaseCoordinator.isRunning()) {
+                        log.info("Starting LeaseCoordinator");
+                        leaseCoordinator.start();
                     } else {
-                        lastException = result.getException();
+                        log.info("LeaseCoordinator is already running. No need to start it.");
                     }
+                    isDone = true;
                 } catch (LeasingException e) {
                     log.error("Caught exception when initializing LeaseCoordinator", e);
                     lastException = e;
@@ -591,7 +614,7 @@ public class Scheduler implements Runnable {
         ShardRecordProcessorCheckpointer checkpointer = coordinatorConfig.coordinatorFactory().createRecordProcessorCheckpointer(shardInfo,
                         checkpoint);
         ShardConsumerArgument argument = new ShardConsumerArgument(shardInfo,
-                streamName,
+                shardInfo.streamName(),
                 leaseCoordinator,
                 executorService,
                 cache,
