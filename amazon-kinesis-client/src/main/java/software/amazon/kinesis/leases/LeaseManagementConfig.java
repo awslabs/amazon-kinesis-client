@@ -16,6 +16,8 @@
 package software.amazon.kinesis.leases;
 
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
@@ -27,6 +29,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
+import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -36,6 +39,7 @@ import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.processor.MultiStreamTracker;
 
 /**
  * Used by the KCL to configure lease management.
@@ -71,7 +75,7 @@ public class LeaseManagementConfig {
      * Name of the Kinesis Data Stream to read records from.
      */
     @NonNull
-    private final String streamName;
+    private String streamName;
     /**
      * Used to distinguish different workers/processes of a KCL application.
      *
@@ -116,7 +120,7 @@ public class LeaseManagementConfig {
      *
      * <p>Default value: {@link Integer#MAX_VALUE}</p>
      */
-    private int maxLeasesForWorker = Integer.MAX_VALUE;;
+    private int maxLeasesForWorker = Integer.MAX_VALUE;
 
     /**
      * Max leases to steal from another worker at one time (for load balancing).
@@ -182,6 +186,24 @@ public class LeaseManagementConfig {
 
     private MetricsFactory metricsFactory = new NullMetricsFactory();
 
+    @Deprecated
+    public LeaseManagementConfig(String tableName, DynamoDbAsyncClient dynamoDBClient, KinesisAsyncClient kinesisClient,
+            String streamName, String workerIdentifier) {
+        this.tableName = tableName;
+        this.dynamoDBClient = dynamoDBClient;
+        this.kinesisClient = kinesisClient;
+        this.streamName = streamName;
+        this.workerIdentifier = workerIdentifier;
+    }
+
+    public LeaseManagementConfig(String tableName, DynamoDbAsyncClient dynamoDBClient, KinesisAsyncClient kinesisClient,
+            String workerIdentifier) {
+        this.tableName = tableName;
+        this.dynamoDBClient = dynamoDBClient;
+        this.kinesisClient = kinesisClient;
+        this.workerIdentifier = workerIdentifier;
+    }
+
     /**
      * Returns the metrics factory.
      *
@@ -244,9 +266,10 @@ public class LeaseManagementConfig {
 
     private LeaseManagementFactory leaseManagementFactory;
 
+    @Deprecated
     public LeaseManagementFactory leaseManagementFactory() {
-        if (leaseManagementFactory == null) {
-            leaseManagementFactory = new DynamoDBLeaseManagementFactory(kinesisClient(),
+        Validate.notEmpty(streamName(), "Stream name is empty");
+        return new DynamoDBLeaseManagementFactory(kinesisClient(),
                     streamName(),
                     dynamoDBClient(),
                     tableName(),
@@ -271,8 +294,43 @@ public class LeaseManagementConfig {
                     initialLeaseTableWriteCapacity(),
                     hierarchicalShardSyncer(),
                     tableCreatorCallback(), dynamoDbRequestTimeout(), billingMode());
-        }
-        return leaseManagementFactory;
     }
+
+    public LeaseManagementFactory leaseManagementFactory(final LeaseSerializer leaseSerializer) {
+        return new DynamoDBLeaseManagementFactory(kinesisClient(),
+                dynamoDBClient(),
+                tableName(),
+                workerIdentifier(),
+                executorService(),
+                failoverTimeMillis(),
+                epsilonMillis(),
+                maxLeasesForWorker(),
+                maxLeasesToStealAtOneTime(),
+                maxLeaseRenewalThreads(),
+                cleanupLeasesUponShardCompletion(),
+                ignoreUnexpectedChildShards(),
+                shardSyncIntervalMillis(),
+                consistentReads(),
+                listShardsBackoffTimeInMillis(),
+                maxListShardsRetryAttempts(),
+                maxCacheMissesBeforeReload(),
+                listShardsCacheAllowedAgeInSeconds(),
+                cacheMissWarningModulus(),
+                initialLeaseTableReadCapacity(),
+                initialLeaseTableWriteCapacity(),
+                hierarchicalShardSyncer(),
+                tableCreatorCallback(),
+                dynamoDbRequestTimeout(),
+                billingMode(),
+                leaseSerializer);
+    }
+
+//    private InitialPositionInStreamExtended getInitialPositionExtendedForStream(String streamName) {
+//        return multiStreamTracker() == null ?
+//                initialPositionInStream() :
+//                multiStreamTracker().initialPositionInStreamExtended(streamName) == null ?
+//                        initialPositionInStream() :
+//                        multiStreamTracker().initialPositionInStreamExtended(streamName);
+//    }
 
 }

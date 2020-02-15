@@ -80,28 +80,32 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
 
     @Override
     public Lease fromDynamoRecord(final Map<String, AttributeValue> dynamoRecord) {
-        Lease result = new Lease();
-        result.leaseKey(DynamoUtils.safeGetString(dynamoRecord, LEASE_KEY_KEY));
-        result.leaseOwner(DynamoUtils.safeGetString(dynamoRecord, LEASE_OWNER_KEY));
-        result.leaseCounter(DynamoUtils.safeGetLong(dynamoRecord, LEASE_COUNTER_KEY));
+        final Lease result = new Lease();
+        return fromDynamoRecord(dynamoRecord, result);
+    }
 
-        result.ownerSwitchesSinceCheckpoint(DynamoUtils.safeGetLong(dynamoRecord, OWNER_SWITCHES_KEY));
-        result.checkpoint(
+    @Override
+    public Lease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord, Lease leaseToUpdate) {
+        leaseToUpdate.leaseKey(DynamoUtils.safeGetString(dynamoRecord, LEASE_KEY_KEY));
+        leaseToUpdate.leaseOwner(DynamoUtils.safeGetString(dynamoRecord, LEASE_OWNER_KEY));
+        leaseToUpdate.leaseCounter(DynamoUtils.safeGetLong(dynamoRecord, LEASE_COUNTER_KEY));
+
+        leaseToUpdate.ownerSwitchesSinceCheckpoint(DynamoUtils.safeGetLong(dynamoRecord, OWNER_SWITCHES_KEY));
+        leaseToUpdate.checkpoint(
                 new ExtendedSequenceNumber(
                         DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_SEQUENCE_NUMBER_KEY),
                         DynamoUtils.safeGetLong(dynamoRecord, CHECKPOINT_SUBSEQUENCE_NUMBER_KEY))
         );
-        result.parentShardIds(DynamoUtils.safeGetSS(dynamoRecord, PARENT_SHARD_ID_KEY));
+        leaseToUpdate.parentShardIds(DynamoUtils.safeGetSS(dynamoRecord, PARENT_SHARD_ID_KEY));
 
         if (!Strings.isNullOrEmpty(DynamoUtils.safeGetString(dynamoRecord, PENDING_CHECKPOINT_SEQUENCE_KEY))) {
-            result.pendingCheckpoint(
+            leaseToUpdate.pendingCheckpoint(
                     new ExtendedSequenceNumber(
                             DynamoUtils.safeGetString(dynamoRecord, PENDING_CHECKPOINT_SEQUENCE_KEY),
                             DynamoUtils.safeGetLong(dynamoRecord, PENDING_CHECKPOINT_SUBSEQUENCE_KEY))
             );
         }
-
-        return result;
+        return leaseToUpdate;
     }
 
     @Override
@@ -198,7 +202,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
         return result;
     }
 
-    private AttributeValueUpdate putUpdate(AttributeValue attributeValue) {
+    protected AttributeValueUpdate putUpdate(AttributeValue attributeValue) {
         return AttributeValueUpdate.builder().value(attributeValue).action(AttributeAction.PUT).build();
     }
 

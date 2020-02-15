@@ -33,11 +33,13 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.leases.CompositeLeaseKey;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseRenewer;
 import software.amazon.kinesis.leases.LeaseTaker;
+import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
@@ -377,9 +379,22 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         return leases.stream().map(DynamoDBLeaseCoordinator::convertLeaseToAssignment).collect(Collectors.toList());
     }
 
+    // TODO : Halo : Reenable for backward compatibility
+//    public static ShardInfo convertLeaseToAssignment(final Lease lease) {
+//        return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
+//                lease.checkpoint());
+//    }
+
+    // TODO : Support Shard
     public static ShardInfo convertLeaseToAssignment(final Lease lease) {
-        return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
-                lease.checkpoint());
+        if (lease instanceof MultiStreamLease) {
+            return new ShardInfo(((MultiStreamLease) lease).shardId(), lease.concurrencyToken().toString(), lease.parentShardIds(),
+                    lease.checkpoint(), ((MultiStreamLease) lease).streamName());
+        } else {
+            return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
+                    lease.checkpoint());
+        }
+
     }
 
     /**

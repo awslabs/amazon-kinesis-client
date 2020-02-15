@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.leases;
 
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.metrics.MetricsFactory;
 
@@ -26,7 +27,16 @@ public interface LeaseManagementFactory {
 
     ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory);
 
+    default ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory, StreamConfig streamConfig) {
+        throw new UnsupportedOperationException();
+    }
+
     DynamoDBLeaseRefresher createLeaseRefresher();
 
     ShardDetector createShardDetector();
+
+    default ShardDetector createShardDetector(StreamConfig streamConfig) {
+        throw new UnsupportedOperationException();
+    }
+
 }
