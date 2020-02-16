@@ -1,8 +1,8 @@
 package software.amazon.kinesis.processor;
 
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
 
-import java.util.List;
+import java.util.Map;
 
 /**
  * Interface for stream trackers. This is useful for KCL Workers that need
@@ -11,17 +11,9 @@ import java.util.List;
 public interface MultiStreamTracker {
 
     /**
-     * Returns the list of streams that the Worker should consume data from.
+     * Returns the map of streams and its associated stream specific config.
      *
      * @return List of stream names
      */
-    List<String> listStreamsToProcess();
-
-    /**
-     * Returns the initial position in stream to read from, for the given stream.
-     * @param streamName
-     * @return Initial position to read from, for the given stream
-     */
-    InitialPositionInStreamExtended initialPositionInStreamExtended(String streamName);
-
+    Map<String, StreamConfig> streamConfigMap();
 }
