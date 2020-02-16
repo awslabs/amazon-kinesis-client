@@ -379,13 +379,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         return leases.stream().map(DynamoDBLeaseCoordinator::convertLeaseToAssignment).collect(Collectors.toList());
     }
 
-    // TODO : Halo : Reenable for backward compatibility
-//    public static ShardInfo convertLeaseToAssignment(final Lease lease) {
-//        return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
-//                lease.checkpoint());
-//    }
-
-    // TODO : Support Shard
+    // TODO : Halo : Check for better way
     public static ShardInfo convertLeaseToAssignment(final Lease lease) {
         if (lease instanceof MultiStreamLease) {
             return new ShardInfo(((MultiStreamLease) lease).shardId(), lease.concurrencyToken().toString(), lease.parentShardIds(),
@@ -394,7 +388,6 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
             return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
                     lease.checkpoint());
         }
-
     }
 
     /**

@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
@@ -36,7 +37,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @ToString
 public class ShardInfo {
 
-    private final String streamName;
+    private final Optional<String> streamName;
     private final String shardId;
     private final String concurrencyToken;
     // Sorted list of parent shardIds.
@@ -77,7 +78,7 @@ public class ShardInfo {
         // This makes it easy to check for equality in ShardInfo.equals method.
         Collections.sort(this.parentShardIds);
         this.checkpoint = checkpoint;
-        this.streamName = streamName;
+        this.streamName = Optional.ofNullable(streamName);
     }
 
     /**
