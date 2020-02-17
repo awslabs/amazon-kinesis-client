@@ -1,14 +1,10 @@
 package software.amazon.kinesis.common;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 import java.util.Optional;
 
 @Accessors(fluent=true)
-@Getter
 public class RequestDetails {
 
     /**
@@ -20,12 +16,13 @@ public class RequestDetails {
     private final Optional<String> timestamp;
 
     public RequestDetails() {
-        this(Optional.empty(), Optional.empty());
+        this.requestId = Optional.empty();
+        this.timestamp = Optional.empty();
     }
 
-    public RequestDetails(Optional<String> requestId, Optional<String> timestamp) {
-        this.requestId = requestId;
-        this.timestamp = timestamp;
+    public RequestDetails(String requestId, String timestamp) {
+        this.requestId = Optional.of(requestId);
+        this.timestamp = Optional.of(timestamp);
     }
 
     /**

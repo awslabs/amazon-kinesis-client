@@ -698,7 +698,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         private boolean isDisposed = false;
         private boolean isErrorDispatched = false;
         private boolean isCancelled = false;
-        private RequestDetails recordFlowLastSuccessfuRequestDetails;
 
         @Override
         public void onEventStream(SdkPublisher<SubscribeToShardEventStream> publisher) {
@@ -736,11 +735,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         @Override
         public void responseReceived(SubscribeToShardResponse response) {
-            log.debug("{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Response received. RequestId - {} -- Last successful request details -- {} ",
-                    parent.shardId, connectionStartedAt, subscribeToShardId, response.responseMetadata().requestId(), parent.lastSuccessfulRequestDetails);
+            log.debug("{}: [SubscriptionLifetime]: (RecordFlow#responseReceived) @ {} id: {} -- Response received. RequestId - {}",
+                    parent.shardId, connectionStartedAt, subscribeToShardId, response.responseMetadata().requestId());
 
-            recordFlowLastSuccessfuRequestDetails = new RequestDetails(Optional.of(response.responseMetadata().requestId()), Optional.of(connectionStartedAt.toString()));
-            parent.setLastSuccessfulRequestDetails(this.recordFlowLastSuccessfuRequestDetails);
+            final RequestDetails requestDetails = new RequestDetails(response.responseMetadata().requestId(), connectionStartedAt.toString());
+            parent.setLastSuccessfulRequestDetails(requestDetails);
         }
 
         @Override

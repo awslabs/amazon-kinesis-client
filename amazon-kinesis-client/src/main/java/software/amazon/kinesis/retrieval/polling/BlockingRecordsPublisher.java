@@ -15,8 +15,8 @@
 
 package software.amazon.kinesis.retrieval.polling;
 
+import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.reactivestreams.Subscriber;
@@ -42,7 +42,7 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
 
     private Subscriber<? super RecordsRetrieved> subscriber;
-    private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
+    private RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
 
     public BlockingRecordsPublisher(final int maxRecordsPerCall,
                                     final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
@@ -60,6 +60,8 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
 
     public ProcessRecordsInput getNextResult() {
         GetRecordsResponse getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
+        final RequestDetails getRecordsRequestDetails = new RequestDetails(getRecordsResult.responseMetadata().requestId(), Instant.now().toString());
+        setLastSuccessfulRequestDetails(getRecordsRequestDetails);
         List<KinesisClientRecord> records = getRecordsResult.records().stream()
                 .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
         return ProcessRecordsInput.builder()
@@ -71,6 +73,10 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     @Override
     public void shutdown() {
         getRecordsRetrievalStrategy.shutdown();
+    }
+
+    private void setLastSuccessfulRequestDetails(RequestDetails requestDetails) {
+        lastSuccessfulRequestDetails = requestDetails;
     }
 
     @Override
