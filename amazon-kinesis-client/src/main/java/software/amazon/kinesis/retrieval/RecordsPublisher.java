@@ -18,16 +18,22 @@ package software.amazon.kinesis.retrieval;
 import org.reactivestreams.Publisher;
 
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import java.util.Optional;
 
 /**
  * Provides a record publisher that will retrieve records from Kinesis for processing
  */
 public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
+
+
+
     /**
      * Initializes the publisher with where to start processing. If there is a stored sequence number the publisher will
      * begin from that sequence number, otherwise it will use the initial position.
-     * 
+     *
      * @param extendedSequenceNumber
      *            the sequence number to start processing from
      * @param initialPositionInStreamExtended
@@ -40,7 +46,7 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
      * @param recordsRetrieved the processRecordsInput to restart from
      */
     void restartFrom(RecordsRetrieved recordsRetrieved);
-    
+
 
     /**
      * Shutdowns the publisher. Once this method returns the publisher should no longer provide any records.
@@ -48,7 +54,15 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
     void shutdown();
 
     /**
+     * Gets last successful request details.
+     *
+     * @return details associated with last successful request.
+     */
+    RequestDetails getLastSuccessfulRequestDetails();
+
+    /**
      * Notify the publisher on receipt of a data event.
+     *
      * @param ack acknowledgement received from the subscriber.
      */
     default void notify(RecordsDeliveryAck ack) {

@@ -46,6 +46,7 @@ import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
@@ -98,6 +99,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private boolean wasReset = false;
 
     private Instant lastEventDeliveryTime = Instant.EPOCH;
+    private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
 
     @Data
     @Accessors(fluent = true)
@@ -258,6 +260,11 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         defaultGetRecordsCacheDaemon.isShutdown = true;
         executorService.shutdownNow();
         started = false;
+    }
+
+    @Override
+    public RequestDetails getLastSuccessfulRequestDetails() {
+        return lastSuccessfulRequestDetails;
     }
 
     @Override

@@ -70,6 +70,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
@@ -88,6 +89,7 @@ public class ShardConsumerTest {
 
     private final String shardId = "shardId-0-0";
     private final String concurrencyToken = "TestToken";
+    private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
     private ShardInfo shardInfo;
     private TaskExecutionListenerInput initialTaskInput;
     private TaskExecutionListenerInput processTaskInput;
@@ -207,6 +209,11 @@ public class ShardConsumerTest {
         @Override
         public void shutdown() {
 
+        }
+
+        @Override
+        public RequestDetails getLastSuccessfulRequestDetails() {
+            return lastSuccessfulRequestDetails;
         }
 
         @Override

@@ -35,6 +35,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,6 +62,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
@@ -76,6 +78,8 @@ public class ShardConsumerSubscriberTest {
     private final Object processedNotifier = new Object();
 
     private static final String TERMINAL_MARKER = "Terminal";
+
+    private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
 
     @Mock
     private ShardConsumer shardConsumer;
@@ -554,6 +558,11 @@ public class ShardConsumerSubscriberTest {
         @Override
         public void shutdown() {
 
+        }
+
+        @Override
+        public RequestDetails getLastSuccessfulRequestDetails() {
+            return lastSuccessfulRequestDetails;
         }
 
         @Override
