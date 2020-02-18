@@ -1,5 +1,12 @@
 # Changelog
 
+### Release 2.2.9 (Febuary 17, 2020)
+[Milestone#47](https://github.com/awslabs/amazon-kinesis-client/milestone/47)
+* Updating the AWS SDK version to 2.10.66.
+  * [PR#687](https://github.com/awslabs/amazon-kinesis-client/commit/8aaf2aa11c43f77f459732cdb7d88f4418d367ff)
+* Adding request id logging to SubscribeToShard response.
+  * [PR#678](https://github.com/awslabs/amazon-kinesis-client/pull/678)
+
 ### Release 2.2.8 (January 28, 2020)
 [Milestone#46](https://github.com/awslabs/amazon-kinesis-client/milestone/45)
 * Updating the AWS SDK version to 2.10.56.
