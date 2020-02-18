@@ -47,7 +47,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.2.4</version>
+      <version>2.2.9</version>
   </dependency>
   ```
 
@@ -63,14 +63,12 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release (2.2.8 - January 28 2020)
-[Milestone#46](https://github.com/awslabs/amazon-kinesis-client/milestone/45)
-* Updating the AWS SDK version to 2.10.56.
-  * [PR#679](https://github.com/awslabs/amazon-kinesis-client/pull/679)
-* Making ShardConsumerTest resilient to race conditions.
-  * [PR#668](https://github.com/awslabs/amazon-kinesis-client/pull/668)
-* Updating integration test naming.
-  * [PR#667](https://github.com/awslabs/amazon-kinesis-client/pull/667)
+### Latest Release 2.2.9 (Febuary 17, 2020)
+[Milestone#47](https://github.com/awslabs/amazon-kinesis-client/milestone/47)
+* Updating the AWS SDK version to 2.10.66.
+  * [PR#687](https://github.com/awslabs/amazon-kinesis-client/commit/8aaf2aa11c43f77f459732cdb7d88f4418d367ff)
+* Adding request id logging to SubscribeToShard response.
+  * [PR#678](https://github.com/awslabs/amazon-kinesis-client/pull/678)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
