@@ -105,7 +105,7 @@ public class ShardInfo {
     @Override
     public int hashCode() {
         return new HashCodeBuilder()
-                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamName).toHashCode();
+                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamName.orElse("")).toHashCode();
     }
 
     /**
@@ -130,7 +130,7 @@ public class ShardInfo {
         ShardInfo other = (ShardInfo) obj;
         return new EqualsBuilder().append(concurrencyToken, other.concurrencyToken)
                 .append(parentShardIds, other.parentShardIds).append(shardId, other.shardId)
-                .append(streamName, other.streamName).isEquals();
+                .append(streamName.orElse(""), other.streamName.orElse("")).isEquals();
 
     }
 

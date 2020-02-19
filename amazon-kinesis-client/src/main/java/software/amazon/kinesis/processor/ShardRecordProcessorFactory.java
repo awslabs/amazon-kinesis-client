@@ -24,8 +24,7 @@ public interface ShardRecordProcessorFactory {
      *
      * @return
      */
-    // TODO : Halo : Reenable
-//    ShardRecordProcessor shardRecordProcessor();
+    ShardRecordProcessor shardRecordProcessor();
 
     /**
      * Returns a new instance of the ShardRecordProcessor for a stream
@@ -33,6 +32,6 @@ public interface ShardRecordProcessorFactory {
      * @return ShardRecordProcessor
      */
     default ShardRecordProcessor shardRecordProcessor(String streamName) {
-        throw new UnsupportedOperationException();
+        return shardRecordProcessor();
     }
 }

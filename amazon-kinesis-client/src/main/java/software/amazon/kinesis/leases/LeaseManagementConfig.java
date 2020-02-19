@@ -268,36 +268,40 @@ public class LeaseManagementConfig {
 
     @Deprecated
     public LeaseManagementFactory leaseManagementFactory() {
-        Validate.notEmpty(streamName(), "Stream name is empty");
-        return new DynamoDBLeaseManagementFactory(kinesisClient(),
-                    streamName(),
-                    dynamoDBClient(),
-                    tableName(),
-                    workerIdentifier(),
-                    executorService(),
-                    initialPositionInStream(),
-                    failoverTimeMillis(),
-                    epsilonMillis(),
-                    maxLeasesForWorker(),
-                    maxLeasesToStealAtOneTime(),
-                    maxLeaseRenewalThreads(),
-                    cleanupLeasesUponShardCompletion(),
-                    ignoreUnexpectedChildShards(),
-                    shardSyncIntervalMillis(),
-                    consistentReads(),
-                    listShardsBackoffTimeInMillis(),
-                    maxListShardsRetryAttempts(),
-                    maxCacheMissesBeforeReload(),
-                    listShardsCacheAllowedAgeInSeconds(),
-                    cacheMissWarningModulus(),
-                    initialLeaseTableReadCapacity(),
-                    initialLeaseTableWriteCapacity(),
-                    hierarchicalShardSyncer(),
-                    tableCreatorCallback(), dynamoDbRequestTimeout(), billingMode());
+        if (leaseManagementFactory == null) {
+            Validate.notEmpty(streamName(), "Stream name is empty");
+            leaseManagementFactory = new DynamoDBLeaseManagementFactory(kinesisClient(),
+                        streamName(),
+                        dynamoDBClient(),
+                        tableName(),
+                        workerIdentifier(),
+                        executorService(),
+                        initialPositionInStream(),
+                        failoverTimeMillis(),
+                        epsilonMillis(),
+                        maxLeasesForWorker(),
+                        maxLeasesToStealAtOneTime(),
+                        maxLeaseRenewalThreads(),
+                        cleanupLeasesUponShardCompletion(),
+                        ignoreUnexpectedChildShards(),
+                        shardSyncIntervalMillis(),
+                        consistentReads(),
+                        listShardsBackoffTimeInMillis(),
+                        maxListShardsRetryAttempts(),
+                        maxCacheMissesBeforeReload(),
+                        listShardsCacheAllowedAgeInSeconds(),
+                        cacheMissWarningModulus(),
+                        initialLeaseTableReadCapacity(),
+                        initialLeaseTableWriteCapacity(),
+                        hierarchicalShardSyncer(),
+                        tableCreatorCallback(), dynamoDbRequestTimeout(), billingMode());
+        }
+        return leaseManagementFactory;
     }
 
     public LeaseManagementFactory leaseManagementFactory(final LeaseSerializer leaseSerializer) {
-        return new DynamoDBLeaseManagementFactory(kinesisClient(),
+        if(leaseManagementFactory == null) {
+            leaseManagementFactory = new DynamoDBLeaseManagementFactory(kinesisClient(),
                 dynamoDBClient(),
                 tableName(),
                 workerIdentifier(),
@@ -323,6 +327,13 @@ public class LeaseManagementConfig {
                 dynamoDbRequestTimeout(),
                 billingMode(),
                 leaseSerializer);
+        }
+        return leaseManagementFactory;
+    }
+
+    public LeaseManagementConfig leaseManagementFactory(final LeaseManagementFactory leaseManagementFactory) {
+        this.leaseManagementFactory = leaseManagementFactory;
+        return this;
     }
 
 //    private InitialPositionInStreamExtended getInitialPositionExtendedForStream(String streamName) {
