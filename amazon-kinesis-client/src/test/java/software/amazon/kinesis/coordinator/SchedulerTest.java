@@ -52,6 +52,7 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.CheckpointFactory;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.exceptions.KinesisClientLibNonRetryableException;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -498,6 +499,11 @@ public class SchedulerTest {
                 }
             };
         }
+
+        @Override
+        public ShardRecordProcessor shardRecordProcessor(String streamName) {
+            return shardRecordProcessor();
+        }
     }
 
     private class TestKinesisLeaseManagementFactory implements LeaseManagementFactory {
@@ -512,12 +518,23 @@ public class SchedulerTest {
         }
 
         @Override
+        public ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory,
+                StreamConfig streamConfig) {
+            return shardSyncTaskManager;
+        }
+
+        @Override
         public DynamoDBLeaseRefresher createLeaseRefresher() {
             return dynamoDBLeaseRefresher;
         }
 
         @Override
         public ShardDetector createShardDetector() {
+            return shardDetector;
+        }
+
+        @Override
+        public ShardDetector createShardDetector(StreamConfig streamConfig) {
             return shardDetector;
         }
     }
