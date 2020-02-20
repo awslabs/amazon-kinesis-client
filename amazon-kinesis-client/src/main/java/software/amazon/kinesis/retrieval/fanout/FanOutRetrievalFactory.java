@@ -25,12 +25,15 @@ import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 
+import java.util.function.Function;
+
 @RequiredArgsConstructor
 @KinesisClientInternalApi
 public class FanOutRetrievalFactory implements RetrievalFactory {
 
     private final KinesisAsyncClient kinesisClient;
-    private final String consumerArn;
+    private final String defaultStreamName;
+    private final Function<String, String> consumerArnProvider;
 
     @Override
     public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(final ShardInfo shardInfo,
@@ -41,6 +44,7 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
             final MetricsFactory metricsFactory) {
-        return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(), consumerArn);
+        final String streamName = shardInfo.streamName().orElse(defaultStreamName);
+        return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(), consumerArnProvider.apply(streamName));
     }
 }

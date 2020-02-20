@@ -82,15 +82,15 @@ public class FanOutConfig implements RetrievalSpecificConfig {
 
     @Override
     public RetrievalFactory retrievalFactory() {
-        return new FanOutRetrievalFactory(kinesisClient, getOrCreateConsumerArn());
+        return new FanOutRetrievalFactory(kinesisClient, streamName, this::getOrCreateConsumerArn);
     }
 
-    private String getOrCreateConsumerArn() {
+    private String getOrCreateConsumerArn(String streamName) {
         if (consumerArn != null) {
             return consumerArn;
         }
 
-        FanOutConsumerRegistration registration = createConsumerRegistration();
+        FanOutConsumerRegistration registration = createConsumerRegistration(streamName);
         try {
             return registration.getOrCreateStreamConsumerArn();
         } catch (DependencyException e) {
@@ -98,10 +98,10 @@ public class FanOutConfig implements RetrievalSpecificConfig {
         }
     }
 
-    private FanOutConsumerRegistration createConsumerRegistration() {
+    private FanOutConsumerRegistration createConsumerRegistration(String streamName) {
         String consumerToCreate = ObjectUtils.firstNonNull(consumerName(), applicationName());
         return createConsumerRegistration(kinesisClient(),
-                Preconditions.checkNotNull(streamName(), "streamName must be set for consumer creation"),
+                Preconditions.checkNotNull(streamName, "streamName must be set for consumer creation"),
                 Preconditions.checkNotNull(consumerToCreate,
                         "applicationName or consumerName must be set for consumer creation"));
 

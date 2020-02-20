@@ -65,11 +65,11 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
         this.maxFutureWait = maxFutureWait;
     }
 
-    @Override
-    public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
+    @Override public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
-        return new SynchronousGetRecordsRetrievalStrategy(new KinesisDataFetcher(kinesisClient, streamName,
-                shardInfo.shardId(), maxRecords, metricsFactory, maxFutureWait));
+        return new SynchronousGetRecordsRetrievalStrategy(
+                new KinesisDataFetcher(kinesisClient, shardInfo.streamName().orElse(streamName), shardInfo.shardId(),
+                        maxRecords, metricsFactory, maxFutureWait));
     }
 
     @Override
