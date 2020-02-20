@@ -134,4 +134,15 @@ public class ShardInfo {
 
     }
 
+    /**
+     *
+     * @param shardInfo
+     * @return
+     */
+    public static String getLeaseKey(ShardInfo shardInfo) {
+        return shardInfo.streamName().isPresent() ?
+                MultiStreamLease.getLeaseKey(shardInfo.streamName().get(), shardInfo.shardId()) :
+                shardInfo.shardId();
+    }
+
 }

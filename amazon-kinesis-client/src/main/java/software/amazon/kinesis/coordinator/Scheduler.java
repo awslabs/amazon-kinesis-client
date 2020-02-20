@@ -367,8 +367,8 @@ public class Scheduler implements Runnable {
 
             for (ShardInfo completedShard : completedShards) {
                 final String streamName = completedShard.streamName()
-                        .orElseGet(() -> appStreamTracker.map(mst -> null, sc -> sc.streamName()));
-                Validate.notEmpty(streamName, "Stream name should not be null");
+                        .orElseGet(() -> appStreamTracker.map(mst -> "", sc -> sc.streamName()));
+                Validate.notEmpty(streamName, "Stream name should not be empty");
                 if (createOrGetShardSyncTaskManager(streamName).syncShardAndLeaseInfo()) {
                     log.info("Found completed shard, initiated new ShardSyncTak for " + completedShard.toString());
                 }
@@ -640,7 +640,7 @@ public class Scheduler implements Runnable {
                         checkpoint);
         // The only case where streamName is not available will be when multistreamtracker not set. In this case,
         // get the default stream name for the single stream application.
-        final String streamName = shardInfo.streamName().orElseGet(() -> appStreamTracker.map(mst -> null, sc -> sc.streamName()));
+        final String streamName = shardInfo.streamName().orElseGet(() -> appStreamTracker.map(mst -> "", sc -> sc.streamName()));
         Validate.notEmpty(streamName, "StreamName should not be empty");
         // Irrespective of single stream app or multi stream app, streamConfig should always be available.
         // TODO: Halo : if not available, construct a default config ?
