@@ -112,9 +112,10 @@ public class HierarchicalShardSyncerTest {
     public void testDetermineNewLeasesToCreateNoShards() {
         final List<Shard> shards = Collections.emptyList();
         final List<Lease> leases = Collections.emptyList();
+        final LeaseSynchronizer emptyLeaseTableSynchronizer = new EmptyLeaseTableSynchronizer();
 
-        assertThat(HierarchicalShardSyncer.determineNewLeasesToCreate(shards, leases, INITIAL_POSITION_LATEST).isEmpty(),
-                equalTo(true));
+        assertThat(HierarchicalShardSyncer.determineNewLeasesToCreate(emptyLeaseTableSynchronizer, shards, leases,
+                INITIAL_POSITION_LATEST).isEmpty(), equalTo(true));
     }
 
     /**
@@ -123,10 +124,11 @@ public class HierarchicalShardSyncerTest {
     @Test public void testDetermineNewLeasesToCreateNoShardsForMultiStream() {
         final List<Shard> shards = Collections.emptyList();
         final List<Lease> leases = Collections.emptyList();
+        final LeaseSynchronizer emptyLeaseTableSynchronizer = new EmptyLeaseTableSynchronizer();
 
         assertThat(HierarchicalShardSyncer
-                .determineNewLeasesToCreate(shards, leases, INITIAL_POSITION_LATEST, new HashSet<>(), MULTI_STREAM_ARGS)
-                .isEmpty(), equalTo(true));
+                .determineNewLeasesToCreate(emptyLeaseTableSynchronizer, shards, leases, INITIAL_POSITION_LATEST,
+                        new HashSet<>(), MULTI_STREAM_ARGS).isEmpty(), equalTo(true));
     }
 
     /**
@@ -141,9 +143,10 @@ public class HierarchicalShardSyncerTest {
         final List<Shard> shards = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange),
                 ShardObjectHelper.newShard(shardId1, null, null, sequenceRange));
         final List<Lease> currentLeases = Collections.emptyList();
+        final LeaseSynchronizer emptyLeaseTableSynchronizer = new EmptyLeaseTableSynchronizer();
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_LATEST);
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(emptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_LATEST);
         final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final Set<String> expectedLeaseShardIds = new HashSet<>(Arrays.asList(shardId0, shardId1));
 
@@ -163,68 +166,16 @@ public class HierarchicalShardSyncerTest {
         final List<Shard> shards = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange),
                 ShardObjectHelper.newShard(shardId1, null, null, sequenceRange));
         final List<Lease> currentLeases = Collections.emptyList();
+        final LeaseSynchronizer emptyLeaseTableSynchronizer = new EmptyLeaseTableSynchronizer();
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_LATEST, new HashSet<>(), MULTI_STREAM_ARGS);
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(emptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_LATEST, new HashSet<>(), MULTI_STREAM_ARGS);
         final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final Set<String> expectedLeaseIds = new HashSet<>(
                 toMultiStreamLeaseList(Arrays.asList(shardId0, shardId1)));
 
         assertThat(newLeases.size(), equalTo(expectedLeaseIds.size()));
         assertThat(newLeaseKeys, equalTo(expectedLeaseIds));
-    }
-
-    /**
-     * Test determineNewLeasesToCreate() where there are no leases and no resharding operations have been performed, but
-     * one of the shards was marked as inconsistent.
-     */
-    @Test
-    public void testDetermineNewLeasesToCreate0Leases0Reshards1Inconsistent() {
-        final String shardId0 = "shardId-0";
-        final String shardId1 = "shardId-1";
-        final String shardId2 = "shardId-2";
-        final SequenceNumberRange sequenceRange = ShardObjectHelper.newSequenceNumberRange("342980", null);
-
-        final List<Shard> shards = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange),
-                ShardObjectHelper.newShard(shardId1, null, null, sequenceRange),
-                ShardObjectHelper.newShard(shardId2, shardId1, null, sequenceRange));
-        final List<Lease> currentLeases = Collections.emptyList();
-
-        final Set<String> inconsistentShardIds = new HashSet<>(Collections.singletonList(shardId2));
-
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_LATEST, inconsistentShardIds);
-        final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
-        final Set<String> expectedLeaseShardIds = new HashSet<>(Arrays.asList(shardId0, shardId1));
-        assertThat(newLeases.size(), equalTo(expectedLeaseShardIds.size()));
-        assertThat(newLeaseKeys, equalTo(expectedLeaseShardIds));
-    }
-
-    /**
-     * Test determineNewLeasesToCreate() where there are no leases and no resharding operations have been performed, but
-     * one of the shards was marked as inconsistent.
-     */
-    @Test
-    public void testDetermineNewLeasesToCreate0Leases0Reshards1InconsistentMultiStream() {
-        final String shardId0 = "shardId-0";
-        final String shardId1 = "shardId-1";
-        final String shardId2 = "shardId-2";
-        final SequenceNumberRange sequenceRange = ShardObjectHelper.newSequenceNumberRange("342980", null);
-
-        final List<Shard> shards = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange),
-                ShardObjectHelper.newShard(shardId1, null, null, sequenceRange),
-                ShardObjectHelper.newShard(shardId2, shardId1, null, sequenceRange));
-        final List<Lease> currentLeases = Collections.emptyList();
-
-        final Set<String> inconsistentShardIds = new HashSet<>(Collections.singletonList(shardId2));
-
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_LATEST, inconsistentShardIds, MULTI_STREAM_ARGS);
-        final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
-        final Set<String> expectedLeaseShardIds = new HashSet<>(
-                toMultiStreamLeaseList(Arrays.asList(shardId0, shardId1)));
-        assertThat(newLeases.size(), equalTo(expectedLeaseShardIds.size()));
-        assertThat(newLeaseKeys, equalTo(expectedLeaseShardIds));
     }
 
     /**
@@ -1069,6 +1020,7 @@ public class HierarchicalShardSyncerTest {
         final String shardId0 = "shardId-0";
         final String shardId1 = "shardId-1";
         final List<Lease> currentLeases = new ArrayList<>();
+        final LeaseSynchronizer emptyLeaseTableSynchronizer = new EmptyLeaseTableSynchronizer();
         final SequenceNumberRange sequenceRange = ShardObjectHelper.newSequenceNumberRange("342980", null);
 
         final List<Shard> shards = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange),
@@ -1080,7 +1032,7 @@ public class HierarchicalShardSyncerTest {
         final Set<String> expectedLeaseShardIds = new HashSet<>(Arrays.asList(shardId0, shardId1));
 
         for (InitialPositionInStreamExtended initialPosition : initialPositions) {
-            final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
+            final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(emptyLeaseTableSynchronizer, shards, currentLeases,
                     initialPosition);
             assertThat(newLeases.size(), equalTo(2));
 
@@ -1090,24 +1042,6 @@ public class HierarchicalShardSyncerTest {
                         equalTo(new ExtendedSequenceNumber(initialPosition.getInitialPositionInStream().toString())));
             }
         }
-    }
-
-    @Test
-    public void testDetermineNewLeasesToCreateIgnoreClosedShard() {
-        final String lastShardId = "shardId-1";
-        final List<Lease> currentLeases = new ArrayList<>();
-
-        final List<Shard> shards = Arrays.asList(
-                ShardObjectHelper.newShard("shardId-0", null, null,
-                        ShardObjectHelper.newSequenceNumberRange("303", "404")),
-                ShardObjectHelper.newShard(lastShardId, null, null,
-                        ShardObjectHelper.newSequenceNumberRange("405", null)));
-
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_LATEST);
-
-        assertThat(newLeases.size(), equalTo(1));
-        assertThat(newLeases.get(0).leaseKey(), equalTo(lastShardId));
     }
 
 //    /**
@@ -1125,9 +1059,15 @@ public class HierarchicalShardSyncerTest {
         final List<Shard> shards = constructShardListForGraphA();
         final List<Lease> currentLeases = Arrays.asList(newLease("shardId-3"), newLease("shardId-4"),
                 newLease("shardId-5"));
+        final Map<String, Shard> shardIdToShardMap = HierarchicalShardSyncer.constructShardIdToShardMap(shards);
+        final Map<String, Set<String>> shardIdToChildShardIdsMap = HierarchicalShardSyncer
+                .constructShardIdToChildShardIdsMap(shardIdToShardMap);
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_LATEST);
+        final LeaseSynchronizer nonEmptyLeaseTableSynchronizer =
+                new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(nonEmptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_LATEST);
 
         final Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap = new HashMap<>();
         expectedShardIdCheckpointMap.put("shardId-8", ExtendedSequenceNumber.TRIM_HORIZON);
@@ -1161,8 +1101,15 @@ public class HierarchicalShardSyncerTest {
         final List<Lease> currentLeases = Arrays.asList(newLease("shardId-4"), newLease("shardId-5"),
                 newLease("shardId-7"));
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_LATEST);
+        final Map<String, Shard> shardIdToShardMap = HierarchicalShardSyncer.constructShardIdToShardMap(shards);
+        final Map<String, Set<String>> shardIdToChildShardIdsMap = HierarchicalShardSyncer
+                .constructShardIdToChildShardIdsMap(shardIdToShardMap);
+
+        final LeaseSynchronizer nonEmptyLeaseTableSynchronizer =
+                new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(nonEmptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_LATEST);
 
         final Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap = new HashMap<>();
         expectedShardIdCheckpointMap.put("shardId-8", ExtendedSequenceNumber.TRIM_HORIZON);
@@ -1194,8 +1141,15 @@ public class HierarchicalShardSyncerTest {
         final List<Lease> currentLeases = Arrays.asList(newLease("shardId-3"), newLease("shardId-4"),
                 newLease("shardId-5"));
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_TRIM_HORIZON);
+        final Map<String, Shard> shardIdToShardMap = HierarchicalShardSyncer.constructShardIdToShardMap(shards);
+        final Map<String, Set<String>> shardIdToChildShardIdsMap = HierarchicalShardSyncer
+                .constructShardIdToChildShardIdsMap(shardIdToShardMap);
+
+        final LeaseSynchronizer nonEmptyLeaseTableSynchronizer =
+                new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(nonEmptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_TRIM_HORIZON);
 
         final Set<String> leaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final List<ExtendedSequenceNumber> checkpoints = newLeases.stream().map(Lease::checkpoint)
@@ -1229,8 +1183,15 @@ public class HierarchicalShardSyncerTest {
         final List<Lease> currentLeases = Arrays.asList(newLease("shardId-4"), newLease("shardId-5"),
                 newLease("shardId-7"));
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_TRIM_HORIZON);
+        final Map<String, Shard> shardIdToShardMap = HierarchicalShardSyncer.constructShardIdToShardMap(shards);
+        final Map<String, Set<String>> shardIdToChildShardIdsMap = HierarchicalShardSyncer
+                .constructShardIdToChildShardIdsMap(shardIdToShardMap);
+
+        final LeaseSynchronizer nonEmptyLeaseTableSynchronizer =
+                new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(nonEmptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_TRIM_HORIZON);
 
         final Set<String> leaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final List<ExtendedSequenceNumber> checkpoints = newLeases.stream().map(Lease::checkpoint)
@@ -1259,8 +1220,15 @@ public class HierarchicalShardSyncerTest {
         final List<Shard> shards = constructShardListForGraphB();
         final List<Lease> currentLeases = new ArrayList<>();
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_TRIM_HORIZON);
+        final Map<String, Shard> shardIdToShardMap = HierarchicalShardSyncer.constructShardIdToShardMap(shards);
+        final Map<String, Set<String>> shardIdToChildShardIdsMap = HierarchicalShardSyncer
+                .constructShardIdToChildShardIdsMap(shardIdToShardMap);
+
+        final LeaseSynchronizer nonEmptyLeaseTableSynchronizer =
+                new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(nonEmptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_TRIM_HORIZON);
 
         final Set<String> leaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final List<ExtendedSequenceNumber> checkpoints = newLeases.stream().map(Lease::checkpoint)
@@ -1294,8 +1262,15 @@ public class HierarchicalShardSyncerTest {
         final List<Lease> currentLeases = Arrays.asList(newLease("shardId-3"), newLease("shardId-4"),
                 newLease("shardId-5"));
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_AT_TIMESTAMP);
+        final Map<String, Shard> shardIdToShardMap = HierarchicalShardSyncer.constructShardIdToShardMap(shards);
+        final Map<String, Set<String>> shardIdToChildShardIdsMap = HierarchicalShardSyncer
+                .constructShardIdToChildShardIdsMap(shardIdToShardMap);
+
+        final LeaseSynchronizer nonEmptyLeaseTableSynchronizer =
+                new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(nonEmptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_AT_TIMESTAMP);
         final Set<String> leaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final List<ExtendedSequenceNumber> checkpoints = newLeases.stream().map(Lease::checkpoint)
                 .collect(Collectors.toList());
@@ -1328,8 +1303,15 @@ public class HierarchicalShardSyncerTest {
         final List<Lease> currentLeases = Arrays.asList(newLease("shardId-4"), newLease("shardId-5"),
                 newLease("shardId-7"));
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_AT_TIMESTAMP);
+        final Map<String, Shard> shardIdToShardMap = HierarchicalShardSyncer.constructShardIdToShardMap(shards);
+        final Map<String, Set<String>> shardIdToChildShardIdsMap = HierarchicalShardSyncer
+                .constructShardIdToChildShardIdsMap(shardIdToShardMap);
+
+        final LeaseSynchronizer nonEmptyLeaseTableSynchronizer =
+                new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(nonEmptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_AT_TIMESTAMP);
         final Set<String> leaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final List<ExtendedSequenceNumber> checkpoints = newLeases.stream().map(Lease::checkpoint)
                 .collect(Collectors.toList());
@@ -1355,8 +1337,15 @@ public class HierarchicalShardSyncerTest {
         final List<Shard> shards = constructShardListForGraphB();
         final List<Lease> currentLeases = new ArrayList<>();
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
-                INITIAL_POSITION_AT_TIMESTAMP);
+        final Map<String, Shard> shardIdToShardMap = HierarchicalShardSyncer.constructShardIdToShardMap(shards);
+        final Map<String, Set<String>> shardIdToChildShardIdsMap = HierarchicalShardSyncer
+                .constructShardIdToChildShardIdsMap(shardIdToShardMap);
+
+        final LeaseSynchronizer nonEmptyLeaseTableSynchronizer =
+                new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(nonEmptyLeaseTableSynchronizer,
+                shards, currentLeases, INITIAL_POSITION_AT_TIMESTAMP);
         final Set<String> leaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final List<ExtendedSequenceNumber> checkpoints = newLeases.stream().map(Lease::checkpoint)
                 .collect(Collectors.toList());
