@@ -59,7 +59,7 @@ public class KinesisShardDetector implements ShardDetector {
 
     @NonNull
     private final KinesisAsyncClient kinesisClient;
-    @NonNull
+    @NonNull @Getter
     private final String streamName;
     private final long listShardsBackoffTimeInMillis;
     private final int maxListShardsRetryAttempts;

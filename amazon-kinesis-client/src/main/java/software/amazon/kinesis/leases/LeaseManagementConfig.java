@@ -262,9 +262,23 @@ public class LeaseManagementConfig {
      */
     private TableCreatorCallback tableCreatorCallback = TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK;
 
-    private HierarchicalShardSyncer hierarchicalShardSyncer = new HierarchicalShardSyncer();
+    private HierarchicalShardSyncer hierarchicalShardSyncer;
 
     private LeaseManagementFactory leaseManagementFactory;
+
+    private HierarchicalShardSyncer hierarchicalShardSyncer() {
+        if(hierarchicalShardSyncer == null) {
+            hierarchicalShardSyncer = new HierarchicalShardSyncer();
+        }
+        return hierarchicalShardSyncer;
+    }
+
+    public HierarchicalShardSyncer hierarchicalShardSyncer(boolean isMultiStreamingMode) {
+        if(hierarchicalShardSyncer == null) {
+            hierarchicalShardSyncer = new HierarchicalShardSyncer(isMultiStreamingMode);
+        }
+        return hierarchicalShardSyncer;
+    }
 
     @Deprecated
     public LeaseManagementFactory leaseManagementFactory() {
@@ -299,7 +313,7 @@ public class LeaseManagementConfig {
         return leaseManagementFactory;
     }
 
-    public LeaseManagementFactory leaseManagementFactory(final LeaseSerializer leaseSerializer) {
+    public LeaseManagementFactory leaseManagementFactory(final LeaseSerializer leaseSerializer, boolean isMultiStreamingMode) {
         if(leaseManagementFactory == null) {
             leaseManagementFactory = new DynamoDBLeaseManagementFactory(kinesisClient(),
                 dynamoDBClient(),
@@ -322,7 +336,7 @@ public class LeaseManagementConfig {
                 cacheMissWarningModulus(),
                 initialLeaseTableReadCapacity(),
                 initialLeaseTableWriteCapacity(),
-                hierarchicalShardSyncer(),
+                hierarchicalShardSyncer(isMultiStreamingMode),
                 tableCreatorCallback(),
                 dynamoDbRequestTimeout(),
                 billingMode(),
