@@ -199,7 +199,8 @@ public class Scheduler implements Runnable {
         final LeaseSerializer leaseSerializer = this.appStreamTracker.map(mst -> true, sc -> false) ?
                 new DynamoDBMultiStreamLeaseSerializer() :
                 new DynamoDBLeaseSerializer();
-        this.leaseCoordinator = this.leaseManagementConfig.leaseManagementFactory(leaseSerializer)
+        this.leaseCoordinator = this.leaseManagementConfig
+                .leaseManagementFactory(leaseSerializer, this.appStreamTracker.map(mst -> true, sc -> false))
                 .createLeaseCoordinator(this.metricsFactory);
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
@@ -220,7 +221,7 @@ public class Scheduler implements Runnable {
         // TODO : Halo : Handle case of no StreamConfig present in streamConfigMap() for the supplied streamName.
         // TODO : Pass the immutable map here instead of using mst.streamConfigMap()
         this.shardSyncTaskManagerProvider = streamName -> this.leaseManagementConfig
-                .leaseManagementFactory(leaseSerializer)
+                .leaseManagementFactory(leaseSerializer, this.appStreamTracker.map(mst -> true, sc -> false))
                 .createShardSyncTaskManager(this.metricsFactory, this.currentStreamConfigMap.get(streamName));
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
@@ -248,7 +249,8 @@ public class Scheduler implements Runnable {
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
         // TODO : Halo : Check if this needs to be per stream.
-        this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer();
+        this.hierarchicalShardSyncer = leaseManagementConfig
+                .hierarchicalShardSyncer(this.appStreamTracker.map(mst -> true, sc -> false));
         this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
     }
 

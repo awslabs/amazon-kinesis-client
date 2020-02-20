@@ -27,4 +27,8 @@ public interface ShardDetector {
 
     List<Shard> listShards();
 
+    default String streamName() {
+        throw new UnsupportedOperationException("StreamName not available");
+    }
+
 }
