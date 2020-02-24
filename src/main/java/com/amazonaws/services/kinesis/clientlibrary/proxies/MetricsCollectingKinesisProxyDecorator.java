@@ -182,6 +182,13 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
     /**
      * {@inheritDoc}
      */
+    @Override public ShardClosureVerificationResponse verifyShardClosure(String shardId) {
+        return other.verifyShardClosure(shardId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public PutRecordResult put(String sequenceNumberForOrdering,
             String explicitHashKey,

@@ -79,6 +79,13 @@ public interface IKinesisProxy {
     List<Shard> getShardList() throws ResourceNotFoundException;
 
     /**
+     * Used to verify during ShardConsumer shutdown if the provided shardId is for a shard that has been closed.
+     * @param shardId Id of the shard that needs to be verified.
+     * @return an Object of type ShardClosureVerificationResponse.
+     */
+    ShardClosureVerificationResponse verifyShardClosure(String shardId);
+
+    /**
      * Fetch a shard iterator from the specified position in the shard.
      * This is to fetch a shard iterator for ShardIteratorType AT_SEQUENCE_NUMBER or AFTER_SEQUENCE_NUMBER which
      * requires the starting sequence number.

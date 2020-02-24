@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -474,6 +475,35 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
         shardIterationState = new ShardIterationState();
         return shards;
+    }
+
+    /**
+     * Used to verify during ShardConsumer shutdown if the provided shardId is for a shard that has been closed.
+     * Also returns the list of shards wrapped in the response so that it can be used for lease creation
+     * (instead of calling getShardList() again).
+     * @param shardId Id of the shard that needs to be verified.
+     * @return an Object of type ShardClosureVerificationResponse.
+     */
+    @Override public ShardClosureVerificationResponse verifyShardClosure(String shardId) {
+        List<Shard> shards = this.getShardList();
+        if (!CollectionUtils.isNullOrEmpty(shards) && isShardParentOfAny(shardId, shards)) {
+            return new ShardListWrappingShardClosureVerificationResponse(true /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
+        }
+        return new ShardListWrappingShardClosureVerificationResponse(false /*isVerifiedShardWasClosed*/, shards /*latestShards*/);
+    }
+
+    private boolean isShardParentOfAny(String shardId, List<Shard> shards) {
+        for(Shard shard : shards) {
+            if (isShardAParent(shard, shardId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isShardAParent(Shard shard, String shardId) {
+        return (StringUtils.equals(shard.getParentShardId(), shardId)
+                || StringUtils.equals(shard.getAdjacentParentShardId(), shardId));
     }
 
     /**
