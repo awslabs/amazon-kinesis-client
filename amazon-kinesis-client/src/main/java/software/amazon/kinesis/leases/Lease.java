@@ -14,14 +14,6 @@
  */
 package software.amazon.kinesis.leases;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
-import com.google.common.collect.Collections2;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -29,6 +21,12 @@ import lombok.NonNull;
 import lombok.ToString;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class contains data pertaining to a Lease. Distributed systems may use leases to partition work across a
