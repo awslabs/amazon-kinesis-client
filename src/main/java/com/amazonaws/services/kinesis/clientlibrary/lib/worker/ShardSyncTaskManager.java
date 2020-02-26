@@ -117,7 +117,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
                             cleanupLeasesUponShardCompletion, ignoreUnexpectedChildShards, shardSyncIdleTimeMillis,
                             shardSyncer, latestShards), metricsFactory);
             future = CompletableFuture.supplyAsync(() -> currentTask.call(), executorService)
-                    .whenComplete((taskResult, exception) -> handlePendingShardSyncs(latestShards, exception));
+                    .whenComplete((taskResult, exception) -> handlePendingShardSyncs(exception, taskResult));
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Submitted new " + currentTask.getTaskType() + " task.");
             }
@@ -132,9 +132,9 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
         return submittedTaskFuture;
     }
 
-    private void handlePendingShardSyncs(List<Shard> latestShards, Throwable exception) {
-        if (exception != null) {
-            LOG.error("Caught exception running " + currentTask.getTaskType() + " task: ", exception);
+    private void handlePendingShardSyncs(Throwable exception, TaskResult taskResult) {
+        if (exception != null || taskResult.getException() != null) {
+            LOG.error("Caught exception running " + currentTask.getTaskType() + " task: ", exception != null ? exception : taskResult.getException());
         }
         // Acquire lock here. If shardSyncRequestPending is false in this completionStage and
         // syncShardAndLeaseInfo is invoked, before completion stage exits (future completes)
@@ -150,7 +150,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
                 // reset future to null, so next call creates a new one
                 // without trying to get results from the old future.
                 future = null;
-                checkAndSubmitNextTask(latestShards);
+                checkAndSubmitNextTask(null);
             }
         } finally {
             lock.unlock();
