@@ -23,6 +23,8 @@ import java.util.concurrent.Executors;
 
 import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.matches;
+import static org.mockito.Matchers.notNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -91,10 +93,14 @@ public class ShardSyncTaskManagerTest {
         pausableNoOpShardSyncer.blockShardSyncLatch.countDown();
         // Wait for ShardSyncer to be initialized.
         pausableNoOpShardSyncer.waitForShardSyncerInitializationLatch.await();
-        // There should be 1 more shardSyncer invocation after the previous shardSync completes.
-        verify(mockShardSyncer, times(2))
+        // There should be totally 2 invocation of shardSyncer. The first one should be triggered with an empty list the latestShards.
+        // The second invocation should be the pending shard sync task, which should have null as the latestShards.
+        verify(mockShardSyncer, times(1))
                 .checkAndCreateLeasesForNewShards(Matchers.any(), Matchers.any(), Matchers.any(), anyBoolean(),
-                        anyBoolean(), Matchers.any());
+                        anyBoolean(), Matchers.eq(new ArrayList<>()));
+        verify(mockShardSyncer, times(1))
+                .checkAndCreateLeasesForNewShards(Matchers.any(), Matchers.any(), Matchers.any(), anyBoolean(),
+                        anyBoolean(), Matchers.eq(null));
     }
 
     private static class PausableNoOpShardSyncer implements ShardSyncer {
