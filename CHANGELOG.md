@@ -1,5 +1,12 @@
 # Changelog
-## Latest Release (1.13.2 Janurary 13, 2020)
+## Latest Release (1.13.3 March 2, 2020)
+[Milestone#49] (https://github.com/awslabs/amazon-kinesis-client/milestone/49）
+* Refactoring shard closure verification performed by ShutdownTask.
+  * [PR #684] (https://github.com/awslabs/amazon-kinesis-client/pull/684)
+* Fixing the bug in ShardSyncTaskManager to resolve the issue of new shards not being processed after resharding.
+  * [PR #694] (https://github.com/awslabs/amazon-kinesis-client/pull/694)
+
+## Release 1.13.2 （Janurary 13, 2020）
 * Adding backward compatible constructors that use the default DDB Billing Mode (#673)
   * [PR #673](https://github.com/awslabs/amazon-kinesis-client/pull/673)
 

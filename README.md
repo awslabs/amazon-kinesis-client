@@ -31,7 +31,13 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-#### Latest Release (1.13.2 Janurary 13, 2020)
+#### Latest Release (1.13.3 March 2, 2020)
+* Refactoring shard closure verification performed by ShutdownTask.
+  * [PR #684] (https://github.com/awslabs/amazon-kinesis-client/pull/684)
+* Fixing the bug in ShardSyncTaskManager to resolve the issue of new shards not being processed after resharding.
+  * [PR #694] (https://github.com/awslabs/amazon-kinesis-client/pull/694)
+
+#### Release (1.13.2 Janurary 13, 2020)
 * Adding backward compatible constructors that use the default DDB Billing Mode (#673)
   * [PR #673](https://github.com/awslabs/amazon-kinesis-client/pull/673)
 
@@ -47,17 +53,6 @@ To make it easier for developers to write record processors in other languages, 
 * Handling completed and blocked tasks better during graceful shutdown
   * [PR #640](https://github.com/awslabs/amazon-kinesis-client/pull/640)
 
-#### Release 1.12.0 (October 17, 2019)
-* Adding logging around shard end codepaths
-  * [PR #585](https://github.com/awslabs/amazon-kinesis-client/pull/585)
-* Updating checkpointing failure message to refer to javadocs
-  * [PR #590](https://github.com/awslabs/amazon-kinesis-client/pull/590)
-* Updating Sonatype to dedicated AWS endpoint.
-  * [PR #618](https://github.com/awslabs/amazon-kinesis-client/pull/618)
-* Introducing a validation step to verify if ShardEnd is reached, to prevent shard consumer stuck scenarios in the event of malformed response from service.
-  * [PR #623](https://github.com/awslabs/amazon-kinesis-client/pull/623)
-* Updating AWS SDK to 1.11.655
-  * [PR #626](https://github.com/awslabs/amazon-kinesis-client/pull/626)
 
 ###### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
