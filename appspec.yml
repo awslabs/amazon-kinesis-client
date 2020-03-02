@@ -1,8 +1,8 @@
 version: 0.0
 os: linux
 files:
-  - source: /quickdeal.zip
-    destination: /home/ubuntu/quickdeal/
+  - source: /
+    destination: /home/ec2-user/kcl-2x/
 hooks:
   AfterInstall:
     - location: scripts/install.sh
