@@ -1,0 +1,10 @@
+version: 0.0
+os: linux
+files:
+  - source: /quickdeal.zip
+    destination: /home/ubuntu/quickdeal/
+hooks:
+  AfterInstall:
+    - location: scripts/install.sh
+      timeout: 600
+      runas: ec2-user
