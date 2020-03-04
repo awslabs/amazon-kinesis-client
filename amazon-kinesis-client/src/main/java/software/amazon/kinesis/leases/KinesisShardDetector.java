@@ -47,6 +47,7 @@ import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 
 /**
@@ -60,7 +61,7 @@ public class KinesisShardDetector implements ShardDetector {
     @NonNull
     private final KinesisAsyncClient kinesisClient;
     @NonNull @Getter
-    private final String streamName;
+    private final StreamIdentifier streamIdentifier;
     private final long listShardsBackoffTimeInMillis;
     private final int maxListShardsRetryAttempts;
     private final long listShardsCacheAllowedAgeInSeconds;
@@ -77,16 +78,16 @@ public class KinesisShardDetector implements ShardDetector {
     public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
             int maxListShardsRetryAttempts, long listShardsCacheAllowedAgeInSeconds, int maxCacheMissesBeforeReload,
             int cacheMissWarningModulus) {
-        this(kinesisClient, streamName, listShardsBackoffTimeInMillis, maxListShardsRetryAttempts,
+        this(kinesisClient, StreamIdentifier.fromStreamName(streamName), listShardsBackoffTimeInMillis, maxListShardsRetryAttempts,
                 listShardsCacheAllowedAgeInSeconds, maxCacheMissesBeforeReload, cacheMissWarningModulus,
                 LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
     }
 
-    public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
+    public KinesisShardDetector(KinesisAsyncClient kinesisClient, StreamIdentifier streamIdentifier, long listShardsBackoffTimeInMillis,
             int maxListShardsRetryAttempts, long listShardsCacheAllowedAgeInSeconds, int maxCacheMissesBeforeReload,
             int cacheMissWarningModulus, Duration kinesisRequestTimeout) {
         this.kinesisClient = kinesisClient;
-        this.streamName = streamName;
+        this.streamIdentifier = streamIdentifier;
         this.listShardsBackoffTimeInMillis = listShardsBackoffTimeInMillis;
         this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
         this.listShardsCacheAllowedAgeInSeconds = listShardsCacheAllowedAgeInSeconds;
@@ -180,7 +181,7 @@ public class KinesisShardDetector implements ShardDetector {
 
         ListShardsRequest.Builder request = KinesisRequestsBuilder.listShardsRequestBuilder();
         if (StringUtils.isEmpty(nextToken)) {
-            request = request.streamName(streamName);
+            request = request.streamName(streamIdentifier.streamName());
         } else {
             request = request.nextToken(nextToken);
         }
@@ -205,12 +206,12 @@ public class KinesisShardDetector implements ShardDetector {
                         + " Active or Updating)");
                 return null;
             } catch (LimitExceededException e) {
-                log.info("Got LimitExceededException when listing shards {}. Backing off for {} millis.", streamName,
+                log.info("Got LimitExceededException when listing shards {}. Backing off for {} millis.", streamIdentifier,
                         listShardsBackoffTimeInMillis);
                 try {
                     Thread.sleep(listShardsBackoffTimeInMillis);
                 } catch (InterruptedException ie) {
-                    log.debug("Stream {} : Sleep  was interrupted ", streamName, ie);
+                    log.debug("Stream {} : Sleep  was interrupted ", streamIdentifier, ie);
                 }
                 lastException = e;
             } catch (TimeoutException te) {

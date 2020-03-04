@@ -3,11 +3,13 @@ package software.amazon.kinesis.common;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import software.amazon.awssdk.utils.Validate;
 
 @RequiredArgsConstructor
 @EqualsAndHashCode
 @Getter
+@Accessors(fluent = true)
 public class StreamIdentifier {
     private final String accountName;
     private final String streamName;

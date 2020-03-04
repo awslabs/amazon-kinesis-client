@@ -19,6 +19,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -27,6 +28,7 @@ import software.amazon.kinesis.retrieval.RetrievalFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 
 @RequiredArgsConstructor
@@ -36,7 +38,7 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
     private final KinesisAsyncClient kinesisClient;
     private final String defaultStreamName;
     private final Function<String, String> consumerArnProvider;
-    private Map<String,String> streamToconsumerArnMap = new HashMap<>();
+    private Map<String,String> streamToConsumerArnMap = new HashMap<>();
 
     @Override
     public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(final ShardInfo shardInfo,
@@ -47,8 +49,14 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
             final MetricsFactory metricsFactory) {
-        final String streamName = shardInfo.streamIdentifier().orElse(defaultStreamName);
+        final Optional<String> streamIdentifierStr = shardInfo.streamIdentifier();
+        final String streamName;
+        if(streamIdentifierStr.isPresent()) {
+            streamName = StreamIdentifier.fromString(streamIdentifierStr.get()).streamName();
+        } else {
+            streamName = defaultStreamName;
+        }
         return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
-                streamToconsumerArnMap.computeIfAbsent(streamName, consumerArnProvider::apply));
+                streamToConsumerArnMap.computeIfAbsent(streamName, consumerArnProvider::apply));
     }
 }

@@ -14,14 +14,15 @@ import static software.amazon.kinesis.leases.MultiStreamLease.validateAndCast;
 @NoArgsConstructor
 public class DynamoDBMultiStreamLeaseSerializer extends DynamoDBLeaseSerializer {
 
-    private static final String STREAM_NAME_KEY = "streamName";
+    // Keeping the stream id as "streamName" for legacy reasons.
+    private static final String STREAM_ID_KEY = "streamName";
     private static final String SHARD_ID_KEY = "shardId";
 
     @Override
     public Map<String, AttributeValue> toDynamoRecord(Lease lease) {
         final MultiStreamLease multiStreamLease = validateAndCast(lease);
         final Map<String, AttributeValue> result = super.toDynamoRecord(multiStreamLease);
-        result.put(STREAM_NAME_KEY, DynamoUtils.createAttributeValue(multiStreamLease.streamIdentifier()));
+        result.put(STREAM_ID_KEY, DynamoUtils.createAttributeValue(multiStreamLease.streamIdentifier()));
         result.put(SHARD_ID_KEY, DynamoUtils.createAttributeValue(multiStreamLease.shardId()));
         return result;
     }
@@ -30,7 +31,7 @@ public class DynamoDBMultiStreamLeaseSerializer extends DynamoDBLeaseSerializer 
     public MultiStreamLease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord) {
         final MultiStreamLease multiStreamLease = (MultiStreamLease) super
                 .fromDynamoRecord(dynamoRecord, new MultiStreamLease());
-        multiStreamLease.streamIdentifier(DynamoUtils.safeGetString(dynamoRecord, STREAM_NAME_KEY));
+        multiStreamLease.streamIdentifier(DynamoUtils.safeGetString(dynamoRecord, STREAM_ID_KEY));
         multiStreamLease.shardId(DynamoUtils.safeGetString(dynamoRecord, SHARD_ID_KEY));
         return multiStreamLease;
     }
@@ -40,7 +41,7 @@ public class DynamoDBMultiStreamLeaseSerializer extends DynamoDBLeaseSerializer 
     public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease) {
         final MultiStreamLease multiStreamLease = validateAndCast(lease);
         final Map<String, AttributeValueUpdate> result = super.getDynamoUpdateLeaseUpdate(multiStreamLease);
-        result.put(STREAM_NAME_KEY, putUpdate(DynamoUtils.createAttributeValue(multiStreamLease.streamIdentifier())));
+        result.put(STREAM_ID_KEY, putUpdate(DynamoUtils.createAttributeValue(multiStreamLease.streamIdentifier())));
         result.put(SHARD_ID_KEY, putUpdate(DynamoUtils.createAttributeValue(multiStreamLease.shardId())));
         return result;
     }

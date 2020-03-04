@@ -40,6 +40,7 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
@@ -63,7 +64,7 @@ public class KinesisDataFetcher {
     @NonNull
     private final KinesisAsyncClient kinesisClient;
     @NonNull
-    private final String streamName;
+    private final StreamIdentifier streamIdentifier;
     @NonNull
     private final String shardId;
     private final int maxRecords;
@@ -73,12 +74,13 @@ public class KinesisDataFetcher {
 
     @Deprecated
     public KinesisDataFetcher(KinesisAsyncClient kinesisClient, String streamName, String shardId, int maxRecords, MetricsFactory metricsFactory) {
-        this(kinesisClient, streamName, shardId, maxRecords, metricsFactory, PollingConfig.DEFAULT_REQUEST_TIMEOUT);
+        this(kinesisClient, StreamIdentifier.fromStreamName(streamName), shardId, maxRecords, metricsFactory, PollingConfig.DEFAULT_REQUEST_TIMEOUT);
     }
 
-    public KinesisDataFetcher(KinesisAsyncClient kinesisClient, String streamName, String shardId, int maxRecords, MetricsFactory metricsFactory, Duration maxFutureWait) {
+    // Changing the constructor directly as this is an internal API
+    public KinesisDataFetcher(KinesisAsyncClient kinesisClient, StreamIdentifier streamIdentifier, String shardId, int maxRecords, MetricsFactory metricsFactory, Duration maxFutureWait) {
         this.kinesisClient = kinesisClient;
-        this.streamName = streamName;
+        this.streamIdentifier = streamIdentifier;
         this.shardId = shardId;
         this.maxRecords = maxRecords;
         this.metricsFactory = metricsFactory;
@@ -199,7 +201,7 @@ public class KinesisDataFetcher {
         final AWSExceptionManager exceptionManager = createExceptionManager();
 
         GetShardIteratorRequest.Builder builder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
-                .streamName(streamName).shardId(shardId);
+                .streamName(streamIdentifier.streamName()).shardId(shardId);
         GetShardIteratorRequest request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStream)
                 .build();
 

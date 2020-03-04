@@ -35,10 +35,10 @@ public class MultiStreamLease extends Lease {
         shardId(casted.shardId);
     }
 
-    public static String getLeaseKey(String streamName, String shardId) {
-        verifyNotNull(streamName, "streamName should not be null");
+    public static String getLeaseKey(String streamIdentifier, String shardId) {
+        verifyNotNull(streamIdentifier, "streamIdentifier should not be null");
         verifyNotNull(shardId, "shardId should not be null");
-        return streamName + ":" + shardId;
+        return streamIdentifier + ":" + shardId;
     }
 
     @Override
