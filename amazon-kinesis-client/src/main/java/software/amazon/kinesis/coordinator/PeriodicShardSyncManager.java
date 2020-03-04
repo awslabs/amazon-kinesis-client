@@ -18,6 +18,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.Validate;
+import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.ShardSyncTask;
 import software.amazon.kinesis.lifecycle.ConsumerTask;
 import software.amazon.kinesis.lifecycle.TaskResult;
@@ -36,8 +37,8 @@ import java.util.concurrent.TimeUnit;
 @EqualsAndHashCode
 @Slf4j
 class PeriodicShardSyncManager {
-    private static final long INITIAL_DELAY = 0;
-    private static final long PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 5 * 60 * 1000;
+    private static final long INITIAL_DELAY = 60 * 1000L;
+    private static final long PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 5 * 60 * 1000L;
 
     private final String workerId;
     private final LeaderDecider leaderDecider;
@@ -61,12 +62,32 @@ class PeriodicShardSyncManager {
 
     public synchronized TaskResult start() {
         if (!isRunning) {
-            shardSyncThreadPool
-                    .scheduleWithFixedDelay(this::runShardSync, INITIAL_DELAY, PERIODIC_SHARD_SYNC_INTERVAL_MILLIS,
-                            TimeUnit.MILLISECONDS);
+            final Runnable periodicShardSyncer = () -> {
+                try {
+                    runShardSync();
+                } catch (Throwable t) {
+                    log.error("Error during runShardSync.", t);
+                }
+            };
+            shardSyncThreadPool.scheduleWithFixedDelay(periodicShardSyncer, INITIAL_DELAY, PERIODIC_SHARD_SYNC_INTERVAL_MILLIS,
+                    TimeUnit.MILLISECONDS);
             isRunning = true;
+
         }
         return new TaskResult(null);
+    }
+
+    public synchronized TaskResult syncShardsOnce() {
+
+        Exception lastException = null;
+        try {
+            if (!isRunning) {
+                runShardSync();
+            }
+        } catch (Exception e) {
+            lastException = e;
+        }
+        return new TaskResult(lastException);
     }
 
     public void stop() {
@@ -80,15 +101,23 @@ class PeriodicShardSyncManager {
     }
 
     private void runShardSync() {
-        try {
-            if (leaderDecider.isLeader(workerId)) {
-                log.info(String.format("WorkerId %s is a leader, running the shard sync task", workerId));
-                metricsEmittingShardSyncTask.call();
-            } else {
-                log.debug(String.format("WorkerId %s is not a leader, not running the shard sync task", workerId));
+        if (leaderDecider.isLeader(workerId)) {
+            log.info(String.format("WorkerId %s is a leader, running the shard sync task", workerId));
+            final TaskResult taskResult = metricsEmittingShardSyncTask.call();
+            if (taskResult != null && taskResult.getException() != null) {
+                throw new KinesisClientLibIOException("Failed to sync shards", taskResult.getException());
             }
-        } catch (Throwable t) {
-            log.error("Error during runShardSync.", t);
+        } else {
+            log.debug(String.format("WorkerId %s is not a leader, not running the shard sync task", workerId));
         }
+    }
+
+    /**
+     * Checks if the entire hash range is covered
+     * @return true if covered, false otherwise
+     */
+    public boolean hashRangeCovered() {
+        // TODO: Implement method
+        return true;
     }
 }

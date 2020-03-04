@@ -46,7 +46,6 @@ import software.amazon.kinesis.lifecycle.ShutdownNotification;
 import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.metrics.CloudWatchMetricsFactory;
-import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
@@ -68,6 +67,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -102,7 +102,7 @@ public class Scheduler implements Runnable {
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final LeaseCoordinator leaseCoordinator;
     private final ShardSyncTaskManager shardSyncTaskManager;
-    private final PeriodicShardSyncManager periodicShardSyncManager;
+    private final PeriodicShardSyncManager leaderElectedPeriodicShardSyncManager;
     private final ShardPrioritization shardPrioritization;
     private final boolean cleanupLeasesUponShardCompletion;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -121,7 +121,7 @@ public class Scheduler implements Runnable {
     private final AggregatorUtil aggregatorUtil;
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
     private final long schedulerInitializationBackoffTimeMillis;
-    private LeaderDecider leaderDecider;
+    private final LeaderDecider leaderDecider;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -212,10 +212,8 @@ public class Scheduler implements Runnable {
             this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory()
                     .createWorkerStateChangeListener();
         }
-        if (leaderDecider == null) {
-                leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher,
+        this.leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher,
                 Executors.newSingleThreadScheduledExecutor(), PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
-            }
         this.initialPosition = retrievalConfig.initialPositionInStreamExtended();
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
@@ -232,7 +230,7 @@ public class Scheduler implements Runnable {
         ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetector, leaseRefresher, initialPosition,
                 cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L, hierarchicalShardSyncer,
                 metricsFactory);
-        this.periodicShardSyncManager = new PeriodicShardSyncManager(leaseManagementConfig.workerIdentifier(),
+        this.leaderElectedPeriodicShardSyncManager = new PeriodicShardSyncManager(leaseManagementConfig.workerIdentifier(),
                 leaderDecider, shardSyncTask, metricsFactory);
     }
 
@@ -247,12 +245,7 @@ public class Scheduler implements Runnable {
 
         try {
             initialize();
-            log.info("Initialization complete. Scheduling periodicShardSync..");
-
-            periodicShardSyncManager.start();
-
-            log.info("Scheduled periodicShardSync tasks. Starting worker loop.");
-
+            log.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e) {
             log.error("Unable to initialize after {} attempts. Shutting down.", maxInitializationAttempts, e);
             workerStateChangeListener.onAllInitializationAttemptsFailed(e);
@@ -282,11 +275,14 @@ public class Scheduler implements Runnable {
 
                     TaskResult result = null;
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
+                        for (int j = 0; j < 10 && leaseRefresher.isLeaseTableEmpty(); j++) {
+                            // check every 1-5 seconds if lease table is still empty,
+                            // to minimize contention between all workers bootstrapping at the same time
+                            long waitTime = ThreadLocalRandom.current().nextLong(1000L, 5000L);
+                            Thread.sleep(waitTime);
+                        }
                         log.info("Syncing Kinesis shard info");
-                        ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetector, leaseRefresher, initialPosition,
-                                cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L, hierarchicalShardSyncer,
-                                metricsFactory);
-                        result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
+                        result = leaderElectedPeriodicShardSyncManager.syncShardsOnce();
                     } else {
                         log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
                     }
@@ -298,6 +294,9 @@ public class Scheduler implements Runnable {
                         } else {
                             log.info("LeaseCoordinator is already running. No need to start it.");
                         }
+                        log.info("Scheduling periodicShardSync)");
+                        // leaderElectedPeriodicShardSyncManager.start();
+                        // TODO: enable periodicShardSync after https://github.com/jushkem/amazon-kinesis-client/pull/2 is merged
                         isDone = true;
                     } else {
                         lastException = result.getException();
@@ -309,9 +308,10 @@ public class Scheduler implements Runnable {
                     lastException = e;
                 }
 
-                if (!isDone) {
+                if (!isDone || !leaderElectedPeriodicShardSyncManager.hashRangeCovered()) {
                     try {
                         Thread.sleep(schedulerInitializationBackoffTimeMillis);
+                        leaderElectedPeriodicShardSyncManager.stop();
                     } catch (InterruptedException e) {
                         log.debug("Sleep interrupted while initializing worker.");
                     }
@@ -532,7 +532,7 @@ public class Scheduler implements Runnable {
             // Lost leases will force Worker to begin shutdown process for all shard consumers in
             // Worker.run().
             leaseCoordinator.stop();
-            periodicShardSyncManager.stop();
+            leaderElectedPeriodicShardSyncManager.stop();
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
         }
     }
@@ -630,12 +630,12 @@ public class Scheduler implements Runnable {
                 hierarchicalShardSyncer,
                 metricsFactory);
         return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(),
-                argument, lifecycleConfig.taskExecutionListener(),lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
+                argument, lifecycleConfig.taskExecutionListener(), lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
     }
 
     /**
      * NOTE: This method is internal/private to the Worker class. It has package access solely for testing.
-     *
+     * <p>
      * This method relies on ShardInfo.equals() method returning true for ShardInfo objects which may have been
      * instantiated with parentShardIds in a different order (and rest of the fields being the equal). For example
      * shardInfo1.equals(shardInfo2) should return true with shardInfo1 and shardInfo2 defined as follows. ShardInfo
