@@ -31,6 +31,7 @@ import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.KinesisShardDetector;
 import software.amazon.kinesis.leases.LeaseCoordinator;
@@ -330,7 +331,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final HierarchicalShardSyncer hierarchicalShardSyncer, final TableCreatorCallback tableCreatorCallback,
             Duration dynamoDbRequestTimeout, BillingMode billingMode) {
 
-        this(kinesisClient, new StreamConfig(streamName, initialPositionInStream), dynamoDBClient, tableName,
+        this(kinesisClient, new StreamConfig(StreamIdentifier.fromStreamName(streamName), initialPositionInStream), dynamoDBClient, tableName,
                 workerIdentifier, executorService, failoverTimeMillis, epsilonMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
@@ -477,14 +478,20 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
 
     @Override @Deprecated
     public ShardDetector createShardDetector() {
-        return new KinesisShardDetector(kinesisClient, streamConfig.streamName(),
+        return new KinesisShardDetector(kinesisClient, streamConfig.streamIdentifier(),
                 listShardsBackoffTimeMillis, maxListShardsRetryAttempts, listShardsCacheAllowedAgeInSeconds,
                 maxCacheMissesBeforeReload, cacheMissWarningModulus, dynamoDbRequestTimeout);
     }
 
+    /**
+     * KinesisShardDetector supports reading from service only using streamName. Support for accountId and
+     * stream creation epoch is yet to be provided.
+     * @param streamConfig
+     * @return
+     */
     @Override
     public ShardDetector createShardDetector(StreamConfig streamConfig) {
-        return new KinesisShardDetector(kinesisClient, streamConfig.streamName(), listShardsBackoffTimeMillis,
+        return new KinesisShardDetector(kinesisClient, streamConfig.streamIdentifier(), listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, listShardsCacheAllowedAgeInSeconds, maxCacheMissesBeforeReload,
                 cacheMissWarningModulus, dynamoDbRequestTimeout);
     }

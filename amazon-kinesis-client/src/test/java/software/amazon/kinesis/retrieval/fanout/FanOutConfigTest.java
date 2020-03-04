@@ -19,6 +19,8 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.junit.Assert.assertThat;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,8 +31,13 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
+
+import java.util.Optional;
 
 @RunWith(MockitoJUnitRunner.class)
 public class FanOutConfigTest {
@@ -59,7 +66,9 @@ public class FanOutConfigTest {
         FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
                 .streamName(TEST_STREAM_NAME);
         RetrievalFactory retrievalFactory = config.retrievalFactory();
-
+        ShardInfo shardInfo = mock(ShardInfo.class);
+        doReturn(Optional.of(StreamIdentifier.fromStreamName(TEST_STREAM_NAME).toString())).when(shardInfo).streamIdentifier();
+        retrievalFactory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
         assertThat(retrievalFactory, not(nullValue()));
         verify(consumerRegistration).getOrCreateStreamConsumerArn();
     }
@@ -83,7 +92,9 @@ public class FanOutConfigTest {
         FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
                 .streamName(TEST_STREAM_NAME);
         RetrievalFactory factory = config.retrievalFactory();
-
+        ShardInfo shardInfo = mock(ShardInfo.class);
+        doReturn(Optional.of(StreamIdentifier.fromStreamName(TEST_STREAM_NAME).toString())).when(shardInfo).streamIdentifier();
+        factory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
         assertThat(factory, not(nullValue()));
 
         TestingConfig testingConfig = (TestingConfig) config;
@@ -96,9 +107,10 @@ public class FanOutConfigTest {
         FanOutConfig config = new TestingConfig(kinesisClient).consumerName(TEST_CONSUMER_NAME)
                 .streamName(TEST_STREAM_NAME);
         RetrievalFactory factory = config.retrievalFactory();
-
+        ShardInfo shardInfo = mock(ShardInfo.class);
+        doReturn(Optional.of(StreamIdentifier.fromStreamName(TEST_STREAM_NAME).toString())).when(shardInfo).streamIdentifier();
+        factory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
         assertThat(factory, not(nullValue()));
-
         TestingConfig testingConfig = (TestingConfig) config;
         assertThat(testingConfig.stream, equalTo(TEST_STREAM_NAME));
         assertThat(testingConfig.consumerToCreate, equalTo(TEST_CONSUMER_NAME));
@@ -109,7 +121,9 @@ public class FanOutConfigTest {
         FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
                 .consumerName(TEST_CONSUMER_NAME).streamName(TEST_STREAM_NAME);
         RetrievalFactory factory = config.retrievalFactory();
-
+        ShardInfo shardInfo = mock(ShardInfo.class);
+        doReturn(Optional.of(StreamIdentifier.fromStreamName(TEST_STREAM_NAME).toString())).when(shardInfo).streamIdentifier();
+        factory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
         assertThat(factory, not(nullValue()));
 
         TestingConfig testingConfig = (TestingConfig) config;

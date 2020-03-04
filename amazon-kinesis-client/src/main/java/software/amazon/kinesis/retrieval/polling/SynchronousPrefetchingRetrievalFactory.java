@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutorService;
 import lombok.NonNull;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -67,8 +68,11 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
 
     @Override public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
+        final StreamIdentifier streamIdentifier = shardInfo.streamIdentifier().isPresent() ?
+                StreamIdentifier.fromString(shardInfo.streamIdentifier().get()) :
+                StreamIdentifier.fromStreamName(streamName);
         return new SynchronousGetRecordsRetrievalStrategy(
-                new KinesisDataFetcher(kinesisClient, shardInfo.streamIdentifier().orElse(streamName), shardInfo.shardId(),
+                new KinesisDataFetcher(kinesisClient, streamIdentifier, shardInfo.shardId(),
                         maxRecords, metricsFactory, maxFutureWait));
     }
 
