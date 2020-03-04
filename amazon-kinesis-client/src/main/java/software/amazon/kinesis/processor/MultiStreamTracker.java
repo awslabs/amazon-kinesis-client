@@ -2,6 +2,7 @@ package software.amazon.kinesis.processor;
 
 import software.amazon.kinesis.common.StreamConfig;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -15,5 +16,5 @@ public interface MultiStreamTracker {
      *
      * @return List of stream names
      */
-    Map<String, StreamConfig> streamConfigMap();
+    List<StreamConfig> streamConfigList();
 }

@@ -382,7 +382,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     public static ShardInfo convertLeaseToAssignment(final Lease lease) {
         if (lease instanceof MultiStreamLease) {
             return new ShardInfo(((MultiStreamLease) lease).shardId(), lease.concurrencyToken().toString(), lease.parentShardIds(),
-                    lease.checkpoint(), ((MultiStreamLease) lease).streamName());
+                    lease.checkpoint(), ((MultiStreamLease) lease).streamIdentifier());
         } else {
             return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
                     lease.checkpoint());

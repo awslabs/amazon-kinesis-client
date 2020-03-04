@@ -17,13 +17,13 @@ import static com.google.common.base.Verify.verifyNotNull;
 @Accessors(fluent = true)
 public class MultiStreamLease extends Lease {
 
-    @NonNull private String streamName;
+    @NonNull private String streamIdentifier;
     @NonNull private String shardId;
 
     public MultiStreamLease(Lease other) {
         super(other);
         MultiStreamLease casted = validateAndCast(other);
-        streamName(casted.streamName);
+        streamIdentifier(casted.streamIdentifier);
         shardId(casted.shardId);
     }
 
@@ -31,7 +31,7 @@ public class MultiStreamLease extends Lease {
     public void update(Lease other) {
         MultiStreamLease casted = validateAndCast(other);
         super.update(casted);
-        streamName(casted.streamName);
+        streamIdentifier(casted.streamIdentifier);
         shardId(casted.shardId);
     }
 
@@ -43,7 +43,7 @@ public class MultiStreamLease extends Lease {
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), streamName);
+        return Objects.hash(super.hashCode(), streamIdentifier);
     }
 
     @Override
@@ -58,11 +58,11 @@ public class MultiStreamLease extends Lease {
             return false;
         }
         MultiStreamLease other = (MultiStreamLease) obj;
-        if (streamName == null) {
-            if (other.streamName != null) {
+        if (streamIdentifier == null) {
+            if (other.streamIdentifier != null) {
                 return false;
             }
-        } else if (!streamName.equals(other.streamName)) {
+        } else if (!streamIdentifier.equals(other.streamIdentifier)) {
             return false;
         }
         return true;
