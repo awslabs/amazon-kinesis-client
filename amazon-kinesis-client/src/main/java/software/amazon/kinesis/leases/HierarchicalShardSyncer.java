@@ -29,7 +29,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.StringUtils;
@@ -39,7 +38,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.utils.CollectionUtils;
-import software.amazon.awssdk.utils.Pair;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -163,7 +161,7 @@ public class HierarchicalShardSyncer {
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<Lease> streamLeases = new ArrayList<>();
         for (Lease lease : leaseRefresher.listLeases()) {
-            if (streamName.equals(((MultiStreamLease)lease).streamName())) {
+            if (streamName.equals(((MultiStreamLease)lease).streamIdentifier())) {
                 streamLeases.add(lease);
             }
         }
@@ -772,7 +770,7 @@ public class HierarchicalShardSyncer {
         }
         newLease.parentShardIds(parentShardIds);
         newLease.ownerSwitchesSinceCheckpoint(0L);
-        newLease.streamName(streamName);
+        newLease.streamIdentifier(streamName);
         newLease.shardId(shard.shardId());
         return newLease;
     }

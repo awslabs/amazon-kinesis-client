@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,6 +46,7 @@ import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -110,8 +112,8 @@ public class Scheduler implements Runnable {
     private final DiagnosticEventHandler diagnosticEventHandler;
     // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final LeaseCoordinator leaseCoordinator;
-    private final Function<String, ShardSyncTaskManager> shardSyncTaskManagerProvider;
-    private final Map<String, ShardSyncTaskManager> streamToShardSyncTaskManagerMap = new HashMap<>();
+    private final Function<StreamIdentifier, ShardSyncTaskManager> shardSyncTaskManagerProvider;
+    private final Map<StreamIdentifier, ShardSyncTaskManager> streamToShardSyncTaskManagerMap = new HashMap<>();
     private final ShardPrioritization shardPrioritization;
     private final boolean cleanupLeasesUponShardCompletion;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -121,11 +123,11 @@ public class Scheduler implements Runnable {
     private final long failoverTimeMillis;
     private final long taskBackoffTimeMillis;
     private final Either<MultiStreamTracker, StreamConfig> appStreamTracker;
-    private final Map<String, StreamConfig> currentStreamConfigMap;
+    private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
     private final long listShardsBackoffTimeMillis;
     private final int maxListShardsRetryAttempts;
     private final LeaseRefresher leaseRefresher;
-    private final Function<String, ShardDetector> shardDetectorProvider;
+    private final Function<StreamIdentifier, ShardDetector> shardDetectorProvider;
     private final boolean ignoreUnexpetedChildShards;
     private final AggregatorUtil aggregatorUtil;
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
@@ -183,15 +185,16 @@ public class Scheduler implements Runnable {
         this.applicationName = this.coordinatorConfig.applicationName();
         final MultiStreamTracker multiStreamTracker = this.retrievalConfig.multiStreamTracker();
         if(multiStreamTracker == null) {
-            final StreamConfig streamConfig = new StreamConfig(this.retrievalConfig.streamName(),
+            final StreamConfig streamConfig = new StreamConfig(StreamIdentifier.fromStreamName(this.retrievalConfig.streamName()),
                     this.retrievalConfig.initialPositionInStreamExtended());
             this.appStreamTracker = Either.right(streamConfig);
-            this.currentStreamConfigMap = new HashMap<String, StreamConfig>() {{
-                put(streamConfig.streamName(), streamConfig);
+            this.currentStreamConfigMap = new HashMap<StreamIdentifier, StreamConfig>() {{
+                put(streamConfig.streamIdentifier(), streamConfig);
             }};
         } else {
             this.appStreamTracker = Either.left(multiStreamTracker);
-            this.currentStreamConfigMap = multiStreamTracker.streamConfigMap();
+            this.currentStreamConfigMap = multiStreamTracker.streamConfigList().stream()
+                    .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc));
         }
         this.maxInitializationAttempts = this.coordinatorConfig.maxInitializationAttempts();
         this.metricsFactory = this.metricsConfig.metricsFactory();
@@ -218,11 +221,11 @@ public class Scheduler implements Runnable {
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
         this.diagnosticEventFactory = diagnosticEventFactory;
         this.diagnosticEventHandler = new DiagnosticEventLogger();
-        // TODO : Halo : Handle case of no StreamConfig present in streamConfigMap() for the supplied streamName.
-        // TODO : Pass the immutable map here instead of using mst.streamConfigMap()
-        this.shardSyncTaskManagerProvider = streamName -> this.leaseManagementConfig
+        // TODO : Halo : Handle case of no StreamConfig present in streamConfigList() for the supplied streamName.
+        // TODO : Pass the immutable map here instead of using mst.streamConfigList()
+        this.shardSyncTaskManagerProvider = streamIdentifier -> this.leaseManagementConfig
                 .leaseManagementFactory(leaseSerializer, this.appStreamTracker.map(mst -> true, sc -> false))
-                .createShardSyncTaskManager(this.metricsFactory, this.currentStreamConfigMap.get(streamName));
+                .createShardSyncTaskManager(this.metricsFactory, this.currentStreamConfigMap.get(streamIdentifier));
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
@@ -245,7 +248,7 @@ public class Scheduler implements Runnable {
 //        this.maxGetRecordsThreadPool = this.retrievalConfig.maxGetRecordsThreadPool();
         this.listShardsBackoffTimeMillis = this.retrievalConfig.listShardsBackoffTimeInMillis();
         this.maxListShardsRetryAttempts = this.retrievalConfig.maxListShardsRetryAttempts();
-        this.shardDetectorProvider = streamName -> createOrGetShardSyncTaskManager(streamName).shardDetector();
+        this.shardDetectorProvider = streamIdentifier -> createOrGetShardSyncTaskManager(streamIdentifier).shardDetector();
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
         // TODO : Halo : Check if this needs to be per stream.
@@ -298,17 +301,17 @@ public class Scheduler implements Runnable {
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
                         // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
                         // TODO: for already synced streams
-                        for(String streamName : currentStreamConfigMap.keySet().stream().collect(Collectors.toList())) {
+                        for(StreamIdentifier streamIdentifier : currentStreamConfigMap.keySet().stream().collect(Collectors.toList())) {
                             log.info("Syncing Kinesis shard info");
-                            final StreamConfig streamConfig = currentStreamConfigMap.get(streamName);
-                            ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetectorProvider.apply(streamName),
+                            final StreamConfig streamConfig = currentStreamConfigMap.get(streamIdentifier);
+                            ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetectorProvider.apply(streamIdentifier),
                                     leaseRefresher, streamConfig.initialPositionInStreamExtended(),
                                     cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L,
                                     hierarchicalShardSyncer, metricsFactory);
                             result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                             // Throwing the exception, to prevent further syncs for other stream.
                             if (result.getException() != null) {
-                                log.error("Caught exception when sync'ing info for " + streamName, result.getException());
+                                log.error("Caught exception when sync'ing info for " + streamIdentifier, result.getException());
                                 throw result.getException();
                             }
                         }
@@ -366,10 +369,8 @@ public class Scheduler implements Runnable {
             }
 
             for (ShardInfo completedShard : completedShards) {
-                final String streamName = completedShard.streamName()
-                        .orElseGet(() -> appStreamTracker.map(mst -> "", sc -> sc.streamName()));
-                Validate.notEmpty(streamName, "Stream name should not be empty");
-                if (createOrGetShardSyncTaskManager(streamName).syncShardAndLeaseInfo()) {
+                final StreamIdentifier streamIdentifier = getStreamIdentifier(completedShard.streamIdentifier());
+                if (createOrGetShardSyncTaskManager(streamIdentifier).syncShardAndLeaseInfo()) {
                     log.info("Found completed shard, initiated new ShardSyncTak for " + completedShard.toString());
                 }
             }
@@ -629,8 +630,8 @@ public class Scheduler implements Runnable {
         return consumer;
     }
 
-    private ShardSyncTaskManager createOrGetShardSyncTaskManager(String streamName) {
-        return streamToShardSyncTaskManagerMap.computeIfAbsent(streamName, s -> shardSyncTaskManagerProvider.apply(s));
+    private ShardSyncTaskManager createOrGetShardSyncTaskManager(StreamIdentifier streamIdentifier) {
+        return streamToShardSyncTaskManagerMap.computeIfAbsent(streamIdentifier, s -> shardSyncTaskManagerProvider.apply(s));
     }
 
     protected ShardConsumer buildConsumer(@NonNull final ShardInfo shardInfo,
@@ -640,18 +641,17 @@ public class Scheduler implements Runnable {
                         checkpoint);
         // The only case where streamName is not available will be when multistreamtracker not set. In this case,
         // get the default stream name for the single stream application.
-        final String streamName = shardInfo.streamName().orElseGet(() -> appStreamTracker.map(mst -> "", sc -> sc.streamName()));
-        Validate.notEmpty(streamName, "StreamName should not be empty");
+        final StreamIdentifier streamIdentifier = getStreamIdentifier(shardInfo.streamIdentifier());
         // Irrespective of single stream app or multi stream app, streamConfig should always be available.
         // TODO: Halo : if not available, construct a default config ?
-        final StreamConfig streamConfig = currentStreamConfigMap.get(streamName);
+        final StreamConfig streamConfig = currentStreamConfigMap.get(streamIdentifier);
         Validate.notNull(streamConfig, "StreamConfig should not be empty");
         ShardConsumerArgument argument = new ShardConsumerArgument(shardInfo,
-                streamConfig.streamName(),
+                streamConfig.streamIdentifier(),
                 leaseCoordinator,
                 executorService,
                 cache,
-                shardRecordProcessorFactory.shardRecordProcessor(streamName),
+                shardRecordProcessorFactory.shardRecordProcessor(streamIdentifier),
                 checkpoint,
                 checkpointer,
                 parentShardPollIntervalMillis,
@@ -664,7 +664,7 @@ public class Scheduler implements Runnable {
                 streamConfig.initialPositionInStreamExtended(),
                 cleanupLeasesUponShardCompletion,
                 ignoreUnexpetedChildShards,
-                shardDetectorProvider.apply(streamConfig.streamName()),
+                shardDetectorProvider.apply(streamConfig.streamIdentifier()),
                 aggregatorUtil,
                 hierarchicalShardSyncer,
                 metricsFactory);
@@ -714,6 +714,17 @@ public class Scheduler implements Runnable {
         ExecutorStateEvent executorStateEvent = diagnosticEventFactory.executorStateEvent(executorService,
                 leaseCoordinator);
         executorStateEvent.accept(diagnosticEventHandler);
+    }
+
+    private StreamIdentifier getStreamIdentifier(Optional<String> streamIdentifierString) {
+        final StreamIdentifier streamIdentifier;
+        if(streamIdentifierString.isPresent()) {
+            streamIdentifier = StreamIdentifier.fromString(streamIdentifierString.get());
+        } else {
+            streamIdentifier = appStreamTracker.map(mst -> null, sc -> sc.streamIdentifier());
+        }
+        Validate.notNull(streamIdentifier, "Stream identifier should not be empty");
+        return streamIdentifier;
     }
 
     /**

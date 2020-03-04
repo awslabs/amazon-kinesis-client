@@ -37,7 +37,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @ToString
 public class ShardInfo {
 
-    private final Optional<String> streamName;
+    private final Optional<String> streamIdentifier;
     private final String shardId;
     private final String concurrencyToken;
     // Sorted list of parent shardIds.
@@ -67,7 +67,7 @@ public class ShardInfo {
             final String concurrencyToken,
             final Collection<String> parentShardIds,
             final ExtendedSequenceNumber checkpoint,
-            final String streamName) {
+            final String streamIdentifier) {
         this.shardId = shardId;
         this.concurrencyToken = concurrencyToken;
         this.parentShardIds = new LinkedList<>();
@@ -78,7 +78,7 @@ public class ShardInfo {
         // This makes it easy to check for equality in ShardInfo.equals method.
         Collections.sort(this.parentShardIds);
         this.checkpoint = checkpoint;
-        this.streamName = Optional.ofNullable(streamName);
+        this.streamIdentifier = Optional.ofNullable(streamIdentifier);
     }
 
     /**
@@ -105,7 +105,7 @@ public class ShardInfo {
     @Override
     public int hashCode() {
         return new HashCodeBuilder()
-                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamName.orElse("")).toHashCode();
+                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamIdentifier.orElse("")).toHashCode();
     }
 
     /**
@@ -130,7 +130,7 @@ public class ShardInfo {
         ShardInfo other = (ShardInfo) obj;
         return new EqualsBuilder().append(concurrencyToken, other.concurrencyToken)
                 .append(parentShardIds, other.parentShardIds).append(shardId, other.shardId)
-                .append(streamName.orElse(""), other.streamName.orElse("")).isEquals();
+                .append(streamIdentifier.orElse(""), other.streamIdentifier.orElse("")).isEquals();
 
     }
 
@@ -140,8 +140,8 @@ public class ShardInfo {
      * @return
      */
     public static String getLeaseKey(ShardInfo shardInfo) {
-        return shardInfo.streamName().isPresent() ?
-                MultiStreamLease.getLeaseKey(shardInfo.streamName().get(), shardInfo.shardId()) :
+        return shardInfo.streamIdentifier().isPresent() ?
+                MultiStreamLease.getLeaseKey(shardInfo.streamIdentifier().get(), shardInfo.shardId()) :
                 shardInfo.shardId();
     }
 

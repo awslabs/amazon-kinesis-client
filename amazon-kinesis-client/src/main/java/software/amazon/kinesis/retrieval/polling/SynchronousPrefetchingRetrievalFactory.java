@@ -68,7 +68,7 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
     @Override public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
         return new SynchronousGetRecordsRetrievalStrategy(
-                new KinesisDataFetcher(kinesisClient, shardInfo.streamName().orElse(streamName), shardInfo.shardId(),
+                new KinesisDataFetcher(kinesisClient, shardInfo.streamIdentifier().orElse(streamName), shardInfo.shardId(),
                         maxRecords, metricsFactory, maxFutureWait));
     }
 

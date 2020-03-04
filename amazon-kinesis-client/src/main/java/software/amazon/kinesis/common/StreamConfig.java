@@ -9,6 +9,8 @@ import lombok.experimental.FieldDefaults;
 @Accessors(fluent = true)
 @FieldDefaults(makeFinal=true, level= AccessLevel.PRIVATE)
 public class StreamConfig {
-    String streamName;
+    StreamIdentifier streamIdentifier;
     InitialPositionInStreamExtended initialPositionInStreamExtended;
 }
+
+

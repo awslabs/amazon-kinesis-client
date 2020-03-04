@@ -47,7 +47,7 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
             final MetricsFactory metricsFactory) {
-        final String streamName = shardInfo.streamName().orElse(defaultStreamName);
+        final String streamName = shardInfo.streamIdentifier().orElse(defaultStreamName);
         return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
                 streamToconsumerArnMap.computeIfAbsent(streamName, consumerArnProvider::apply));
     }

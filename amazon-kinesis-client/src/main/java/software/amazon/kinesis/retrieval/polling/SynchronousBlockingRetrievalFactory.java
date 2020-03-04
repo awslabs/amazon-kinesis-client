@@ -63,7 +63,7 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
     public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
         return new SynchronousGetRecordsRetrievalStrategy(
-                new KinesisDataFetcher(kinesisClient, shardInfo.streamName().orElse(streamName), shardInfo.shardId(), maxRecords, metricsFactory, kinesisRequestTimeout));
+                new KinesisDataFetcher(kinesisClient, shardInfo.streamIdentifier().orElse(streamName), shardInfo.shardId(), maxRecords, metricsFactory, kinesisRequestTimeout));
     }
 
     @Override

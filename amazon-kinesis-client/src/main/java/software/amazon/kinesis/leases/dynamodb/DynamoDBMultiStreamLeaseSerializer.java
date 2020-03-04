@@ -21,7 +21,7 @@ public class DynamoDBMultiStreamLeaseSerializer extends DynamoDBLeaseSerializer 
     public Map<String, AttributeValue> toDynamoRecord(Lease lease) {
         final MultiStreamLease multiStreamLease = validateAndCast(lease);
         final Map<String, AttributeValue> result = super.toDynamoRecord(multiStreamLease);
-        result.put(STREAM_NAME_KEY, DynamoUtils.createAttributeValue(multiStreamLease.streamName()));
+        result.put(STREAM_NAME_KEY, DynamoUtils.createAttributeValue(multiStreamLease.streamIdentifier()));
         result.put(SHARD_ID_KEY, DynamoUtils.createAttributeValue(multiStreamLease.shardId()));
         return result;
     }
@@ -30,7 +30,7 @@ public class DynamoDBMultiStreamLeaseSerializer extends DynamoDBLeaseSerializer 
     public MultiStreamLease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord) {
         final MultiStreamLease multiStreamLease = (MultiStreamLease) super
                 .fromDynamoRecord(dynamoRecord, new MultiStreamLease());
-        multiStreamLease.streamName(DynamoUtils.safeGetString(dynamoRecord, STREAM_NAME_KEY));
+        multiStreamLease.streamIdentifier(DynamoUtils.safeGetString(dynamoRecord, STREAM_NAME_KEY));
         multiStreamLease.shardId(DynamoUtils.safeGetString(dynamoRecord, SHARD_ID_KEY));
         return multiStreamLease;
     }
@@ -40,7 +40,7 @@ public class DynamoDBMultiStreamLeaseSerializer extends DynamoDBLeaseSerializer 
     public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease) {
         final MultiStreamLease multiStreamLease = validateAndCast(lease);
         final Map<String, AttributeValueUpdate> result = super.getDynamoUpdateLeaseUpdate(multiStreamLease);
-        result.put(STREAM_NAME_KEY, putUpdate(DynamoUtils.createAttributeValue(multiStreamLease.streamName())));
+        result.put(STREAM_NAME_KEY, putUpdate(DynamoUtils.createAttributeValue(multiStreamLease.streamIdentifier())));
         result.put(SHARD_ID_KEY, putUpdate(DynamoUtils.createAttributeValue(multiStreamLease.shardId())));
         return result;
     }
