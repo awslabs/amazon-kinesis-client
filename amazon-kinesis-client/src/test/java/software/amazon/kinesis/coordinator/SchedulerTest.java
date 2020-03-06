@@ -89,6 +89,8 @@ public class SchedulerTest {
     private final String applicationName = "applicationName";
     private final String streamName = "streamName";
     private final String namespace = "testNamespace";
+    private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 5 * 1000L;
+    private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
 
     private Scheduler scheduler;
     private ShardRecordProcessorFactory shardRecordProcessorFactory;
@@ -263,6 +265,43 @@ public class SchedulerTest {
 
         // verify initialization was retried for maxInitializationAttempts times
         verify(shardDetector, times(maxInitializationAttempts)).listShards();
+    }
+
+    @Test
+    public final void testInitializationWaitsWhenLeaseTableIsEmpty() throws Exception {
+        final int maxInitializationAttempts = 1;
+        coordinatorConfig.maxInitializationAttempts(maxInitializationAttempts);
+        coordinatorConfig.skipShardSyncAtWorkerInitializationIfLeasesExist(false);
+        scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig);
+
+        doNothing().when(leaseCoordinator).initialize();
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
+
+        long startTime = System.currentTimeMillis();
+        scheduler.waitUntilLeaseTableIsReady();
+        long endTime = System.currentTimeMillis();
+
+        assertTrue(endTime - startTime > MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
+        assertTrue(endTime - startTime < MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
+    }
+
+    @Test
+    public final void testInitializationDoesntWaitWhenLeaseTableIsNotEmpty() throws Exception {
+        final int maxInitializationAttempts = 1;
+        coordinatorConfig.maxInitializationAttempts(maxInitializationAttempts);
+        coordinatorConfig.skipShardSyncAtWorkerInitializationIfLeasesExist(false);
+        scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig);
+
+        doNothing().when(leaseCoordinator).initialize();
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(false);
+
+        long startTime = System.currentTimeMillis();
+        scheduler.waitUntilLeaseTableIsReady();
+        long endTime = System.currentTimeMillis();
+
+        assertTrue(endTime - startTime < MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
     }
 
     @Test

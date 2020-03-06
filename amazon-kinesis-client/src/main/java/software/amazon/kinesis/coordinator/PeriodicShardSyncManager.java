@@ -77,6 +77,11 @@ class PeriodicShardSyncManager {
         return new TaskResult(null);
     }
 
+    /**
+     * Runs shardSync once
+     * Does not schedule periodic shardSync
+     * @return the result of the task
+     */
     public synchronized TaskResult syncShardsOnce() {
 
         Exception lastException = null;
