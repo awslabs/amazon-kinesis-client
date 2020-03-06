@@ -22,6 +22,10 @@
   * [PR#657](https://github.com/awslabs/amazon-kinesis-client/pull/657)
 * Adding a configurable DynamoDB billing mode
   * [PR#582](https://github.com/awslabs/amazon-kinesis-client/pull/582)
+  * NOTE: Billing mode is not available in all regions; if your lease table cannot be created, use the following configuration as a workaround:
+  ```
+  LeaseManagementConfig leaseManagementConfig = builder.leaseManagementConfig().billingMode(null).build();
+  ```
 
 
 ### Release 2.2.6 (November 7, 2019)
