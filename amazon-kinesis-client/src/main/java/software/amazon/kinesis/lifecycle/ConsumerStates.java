@@ -496,7 +496,8 @@ class ConsumerStates {
                     argument.taskBackoffTimeMillis(),
                     argument.recordsPublisher(),
                     argument.hierarchicalShardSyncer(),
-                    argument.metricsFactory());
+                    argument.metricsFactory(),
+                    input == null ? null : input.childShards());
         }
 
         @Override

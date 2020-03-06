@@ -45,6 +45,7 @@ public class ProcessRecordsInputMatcher extends TypeSafeDiagnosingMatcher<Proces
         matchers.put("millisBehindLatest",
                 nullOrEquals(template.millisBehindLatest(), ProcessRecordsInput::millisBehindLatest));
         matchers.put("records", nullOrEquals(template.records(), ProcessRecordsInput::records));
+        matchers.put("childShards", nullOrEquals(template.childShards(), ProcessRecordsInput::childShards));
 
         this.template = template;
     }

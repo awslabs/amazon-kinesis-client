@@ -36,6 +36,7 @@ import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorResponse;
 import software.amazon.awssdk.services.kinesis.model.KinesisException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
+import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -120,7 +121,13 @@ public class KinesisDataFetcher {
 
         if (nextIterator != null) {
             try {
-                return new AdvancingResult(getRecords(nextIterator));
+                GetRecordsResponse getRecordsResponse = getRecords(nextIterator);
+                while (!isValidResponse(getRecordsResponse)) {
+                    log.error("{} : GetRecords response is not valid. nextShardIterator: {}. childShards: {}. Will retry GetRecords with the same nextIterator.",
+                              shardId, getRecordsResponse.nextShardIterator(), getRecordsResponse.childShards());
+                    getRecordsResponse = getRecords(nextIterator);
+                }
+                return new AdvancingResult(getRecordsResponse);
             } catch (ResourceNotFoundException e) {
                 log.info("Caught ResourceNotFoundException when fetching records for shard {}", streamAndShardId);
                 return TERMINAL_RESULT;
@@ -133,8 +140,12 @@ public class KinesisDataFetcher {
     final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
         @Override
         public GetRecordsResponse getResult() {
-            return GetRecordsResponse.builder().millisBehindLatest(null).records(Collections.emptyList())
-                    .nextShardIterator(null).build();
+            return GetRecordsResponse.builder()
+                                     .millisBehindLatest(null)
+                                     .records(Collections.emptyList())
+                                     .nextShardIterator(null)
+                                     .childShards(Collections.emptyList())
+                                     .build();
         }
 
         @Override
@@ -175,6 +186,11 @@ public class KinesisDataFetcher {
         public boolean isShardEnd() {
             return isShardEndReached;
         }
+    }
+
+    private boolean isValidResponse(GetRecordsResponse response) {
+            return response.nextShardIterator() == null ? !CollectionUtils.isNullOrEmpty(response.childShards())
+                                                        : response.childShards() != null && response.childShards().isEmpty();
     }
 
     /**

@@ -26,6 +26,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -33,9 +34,11 @@ import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.SequenceNumberRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -43,11 +46,15 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
+import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardObjectHelper;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -104,7 +111,7 @@ public class ShutdownTaskTest {
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShards());
     }
 
     /**
@@ -113,8 +120,8 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testCallWhenApplicationDoesNotCheckpoint() {
-        when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("3298"));
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         final TaskResult result = task.call();
         assertNotNull(result.getException());
@@ -126,28 +133,18 @@ public class ShutdownTaskTest {
      * This test is for the scenario that checkAndCreateLeaseForNewShards throws an exception.
      */
     @Test
-    public final void testCallWhenSyncingShardsThrows() throws Exception {
-        final boolean garbageCollectLeases = false;
-        final boolean isLeaseTableEmpty = false;
-
-        List<Shard> latestShards = constructShardListGraphA();
-        when(shardDetector.listShards()).thenReturn(latestShards);
+    public final void testCallWhenCreatingNewLeasesThrows() throws Exception {
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
-
-        doAnswer((invocation) -> {
-            throw new KinesisClientLibIOException("KinesisClientLibIOException");
-        }).when(hierarchicalShardSyncer)
-                .checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, INITIAL_POSITION_TRIM_HORIZON,
-                        latestShards, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
-                        NULL_METRICS_FACTORY.createMetrics(), garbageCollectLeases, isLeaseTableEmpty);
+        when(leaseRefresher.createLeaseIfNotExists(Matchers.any(Lease.class))).thenThrow(new KinesisClientLibIOException("KinesisClientLibIOException"));
 
         final TaskResult result = task.call();
         assertNotNull(result.getException());
         assertTrue(result.getException() instanceof KinesisClientLibIOException);
-        verify(recordsPublisher).shutdown();
-        verify(shardRecordProcessor).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
+        verify(recordsPublisher, never()).shutdown();
+        verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
+        verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
     }
 
     /**
@@ -155,24 +152,24 @@ public class ShutdownTaskTest {
      * This test is for the scenario that ShutdownTask is created for ShardConsumer reaching the Shard End.
      */
     @Test
-    public final void testCallWhenTrueShardEnd() {
+    public final void testCallWhenTrueShardEnd() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         shardInfo = new ShardInfo("shardId-0", concurrencyToken, Collections.emptySet(),
                                   ExtendedSequenceNumber.LATEST);
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
+                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShards());
 
-        when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         final TaskResult result = task.call();
         assertNull(result.getException());
         verify(recordsPublisher).shutdown();
         verify(shardRecordProcessor).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
-        verify(shardDetector, times(1)).listShards();
-        verify(leaseCoordinator, never()).getAssignments();
+        verify(leaseRefresher, times(2)).createLeaseIfNotExists(Matchers.any(Lease.class));
+        verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
     }
 
     /**
@@ -180,23 +177,25 @@ public class ShutdownTaskTest {
      * This test is for the scenario that a ShutdownTask is created for detecting a false Shard End.
      */
     @Test
-    public final void testCallWhenFalseShardEnd() {
+    public final void testCallWhenShardNotFound() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         shardInfo = new ShardInfo("shardId-4", concurrencyToken, Collections.emptySet(),
                                   ExtendedSequenceNumber.LATEST);
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
+                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, new ArrayList<>());
 
-        when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
+        when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         final TaskResult result = task.call();
         assertNull(result.getException());
         verify(recordsPublisher).shutdown();
-        verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
-        verify(shardRecordProcessor).leaseLost(LeaseLostInput.builder().build());
-        verify(shardDetector, times(1)).listShards();
-        verify(leaseCoordinator).getCurrentlyHeldLease(shardInfo.shardId());
+        verify(shardRecordProcessor).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
+        verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
+        verify(leaseCoordinator, never()).getCurrentlyHeldLease(shardInfo.shardId());
+        verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
+        verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
     }
 
     /**
@@ -204,23 +203,22 @@ public class ShutdownTaskTest {
      * This test is for the scenario that a ShutdownTask is created for the ShardConsumer losing the lease.
      */
     @Test
-    public final void testCallWhenLeaseLost() {
+    public final void testCallWhenLeaseLost() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         shardInfo = new ShardInfo("shardId-4", concurrencyToken, Collections.emptySet(),
                                   ExtendedSequenceNumber.LATEST);
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 LEASE_LOST_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                                hierarchicalShardSyncer, NULL_METRICS_FACTORY);
-
-        when(shardDetector.listShards()).thenReturn(constructShardListGraphA());
+                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, new ArrayList<>());
 
         final TaskResult result = task.call();
         assertNull(result.getException());
         verify(recordsPublisher).shutdown();
         verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor).leaseLost(LeaseLostInput.builder().build());
-        verify(shardDetector, never()).listShards();
         verify(leaseCoordinator, never()).getAssignments();
+        verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
+        verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
     }
 
     /**
@@ -231,45 +229,23 @@ public class ShutdownTaskTest {
         assertEquals(TaskType.SHUTDOWN, task.taskType());
     }
 
-
-    /*
-     * Helper method to construct a shard list for graph A. Graph A is defined below. Shard structure (y-axis is
-     * epochs): 0 1 2 3 4   5  - shards till
-     *          \ / \ / |   |
-     *           6   7  4   5  - shards from epoch 103 - 205
-     *            \ /   |  /\
-     *             8    4 9 10 - shards from epoch 206 (open - no ending sequenceNumber)
-     */
-    private List<Shard> constructShardListGraphA() {
-        final SequenceNumberRange range0 = ShardObjectHelper.newSequenceNumberRange("11", "102");
-        final SequenceNumberRange range1 = ShardObjectHelper.newSequenceNumberRange("11", null);
-        final SequenceNumberRange range2 = ShardObjectHelper.newSequenceNumberRange("11", "205");
-        final SequenceNumberRange range3 = ShardObjectHelper.newSequenceNumberRange("103", "205");
-        final SequenceNumberRange range4 = ShardObjectHelper.newSequenceNumberRange("206", null);
-
-        return Arrays.asList(
-                ShardObjectHelper.newShard("shardId-0", null, null, range0,
-                                           ShardObjectHelper.newHashKeyRange("0", "99")),
-                ShardObjectHelper.newShard("shardId-1", null, null, range0,
-                                           ShardObjectHelper.newHashKeyRange("100", "199")),
-                ShardObjectHelper.newShard("shardId-2", null, null, range0,
-                                           ShardObjectHelper.newHashKeyRange("200", "299")),
-                ShardObjectHelper.newShard("shardId-3", null, null, range0,
-                                           ShardObjectHelper.newHashKeyRange("300", "399")),
-                ShardObjectHelper.newShard("shardId-4", null, null, range1,
-                                           ShardObjectHelper.newHashKeyRange("400", "499")),
-                ShardObjectHelper.newShard("shardId-5", null, null, range2,
-                                           ShardObjectHelper.newHashKeyRange("500", ShardObjectHelper.MAX_HASH_KEY)),
-                ShardObjectHelper.newShard("shardId-6", "shardId-0", "shardId-1", range3,
-                                           ShardObjectHelper.newHashKeyRange("0", "199")),
-                ShardObjectHelper.newShard("shardId-7", "shardId-2", "shardId-3", range3,
-                                           ShardObjectHelper.newHashKeyRange("200", "399")),
-                ShardObjectHelper.newShard("shardId-8", "shardId-6", "shardId-7", range4,
-                                           ShardObjectHelper.newHashKeyRange("0", "399")),
-                ShardObjectHelper.newShard("shardId-9", "shardId-5", null, range4,
-                                           ShardObjectHelper.newHashKeyRange("500", "799")),
-                ShardObjectHelper.newShard("shardId-10", null, "shardId-5", range4,
-                                           ShardObjectHelper.newHashKeyRange("800", ShardObjectHelper.MAX_HASH_KEY)));
+    private List<ChildShard> constructChildShards() {
+        List<ChildShard> childShards = new ArrayList<>();
+        List<String> parentShards = new ArrayList<>();
+        parentShards.add(shardId);
+        ChildShard leftChild = ChildShard.builder()
+                                         .shardId("ShardId-1")
+                                         .parentShards(parentShards)
+                                         .hashKeyRange(ShardObjectHelper.newHashKeyRange("0", "49"))
+                                         .build();
+        ChildShard rightChild = ChildShard.builder()
+                                         .shardId("ShardId-2")
+                                         .parentShards(parentShards)
+                                         .hashKeyRange(ShardObjectHelper.newHashKeyRange("50", "99"))
+                                         .build();
+        childShards.add(leftChild);
+        childShards.add(rightChild);
+        return  childShards;
     }
 
 }

@@ -162,7 +162,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             } else {
                 log.info(
                         "{}: No record batch found while evicting from the prefetch queue. This indicates the prefetch buffer"
-                                + "was reset.", streamAndShardId);
+                                + " was reset.", streamAndShardId);
             }
             return result;
         }
@@ -437,6 +437,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                             .millisBehindLatest(getRecordsResult.millisBehindLatest())
                             .cacheEntryTime(lastSuccessfulCall)
                             .isAtShardEnd(getRecordsRetrievalStrategy.getDataFetcher().isShardEndReached())
+                            .childShards(getRecordsResult.childShards())
                             .build();
 
                     PrefetchRecordsRetrieved recordsRetrieved = new PrefetchRecordsRetrieved(processRecordsInput,

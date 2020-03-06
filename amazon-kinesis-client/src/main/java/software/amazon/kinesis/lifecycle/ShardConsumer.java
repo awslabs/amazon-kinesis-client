@@ -16,6 +16,7 @@ package software.amazon.kinesis.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -32,6 +33,7 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -85,6 +87,8 @@ public class ShardConsumer {
     private volatile ShutdownNotification shutdownNotification;
 
     private final ShardConsumerSubscriber subscriber;
+
+    private ProcessRecordsInput shardEndProcessRecordsInput;
 
     @Deprecated
     public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
@@ -148,6 +152,7 @@ public class ShardConsumer {
         processData(input);
         if (taskOutcome == TaskOutcome.END_OF_SHARD) {
             markForShutdown(ShutdownReason.SHARD_END);
+            shardEndProcessRecordsInput = input;
             subscription.cancel();
             return;
         }
@@ -305,7 +310,7 @@ public class ShardConsumer {
                     return true;
                 }
 
-                executeTask(null);
+                executeTask(shardEndProcessRecordsInput);
                 return false;
             }
         }, executorService);
