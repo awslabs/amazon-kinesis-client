@@ -157,7 +157,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         }else{
             request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
                     .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput)
-                    .billingMode(billingMode).build();
+                    .build();
         }
 
 
