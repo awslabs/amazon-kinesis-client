@@ -91,6 +91,7 @@ public class SchedulerTest {
     private final String namespace = "testNamespace";
     private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 5 * 1000L;
     private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
+    private static final long LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 3 * 1000L;
 
     private Scheduler scheduler;
     private ShardRecordProcessorFactory shardRecordProcessorFactory;
@@ -283,7 +284,7 @@ public class SchedulerTest {
         long endTime = System.currentTimeMillis();
 
         assertTrue(endTime - startTime > MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
-        assertTrue(endTime - startTime < MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
+        assertTrue(endTime - startTime < (MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS + LEASE_TABLE_CHECK_FREQUENCY_MILLIS));
     }
 
     @Test
