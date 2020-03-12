@@ -15,19 +15,25 @@
 
 package software.amazon.kinesis.retrieval;
 
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
 
 /**
  * Used by the KCL to configure the retrieval of records from Kinesis.
  */
-@Data
+@Getter @Setter @ToString @EqualsAndHashCode
 @Accessors(fluent = true)
 public class RetrievalConfig {
     /**
@@ -43,19 +49,13 @@ public class RetrievalConfig {
     @NonNull
     private final KinesisAsyncClient kinesisClient;
 
-    /**
-     * The name of the stream to process records from.
-     */
-    @NonNull
-    private final String streamName;
-
     @NonNull
     private final String applicationName;
 
     /**
-     * StreamTracker for multi streaming support
+     * AppStreamTracker either for multi stream tracking or single stream
      */
-    private MultiStreamTracker multiStreamTracker;
+    private Either<MultiStreamTracker, StreamConfig> appStreamTracker;
 
     /**
      * Backoff time between consecutive ListShards calls.
@@ -90,15 +90,43 @@ public class RetrievalConfig {
 
     private RetrievalFactory retrievalFactory;
 
+    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull String streamName,
+            @NonNull String applicationName) {
+        this.kinesisClient = kinesisAsyncClient;
+        this.appStreamTracker = Either
+                .right(new StreamConfig(StreamIdentifier.fromStreamName(streamName), initialPositionInStreamExtended));
+        this.applicationName = applicationName;
+    }
+
+    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull MultiStreamTracker multiStreamTracker,
+            @NonNull String applicationName) {
+        this.kinesisClient = kinesisAsyncClient;
+        this.appStreamTracker = Either.left(multiStreamTracker);
+        this.applicationName = applicationName;
+    }
+
+    public void initialPositionInStreamExtended(InitialPositionInStreamExtended initialPositionInStreamExtended) {
+        final StreamConfig[] streamConfig = new StreamConfig[1];
+        this.appStreamTracker.apply(multiStreamTracker -> {
+            throw new IllegalArgumentException(
+                    "Cannot set initialPositionInStreamExtended when multiStreamTracker is set");
+        }, sc -> streamConfig[0] = sc);
+        this.appStreamTracker = Either
+                .right(new StreamConfig(streamConfig[0].streamIdentifier(), initialPositionInStreamExtended));
+    }
+
     public RetrievalFactory retrievalFactory() {
 
         if (retrievalFactory == null) {
             if (retrievalSpecificConfig == null) {
-                retrievalSpecificConfig = new FanOutConfig(kinesisClient()).streamName(streamName())
+                retrievalSpecificConfig = new FanOutConfig(kinesisClient())
                         .applicationName(applicationName());
+                retrievalSpecificConfig = appStreamTracker.map(multiStreamTracker -> retrievalSpecificConfig,
+                        streamConfig -> ((FanOutConfig)retrievalSpecificConfig).streamName(streamConfig.streamIdentifier().streamName()));
             }
             retrievalFactory = retrievalSpecificConfig.retrievalFactory();
         }
         return retrievalFactory;
     }
+
 }
