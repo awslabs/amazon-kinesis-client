@@ -16,6 +16,7 @@
 package software.amazon.kinesis.coordinator;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -77,7 +78,6 @@ import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.ShutdownNotificationAware;
-import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
@@ -122,7 +122,7 @@ public class Scheduler implements Runnable {
     private final MetricsFactory metricsFactory;
     private final long failoverTimeMillis;
     private final long taskBackoffTimeMillis;
-    private final Either<MultiStreamTracker, StreamConfig> appStreamTracker;
+    private final boolean isMultiStreamMode;
     private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
     private final long listShardsBackoffTimeMillis;
     private final int maxListShardsRetryAttempts;
@@ -183,27 +183,22 @@ public class Scheduler implements Runnable {
         this.retrievalConfig = retrievalConfig;
 
         this.applicationName = this.coordinatorConfig.applicationName();
-        final MultiStreamTracker multiStreamTracker = this.retrievalConfig.multiStreamTracker();
-        if(multiStreamTracker == null) {
-            final StreamConfig streamConfig = new StreamConfig(StreamIdentifier.fromStreamName(this.retrievalConfig.streamName()),
-                    this.retrievalConfig.initialPositionInStreamExtended());
-            this.appStreamTracker = Either.right(streamConfig);
-            this.currentStreamConfigMap = new HashMap<StreamIdentifier, StreamConfig>() {{
-                put(streamConfig.streamIdentifier(), streamConfig);
-            }};
-        } else {
-            this.appStreamTracker = Either.left(multiStreamTracker);
-            this.currentStreamConfigMap = multiStreamTracker.streamConfigList().stream()
-                    .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc));
-        }
+        this.isMultiStreamMode = this.retrievalConfig.appStreamTracker().map(
+                multiStreamTracker -> true, streamConfig -> false);
+        this.currentStreamConfigMap = this.retrievalConfig.appStreamTracker().map(
+                multiStreamTracker ->
+                        multiStreamTracker.streamConfigList().stream()
+                                .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc)),
+                streamConfig ->
+                        Collections.singletonMap(streamConfig.streamIdentifier(), streamConfig));
         this.maxInitializationAttempts = this.coordinatorConfig.maxInitializationAttempts();
         this.metricsFactory = this.metricsConfig.metricsFactory();
         // Determine leaseSerializer based on availability of MultiStreamTracker.
-        final LeaseSerializer leaseSerializer = this.appStreamTracker.map(mst -> true, sc -> false) ?
+        final LeaseSerializer leaseSerializer = isMultiStreamMode ?
                 new DynamoDBMultiStreamLeaseSerializer() :
                 new DynamoDBLeaseSerializer();
         this.leaseCoordinator = this.leaseManagementConfig
-                .leaseManagementFactory(leaseSerializer, this.appStreamTracker.map(mst -> true, sc -> false))
+                .leaseManagementFactory(leaseSerializer, isMultiStreamMode)
                 .createLeaseCoordinator(this.metricsFactory);
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
@@ -224,7 +219,7 @@ public class Scheduler implements Runnable {
         // TODO : Halo : Handle case of no StreamConfig present in streamConfigList() for the supplied streamName.
         // TODO : Pass the immutable map here instead of using mst.streamConfigList()
         this.shardSyncTaskManagerProvider = streamIdentifier -> this.leaseManagementConfig
-                .leaseManagementFactory(leaseSerializer, this.appStreamTracker.map(mst -> true, sc -> false))
+                .leaseManagementFactory(leaseSerializer, isMultiStreamMode)
                 .createShardSyncTaskManager(this.metricsFactory, this.currentStreamConfigMap.get(streamIdentifier));
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
@@ -252,8 +247,7 @@ public class Scheduler implements Runnable {
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
         // TODO : Halo : Check if this needs to be per stream.
-        this.hierarchicalShardSyncer = leaseManagementConfig
-                .hierarchicalShardSyncer(this.appStreamTracker.map(mst -> true, sc -> false));
+        this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer(isMultiStreamMode);
         this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
     }
 
@@ -643,7 +637,6 @@ public class Scheduler implements Runnable {
         // get the default stream name for the single stream application.
         final StreamIdentifier streamIdentifier = getStreamIdentifier(shardInfo.streamIdentifier());
         // Irrespective of single stream app or multi stream app, streamConfig should always be available.
-        // TODO: Halo : if not available, construct a default config ?
         final StreamConfig streamConfig = currentStreamConfigMap.get(streamIdentifier);
         Validate.notNull(streamConfig, "StreamConfig should not be empty");
         ShardConsumerArgument argument = new ShardConsumerArgument(shardInfo,
@@ -721,7 +714,8 @@ public class Scheduler implements Runnable {
         if(streamIdentifierString.isPresent()) {
             streamIdentifier = StreamIdentifier.fromString(streamIdentifierString.get());
         } else {
-            streamIdentifier = appStreamTracker.map(mst -> null, sc -> sc.streamIdentifier());
+            Validate.isTrue(!isMultiStreamMode, "Should not be in MultiStream Mode");
+            streamIdentifier = this.currentStreamConfigMap.values().iterator().next().streamIdentifier();
         }
         Validate.notNull(streamIdentifier, "Stream identifier should not be empty");
         return streamIdentifier;

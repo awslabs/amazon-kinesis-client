@@ -15,14 +15,18 @@
 
 package software.amazon.kinesis.common;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 import org.apache.commons.lang3.StringUtils;
 
-import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -36,14 +40,15 @@ import software.amazon.kinesis.retrieval.RetrievalConfig;
 /**
  * This Builder is useful to create all configurations for the KCL with default values.
  */
-@Data
+@Getter @Setter @ToString @EqualsAndHashCode
 @Accessors(fluent = true)
 public class ConfigsBuilder {
     /**
-     * Name of the stream to consume records from
+     * Either the name of the stream to consume records from
+     * Or MultiStreamTracker for all the streams to consume records from
      */
-    @NonNull
-    private final String streamName;
+    private Either<MultiStreamTracker, String> appStreamTracker;
+
     /**
      * Application name for the KCL Worker
      */
@@ -109,7 +114,45 @@ public class ConfigsBuilder {
         return namespace;
     }
 
-    private MultiStreamTracker multiStreamTracker;
+    /**
+     * Constructor to initialize ConfigsBuilder with StreamName
+     * @param streamName
+     * @param applicationName
+     * @param kinesisClient
+     * @param dynamoDBClient
+     * @param cloudWatchClient
+     * @param workerIdentifier
+     * @param shardRecordProcessorFactory
+     */
+    public ConfigsBuilder(@NonNull String streamName, @NonNull String applicationName, @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient, @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier, @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
+        this.appStreamTracker = Either.right(streamName);
+        this.applicationName = applicationName;
+        this.kinesisClient = kinesisClient;
+        this.dynamoDBClient = dynamoDBClient;
+        this.cloudWatchClient = cloudWatchClient;
+        this.workerIdentifier = workerIdentifier;
+        this.shardRecordProcessorFactory = shardRecordProcessorFactory;
+    }
+
+    /**
+     * Constructor to initialize ConfigsBuilder with MultiStreamTracker
+     * @param multiStreamTracker
+     * @param applicationName
+     * @param kinesisClient
+     * @param dynamoDBClient
+     * @param cloudWatchClient
+     * @param workerIdentifier
+     * @param shardRecordProcessorFactory
+     */
+    public ConfigsBuilder(@NonNull MultiStreamTracker multiStreamTracker, @NonNull String applicationName, @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient, @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier, @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
+        this.appStreamTracker = Either.left(multiStreamTracker);
+        this.applicationName = applicationName;
+        this.kinesisClient = kinesisClient;
+        this.dynamoDBClient = dynamoDBClient;
+        this.cloudWatchClient = cloudWatchClient;
+        this.workerIdentifier = workerIdentifier;
+        this.shardRecordProcessorFactory = shardRecordProcessorFactory;
+    }
 
     /**
      * Creates a new instance of CheckpointConfig
@@ -135,8 +178,7 @@ public class ConfigsBuilder {
      * @return LeaseManagementConfig
      */
     public LeaseManagementConfig leaseManagementConfig() {
-        return new LeaseManagementConfig(tableName(), dynamoDBClient(), kinesisClient(), streamName(),
-                workerIdentifier());
+        return new LeaseManagementConfig(tableName(), dynamoDBClient(), kinesisClient(), workerIdentifier());
     }
 
     /**
@@ -173,10 +215,10 @@ public class ConfigsBuilder {
      * @return RetrievalConfig
      */
     public RetrievalConfig retrievalConfig() {
-        final RetrievalConfig retrievalConfig = new RetrievalConfig(kinesisClient(), streamName(), applicationName());
-        if(this.multiStreamTracker != null) {
-            retrievalConfig.multiStreamTracker(multiStreamTracker);
-        }
+        final RetrievalConfig retrievalConfig =
+                appStreamTracker.map(
+                        multiStreamTracker -> new RetrievalConfig(kinesisClient(), multiStreamTracker, applicationName()),
+                        streamName ->  new RetrievalConfig(kinesisClient(), streamName, applicationName()));
         return retrievalConfig;
     }
 }

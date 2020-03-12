@@ -20,11 +20,10 @@ public class MultiStreamLease extends Lease {
     @NonNull private String streamIdentifier;
     @NonNull private String shardId;
 
-    public MultiStreamLease(Lease other) {
+    public MultiStreamLease(MultiStreamLease other) {
         super(other);
-        MultiStreamLease casted = validateAndCast(other);
-        streamIdentifier(casted.streamIdentifier);
-        shardId(casted.shardId);
+        streamIdentifier(other.streamIdentifier);
+        shardId(other.shardId);
     }
 
     @Override
@@ -58,14 +57,7 @@ public class MultiStreamLease extends Lease {
             return false;
         }
         MultiStreamLease other = (MultiStreamLease) obj;
-        if (streamIdentifier == null) {
-            if (other.streamIdentifier != null) {
-                return false;
-            }
-        } else if (!streamIdentifier.equals(other.streamIdentifier)) {
-            return false;
-        }
-        return true;
+        return Objects.equals(streamIdentifier, other.streamIdentifier);
     }
 
     /**
