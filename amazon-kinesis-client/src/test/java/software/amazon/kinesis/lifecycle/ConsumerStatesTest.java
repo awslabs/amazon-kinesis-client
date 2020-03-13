@@ -57,8 +57,6 @@ import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 
-import javax.swing.*;
-
 @RunWith(MockitoJUnitRunner.class)
 public class ConsumerStatesTest {
     private static final String STREAM_NAME = "TestStream";
@@ -115,7 +113,7 @@ public class ConsumerStatesTest {
 
     @Before
     public void setup() {
-        argument = new ShardConsumerArgument(shardInfo, StreamIdentifier.fromStreamName(STREAM_NAME), leaseCoordinator, executorService, recordsPublisher,
+        argument = new ShardConsumerArgument(shardInfo, StreamIdentifier.singleStreamInstance(STREAM_NAME), leaseCoordinator, executorService, recordsPublisher,
                 shardRecordProcessor, checkpointer, recordProcessorCheckpointer, parentShardPollIntervalMillis,
                 taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,

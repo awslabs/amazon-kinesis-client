@@ -94,7 +94,7 @@ public class RetrievalConfig {
             @NonNull String applicationName) {
         this.kinesisClient = kinesisAsyncClient;
         this.appStreamTracker = Either
-                .right(new StreamConfig(StreamIdentifier.fromStreamName(streamName), initialPositionInStreamExtended));
+                .right(new StreamConfig(StreamIdentifier.singleStreamInstance(streamName), initialPositionInStreamExtended));
         this.applicationName = applicationName;
     }
 

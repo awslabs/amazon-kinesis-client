@@ -273,6 +273,12 @@ public class LeaseManagementConfig {
         return hierarchicalShardSyncer;
     }
 
+    /**
+     * Vends HierarchicalShardSyncer based on MultiStreamingMode. With MultiStreamMode shard syncer creates
+     * leases to accommodate more than one stream.
+     * @param isMultiStreamingMode
+     * @return HierarchicalShardSyncer
+     */
     public HierarchicalShardSyncer hierarchicalShardSyncer(boolean isMultiStreamingMode) {
         if(hierarchicalShardSyncer == null) {
             hierarchicalShardSyncer = new HierarchicalShardSyncer(isMultiStreamingMode);
@@ -313,6 +319,12 @@ public class LeaseManagementConfig {
         return leaseManagementFactory;
     }
 
+    /**
+     * Vends LeaseManagementFactory that performs serde based on leaseSerializer and shard sync based on isMultiStreamingMode
+     * @param leaseSerializer
+     * @param isMultiStreamingMode
+     * @return LeaseManagementFactory
+     */
     public LeaseManagementFactory leaseManagementFactory(final LeaseSerializer leaseSerializer, boolean isMultiStreamingMode) {
         if(leaseManagementFactory == null) {
             leaseManagementFactory = new DynamoDBLeaseManagementFactory(kinesisClient(),
@@ -345,17 +357,14 @@ public class LeaseManagementConfig {
         return leaseManagementFactory;
     }
 
+    /**
+     * Set leaseManagementFactory and return the current LeaseManagementConfig instance.
+     * @param leaseManagementFactory
+     * @return LeaseManagementConfig
+     */
     public LeaseManagementConfig leaseManagementFactory(final LeaseManagementFactory leaseManagementFactory) {
         this.leaseManagementFactory = leaseManagementFactory;
         return this;
     }
-
-//    private InitialPositionInStreamExtended getInitialPositionExtendedForStream(String streamName) {
-//        return multiStreamTracker() == null ?
-//                initialPositionInStream() :
-//                multiStreamTracker().initialPositionInStreamExtended(streamName) == null ?
-//                        initialPositionInStream() :
-//                        multiStreamTracker().initialPositionInStreamExtended(streamName);
-//    }
 
 }

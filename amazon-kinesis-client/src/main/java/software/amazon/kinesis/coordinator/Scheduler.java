@@ -42,7 +42,6 @@ import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.utils.Either;
 import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -295,9 +294,10 @@ public class Scheduler implements Runnable {
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
                         // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
                         // TODO: for already synced streams
-                        for(StreamIdentifier streamIdentifier : currentStreamConfigMap.keySet().stream().collect(Collectors.toList())) {
-                            log.info("Syncing Kinesis shard info");
-                            final StreamConfig streamConfig = currentStreamConfigMap.get(streamIdentifier);
+                        for(Map.Entry<StreamIdentifier, StreamConfig> streamConfigEntry : currentStreamConfigMap.entrySet()) {
+                            final StreamIdentifier streamIdentifier = streamConfigEntry.getKey();
+                            log.info("Syncing Kinesis shard info for " + streamIdentifier);
+                            final StreamConfig streamConfig = streamConfigEntry.getValue();
                             ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetectorProvider.apply(streamIdentifier),
                                     leaseRefresher, streamConfig.initialPositionInStreamExtended(),
                                     cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L,
@@ -363,7 +363,7 @@ public class Scheduler implements Runnable {
             }
 
             for (ShardInfo completedShard : completedShards) {
-                final StreamIdentifier streamIdentifier = getStreamIdentifier(completedShard.streamIdentifier());
+                final StreamIdentifier streamIdentifier = getStreamIdentifier(completedShard.streamIdentifierSerOpt());
                 if (createOrGetShardSyncTaskManager(streamIdentifier).syncShardAndLeaseInfo()) {
                     log.info("Found completed shard, initiated new ShardSyncTak for " + completedShard.toString());
                 }
@@ -635,7 +635,7 @@ public class Scheduler implements Runnable {
                         checkpoint);
         // The only case where streamName is not available will be when multistreamtracker not set. In this case,
         // get the default stream name for the single stream application.
-        final StreamIdentifier streamIdentifier = getStreamIdentifier(shardInfo.streamIdentifier());
+        final StreamIdentifier streamIdentifier = getStreamIdentifier(shardInfo.streamIdentifierSerOpt());
         // Irrespective of single stream app or multi stream app, streamConfig should always be available.
         final StreamConfig streamConfig = currentStreamConfigMap.get(streamIdentifier);
         Validate.notNull(streamConfig, "StreamConfig should not be empty");
@@ -712,7 +712,7 @@ public class Scheduler implements Runnable {
     private StreamIdentifier getStreamIdentifier(Optional<String> streamIdentifierString) {
         final StreamIdentifier streamIdentifier;
         if(streamIdentifierString.isPresent()) {
-            streamIdentifier = StreamIdentifier.fromString(streamIdentifierString.get());
+            streamIdentifier = StreamIdentifier.multiStreamInstance(streamIdentifierString.get());
         } else {
             Validate.isTrue(!isMultiStreamMode, "Should not be in MultiStream Mode");
             streamIdentifier = this.currentStreamConfigMap.values().iterator().next().streamIdentifier();
