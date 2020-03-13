@@ -378,7 +378,11 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         return leases.stream().map(DynamoDBLeaseCoordinator::convertLeaseToAssignment).collect(Collectors.toList());
     }
 
-    // TODO : Halo : Check for better way
+    /**
+     * Utility method to convert the basic lease or multistream lease to ShardInfo
+     * @param lease
+     * @return ShardInfo
+     */
     public static ShardInfo convertLeaseToAssignment(final Lease lease) {
         if (lease instanceof MultiStreamLease) {
             return new ShardInfo(((MultiStreamLease) lease).shardId(), lease.concurrencyToken().toString(), lease.parentShardIds(),

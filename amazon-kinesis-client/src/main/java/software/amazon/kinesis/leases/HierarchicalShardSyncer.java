@@ -29,6 +29,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.google.common.annotations.VisibleForTesting;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.StringUtils;
@@ -162,7 +163,7 @@ public class HierarchicalShardSyncer {
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<Lease> streamLeases = new ArrayList<>();
         for (Lease lease : leaseRefresher.listLeases()) {
-            if (streamIdentifier.toString().equals(((MultiStreamLease)lease).streamIdentifier())) {
+            if (streamIdentifier.serialize().equals(((MultiStreamLease)lease).streamIdentifier())) {
                 streamLeases.add(lease);
             }
         }
@@ -761,7 +762,7 @@ public class HierarchicalShardSyncer {
 
     private static Lease newKCLMultiStreamLease(final Shard shard, final StreamIdentifier streamIdentifier) {
         MultiStreamLease newLease = new MultiStreamLease();
-        newLease.leaseKey(MultiStreamLease.getLeaseKey(streamIdentifier.toString(), shard.shardId()));
+        newLease.leaseKey(MultiStreamLease.getLeaseKey(streamIdentifier.serialize(), shard.shardId()));
         List<String> parentShardIds = new ArrayList<>(2);
         if (shard.parentShardId() != null) {
             parentShardIds.add(shard.parentShardId());
@@ -771,7 +772,7 @@ public class HierarchicalShardSyncer {
         }
         newLease.parentShardIds(parentShardIds);
         newLease.ownerSwitchesSinceCheckpoint(0L);
-        newLease.streamIdentifier(streamIdentifier.toString());
+        newLease.streamIdentifier(streamIdentifier.serialize());
         newLease.shardId(shard.shardId());
         return newLease;
     }
@@ -857,7 +858,8 @@ public class HierarchicalShardSyncer {
 
     @Data
     @Accessors(fluent = true)
-    private static class MultiStreamArgs {
+    @VisibleForTesting
+    static class MultiStreamArgs {
         private final Boolean isMultiStreamMode;
         private final StreamIdentifier streamIdentifier;
     }

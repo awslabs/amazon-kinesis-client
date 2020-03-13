@@ -12,9 +12,9 @@ import java.util.Map;
 public interface MultiStreamTracker {
 
     /**
-     * Returns the map of streams and its associated stream specific config.
+     * Returns the list of stream config, to be processed by the current application.
      *
-     * @return List of stream names
+     * @return List of StreamConfig
      */
     List<StreamConfig> streamConfigList();
 }

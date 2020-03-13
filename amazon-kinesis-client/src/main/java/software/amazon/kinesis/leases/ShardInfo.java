@@ -37,7 +37,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @ToString
 public class ShardInfo {
 
-    private final Optional<String> streamIdentifier;
+    private final Optional<String> streamIdentifierSerOpt;
     private final String shardId;
     private final String concurrencyToken;
     // Sorted list of parent shardIds.
@@ -63,11 +63,20 @@ public class ShardInfo {
         this(shardId, concurrencyToken, parentShardIds, checkpoint, null);
     }
 
+    /**
+     * Creates a new ShardInfo object that has an option to pass a serialized streamIdentifier.
+     * The checkpoint is not part of the equality, but is used for debugging output.
+     * @param shardId
+     * @param concurrencyToken
+     * @param parentShardIds
+     * @param checkpoint
+     * @param streamIdentifierSer
+     */
     public ShardInfo(@NonNull final String shardId,
             final String concurrencyToken,
             final Collection<String> parentShardIds,
             final ExtendedSequenceNumber checkpoint,
-            final String streamIdentifier) {
+            final String streamIdentifierSer) {
         this.shardId = shardId;
         this.concurrencyToken = concurrencyToken;
         this.parentShardIds = new LinkedList<>();
@@ -78,7 +87,7 @@ public class ShardInfo {
         // This makes it easy to check for equality in ShardInfo.equals method.
         Collections.sort(this.parentShardIds);
         this.checkpoint = checkpoint;
-        this.streamIdentifier = Optional.ofNullable(streamIdentifier);
+        this.streamIdentifierSerOpt = Optional.ofNullable(streamIdentifierSer);
     }
 
     /**
@@ -105,7 +114,7 @@ public class ShardInfo {
     @Override
     public int hashCode() {
         return new HashCodeBuilder()
-                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamIdentifier.orElse("")).toHashCode();
+                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamIdentifierSerOpt.orElse("")).toHashCode();
     }
 
     /**
@@ -130,18 +139,18 @@ public class ShardInfo {
         ShardInfo other = (ShardInfo) obj;
         return new EqualsBuilder().append(concurrencyToken, other.concurrencyToken)
                 .append(parentShardIds, other.parentShardIds).append(shardId, other.shardId)
-                .append(streamIdentifier.orElse(""), other.streamIdentifier.orElse("")).isEquals();
+                .append(streamIdentifierSerOpt.orElse(""), other.streamIdentifierSerOpt.orElse("")).isEquals();
 
     }
 
     /**
-     *
+     * Utility method to derive lease key from ShardInfo
      * @param shardInfo
-     * @return
+     * @return lease key
      */
     public static String getLeaseKey(ShardInfo shardInfo) {
-        return shardInfo.streamIdentifier().isPresent() ?
-                MultiStreamLease.getLeaseKey(shardInfo.streamIdentifier().get(), shardInfo.shardId()) :
+        return shardInfo.streamIdentifierSerOpt().isPresent() ?
+                MultiStreamLease.getLeaseKey(shardInfo.streamIdentifierSerOpt().get(), shardInfo.shardId()) :
                 shardInfo.shardId();
     }
 

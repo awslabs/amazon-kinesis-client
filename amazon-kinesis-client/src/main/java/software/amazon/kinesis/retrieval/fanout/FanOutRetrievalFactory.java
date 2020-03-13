@@ -49,10 +49,10 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
             final MetricsFactory metricsFactory) {
-        final Optional<String> streamIdentifierStr = shardInfo.streamIdentifier();
+        final Optional<String> streamIdentifierStr = shardInfo.streamIdentifierSerOpt();
         final String streamName;
         if(streamIdentifierStr.isPresent()) {
-            streamName = StreamIdentifier.fromString(streamIdentifierStr.get()).streamName();
+            streamName = StreamIdentifier.multiStreamInstance(streamIdentifierStr.get()).streamName();
         } else {
             streamName = defaultStreamName;
         }

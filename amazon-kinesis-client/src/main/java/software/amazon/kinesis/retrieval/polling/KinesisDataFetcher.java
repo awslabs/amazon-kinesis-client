@@ -74,10 +74,18 @@ public class KinesisDataFetcher {
 
     @Deprecated
     public KinesisDataFetcher(KinesisAsyncClient kinesisClient, String streamName, String shardId, int maxRecords, MetricsFactory metricsFactory) {
-        this(kinesisClient, StreamIdentifier.fromStreamName(streamName), shardId, maxRecords, metricsFactory, PollingConfig.DEFAULT_REQUEST_TIMEOUT);
+        this(kinesisClient, StreamIdentifier.singleStreamInstance(streamName), shardId, maxRecords, metricsFactory, PollingConfig.DEFAULT_REQUEST_TIMEOUT);
     }
 
-    // Changing the constructor directly as this is an internal API
+    /**
+     * Constructs KinesisDataFetcher.
+     * @param kinesisClient
+     * @param streamIdentifier
+     * @param shardId
+     * @param maxRecords
+     * @param metricsFactory
+     * @param maxFutureWait
+     */
     public KinesisDataFetcher(KinesisAsyncClient kinesisClient, StreamIdentifier streamIdentifier, String shardId, int maxRecords, MetricsFactory metricsFactory, Duration maxFutureWait) {
         this.kinesisClient = kinesisClient;
         this.streamIdentifier = streamIdentifier;

@@ -29,7 +29,7 @@ public interface ShardRecordProcessorFactory {
     ShardRecordProcessor shardRecordProcessor();
 
     /**
-     * Returns a new instance of the ShardRecordProcessor for a stream
+     * Returns a new instance of the ShardRecordProcessor for a stream identifier
      * @param streamIdentifier
      * @return ShardRecordProcessor
      */

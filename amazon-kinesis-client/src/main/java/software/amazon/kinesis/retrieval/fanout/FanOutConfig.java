@@ -85,6 +85,7 @@ public class FanOutConfig implements RetrievalSpecificConfig {
         return new FanOutRetrievalFactory(kinesisClient, streamName, this::getOrCreateConsumerArn);
     }
 
+    // TODO : Halo. Need Stream Specific ConsumerArn to be passed from Customer
     private String getOrCreateConsumerArn(String streamName) {
         if (consumerArn != null) {
             return consumerArn;

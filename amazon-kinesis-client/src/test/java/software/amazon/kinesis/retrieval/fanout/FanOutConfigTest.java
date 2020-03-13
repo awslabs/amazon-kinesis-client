@@ -31,7 +31,6 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -67,7 +66,8 @@ public class FanOutConfigTest {
                 .streamName(TEST_STREAM_NAME);
         RetrievalFactory retrievalFactory = config.retrievalFactory();
         ShardInfo shardInfo = mock(ShardInfo.class);
-        doReturn(Optional.of(StreamIdentifier.fromStreamName(TEST_STREAM_NAME).toString())).when(shardInfo).streamIdentifier();
+//        doReturn(Optional.of(StreamIdentifier.singleStreamInstance(TEST_STREAM_NAME).serialize())).when(shardInfo).streamIdentifier();
+        doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
         retrievalFactory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
         assertThat(retrievalFactory, not(nullValue()));
         verify(consumerRegistration).getOrCreateStreamConsumerArn();
@@ -93,7 +93,7 @@ public class FanOutConfigTest {
                 .streamName(TEST_STREAM_NAME);
         RetrievalFactory factory = config.retrievalFactory();
         ShardInfo shardInfo = mock(ShardInfo.class);
-        doReturn(Optional.of(StreamIdentifier.fromStreamName(TEST_STREAM_NAME).toString())).when(shardInfo).streamIdentifier();
+        doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
         factory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
         assertThat(factory, not(nullValue()));
 
@@ -108,7 +108,7 @@ public class FanOutConfigTest {
                 .streamName(TEST_STREAM_NAME);
         RetrievalFactory factory = config.retrievalFactory();
         ShardInfo shardInfo = mock(ShardInfo.class);
-        doReturn(Optional.of(StreamIdentifier.fromStreamName(TEST_STREAM_NAME).toString())).when(shardInfo).streamIdentifier();
+        doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
         factory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
         assertThat(factory, not(nullValue()));
         TestingConfig testingConfig = (TestingConfig) config;
@@ -122,7 +122,7 @@ public class FanOutConfigTest {
                 .consumerName(TEST_CONSUMER_NAME).streamName(TEST_STREAM_NAME);
         RetrievalFactory factory = config.retrievalFactory();
         ShardInfo shardInfo = mock(ShardInfo.class);
-        doReturn(Optional.of(StreamIdentifier.fromStreamName(TEST_STREAM_NAME).toString())).when(shardInfo).streamIdentifier();
+        doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
         factory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
         assertThat(factory, not(nullValue()));
 

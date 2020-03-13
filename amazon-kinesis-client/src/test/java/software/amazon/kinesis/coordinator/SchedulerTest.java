@@ -22,8 +22,10 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -32,14 +34,20 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.internal.verification.VerificationModeFactory.atMost;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.stream.Collectors;
 
 import io.reactivex.plugins.RxJavaPlugins;
+import lombok.RequiredArgsConstructor;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -52,8 +60,11 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.CheckpointFactory;
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.exceptions.KinesisClientLibNonRetryableException;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -63,6 +74,8 @@ import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
@@ -73,6 +86,7 @@ import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.Checkpointer;
+import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
@@ -124,6 +138,11 @@ public class SchedulerTest {
     private Checkpointer checkpoint;
     @Mock
     private WorkerStateChangeListener workerStateChangeListener;
+    @Mock
+    private MultiStreamTracker multiStreamTracker;
+
+    private Map<StreamIdentifier, ShardSyncTaskManager> shardSyncTaskManagerMap = new HashMap<>();
+    private Map<StreamIdentifier, ShardDetector> shardDetectorMap = new HashMap<>();
 
     @Before
     public void setup() {
@@ -132,13 +151,25 @@ public class SchedulerTest {
         checkpointConfig = new CheckpointConfig().checkpointFactory(new TestKinesisCheckpointFactory());
         coordinatorConfig = new CoordinatorConfig(applicationName).parentShardPollIntervalMillis(100L).workerStateChangeListener(workerStateChangeListener);
         leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, streamName,
-                workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory());
+                workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, false));
         lifecycleConfig = new LifecycleConfig();
         metricsConfig = new MetricsConfig(cloudWatchClient, namespace);
         processorConfig = new ProcessorConfig(shardRecordProcessorFactory);
         retrievalConfig = new RetrievalConfig(kinesisClient, streamName, applicationName)
                 .retrievalFactory(retrievalFactory);
 
+        final List<StreamConfig> streamConfigList = new ArrayList<StreamConfig>() {{
+            add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc1:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
+                    InitialPositionInStream.LATEST)));
+            add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc1:stream2:2"), InitialPositionInStreamExtended.newInitialPosition(
+                    InitialPositionInStream.LATEST)));
+            add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc2:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
+                    InitialPositionInStream.LATEST)));
+            add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc2:stream2:3"), InitialPositionInStreamExtended.newInitialPosition(
+                    InitialPositionInStream.LATEST)));
+        }};
+
+        when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList);
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
         when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
         when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(MetricsFactory.class))).thenReturn(recordsPublisher);
@@ -245,7 +276,10 @@ public class SchedulerTest {
     public final void testInitializationFailureWithRetries() throws Exception {
         doNothing().when(leaseCoordinator).initialize();
         when(shardDetector.listShards()).thenThrow(new RuntimeException());
-
+        leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, streamName,
+                workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, true));
+        scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig);
         scheduler.run();
 
         verify(shardDetector, times(coordinatorConfig.maxInitializationAttempts())).listShards();
@@ -255,6 +289,8 @@ public class SchedulerTest {
     public final void testInitializationFailureWithRetriesWithConfiguredMaxInitializationAttempts() throws Exception {
         final int maxInitializationAttempts = 5;
         coordinatorConfig.maxInitializationAttempts(maxInitializationAttempts);
+        leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, streamName,
+                workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, true));
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
 
@@ -265,6 +301,76 @@ public class SchedulerTest {
 
         // verify initialization was retried for maxInitializationAttempts times
         verify(shardDetector, times(maxInitializationAttempts)).listShards();
+    }
+
+    @Test
+    public final void testMultiStreamInitialization() throws ProvisionedThroughputException, DependencyException {
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig);
+        scheduler.initialize();
+        shardDetectorMap.values().stream()
+                .forEach(shardDetector -> verify(shardDetector, times(1)).listShards());
+    }
+
+    @Test
+    public final void testMultiStreamInitializationWithFailures() {
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient,
+                workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(true, false));
+        scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig);
+        scheduler.initialize();
+        // Note : As of today we retry for all streams in the next attempt. Hence the retry for each stream will vary.
+        //        At the least we expect 2 retries for each stream. Since there are 4 streams, we expect at most
+        //        the number of calls to be 5.
+        shardDetectorMap.values().stream()
+                .forEach(shardDetector -> verify(shardDetector, atLeast(2)).listShards());
+        shardDetectorMap.values().stream()
+                .forEach(shardDetector -> verify(shardDetector, atMost(5)).listShards());
+    }
+
+
+    @Test
+    public final void testMultiStreamConsumersAreBuiltOncePerAccountStreamShard() throws KinesisClientLibException {
+        final String shardId = "shardId-000000000000";
+        final String concurrencyToken = "concurrencyToken";
+        final ExtendedSequenceNumber firstSequenceNumber = ExtendedSequenceNumber.TRIM_HORIZON;
+        final ExtendedSequenceNumber secondSequenceNumber = new ExtendedSequenceNumber("1000");
+        final ExtendedSequenceNumber finalSequenceNumber = new ExtendedSequenceNumber("2000");
+
+        final List<ShardInfo> initialShardInfo = multiStreamTracker.streamConfigList().stream()
+                .map(sc -> new ShardInfo(shardId, concurrencyToken, null, firstSequenceNumber,
+                        sc.streamIdentifier().serialize())).collect(Collectors.toList());
+        final List<ShardInfo> firstShardInfo = multiStreamTracker.streamConfigList().stream()
+                .map(sc -> new ShardInfo(shardId, concurrencyToken, null, secondSequenceNumber,
+                        sc.streamIdentifier().serialize())).collect(Collectors.toList());
+        final List<ShardInfo> secondShardInfo = multiStreamTracker.streamConfigList().stream()
+                .map(sc -> new ShardInfo(shardId, concurrencyToken, null, finalSequenceNumber,
+                        sc.streamIdentifier().serialize())).collect(Collectors.toList());
+
+        final Checkpoint firstCheckpoint = new Checkpoint(firstSequenceNumber, null);
+
+        when(leaseCoordinator.getCurrentAssignments()).thenReturn(initialShardInfo, firstShardInfo, secondShardInfo);
+        when(checkpoint.getCheckpointObject(anyString())).thenReturn(firstCheckpoint);
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig);
+        Scheduler schedulerSpy = spy(scheduler);
+        schedulerSpy.runProcessLoop();
+        schedulerSpy.runProcessLoop();
+        schedulerSpy.runProcessLoop();
+
+        initialShardInfo.stream().forEach(
+                shardInfo -> verify(schedulerSpy).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory)));
+        firstShardInfo.stream().forEach(
+                shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory)));
+        secondShardInfo.stream().forEach(
+                shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory)));
+
     }
 
     @Test
@@ -508,7 +614,12 @@ public class SchedulerTest {
 
     }
 
+    @RequiredArgsConstructor
     private class TestKinesisLeaseManagementFactory implements LeaseManagementFactory {
+
+        private final boolean shardSyncFirstAttemptFailure;
+        private final boolean shouldReturnDefaultShardSyncTaskmanager;
+
         @Override
         public LeaseCoordinator createLeaseCoordinator(MetricsFactory metricsFactory) {
             return leaseCoordinator;
@@ -522,6 +633,19 @@ public class SchedulerTest {
         @Override
         public ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory,
                 StreamConfig streamConfig) {
+            if(shouldReturnDefaultShardSyncTaskmanager) {
+                return shardSyncTaskManager;
+            }
+            final ShardSyncTaskManager shardSyncTaskManager = mock(ShardSyncTaskManager.class);
+            final ShardDetector shardDetector = mock(ShardDetector.class);
+            shardSyncTaskManagerMap.put(streamConfig.streamIdentifier(), shardSyncTaskManager);
+            shardDetectorMap.put(streamConfig.streamIdentifier(), shardDetector);
+            when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
+            if(shardSyncFirstAttemptFailure) {
+                when(shardDetector.listShards())
+                        .thenThrow(new RuntimeException("Service Exception"))
+                        .thenReturn(Collections.EMPTY_LIST);
+            }
             return shardSyncTaskManager;
         }
 
@@ -537,7 +661,7 @@ public class SchedulerTest {
 
         @Override
         public ShardDetector createShardDetector(StreamConfig streamConfig) {
-            return shardDetector;
+            return shardDetectorMap.get(streamConfig.streamIdentifier());
         }
     }
 

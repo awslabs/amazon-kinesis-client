@@ -68,9 +68,9 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
 
     @Override public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
-        final StreamIdentifier streamIdentifier = shardInfo.streamIdentifier().isPresent() ?
-                StreamIdentifier.fromString(shardInfo.streamIdentifier().get()) :
-                StreamIdentifier.fromStreamName(streamName);
+        final StreamIdentifier streamIdentifier = shardInfo.streamIdentifierSerOpt().isPresent() ?
+                StreamIdentifier.multiStreamInstance(shardInfo.streamIdentifierSerOpt().get()) :
+                StreamIdentifier.singleStreamInstance(streamName);
         return new SynchronousGetRecordsRetrievalStrategy(
                 new KinesisDataFetcher(kinesisClient, streamIdentifier, shardInfo.shardId(),
                         maxRecords, metricsFactory, maxFutureWait));
