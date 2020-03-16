@@ -3,6 +3,7 @@ package software.amazon.kinesis.common;
 import com.google.common.base.Joiner;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.utils.Validate;
 
@@ -18,14 +19,16 @@ public class StreamIdentifier {
     private static final String DELIMITER = ":";
     private static final Pattern PATTERN = Pattern.compile(".*" + ":" + ".*" + ":" + "[0-9]*");
 
-    private StreamIdentifier(Optional<String> accountIdOptional, String streamName,
-            Optional<Long> streamCreationEpochOptional) {
-        Validate.isTrue((accountIdOptional.isPresent() && streamCreationEpochOptional.isPresent()) ||
-                        (!accountIdOptional.isPresent() && !streamCreationEpochOptional.isPresent()),
-                "AccountId and StreamCreationEpoch must either be present together or not");
-        this.accountIdOptional = accountIdOptional;
+    private StreamIdentifier(@NonNull String accountId, @NonNull String streamName, @NonNull Long streamCreationEpoch) {
+        this.accountIdOptional = Optional.of(accountId);
         this.streamName = streamName;
-        this.streamCreationEpochOptional = streamCreationEpochOptional;
+        this.streamCreationEpochOptional = Optional.of(streamCreationEpoch);
+    }
+
+    private StreamIdentifier(@NonNull String streamName) {
+        this.accountIdOptional = Optional.empty();
+        this.streamName = streamName;
+        this.streamCreationEpochOptional = Optional.empty();
     }
 
     /**
@@ -51,7 +54,7 @@ public class StreamIdentifier {
     public static StreamIdentifier multiStreamInstance(String streamIdentifierSer) {
         if (PATTERN.matcher(streamIdentifierSer).matches()) {
             final String[] split = streamIdentifierSer.split(DELIMITER);
-            return new StreamIdentifier(Optional.of(split[0]), split[1], Optional.of(Long.parseLong(split[2])));
+            return new StreamIdentifier(split[0], split[1], Long.parseLong(split[2]));
         } else {
             throw new IllegalArgumentException("Unable to deserialize StreamIdentifier from " + streamIdentifierSer);
         }
@@ -64,6 +67,6 @@ public class StreamIdentifier {
      */
     public static StreamIdentifier singleStreamInstance(String streamName) {
         Validate.notEmpty(streamName, "StreamName should not be empty");
-        return new StreamIdentifier(Optional.empty(), streamName, Optional.empty());
+        return new StreamIdentifier(streamName);
     }
 }

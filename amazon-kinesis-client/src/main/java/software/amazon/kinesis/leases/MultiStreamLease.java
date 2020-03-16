@@ -1,5 +1,6 @@
 package software.amazon.kinesis.leases;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
@@ -15,6 +16,7 @@ import static com.google.common.base.Verify.verifyNotNull;
 @NoArgsConstructor
 @Getter
 @Accessors(fluent = true)
+@EqualsAndHashCode(callSuper = true)
 public class MultiStreamLease extends Lease {
 
     @NonNull private String streamIdentifier;
@@ -38,26 +40,6 @@ public class MultiStreamLease extends Lease {
         verifyNotNull(streamIdentifier, "streamIdentifier should not be null");
         verifyNotNull(shardId, "shardId should not be null");
         return streamIdentifier + ":" + shardId;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(super.hashCode(), streamIdentifier);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (!super.equals(obj)) {
-            return false;
-        }
-        if (!(obj instanceof MultiStreamLease)) {
-            return false;
-        }
-        MultiStreamLease other = (MultiStreamLease) obj;
-        return Objects.equals(streamIdentifier, other.streamIdentifier);
     }
 
     /**
