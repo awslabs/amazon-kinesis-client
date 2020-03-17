@@ -34,7 +34,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import io.reactivex.plugins.RxJavaPlugins;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -45,6 +44,8 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.Lease;
@@ -61,7 +62,10 @@ import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBMultiStreamLeaseSerializer;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.lifecycle.ShardConsumerArgument;
@@ -81,6 +85,20 @@ import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+
 /**
  *
  */
@@ -89,6 +107,11 @@ import software.amazon.kinesis.retrieval.RetrievalConfig;
 @Slf4j
 public class Scheduler implements Runnable {
 
+    private static final int PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT = 1;
+    private static final long LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 3 * 1000L;
+    private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 5 * 1000L;
+    private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
+    private static final long HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS = 5000L;
     private SchedulerLog slog = new SchedulerLog();
 
     private final CheckpointConfig checkpointConfig;
@@ -113,11 +136,14 @@ public class Scheduler implements Runnable {
     private final LeaseCoordinator leaseCoordinator;
     private final Function<StreamIdentifier, ShardSyncTaskManager> shardSyncTaskManagerProvider;
     private final Map<StreamIdentifier, ShardSyncTaskManager> streamToShardSyncTaskManagerMap = new HashMap<>();
+    private final ShardSyncTaskManager shardSyncTaskManager;
+    private final PeriodicShardSyncManager leaderElectedPeriodicShardSyncManager;
     private final ShardPrioritization shardPrioritization;
     private final boolean cleanupLeasesUponShardCompletion;
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
     private final GracefulShutdownCoordinator gracefulShutdownCoordinator;
     private final WorkerStateChangeListener workerStateChangeListener;
+    private final InitialPositionInStreamExtended initialPosition;
     private final MetricsFactory metricsFactory;
     private final long failoverTimeMillis;
     private final long taskBackoffTimeMillis;
@@ -131,6 +157,7 @@ public class Scheduler implements Runnable {
     private final AggregatorUtil aggregatorUtil;
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
     private final long schedulerInitializationBackoffTimeMillis;
+    private final LeaderDecider leaderDecider;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -236,6 +263,9 @@ public class Scheduler implements Runnable {
             this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory()
                     .createWorkerStateChangeListener();
         }
+        this.leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher,
+                Executors.newSingleThreadScheduledExecutor(), PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
+        this.initialPosition = retrievalConfig.initialPositionInStreamExtended();
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
 //        this.retryGetRecordsInSeconds = this.retrievalConfig.retryGetRecordsInSeconds();
@@ -248,6 +278,7 @@ public class Scheduler implements Runnable {
         // TODO : Halo : Check if this needs to be per stream.
         this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer(isMultiStreamMode);
         this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
+        this.leaderElectedPeriodicShardSyncManager = buildPeriodicShardSyncManager();
     }
 
     /**
@@ -267,7 +298,6 @@ public class Scheduler implements Runnable {
             workerStateChangeListener.onAllInitializationAttemptsFailed(e);
             shutdown();
         }
-
         while (!shouldShutdown()) {
             runProcessLoop();
         }
@@ -294,6 +324,7 @@ public class Scheduler implements Runnable {
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
                         // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
                         // TODO: for already synced streams
+                        waitUntilLeaseTableIsReady();
                         for(Map.Entry<StreamIdentifier, StreamConfig> streamConfigEntry : currentStreamConfigMap.entrySet()) {
                             final StreamIdentifier streamIdentifier = streamConfigEntry.getKey();
                             log.info("Syncing Kinesis shard info for " + streamIdentifier);
@@ -321,6 +352,10 @@ public class Scheduler implements Runnable {
                     } else {
                         log.info("LeaseCoordinator is already running. No need to start it.");
                     }
+                    log.info("Scheduling periodicShardSync)");
+                    // leaderElectedPeriodicShardSyncManager.start();
+                    // TODO: enable periodicShardSync after https://github.com/jushkem/amazon-kinesis-client/pull/2 is merged
+                    waitUntilHashRangeCovered();
                     isDone = true;
                 } catch (LeasingException e) {
                     log.error("Caught exception when initializing LeaseCoordinator", e);
@@ -332,6 +367,7 @@ public class Scheduler implements Runnable {
                 if (!isDone) {
                     try {
                         Thread.sleep(schedulerInitializationBackoffTimeMillis);
+                        leaderElectedPeriodicShardSyncManager.stop();
                     } catch (InterruptedException e) {
                         log.debug("Sleep interrupted while initializing worker.");
                     }
@@ -342,6 +378,29 @@ public class Scheduler implements Runnable {
                 throw new RuntimeException(lastException);
             }
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.STARTED);
+        }
+    }
+
+    @VisibleForTesting
+    void waitUntilLeaseTableIsReady() throws InterruptedException,
+            DependencyException, ProvisionedThroughputException, InvalidStateException {
+        long waitTime = ThreadLocalRandom.current().nextLong(MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS, MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
+        long waitUntil = System.currentTimeMillis() + waitTime;
+
+        while (System.currentTimeMillis() < waitUntil && leaseRefresher.isLeaseTableEmpty()) {
+            // check every 3 seconds if lease table is still empty,
+            // to minimize contention between all workers bootstrapping at the same time
+            log.info("Lease table is still empty. Checking again in {} ms", LEASE_TABLE_CHECK_FREQUENCY_MILLIS);
+            Thread.sleep(LEASE_TABLE_CHECK_FREQUENCY_MILLIS);
+        }
+    }
+
+    private void waitUntilHashRangeCovered() throws InterruptedException {
+
+        while (!leaderElectedPeriodicShardSyncManager.hashRangeCovered()) {
+            // wait until entire hash range is covered
+            log.info("Hash range is not covered yet. Checking again in {} ms", HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS);
+            Thread.sleep(HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS);
         }
     }
 
@@ -555,6 +614,7 @@ public class Scheduler implements Runnable {
             // Lost leases will force Worker to begin shutdown process for all shard consumers in
             // Worker.run().
             leaseCoordinator.stop();
+            leaderElectedPeriodicShardSyncManager.stop();
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
         }
     }
@@ -662,12 +722,20 @@ public class Scheduler implements Runnable {
                 hierarchicalShardSyncer,
                 metricsFactory);
         return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(),
-                argument, lifecycleConfig.taskExecutionListener(),lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
+                argument, lifecycleConfig.taskExecutionListener(), lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
+    }
+
+    private PeriodicShardSyncManager buildPeriodicShardSyncManager() {
+        final ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetectorProvider.apply(getStreamIdentifier), leaseRefresher, initialPosition,
+                cleanupLeasesUponShardCompletion, ignoreUnexpetedChildShards, 0L, hierarchicalShardSyncer,
+                metricsFactory);
+        return new PeriodicShardSyncManager(leaseManagementConfig.workerIdentifier(),
+                leaderDecider, shardSyncTask, metricsFactory);
     }
 
     /**
      * NOTE: This method is internal/private to the Worker class. It has package access solely for testing.
-     *
+     * <p>
      * This method relies on ShardInfo.equals() method returning true for ShardInfo objects which may have been
      * instantiated with parentShardIds in a different order (and rest of the fields being the equal). For example
      * shardInfo1.equals(shardInfo2) should return true with shardInfo1 and shardInfo2 defined as follows. ShardInfo
