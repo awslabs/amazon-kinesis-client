@@ -392,7 +392,7 @@ public class SchedulerTest {
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
 
         long startTime = System.currentTimeMillis();
-        scheduler.waitAndCheckIfLeaseTableIsReady();
+        scheduler.shouldInitiateLeaseSync();
         long endTime = System.currentTimeMillis();
 
         assertTrue(endTime - startTime > MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
@@ -411,7 +411,7 @@ public class SchedulerTest {
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(false);
 
         long startTime = System.currentTimeMillis();
-        scheduler.waitAndCheckIfLeaseTableIsReady();
+        scheduler.shouldInitiateLeaseSync();
         long endTime = System.currentTimeMillis();
 
         assertTrue(endTime - startTime < MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
