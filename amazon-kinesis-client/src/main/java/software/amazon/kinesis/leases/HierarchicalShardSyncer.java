@@ -839,12 +839,14 @@ public class HierarchicalShardSyncer {
          * regardless of if they are open or closed. Closed shards will be unblocked via child shard information upon
          * reaching SHARD_END.
          */
-        private List<Lease> getLeasesToCreateForOpenAndClosedShards(InitialPositionInStreamExtended initialPosition, List<Shard> shards)  {
+        private List<Lease> getLeasesToCreateForOpenAndClosedShards(InitialPositionInStreamExtended initialPosition,
+            List<Shard> shards, MultiStreamArgs multiStreamArgs)  {
             final Map<String, Lease> shardIdToNewLeaseMap = new HashMap<>();
 
             for (Shard shard : shards) {
                 final String shardId = shard.shardId();
-                final Lease lease = newKCLLease(shard);
+                final Lease lease = multiStreamArgs.isMultiStreamMode() ?
+                        newKCLMultiStreamLease(shard, multiStreamArgs.streamIdentifier) : newKCLLease(shard);
                 lease.checkpoint(convertToCheckpoint(initialPosition));
 
                 log.debug("Need to create a lease for shard with shardId {}", shardId);
