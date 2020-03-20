@@ -109,7 +109,8 @@ class PeriodicShardSyncManager {
             for (Map.Entry<StreamIdentifier, ShardSyncTaskManager> mapEntry : streamToShardSyncTaskManagerMap.entrySet()) {
                 final ShardSyncTaskManager shardSyncTaskManager = mapEntry.getValue();
                 if (!shardSyncTaskManager.syncShardAndLeaseInfo()) {
-                    throw new KinesisClientLibIOException("Failed to submit shard sync task for stream " + shardSyncTaskManager.shardDetector().streamIdentifier().streamName());
+                    log.warn("Failed to submit shard sync task for stream {}. This could be due to the previous shard sync task not finished.",
+                             shardSyncTaskManager.shardDetector().streamIdentifier().streamName());
                 }
             }
         } else {

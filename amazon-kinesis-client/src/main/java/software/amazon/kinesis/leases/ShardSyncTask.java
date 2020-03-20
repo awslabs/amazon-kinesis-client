@@ -23,6 +23,7 @@ import software.amazon.kinesis.lifecycle.ConsumerTask;
 import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.lifecycle.TaskType;
 import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
@@ -62,6 +63,7 @@ public class ShardSyncTask implements ConsumerTask {
     public TaskResult call() {
         Exception exception = null;
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, SHARD_SYNC_TASK_OPERATION);
+        boolean shardSyncSuccess = true;
 
         try {
             hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
@@ -72,7 +74,9 @@ public class ShardSyncTask implements ConsumerTask {
         } catch (Exception e) {
             log.error("Caught exception while sync'ing Kinesis shards and leases", e);
             exception = e;
+            shardSyncSuccess = false;
         } finally {
+            MetricsUtil.addSuccess(scope, "SyncShards", shardSyncSuccess, MetricsLevel.DETAILED);
             MetricsUtil.endScope(scope);
         }
 
