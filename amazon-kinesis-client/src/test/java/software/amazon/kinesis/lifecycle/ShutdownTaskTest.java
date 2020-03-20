@@ -18,6 +18,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
@@ -136,7 +137,7 @@ public class ShutdownTaskTest {
             throw new KinesisClientLibIOException("KinesisClientLibIOException");
         }).when(hierarchicalShardSyncer)
                 .checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, INITIAL_POSITION_TRIM_HORIZON,
-                        cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
+                        true, cleanupLeasesOfCompletedShards,  ignoreUnexpectedChildShards,
                         NULL_METRICS_FACTORY.createMetrics(), latestShards);
 
         final TaskResult result = task.call();
