@@ -62,6 +62,7 @@ public class ShardConsumer {
     private final Function<ConsumerTask, ConsumerTask> taskMetricsDecorator;
     private final int bufferSize;
     private final TaskExecutionListener taskExecutionListener;
+    private final String streamIdentifier;
 
     private ConsumerTask currentTask;
     private TaskOutcome taskOutcome;
@@ -124,6 +125,7 @@ public class ShardConsumer {
         this.recordsPublisher = recordsPublisher;
         this.executorService = executorService;
         this.shardInfo = shardInfo;
+        this.streamIdentifier = shardInfo.streamIdentifierSerOpt().orElse("single_stream_mode");
         this.shardConsumerArgument = shardConsumerArgument;
         this.logWarningForTaskAfterMillis = logWarningForTaskAfterMillis;
         this.taskExecutionListener = taskExecutionListener;
@@ -208,8 +210,8 @@ public class ShardConsumer {
         }
         Throwable dispatchFailure = subscriber.getAndResetDispatchFailure();
         if (dispatchFailure != null) {
-            log.warn("Exception occurred while dispatching incoming data.  The incoming data has been skipped",
-                    dispatchFailure);
+            log.warn("{} : Exception occurred while dispatching incoming data.  The incoming data has been skipped",
+                    streamIdentifier, dispatchFailure);
             return dispatchFailure;
         }
 
@@ -238,7 +240,7 @@ public class ShardConsumer {
                 Instant now = Instant.now();
                 Duration timeSince = Duration.between(subscriber.lastDataArrival(), now);
                 if (timeSince.toMillis() > value) {
-                    log.warn("Last time data arrived: {} ({})", lastDataArrival, timeSince);
+                    log.warn("{} : Last time data arrived: {} ({})", streamIdentifier, lastDataArrival, timeSince);
                 }
             }
         });
@@ -250,11 +252,11 @@ public class ShardConsumer {
         if (taken != null) {
             String message = longRunningTaskMessage(taken);
             if (log.isDebugEnabled()) {
-                log.debug("{} Not submitting new task.", message);
+                log.debug("{} : {} Not submitting new task.", streamIdentifier, message);
             }
             logWarningForTaskAfterMillis.ifPresent(value -> {
                 if (taken.toMillis() > value) {
-                    log.warn(message);
+                    log.warn("{} : {}", streamIdentifier, message);
                 }
             });
         }
@@ -358,7 +360,7 @@ public class ShardConsumer {
             nextState = currentState.failureTransition();
             break;
         default:
-            log.error("No handler for outcome of {}", outcome.name());
+            log.error("{} : No handler for outcome of {}", streamIdentifier, outcome.name());
             nextState = currentState.failureTransition();
             break;
         }
@@ -382,9 +384,9 @@ public class ShardConsumer {
             Exception taskException = taskResult.getException();
             if (taskException instanceof BlockedOnParentShardException) {
                 // No need to log the stack trace for this exception (it is very specific).
-                log.debug("Shard {} is blocked on completion of parent shard.", shardInfo.shardId());
+                log.debug("{} : Shard {} is blocked on completion of parent shard.", streamIdentifier, shardInfo.shardId());
             } else {
-                log.debug("Caught exception running {} task: ", currentTask.taskType(), taskResult.getException());
+                log.debug("{} : Caught exception running {} task: ", streamIdentifier, currentTask.taskType(), taskResult.getException());
             }
         }
     }
@@ -411,10 +413,10 @@ public class ShardConsumer {
      * @return true if shutdown is complete (false if shutdown is still in progress)
      */
     public boolean leaseLost() {
-        log.debug("Shutdown({}): Lease lost triggered.", shardInfo.shardId());
+        log.debug("{} : Shutdown({}): Lease lost triggered.", streamIdentifier, shardInfo.shardId());
         if (subscriber != null) {
             subscriber.cancel();
-            log.debug("Shutdown({}): Subscriber cancelled.", shardInfo.shardId());
+            log.debug("{} : Shutdown({}): Subscriber cancelled.", streamIdentifier, shardInfo.shardId());
         }
         markForShutdown(ShutdownReason.LEASE_LOST);
         return isShutdown();

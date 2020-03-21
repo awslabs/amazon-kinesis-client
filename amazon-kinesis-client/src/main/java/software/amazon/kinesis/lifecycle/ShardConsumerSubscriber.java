@@ -40,8 +40,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     private final int bufferSize;
     private final ShardConsumer shardConsumer;
     private final int readTimeoutsToIgnoreBeforeWarning;
+    private final String shardInfoId;
     private volatile int readTimeoutSinceLastRead = 0;
-
     @VisibleForTesting
     final Object lockObject = new Object();
     // This holds the last time an attempt of request to upstream service was made including the first try to
@@ -70,6 +70,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         this.bufferSize = bufferSize;
         this.shardConsumer = shardConsumer;
         this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
+        this.shardInfoId = shardConsumer.shardInfo().streamIdentifierSerOpt()
+                .map(s -> s + ":" + shardConsumer.shardInfo().shardId()).orElse(shardConsumer.shardInfo().shardId());
     }
 
 
@@ -107,7 +109,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         if (retrievalFailure != null) {
             synchronized (lockObject) {
                 String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests",
-                        shardConsumer.shardInfo().shardId());
+                        shardInfoId);
                 if (retrievalFailure instanceof RetryableRetrievalException) {
                     log.debug(logMessage, retrievalFailure.getCause());
                 } else {
@@ -130,7 +132,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 if (timeSinceLastResponse.toMillis() > maxTimeBetweenRequests) {
                     log.error(
                             "{}: Last request was dispatched at {}, but no response as of {} ({}).  Cancelling subscription, and restarting. Last successful request details -- {}",
-                            shardConsumer.shardInfo().shardId(), lastRequestTime, now, timeSinceLastResponse, recordsPublisher.getLastSuccessfulRequestDetails());
+                            shardInfoId, lastRequestTime, now, timeSinceLastResponse, recordsPublisher.getLastSuccessfulRequestDetails());
                     cancel();
 
                     // Start the subscription again which will update the lastRequestTime as well.
@@ -157,7 +159,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                     subscription);
 
         } catch (Throwable t) {
-            log.warn("{}: Caught exception from handleInput", shardConsumer.shardInfo().shardId(), t);
+            log.warn("{}: Caught exception from handleInput", shardInfoId, t);
             synchronized (lockObject) {
                 dispatchFailure = t;
             }
@@ -193,7 +195,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         log.warn(
                 "{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
                         + "recreate the subscription as neccessary to continue processing.",
-                shardConsumer.shardInfo().shardId(), t);
+                shardInfoId, t);
     }
 
     protected void logOnErrorReadTimeoutWarning(Throwable t) {
@@ -202,13 +204,13 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 + "are seeing this warning frequently consider increasing the SDK timeouts "
                 + "by providing an OverrideConfiguration to the kinesis client. Alternatively you"
                 + "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
-                + "intermittant ReadTimeout warnings.", shardConsumer.shardInfo().shardId(), t);
+                + "intermittant ReadTimeout warnings.", shardInfoId, t);
     }
 
     @Override
     public void onComplete() {
         log.debug("{}: onComplete(): Received onComplete.  Activity should be triggered externally",
-                shardConsumer.shardInfo().shardId());
+                shardInfoId);
     }
 
     public void cancel() {

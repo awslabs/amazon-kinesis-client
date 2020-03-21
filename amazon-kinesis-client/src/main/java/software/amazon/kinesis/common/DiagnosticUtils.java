@@ -28,11 +28,11 @@ public class DiagnosticUtils {
 
     /**
      * Util for RecordPublisher to measure the event delivery latency of the executor service and take appropriate action.
-     * @param shardId of the shard that is having delayed delivery
+     * @param resourceIdentifier of the shard that is having delayed delivery
      * @param enqueueTimestamp of the event submitted to the executor service
      * @param log Slf4j Logger from RecordPublisher to log the events
      */
-    public static void takeDelayedDeliveryActionIfRequired(String shardId, Instant enqueueTimestamp, Logger log) {
+    public static void takeDelayedDeliveryActionIfRequired(String resourceIdentifier, Instant enqueueTimestamp, Logger log) {
         final long durationBetweenEnqueueAndAckInMillis = Duration
                 .between(enqueueTimestamp, Instant.now()).toMillis();
         if (durationBetweenEnqueueAndAckInMillis > MAX_TIME_BETWEEN_REQUEST_RESPONSE / 3) {
@@ -41,9 +41,9 @@ public class DiagnosticUtils {
                     "{}: Record delivery time to shard consumer is high at {} millis. Check the ExecutorStateEvent logs"
                             + " to see the state of the executor service. Also check if the RecordProcessor's processing "
                             + "time is high. ",
-                    shardId, durationBetweenEnqueueAndAckInMillis);
+                    resourceIdentifier, durationBetweenEnqueueAndAckInMillis);
         } else if (log.isDebugEnabled()) {
-            log.debug("{}: Record delivery time to shard consumer is {} millis", shardId,
+            log.debug("{}: Record delivery time to shard consumer is {} millis", resourceIdentifier,
                     durationBetweenEnqueueAndAckInMillis);
         }
     }

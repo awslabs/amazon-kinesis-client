@@ -63,7 +63,7 @@ public class KinesisDataFetcher {
 
     @NonNull
     private final KinesisAsyncClient kinesisClient;
-    @NonNull
+    @NonNull @Getter
     private final StreamIdentifier streamIdentifier;
     @NonNull
     private final String shardId;
@@ -71,6 +71,7 @@ public class KinesisDataFetcher {
     @NonNull
     private final MetricsFactory metricsFactory;
     private final Duration maxFutureWait;
+    private final String streamAndShardId;
 
     @Deprecated
     public KinesisDataFetcher(KinesisAsyncClient kinesisClient, String streamName, String shardId, int maxRecords, MetricsFactory metricsFactory) {
@@ -93,6 +94,7 @@ public class KinesisDataFetcher {
         this.maxRecords = maxRecords;
         this.metricsFactory = metricsFactory;
         this.maxFutureWait = maxFutureWait;
+        this.streamAndShardId = streamIdentifier.serialize() + ":" + shardId;
     }
 
     /** Note: This method has package level access for testing purposes.
@@ -120,7 +122,7 @@ public class KinesisDataFetcher {
             try {
                 return new AdvancingResult(getRecords(nextIterator));
             } catch (ResourceNotFoundException e) {
-                log.info("Caught ResourceNotFoundException when fetching records for shard {}", shardId);
+                log.info("Caught ResourceNotFoundException when fetching records for shard {}", streamAndShardId);
                 return TERMINAL_RESULT;
             }
         } else {
@@ -182,14 +184,14 @@ public class KinesisDataFetcher {
      */
     public void initialize(final String initialCheckpoint,
                            final InitialPositionInStreamExtended initialPositionInStream) {
-        log.info("Initializing shard {} with {}", shardId, initialCheckpoint);
+        log.info("Initializing shard {} with {}", streamAndShardId, initialCheckpoint);
         advanceIteratorTo(initialCheckpoint, initialPositionInStream);
         isInitialized = true;
     }
 
     public void initialize(final ExtendedSequenceNumber initialCheckpoint,
                            final InitialPositionInStreamExtended initialPositionInStream) {
-        log.info("Initializing shard {} with {}", shardId, initialCheckpoint.sequenceNumber());
+        log.info("Initializing shard {} with {}", streamAndShardId, initialCheckpoint.sequenceNumber());
         advanceIteratorTo(initialCheckpoint.sequenceNumber(), initialPositionInStream);
         isInitialized = true;
     }
@@ -234,7 +236,7 @@ public class KinesisDataFetcher {
                 throw new RetryableRetrievalException(e.getMessage(), e);
             }
         } catch (ResourceNotFoundException e) {
-            log.info("Caught ResourceNotFoundException when getting an iterator for shard {}", shardId, e);
+            log.info("Caught ResourceNotFoundException when getting an iterator for shard {}", streamAndShardId, e);
             nextIterator = null;
         } finally {
             MetricsUtil.addSuccessAndLatency(metricsScope, String.format("%s.%s", METRICS_PREFIX, "getShardIterator"),
@@ -285,7 +287,7 @@ public class KinesisDataFetcher {
             throw exceptionManager.apply(e.getCause());
         } catch (InterruptedException e) {
             // TODO: Check behavior
-            log.debug("Interrupt called on metod, shutdown initiated");
+            log.debug("{} : Interrupt called on method, shutdown initiated", streamAndShardId);
             throw new RuntimeException(e);
         } catch (TimeoutException e) {
             throw new RetryableRetrievalException(e.getMessage(), e);

@@ -1156,6 +1156,45 @@ public class HierarchicalShardSyncerTest {
 //     * Current leases: (4, 5, 7)
 //     */
     @Test
+    public void understandLeaseBehavior() {
+        final List<Shard> shards = constructShardListForGraphA();
+//        final List<Lease> currentLeases = Arrays.asList(newLease("shardId-4"), newLease("shardId-5"),
+//                newLease("shardId-7"));
+
+        final List<Lease> currentLeases = Collections.emptyList();
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
+                INITIAL_POSITION_LATEST);
+
+        System.out.println("Leases : " + newLeases.stream().map(lease -> lease.leaseKey() + ":" + lease.checkpoint()).collect(
+                Collectors.joining()));
+
+        final Map<String, ExtendedSequenceNumber> expectedShardIdCheckpointMap = new HashMap<>();
+        expectedShardIdCheckpointMap.put("shardId-8", ExtendedSequenceNumber.TRIM_HORIZON);
+        expectedShardIdCheckpointMap.put("shardId-9", ExtendedSequenceNumber.TRIM_HORIZON);
+        expectedShardIdCheckpointMap.put("shardId-10", ExtendedSequenceNumber.TRIM_HORIZON);
+        expectedShardIdCheckpointMap.put("shardId-6", ExtendedSequenceNumber.LATEST);
+
+        assertThat(newLeases.size(), equalTo(expectedShardIdCheckpointMap.size()));
+        for (Lease lease : newLeases) {
+            assertThat("Unexpected lease: " + lease, expectedShardIdCheckpointMap.containsKey(lease.leaseKey()),
+                    equalTo(true));
+            assertThat(lease.checkpoint(), equalTo(expectedShardIdCheckpointMap.get(lease.leaseKey())));
+        }
+    }
+
+
+    /**
+     * Test CheckIfDescendantAndAddNewLeasesForAncestors (initial position Latest)
+     * Shard structure (each level depicts a stream segment):
+     * 0 1 2 3 4   5- shards till epoch 102
+     * \ / \ / |   |
+     *  6   7  4   5- shards from epoch 103 - 205
+     *   \ /   |  /\
+     *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
+     * Current leases: (4, 5, 7)
+     */
+    @Test
     public void testDetermineNewLeasesToCreateSplitMergeLatest2() {
         final List<Shard> shards = constructShardListForGraphA();
         final List<Lease> currentLeases = Arrays.asList(newLease("shardId-4"), newLease("shardId-5"),
