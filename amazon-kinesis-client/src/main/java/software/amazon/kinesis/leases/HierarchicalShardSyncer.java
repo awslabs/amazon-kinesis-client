@@ -826,7 +826,7 @@ public class HierarchicalShardSyncer {
                     .map(lease -> shardIdFromLeaseDeducer.apply(lease, multiStreamArgs))
                     .collect(Collectors.toSet());
 
-            final List<Lease> newLeasesToCreate = getLeasesToCreateForOpenAndClosedShards(initialPosition, shards);
+            final List<Lease> newLeasesToCreate = getLeasesToCreateForOpenAndClosedShards(initialPosition, shards, multiStreamArgs);
 
             //TODO: Verify before LTR launch that ending sequence number is still returned from the service.
             final Comparator<Lease> startingSequenceNumberComparator =

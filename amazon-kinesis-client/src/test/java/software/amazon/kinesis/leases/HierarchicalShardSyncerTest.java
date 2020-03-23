@@ -196,8 +196,9 @@ public class HierarchicalShardSyncerTest {
         final List<Lease> currentLeases = Collections.emptyList();
 
         final Set<String> inconsistentShardIds = new HashSet<>(Collections.singletonList(shardId2));
+        final HierarchicalShardSyncer.LeaseSynchronizer leaseSynchronizer = new HierarchicalShardSyncer.NonEmptyLeaseTableSynchronizer();
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(leaseSynchronizer, shards, currentLeases,
                 INITIAL_POSITION_LATEST, inconsistentShardIds);
         final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final Set<String> expectedLeaseShardIds = new HashSet<>(Arrays.asList(shardId0, shardId1));
@@ -222,8 +223,9 @@ public class HierarchicalShardSyncerTest {
         final List<Lease> currentLeases = Collections.emptyList();
 
         final Set<String> inconsistentShardIds = new HashSet<>(Collections.singletonList(shardId2));
+        final HierarchicalShardSyncer.LeaseSynchronizer leaseSynchronizer = new HierarchicalShardSyncer.EmptyLeaseTableSynchronizer();
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(leaseSynchronizer, shards, currentLeases,
                 INITIAL_POSITION_LATEST, inconsistentShardIds, MULTI_STREAM_ARGS);
         final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final Set<String> expectedLeaseShardIds = new HashSet<>(
@@ -1109,7 +1111,9 @@ public class HierarchicalShardSyncerTest {
                 ShardObjectHelper.newShard(lastShardId, null, null,
                         ShardObjectHelper.newSequenceNumberRange("405", null)));
 
-        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(shards, currentLeases,
+        final HierarchicalShardSyncer.LeaseSynchronizer leaseSynchronizer = new HierarchicalShardSyncer.EmptyLeaseTableSynchronizer();
+
+        final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(leaseSynchronizer, shards, currentLeases,
                 INITIAL_POSITION_LATEST);
 
         assertThat(newLeases.size(), equalTo(1));
