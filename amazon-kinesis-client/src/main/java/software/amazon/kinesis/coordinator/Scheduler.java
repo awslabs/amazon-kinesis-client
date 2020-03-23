@@ -135,7 +135,7 @@ public class Scheduler implements Runnable {
     private final boolean isMultiStreamMode;
     // TODO : halo : make sure we generate streamConfig if entry not present.
     private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
-    private final MultiStreamTracker multiStreamTracker;
+    private MultiStreamTracker multiStreamTracker;
     private final long listShardsBackoffTimeMillis;
     private final int maxListShardsRetryAttempts;
     private final LeaseRefresher leaseRefresher;
@@ -201,14 +201,13 @@ public class Scheduler implements Runnable {
         this.isMultiStreamMode = this.retrievalConfig.appStreamTracker().map(
                 multiStreamTracker -> true, streamConfig -> false);
         this.currentStreamConfigMap = this.retrievalConfig.appStreamTracker().map(
-                multiStreamTracker ->
-                        multiStreamTracker.streamConfigList().stream()
-                                .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc)),
+                multiStreamTracker -> {
+                    this.multiStreamTracker = multiStreamTracker;
+                    return multiStreamTracker.streamConfigList().stream()
+                            .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc));
+                },
                 streamConfig ->
                         Collections.singletonMap(streamConfig.streamIdentifier(), streamConfig));
-        this.multiStreamTracker = this.retrievalConfig.appStreamTracker().map(
-                multiStreamTracker -> multiStreamTracker,
-                streamConfig -> null);
         this.maxInitializationAttempts = this.coordinatorConfig.maxInitializationAttempts();
         this.metricsFactory = this.metricsConfig.metricsFactory();
         // Determine leaseSerializer based on availability of MultiStreamTracker.

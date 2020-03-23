@@ -16,6 +16,7 @@ package software.amazon.kinesis.retrieval.polling;
 
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Mockito.when;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -23,6 +24,7 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.DataFetchingStrategy;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -37,11 +39,15 @@ public class RecordsFetcherFactoryTest {
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     @Mock
     private MetricsFactory metricsFactory;
+    @Mock
+    private KinesisDataFetcher kinesisDataFetcher;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         recordsFetcherFactory = new SimpleRecordsFetcherFactory();
+        when(getRecordsRetrievalStrategy.getDataFetcher()).thenReturn(kinesisDataFetcher);
+        when(kinesisDataFetcher.getStreamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("stream"));
     }
 
     @Test

@@ -57,6 +57,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.CheckpointFactory;
@@ -173,6 +174,7 @@ public class SchedulerTest {
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
         when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
         when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(MetricsFactory.class))).thenReturn(recordsPublisher);
+        when(shardDetector.streamIdentifier()).thenReturn(mock(StreamIdentifier.class));
 
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
@@ -641,6 +643,7 @@ public class SchedulerTest {
             shardSyncTaskManagerMap.put(streamConfig.streamIdentifier(), shardSyncTaskManager);
             shardDetectorMap.put(streamConfig.streamIdentifier(), shardDetector);
             when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
+            when(shardDetector.streamIdentifier()).thenReturn(streamConfig.streamIdentifier());
             if(shardSyncFirstAttemptFailure) {
                 when(shardDetector.listShards())
                         .thenThrow(new RuntimeException("Service Exception"))

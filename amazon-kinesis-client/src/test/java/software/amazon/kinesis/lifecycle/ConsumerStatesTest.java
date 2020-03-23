@@ -119,10 +119,10 @@ public class ConsumerStatesTest {
                 maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,
                 INITIAL_POSITION_IN_STREAM, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector,
                 new AggregatorUtil(), hierarchicalShardSyncer, metricsFactory);
+        when(shardInfo.shardId()).thenReturn("shardId-000000000000");
+        when(shardInfo.streamIdentifierSerOpt()).thenReturn(Optional.of(StreamIdentifier.singleStreamInstance(STREAM_NAME).serialize()));
         consumer = spy(new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis,
                 argument, taskExecutionListener, 0));
-
-        when(shardInfo.shardId()).thenReturn("shardId-000000000000");
         when(recordProcessorCheckpointer.checkpointer()).thenReturn(checkpointer);
     }
 

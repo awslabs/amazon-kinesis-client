@@ -98,6 +98,7 @@ public class HierarchicalShardSyncerTest {
     @Before
     public void setup() {
         hierarchicalShardSyncer = new HierarchicalShardSyncer();
+        when(shardDetector.streamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("stream"));
     }
 
     private void setupMultiStream() {
@@ -1155,7 +1156,7 @@ public class HierarchicalShardSyncerTest {
 //     *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
 //     * Current leases: (4, 5, 7)
 //     */
-    @Test
+//    @Test
     public void understandLeaseBehavior() {
         final List<Shard> shards = constructShardListForGraphA();
 //        final List<Lease> currentLeases = Arrays.asList(newLease("shardId-4"), newLease("shardId-5"),

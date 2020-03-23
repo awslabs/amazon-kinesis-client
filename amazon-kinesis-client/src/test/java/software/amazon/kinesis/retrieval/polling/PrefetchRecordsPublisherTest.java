@@ -76,6 +76,7 @@ import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
@@ -120,7 +121,7 @@ public class PrefetchRecordsPublisherTest {
     @Before
     public void setup() {
         when(getRecordsRetrievalStrategy.getDataFetcher()).thenReturn(dataFetcher);
-
+        when(dataFetcher.getStreamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("testStream"));
         executorService = spy(Executors.newFixedThreadPool(1));
         getRecordsCache = new PrefetchRecordsPublisher(
                 MAX_SIZE,
