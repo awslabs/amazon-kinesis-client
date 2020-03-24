@@ -28,7 +28,7 @@ import java.time.Duration;
  */
 public class KinesisClientUtil {
 
-    private static int INITIAL_WINDOW_SIZE_BYTES = 10 * 1024 * 1024;
+    private static int INITIAL_WINDOW_SIZE_BYTES = 512 * 1024; // 512 KB
     private static long HEALTH_CHECK_PING_PERIOD_MILLIS = 60 * 1000;
 
     /**
