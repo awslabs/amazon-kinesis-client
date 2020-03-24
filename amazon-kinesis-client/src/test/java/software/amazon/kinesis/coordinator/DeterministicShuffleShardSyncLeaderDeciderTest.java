@@ -78,7 +78,7 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
         List<Lease> leases = getLeases(5, true, true, true);
         when(leaseRefresher.listLeases()).thenReturn(leases);
         boolean isLeader = leaderDecider.isLeader(WORKER_ID);
-        assertTrue("IsLeader should return false if leases have no owner", isLeader);
+        assertTrue("IsLeader should return true if leases have no owner", isLeader);
     }
 
     @Test
