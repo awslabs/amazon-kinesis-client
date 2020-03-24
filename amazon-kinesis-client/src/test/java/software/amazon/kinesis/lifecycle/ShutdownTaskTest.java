@@ -137,7 +137,7 @@ public class ShutdownTaskTest {
             throw new KinesisClientLibIOException("KinesisClientLibIOException");
         }).when(hierarchicalShardSyncer)
                 .checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, INITIAL_POSITION_TRIM_HORIZON,
-                        true, cleanupLeasesOfCompletedShards,  ignoreUnexpectedChildShards,
+                        false, cleanupLeasesOfCompletedShards,  ignoreUnexpectedChildShards,
                         NULL_METRICS_FACTORY.createMetrics(), latestShards);
 
         final TaskResult result = task.call();
