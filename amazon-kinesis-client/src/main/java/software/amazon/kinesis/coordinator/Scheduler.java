@@ -363,14 +363,14 @@ public class Scheduler implements Runnable {
         long waitTime = ThreadLocalRandom.current().nextLong(MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS, MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
         long waitUntil = System.currentTimeMillis() + waitTime;
 
-        boolean isLeaseTableEmpty = true;
-        while (System.currentTimeMillis() < waitUntil && (isLeaseTableEmpty = leaseRefresher.isLeaseTableEmpty())) {
+        boolean shouldInitiateLeaseSync = true;
+        while (System.currentTimeMillis() < waitUntil && (shouldInitiateLeaseSync = leaseRefresher.isLeaseTableEmpty())) {
             // check every 3 seconds if lease table is still empty,
             // to minimize contention between all workers bootstrapping at the same time
             log.info("Lease table is still empty. Checking again in {} ms", LEASE_TABLE_CHECK_FREQUENCY_MILLIS);
             Thread.sleep(LEASE_TABLE_CHECK_FREQUENCY_MILLIS);
         }
-        return isLeaseTableEmpty;
+        return shouldInitiateLeaseSync;
     }
 
     private void waitUntilHashRangeCovered() throws InterruptedException {
