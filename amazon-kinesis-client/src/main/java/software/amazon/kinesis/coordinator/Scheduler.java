@@ -375,6 +375,9 @@ public class Scheduler implements Runnable {
 
     private void waitUntilHashRangeCovered() throws InterruptedException {
 
+        // TODO: Currently this call is not in use. We may need to implement this method later. Created SIM to track the work: https://sim.amazon.com/issues/KinesisLTR-202
+        // TODO: For future implementation, streamToShardSyncTaskManagerMap might not contain the most up to date snapshot of active streams.
+        // Should use currentStreamConfigMap to determine the streams to check.
         while (!leaderElectedPeriodicShardSyncManager.hashRangeCovered()) {
             // wait until entire hash range is covered
             log.info("Hash range is not covered yet. Checking again in {} ms", HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS);

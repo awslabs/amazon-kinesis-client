@@ -76,6 +76,9 @@ public class ShardSyncTask implements ConsumerTask {
             exception = e;
             shardSyncSuccess = false;
         } finally {
+            // NOTE: This metric is reflecting if a shard sync task succeeds. Customer can use this metric to monitor if
+            // their application encounter any shard sync failures. This metric can help to detect potential shard stuck issues
+            // that are due to shard sync failures.
             MetricsUtil.addSuccess(scope, "SyncShards", shardSyncSuccess, MetricsLevel.DETAILED);
             MetricsUtil.endScope(scope);
         }
