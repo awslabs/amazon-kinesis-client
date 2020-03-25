@@ -78,6 +78,7 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
+import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -105,6 +106,9 @@ public class SchedulerTest {
     private final String applicationName = "applicationName";
     private final String streamName = "streamName";
     private final String namespace = "testNamespace";
+    private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 5 * 1000L;
+    private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
+    private static final long LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 3 * 1000L;
 
     private Scheduler scheduler;
     private ShardRecordProcessorFactory shardRecordProcessorFactory;
@@ -172,6 +176,7 @@ public class SchedulerTest {
         when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList);
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
         when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
+        when(shardSyncTaskManager.executeShardSyncTask()).thenReturn(new TaskResult(null));
         when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(MetricsFactory.class))).thenReturn(recordsPublisher);
 
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
@@ -275,14 +280,14 @@ public class SchedulerTest {
     @Test
     public final void testInitializationFailureWithRetries() throws Exception {
         doNothing().when(leaseCoordinator).initialize();
-        when(shardDetector.listShards()).thenThrow(new RuntimeException());
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenThrow(new RuntimeException());
         leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, streamName,
                 workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, true));
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
         scheduler.run();
 
-        verify(shardDetector, times(coordinatorConfig.maxInitializationAttempts())).listShards();
+        verify(dynamoDBLeaseRefresher, times(coordinatorConfig.maxInitializationAttempts())).isLeaseTableEmpty();
     }
 
     @Test
@@ -295,18 +300,20 @@ public class SchedulerTest {
                 metricsConfig, processorConfig, retrievalConfig);
 
         doNothing().when(leaseCoordinator).initialize();
-        when(shardDetector.listShards()).thenThrow(new RuntimeException());
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenThrow(new RuntimeException());
 
         scheduler.run();
 
         // verify initialization was retried for maxInitializationAttempts times
-        verify(shardDetector, times(maxInitializationAttempts)).listShards();
+        verify(dynamoDBLeaseRefresher, times(maxInitializationAttempts)).isLeaseTableEmpty();
     }
 
     @Test
     public final void testMultiStreamInitialization() throws ProvisionedThroughputException, DependencyException {
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
+        leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient,
+                                                          workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(true, true));
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
         scheduler.initialize();
@@ -319,7 +326,7 @@ public class SchedulerTest {
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
         leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient,
-                workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(true, false));
+                workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(true, true));
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
         scheduler.initialize();
@@ -371,6 +378,43 @@ public class SchedulerTest {
         secondShardInfo.stream().forEach(
                 shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory)));
 
+    }
+
+    @Test
+    public final void testInitializationWaitsWhenLeaseTableIsEmpty() throws Exception {
+        final int maxInitializationAttempts = 1;
+        coordinatorConfig.maxInitializationAttempts(maxInitializationAttempts);
+        coordinatorConfig.skipShardSyncAtWorkerInitializationIfLeasesExist(false);
+        scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                                  metricsConfig, processorConfig, retrievalConfig);
+
+        doNothing().when(leaseCoordinator).initialize();
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
+
+        long startTime = System.currentTimeMillis();
+        scheduler.shouldInitiateLeaseSync();
+        long endTime = System.currentTimeMillis();
+
+        assertTrue(endTime - startTime > MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
+        assertTrue(endTime - startTime < (MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS + LEASE_TABLE_CHECK_FREQUENCY_MILLIS));
+    }
+
+    @Test
+    public final void testInitializationDoesntWaitWhenLeaseTableIsNotEmpty() throws Exception {
+        final int maxInitializationAttempts = 1;
+        coordinatorConfig.maxInitializationAttempts(maxInitializationAttempts);
+        coordinatorConfig.skipShardSyncAtWorkerInitializationIfLeasesExist(false);
+        scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                                  metricsConfig, processorConfig, retrievalConfig);
+
+        doNothing().when(leaseCoordinator).initialize();
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(false);
+
+        long startTime = System.currentTimeMillis();
+        scheduler.shouldInitiateLeaseSync();
+        long endTime = System.currentTimeMillis();
+
+        assertTrue(endTime - startTime < MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
     }
 
     @Test
@@ -641,6 +685,7 @@ public class SchedulerTest {
             shardSyncTaskManagerMap.put(streamConfig.streamIdentifier(), shardSyncTaskManager);
             shardDetectorMap.put(streamConfig.streamIdentifier(), shardDetector);
             when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
+            when(shardSyncTaskManager.executeShardSyncTask()).thenReturn(new TaskResult(null));
             if(shardSyncFirstAttemptFailure) {
                 when(shardDetector.listShards())
                         .thenThrow(new RuntimeException("Service Exception"))
