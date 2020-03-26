@@ -1612,18 +1612,30 @@ public class HierarchicalShardSyncerTest {
         assertThat(newLeaseMap.isEmpty(), equalTo(true));
     }
 
+    /**
+     * Tests that when reading from TIP, we use the AT_LATEST shard filter.
+     * @throws Exception
+     */
     @Test
     public void testEmptyLeaseTableBootstrapUsesShardFilterWithAtLatest() throws Exception {
         ShardFilter shardFilter = ShardFilter.builder().type(ShardFilterType.AT_LATEST).build();
         testEmptyLeaseTableBootstrapUsesListShardsWithFilter(INITIAL_POSITION_LATEST, shardFilter);
     }
 
+    /**
+     * Tests that when reading from TRIM, we use the TRIM_HORIZON shard filter.
+     * @throws Exception
+     */
     @Test
     public void testEmptyLeaseTableBootstrapUsesShardFilterWithAtTrimHorizon() throws Exception {
         ShardFilter shardFilter = ShardFilter.builder().type(ShardFilterType.AT_TRIM_HORIZON).build();
         testEmptyLeaseTableBootstrapUsesListShardsWithFilter(INITIAL_POSITION_TRIM_HORIZON, shardFilter);
     }
 
+    /**
+     * Tests that when reading from AT_TIMESTAMP, we use the AT_TIMESTAMP shard filter.
+     * @throws Exception
+     */
     @Test
     public void testEmptyLeaseTableBootstrapUsesShardFilterWithAtTimestamp() throws Exception {
         ShardFilter shardFilter = ShardFilter.builder().type(ShardFilterType.AT_TIMESTAMP).timestamp(new Date(1000L).toInstant()).build();
@@ -1668,7 +1680,7 @@ public class HierarchicalShardSyncerTest {
         verify(shardDetector, atLeast(1)).listShards();
     }
 
-//    /**
+//    /**getShardFilterFromInitialPosition
 //     * Test CheckIfDescendantAndAddNewLeasesForAncestors - two parents, there is a lease for one parent.
 //     */
 //    @Test

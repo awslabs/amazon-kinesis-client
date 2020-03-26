@@ -313,6 +313,11 @@ public class HierarchicalShardSyncer {
         return shardIdToChildShardIdsMap;
     }
 
+    /**
+     * Helper method to resolve the correct shard filter to use when listing shards from a position in a stream.
+     * @param initialPositionInStreamExtended
+     * @return
+     */
     private static ShardFilter getShardFilterFromInitialPosition(InitialPositionInStreamExtended initialPositionInStreamExtended) {
 
         ShardFilter.Builder builder = ShardFilter.builder();
@@ -806,17 +811,44 @@ public class HierarchicalShardSyncer {
         private final StreamIdentifier streamIdentifier;
     }
 
+    /**
+     * Interface to determine how to create new leases.
+     */
     @VisibleForTesting
     static interface LeaseSynchronizer {
+        /**
+         * Determines how to create leases.
+         * @param shards
+         * @param currentLeases
+         * @param initialPosition
+         * @param inconsistentShardIds
+         * @param multiStreamArgs
+         * @return
+         */
         List<Lease> determineNewLeasesToCreate(List<Shard> shards, List<Lease> currentLeases,
                                                InitialPositionInStreamExtended initialPosition, Set<String> inconsistentShardIds,
                                                MultiStreamArgs multiStreamArgs);
     }
 
+    /**
+     * Class to help create leases when the table is initially empty.
+     */
     @Slf4j
     @AllArgsConstructor
     static class EmptyLeaseTableSynchronizer implements LeaseSynchronizer {
 
+        /**
+         * Determines how to create leases when the lease table is initially empty. For this, we read all shards where
+         * the KCL is reading from. For any shards which are closed, we will discover their child shards through GetRecords
+         * child shard information.
+         *
+         * @param shards
+         * @param currentLeases
+         * @param initialPosition
+         * @param inconsistentShardIds
+         * @param multiStreamArgs
+         * @return
+         */
         @Override
         public List<Lease> determineNewLeasesToCreate(List<Shard> shards, List<Lease> currentLeases,
             InitialPositionInStreamExtended initialPosition, Set<String> inconsistentShardIds, MultiStreamArgs multiStreamArgs) {
@@ -860,6 +892,9 @@ public class HierarchicalShardSyncer {
     }
 
 
+    /**
+     * Class to help create leases when the lease table is not initially empty.
+     */
     @Slf4j
     @AllArgsConstructor
     static class NonEmptyLeaseTableSynchronizer implements LeaseSynchronizer {
