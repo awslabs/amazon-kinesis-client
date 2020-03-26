@@ -1644,12 +1644,11 @@ public class HierarchicalShardSyncerTest {
 
     public void testEmptyLeaseTableBootstrapUsesListShardsWithFilter(InitialPositionInStreamExtended initialPosition, ShardFilter shardFilter) throws Exception {
         final String shardId0 = "shardId-0";
-        final List<Shard> shards = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null, ShardObjectHelper.newSequenceNumberRange("1", null)));
-        final List<Lease> currentLeases = Collections.emptyList();
+        final List<Shard> shards = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null,
+                ShardObjectHelper.newSequenceNumberRange("1", null), ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, ShardObjectHelper.MAX_HASH_KEY)));
 
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
-        when(shardDetector.listShards()).thenReturn(shards);
-        when(dynamoDBLeaseRefresher.listLeases()).thenReturn(currentLeases);
+        when(shardDetector.listShardsWithFilter(shardFilter)).thenReturn(shards);
 
         hierarchicalShardSyncer
                 .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, initialPosition,
