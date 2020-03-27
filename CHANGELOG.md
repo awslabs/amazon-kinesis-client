@@ -1,5 +1,12 @@
 # Changelog
 
+### Release 2.2.10 (March 26, 2020)
+[Milestone#48](https://github.com/awslabs/amazon-kinesis-client/milestone/48)
+* Fixing a bug in DynamoDB billing mode support for special regions.
+  * [PR#703](https://github.com/awslabs/amazon-kinesis-client/pull/703)
+* Adding request id logging to ShardConsumerSubscriber.
+  * [PR#705](https://github.com/awslabs/amazon-kinesis-client/pull/705)
+
 ### Release 2.2.9 (Febuary 17, 2020)
 [Milestone#47](https://github.com/awslabs/amazon-kinesis-client/milestone/47)
 * Updating the AWS SDK version to 2.10.66.
