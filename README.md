@@ -69,8 +69,6 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   * [PR#703](https://github.com/awslabs/amazon-kinesis-client/pull/703)
 * Adding request id logging to ShardConsumerSubscriber.
   * [PR#705](https://github.com/awslabs/amazon-kinesis-client/pull/705)
-* Adjusting HTTP2 initial window size to be 2MB.
-  * [PR#706](https://github.com/awslabs/amazon-kinesis-client/pull/706)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
