@@ -19,6 +19,7 @@ import software.amazon.kinesis.metrics.MetricsScope;
 @Deprecated
 public class ShardSyncer {
     private static final HierarchicalShardSyncer HIERARCHICAL_SHARD_SYNCER = new HierarchicalShardSyncer();
+    private static final boolean garbageCollectLeases = true;
 
     /**
      * <p>NOTE: This method is deprecated and will be removed in a future release.</p>
@@ -41,6 +42,6 @@ public class ShardSyncer {
             final MetricsScope scope) throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException {
         HIERARCHICAL_SHARD_SYNCER.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
-                true, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, leaseRefresher.isLeaseTableEmpty());
+                garbageCollectLeases, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, leaseRefresher.isLeaseTableEmpty());
     }
 }

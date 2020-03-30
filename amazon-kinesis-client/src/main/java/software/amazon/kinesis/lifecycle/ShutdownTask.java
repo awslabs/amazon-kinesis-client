@@ -69,6 +69,8 @@ public class ShutdownTask implements ConsumerTask {
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
+    private final boolean garbageCollectLeases = false;
+    private final boolean isLeaseTableEmpty= false;
     private final boolean ignoreUnexpectedChildShards;
     @NonNull
     private final LeaseCoordinator leaseCoordinator;
@@ -155,8 +157,8 @@ public class ShutdownTask implements ConsumerTask {
                     log.debug("Looking for child shards of shard {}", shardInfo.shardId());
                     // create leases for the child shards
                     hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseCoordinator.leaseRefresher(),
-                            initialPositionInStream, false, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
-                            scope, false, latestShards);
+                            initialPositionInStream, garbageCollectLeases, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
+                            scope, latestShards, isLeaseTableEmpty);
                     log.debug("Finished checking for child shards of shard {}", shardInfo.shardId());
                 }
 
