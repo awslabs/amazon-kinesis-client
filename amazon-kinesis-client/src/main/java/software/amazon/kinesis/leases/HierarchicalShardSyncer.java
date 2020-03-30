@@ -89,10 +89,10 @@ public class HierarchicalShardSyncer {
      * @param shardDetector
      * @param leaseRefresher
      * @param initialPosition
-     * @param garbageCollectLeases
+     * @param scope
      * @param cleanupLeasesOfCompletedShards
      * @param ignoreUnexpectedChildShards
-     * @param scope
+     * @param garbageCollectLeases
      * @throws DependencyException
      * @throws InvalidStateException
      * @throws ProvisionedThroughputException
@@ -101,20 +101,20 @@ public class HierarchicalShardSyncer {
     // CHECKSTYLE:OFF CyclomaticComplexity
     public synchronized void checkAndCreateLeaseForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
-            final boolean garbageCollectLeases, final boolean cleanupLeasesOfCompletedShards,
-            final boolean ignoreUnexpectedChildShards, final MetricsScope scope, final boolean isLeaseTableEmpty)
+            final MetricsScope scope, final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
+            final boolean garbageCollectLeases, final boolean isLeaseTableEmpty)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
         final List<Shard> latestShards = isLeaseTableEmpty ?
                 getShardListAtInitialPosition(shardDetector, initialPosition) : getShardList(shardDetector);
-        checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition, garbageCollectLeases,
-                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, latestShards, isLeaseTableEmpty);
+        checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition, latestShards, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, garbageCollectLeases,
+                isLeaseTableEmpty);
     }
 
     //Provide a pre-collcted list of shards to avoid calling ListShards API
     public synchronized void checkAndCreateLeaseForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
-            final boolean garbageCollectLeases, final boolean cleanupLeasesOfCompletedShards,
-            final boolean ignoreUnexpectedChildShards, final MetricsScope scope, List<Shard> latestShards, final boolean isLeaseTableEmpty)
+            List<Shard> latestShards, final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
+            final MetricsScope scope, final boolean garbageCollectLeases, final boolean isLeaseTableEmpty)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
 
         //TODO: Need to add multistream support for this https://sim.amazon.com/issues/KinesisLTR-191

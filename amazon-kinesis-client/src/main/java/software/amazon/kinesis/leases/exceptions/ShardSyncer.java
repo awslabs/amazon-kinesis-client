@@ -42,6 +42,6 @@ public class ShardSyncer {
             final MetricsScope scope) throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException {
         HIERARCHICAL_SHARD_SYNCER.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
-                garbageCollectLeases, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, leaseRefresher.isLeaseTableEmpty());
+                scope, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, garbageCollectLeases, leaseRefresher.isLeaseTableEmpty());
     }
 }
