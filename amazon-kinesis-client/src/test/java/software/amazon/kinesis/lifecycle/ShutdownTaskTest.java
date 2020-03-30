@@ -18,6 +18,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
@@ -42,7 +43,6 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
-import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
@@ -127,6 +127,9 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testCallWhenSyncingShardsThrows() throws Exception {
+        final boolean garbageCollectLeases = false;
+        final boolean isLeaseTableEmpty = false;
+
         List<Shard> latestShards = constructShardListGraphA();
         when(shardDetector.listShards()).thenReturn(latestShards);
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
@@ -136,8 +139,8 @@ public class ShutdownTaskTest {
             throw new KinesisClientLibIOException("KinesisClientLibIOException");
         }).when(hierarchicalShardSyncer)
                 .checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, INITIAL_POSITION_TRIM_HORIZON,
-                        cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
-                        NULL_METRICS_FACTORY.createMetrics(), latestShards);
+                        latestShards, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards,
+                        NULL_METRICS_FACTORY.createMetrics(), garbageCollectLeases, isLeaseTableEmpty);
 
         final TaskResult result = task.call();
         assertNotNull(result.getException());

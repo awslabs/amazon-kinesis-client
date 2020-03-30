@@ -42,6 +42,7 @@ import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
@@ -149,12 +150,18 @@ public class KinesisShardDetector implements ShardDetector {
     @Override
     @Synchronized
     public List<Shard> listShards() {
+        return listShardsWithFilter(null);
+    }
+
+    @Override
+    @Synchronized
+    public List<Shard> listShardsWithFilter(ShardFilter shardFilter) {
         final List<Shard> shards = new ArrayList<>();
         ListShardsResponse result;
         String nextToken = null;
 
         do {
-            result = listShards(nextToken);
+            result = listShards(shardFilter, nextToken);
 
             if (result == null) {
                 /*
@@ -172,13 +179,13 @@ public class KinesisShardDetector implements ShardDetector {
         return shards;
     }
 
-    private ListShardsResponse listShards(final String nextToken) {
+    private ListShardsResponse listShards(ShardFilter shardFilter, final String nextToken) {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
         exceptionManager.add(LimitExceededException.class, t -> t);
         exceptionManager.add(ResourceInUseException.class, t -> t);
         exceptionManager.add(KinesisException.class, t -> t);
 
-        ListShardsRequest.Builder request = KinesisRequestsBuilder.listShardsRequestBuilder();
+        ListShardsRequest.Builder request = KinesisRequestsBuilder.listShardsRequestBuilder().shardFilter(shardFilter);
         if (StringUtils.isEmpty(nextToken)) {
             request = request.streamName(streamIdentifier.streamName());
         } else {

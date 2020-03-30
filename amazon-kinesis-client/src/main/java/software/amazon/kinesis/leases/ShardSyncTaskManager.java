@@ -48,6 +48,7 @@ public class ShardSyncTaskManager {
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesUponShardCompletion;
+    private final boolean garbageCollectLeases;
     private final boolean ignoreUnexpectedChildShards;
     private final long shardSyncIdleTimeMillis;
     @NonNull
@@ -84,6 +85,7 @@ public class ShardSyncTaskManager {
         this.leaseRefresher = leaseRefresher;
         this.initialPositionInStream = initialPositionInStream;
         this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        this.garbageCollectLeases = true;
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
@@ -114,6 +116,7 @@ public class ShardSyncTaskManager {
         this.leaseRefresher = leaseRefresher;
         this.initialPositionInStream = initialPositionInStream;
         this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        this.garbageCollectLeases = true;
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
@@ -128,6 +131,7 @@ public class ShardSyncTaskManager {
                                                leaseRefresher,
                                                initialPositionInStream,
                                                cleanupLeasesUponShardCompletion,
+                                               garbageCollectLeases,
                                                ignoreUnexpectedChildShards,
                                                shardSyncIdleTimeMillis,
                                                hierarchicalShardSyncer,
@@ -166,6 +170,7 @@ public class ShardSyncTaskManager {
                                     leaseRefresher,
                                     initialPositionInStream,
                                     cleanupLeasesUponShardCompletion,
+                                    garbageCollectLeases,
                                     ignoreUnexpectedChildShards,
                                     shardSyncIdleTimeMillis,
                                     hierarchicalShardSyncer,

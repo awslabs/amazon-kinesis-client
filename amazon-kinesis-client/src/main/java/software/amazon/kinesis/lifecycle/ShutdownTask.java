@@ -16,7 +16,6 @@ package software.amazon.kinesis.lifecycle;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import com.sun.org.apache.bcel.internal.generic.LUSHR;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +27,6 @@ import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
-import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
@@ -42,8 +40,6 @@ import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -69,6 +65,8 @@ public class ShutdownTask implements ConsumerTask {
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
+    private final boolean garbageCollectLeases = false;
+    private final boolean isLeaseTableEmpty= false;
     private final boolean ignoreUnexpectedChildShards;
     @NonNull
     private final LeaseCoordinator leaseCoordinator;
@@ -155,7 +153,8 @@ public class ShutdownTask implements ConsumerTask {
                     log.debug("Looking for child shards of shard {}", shardInfo.shardId());
                     // create leases for the child shards
                     hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseCoordinator.leaseRefresher(),
-                            initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, latestShards);
+                            initialPositionInStream, latestShards, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, garbageCollectLeases,
+                            isLeaseTableEmpty);
                     log.debug("Finished checking for child shards of shard {}", shardInfo.shardId());
                 }
 
