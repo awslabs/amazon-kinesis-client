@@ -242,7 +242,7 @@ public class SchedulerTest {
         final List<ShardInfo> secondShardInfo = Collections.singletonList(
                 new ShardInfo(shardId, concurrencyToken, null, finalSequenceNumber));
 
-        final Checkpoint firstCheckpoint = new Checkpoint(firstSequenceNumber, null);
+        final Checkpoint firstCheckpoint = new Checkpoint(firstSequenceNumber, null, null);
 
         when(leaseCoordinator.getCurrentAssignments()).thenReturn(initialShardInfo, firstShardInfo, secondShardInfo);
         when(checkpoint.getCheckpointObject(eq(shardId))).thenReturn(firstCheckpoint);
@@ -368,7 +368,7 @@ public class SchedulerTest {
                 .map(sc -> new ShardInfo(shardId, concurrencyToken, null, finalSequenceNumber,
                         sc.streamIdentifier().serialize())).collect(Collectors.toList());
 
-        final Checkpoint firstCheckpoint = new Checkpoint(firstSequenceNumber, null);
+        final Checkpoint firstCheckpoint = new Checkpoint(firstSequenceNumber, null, null);
 
         when(leaseCoordinator.getCurrentAssignments()).thenReturn(initialShardInfo, firstShardInfo, secondShardInfo);
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(firstCheckpoint);

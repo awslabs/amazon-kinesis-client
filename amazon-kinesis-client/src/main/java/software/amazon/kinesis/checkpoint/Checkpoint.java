@@ -18,6 +18,8 @@ import lombok.Data;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import java.util.Arrays;
+
 /**
  * A class encapsulating the 2 pieces of state stored in a checkpoint.
  */
@@ -26,18 +28,21 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 public class Checkpoint {
     private final ExtendedSequenceNumber checkpoint;
     private final ExtendedSequenceNumber pendingCheckpoint;
+    private final byte[] pendingCheckpointState;
 
     /**
      * Constructor.
      *
      * @param checkpoint the checkpoint sequence number - cannot be null or empty.
      * @param pendingCheckpoint the pending checkpoint sequence number - can be null.
+     * @param pendingCheckpointState the pending checkpoint state - can be null.
      */
-    public Checkpoint(final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint) {
+    public Checkpoint(final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint, byte[] pendingCheckpointState) {
         if (checkpoint == null || checkpoint.sequenceNumber().isEmpty()) {
             throw new IllegalArgumentException("Checkpoint cannot be null or empty");
         }
         this.checkpoint = checkpoint;
         this.pendingCheckpoint = pendingCheckpoint;
+        this.pendingCheckpointState = pendingCheckpointState;
     }
 }

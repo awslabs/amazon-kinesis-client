@@ -88,7 +88,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
         try {
             Lease lease = leaseRefresher.getLease(leaseKey);
             log.debug("[{}] Retrieved lease => {}", leaseKey, lease);
-            return new Checkpoint(lease.checkpoint(), lease.pendingCheckpoint());
+            return new Checkpoint(lease.checkpoint(), lease.pendingCheckpoint(), lease.pendingCheckpointState());
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
             String message = "Unable to fetch checkpoint for shardId " + leaseKey;
             log.error(message, e);
@@ -99,9 +99,14 @@ public class DynamoDBCheckpointer implements Checkpointer {
     @Override
     public void prepareCheckpoint(final String leaseKey, final ExtendedSequenceNumber pendingCheckpoint,
             final String concurrencyToken) throws KinesisClientLibException {
+        prepareCheckpoint(leaseKey, pendingCheckpoint, null, concurrencyToken);
+    }
+
+    @Override
+    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, byte[] pendingCheckpointState, String concurrencyToken) throws KinesisClientLibException {
         try {
             boolean wasSuccessful =
-                    prepareCheckpoint(leaseKey, pendingCheckpoint, UUID.fromString(concurrencyToken));
+                    prepareCheckpoint(leaseKey, pendingCheckpoint, pendingCheckpointState, UUID.fromString(concurrencyToken));
             if (!wasSuccessful) {
                 throw new ShutdownException(
                         "Can't prepare checkpoint - instance doesn't hold the lease for this shard");
@@ -134,7 +139,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
         return leaseCoordinator.updateLease(lease, concurrencyToken, operation, leaseKey);
     }
 
-    boolean prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, UUID concurrencyToken)
+    boolean prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, byte[] pendingCheckpointState, UUID concurrencyToken)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         Lease lease = leaseCoordinator.getCurrentlyHeldLease(leaseKey);
         if (lease == null) {
@@ -144,6 +149,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
         }
 
         lease.pendingCheckpoint(Objects.requireNonNull(pendingCheckpoint, "pendingCheckpoint should not be null"));
+        lease.pendingCheckpointState(pendingCheckpointState);
         return leaseCoordinator.updateLease(lease, concurrencyToken, operation, leaseKey);
     }
 

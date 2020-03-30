@@ -82,6 +82,12 @@ public class Lease {
      * @return pending checkpoint, possibly null.
      */
     private ExtendedSequenceNumber pendingCheckpoint;
+
+    /**
+     * @return pending checkpoint state, possibly null.
+     */
+    private byte[] pendingCheckpointState;
+
     /**
      * @return count of distinct lease holders between checkpoints.
      */
@@ -210,6 +216,15 @@ public class Lease {
      */
     public void pendingCheckpoint(ExtendedSequenceNumber pendingCheckpoint) {
         this.pendingCheckpoint = pendingCheckpoint;
+    }
+
+    /**
+     * Sets pending checkpoint state.
+     *
+     * @param pendingCheckpointState can be null
+     */
+    public void pendingCheckpointState(byte[] pendingCheckpointState) {
+        this.pendingCheckpointState = pendingCheckpointState;
     }
 
     /**

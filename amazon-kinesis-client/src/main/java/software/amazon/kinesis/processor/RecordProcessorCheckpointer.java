@@ -93,7 +93,6 @@ public interface RecordProcessorCheckpointer {
         throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
         IllegalArgumentException;
 
-
     /**
      * This method will checkpoint the progress at the provided sequenceNumber and subSequenceNumber, the latter for
      * aggregated records produced with the Producer Library. This method is analogous to {@link #checkpoint()} 
@@ -145,6 +144,9 @@ public interface RecordProcessorCheckpointer {
     PreparedCheckpointer prepareCheckpoint()
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException;
 
+    PreparedCheckpointer prepareCheckpoint(byte[] applicationState)
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException;
+
     /**
      * This method will record a pending checkpoint at the at the provided record. This method is analogous to
      * {@link #prepareCheckpoint()} but provides the ability to specify the record at which to prepare the checkpoint.
@@ -174,6 +176,10 @@ public interface RecordProcessorCheckpointer {
     PreparedCheckpointer prepareCheckpoint(Record record)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException;
 
+
+    PreparedCheckpointer prepareCheckpoint(Record record, byte[] applicationState)
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException;
+
     /**
      * This method will record a pending checkpoint at the provided sequenceNumber. This method is analogous to
      * {@link #prepareCheckpoint()} but provides the ability to specify the sequence number at which to checkpoint.
@@ -197,6 +203,10 @@ public interface RecordProcessorCheckpointer {
      *         2.) It is not a valid sequence number for a record in this shard.
      */
     PreparedCheckpointer prepareCheckpoint(String sequenceNumber)
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
+            IllegalArgumentException;
+
+    PreparedCheckpointer prepareCheckpoint(String sequenceNumber, byte[] applicationState)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
             IllegalArgumentException;
 
@@ -225,6 +235,10 @@ public interface RecordProcessorCheckpointer {
      *         2.) It is not a valid sequence number for a record in this shard.
      */
     PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber)
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
+            IllegalArgumentException;
+
+    PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber, byte[] applicationState)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
             IllegalArgumentException;
 
