@@ -315,7 +315,7 @@ public class HierarchicalShardSyncer {
     /**
      * Helper method to resolve the correct shard filter to use when listing shards from a position in a stream.
      * @param initialPositionInStreamExtended
-     * @return
+     * @return ShardFilter shard filter for the corresponding position in the stream.
      */
     private static ShardFilter getShardFilterFromInitialPosition(InitialPositionInStreamExtended initialPositionInStreamExtended) {
 
@@ -361,6 +361,7 @@ public class HierarchicalShardSyncer {
      * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. We'll start fetching records from that
      *        location in the shard (when an application starts up for the first time - and there are no checkpoints).
      * @param inconsistentShardIds Set of child shard ids having open parents.
+     * @param multiStreamArgs determines if we are using multistream mode.
      * @return List of new leases to create sorted by starting sequenceNumber of the corresponding shard
      */
     static List<Lease> determineNewLeasesToCreate(final LeaseSynchronizer leaseSynchronizer, final List<Shard> shards,
@@ -369,6 +370,18 @@ public class HierarchicalShardSyncer {
         return leaseSynchronizer.determineNewLeasesToCreate(shards, currentLeases, initialPosition, inconsistentShardIds, multiStreamArgs);
     }
 
+    /**
+     * Determine new leases to create and their initial checkpoint.
+     * Note: Package level access only for testing purposes.
+     *
+     * @param leaseSynchronizer determines the strategy we'll be using to update any new leases.
+     * @param shards List of all shards in Kinesis (we'll create new leases based on this set)
+     * @param currentLeases List of current leases
+     * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. We'll start fetching records from that
+     *        location in the shard (when an application starts up for the first time - and there are no checkpoints).
+     * @param inconsistentShardIds Set of child shard ids having open parents.
+     * @return List of new leases to create sorted by starting sequenceNumber of the corresponding shard
+     */
     static List<Lease> determineNewLeasesToCreate(final LeaseSynchronizer leaseSynchronizer, final List<Shard> shards,
             final List<Lease> currentLeases, final InitialPositionInStreamExtended initialPosition,final Set<String> inconsistentShardIds) {
         return determineNewLeasesToCreate(leaseSynchronizer, shards, currentLeases, initialPosition, inconsistentShardIds,
@@ -378,6 +391,13 @@ public class HierarchicalShardSyncer {
     /**
      * Determine new leases to create and their initial checkpoint.
      * Note: Package level access only for testing purposes.
+     *
+     * @param leaseSynchronizer determines the strategy we'll be using to update any new leases.
+     * @param shards List of all shards in Kinesis (we'll create new leases based on this set)
+     * @param currentLeases List of current leases
+     * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. We'll start fetching records from that
+     *        location in the shard (when an application starts up for the first time - and there are no checkpoints).
+     * @return List of new leases to create sorted by starting sequenceNumber of the corresponding shard
      */
     static List<Lease> determineNewLeasesToCreate(final LeaseSynchronizer leaseSynchronizer, final List<Shard> shards,
             final List<Lease> currentLeases, final InitialPositionInStreamExtended initialPosition) {
@@ -391,7 +411,6 @@ public class HierarchicalShardSyncer {
      * Create leases for the ancestors of this shard as required.
      * See javadoc of determineNewLeasesToCreate() for rules and example.
      * 
-     * @param shardId The shardId to check.
      * @param shardId The shardId to check.
      * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. We'll start fetching records from that
      *        location in the shard (when an application starts up for the first time - and there are no checkpoints).
@@ -812,7 +831,7 @@ public class HierarchicalShardSyncer {
      * Interface to determine how to create new leases.
      */
     @VisibleForTesting
-    static interface LeaseSynchronizer {
+    interface LeaseSynchronizer {
         /**
          * Determines how to create leases.
          * @param shards
