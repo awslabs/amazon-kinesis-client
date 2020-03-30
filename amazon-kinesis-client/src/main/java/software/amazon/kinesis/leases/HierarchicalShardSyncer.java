@@ -102,23 +102,23 @@ public class HierarchicalShardSyncer {
     public synchronized void checkAndCreateLeaseForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
             final boolean garbageCollectLeases, final boolean cleanupLeasesOfCompletedShards,
-            final boolean ignoreUnexpectedChildShards, final MetricsScope scope)
+            final boolean ignoreUnexpectedChildShards, final MetricsScope scope, final boolean isLeaseTableEmpty)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-        final List<Shard> latestShards = leaseRefresher.isLeaseTableEmpty() ?
+        final List<Shard> latestShards = isLeaseTableEmpty ?
                 getShardListAtInitialPosition(shardDetector, initialPosition) : getShardList(shardDetector);
         checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition, garbageCollectLeases,
-                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, latestShards);
+                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, isLeaseTableEmpty, latestShards);
     }
 
     //Provide a pre-collcted list of shards to avoid calling ListShards API
     public synchronized void checkAndCreateLeaseForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
             final boolean garbageCollectLeases, final boolean cleanupLeasesOfCompletedShards,
-            final boolean ignoreUnexpectedChildShards, final MetricsScope scope, List<Shard> latestShards)
+            final boolean ignoreUnexpectedChildShards, final MetricsScope scope, final boolean isLeaseTableEmpty,
+            List<Shard> latestShards)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
 
         //TODO: Need to add multistream support for this https://sim.amazon.com/issues/KinesisLTR-191
-        final boolean isLeaseTableEmpty = leaseRefresher.isLeaseTableEmpty();
 
         if (!CollectionUtils.isNullOrEmpty(latestShards)) {
             log.debug("Num shards: {}", latestShards.size());
@@ -341,17 +341,15 @@ public class HierarchicalShardSyncer {
         final ShardFilter shardFilter = getShardFilterFromInitialPosition(initialPositionInStreamExtended);
         final Optional<List<Shard>> shards = Optional.of(shardDetector.listShardsWithFilter(shardFilter));
 
-        return shards.orElseThrow(() -> new KinesisClientLibIOException("Stream is not in ACTIVE OR UPDATING state - " +
-                "will retry getting the shard list."));
+        return shards.orElseThrow(() -> new KinesisClientLibIOException("Stream " + shardDetector.streamIdentifier().streamName() +
+                " is not in ACTIVE OR UPDATING state - will retry getting the shard list."));
     }
 
     private static List<Shard> getShardList(@NonNull final ShardDetector shardDetector) throws KinesisClientLibIOException {
-        final List<Shard> shards = shardDetector.listShards();
-        if (shards == null) {
-            throw new KinesisClientLibIOException(
-                    "Stream is not in ACTIVE OR UPDATING state - will retry getting the shard list.");
-        }
-        return shards;
+        final Optional<List<Shard>> shards = Optional.of(shardDetector.listShards());
+
+        return shards.orElseThrow(() -> new KinesisClientLibIOException("Stream " + shardDetector.streamIdentifier().streamName() +
+                " is not in ACTIVE OR UPDATING state - will retry getting the shard list."));
     }
 
     /**
