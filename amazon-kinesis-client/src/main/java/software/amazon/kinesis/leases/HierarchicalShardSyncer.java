@@ -347,6 +347,8 @@ public class HierarchicalShardSyncer {
         InitialPositionInStreamExtended initialPositionInStreamExtended) throws KinesisClientLibIOException {
 
         final ShardFilter shardFilter = getShardFilterFromInitialPosition(initialPositionInStreamExtended);
+        final String streamName = shardDetector.streamIdentifier().streamName();
+
         List<Shard> shards;
 
         for (int i = 0; i < retriesForCompleteHashRange; i++) {
@@ -354,8 +356,7 @@ public class HierarchicalShardSyncer {
 
             if (shards == null) {
                 throw new KinesisClientLibIOException(
-                        "Stream " + shardDetector.streamIdentifier().streamName() +
-                                " is not in ACTIVE OR UPDATING state - will retry getting the shard list.");
+                        "Stream " + streamName + " is not in ACTIVE OR UPDATING state - will retry getting the shard list.");
             }
 
             if (hashRangeOfShardsIsComplete(shards)) {
@@ -363,7 +364,7 @@ public class HierarchicalShardSyncer {
             }
         }
 
-        throw new KinesisClientLibIOException("Hash range of shards returned was incomplete after "
+        throw new KinesisClientLibIOException("Hash range of shards returned for " + streamName + " was incomplete after "
                 + retriesForCompleteHashRange + " retries.");
     }
 
