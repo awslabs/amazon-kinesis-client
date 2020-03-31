@@ -98,7 +98,7 @@ import software.amazon.kinesis.retrieval.RetrievalConfig;
 @Slf4j
 public class Scheduler implements Runnable {
 
-    private static final long NEW_STREAM_CHECK_INTERVAL_MILLIS = 10000L;
+    private static final long NEW_STREAM_CHECK_INTERVAL_MILLIS = 1 * 60 * 1000L;
 
     private SchedulerLog slog = new SchedulerLog();
 
@@ -418,11 +418,12 @@ public class Scheduler implements Runnable {
      * Sync all streams method.
      * @return streams that are being synced by this worker
      */
-    private Set<StreamIdentifier> checkAndSyncStreamShardsAndLeases()
+    @VisibleForTesting
+    Set<StreamIdentifier> checkAndSyncStreamShardsAndLeases()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         final Set<StreamIdentifier> streamsSynced = new HashSet<>();
 
-        if (isMultiStreamMode && (streamSyncWatch.elapsed(TimeUnit.MILLISECONDS) > NEW_STREAM_CHECK_INTERVAL_MILLIS)) {
+        if (shouldSyncStreamsNow()) {
             final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = new HashMap<>();
             // Making an immutable copy
             newStreamConfigMap.putAll(multiStreamTracker.streamConfigList().stream()
@@ -462,7 +463,12 @@ public class Scheduler implements Runnable {
         return streamsSynced;
     }
 
-    private Set<StreamIdentifier> syncStreamsFromLeaseTableOnAppInit()
+    @VisibleForTesting
+    boolean shouldSyncStreamsNow() {
+        return isMultiStreamMode && (streamSyncWatch.elapsed(TimeUnit.MILLISECONDS) > NEW_STREAM_CHECK_INTERVAL_MILLIS);
+    }
+
+    private void syncStreamsFromLeaseTableOnAppInit()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         if (!leasesSyncedOnAppInit && isMultiStreamMode) {
             final Set<StreamIdentifier> streamIdentifiers = leaseCoordinator.leaseRefresher().listLeases().stream()
@@ -475,7 +481,6 @@ public class Scheduler implements Runnable {
             }
             leasesSyncedOnAppInit = true;
         }
-        return Collections.emptySet();
     }
 
     // When a stream is no longer needed to be tracked, return a default StreamConfig with LATEST for faster shard end.
