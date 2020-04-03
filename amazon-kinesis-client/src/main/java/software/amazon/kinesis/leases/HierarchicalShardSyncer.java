@@ -68,6 +68,8 @@ public class HierarchicalShardSyncer {
 
     private final boolean isMultiStreamMode;
 
+    private String streamIdentifier = "";
+
     public HierarchicalShardSyncer() {
         isMultiStreamMode = false;
     }
@@ -104,6 +106,7 @@ public class HierarchicalShardSyncer {
             final MetricsScope scope, final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
             final boolean garbageCollectLeases, final boolean isLeaseTableEmpty)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+        this.streamIdentifier = shardDetector.streamIdentifier().serialize();
         final List<Shard> latestShards = isLeaseTableEmpty ?
                 getShardListAtInitialPosition(shardDetector, initialPosition) : getShardList(shardDetector);
         checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition, latestShards, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, garbageCollectLeases,
@@ -117,10 +120,11 @@ public class HierarchicalShardSyncer {
             final MetricsScope scope, final boolean garbageCollectLeases, final boolean isLeaseTableEmpty)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
 
+        this.streamIdentifier = shardDetector.streamIdentifier().serialize();
         //TODO: Need to add multistream support for this https://sim.amazon.com/issues/KinesisLTR-191
 
         if (!CollectionUtils.isNullOrEmpty(latestShards)) {
-            log.debug("Num shards: {}", latestShards.size());
+            log.debug("{} - Num shards: {}", streamIdentifier, latestShards.size());
         }
 
         final Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(latestShards);
@@ -138,7 +142,7 @@ public class HierarchicalShardSyncer {
                 new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
         final List<Lease> newLeasesToCreate = determineNewLeasesToCreate(leaseSynchronizer, latestShards, currentLeases,
                 initialPosition, inconsistentShardIds, multiStreamArgs);
-        log.debug("Num new leases to create: {}", newLeasesToCreate.size());
+        log.debug("{} - Num new leases to create: {}", streamIdentifier, newLeasesToCreate.size());
         for (Lease lease : newLeasesToCreate) {
             long startTime = System.currentTimeMillis();
             boolean success = false;
@@ -231,7 +235,7 @@ public class HierarchicalShardSyncer {
         for (String shardId : shardIdsOfClosedShards) {
             final Shard shard = shardIdToShardMap.get(shardId);
             if (shard == null) {
-                log.info("Shard {} is not present in Kinesis anymore.", shardId);
+                log.info("{} : Shard {} is not present in Kinesis anymore.", streamIdentifier, shardId);
                 continue;
             }
             
@@ -426,7 +430,7 @@ public class HierarchicalShardSyncer {
             final Map<String, Shard> shardIdToShardMapOfAllKinesisShards,
             final Map<String, Lease> shardIdToLeaseMapOfNewShards, final Map<String, Boolean> memoizationContext,
             final MultiStreamArgs multiStreamArgs) {
-        
+        final String streamIdentifier = getStreamIdentifier(multiStreamArgs);
         final Boolean previousValue = memoizationContext.get(shardId);
         if (previousValue != null) {
             return previousValue;
@@ -451,9 +455,9 @@ public class HierarchicalShardSyncer {
                             memoizationContext, multiStreamArgs)) {
                         isDescendant = true;
                         descendantParentShardIds.add(parentShardId);
-                        log.debug("Parent shard {} is a descendant.", parentShardId);
+                        log.debug("{} : Parent shard {} is a descendant.", streamIdentifier, parentShardId);
                     } else {
-                        log.debug("Parent shard {} is NOT a descendant.", parentShardId);
+                        log.debug("{} : Parent shard {} is NOT a descendant.", streamIdentifier, parentShardId);
                     }
                 }
 
@@ -461,7 +465,7 @@ public class HierarchicalShardSyncer {
                 if (isDescendant) {
                     for (String parentShardId : parentShardIds) {
                         if (!shardIdsOfCurrentLeases.contains(parentShardId)) {
-                            log.debug("Need to create a lease for shardId {}", parentShardId);
+                            log.debug("{} : Need to create a lease for shardId {}", streamIdentifier, parentShardId);
                             Lease lease = shardIdToLeaseMapOfNewShards.get(parentShardId);
                             if (lease == null) {
                                 lease = multiStreamArgs.isMultiStreamMode() ?
@@ -555,6 +559,7 @@ public class HierarchicalShardSyncer {
             final List<Lease> trackedLeases, final LeaseRefresher leaseRefresher,
             final MultiStreamArgs multiStreamArgs) throws KinesisClientLibIOException,
             DependencyException, InvalidStateException, ProvisionedThroughputException {
+        final String streamIdentifier = getStreamIdentifier(multiStreamArgs);
         final Set<String> kinesisShards = shards.stream().map(Shard::shardId).collect(Collectors.toSet());
 
         // Check if there are leases for non-existent shards
@@ -562,14 +567,15 @@ public class HierarchicalShardSyncer {
                 .filter(lease -> isCandidateForCleanup(lease, kinesisShards, multiStreamArgs)).collect(Collectors.toList());
 
         if (!CollectionUtils.isNullOrEmpty(garbageLeases)) {
-            log.info("Found {} candidate leases for cleanup. Refreshing list of" 
-                    + " Kinesis shards to pick up recent/latest shards", garbageLeases.size());
+            log.info("{} : Found {} candidate leases for cleanup. Refreshing list of"
+                    + " Kinesis shards to pick up recent/latest shards", streamIdentifier, garbageLeases.size());
             final Set<String> currentKinesisShardIds = getShardList(shardDetector).stream().map(Shard::shardId)
                     .collect(Collectors.toSet());
 
             for (Lease lease : garbageLeases) {
                 if (isCandidateForCleanup(lease, currentKinesisShardIds, multiStreamArgs)) {
-                    log.info("Deleting lease for shard {} as it is not present in Kinesis stream.", lease.leaseKey());
+                    log.info("{} : Deleting lease for shard {} as it is not present in Kinesis stream.",
+                            streamIdentifier, lease.leaseKey());
                     leaseRefresher.deleteLease(lease);
                 }
             }
@@ -589,14 +595,16 @@ public class HierarchicalShardSyncer {
     static boolean isCandidateForCleanup(final Lease lease, final Set<String> currentKinesisShardIds,
             final MultiStreamArgs multiStreamArgs)
             throws KinesisClientLibIOException {
-        boolean isCandidateForCleanup = true;
 
+        final String streamIdentifier = getStreamIdentifier(multiStreamArgs);
+
+        boolean isCandidateForCleanup = true;
         final String shardId = shardIdFromLeaseDeducer.apply(lease, multiStreamArgs);
 
         if (currentKinesisShardIds.contains(shardId)) {
             isCandidateForCleanup = false;
         } else {
-            log.info("Found lease for non-existent shard: {}. Checking its parent shards", shardId);
+            log.info("{} : Found lease for non-existent shard: {}. Checking its parent shards", streamIdentifier, shardId);
             final Set<String> parentShardIds = lease.parentShardIds();
             for (String parentShardId : parentShardIds) {
                 
@@ -605,7 +613,7 @@ public class HierarchicalShardSyncer {
                 if (currentKinesisShardIds.contains(parentShardId)) {
                     final String message = String.format("Parent shard %s exists but not the child shard %s",
                             parentShardId, shardId);
-                    log.info(message);
+                    log.info("{} : {}", streamIdentifier, message);
                     throw new KinesisClientLibIOException(message);
                 }
             }
@@ -693,8 +701,8 @@ public class HierarchicalShardSyncer {
             }
             
             if (okayToDelete) {
-                log.info("Deleting lease for shard {} as it has been completely processed and processing of child "
-                        + "shards has begun.", shardIdFromLeaseDeducer.apply(leaseForClosedShard, multiStreamArgs));
+                log.info("{} : Deleting lease for shard {} as it has been completely processed and processing of child "
+                        + "shards has begun.", streamIdentifier, shardIdFromLeaseDeducer.apply(leaseForClosedShard, multiStreamArgs));
                 leaseRefresher.deleteLease(leaseForClosedShard);
             }
         }
@@ -757,9 +765,9 @@ public class HierarchicalShardSyncer {
      * @param allShards All shards returved via DescribeStream. We assume this to represent a consistent shard list.
      * @return List of open shards (shards at the tip of the stream) - may include shards that are not yet active.
      */
-    static List<Shard> getOpenShards(final List<Shard> allShards) {
+    static List<Shard> getOpenShards(final List<Shard> allShards, final String streamIdentifier) {
         return allShards.stream().filter(shard -> shard.sequenceNumberRange().endingSequenceNumber() == null)
-                .peek(shard -> log.debug("Found open shard: {}", shard.shardId())).collect(Collectors.toList());
+                .peek(shard -> log.debug("{} : Found open shard: {}", streamIdentifier, shard.shardId())).collect(Collectors.toList());
     }
 
     private static ExtendedSequenceNumber convertToCheckpoint(final InitialPositionInStreamExtended position) {
@@ -775,7 +783,12 @@ public class HierarchicalShardSyncer {
         
         return checkpoint;
     }
-    
+
+    private static String getStreamIdentifier(MultiStreamArgs multiStreamArgs) {
+        return Optional.ofNullable(multiStreamArgs.streamIdentifier())
+                .map(streamId -> streamId.serialize()).orElse("single_stream_mode");
+    }
+
     /** Helper class to compare leases based on starting sequence number of the corresponding shards.
      *
      */
@@ -868,13 +881,15 @@ public class HierarchicalShardSyncer {
         @Override
         public List<Lease> determineNewLeasesToCreate(List<Shard> shards, List<Lease> currentLeases,
             InitialPositionInStreamExtended initialPosition, Set<String> inconsistentShardIds, MultiStreamArgs multiStreamArgs) {
+            final String streamIdentifier = Optional.ofNullable(multiStreamArgs.streamIdentifier())
+                    .map(streamId -> streamId.serialize()).orElse("");
             final Map<String, Shard> shardIdToShardMapOfAllKinesisShards = constructShardIdToShardMap(shards);
 
-            currentLeases.stream().peek(lease -> log.debug("Existing lease: {}", lease))
+            currentLeases.stream().peek(lease -> log.debug("{} : Existing lease: {}", streamIdentifier, lease))
                     .map(lease -> shardIdFromLeaseDeducer.apply(lease, multiStreamArgs))
                     .collect(Collectors.toSet());
 
-            final List<Lease> newLeasesToCreate = getLeasesToCreateForOpenAndClosedShards(initialPosition, shards, multiStreamArgs);
+            final List<Lease> newLeasesToCreate = getLeasesToCreateForOpenAndClosedShards(initialPosition, shards, multiStreamArgs, streamIdentifier);
 
             //TODO: Verify before LTR launch that ending sequence number is still returned from the service.
             final Comparator<Lease> startingSequenceNumberComparator =
@@ -889,7 +904,7 @@ public class HierarchicalShardSyncer {
          * reaching SHARD_END.
          */
         private List<Lease> getLeasesToCreateForOpenAndClosedShards(InitialPositionInStreamExtended initialPosition,
-            List<Shard> shards, MultiStreamArgs multiStreamArgs)  {
+            List<Shard> shards, MultiStreamArgs multiStreamArgs, String streamId)  {
             final Map<String, Lease> shardIdToNewLeaseMap = new HashMap<>();
 
             for (Shard shard : shards) {
@@ -898,7 +913,7 @@ public class HierarchicalShardSyncer {
                         newKCLMultiStreamLease(shard, multiStreamArgs.streamIdentifier) : newKCLLease(shard);
                 lease.checkpoint(convertToCheckpoint(initialPosition));
 
-                log.debug("Need to create a lease for shard with shardId {}", shardId);
+                log.debug("{} : Need to create a lease for shard with shardId {}", streamId, shardId);
 
                 shardIdToNewLeaseMap.put(shardId, lease);
             }
@@ -961,29 +976,31 @@ public class HierarchicalShardSyncer {
          * @return List of new leases to create sorted by starting sequenceNumber of the corresponding shard
          */
         @Override
-        public synchronized List<Lease> determineNewLeasesToCreate(List<Shard> shards, List<Lease> currentLeases,
-            InitialPositionInStreamExtended initialPosition, Set<String> inconsistentShardIds, MultiStreamArgs multiStreamArgs) {
+        public synchronized List<Lease> determineNewLeasesToCreate(final List<Shard> shards, final List<Lease> currentLeases,
+                final InitialPositionInStreamExtended initialPosition, final Set<String> inconsistentShardIds,
+                final MultiStreamArgs multiStreamArgs) {
             final Map<String, Lease> shardIdToNewLeaseMap = new HashMap<>();
             final Map<String, Shard> shardIdToShardMapOfAllKinesisShards = constructShardIdToShardMap(shards);
-
+            final String streamIdentifier = Optional.ofNullable(multiStreamArgs.streamIdentifier())
+                    .map(streamId -> streamId.serialize()).orElse("");
             final Set<String> shardIdsOfCurrentLeases = currentLeases.stream()
-                    .peek(lease -> log.debug("Existing lease: {}", lease))
+                    .peek(lease -> log.debug("{} : Existing lease: {}", streamIdentifier, lease))
                     .map(lease -> shardIdFromLeaseDeducer.apply(lease, multiStreamArgs))
                     .collect(Collectors.toSet());
 
-            final List<Shard> openShards = getOpenShards(shards);
+            final List<Shard> openShards = getOpenShards(shards, streamIdentifier);
             final Map<String, Boolean> memoizationContext = new HashMap<>();
 
             // Iterate over the open shards and find those that don't have any lease entries.
             for (Shard shard : openShards) {
                 final String shardId = shard.shardId();
-                log.debug("Evaluating leases for open shard {} and its ancestors.", shardId);
+                log.debug("{} : Evaluating leases for open shard {} and its ancestors.", streamIdentifier, shardId);
                 if (shardIdsOfCurrentLeases.contains(shardId)) {
-                    log.debug("Lease for shardId {} already exists. Not creating a lease", shardId);
+                    log.debug("{} : Lease for shardId {} already exists. Not creating a lease", streamIdentifier, shardId);
                 } else if (inconsistentShardIds.contains(shardId)) {
-                    log.info("shardId {} is an inconsistent child.  Not creating a lease", shardId);
+                    log.info("{} : shardId {} is an inconsistent child.  Not creating a lease", streamIdentifier, shardId);
                 } else {
-                    log.debug("Need to create a lease for shardId {}", shardId);
+                    log.debug("{} : Need to create a lease for shardId {}", streamIdentifier, shardId);
                     final Lease newLease = multiStreamArgs.isMultiStreamMode() ?
                             newKCLMultiStreamLease(shard, multiStreamArgs.streamIdentifier()) :
                             newKCLLease(shard);
@@ -1020,13 +1037,12 @@ public class HierarchicalShardSyncer {
                     } else {
                         newLease.checkpoint(convertToCheckpoint(initialPosition));
                     }
-                    log.debug("Set checkpoint of {} to {}", newLease.leaseKey(), newLease.checkpoint());
+                    log.debug("{} : Set checkpoint of {} to {}", streamIdentifier, newLease.leaseKey(), newLease.checkpoint());
                     shardIdToNewLeaseMap.put(shardId, newLease);
                 }
             }
 
             final List<Lease> newLeasesToCreate = new ArrayList<>(shardIdToNewLeaseMap.values());
-            //TODO: Verify before LTR launch that ending sequence number is still returned from the service.
             final Comparator<Lease> startingSequenceNumberComparator = new StartingSequenceNumberAndShardIdBasedComparator(
                     shardIdToShardMapOfAllKinesisShards, multiStreamArgs);
             newLeasesToCreate.sort(startingSequenceNumberComparator);

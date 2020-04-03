@@ -18,6 +18,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.Validate;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
@@ -30,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 
 /**
  * The top level orchestrator for coordinating the periodic shard sync related
@@ -44,21 +46,24 @@ class PeriodicShardSyncManager {
 
     private final String workerId;
     private final LeaderDecider leaderDecider;
-    private final Map<StreamIdentifier, ShardSyncTaskManager> streamToShardSyncTaskManagerMap;
+    private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
+    private final Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider;
     private final ScheduledExecutorService shardSyncThreadPool;
     private boolean isRunning;
 
-    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, Map<StreamIdentifier, ShardSyncTaskManager> streamToShardSyncTaskManagerMap) {
-        this(workerId, leaderDecider, streamToShardSyncTaskManagerMap, Executors.newSingleThreadScheduledExecutor());
+    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
+            Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider) {
+        this(workerId, leaderDecider, currentStreamConfigMap, shardSyncTaskManagerProvider, Executors.newSingleThreadScheduledExecutor());
     }
 
-    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, Map<StreamIdentifier, ShardSyncTaskManager> streamToShardSyncTaskManagerMap,
-                             ScheduledExecutorService shardSyncThreadPool) {
+    PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
+            Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider, ScheduledExecutorService shardSyncThreadPool) {
         Validate.notBlank(workerId, "WorkerID is required to initialize PeriodicShardSyncManager.");
         Validate.notNull(leaderDecider, "LeaderDecider is required to initialize PeriodicShardSyncManager.");
         this.workerId = workerId;
         this.leaderDecider = leaderDecider;
-        this.streamToShardSyncTaskManagerMap = streamToShardSyncTaskManagerMap;
+        this.currentStreamConfigMap = currentStreamConfigMap;
+        this.shardSyncTaskManagerProvider = shardSyncTaskManagerProvider;
         this.shardSyncThreadPool = shardSyncThreadPool;
     }
 
@@ -85,8 +90,13 @@ class PeriodicShardSyncManager {
      * @return the result of the task
      */
     public synchronized void syncShardsOnce() throws Exception {
-        for (Map.Entry<StreamIdentifier, ShardSyncTaskManager> mapEntry : streamToShardSyncTaskManagerMap.entrySet()) {
-            final ShardSyncTaskManager shardSyncTaskManager = mapEntry.getValue();
+        // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
+        // TODO: for already synced streams
+        for(Map.Entry<StreamIdentifier, StreamConfig> streamConfigEntry : currentStreamConfigMap.entrySet()) {
+            final StreamIdentifier streamIdentifier = streamConfigEntry.getKey();
+            log.info("Syncing Kinesis shard info for " + streamIdentifier);
+            final StreamConfig streamConfig = streamConfigEntry.getValue();
+            final ShardSyncTaskManager shardSyncTaskManager = shardSyncTaskManagerProvider.apply(streamConfig);
             final TaskResult taskResult = shardSyncTaskManager.executeShardSyncTask();
             if (taskResult.getException() != null) {
                 throw taskResult.getException();
@@ -106,8 +116,8 @@ class PeriodicShardSyncManager {
 
     private void runShardSync() {
         if (leaderDecider.isLeader(workerId)) {
-            for (Map.Entry<StreamIdentifier, ShardSyncTaskManager> mapEntry : streamToShardSyncTaskManagerMap.entrySet()) {
-                final ShardSyncTaskManager shardSyncTaskManager = mapEntry.getValue();
+            for (Map.Entry<StreamIdentifier, StreamConfig> streamConfigEntry : currentStreamConfigMap.entrySet()) {
+                final ShardSyncTaskManager shardSyncTaskManager = shardSyncTaskManagerProvider.apply(streamConfigEntry.getValue());
                 if (!shardSyncTaskManager.syncShardAndLeaseInfo()) {
                     log.warn("Failed to submit shard sync task for stream {}. This could be due to the previous shard sync task not finished.",
                              shardSyncTaskManager.shardDetector().streamIdentifier().streamName());

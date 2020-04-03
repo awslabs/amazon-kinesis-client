@@ -105,7 +105,7 @@ public class RetrievalConfig {
         this.applicationName = applicationName;
     }
 
-    public void initialPositionInStreamExtended(InitialPositionInStreamExtended initialPositionInStreamExtended) {
+    public RetrievalConfig initialPositionInStreamExtended(InitialPositionInStreamExtended initialPositionInStreamExtended) {
         final StreamConfig[] streamConfig = new StreamConfig[1];
         this.appStreamTracker.apply(multiStreamTracker -> {
             throw new IllegalArgumentException(
@@ -113,6 +113,7 @@ public class RetrievalConfig {
         }, sc -> streamConfig[0] = sc);
         this.appStreamTracker = Either
                 .right(new StreamConfig(streamConfig[0].streamIdentifier(), initialPositionInStreamExtended));
+        return this;
     }
 
     public RetrievalFactory retrievalFactory() {

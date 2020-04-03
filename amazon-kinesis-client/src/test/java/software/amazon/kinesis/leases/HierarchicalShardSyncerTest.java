@@ -103,6 +103,7 @@ public class HierarchicalShardSyncerTest {
     @Before
     public void setup() {
         hierarchicalShardSyncer = new HierarchicalShardSyncer();
+        when(shardDetector.streamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("stream"));
     }
 
     private void setupMultiStream() {
@@ -1196,16 +1197,16 @@ public class HierarchicalShardSyncerTest {
         }
     }
 
-//    /**
-//     * Test CheckIfDescendantAndAddNewLeasesForAncestors (initial position Latest)
-//     * Shard structure (each level depicts a stream segment):
-//     * 0 1 2 3 4   5- shards till epoch 102
-//     * \ / \ / |   |
-//     *  6   7  4   5- shards from epoch 103 - 205
-//     *   \ /   |  /\
-//     *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
-//     * Current leases: (4, 5, 7)
-//     */
+    /**
+     * Test CheckIfDescendantAndAddNewLeasesForAncestors (initial position Latest)
+     * Shard structure (each level depicts a stream segment):
+     * 0 1 2 3 4   5- shards till epoch 102
+     * \ / \ / |   |
+     *  6   7  4   5- shards from epoch 103 - 205
+     *   \ /   |  /\
+     *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
+     * Current leases: (4, 5, 7)
+     */
     @Test
     public void testDetermineNewLeasesToCreateSplitMergeLatest2() {
         final List<Shard> shards = constructShardListForGraphA();

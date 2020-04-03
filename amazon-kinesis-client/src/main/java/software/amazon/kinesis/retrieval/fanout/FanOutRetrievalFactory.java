@@ -53,10 +53,14 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
         final String streamName;
         if(streamIdentifierStr.isPresent()) {
             streamName = StreamIdentifier.multiStreamInstance(streamIdentifierStr.get()).streamName();
+            return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
+                    streamToConsumerArnMap.computeIfAbsent(streamName, consumerArnProvider::apply),
+                    streamIdentifierStr.get());
         } else {
             streamName = defaultStreamName;
+            return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
+                    streamToConsumerArnMap.computeIfAbsent(streamName, consumerArnProvider::apply));
         }
-        return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
-                streamToConsumerArnMap.computeIfAbsent(streamName, consumerArnProvider::apply));
+
     }
 }
