@@ -173,6 +173,7 @@ public class HierarchicalShardSyncer {
         } else {
             throw new InvalidStateException("Unable to populate new lease for child shard " + childShard.shardId() + "because parent shards cannot be found.");
         }
+        newLease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
         newLease.ownerSwitchesSinceCheckpoint(0L);
         return newLease;
     }

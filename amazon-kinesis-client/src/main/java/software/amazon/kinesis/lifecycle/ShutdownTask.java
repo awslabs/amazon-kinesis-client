@@ -71,8 +71,6 @@ public class ShutdownTask implements ConsumerTask {
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
-    private final boolean garbageCollectLeases = false;
-    private final boolean isLeaseTableEmpty = false;
     private final boolean ignoreUnexpectedChildShards;
     @NonNull
     private final LeaseCoordinator leaseCoordinator;
@@ -174,7 +172,7 @@ public class ShutdownTask implements ConsumerTask {
     private void createLeasesForChildShardsIfNotExist()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         for(ChildShard childShard : childShards) {
-            if(leaseCoordinator.getCurrentlyHeldLease(shardInfo.shardId()) == null) {
+            if(leaseCoordinator.getCurrentlyHeldLease(childShard.shardId()) == null) {
                 final Lease leaseToCreate = hierarchicalShardSyncer.createLeaseForChildShard(childShard);
                 leaseCoordinator.leaseRefresher().createLeaseIfNotExists(leaseToCreate);
             }
