@@ -44,6 +44,7 @@ public class InMemoryCheckpointer implements Checkpointer {
         checkpoints.put(leaseKey, checkpointValue);
         flushpoints.put(leaseKey, checkpointValue);
         pendingCheckpoints.remove(leaseKey);
+        pendingCheckpointStates.remove(leaseKey);
 
         if (log.isDebugEnabled()) {
             log.debug("shardId: {} checkpoint: {}", leaseKey, checkpointValue);

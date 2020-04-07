@@ -134,6 +134,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
 
         lease.checkpoint(checkpoint);
         lease.pendingCheckpoint(null);
+        lease.pendingCheckpointState(null);
         lease.ownerSwitchesSinceCheckpoint(0L);
 
         return leaseCoordinator.updateLease(lease, concurrencyToken, operation, leaseKey);
