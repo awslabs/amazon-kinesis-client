@@ -71,6 +71,7 @@ public class InMemoryCheckpointer implements Checkpointer {
     @Override
     public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, byte[] pendingCheckpointState, String concurrencyToken) throws KinesisClientLibException {
         pendingCheckpoints.put(leaseKey, pendingCheckpoint);
+        pendingCheckpointStates.put(leaseKey, pendingCheckpointState);
     }
 
     @Override
