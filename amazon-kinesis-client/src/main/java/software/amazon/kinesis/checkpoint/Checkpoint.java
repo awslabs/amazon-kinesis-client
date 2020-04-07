@@ -18,8 +18,6 @@ import lombok.Data;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-import java.util.Arrays;
-
 /**
  * A class encapsulating the 2 pieces of state stored in a checkpoint.
  */
