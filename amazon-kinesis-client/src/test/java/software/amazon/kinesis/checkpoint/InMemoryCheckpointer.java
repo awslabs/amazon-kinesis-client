@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
-import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -65,11 +64,11 @@ public class InMemoryCheckpointer implements Checkpointer {
     @Override
     public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
             throws KinesisClientLibException {
-        prepareCheckpoint(leaseKey, pendingCheckpoint, null, concurrencyToken);
+        prepareCheckpoint(leaseKey, pendingCheckpoint, concurrencyToken, null);
     }
 
     @Override
-    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, byte[] pendingCheckpointState, String concurrencyToken) throws KinesisClientLibException {
+    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken, byte[] pendingCheckpointState) throws KinesisClientLibException {
         pendingCheckpoints.put(leaseKey, pendingCheckpoint);
         pendingCheckpointStates.put(leaseKey, pendingCheckpointState);
     }

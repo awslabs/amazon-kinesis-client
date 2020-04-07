@@ -329,8 +329,8 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
         }
 
         try {
-            checkpointer.prepareCheckpoint(ShardInfo.getLeaseKey(shardInfo), newPrepareCheckpoint, applicationState,
-                    shardInfo.concurrencyToken());
+            checkpointer.prepareCheckpoint(ShardInfo.getLeaseKey(shardInfo), newPrepareCheckpoint, shardInfo.concurrencyToken(), applicationState
+            );
         } catch (ThrottlingException | ShutdownException | InvalidStateException
                 | KinesisClientLibDependencyException e) {
             throw e;

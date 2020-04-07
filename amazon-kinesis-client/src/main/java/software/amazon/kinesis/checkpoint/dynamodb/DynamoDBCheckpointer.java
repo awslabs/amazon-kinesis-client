@@ -99,14 +99,14 @@ public class DynamoDBCheckpointer implements Checkpointer {
     @Override
     public void prepareCheckpoint(final String leaseKey, final ExtendedSequenceNumber pendingCheckpoint,
             final String concurrencyToken) throws KinesisClientLibException {
-        prepareCheckpoint(leaseKey, pendingCheckpoint, null, concurrencyToken);
+        prepareCheckpoint(leaseKey, pendingCheckpoint, concurrencyToken, null);
     }
 
     @Override
-    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, byte[] pendingCheckpointState, String concurrencyToken) throws KinesisClientLibException {
+    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken, byte[] pendingCheckpointState) throws KinesisClientLibException {
         try {
             boolean wasSuccessful =
-                    prepareCheckpoint(leaseKey, pendingCheckpoint, pendingCheckpointState, UUID.fromString(concurrencyToken));
+                    prepareCheckpoint(leaseKey, pendingCheckpoint, UUID.fromString(concurrencyToken), pendingCheckpointState);
             if (!wasSuccessful) {
                 throw new ShutdownException(
                         "Can't prepare checkpoint - instance doesn't hold the lease for this shard");
@@ -139,7 +139,7 @@ public class DynamoDBCheckpointer implements Checkpointer {
         return leaseCoordinator.updateLease(lease, concurrencyToken, operation, leaseKey);
     }
 
-    boolean prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, byte[] pendingCheckpointState, UUID concurrencyToken)
+    boolean prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, UUID concurrencyToken, byte[] pendingCheckpointState)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         Lease lease = leaseCoordinator.getCurrentlyHeldLease(leaseKey);
         if (lease == null) {

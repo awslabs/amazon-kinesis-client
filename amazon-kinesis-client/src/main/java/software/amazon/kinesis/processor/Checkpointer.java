@@ -73,7 +73,7 @@ public interface Checkpointer {
     void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
         throws KinesisClientLibException;
 
-    void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, byte[] pendingCheckpointState, String concurrencyToken)
+    void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken, byte[] pendingCheckpointState)
             throws KinesisClientLibException;
 
     void operation(String operation);
