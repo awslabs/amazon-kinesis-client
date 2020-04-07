@@ -50,6 +50,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String CHECKPOINT_SUBSEQUENCE_NUMBER_KEY = "checkpointSubSequenceNumber";
     private static final String PENDING_CHECKPOINT_SEQUENCE_KEY = "pendingCheckpoint";
     private static final String PENDING_CHECKPOINT_SUBSEQUENCE_KEY = "pendingCheckpointSubSequenceNumber";
+    private static final String PENDING_CHECKPOINT_STATE_KEY = "pendingCheckpointState";
     private static final String PARENT_SHARD_ID_KEY = "parentShardId";
 
     @Override
@@ -73,6 +74,10 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
         if (lease.pendingCheckpoint() != null && !lease.pendingCheckpoint().sequenceNumber().isEmpty()) {
             result.put(PENDING_CHECKPOINT_SEQUENCE_KEY, DynamoUtils.createAttributeValue(lease.pendingCheckpoint().sequenceNumber()));
             result.put(PENDING_CHECKPOINT_SUBSEQUENCE_KEY, DynamoUtils.createAttributeValue(lease.pendingCheckpoint().subSequenceNumber()));
+        }
+
+        if (lease.pendingCheckpointState() != null) {
+            result.put(PENDING_CHECKPOINT_STATE_KEY, DynamoUtils.createAttributeValue(lease.checkpoint().subSequenceNumber()));
         }
 
         return result;
@@ -105,6 +110,9 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
                             DynamoUtils.safeGetLong(dynamoRecord, PENDING_CHECKPOINT_SUBSEQUENCE_KEY))
             );
         }
+
+        leaseToUpdate.pendingCheckpointState(DynamoUtils.safeGetByteArray(dynamoRecord, PENDING_CHECKPOINT_STATE_KEY));
+
         return leaseToUpdate;
     }
 
@@ -220,6 +228,13 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
             result.put(PENDING_CHECKPOINT_SEQUENCE_KEY, AttributeValueUpdate.builder().action(AttributeAction.DELETE).build());
             result.put(PENDING_CHECKPOINT_SUBSEQUENCE_KEY, AttributeValueUpdate.builder().action(AttributeAction.DELETE).build());
         }
+
+        if (lease.pendingCheckpointState() != null) {
+            result.put(PENDING_CHECKPOINT_STATE_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.pendingCheckpointState())));
+        } else {
+            result.put(PENDING_CHECKPOINT_STATE_KEY, AttributeValueUpdate.builder().action(AttributeAction.DELETE).build());
+        }
+
         return result;
     }
 
