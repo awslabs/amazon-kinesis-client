@@ -102,13 +102,13 @@ public class Lease {
     protected Lease(Lease lease) {
         this(lease.leaseKey(), lease.leaseOwner(), lease.leaseCounter(), lease.concurrencyToken(),
                 lease.lastCounterIncrementNanos(), lease.checkpoint(), lease.pendingCheckpoint(),
-                lease.ownerSwitchesSinceCheckpoint(), lease.parentShardIds());
+                lease.ownerSwitchesSinceCheckpoint(), lease.parentShardIds(), lease.pendingCheckpointState());
     }
 
     public Lease(final String leaseKey, final String leaseOwner, final Long leaseCounter,
                     final UUID concurrencyToken, final Long lastCounterIncrementNanos,
                     final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint,
-                    final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds) {
+                    final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds, final byte[] pendingCheckpointState) {
         this.leaseKey = leaseKey;
         this.leaseOwner = leaseOwner;
         this.leaseCounter = leaseCounter;
@@ -120,6 +120,7 @@ public class Lease {
         if (parentShardIds != null) {
             this.parentShardIds.addAll(parentShardIds);
         }
+        this.pendingCheckpointState = pendingCheckpointState;
     }
 
     /**
@@ -139,6 +140,7 @@ public class Lease {
         ownerSwitchesSinceCheckpoint(lease.ownerSwitchesSinceCheckpoint());
         checkpoint(lease.checkpoint);
         pendingCheckpoint(lease.pendingCheckpoint);
+        pendingCheckpointState(lease.pendingCheckpointState);
         parentShardIds(lease.parentShardIds);
     }
 

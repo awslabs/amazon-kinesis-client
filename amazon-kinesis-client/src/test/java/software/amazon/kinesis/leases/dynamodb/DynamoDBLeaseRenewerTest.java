@@ -55,7 +55,7 @@ public class DynamoDBLeaseRenewerTest {
     private LeaseRefresher leaseRefresher;
 
     private static Lease newLease(String leaseKey) {
-        return new Lease(leaseKey, "LeaseOwner", 0L, UUID.randomUUID(), System.nanoTime(), null, null, null, new HashSet<>());
+        return new Lease(leaseKey, "LeaseOwner", 0L, UUID.randomUUID(), System.nanoTime(), null, null, null, new HashSet<>(), null);
     }
 
     @Before

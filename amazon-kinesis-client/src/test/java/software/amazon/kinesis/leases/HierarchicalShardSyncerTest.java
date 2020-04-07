@@ -969,7 +969,7 @@ public class HierarchicalShardSyncerTest {
                 parentShardIds.add(shard.adjacentParentShardId());
             }
             return new Lease(shard.shardId(), leaseOwner, 0L, UUID.randomUUID(), 0L, checkpoint, null, 0L,
-                    parentShardIds);
+                    parentShardIds, null);
         }).collect(Collectors.toList());
     }
 
