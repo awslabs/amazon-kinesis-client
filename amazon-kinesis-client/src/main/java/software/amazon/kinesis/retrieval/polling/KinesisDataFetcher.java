@@ -121,13 +121,7 @@ public class KinesisDataFetcher {
 
         if (nextIterator != null) {
             try {
-                GetRecordsResponse getRecordsResponse = getRecords(nextIterator);
-                while (!isValidResponse(getRecordsResponse)) {
-                    log.error("{} : GetRecords response is not valid. nextShardIterator: {}. childShards: {}. Will retry GetRecords with the same nextIterator.",
-                              shardId, getRecordsResponse.nextShardIterator(), getRecordsResponse.childShards());
-                    getRecordsResponse = getRecords(nextIterator);
-                }
-                return new AdvancingResult(getRecordsResponse);
+                return new AdvancingResult(getRecords(nextIterator));
             } catch (ResourceNotFoundException e) {
                 log.info("Caught ResourceNotFoundException when fetching records for shard {}", streamAndShardId);
                 return TERMINAL_RESULT;
@@ -186,11 +180,6 @@ public class KinesisDataFetcher {
         public boolean isShardEnd() {
             return isShardEndReached;
         }
-    }
-
-    private boolean isValidResponse(GetRecordsResponse response) {
-            return response.nextShardIterator() == null ? !CollectionUtils.isNullOrEmpty(response.childShards())
-                                                        : response.childShards() != null && response.childShards().isEmpty();
     }
 
     /**
@@ -297,6 +286,11 @@ public class KinesisDataFetcher {
         try {
             final GetRecordsResponse response = FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(request),
                     maxFutureWait);
+            if (!isValidResponse(response)) {
+                throw new RetryableRetrievalException("GetRecords response is not valid for shard: " + streamAndShardId
+                        + ". nextShardIterator: " + response.nextShardIterator()
+                        + ". childShards: " + response.childShards() + ". Will retry GetRecords with the same nextIterator.");
+            }
             success = true;
             return response;
         } catch (ExecutionException e) {
@@ -312,6 +306,11 @@ public class KinesisDataFetcher {
                     success, startTime, MetricsLevel.DETAILED);
             MetricsUtil.endScope(metricsScope);
         }
+    }
+
+    private boolean isValidResponse(GetRecordsResponse response) {
+        return response.nextShardIterator() == null ? !CollectionUtils.isNullOrEmpty(response.childShards())
+                                                    : response.childShards() != null && response.childShards().isEmpty();
     }
 
     private AWSExceptionManager createExceptionManager() {

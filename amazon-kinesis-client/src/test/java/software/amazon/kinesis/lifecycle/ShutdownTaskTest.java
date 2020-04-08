@@ -52,6 +52,7 @@ import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardObjectHelper;
+import software.amazon.kinesis.leases.exceptions.CustomerApplicationException;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -125,7 +126,7 @@ public class ShutdownTaskTest {
 
         final TaskResult result = task.call();
         assertNotNull(result.getException());
-        assertTrue(result.getException() instanceof IllegalArgumentException);
+        assertTrue(result.getException() instanceof CustomerApplicationException);
     }
 
     /**

@@ -165,19 +165,6 @@ public class HierarchicalShardSyncer {
         }
     }
 
-    public synchronized Lease createLeaseForChildShard(ChildShard childShard) throws InvalidStateException {
-        Lease newLease = new Lease();
-        newLease.leaseKey(childShard.shardId());
-        if (!CollectionUtils.isNullOrEmpty(childShard.parentShards())) {
-            newLease.parentShardIds(childShard.parentShards());
-        } else {
-            throw new InvalidStateException("Unable to populate new lease for child shard " + childShard.shardId() + "because parent shards cannot be found.");
-        }
-        newLease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
-        newLease.ownerSwitchesSinceCheckpoint(0L);
-        return newLease;
-    }
-
     // CHECKSTYLE:ON CyclomaticComplexity
 
     /** Note: This method has package level access solely for testing purposes.
@@ -720,6 +707,41 @@ public class HierarchicalShardSyncer {
                 leaseRefresher.deleteLease(leaseForClosedShard);
             }
         }
+    }
+
+    public synchronized Lease createLeaseForChildShard(final ChildShard childShard, final StreamIdentifier streamIdentifier) throws InvalidStateException {
+        final MultiStreamArgs multiStreamArgs = new MultiStreamArgs(isMultiStreamMode, streamIdentifier);
+
+        return multiStreamArgs.isMultiStreamMode() ? newKCLMultiStreamLeaseForChildShard(childShard, streamIdentifier)
+                                                   : newKCLLeaseForChildShard(childShard);
+    }
+
+    private static Lease newKCLLeaseForChildShard(final ChildShard childShard) throws InvalidStateException {
+        Lease newLease = new Lease();
+        newLease.leaseKey(childShard.shardId());
+        if (!CollectionUtils.isNullOrEmpty(childShard.parentShards())) {
+            newLease.parentShardIds(childShard.parentShards());
+        } else {
+            throw new InvalidStateException("Unable to populate new lease for child shard " + childShard.shardId() + "because parent shards cannot be found.");
+        }
+        newLease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        newLease.ownerSwitchesSinceCheckpoint(0L);
+        return newLease;
+    }
+
+    private static Lease newKCLMultiStreamLeaseForChildShard(final ChildShard childShard, final StreamIdentifier streamIdentifier) throws InvalidStateException {
+        MultiStreamLease newLease = new MultiStreamLease();
+        newLease.leaseKey(MultiStreamLease.getLeaseKey(streamIdentifier.serialize(), childShard.shardId()));
+        if (!CollectionUtils.isNullOrEmpty(childShard.parentShards())) {
+            newLease.parentShardIds(childShard.parentShards());
+        } else {
+            throw new InvalidStateException("Unable to populate new lease for child shard " + childShard.shardId() + "because parent shards cannot be found.");
+        }
+        newLease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        newLease.ownerSwitchesSinceCheckpoint(0L);
+        newLease.streamIdentifier(streamIdentifier.serialize());
+        newLease.shardId(childShard.shardId());
+        return newLease;
     }
 
     /**

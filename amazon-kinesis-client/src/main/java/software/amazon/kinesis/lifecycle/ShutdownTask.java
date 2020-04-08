@@ -31,11 +31,11 @@ import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
+import software.amazon.kinesis.leases.exceptions.CustomerApplicationException;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
-import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsScope;
@@ -100,7 +100,6 @@ public class ShutdownTask implements ConsumerTask {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, SHUTDOWN_TASK_OPERATION);
 
         Exception exception;
-        boolean applicationException = false;
 
         try {
             try {
@@ -117,49 +116,30 @@ public class ShutdownTask implements ConsumerTask {
                     recordProcessorCheckpointer
                             .sequenceNumberAtShardEnd(recordProcessorCheckpointer.largestPermittedCheckpointValue());
                     recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
-                    // Call the shardReocrdsProcessor to checkpoint with SHARD_END sequence number.
-                    // The shardEnded is implemented by customer. We should validate if the Shard_End checkpointing is successful after calling shardEnded.
-                    try {
-                        shardRecordProcessor.shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
-                        final ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.lastCheckpointValue();
-                        if (lastCheckpointValue == null
-                                || !lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END)) {
-                            throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
-                                                                       + shardInfoIdProvider.apply(shardInfo) + ". Application must checkpoint upon shard end. " +
-                                                                       "See ShardRecordProcessor.shardEnded javadocs for more information.");
-                        }
-                    } catch (Exception e) {
-                        applicationException = true;
-                        throw e;
-                    } finally {
-                        MetricsUtil.addLatency(scope, RECORD_PROCESSOR_SHUTDOWN_METRIC, startTime, MetricsLevel.SUMMARY);
-                    }
+                    // Call the shardRecordsProcessor to checkpoint with SHARD_END sequence number.
+                    // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
+                    throwOnApplicationException(() -> applicationCheckpointWithShardEnd(), scope, startTime);
                 } else {
-                    try {
-                        shardRecordProcessor.leaseLost(LeaseLostInput.builder().build());
-                    } catch (Exception e) {
-                        applicationException = true;
-                        throw e;
-                    }
+                    throwOnApplicationException(() -> shardRecordProcessor.leaseLost(LeaseLostInput.builder().build()), scope, startTime);
                 }
 
-                log.debug("Shutting down retrieval strategy.");
+                log.debug("Shutting down retrieval strategy for shard {}.", shardInfoIdProvider.apply(shardInfo));
                 recordsPublisher.shutdown();
                 log.debug("Record processor completed shutdown() for shard {}", shardInfoIdProvider.apply(shardInfo));
 
                 return new TaskResult(null);
             } catch (Exception e) {
-                if (applicationException) {
-                    log.error("Application exception. ", e);
+                if (e instanceof CustomerApplicationException) {
+                    log.error("Shard {}: Application exception. ", shardInfoIdProvider.apply(shardInfo), e);
                 } else {
-                    log.error("Caught exception: ", e);
+                    log.error("Shard {}: Caught exception: ", shardInfoIdProvider.apply(shardInfo), e);
                 }
                 exception = e;
                 // backoff if we encounter an exception.
                 try {
                     Thread.sleep(this.backoffTimeMillis);
                 } catch (InterruptedException ie) {
-                    log.debug("Interrupted sleep", ie);
+                    log.debug("Shard{}: Interrupted sleep", shardInfoIdProvider.apply(shardInfo), ie);
                 }
             }
         } finally {
@@ -169,11 +149,32 @@ public class ShutdownTask implements ConsumerTask {
         return new TaskResult(exception);
     }
 
+    private void applicationCheckpointWithShardEnd() {
+        shardRecordProcessor.shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
+        final ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.lastCheckpointValue();
+        if (lastCheckpointValue == null
+                || !lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END)) {
+            throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
+                                                       + shardInfoIdProvider.apply(shardInfo) + ". Application must checkpoint upon shard end. " +
+                                                       "See ShardRecordProcessor.shardEnded javadocs for more information.");
+        }
+    }
+
+    private void throwOnApplicationException(Runnable action, MetricsScope metricsScope, final long startTime) throws CustomerApplicationException {
+        try {
+            action.run();
+        } catch (Exception e) {
+            throw new CustomerApplicationException("Customer application throws exception for shard " + shardInfoIdProvider.apply(shardInfo) +": ", e);
+        } finally {
+            MetricsUtil.addLatency(metricsScope, RECORD_PROCESSOR_SHUTDOWN_METRIC, startTime, MetricsLevel.SUMMARY);
+        }
+    }
+
     private void createLeasesForChildShardsIfNotExist()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         for(ChildShard childShard : childShards) {
             if(leaseCoordinator.getCurrentlyHeldLease(childShard.shardId()) == null) {
-                final Lease leaseToCreate = hierarchicalShardSyncer.createLeaseForChildShard(childShard);
+                final Lease leaseToCreate = hierarchicalShardSyncer.createLeaseForChildShard(childShard, shardDetector.streamIdentifier());
                 leaseCoordinator.leaseRefresher().createLeaseIfNotExists(leaseToCreate);
             }
         }
