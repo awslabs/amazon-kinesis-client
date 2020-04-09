@@ -20,6 +20,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -30,6 +31,10 @@ import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
+import software.amazon.kinesis.leases.exceptions.CustomerApplicationException;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -66,8 +71,6 @@ public class ShutdownTask implements ConsumerTask {
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
-    private final boolean garbageCollectLeases = false;
-    private final boolean isLeaseTableEmpty = false;
     private final boolean ignoreUnexpectedChildShards;
     @NonNull
     private final LeaseCoordinator leaseCoordinator;
@@ -80,6 +83,8 @@ public class ShutdownTask implements ConsumerTask {
     private final MetricsFactory metricsFactory;
 
     private final TaskType taskType = TaskType.SHUTDOWN;
+
+    private final List<ChildShard> childShards;
 
     private static final Function<ShardInfo, String> shardInfoIdProvider = shardInfo -> shardInfo
             .streamIdentifierSerOpt().map(s -> s + ":" + shardInfo.shardId()).orElse(shardInfo.shardId());
@@ -95,85 +100,48 @@ public class ShutdownTask implements ConsumerTask {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, SHUTDOWN_TASK_OPERATION);
 
         Exception exception;
-        boolean applicationException = false;
 
         try {
             try {
-                ShutdownReason localReason = reason;
-                List<Shard> latestShards = null;
-                /*
-                 * Revalidate if the current shard is closed before shutting down the shard consumer with reason SHARD_END
-                 * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows
-                 * active workers to contend for the lease of this shard.
-                 */
-                if (localReason == ShutdownReason.SHARD_END) {
-                    latestShards = shardDetector.listShards();
+                log.debug("Invoking shutdown() for shard {}, concurrencyToken {}. Shutdown reason: {}",
+                          shardInfoIdProvider.apply(shardInfo), shardInfo.concurrencyToken(), reason);
 
-                    //If latestShards is empty, should also shutdown the ShardConsumer without checkpoint with SHARD_END
-                    if (CollectionUtils.isNullOrEmpty(latestShards) || !isShardInContextParentOfAny(latestShards)) {
-                        localReason = ShutdownReason.LEASE_LOST;
-                        dropLease();
-                        log.info("Forcing the lease to be lost before shutting down the consumer for Shard: " + shardInfoIdProvider.apply(shardInfo));
+                final long startTime = System.currentTimeMillis();
+                if (reason == ShutdownReason.SHARD_END) {
+                    // Create new lease for the child shards if they don't exist.
+                    if (!CollectionUtils.isNullOrEmpty(childShards)) {
+                        createLeasesForChildShardsIfNotExist();
+                    } else {
+                        log.warn("Shard {} no longer exists. Shutting down consumer with SHARD_END reason without creating leases for child shards.", shardInfoIdProvider.apply(shardInfo));
                     }
-                }
 
-                // If we reached end of the shard, set sequence number to SHARD_END.
-                if (localReason == ShutdownReason.SHARD_END) {
                     recordProcessorCheckpointer
                             .sequenceNumberAtShardEnd(recordProcessorCheckpointer.largestPermittedCheckpointValue());
                     recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
+                    // Call the shardRecordsProcessor to checkpoint with SHARD_END sequence number.
+                    // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
+                    throwOnApplicationException(() -> applicationCheckpointAndVerification(), scope, startTime);
+                } else {
+                    throwOnApplicationException(() -> shardRecordProcessor.leaseLost(LeaseLostInput.builder().build()), scope, startTime);
                 }
 
-                log.debug("Invoking shutdown() for shard {}, concurrencyToken {}. Shutdown reason: {}",
-                        shardInfoIdProvider.apply(shardInfo), shardInfo.concurrencyToken(), localReason);
-                final ShutdownInput shutdownInput = ShutdownInput.builder().shutdownReason(localReason)
-                        .checkpointer(recordProcessorCheckpointer).build();
-                final long startTime = System.currentTimeMillis();
-                try {
-                    if (localReason == ShutdownReason.SHARD_END) {
-                        shardRecordProcessor.shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
-                        ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.lastCheckpointValue();
-                        if (lastCheckpointValue == null
-                                || !lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END)) {
-                            throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
-                                    + shardInfoIdProvider.apply(shardInfo) + ". Application must checkpoint upon shard end. " +
-                                    "See ShardRecordProcessor.shardEnded javadocs for more information.");
-                        }
-                    } else {
-                        shardRecordProcessor.leaseLost(LeaseLostInput.builder().build());
-                    }
-                    log.debug("Shutting down retrieval strategy.");
-                    recordsPublisher.shutdown();
-                    log.debug("Record processor completed shutdown() for shard {}", shardInfoIdProvider.apply(shardInfo));
-                } catch (Exception e) {
-                    applicationException = true;
-                    throw e;
-                } finally {
-                    MetricsUtil.addLatency(scope, RECORD_PROCESSOR_SHUTDOWN_METRIC, startTime, MetricsLevel.SUMMARY);
-                }
-
-                if (localReason == ShutdownReason.SHARD_END) {
-                    log.debug("Looking for child shards of shard {}", shardInfoIdProvider.apply(shardInfo));
-                    // create leases for the child shards
-                    hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseCoordinator.leaseRefresher(),
-                            initialPositionInStream, latestShards, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, garbageCollectLeases,
-                            isLeaseTableEmpty);
-                    log.debug("Finished checking for child shards of shard {}", shardInfoIdProvider.apply(shardInfo));
-                }
+                log.debug("Shutting down retrieval strategy for shard {}.", shardInfoIdProvider.apply(shardInfo));
+                recordsPublisher.shutdown();
+                log.debug("Record processor completed shutdown() for shard {}", shardInfoIdProvider.apply(shardInfo));
 
                 return new TaskResult(null);
             } catch (Exception e) {
-                if (applicationException) {
-                    log.error("Application exception. ", e);
+                if (e instanceof CustomerApplicationException) {
+                    log.error("Shard {}: Application exception. ", shardInfoIdProvider.apply(shardInfo), e);
                 } else {
-                    log.error("Caught exception: ", e);
+                    log.error("Shard {}: Caught exception: ", shardInfoIdProvider.apply(shardInfo), e);
                 }
                 exception = e;
                 // backoff if we encounter an exception.
                 try {
                     Thread.sleep(this.backoffTimeMillis);
                 } catch (InterruptedException ie) {
-                    log.debug("Interrupted sleep", ie);
+                    log.debug("Shard {}: Interrupted sleep", shardInfoIdProvider.apply(shardInfo), ie);
                 }
             }
         } finally {
@@ -181,7 +149,37 @@ public class ShutdownTask implements ConsumerTask {
         }
 
         return new TaskResult(exception);
+    }
 
+    private void applicationCheckpointAndVerification() {
+        shardRecordProcessor.shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
+        final ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.lastCheckpointValue();
+        if (lastCheckpointValue == null
+                || !lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END)) {
+            throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
+                                                       + shardInfoIdProvider.apply(shardInfo) + ". Application must checkpoint upon shard end. " +
+                                                       "See ShardRecordProcessor.shardEnded javadocs for more information.");
+        }
+    }
+
+    private void throwOnApplicationException(Runnable action, MetricsScope metricsScope, final long startTime) throws CustomerApplicationException {
+        try {
+            action.run();
+        } catch (Exception e) {
+            throw new CustomerApplicationException("Customer application throws exception for shard " + shardInfoIdProvider.apply(shardInfo) +": ", e);
+        } finally {
+            MetricsUtil.addLatency(metricsScope, RECORD_PROCESSOR_SHUTDOWN_METRIC, startTime, MetricsLevel.SUMMARY);
+        }
+    }
+
+    private void createLeasesForChildShardsIfNotExist()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        for(ChildShard childShard : childShards) {
+            if(leaseCoordinator.getCurrentlyHeldLease(childShard.shardId()) == null) {
+                final Lease leaseToCreate = hierarchicalShardSyncer.createLeaseForChildShard(childShard, shardDetector.streamIdentifier());
+                leaseCoordinator.leaseRefresher().createLeaseIfNotExists(leaseToCreate);
+            }
+        }
     }
 
     /*

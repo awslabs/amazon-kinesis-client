@@ -25,6 +25,8 @@ import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerState;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 
@@ -33,13 +35,13 @@ import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -49,6 +51,7 @@ import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
+import software.amazon.kinesis.leases.ShardObjectHelper;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
@@ -56,6 +59,7 @@ import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+
 
 @RunWith(MockitoJUnitRunner.class)
 public class ConsumerStatesTest {
@@ -300,13 +304,27 @@ public class ConsumerStatesTest {
 
     }
 
-    // TODO: Fix this test
-    @Ignore
     @Test
     public void shuttingDownStateTest() {
         consumer.markForShutdown(ShutdownReason.SHARD_END);
         ConsumerState state = ShardConsumerState.SHUTTING_DOWN.consumerState();
-        ConsumerTask task = state.createTask(argument, consumer, null);
+        List<ChildShard> childShards = new ArrayList<>();
+        List<String> parentShards = new ArrayList<>();
+        parentShards.add("shardId-000000000000");
+        ChildShard leftChild = ChildShard.builder()
+                                         .shardId("shardId-000000000001")
+                                         .parentShards(parentShards)
+                                         .hashKeyRange(ShardObjectHelper.newHashKeyRange("0", "49"))
+                                         .build();
+        ChildShard rightChild = ChildShard.builder()
+                                          .shardId("shardId-000000000002")
+                                          .parentShards(parentShards)
+                                          .hashKeyRange(ShardObjectHelper.newHashKeyRange("50", "99"))
+                                          .build();
+        childShards.add(leftChild);
+        childShards.add(rightChild);
+        when(processRecordsInput.childShards()).thenReturn(childShards);
+        ConsumerTask task = state.createTask(argument, consumer, processRecordsInput);
 
         assertThat(task, shutdownTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
         assertThat(task,
@@ -315,8 +333,6 @@ public class ConsumerStatesTest {
                 equalTo(recordProcessorCheckpointer)));
         assertThat(task, shutdownTask(ShutdownReason.class, "reason", equalTo(reason)));
         assertThat(task, shutdownTask(LeaseCoordinator.class, "leaseCoordinator", equalTo(leaseCoordinator)));
-        assertThat(task, shutdownTask(InitialPositionInStreamExtended.class, "initialPositionInStream",
-                equalTo(initialPositionInStream)));
         assertThat(task,
                 shutdownTask(Boolean.class, "cleanupLeasesOfCompletedShards", equalTo(cleanupLeasesOfCompletedShards)));
         assertThat(task, shutdownTask(Long.class, "backoffTimeMillis", equalTo(taskBackoffTimeMillis)));

@@ -30,6 +30,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -53,6 +54,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
@@ -65,6 +67,7 @@ import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
+import software.amazon.kinesis.leases.ShardObjectHelper;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
@@ -330,8 +333,31 @@ public class KinesisDataFetcherTest {
 
     private CompletableFuture<GetRecordsResponse> makeGetRecordsResponse(String nextIterator, List<Record> records)
             throws InterruptedException, ExecutionException {
+        List<ChildShard> childShards = new ArrayList<>();
+        if(nextIterator == null) {
+            childShards = createChildShards();
+        }
         return CompletableFuture.completedFuture(GetRecordsResponse.builder().nextShardIterator(nextIterator)
-                .records(CollectionUtils.isNullOrEmpty(records) ? Collections.emptyList() : records).build());
+                .records(CollectionUtils.isNullOrEmpty(records) ? Collections.emptyList() : records).childShards(childShards).build());
+    }
+
+    private List<ChildShard> createChildShards() {
+        List<ChildShard> childShards = new ArrayList<>();
+        List<String> parentShards = new ArrayList<>();
+        parentShards.add(SHARD_ID);
+        ChildShard leftChild = ChildShard.builder()
+                                         .shardId("Shard-2")
+                                         .parentShards(parentShards)
+                                         .hashKeyRange(ShardObjectHelper.newHashKeyRange("0", "49"))
+                                         .build();
+        ChildShard rightChild = ChildShard.builder()
+                                          .shardId("Shard-3")
+                                          .parentShards(parentShards)
+                                          .hashKeyRange(ShardObjectHelper.newHashKeyRange("50", "99"))
+                                          .build();
+        childShards.add(leftChild);
+        childShards.add(rightChild);
+        return childShards;
     }
 
     @Test
@@ -342,6 +368,7 @@ public class KinesisDataFetcherTest {
         final String initialIterator = "InitialIterator";
         final String nextIterator1 = "NextIteratorOne";
         final String nextIterator2 = "NextIteratorTwo";
+        final String nextIterator3 = "NextIteratorThree";
         final CompletableFuture<GetRecordsResponse> nonAdvancingResult1 = makeGetRecordsResponse(initialIterator, null);
         final CompletableFuture<GetRecordsResponse> nonAdvancingResult2 = makeGetRecordsResponse(nextIterator1, null);
         final CompletableFuture<GetRecordsResponse> finalNonAdvancingResult = makeGetRecordsResponse(nextIterator2,

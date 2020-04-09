@@ -33,11 +33,13 @@ import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
+import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.common.RequestDetails;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.BatchUniqueIdentifier;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
@@ -398,7 +400,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             // The ack received for this onNext event will be ignored by the publisher as the global flow object should
             // be either null or renewed when the ack's flow identifier is evaluated.
             FanoutRecordsRetrieved response = new FanoutRecordsRetrieved(
-                    ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true).build(), null,
+                    ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true).childShards(Collections.emptyList()).build(), null,
                     triggeringFlow != null ? triggeringFlow.getSubscribeToShardId() : shardId + "-no-flow-found");
             subscriber.onNext(response);
             subscriber.onComplete();
@@ -477,15 +479,28 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 return;
             }
 
-            List<KinesisClientRecord> records = recordBatchEvent.records().stream().map(KinesisClientRecord::fromRecord)
-                    .collect(Collectors.toList());
-            ProcessRecordsInput input = ProcessRecordsInput.builder().cacheEntryTime(Instant.now())
-                    .millisBehindLatest(recordBatchEvent.millisBehindLatest())
-                    .isAtShardEnd(recordBatchEvent.continuationSequenceNumber() == null).records(records).build();
-            FanoutRecordsRetrieved recordsRetrieved = new FanoutRecordsRetrieved(input,
-                    recordBatchEvent.continuationSequenceNumber(), triggeringFlow.subscribeToShardId);
-
             try {
+                // If recordBatchEvent is not valid event, RuntimeException will be thrown here and trigger the errorOccurred call.
+                // Since the triggeringFlow is active flow, it will then trigger the handleFlowError call.
+                // Since the exception is not ResourceNotFoundException, it will trigger onError in the ShardConsumerSubscriber.
+                // The ShardConsumerSubscriber will finally cancel the subscription.
+                if (!isValidEvent(recordBatchEvent)) {
+                    throw new InvalidStateException("RecordBatchEvent for flow " + triggeringFlow.toString() + " is invalid."
+                                               + " event.continuationSequenceNumber: " + recordBatchEvent.continuationSequenceNumber()
+                                               + ". event.childShards: " + recordBatchEvent.childShards());
+                }
+
+                List<KinesisClientRecord> records = recordBatchEvent.records().stream().map(KinesisClientRecord::fromRecord)
+                                                                    .collect(Collectors.toList());
+                ProcessRecordsInput input = ProcessRecordsInput.builder()
+                                                               .cacheEntryTime(Instant.now())
+                                                               .millisBehindLatest(recordBatchEvent.millisBehindLatest())
+                                                               .isAtShardEnd(recordBatchEvent.continuationSequenceNumber() == null)
+                                                               .records(records)
+                                                               .childShards(recordBatchEvent.childShards())
+                                                               .build();
+                FanoutRecordsRetrieved recordsRetrieved = new FanoutRecordsRetrieved(input,
+                        recordBatchEvent.continuationSequenceNumber(), triggeringFlow.subscribeToShardId);
                 bufferCurrentEventAndScheduleIfRequired(recordsRetrieved, triggeringFlow);
             } catch (Throwable t) {
                 log.warn("{}: Unable to buffer or schedule onNext for subscriber.  Failing publisher." +
@@ -493,6 +508,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 errorOccurred(triggeringFlow, t);
             }
         }
+    }
+
+    private boolean isValidEvent(SubscribeToShardEvent event) {
+        return event.continuationSequenceNumber() == null ? !CollectionUtils.isNullOrEmpty(event.childShards())
+                                                          : event.childShards() != null && event.childShards().isEmpty();
     }
 
     private void updateAvailableQueueSpaceAndRequestUpstream(RecordFlow triggeringFlow) {
