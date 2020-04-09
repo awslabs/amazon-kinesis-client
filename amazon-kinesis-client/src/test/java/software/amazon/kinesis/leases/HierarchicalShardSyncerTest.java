@@ -1683,7 +1683,84 @@ public class HierarchicalShardSyncerTest {
         verify(shardDetector, atLeast(1)).listShards();
     }
 
-//    /**getShardFilterFromInitialPosition
+    /**
+     * Tries to boostrap empty lease table. Verifies that if we fail to get a complete hash range of shards after three
+     * retries, we fast fail and throw an exception.
+     * @throws Exception
+     */
+    @Test(expected = KinesisClientLibIOException.class)
+    public void testEmptyLeaseTableThrowsExceptionWhenHashRangeIsStillIncompleteAfterRetries() throws Exception {
+        final List<Shard> shardsWithIncompleteHashRange = Arrays.asList(
+                ShardObjectHelper.newShard("shardId-0", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("0", "1")),
+                ShardObjectHelper.newShard("shardId-1", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("2", "3"))
+        );
+
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
+        when(shardDetector.listShardsWithFilter(any(ShardFilter.class))).thenReturn(shardsWithIncompleteHashRange);
+
+        try {
+            hierarchicalShardSyncer
+                    .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
+                            SCOPE, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, garbageCollectLeases,
+                            dynamoDBLeaseRefresher.isLeaseTableEmpty());
+        } finally {
+            verify(shardDetector, times(3)).listShardsWithFilter(any(ShardFilter.class)); // Verify retries.
+        }
+    }
+
+    /**
+     * Tries to bootstrap an empty lease table. Verifies that after getting an incomplete hash range of shards two times
+     * and a complete hash range the final time, we create the leases.
+     * @throws Exception
+     */
+    @Test
+    public void testEmptyLeaseTablePopulatesLeasesWithCompleteHashRangeAfterTwoRetries() throws Exception {
+        final List<Shard> shardsWithIncompleteHashRange = Arrays.asList(
+                ShardObjectHelper.newShard("shardId-0", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "69")),
+                ShardObjectHelper.newShard("shardId-1", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("71", ShardObjectHelper.MAX_HASH_KEY))
+        );
+        final List<Shard> shardsWithCompleteHashRange = Arrays.asList(
+                ShardObjectHelper.newShard("shardId-2", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "420")),
+                ShardObjectHelper.newShard("shardId-3", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("421", ShardObjectHelper.MAX_HASH_KEY))
+        );
+
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
+        when(shardDetector.listShardsWithFilter(any(ShardFilter.class))).thenReturn(shardsWithIncompleteHashRange)
+                .thenReturn(shardsWithIncompleteHashRange).thenReturn(shardsWithCompleteHashRange);
+
+        hierarchicalShardSyncer
+                .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
+                        SCOPE, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, garbageCollectLeases,
+                        dynamoDBLeaseRefresher.isLeaseTableEmpty());
+
+        verify(shardDetector, times(3)).listShardsWithFilter(any(ShardFilter.class)); // Verify retries.
+        verify(dynamoDBLeaseRefresher, times(2)).createLeaseIfNotExists(any(Lease.class));
+    }
+
+    /**
+     * Tries to bootstrap an empty lease table. Verifies that leases are created when we have a complete hash range of shards.
+     * @throws Exception
+     */
+    @Test
+    public void testEmptyLeaseTablePopulatesLeasesWithCompleteHashRange() throws Exception {
+        final List<Shard> shardsWithCompleteHashRange = Arrays.asList(
+                ShardObjectHelper.newShard("shardId-2", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "420")),
+                ShardObjectHelper.newShard("shardId-3", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("421", ShardObjectHelper.MAX_HASH_KEY))
+        );
+
+        when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
+        when(shardDetector.listShardsWithFilter(any(ShardFilter.class))).thenReturn(shardsWithCompleteHashRange);
+
+        hierarchicalShardSyncer
+                .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
+                        SCOPE, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, garbageCollectLeases,
+                        dynamoDBLeaseRefresher.isLeaseTableEmpty());
+
+        verify(shardDetector, times(1)).listShardsWithFilter(any(ShardFilter.class)); // Verify retries.
+        verify(dynamoDBLeaseRefresher, times(2)).createLeaseIfNotExists(any(Lease.class));
+    }
+
+//    /**
 //     * Test CheckIfDescendantAndAddNewLeasesForAncestors - two parents, there is a lease for one parent.
 //     */
 //    @Test
