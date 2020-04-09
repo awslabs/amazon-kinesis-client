@@ -111,6 +111,8 @@ public class ShutdownTask implements ConsumerTask {
                     // Create new lease for the child shards if they don't exist.
                     if (!CollectionUtils.isNullOrEmpty(childShards)) {
                         createLeasesForChildShardsIfNotExist();
+                    } else {
+                        log.warn("Shard {} no longer exists. Shutting down consumer with SHARD_END reason without creating leases for child shards.", shardInfoIdProvider.apply(shardInfo));
                     }
 
                     recordProcessorCheckpointer
@@ -118,7 +120,7 @@ public class ShutdownTask implements ConsumerTask {
                     recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
                     // Call the shardRecordsProcessor to checkpoint with SHARD_END sequence number.
                     // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
-                    throwOnApplicationException(() -> applicationCheckpointWithShardEnd(), scope, startTime);
+                    throwOnApplicationException(() -> applicationCheckpointAndVerification(), scope, startTime);
                 } else {
                     throwOnApplicationException(() -> shardRecordProcessor.leaseLost(LeaseLostInput.builder().build()), scope, startTime);
                 }
@@ -139,7 +141,7 @@ public class ShutdownTask implements ConsumerTask {
                 try {
                     Thread.sleep(this.backoffTimeMillis);
                 } catch (InterruptedException ie) {
-                    log.debug("Shard{}: Interrupted sleep", shardInfoIdProvider.apply(shardInfo), ie);
+                    log.debug("Shard {}: Interrupted sleep", shardInfoIdProvider.apply(shardInfo), ie);
                 }
             }
         } finally {
@@ -149,7 +151,7 @@ public class ShutdownTask implements ConsumerTask {
         return new TaskResult(exception);
     }
 
-    private void applicationCheckpointWithShardEnd() {
+    private void applicationCheckpointAndVerification() {
         shardRecordProcessor.shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         final ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.lastCheckpointValue();
         if (lastCheckpointValue == null
