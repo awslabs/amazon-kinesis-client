@@ -28,6 +28,11 @@ public class Checkpoint {
     private final ExtendedSequenceNumber pendingCheckpoint;
     private final byte[] pendingCheckpointState;
 
+    @Deprecated
+    public Checkpoint(final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint) {
+        this(checkpoint, pendingCheckpoint, null);
+    }
+
     /**
      * Constructor.
      *

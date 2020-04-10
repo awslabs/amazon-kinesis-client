@@ -140,6 +140,9 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
                 this.largestPermittedCheckpointValue.subSequenceNumber());
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public PreparedCheckpointer prepareCheckpoint(byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
         return prepareCheckpoint(largestPermittedCheckpointValue.sequenceNumber(), applicationState);
@@ -177,6 +180,9 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
         return prepareCheckpoint(sequenceNumber, 0);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, byte[] applicationState)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
@@ -192,6 +198,9 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
         return prepareCheckpoint(sequenceNumber, subSequenceNumber, null);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber, byte[] applicationState)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {

@@ -38,7 +38,7 @@ import java.util.concurrent.TimeUnit;
 @NoArgsConstructor
 @Getter
 @Accessors(fluent = true)
-@EqualsAndHashCode(exclude = {"concurrencyToken", "lastCounterIncrementNanos"})
+@EqualsAndHashCode(exclude = {"concurrencyToken", "lastCounterIncrementNanos", "pendingCheckpointState"})
 @ToString
 public class Lease {
     /*
@@ -84,6 +84,8 @@ public class Lease {
     private ExtendedSequenceNumber pendingCheckpoint;
 
     /**
+     * Last pending application state. Deliberately excluded from hashCode and equals.
+     *
      * @return pending checkpoint state, possibly null.
      */
     private byte[] pendingCheckpointState;
@@ -103,6 +105,15 @@ public class Lease {
         this(lease.leaseKey(), lease.leaseOwner(), lease.leaseCounter(), lease.concurrencyToken(),
                 lease.lastCounterIncrementNanos(), lease.checkpoint(), lease.pendingCheckpoint(),
                 lease.ownerSwitchesSinceCheckpoint(), lease.parentShardIds(), lease.pendingCheckpointState());
+    }
+
+    @Deprecated
+    public Lease(final String leaseKey, final String leaseOwner, final Long leaseCounter,
+                 final UUID concurrencyToken, final Long lastCounterIncrementNanos,
+                 final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint,
+                 final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds) {
+        this(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos, checkpoint, pendingCheckpoint,
+                ownerSwitchesSinceCheckpoint, parentShardIds, null);
     }
 
     public Lease(final String leaseKey, final String leaseOwner, final Long leaseCounter,
