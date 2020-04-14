@@ -186,7 +186,7 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
     @Override
     public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, byte[] applicationState)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
-        return prepareCheckpoint(sequenceNumber, 0, null);
+        return prepareCheckpoint(sequenceNumber, 0, applicationState);
     }
 
     /**
