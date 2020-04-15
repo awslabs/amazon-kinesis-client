@@ -16,6 +16,7 @@ package software.amazon.kinesis.leases;
 
 import java.util.List;
 
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -59,6 +60,18 @@ public interface LeaseRefresher {
      * @throws DependencyException if DynamoDB describeTable fails in an unexpected way
      */
     boolean waitUntilLeaseTableExists(long secondsBetweenPolls, long timeoutSeconds) throws DependencyException;
+
+    /**
+     * List all leases for a given stream synchronously.
+     *
+     * @throws DependencyException if DynamoDB scan fails in an unexpected way
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
+     *
+     * @return list of leases
+     */
+    List<Lease> listLeasesForStream(StreamIdentifier streamIdentifier) throws DependencyException, InvalidStateException,
+            ProvisionedThroughputException;
 
     /**
      * List all objects in table synchronously.

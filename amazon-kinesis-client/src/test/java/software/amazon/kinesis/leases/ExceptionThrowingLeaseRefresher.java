@@ -19,6 +19,7 @@ import java.util.List;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -54,6 +55,7 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
         DELETELEASE(9),
         DELETEALL(10),
         UPDATELEASE(11),
+        LISTLEASESFORSTREAM(12),
         NONE(Integer.MIN_VALUE);
 
         private Integer index;
@@ -127,6 +129,13 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
         throwExceptions("waitUntilLeaseTableExists", ExceptionThrowingLeaseRefresherMethods.WAITUNTILLEASETABLEEXISTS);
 
         return leaseRefresher.waitUntilLeaseTableExists(secondsBetweenPolls, timeoutSeconds);
+    }
+
+    @Override
+    public List<Lease> listLeasesForStream(StreamIdentifier streamIdentifier) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throwExceptions("listLeasesForStream", ExceptionThrowingLeaseRefresherMethods.LISTLEASESFORSTREAM);
+
+        return leaseRefresher.listLeasesForStream(streamIdentifier);
     }
 
     @Override
