@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -77,7 +78,7 @@ public class ShutdownTaskTest {
     private static final ShutdownReason LEASE_LOST_SHUTDOWN_REASON  = ShutdownReason.LEASE_LOST;
     private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
 
-    private final String concurrencyToken = "testToken4398";
+    private final String concurrencyToken = "0-1-2-3-4";
     private final String shardId = "shardId-0";
     private boolean cleanupLeasesOfCompletedShards = false;
     private boolean ignoreUnexpectedChildShards = false;
@@ -122,6 +123,7 @@ public class ShutdownTaskTest {
     @Test
     public final void testCallWhenApplicationDoesNotCheckpoint() {
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("3298"));
+        when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(createLease());
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         final TaskResult result = task.call();
@@ -162,6 +164,7 @@ public class ShutdownTaskTest {
                                 hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShards());
 
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(createLease());
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         final TaskResult result = task.call();
@@ -169,6 +172,7 @@ public class ShutdownTaskTest {
         verify(recordsPublisher).shutdown();
         verify(shardRecordProcessor).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
+        verify(leaseCoordinator).updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString());
         verify(leaseRefresher, times(2)).createLeaseIfNotExists(Matchers.any(Lease.class));
         verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
     }
@@ -247,6 +251,15 @@ public class ShutdownTaskTest {
         childShards.add(leftChild);
         childShards.add(rightChild);
         return  childShards;
+    }
+
+    private Lease createLease() {
+        Lease lease = new Lease();
+        lease.leaseKey("shardId-0");
+        lease.leaseOwner("leaseOwner");
+        lease.parentShardIds(Collections.singleton("parentShardIds"));
+
+        return lease;
     }
 
 }

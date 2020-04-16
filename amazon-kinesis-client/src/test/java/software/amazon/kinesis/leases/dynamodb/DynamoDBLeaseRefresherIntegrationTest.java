@@ -25,6 +25,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -237,6 +238,18 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
 
         Lease newLease = leaseRefresher.getLease(lease.leaseKey());
         assertNull(newLease);
+    }
+
+    @Test
+    public void testUpdateLease() throws LeasingException {
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
+        Lease lease = builder.withLease("1").build().get("1");
+        Lease updatedLease = lease.copy();
+        updatedLease.childShardIds(Collections.singleton("updatedChildShardId"));
+
+        leaseRefresher.updateLease(updatedLease);
+        Lease newLease = leaseRefresher.getLease(lease.leaseKey());
+        assertEquals(Collections.singleton("updatedChildShardId"), newLease.childShardIds());
     }
 
     /**

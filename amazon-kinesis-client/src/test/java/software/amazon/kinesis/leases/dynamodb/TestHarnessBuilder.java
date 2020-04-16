@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNotNull;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -72,6 +73,7 @@ public class TestHarnessBuilder {
         lease.leaseCounter(0L);
         lease.leaseOwner(owner);
         lease.parentShardIds(Collections.singleton("parentShardId"));
+        lease.childShardIds(new HashSet<>());
         lease.leaseKey(shardId);
 
         return lease;

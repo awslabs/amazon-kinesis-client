@@ -45,7 +45,10 @@ import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 
 /**
@@ -109,8 +112,13 @@ public class ShutdownTask implements ConsumerTask {
                 final long startTime = System.currentTimeMillis();
                 if (reason == ShutdownReason.SHARD_END) {
                     // Create new lease for the child shards if they don't exist.
+                    // We have one valid scenario that shutdown task got created with SHARD_END reason and an empty list of childShards.
+                    // This would happen when KinesisDataFetcher(for polling mode) or FanOutRecordsPublisher(for StoS mode) catches ResourceNotFound exception.
+                    // In this case, KinesisDataFetcher and FanOutRecordsPublisher will send out SHARD_END signal to trigger a shutdown task with empty list of childShards.
+                    // This scenario could happen when customer deletes the stream while leaving the KCL application running.
                     if (!CollectionUtils.isNullOrEmpty(childShards)) {
                         createLeasesForChildShardsIfNotExist();
+                        updateLeasesForChildShards();
                     } else {
                         log.warn("Shard {} no longer exists. Shutting down consumer with SHARD_END reason without creating leases for child shards.", shardInfoIdProvider.apply(shardInfo));
                     }
@@ -180,6 +188,19 @@ public class ShutdownTask implements ConsumerTask {
                 leaseCoordinator.leaseRefresher().createLeaseIfNotExists(leaseToCreate);
             }
         }
+    }
+
+    private void updateLeasesForChildShards()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(shardInfoIdProvider.apply(shardInfo));
+        Set<String> childShardIds = new HashSet<>();
+        for (ChildShard childShard : childShards) {
+            childShardIds.add(childShard.shardId());
+        }
+
+        final Lease upatedLease = currentLease.copy();
+        upatedLease.childShardIds(childShardIds);
+        leaseCoordinator.updateLease(upatedLease, UUID.fromString(shardInfo.concurrencyToken()), SHUTDOWN_TASK_OPERATION, shardInfoIdProvider.apply(shardInfo));
     }
 
     /*
