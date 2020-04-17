@@ -15,6 +15,8 @@
 
 package software.amazon.kinesis.retrieval.polling;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -25,21 +27,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
-
 import lombok.AccessLevel;
+import lombok.Data;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.Setter;
+import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
-
-import com.google.common.annotations.VisibleForTesting;
-
-import lombok.Data;
-import lombok.NonNull;
-import lombok.experimental.Accessors;
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
@@ -61,7 +59,6 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-
 import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDeliveryActionIfRequired;
 
 /**
@@ -108,7 +105,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         @VisibleForTesting @Getter
         private final LinkedBlockingQueue<PrefetchRecordsRetrieved> prefetchRecordsQueue;
         private final PrefetchCounters prefetchCounters;
-        private final KinesisDataFetcher dataFetcher;
+        private final DataFetcher dataFetcher;
         private InitialPositionInStreamExtended initialPositionInStreamExtended;
         private String highestSequenceNumber;
 
@@ -215,7 +212,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         this.maxByteSize = maxByteSize;
         this.maxRecordsCount = maxRecordsCount;
         this.publisherSession = new PublisherSession(new LinkedBlockingQueue<>(this.maxPendingProcessRecordsInput),
-                new PrefetchCounters(), this.getRecordsRetrievalStrategy.getDataFetcher());
+                new PrefetchCounters(), this.getRecordsRetrievalStrategy.dataFetcher());
         this.executorService = executorService;
         this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
@@ -223,7 +220,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         Validate.notEmpty(operation, "Operation cannot be empty");
         this.operation = operation;
         this.streamAndShardId =
-                this.getRecordsRetrievalStrategy.getDataFetcher().getStreamIdentifier().serialize() + ":" + shardId;
+                this.getRecordsRetrievalStrategy.dataFetcher().getStreamIdentifier().serialize() + ":" + shardId;
     }
 
     @Override

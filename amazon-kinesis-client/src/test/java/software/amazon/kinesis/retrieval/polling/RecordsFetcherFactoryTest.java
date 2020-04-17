@@ -40,14 +40,14 @@ public class RecordsFetcherFactoryTest {
     @Mock
     private MetricsFactory metricsFactory;
     @Mock
-    private KinesisDataFetcher kinesisDataFetcher;
+    private DataFetcher dataFetcher;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         recordsFetcherFactory = new SimpleRecordsFetcherFactory();
-        when(getRecordsRetrievalStrategy.getDataFetcher()).thenReturn(kinesisDataFetcher);
-        when(kinesisDataFetcher.getStreamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("stream"));
+        when(getRecordsRetrievalStrategy.dataFetcher()).thenReturn(dataFetcher);
+        when(dataFetcher.getStreamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("stream"));
     }
 
     @Test
@@ -66,5 +66,4 @@ public class RecordsFetcherFactoryTest {
                 metricsFactory, 1);
         assertThat(recordsCache, instanceOf(PrefetchRecordsPublisher.class));
     }
-
 }

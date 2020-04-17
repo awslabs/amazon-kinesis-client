@@ -14,20 +14,18 @@
  */
 package software.amazon.kinesis.retrieval.polling;
 
+import com.google.common.collect.Iterables;
+
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
-
-import org.apache.commons.lang3.StringUtils;
-
-import com.google.common.collect.Iterables;
-
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
@@ -47,8 +45,10 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
+import software.amazon.kinesis.retrieval.DataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
+import software.amazon.kinesis.retrieval.KinesisDataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -57,7 +57,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  */
 @Slf4j
 @KinesisClientInternalApi
-public class KinesisDataFetcher {
+public class KinesisDataFetcher implements DataFetcher {
 
     private static final String METRICS_PREFIX = "KinesisDataFetcher";
     private static final String OPERATION = "ProcessTask";
@@ -76,33 +76,39 @@ public class KinesisDataFetcher {
 
     @Deprecated
     public KinesisDataFetcher(KinesisAsyncClient kinesisClient, String streamName, String shardId, int maxRecords, MetricsFactory metricsFactory) {
-        this(kinesisClient, StreamIdentifier.singleStreamInstance(streamName), shardId, maxRecords, metricsFactory, PollingConfig.DEFAULT_REQUEST_TIMEOUT);
+        this(kinesisClient, new KinesisDataFetcherProviderConfig(
+                StreamIdentifier.singleStreamInstance(streamName),
+                shardId,
+                metricsFactory,
+                maxRecords,
+                PollingConfig.DEFAULT_REQUEST_TIMEOUT
+        ));
     }
 
     /**
-     * Constructs KinesisDataFetcher.
-     * @param kinesisClient
-     * @param streamIdentifier
-     * @param shardId
-     * @param maxRecords
-     * @param metricsFactory
-     * @param maxFutureWait
-     */
-    public KinesisDataFetcher(KinesisAsyncClient kinesisClient, StreamIdentifier streamIdentifier, String shardId, int maxRecords, MetricsFactory metricsFactory, Duration maxFutureWait) {
-        this.kinesisClient = kinesisClient;
-        this.streamIdentifier = streamIdentifier;
-        this.shardId = shardId;
-        this.maxRecords = maxRecords;
-        this.metricsFactory = metricsFactory;
-        this.maxFutureWait = maxFutureWait;
-        this.streamAndShardId = streamIdentifier.serialize() + ":" + shardId;
-    }
-
-    /** Note: This method has package level access for testing purposes.
+     * Note: This method has package level access for testing purposes.
+     *
      * @return nextIterator
      */
     @Getter(AccessLevel.PACKAGE)
     private String nextIterator;
+
+    /**
+     * Constructs KinesisDataFetcher.
+     *
+     * @param kinesisClient
+     * @param kinesisDataFetcherProviderConfig
+     */
+    public KinesisDataFetcher(KinesisAsyncClient kinesisClient, DataFetcherProviderConfig kinesisDataFetcherProviderConfig) {
+        this.kinesisClient = kinesisClient;
+        this.maxFutureWait = kinesisDataFetcherProviderConfig.getKinesisRequestTimeout();
+        this.maxRecords = kinesisDataFetcherProviderConfig.getMaxRecords();
+        this.metricsFactory = kinesisDataFetcherProviderConfig.getMetricsFactory();
+        this.shardId = kinesisDataFetcherProviderConfig.getShardId();
+        this.streamIdentifier = kinesisDataFetcherProviderConfig.getStreamIdentifier();
+        this.streamAndShardId = streamIdentifier.serialize() + ":" + shardId;
+    }
+
     @Getter
     private boolean isShardEndReached;
     private boolean isInitialized;
@@ -114,6 +120,7 @@ public class KinesisDataFetcher {
      *
      * @return list of records of up to maxRecords size
      */
+    @Override
     public DataFetcherResult getRecords() {
         if (!isInitialized) {
             throw new IllegalArgumentException("KinesisDataFetcher.records called before initialization.");
@@ -187,6 +194,7 @@ public class KinesisDataFetcher {
      * @param initialCheckpoint Current checkpoint sequence number for this shard.
      * @param initialPositionInStream The initialPositionInStream.
      */
+    @Override
     public void initialize(final String initialCheckpoint,
                            final InitialPositionInStreamExtended initialPositionInStream) {
         log.info("Initializing shard {} with {}", streamAndShardId, initialCheckpoint);
@@ -194,6 +202,7 @@ public class KinesisDataFetcher {
         isInitialized = true;
     }
 
+    @Override
     public void initialize(final ExtendedSequenceNumber initialCheckpoint,
                            final InitialPositionInStreamExtended initialPositionInStream) {
         log.info("Initializing shard {} with {}", streamAndShardId, initialCheckpoint.sequenceNumber());
@@ -207,6 +216,7 @@ public class KinesisDataFetcher {
      * @param sequenceNumber advance the iterator to the record at this sequence number.
      * @param initialPositionInStream The initialPositionInStream.
      */
+    @Override
     public void advanceIteratorTo(final String sequenceNumber,
                                   final InitialPositionInStreamExtended initialPositionInStream) {
         if (sequenceNumber == null) {
@@ -228,9 +238,7 @@ public class KinesisDataFetcher {
 
         try {
             try {
-                final GetShardIteratorResponse result = FutureUtils
-                        .resolveOrCancelFuture(kinesisClient.getShardIterator(request), maxFutureWait);
-                nextIterator = result.shardIterator();
+                nextIterator = getNextIterator(request);
                 success = true;
             } catch (ExecutionException e) {
                 throw exceptionManager.apply(e.getCause());
@@ -260,6 +268,7 @@ public class KinesisDataFetcher {
      * Gets a new iterator from the last known sequence number i.e. the sequence number of the last record from the last
      * records call.
      */
+    @Override
     public void restartIterator() {
         if (StringUtils.isEmpty(lastKnownSequenceNumber) || initialPositionInStream == null) {
             throw new IllegalStateException(
@@ -268,29 +277,49 @@ public class KinesisDataFetcher {
         advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream);
     }
 
+    @Override
     public void resetIterator(String shardIterator, String sequenceNumber, InitialPositionInStreamExtended initialPositionInStream) {
         this.nextIterator = shardIterator;
         this.lastKnownSequenceNumber = sequenceNumber;
         this.initialPositionInStream = initialPositionInStream;
     }
 
-    private GetRecordsResponse getRecords(@NonNull final String nextIterator) {
-        final AWSExceptionManager exceptionManager = createExceptionManager();
-        GetRecordsRequest request = KinesisRequestsBuilder.getRecordsRequestBuilder().shardIterator(nextIterator)
+    @Override
+    public GetRecordsResponse getGetRecordsResponse(GetRecordsRequest request) throws ExecutionException, InterruptedException, TimeoutException {
+        final GetRecordsResponse response = FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(request),
+                maxFutureWait);
+        if (!isValidResponse(response)) {
+            throw new RetryableRetrievalException("GetRecords response is not valid for shard: " + streamAndShardId
+                    + ". nextShardIterator: " + response.nextShardIterator()
+                    + ". childShards: " + response.childShards() + ". Will retry GetRecords with the same nextIterator.");
+        }
+        return response;
+    }
+
+    @Override
+    public GetRecordsRequest getGetRecordsRequest(String nextIterator)  {
+        return KinesisRequestsBuilder.getRecordsRequestBuilder().shardIterator(nextIterator)
                 .limit(maxRecords).build();
+    }
+
+    @Override
+    public String getNextIterator(GetShardIteratorRequest request) throws ExecutionException, InterruptedException, TimeoutException {
+        final GetShardIteratorResponse result = FutureUtils
+                .resolveOrCancelFuture(kinesisClient.getShardIterator(request), maxFutureWait);
+        return result.shardIterator();
+    }
+
+    @Override
+    public GetRecordsResponse getRecords(@NonNull final String nextIterator) {
+        final AWSExceptionManager exceptionManager = createExceptionManager();
+        GetRecordsRequest request = getGetRecordsRequest(nextIterator);
 
         final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, OPERATION);
         MetricsUtil.addShardId(metricsScope, shardId);
-        boolean success = false;
+        boolean success = false ;
         long startTime = System.currentTimeMillis();
         try {
-            final GetRecordsResponse response = FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(request),
-                    maxFutureWait);
-            if (!isValidResponse(response)) {
-                throw new RetryableRetrievalException("GetRecords response is not valid for shard: " + streamAndShardId
-                        + ". nextShardIterator: " + response.nextShardIterator()
-                        + ". childShards: " + response.childShards() + ". Will retry GetRecords with the same nextIterator.");
-            }
+            final GetRecordsResponse response = getGetRecordsResponse(request);
             success = true;
             return response;
         } catch (ExecutionException e) {
