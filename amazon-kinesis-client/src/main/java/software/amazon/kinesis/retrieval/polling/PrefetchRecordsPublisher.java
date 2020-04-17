@@ -45,6 +45,7 @@ import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
@@ -88,6 +89,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private final DefaultGetRecordsCacheDaemon defaultGetRecordsCacheDaemon;
     private boolean started = false;
     private final String operation;
+    private final StreamIdentifier streamId;
     private final String streamAndShardId;
     private Subscriber<? super RecordsRetrieved> subscriber;
     @VisibleForTesting @Getter
@@ -219,8 +221,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
         Validate.notEmpty(operation, "Operation cannot be empty");
         this.operation = operation;
-        this.streamAndShardId =
-                this.getRecordsRetrievalStrategy.dataFetcher().getStreamIdentifier().serialize() + ":" + shardId;
+        this.streamId = this.getRecordsRetrievalStrategy.dataFetcher().getStreamIdentifier();
+        this.streamAndShardId = this.streamId.serialize() + ":" + shardId;
     }
 
     @Override
@@ -453,6 +455,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     log.info("{} :  records threw ExpiredIteratorException - restarting"
                             + " after greatest seqNum passed to customer", streamAndShardId, e);
 
+                    MetricsUtil.addStreamId(scope, streamId);
                     scope.addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
                     publisherSession.dataFetcher().restartIterator();

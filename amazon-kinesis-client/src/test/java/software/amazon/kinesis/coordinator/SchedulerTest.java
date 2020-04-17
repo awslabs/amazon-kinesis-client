@@ -36,6 +36,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.atMost;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -443,7 +444,7 @@ public class SchedulerTest {
     }
 
     @Test
-    public final void testMultiStreamOnlyStaleStreamsAreSynced()
+    public final void testMultiStreamStaleStreamsAreNotDeletedImmediately()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
                 StreamIdentifier.multiStreamInstance(
@@ -462,16 +463,49 @@ public class SchedulerTest {
                 metricsConfig, processorConfig, retrievalConfig));
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
         Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
+        Set<StreamIdentifier> expectedPendingStreams = IntStream.range(1, 3).mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
+                Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345))).collect(
+                Collectors.toCollection(HashSet::new));
+        Assert.assertEquals(Sets.newHashSet(), syncedStreams);
+        Assert.assertEquals(Sets.newHashSet(streamConfigList1),
+                Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        Assert.assertEquals(expectedPendingStreams,
+                scheduler.staleStreamDeletionMap().keySet());
+    }
+
+    @Test
+    public final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
+                StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
+                .collect(Collectors.toCollection(LinkedList::new));
+        List<StreamConfig> streamConfigList2 = IntStream.range(3, 5).mapToObj(streamId -> new StreamConfig(
+                StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
+                .collect(Collectors.toCollection(LinkedList::new));
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList1, streamConfigList2);
+        scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig));
+        when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
+        when(scheduler.getOldStreamDeferredDeletionPeriodMillis()).thenReturn(0L);
+        Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
         Set<StreamIdentifier> expectedSyncedStreams = IntStream.range(1, 3).mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
                 Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345))).collect(
                 Collectors.toCollection(HashSet::new));
         Assert.assertEquals(expectedSyncedStreams, syncedStreams);
         Assert.assertEquals(Sets.newHashSet(streamConfigList2),
                 Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        Assert.assertEquals(Sets.newHashSet(),
+                scheduler.staleStreamDeletionMap().keySet());
     }
 
     @Test
-    public final void testMultiStreamSyncOnlyNewAndStaleStreamsAreSynced()
+    public final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
                 StreamIdentifier.multiStreamInstance(
@@ -490,6 +524,47 @@ public class SchedulerTest {
                 metricsConfig, processorConfig, retrievalConfig));
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
         Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
+        Set<StreamIdentifier> expectedSyncedStreams = IntStream.range(5, 7)
+                .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)))
+                .collect(Collectors.toCollection(HashSet::new));
+        Set<StreamIdentifier> expectedPendingStreams = IntStream.range(1, 3)
+                .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)))
+                .collect(Collectors.toCollection(HashSet::new));
+        Assert.assertEquals(expectedSyncedStreams, syncedStreams);
+        List<StreamConfig> expectedCurrentStreamConfigs = IntStream.range(1, 7).mapToObj(streamId -> new StreamConfig(
+                StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
+                .collect(Collectors.toCollection(LinkedList::new));
+        Assert.assertEquals(Sets.newHashSet(expectedCurrentStreamConfigs),
+                Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        Assert.assertEquals(expectedPendingStreams,
+                scheduler.staleStreamDeletionMap().keySet());
+    }
+
+    @Test
+    public final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreDeletedAfterDefermentPeriod()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
+                StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
+                .collect(Collectors.toCollection(LinkedList::new));
+        List<StreamConfig> streamConfigList2 = IntStream.range(3, 7).mapToObj(streamId -> new StreamConfig(
+                StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
+                .collect(Collectors.toCollection(LinkedList::new));
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList1, streamConfigList2);
+        scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig));
+        when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
+        when(scheduler.getOldStreamDeferredDeletionPeriodMillis()).thenReturn(0L);
+        Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
         Set<StreamIdentifier> expectedSyncedStreams = IntStream.concat(IntStream.range(1, 3), IntStream.range(5, 7))
                 .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
                         Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)))
@@ -497,6 +572,8 @@ public class SchedulerTest {
         Assert.assertEquals(expectedSyncedStreams, syncedStreams);
         Assert.assertEquals(Sets.newHashSet(streamConfigList2),
                 Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        Assert.assertEquals(Sets.newHashSet(),
+                scheduler.staleStreamDeletionMap().keySet());
     }
 
     @Test

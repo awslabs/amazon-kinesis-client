@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -109,6 +110,8 @@ public class ProcessTask implements ConsumerTask {
     @Override
     public TaskResult call() {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
+        shardInfo.streamIdentifierSerOpt()
+                .ifPresent(streamId -> MetricsUtil.addStreamId(scope, StreamIdentifier.multiStreamInstance(streamId)));
         MetricsUtil.addShardId(scope, shardInfo.shardId());
         long startTimeMillis = System.currentTimeMillis();
         boolean success = false;
@@ -197,6 +200,8 @@ public class ProcessTask implements ConsumerTask {
                 .checkpointer(recordProcessorCheckpointer).millisBehindLatest(input.millisBehindLatest()).build();
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
+        shardInfo.streamIdentifierSerOpt()
+                .ifPresent(streamId -> MetricsUtil.addStreamId(scope, StreamIdentifier.multiStreamInstance(streamId)));
         MetricsUtil.addShardId(scope, shardInfo.shardId());
         final long startTime = System.currentTimeMillis();
         try {
