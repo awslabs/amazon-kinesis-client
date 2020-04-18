@@ -43,7 +43,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
-import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
@@ -518,14 +517,19 @@ public class Scheduler implements Runnable {
             // Now let's scan the streamIdentifiers eligible for deferred deletion and delete them.
             // StreamIdentifiers are eligible for deletion only when the deferment period has elapsed and
             // the streamIdentifiers are not present in the latest snapshot.
-            final Set<StreamIdentifier> streamIdsToBeDeleted = staleStreamDeletionMap.keySet().stream()
+            final Map<Boolean, Set<StreamIdentifier>> staleStreamIdDeletionDecisionMap = staleStreamDeletionMap.keySet()
+                    .stream().collect(Collectors
+                            .partitioningBy(streamIdentifier -> newStreamConfigMap.containsKey(streamIdentifier),
+                                    Collectors.toSet()));
+            final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream()
                     .filter(streamIdentifier ->
                             Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis()
-                                    >= getOldStreamDeferredDeletionPeriodMillis() &&
-                                    !newStreamConfigMap.containsKey(streamIdentifier))
-                    .collect(Collectors.toSet());
+                                    >= getOldStreamDeferredDeletionPeriodMillis()).collect(Collectors.toSet());
+            streamsSynced.addAll(deleteMultiStreamLeases(staleStreamIdsToBeDeleted));
 
-            streamsSynced.addAll(deleteMultiStreamLeases(streamIdsToBeDeleted));
+            // Purge the active streams from stale streams list.
+            final Set<StreamIdentifier> staleStreamIdsToBeRevived = staleStreamIdDeletionDecisionMap.get(true);
+            removeActiveStreamsFromStaleStreamsList(staleStreamIdsToBeRevived);
 
             streamSyncWatch.reset().start();
         }
@@ -556,6 +560,12 @@ public class Scheduler implements Runnable {
     private List<MultiStreamLease> fetchMultiStreamLeases()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         return (List<MultiStreamLease>) ((List) leaseCoordinator.leaseRefresher().listLeases());
+    }
+
+    private void removeActiveStreamsFromStaleStreamsList(Set<StreamIdentifier> streamIdentifiers) {
+        for(StreamIdentifier streamIdentifier : streamIdentifiers) {
+            staleStreamDeletionMap.remove(streamIdentifier);
+        }
     }
 
     private Set<StreamIdentifier> deleteMultiStreamLeases(Set<StreamIdentifier> streamIdentifiers)
