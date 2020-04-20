@@ -38,7 +38,7 @@ import java.util.concurrent.TimeUnit;
 @NoArgsConstructor
 @Getter
 @Accessors(fluent = true)
-@EqualsAndHashCode(exclude = {"concurrencyToken", "lastCounterIncrementNanos"})
+@EqualsAndHashCode(exclude = {"concurrencyToken", "lastCounterIncrementNanos", "pendingCheckpointState"})
 @ToString
 public class Lease {
     /*
@@ -82,6 +82,14 @@ public class Lease {
      * @return pending checkpoint, possibly null.
      */
     private ExtendedSequenceNumber pendingCheckpoint;
+
+    /**
+     * Last pending application state. Deliberately excluded from hashCode and equals.
+     *
+     * @return pending checkpoint state, possibly null.
+     */
+    private byte[] pendingCheckpointState;
+
     /**
      * @return count of distinct lease holders between checkpoints.
      */
@@ -96,13 +104,22 @@ public class Lease {
     protected Lease(Lease lease) {
         this(lease.leaseKey(), lease.leaseOwner(), lease.leaseCounter(), lease.concurrencyToken(),
                 lease.lastCounterIncrementNanos(), lease.checkpoint(), lease.pendingCheckpoint(),
-                lease.ownerSwitchesSinceCheckpoint(), lease.parentShardIds());
+                lease.ownerSwitchesSinceCheckpoint(), lease.parentShardIds(), lease.pendingCheckpointState());
+    }
+
+    @Deprecated
+    public Lease(final String leaseKey, final String leaseOwner, final Long leaseCounter,
+                 final UUID concurrencyToken, final Long lastCounterIncrementNanos,
+                 final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint,
+                 final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds) {
+        this(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos, checkpoint, pendingCheckpoint,
+                ownerSwitchesSinceCheckpoint, parentShardIds, null);
     }
 
     public Lease(final String leaseKey, final String leaseOwner, final Long leaseCounter,
                     final UUID concurrencyToken, final Long lastCounterIncrementNanos,
                     final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint,
-                    final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds) {
+                    final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds, final byte[] pendingCheckpointState) {
         this.leaseKey = leaseKey;
         this.leaseOwner = leaseOwner;
         this.leaseCounter = leaseCounter;
@@ -114,6 +131,7 @@ public class Lease {
         if (parentShardIds != null) {
             this.parentShardIds.addAll(parentShardIds);
         }
+        this.pendingCheckpointState = pendingCheckpointState;
     }
 
     /**
@@ -133,6 +151,7 @@ public class Lease {
         ownerSwitchesSinceCheckpoint(lease.ownerSwitchesSinceCheckpoint());
         checkpoint(lease.checkpoint);
         pendingCheckpoint(lease.pendingCheckpoint);
+        pendingCheckpointState(lease.pendingCheckpointState);
         parentShardIds(lease.parentShardIds);
     }
 
@@ -210,6 +229,15 @@ public class Lease {
      */
     public void pendingCheckpoint(ExtendedSequenceNumber pendingCheckpoint) {
         this.pendingCheckpoint = pendingCheckpoint;
+    }
+
+    /**
+     * Sets pending checkpoint state.
+     *
+     * @param pendingCheckpointState can be null
+     */
+    public void pendingCheckpointState(byte[] pendingCheckpointState) {
+        this.pendingCheckpointState = pendingCheckpointState;
     }
 
     /**

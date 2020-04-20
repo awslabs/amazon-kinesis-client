@@ -127,16 +127,37 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
         }
 
         assertNotNull(lease);
-        ExtendedSequenceNumber newCheckpoint = new ExtendedSequenceNumber("newCheckpoint");
+        final ExtendedSequenceNumber initialCheckpoint = new ExtendedSequenceNumber("initialCheckpoint");
+        final ExtendedSequenceNumber pendingCheckpoint = new ExtendedSequenceNumber("pendingCheckpoint");
+        final ExtendedSequenceNumber newCheckpoint = new ExtendedSequenceNumber("newCheckpoint");
+        final byte[] checkpointState = "checkpointState".getBytes();
+
         // lease's leaseCounter is wrong at this point, but it shouldn't matter.
+        assertTrue(dynamoDBCheckpointer.setCheckpoint(lease.leaseKey(), initialCheckpoint, lease.concurrencyToken()));
+
+        final Lease leaseFromDDBAtInitialCheckpoint = leaseRefresher.getLease(lease.leaseKey());
+        lease.leaseCounter(lease.leaseCounter() + 1);
+        lease.checkpoint(initialCheckpoint);
+        lease.leaseOwner(coordinator.workerIdentifier());
+        assertEquals(lease, leaseFromDDBAtInitialCheckpoint);
+
+        dynamoDBCheckpointer.prepareCheckpoint(lease.leaseKey(), pendingCheckpoint, lease.concurrencyToken().toString(), checkpointState);
+
+        final Lease leaseFromDDBAtPendingCheckpoint = leaseRefresher.getLease(lease.leaseKey());
+        lease.leaseCounter(lease.leaseCounter() + 1);
+        lease.checkpoint(initialCheckpoint);
+        lease.pendingCheckpoint(pendingCheckpoint);
+        lease.pendingCheckpointState(checkpointState);
+        assertEquals(lease, leaseFromDDBAtPendingCheckpoint);
+
         assertTrue(dynamoDBCheckpointer.setCheckpoint(lease.leaseKey(), newCheckpoint, lease.concurrencyToken()));
 
-        Lease fromDynamo = leaseRefresher.getLease(lease.leaseKey());
-
+        final Lease leaseFromDDBAtNewCheckpoint = leaseRefresher.getLease(lease.leaseKey());
         lease.leaseCounter(lease.leaseCounter() + 1);
         lease.checkpoint(newCheckpoint);
-        lease.leaseOwner(coordinator.workerIdentifier());
-        assertEquals(lease, fromDynamo);
+        lease.pendingCheckpoint(null);
+        lease.pendingCheckpointState(null);
+        assertEquals(lease, leaseFromDDBAtNewCheckpoint);
     }
 
     /**
