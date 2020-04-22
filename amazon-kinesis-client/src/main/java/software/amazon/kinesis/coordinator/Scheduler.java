@@ -458,8 +458,7 @@ public class Scheduler implements Runnable {
 
         if (shouldSyncStreamsNow()) {
             final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = new HashMap<>();
-            final long waitPeriodToDeleteOldStreamsMillis = multiStreamTracker.waitPeriodToDeleteOldStreams()
-                    .toMillis();
+            final Duration waitPeriodToDeleteOldStreams = multiStreamTracker.waitPeriodToDeleteOldStreams();
             // Making an immutable copy
             newStreamConfigMap.putAll(multiStreamTracker.streamConfigList().stream()
                     .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc)));
@@ -525,12 +524,16 @@ public class Scheduler implements Runnable {
             final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream()
                     .filter(streamIdentifier ->
                             Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis()
-                                    >= waitPeriodToDeleteOldStreamsMillis).collect(Collectors.toSet());
+                                    >= waitPeriodToDeleteOldStreams.toMillis()).collect(Collectors.toSet());
             streamsSynced.addAll(deleteMultiStreamLeases(staleStreamIdsToBeDeleted));
 
             // Purge the active streams from stale streams list.
             final Set<StreamIdentifier> staleStreamIdsToBeRevived = staleStreamIdDeletionDecisionMap.get(true);
             removeActiveStreamsFromStaleStreamsList(staleStreamIdsToBeRevived);
+
+            log.warn("Streams enqueued for deletion for lease table cleanup along with their scheduled time for deletion: {} ",
+                    staleStreamDeletionMap.entrySet().stream().collect(Collectors
+                            .toMap(Map.Entry::getKey, entry -> entry.getValue().plus(waitPeriodToDeleteOldStreams))));
 
             streamSyncWatch.reset().start();
         }
