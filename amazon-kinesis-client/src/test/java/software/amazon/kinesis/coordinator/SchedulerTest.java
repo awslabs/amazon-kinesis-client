@@ -36,7 +36,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.atMost;
 
-import java.time.Instant;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -48,7 +48,6 @@ import java.util.Set;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.Sets;
@@ -64,8 +63,6 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.awssdk.utils.Either;
-import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.CheckpointFactory;
@@ -184,6 +181,7 @@ public class SchedulerTest {
         }};
 
         when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList);
+        when(multiStreamTracker.waitPeriodToDeleteOldStreams()).thenReturn(Duration.ofHours(1L));
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
         when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
         when(shardSyncTaskManager.executeShardSyncTask()).thenReturn(new TaskResult(null));
@@ -492,7 +490,7 @@ public class SchedulerTest {
         scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig));
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
-        when(scheduler.getOldStreamDeferredDeletionPeriodMillis()).thenReturn(0L);
+        when(multiStreamTracker.waitPeriodToDeleteOldStreams()).thenReturn(Duration.ZERO);
         Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
         Set<StreamIdentifier> expectedSyncedStreams = IntStream.range(1, 3).mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
                 Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345))).collect(
@@ -563,7 +561,7 @@ public class SchedulerTest {
         scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig));
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
-        when(scheduler.getOldStreamDeferredDeletionPeriodMillis()).thenReturn(0L);
+        when(multiStreamTracker.waitPeriodToDeleteOldStreams()).thenReturn(Duration.ZERO);
         Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
         Set<StreamIdentifier> expectedSyncedStreams = IntStream.concat(IntStream.range(1, 3), IntStream.range(5, 7))
                 .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(

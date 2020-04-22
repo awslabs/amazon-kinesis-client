@@ -327,7 +327,7 @@ public class KinesisDataFetcher implements DataFetcher {
         } catch (ExecutionException e) {
             throw exceptionManager.apply(e.getCause());
         } catch (InterruptedException e) {
-            // TODO: Check behaviorF
+            // TODO: Check behavior
             log.debug("{} : Interrupt called on method, shutdown initiated", streamAndShardId);
             throw new RuntimeException(e);
         } catch (TimeoutException e) {

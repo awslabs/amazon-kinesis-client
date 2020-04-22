@@ -106,7 +106,6 @@ public class Scheduler implements Runnable {
     private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
     private static final long HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS = 5000L;
     private static final long NEW_STREAM_CHECK_INTERVAL_MILLIS = 1 * 60 * 1000L;
-    private static final long OLD_STREAM_DEFERRED_DELETION_PERIOD_MILLIS = 1 * 60 * 60 * 1000L;
 
     private SchedulerLog slog = new SchedulerLog();
 
@@ -273,7 +272,7 @@ public class Scheduler implements Runnable {
         this.shardDetectorProvider = streamConfig -> createOrGetShardSyncTaskManager(streamConfig).shardDetector();
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
-        // TODO : Halo : Check if this needs to be per stream.
+        // TODO : LTR : Check if this needs to be per stream.
         this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer(isMultiStreamMode);
         this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
         this.leaderElectedPeriodicShardSyncManager = new PeriodicShardSyncManager(
@@ -459,6 +458,8 @@ public class Scheduler implements Runnable {
 
         if (shouldSyncStreamsNow()) {
             final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = new HashMap<>();
+            final long waitPeriodToDeleteOldStreamsMillis = multiStreamTracker.waitPeriodToDeleteOldStreams()
+                    .toMillis();
             // Making an immutable copy
             newStreamConfigMap.putAll(multiStreamTracker.streamConfigList().stream()
                     .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc)));
@@ -524,7 +525,7 @@ public class Scheduler implements Runnable {
             final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream()
                     .filter(streamIdentifier ->
                             Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis()
-                                    >= getOldStreamDeferredDeletionPeriodMillis()).collect(Collectors.toSet());
+                                    >= waitPeriodToDeleteOldStreamsMillis).collect(Collectors.toSet());
             streamsSynced.addAll(deleteMultiStreamLeases(staleStreamIdsToBeDeleted));
 
             // Purge the active streams from stale streams list.
@@ -534,11 +535,6 @@ public class Scheduler implements Runnable {
             streamSyncWatch.reset().start();
         }
         return streamsSynced;
-    }
-
-    @VisibleForTesting
-    long getOldStreamDeferredDeletionPeriodMillis() {
-        return OLD_STREAM_DEFERRED_DELETION_PERIOD_MILLIS;
     }
 
     @VisibleForTesting
