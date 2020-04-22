@@ -14,7 +14,9 @@
  */
 package software.amazon.kinesis.retrieval;
 
+import java.util.Optional;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.kinesis.retrieval.polling.DataFetcher;
 import software.amazon.kinesis.retrieval.polling.KinesisDataFetcher;
 
 /**
@@ -41,15 +43,33 @@ public interface GetRecordsRetrievalStrategy {
 
     /**
      * Returns whether this strategy has been shutdown.
-     * 
+     *
      * @return true if the strategy has been shutdown, false otherwise.
      */
     boolean isShutdown();
 
     /**
-     * Returns the KinesisDataFetcher used to records from Kinesis.
-     * 
-     * @return KinesisDataFetcher
+     * Returns a DataFetcher used to records from Kinesis.
+     *
+     * @return DataFetcher
      */
     KinesisDataFetcher getDataFetcher();
+
+    /**
+     * Returns a DataFetcher override if applicable, else empty for retrieving records from Kinesis.
+     *
+     * @return Optional<DataFetcher>
+     */
+    default Optional<DataFetcher> getDataFetcherOverride() {
+        return Optional.empty();
+    }
+
+    /**
+     * Returns a dataFetcher by first checking for an override if it exists, else using the default data fetcher.
+     *
+     * @return DataFetcher
+     */
+    default DataFetcher dataFetcher() {
+        return getDataFetcherOverride().orElse(getDataFetcher());
+    }
 }
