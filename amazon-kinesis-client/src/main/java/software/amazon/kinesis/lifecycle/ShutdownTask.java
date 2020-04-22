@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Task for invoking the ShardRecordProcessor shutdown() callback.
@@ -195,14 +196,11 @@ public class ShutdownTask implements ConsumerTask {
     private void updateLeasesForChildShards()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(shardInfoIdProvider.apply(shardInfo));
-        Set<String> childShardIds = new HashSet<>();
-        for (ChildShard childShard : childShards) {
-            childShardIds.add(childShard.shardId());
-        }
+        Set<String> childShardIds = childShards.stream().map(ChildShard::shardId).collect(Collectors.toSet());
 
-        final Lease upatedLease = currentLease.copy();
-        upatedLease.childShardIds(childShardIds);
-        leaseCoordinator.updateLease(upatedLease, UUID.fromString(shardInfo.concurrencyToken()), SHUTDOWN_TASK_OPERATION, shardInfoIdProvider.apply(shardInfo));
+        final Lease updatedLease = currentLease.copy();
+        updatedLease.childShardIds(childShardIds);
+        leaseCoordinator.updateLease(updatedLease, UUID.fromString(shardInfo.concurrencyToken()), SHUTDOWN_TASK_OPERATION, shardInfoIdProvider.apply(shardInfo));
     }
 
     /*

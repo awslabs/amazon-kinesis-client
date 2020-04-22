@@ -28,6 +28,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -123,7 +124,8 @@ public class ShutdownTaskTest {
     @Test
     public final void testCallWhenApplicationDoesNotCheckpoint() {
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("3298"));
-        when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(createLease());
+        Lease heldLease = createLease("shardId-0", "leaseOwner", Collections.singleton("parentShardId"));
+        when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         final TaskResult result = task.call();
@@ -164,7 +166,8 @@ public class ShutdownTaskTest {
                                 hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShards());
 
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
-        when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(createLease());
+        Lease heldLease = createLease("shardId-0", "leaseOwner", Collections.singleton("parentShardId"));
+        when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
         final TaskResult result = task.call();
@@ -253,11 +256,11 @@ public class ShutdownTaskTest {
         return  childShards;
     }
 
-    private Lease createLease() {
+    private Lease createLease(String leaseKey, String leaseOwner, Collection<String> parentShardIds) {
         Lease lease = new Lease();
-        lease.leaseKey("shardId-0");
-        lease.leaseOwner("leaseOwner");
-        lease.parentShardIds(Collections.singleton("parentShardIds"));
+        lease.leaseKey(leaseKey);
+        lease.leaseOwner(leaseOwner);
+        lease.parentShardIds(parentShardIds);
 
         return lease;
     }
