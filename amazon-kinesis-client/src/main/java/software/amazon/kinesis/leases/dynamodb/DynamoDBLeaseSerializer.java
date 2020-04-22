@@ -53,7 +53,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String PENDING_CHECKPOINT_SUBSEQUENCE_KEY = "pendingCheckpointSubSequenceNumber";
     private static final String PENDING_CHECKPOINT_STATE_KEY = "pendingCheckpointState";
     private static final String PARENT_SHARD_ID_KEY = "parentShardId";
-    private static final String CHILD_SHARD_ID_KEY = "childShardId";
+    private static final String CHILD_SHARD_ID_KEY = "childShardIds";
 
     @Override
     public Map<String, AttributeValue> toDynamoRecord(final Lease lease) {

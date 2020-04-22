@@ -433,7 +433,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                             .records(records)
                             .millisBehindLatest(getRecordsResult.millisBehindLatest())
                             .cacheEntryTime(lastSuccessfulCall)
-                            .isAtShardEnd(getRecordsRetrievalStrategy.getDataFetcher().isShardEndReached())
+                            .isAtShardEnd(getRecordsRetrievalStrategy.dataFetcher().isShardEndReached())
                             .childShards(getRecordsResult.childShards())
                             .build();
 
