@@ -30,6 +30,7 @@ import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
 import software.amazon.awssdk.services.dynamodb.model.KeyType;
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
+import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.DynamoUtils;
 import software.amazon.kinesis.leases.Lease;
@@ -52,6 +53,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String PENDING_CHECKPOINT_SUBSEQUENCE_KEY = "pendingCheckpointSubSequenceNumber";
     private static final String PENDING_CHECKPOINT_STATE_KEY = "pendingCheckpointState";
     private static final String PARENT_SHARD_ID_KEY = "parentShardId";
+    private static final String CHILD_SHARD_IDS_KEY = "childShardIds";
 
     @Override
     public Map<String, AttributeValue> toDynamoRecord(final Lease lease) {
@@ -69,6 +71,9 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
         result.put(CHECKPOINT_SUBSEQUENCE_NUMBER_KEY, DynamoUtils.createAttributeValue(lease.checkpoint().subSequenceNumber()));
         if (lease.parentShardIds() != null && !lease.parentShardIds().isEmpty()) {
             result.put(PARENT_SHARD_ID_KEY, DynamoUtils.createAttributeValue(lease.parentShardIds()));
+        }
+        if (!CollectionUtils.isNullOrEmpty(lease.childShardIds())) {
+            result.put(CHILD_SHARD_IDS_KEY, DynamoUtils.createAttributeValue(lease.childShardIds()));
         }
 
         if (lease.pendingCheckpoint() != null && !lease.pendingCheckpoint().sequenceNumber().isEmpty()) {
@@ -102,6 +107,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
                         DynamoUtils.safeGetLong(dynamoRecord, CHECKPOINT_SUBSEQUENCE_NUMBER_KEY))
         );
         leaseToUpdate.parentShardIds(DynamoUtils.safeGetSS(dynamoRecord, PARENT_SHARD_ID_KEY));
+        leaseToUpdate.childShardIds(DynamoUtils.safeGetSS(dynamoRecord, CHILD_SHARD_IDS_KEY));
 
         if (!Strings.isNullOrEmpty(DynamoUtils.safeGetString(dynamoRecord, PENDING_CHECKPOINT_SEQUENCE_KEY))) {
             leaseToUpdate.pendingCheckpoint(
@@ -233,6 +239,11 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
             result.put(PENDING_CHECKPOINT_STATE_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.pendingCheckpointState())));
         } else {
             result.put(PENDING_CHECKPOINT_STATE_KEY, AttributeValueUpdate.builder().action(AttributeAction.DELETE).build());
+        }
+
+
+        if (!CollectionUtils.isNullOrEmpty(lease.childShardIds())) {
+            result.put(CHILD_SHARD_IDS_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.childShardIds())));
         }
 
         return result;
