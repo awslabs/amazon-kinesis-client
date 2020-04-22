@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
-import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -32,6 +31,7 @@ public class InMemoryCheckpointer implements Checkpointer {
     private Map<String, ExtendedSequenceNumber> checkpoints = new HashMap<>();
     private Map<String, ExtendedSequenceNumber> flushpoints = new HashMap<>();
     private Map<String, ExtendedSequenceNumber> pendingCheckpoints = new HashMap<>();
+    private Map<String, byte[]> pendingCheckpointStates = new HashMap<>();
 
     private String operation;
 
@@ -44,6 +44,7 @@ public class InMemoryCheckpointer implements Checkpointer {
         checkpoints.put(leaseKey, checkpointValue);
         flushpoints.put(leaseKey, checkpointValue);
         pendingCheckpoints.remove(leaseKey);
+        pendingCheckpointStates.remove(leaseKey);
 
         if (log.isDebugEnabled()) {
             log.debug("shardId: {} checkpoint: {}", leaseKey, checkpointValue);
@@ -64,15 +65,22 @@ public class InMemoryCheckpointer implements Checkpointer {
     @Override
     public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
             throws KinesisClientLibException {
+        prepareCheckpoint(leaseKey, pendingCheckpoint, concurrencyToken, null);
+    }
+
+    @Override
+    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken, byte[] pendingCheckpointState) throws KinesisClientLibException {
         pendingCheckpoints.put(leaseKey, pendingCheckpoint);
+        pendingCheckpointStates.put(leaseKey, pendingCheckpointState);
     }
 
     @Override
     public Checkpoint getCheckpointObject(String leaseKey) throws KinesisClientLibException {
         ExtendedSequenceNumber checkpoint = flushpoints.get(leaseKey);
         ExtendedSequenceNumber pendingCheckpoint = pendingCheckpoints.get(leaseKey);
+        byte[] pendingCheckpointState = pendingCheckpointStates.get(leaseKey);
 
-        Checkpoint checkpointObj = new Checkpoint(checkpoint, pendingCheckpoint);
+        Checkpoint checkpointObj = new Checkpoint(checkpoint, pendingCheckpoint, pendingCheckpointState);
         log.debug("getCheckpointObject shardId: {}, {}", leaseKey, checkpointObj);
         return checkpointObj;
     }

@@ -35,9 +35,10 @@ public class LeaseBuilder {
     private Long ownerSwitchesSinceCheckpoint = 0L;
     private Set<String> parentShardIds  = new HashSet<>();
     private Set<String> childShardIds = new HashSet<>();
+    private byte[] pendingCheckpointState;
 
     public Lease build() {
-        return new Lease(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos,
-                checkpoint, pendingCheckpoint, ownerSwitchesSinceCheckpoint, parentShardIds, childShardIds);
+        return new Lease(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos, checkpoint,
+                         pendingCheckpoint, ownerSwitchesSinceCheckpoint, parentShardIds, childShardIds, pendingCheckpointState);
     }
 }

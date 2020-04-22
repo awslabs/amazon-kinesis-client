@@ -13,24 +13,36 @@
  * limitations under the License.
  */
 
-package software.amazon.kinesis.leases;
+package software.amazon.kinesis.retrieval;
 
-import java.util.List;
-import software.amazon.awssdk.services.kinesis.model.Shard;
-import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import java.time.Duration;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.metrics.MetricsFactory;
 
-/**
- *
- */
-public interface ShardDetector {
-    Shard shard(String shardId);
+public interface DataFetcherProviderConfig {
 
-    List<Shard> listShards();
+    /**
+    * Gets stream identifier for dataFetcher.
+    */
+    StreamIdentifier getStreamIdentifier();
 
-    List<Shard> listShardsWithFilter(ShardFilter shardFilter);
+    /**
+    * Gets shard id.
+    */
+    String getShardId();
 
-    default StreamIdentifier streamIdentifier() {
-        throw new UnsupportedOperationException("StreamName not available");
-    }
+    /**
+     * Gets current instance of metrics factory.
+     */
+    MetricsFactory getMetricsFactory();
+
+    /**
+     * Gets current max records allowed to process at a given time.
+     */
+    Integer getMaxRecords();
+
+    /**
+     * Gets timeout for kinesis request.
+     */
+    Duration getKinesisRequestTimeout();
 }

@@ -92,6 +92,7 @@ public class InitializeTask implements ConsumerTask {
                     .shardId(shardInfo.shardId())
                     .extendedSequenceNumber(initialCheckpoint)
                     .pendingCheckpointSequenceNumber(initialCheckpointObject.pendingCheckpoint())
+                    .pendingCheckpointState(initialCheckpointObject.pendingCheckpointState())
                     .build();
 
             final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory,

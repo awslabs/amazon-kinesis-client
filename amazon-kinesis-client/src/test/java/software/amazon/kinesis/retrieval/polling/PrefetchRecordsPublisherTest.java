@@ -107,7 +107,7 @@ public class PrefetchRecordsPublisherTest {
     @Mock
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     @Mock
-    private KinesisDataFetcher dataFetcher;
+    private DataFetcher dataFetcher;
     @Mock
     private InitialPositionInStreamExtended initialPosition;
     @Mock
@@ -124,7 +124,7 @@ public class PrefetchRecordsPublisherTest {
 
     @Before
     public void setup() {
-        when(getRecordsRetrievalStrategy.getDataFetcher()).thenReturn(dataFetcher);
+        when(getRecordsRetrievalStrategy.dataFetcher()).thenReturn(dataFetcher);
         when(dataFetcher.getStreamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("testStream"));
         executorService = spy(Executors.newFixedThreadPool(1));
         getRecordsCache = new PrefetchRecordsPublisher(

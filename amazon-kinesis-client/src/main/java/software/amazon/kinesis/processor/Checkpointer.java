@@ -40,7 +40,7 @@ public interface Checkpointer {
     /**
      * Get the current checkpoint stored for the specified shard. Useful for checking that the parent shard
      * has been completely processed before we start processing the child shard.
-     * 
+     *
      * @param leaseKey Current checkpoint for this shard is fetched
      * @return Current checkpoint for this shard, null if there is no record for this shard.
      * @throws KinesisClientLibException Thrown if we are unable to fetch the checkpoint
@@ -72,6 +72,22 @@ public interface Checkpointer {
      */
     void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
         throws KinesisClientLibException;
+
+    /**
+     * Record intent to checkpoint for a shard. Upon failover, the pendingCheckpoint and pendingCheckpointState will be
+     * passed to the new ShardRecordProcessor's initialize() method.
+     *
+     * @param leaseKey Checkpoint is specified for this shard.
+     * @param pendingCheckpoint Value of the pending checkpoint (e.g. Kinesis sequence number and subsequence number)
+     * @param concurrencyToken Used with conditional writes to prevent stale updates
+     *        (e.g. if there was a fail over to a different record processor, we don't want to
+     *        overwrite it's checkpoint)
+     * @param pendingCheckpointState Serialized application state at the pending checkpoint.
+     *
+     * @throws KinesisClientLibException Thrown if we were unable to save the checkpoint
+     */
+    void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken, byte[] pendingCheckpointState)
+            throws KinesisClientLibException;
 
     void operation(String operation);
 

@@ -113,9 +113,19 @@ public class StreamingShardRecordProcessorTest {
         }
 
         @Override
+        public PreparedCheckpointer prepareCheckpoint(byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public PreparedCheckpointer prepareCheckpoint(Record record)
                 throws KinesisClientLibDependencyException,
                 InvalidStateException, ThrottlingException, ShutdownException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public PreparedCheckpointer prepareCheckpoint(Record record, byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
             throw new UnsupportedOperationException();
         }
 
@@ -127,9 +137,19 @@ public class StreamingShardRecordProcessorTest {
         }
 
         @Override
+        public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
+            return null;
+        }
+
+        @Override
         public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber)
                 throws KinesisClientLibDependencyException,
                 InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber, byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
             throw new UnsupportedOperationException();
         }
 
