@@ -22,6 +22,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.google.common.collect.ImmutableMap;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
@@ -29,6 +30,7 @@ import software.amazon.awssdk.services.dynamodb.model.*;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -57,6 +59,9 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     private final BillingMode billingMode;
 
     private boolean newTableCreated = false;
+
+    private static final String STREAM_NAME = "streamName";
+    private static final String DDB_STREAM_NAME = ":streamName";
 
     /**
      * Constructor.
@@ -267,8 +272,17 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      * {@inheritDoc}
      */
     @Override
+    public List<Lease> listLeasesForStream(StreamIdentifier streamIdentifier) throws DependencyException,
+            InvalidStateException, ProvisionedThroughputException {
+        return list( null, streamIdentifier);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public List<Lease> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return list(null);
+        return list(null, null);
     }
 
     /**
@@ -277,22 +291,34 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean isLeaseTableEmpty()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return list(1).isEmpty();
+        return list(1, null).isEmpty();
     }
 
     /**
      * List with the given page size. Package access for integration testing.
      *
      * @param limit number of items to consider at a time - used by integration tests to force paging.
+     * @param streamIdentifier streamIdentifier for multi-stream mode. Can be null.
      * @return list of leases
      * @throws InvalidStateException if table does not exist
      * @throws DependencyException if DynamoDB scan fail in an unexpected way
      * @throws ProvisionedThroughputException if DynamoDB scan fail due to exceeded capacity
      */
-    List<Lease> list(Integer limit) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    List<Lease> list(Integer limit, StreamIdentifier streamIdentifier) throws DependencyException, InvalidStateException,
+            ProvisionedThroughputException {
+
         log.debug("Listing leases from table {}", table);
 
         ScanRequest.Builder scanRequestBuilder = ScanRequest.builder().tableName(table);
+
+        if (streamIdentifier != null) {
+            final Map<String, AttributeValue> expressionAttributeValues = ImmutableMap.of(
+                 DDB_STREAM_NAME, AttributeValue.builder().s(streamIdentifier.serialize()).build()
+            );
+            scanRequestBuilder = scanRequestBuilder.filterExpression(STREAM_NAME + " = " + DDB_STREAM_NAME)
+                    .expressionAttributeValues(expressionAttributeValues);
+        }
+
         if (limit != null) {
             scanRequestBuilder = scanRequestBuilder.limit(limit);
         }

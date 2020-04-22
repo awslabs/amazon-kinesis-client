@@ -142,8 +142,7 @@ public class HierarchicalShardSyncer {
             assertAllParentShardsAreClosed(inconsistentShardIds);
         }
         final List<Lease> currentLeases = isMultiStreamMode ?
-                getLeasesForStream(shardDetector.streamIdentifier(), leaseRefresher) :
-                leaseRefresher.listLeases();
+                leaseRefresher.listLeasesForStream(shardDetector.streamIdentifier()) : leaseRefresher.listLeases();
         final MultiStreamArgs multiStreamArgs = new MultiStreamArgs(isMultiStreamMode, shardDetector.streamIdentifier());
         final LeaseSynchronizer leaseSynchronizer = isLeaseTableEmpty ? new EmptyLeaseTableSynchronizer() :
                 new NonEmptyLeaseTableSynchronizer(shardDetector, shardIdToShardMap, shardIdToChildShardIdsMap);
@@ -169,29 +168,6 @@ public class HierarchicalShardSyncer {
             cleanupLeasesOfFinishedShards(currentLeases, shardIdToShardMap, shardIdToChildShardIdsMap, trackedLeases,
                     leaseRefresher, multiStreamArgs);
         }
-    }
-
-    // CHECKSTYLE:ON CyclomaticComplexity
-
-    /** Note: This method has package level access solely for testing purposes.
-     *
-     * @param streamIdentifier We'll use this stream identifier to filter leases
-     * @param leaseRefresher Used to fetch leases
-     * @return Return list of leases (corresponding to shards) of the specified stream.
-     * @throws DependencyException
-     * @throws InvalidStateException
-     * @throws ProvisionedThroughputException
-     */
-    static List<Lease> getLeasesForStream(StreamIdentifier streamIdentifier,
-            LeaseRefresher leaseRefresher)
-            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
-        List<Lease> streamLeases = new ArrayList<>();
-        for (Lease lease : leaseRefresher.listLeases()) {
-            if (streamIdentifier.serialize().equals(((MultiStreamLease)lease).streamIdentifier())) {
-                streamLeases.add(lease);
-            }
-        }
-        return streamLeases;
     }
 
     /** Helper method to detect a race condition between fetching the shards via paginated DescribeStream calls

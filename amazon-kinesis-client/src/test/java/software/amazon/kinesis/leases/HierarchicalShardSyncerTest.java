@@ -1039,7 +1039,7 @@ public class HierarchicalShardSyncerTest {
         final ArgumentCaptor<Lease> leaseCaptor = ArgumentCaptor.forClass(Lease.class);
 
         when(shardDetector.listShards()).thenReturn(shards);
-        when(dynamoDBLeaseRefresher.listLeases()).thenReturn(leases);
+        when(dynamoDBLeaseRefresher.listLeasesForStream(any(StreamIdentifier.class))).thenReturn(leases);
         doNothing().when(dynamoDBLeaseRefresher).deleteLease(leaseCaptor.capture());
         setupMultiStream();
         hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher,
@@ -1049,7 +1049,7 @@ public class HierarchicalShardSyncerTest {
         assertThat(leaseCaptor.getValue(), equalTo(garbageLease));
 
         verify(shardDetector, times(2)).listShards();
-        verify(dynamoDBLeaseRefresher).listLeases();
+        verify(dynamoDBLeaseRefresher).listLeasesForStream(any(StreamIdentifier.class));
         verify(dynamoDBLeaseRefresher).deleteLease(any(Lease.class));
         verify(dynamoDBLeaseRefresher, never()).createLeaseIfNotExists(any(Lease.class));
     }

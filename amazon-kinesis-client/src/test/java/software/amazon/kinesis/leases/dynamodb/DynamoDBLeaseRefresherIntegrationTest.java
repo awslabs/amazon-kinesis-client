@@ -71,7 +71,7 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
         Collection<Lease> expected = builder.build().values();
 
         // The / 3 here ensures that we will test Dynamo's paging mechanics.
-        List<Lease> actual = leaseRefresher.list(numRecordsToPut / 3);
+        List<Lease> actual = leaseRefresher.list(numRecordsToPut / 3, null);
 
         for (Lease lease : actual) {
             assertNotNull(expected.remove(lease));
