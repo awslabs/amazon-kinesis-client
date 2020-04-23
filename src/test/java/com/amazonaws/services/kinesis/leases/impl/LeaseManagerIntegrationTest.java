@@ -297,6 +297,29 @@ public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
     }
 
     @Test
+    public void testWaitUntilLeaseTableExistsUpdatingStatus() throws LeasingException {
+        AmazonDynamoDBClient ddbMock = Mockito.mock(ddbClient.getClass());
+        DescribeTableResult result = Mockito.mock(DescribeTableResult.class);
+        TableDescription description = Mockito.mock(TableDescription.class);
+        Mockito.when(description.getTableStatus()).thenReturn(TableStatus.UPDATING.name());
+        Mockito.when(result.getTable()).thenReturn(description);
+        Mockito.when(ddbMock.describeTable(Mockito.any(DescribeTableRequest.class))).thenReturn(result);
+        KinesisClientLeaseManager manager = new KinesisClientLeaseManager("existing_table", ddbMock, true,
+                KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE) {
+
+            @Override
+            long sleep(long timeToSleepMillis) {
+                Assert.fail("Should not sleep");
+                return 0L;
+            }
+
+        };
+
+
+        Assert.assertTrue(manager.waitUntilLeaseTableExists(1, 1));
+    }
+
+    @Test
     public void testWaitUntilLeaseTableExistsPayPerRequest() throws LeasingException {
         AmazonDynamoDBClient ddbMock = Mockito.mock(ddbClient.getClass());
         DescribeTableResult result = Mockito.mock(DescribeTableResult.class);
