@@ -17,7 +17,6 @@ package software.amazon.kinesis.processor;
 
 import software.amazon.kinesis.common.StreamConfig;
 
-import java.time.Duration;
 import java.util.List;
 
 /**
@@ -29,15 +28,18 @@ public interface MultiStreamTracker {
 
     /**
      * Returns the list of stream config, to be processed by the current application.
-     * Note that this method will be called periodically called by the KCL to learn about the new and old streams.
+     * <b>Note that the streams list CAN be changed during the application runtime.</b>
+     * This method will be called periodically by the KCL to learn about the change in streams to process.
      *
      * @return List of StreamConfig
      */
     List<StreamConfig> streamConfigList();
 
     /**
-     * Duration to wait before deleting the old streams in the lease table.
-     * @return Wait time before deleting old streams
+     * Strategy to delete leases of old streams in the lease table.
+     * <b>Note that the strategy CANNOT be changed during the application runtime.</b>
+     *
+     * @return StreamsLeasesDeletionStrategy
      */
-    Duration waitPeriodToDeleteOldStreams();
+    FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy();
 }

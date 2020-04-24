@@ -94,6 +94,11 @@ public class MetricsUtil {
         metricsScope.addData(metricName, success ? 1 : 0, StandardUnit.COUNT, metricsLevel);
     }
 
+    public static void addCount(@NonNull final MetricsScope metricsScope, final String dimension,
+            final long count, @NonNull final MetricsLevel metricsLevel) {
+        metricsScope.addData(dimension, count, StandardUnit.COUNT, metricsLevel);
+    }
+
     public static void endScope(@NonNull final MetricsScope metricsScope) {
         metricsScope.end();
     }

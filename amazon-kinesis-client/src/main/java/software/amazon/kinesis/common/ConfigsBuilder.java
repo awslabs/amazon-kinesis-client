@@ -124,7 +124,10 @@ public class ConfigsBuilder {
      * @param workerIdentifier
      * @param shardRecordProcessorFactory
      */
-    public ConfigsBuilder(@NonNull String streamName, @NonNull String applicationName, @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient, @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier, @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
+    public ConfigsBuilder(@NonNull String streamName, @NonNull String applicationName,
+            @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient,
+            @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier,
+            @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
         this.appStreamTracker = Either.right(streamName);
         this.applicationName = applicationName;
         this.kinesisClient = kinesisClient;
@@ -144,7 +147,10 @@ public class ConfigsBuilder {
      * @param workerIdentifier
      * @param shardRecordProcessorFactory
      */
-    public ConfigsBuilder(@NonNull MultiStreamTracker multiStreamTracker, @NonNull String applicationName, @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient, @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier, @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
+    public ConfigsBuilder(@NonNull MultiStreamTracker multiStreamTracker, @NonNull String applicationName,
+            @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient,
+            @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier,
+            @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
         this.appStreamTracker = Either.left(multiStreamTracker);
         this.applicationName = applicationName;
         this.kinesisClient = kinesisClient;

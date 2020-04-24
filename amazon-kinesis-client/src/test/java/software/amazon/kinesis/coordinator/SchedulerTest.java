@@ -35,6 +35,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.atMost;
+import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.*;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -94,6 +95,7 @@ import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.Checkpointer;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
@@ -181,7 +183,12 @@ public class SchedulerTest {
         }};
 
         when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList);
-        when(multiStreamTracker.waitPeriodToDeleteOldStreams()).thenReturn(Duration.ofHours(1L));
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy())
+                .thenReturn(new AutoDetectionAndDeferredDeletionStrategy() {
+                    @Override public Duration waitPeriodToDeleteFormerStreams() {
+                        return Duration.ZERO;
+                    }
+                });
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
         when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
         when(shardSyncTaskManager.executeShardSyncTask()).thenReturn(new TaskResult(null));
@@ -442,7 +449,56 @@ public class SchedulerTest {
     }
 
     @Test
-    public final void testMultiStreamStaleStreamsAreNotDeletedImmediately()
+    public final void testMultiStreamStaleStreamsAreNotDeletedImmediatelyAutoDeletionStrategy()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new AutoDetectionAndDeferredDeletionStrategy() {
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ofHours(1);
+            }
+        });
+        testMultiStreamStaleStreamsAreNotDeletedImmediately(true);
+    }
+
+    @Test
+    public final void testMultiStreamStaleStreamsAreNotDeletedImmediatelyNoDeletionStrategy()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new NoLeaseDeletionStrategy());
+        testMultiStreamStaleStreamsAreNotDeletedImmediately(false);
+    }
+
+    @Test
+    public final void testMultiStreamStaleStreamsAreNotDeletedImmediatelyProvidedListStrategy()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
+            @Override public List<StreamIdentifier> streamIdentifiers() {
+                return null;
+            }
+
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ofHours(1);
+            }
+        });
+        testMultiStreamStaleStreamsAreNotDeletedImmediately(false);
+    }
+
+    @Test
+    public final void testMultiStreamStaleStreamsAreNotDeletedImmediatelyProvidedListStrategy2()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
+            @Override public List<StreamIdentifier> streamIdentifiers() {
+                return IntStream.range(1, 3).mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345))).collect(
+                        Collectors.toCollection(ArrayList::new));
+            }
+
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ofHours(1);
+            }
+        });
+        testMultiStreamStaleStreamsAreNotDeletedImmediately(true);
+    }
+
+    private final void testMultiStreamStaleStreamsAreNotDeletedImmediately(boolean expectPendingStreamsForDeletion)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
                 StreamIdentifier.multiStreamInstance(
@@ -457,6 +513,7 @@ public class SchedulerTest {
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
         when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList1, streamConfigList2);
+
         scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig));
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
@@ -467,12 +524,59 @@ public class SchedulerTest {
         Assert.assertEquals(Sets.newHashSet(), syncedStreams);
         Assert.assertEquals(Sets.newHashSet(streamConfigList1),
                 Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
-        Assert.assertEquals(expectedPendingStreams,
+        Assert.assertEquals(expectPendingStreamsForDeletion ? expectedPendingStreams : Sets.newHashSet(),
                 scheduler.staleStreamDeletionMap().keySet());
     }
 
     @Test
-    public final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod()
+    public final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriodWithAutoDetectionStrategy()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new AutoDetectionAndDeferredDeletionStrategy() {
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ZERO;
+            }
+        });
+        testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(true, null);
+    }
+
+    @Test
+    public final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriodWithProvidedListStrategy()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
+            @Override public List<StreamIdentifier> streamIdentifiers() {
+                return null;
+            }
+
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ZERO;
+            }
+        });
+        HashSet<StreamConfig> currentStreamConfigMapOverride = IntStream.range(1, 5).mapToObj(
+                streamId -> new StreamConfig(StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
+                        InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
+                .collect(Collectors.toCollection(HashSet::new));
+        testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(false, currentStreamConfigMapOverride);
+    }
+
+    @Test
+    public final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriodWithProvidedListStrategy2()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
+            @Override public List<StreamIdentifier> streamIdentifiers() {
+                return IntStream.range(1, 3).mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345))).collect(
+                        Collectors.toCollection(ArrayList::new));
+            }
+
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ZERO;
+            }
+        });
+        testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(true, null);
+    }
+
+    private final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(boolean expectSyncedStreams, Set<StreamConfig> currentStreamConfigMapOverride)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
                 StreamIdentifier.multiStreamInstance(
@@ -490,20 +594,69 @@ public class SchedulerTest {
         scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig));
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
-        when(multiStreamTracker.waitPeriodToDeleteOldStreams()).thenReturn(Duration.ZERO);
         Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
         Set<StreamIdentifier> expectedSyncedStreams = IntStream.range(1, 3).mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
                 Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345))).collect(
                 Collectors.toCollection(HashSet::new));
-        Assert.assertEquals(expectedSyncedStreams, syncedStreams);
-        Assert.assertEquals(Sets.newHashSet(streamConfigList2),
+        Assert.assertEquals(expectSyncedStreams ? expectedSyncedStreams : Sets.newHashSet(), syncedStreams);
+        Assert.assertEquals(currentStreamConfigMapOverride == null ? Sets.newHashSet(streamConfigList2) : currentStreamConfigMapOverride,
                 Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
         Assert.assertEquals(Sets.newHashSet(),
                 scheduler.staleStreamDeletionMap().keySet());
     }
 
     @Test
-    public final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately()
+    public final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediatelyWithAutoDetectionStrategy()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new AutoDetectionAndDeferredDeletionStrategy() {
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ofHours(1);
+            }
+        });
+        testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(true);
+    }
+
+    @Test
+    public final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediatelyWithNoDeletionStrategy()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new NoLeaseDeletionStrategy());
+        testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(false);
+    }
+
+    @Test
+    public final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediatelyWithProvidedListStrategy()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
+            @Override public List<StreamIdentifier> streamIdentifiers() {
+                return null;
+            }
+
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ofHours(1);
+            }
+        });
+        testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(false);
+    }
+
+    @Test
+    public final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediatelyWithProvidedListStrategy2()
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
+            @Override public List<StreamIdentifier> streamIdentifiers() {
+                return IntStream.range(1, 3)
+                        .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
+                                Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)))
+                        .collect(Collectors.toCollection(ArrayList::new));
+            }
+
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ofHours(1);
+            }
+        });
+        testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(true);
+    }
+
+    private final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(boolean expectPendingStreamsForDeletion)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
                 StreamIdentifier.multiStreamInstance(
@@ -538,7 +691,7 @@ public class SchedulerTest {
                 .collect(Collectors.toCollection(LinkedList::new));
         Assert.assertEquals(Sets.newHashSet(expectedCurrentStreamConfigs),
                 Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
-        Assert.assertEquals(expectedPendingStreams,
+        Assert.assertEquals(expectPendingStreamsForDeletion ? expectedPendingStreams: Sets.newHashSet(),
                 scheduler.staleStreamDeletionMap().keySet());
     }
 
@@ -561,7 +714,11 @@ public class SchedulerTest {
         scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig));
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
-        when(multiStreamTracker.waitPeriodToDeleteOldStreams()).thenReturn(Duration.ZERO);
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new AutoDetectionAndDeferredDeletionStrategy() {
+            @Override public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ZERO;
+            }
+        });
         Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
         Set<StreamIdentifier> expectedSyncedStreams = IntStream.concat(IntStream.range(1, 3), IntStream.range(5, 7))
                 .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(

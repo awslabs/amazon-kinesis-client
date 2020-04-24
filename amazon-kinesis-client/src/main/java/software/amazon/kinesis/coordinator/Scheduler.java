@@ -26,7 +26,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +39,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.AccessLevel;
@@ -83,7 +83,11 @@ import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.metrics.CloudWatchMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
+import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.processor.Checkpointer;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
@@ -91,6 +95,8 @@ import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
+
+import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType;
 
 /**
  *
@@ -106,6 +112,10 @@ public class Scheduler implements Runnable {
     private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
     private static final long HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS = 5000L;
     private static final long NEW_STREAM_CHECK_INTERVAL_MILLIS = 1 * 60 * 1000L;
+    private static final String MULTI_STREAM_TRACKER = "MultiStreamTracker";
+    private static final String ACTIVE_STREAMS_COUNT = "ActiveStreams.Count";
+    private static final String PENDING_STREAMS_DELETION_COUNT = "StreamsPendingDeletion.Count";
+    private static final String DELETED_STREAMS_COUNT = "DeletedStreams.Count";
 
     private SchedulerLog slog = new SchedulerLog();
 
@@ -143,6 +153,7 @@ public class Scheduler implements Runnable {
     private final boolean isMultiStreamMode;
     private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
     private MultiStreamTracker multiStreamTracker;
+    private FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy;
     private final long listShardsBackoffTimeMillis;
     private final int maxListShardsRetryAttempts;
     private final LeaseRefresher leaseRefresher;
@@ -212,6 +223,7 @@ public class Scheduler implements Runnable {
         this.currentStreamConfigMap = this.retrievalConfig.appStreamTracker().map(
                 multiStreamTracker -> {
                     this.multiStreamTracker = multiStreamTracker;
+                    this.formerStreamsLeasesDeletionStrategy = multiStreamTracker.formerStreamsLeasesDeletionStrategy();
                     return multiStreamTracker.streamConfigList().stream()
                             .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc));
                 },
@@ -457,92 +469,108 @@ public class Scheduler implements Runnable {
         final Set<StreamIdentifier> streamsSynced = new HashSet<>();
 
         if (shouldSyncStreamsNow()) {
-            final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = new HashMap<>();
-            final Duration waitPeriodToDeleteOldStreams = multiStreamTracker.waitPeriodToDeleteOldStreams();
-            // Making an immutable copy
-            newStreamConfigMap.putAll(multiStreamTracker.streamConfigList().stream()
-                    .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc)));
+            final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, MULTI_STREAM_TRACKER);
 
-            List<MultiStreamLease> leases;
+            try {
 
-            // This is done to ensure that we clean up the stale streams lingering in the lease table.
-            if (!leasesSyncedOnAppInit && isMultiStreamMode) {
-                leases = fetchMultiStreamLeases();
-                syncStreamsFromLeaseTableOnAppInit(leases);
-                leasesSyncedOnAppInit = true;
-            }
+                final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = new HashMap<>();
+                final Duration waitPeriodToDeleteOldStreams = formerStreamsLeasesDeletionStrategy.waitPeriodToDeleteFormerStreams();
+                // Making an immutable copy
+                newStreamConfigMap.putAll(multiStreamTracker.streamConfigList().stream()
+                        .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc)));
 
-            // For new streams discovered, do a shard sync and update the currentStreamConfigMap
-            for (StreamIdentifier streamIdentifier : newStreamConfigMap.keySet()) {
-                if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
-                    log.info("Found new stream to process: " + streamIdentifier + ". Syncing shards of that stream.");
-                    ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(newStreamConfigMap.get(streamIdentifier));
-                    shardSyncTaskManager.syncShardAndLeaseInfo();
-                    currentStreamConfigMap.put(streamIdentifier, newStreamConfigMap.get(streamIdentifier));
-                    streamsSynced.add(streamIdentifier);
-                } else {
-                    if (log.isDebugEnabled()) {
-                        log.debug(streamIdentifier + " is already being processed - skipping shard sync.");
+                List<MultiStreamLease> leases;
+
+                // This is done to ensure that we clean up the stale streams lingering in the lease table.
+                if (!leasesSyncedOnAppInit && isMultiStreamMode) {
+                    leases = fetchMultiStreamLeases();
+                    syncStreamsFromLeaseTableOnAppInit(leases);
+                    leasesSyncedOnAppInit = true;
+                }
+
+                // For new streams discovered, do a shard sync and update the currentStreamConfigMap
+                for (StreamIdentifier streamIdentifier : newStreamConfigMap.keySet()) {
+                    if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
+                        log.info("Found new stream to process: " + streamIdentifier + ". Syncing shards of that stream.");
+                        ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(newStreamConfigMap.get(streamIdentifier));
+                        shardSyncTaskManager.syncShardAndLeaseInfo();
+                        currentStreamConfigMap.put(streamIdentifier, newStreamConfigMap.get(streamIdentifier));
+                        streamsSynced.add(streamIdentifier);
+                    } else {
+                        if (log.isDebugEnabled()) {
+                            log.debug(streamIdentifier + " is already being processed - skipping shard sync.");
+                        }
                     }
                 }
-            }
 
-            // Now, we are identifying the stale/old streams and enqueuing it for deferred deletion.
-            // It is assumed that all the workers will always have the latest and consistent snapshot of streams
-            // from the multiStreamTracker.
-            //
-            // The following streams transition state among two workers are NOT considered safe, where Worker 2, on
-            // initialization learn about D from lease table and delete the leases for D, as it is not available
-            // in its latest MultiStreamTracker.
-            // Worker 1 : A,B,C -> A,B,C,D (latest)
-            // Worker 2 : BOOTS_UP -> A,B,C (stale)
-            //
-            // The following streams transition state among two workers are NOT considered safe, where Worker 2 might
-            // end up deleting the leases for A and D and loose progress made so far.
-            // Worker 1 : A,B,C -> A,B,C,D (latest)
-            // Worker 2 : A,B,C -> B,C (stale/partial)
-            //
-            // In order to give workers with stale stream info, sufficient time to learn about the new streams
-            // before attempting to delete it, we will be deferring the leases deletion based on the
-            // defer time period.
+                final Consumer<StreamIdentifier> enqueueStreamLeaseDeletionOperation = streamIdentifier -> {
+                    if (!newStreamConfigMap.containsKey(streamIdentifier)) {
+                        staleStreamDeletionMap.putIfAbsent(streamIdentifier, Instant.now());
+                    }
+                };
 
-            Iterator<StreamIdentifier> currentStreamConfigIter = currentStreamConfigMap.keySet().iterator();
-            while (currentStreamConfigIter.hasNext()) {
-                StreamIdentifier streamIdentifier = currentStreamConfigIter.next();
-                if (!newStreamConfigMap.containsKey(streamIdentifier)) {
-                    staleStreamDeletionMap.putIfAbsent(streamIdentifier, Instant.now());
+                if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION) {
+                    // Now, we are identifying the stale/old streams and enqueuing it for deferred deletion.
+                    // It is assumed that all the workers will always have the latest and consistent snapshot of streams
+                    // from the multiStreamTracker.
+                    //
+                    // The following streams transition state among two workers are NOT considered safe, where Worker 2, on
+                    // initialization learn about D from lease table and delete the leases for D, as it is not available
+                    // in its latest MultiStreamTracker.
+                    // Worker 1 : A,B,C -> A,B,C,D (latest)
+                    // Worker 2 : BOOTS_UP -> A,B,C (stale)
+                    //
+                    // The following streams transition state among two workers are NOT considered safe, where Worker 2 might
+                    // end up deleting the leases for A and D and loose progress made so far.
+                    // Worker 1 : A,B,C -> A,B,C,D (latest)
+                    // Worker 2 : A,B,C -> B,C (stale/partial)
+                    //
+                    // In order to give workers with stale stream info, sufficient time to learn about the new streams
+                    // before attempting to delete it, we will be deferring the leases deletion based on the
+                    // defer time period.
+
+                    currentStreamConfigMap.keySet().stream().forEach(streamIdentifier -> enqueueStreamLeaseDeletionOperation.accept(streamIdentifier));
+
+                } else if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == StreamsLeasesDeletionType.PROVIDED_STREAMS_DEFERRED_DELETION) {
+                    Optional.ofNullable(formerStreamsLeasesDeletionStrategy.streamIdentifiers()).ifPresent(
+                            streamIdentifiers -> streamIdentifiers.stream().forEach(streamIdentifier -> enqueueStreamLeaseDeletionOperation.accept(streamIdentifier)));
                 }
+
+                // Now let's scan the streamIdentifiers eligible for deferred deletion and delete them.
+                // StreamIdentifiers are eligible for deletion only when the deferment period has elapsed and
+                // the streamIdentifiers are not present in the latest snapshot.
+                final Map<Boolean, Set<StreamIdentifier>> staleStreamIdDeletionDecisionMap = staleStreamDeletionMap.keySet().stream().collect(Collectors
+                        .partitioningBy(streamIdentifier -> newStreamConfigMap.containsKey(streamIdentifier), Collectors.toSet()));
+                final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream().filter(streamIdentifier ->
+                        Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis() >= waitPeriodToDeleteOldStreams.toMillis()).collect(Collectors.toSet());
+                final Set<StreamIdentifier> deletedStreamsLeases = deleteMultiStreamLeases(staleStreamIdsToBeDeleted);
+                streamsSynced.addAll(deletedStreamsLeases);
+
+                // Purge the active streams from stale streams list.
+                final Set<StreamIdentifier> staleStreamIdsToBeRevived = staleStreamIdDeletionDecisionMap.get(true);
+                removeStreamsFromStaleStreamsList(staleStreamIdsToBeRevived);
+
+                log.warn(
+                        "Streams enqueued for deletion for lease table cleanup along with their scheduled time for deletion: {} ",
+                        staleStreamDeletionMap.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
+                                entry -> entry.getValue().plus(waitPeriodToDeleteOldStreams))));
+
+                streamSyncWatch.reset().start();
+
+                MetricsUtil.addCount(metricsScope, ACTIVE_STREAMS_COUNT, newStreamConfigMap.size(), MetricsLevel.SUMMARY);
+                MetricsUtil.addCount(metricsScope, PENDING_STREAMS_DELETION_COUNT, staleStreamDeletionMap.size(),
+                        MetricsLevel.SUMMARY);
+                MetricsUtil.addCount(metricsScope, DELETED_STREAMS_COUNT, deletedStreamsLeases.size(), MetricsLevel.SUMMARY);
+            } finally {
+                MetricsUtil.endScope(metricsScope);
             }
-
-            // Now let's scan the streamIdentifiers eligible for deferred deletion and delete them.
-            // StreamIdentifiers are eligible for deletion only when the deferment period has elapsed and
-            // the streamIdentifiers are not present in the latest snapshot.
-            final Map<Boolean, Set<StreamIdentifier>> staleStreamIdDeletionDecisionMap = staleStreamDeletionMap.keySet()
-                    .stream().collect(Collectors
-                            .partitioningBy(streamIdentifier -> newStreamConfigMap.containsKey(streamIdentifier),
-                                    Collectors.toSet()));
-            final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream()
-                    .filter(streamIdentifier ->
-                            Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis()
-                                    >= waitPeriodToDeleteOldStreams.toMillis()).collect(Collectors.toSet());
-            streamsSynced.addAll(deleteMultiStreamLeases(staleStreamIdsToBeDeleted));
-
-            // Purge the active streams from stale streams list.
-            final Set<StreamIdentifier> staleStreamIdsToBeRevived = staleStreamIdDeletionDecisionMap.get(true);
-            removeActiveStreamsFromStaleStreamsList(staleStreamIdsToBeRevived);
-
-            log.warn("Streams enqueued for deletion for lease table cleanup along with their scheduled time for deletion: {} ",
-                    staleStreamDeletionMap.entrySet().stream().collect(Collectors
-                            .toMap(Map.Entry::getKey, entry -> entry.getValue().plus(waitPeriodToDeleteOldStreams))));
-
-            streamSyncWatch.reset().start();
         }
         return streamsSynced;
     }
 
-    @VisibleForTesting
-    boolean shouldSyncStreamsNow() {
-        return isMultiStreamMode && (streamSyncWatch.elapsed(TimeUnit.MILLISECONDS) > NEW_STREAM_CHECK_INTERVAL_MILLIS);
+    @VisibleForTesting boolean shouldSyncStreamsNow() {
+        return isMultiStreamMode &&
+                (streamSyncWatch.elapsed(TimeUnit.MILLISECONDS) > NEW_STREAM_CHECK_INTERVAL_MILLIS);
     }
 
     private void syncStreamsFromLeaseTableOnAppInit(List<MultiStreamLease> leases) {
@@ -561,7 +589,7 @@ public class Scheduler implements Runnable {
         return (List<MultiStreamLease>) ((List) leaseCoordinator.leaseRefresher().listLeases());
     }
 
-    private void removeActiveStreamsFromStaleStreamsList(Set<StreamIdentifier> streamIdentifiers) {
+    private void removeStreamsFromStaleStreamsList(Set<StreamIdentifier> streamIdentifiers) {
         for(StreamIdentifier streamIdentifier : streamIdentifiers) {
             staleStreamDeletionMap.remove(streamIdentifier);
         }
