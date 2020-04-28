@@ -23,6 +23,9 @@ import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 
 @Data
 @Accessors(fluent = true)
+/**
+ * Lease POJO to hold the starting hashkey range and ending hashkey range of kinesis shards.
+ */
 public class HashKeyRangeForLease {
 
     private static final String DELIM = ":";
@@ -30,6 +33,10 @@ public class HashKeyRangeForLease {
     private final String startingHashKey;
     private final String endingHashKey;
 
+    /**
+     * Serialize the HashKeyRangeForLease for persisting in external storage
+     * @return Serialized string
+     */
     public String serialize() {
         return Joiner.on(DELIM).join(startingHashKey, endingHashKey);
     }
@@ -39,6 +46,11 @@ public class HashKeyRangeForLease {
         return serialize();
     }
 
+    /**
+     * Deserialize from serialized hashKeyRange string from external storage.
+     * @param hashKeyRange
+     * @return HashKeyRangeForLease
+     */
     public static HashKeyRangeForLease deserialize(String hashKeyRange) {
         final String[] hashKeyTokens = hashKeyRange.split(DELIM);
         Validate.isTrue(hashKeyTokens.length == 2, "HashKeyRange should have exactly two tokens");
@@ -48,6 +60,11 @@ public class HashKeyRangeForLease {
         return new HashKeyRangeForLease(hashKeyTokens[0], hashKeyTokens[1]);
     }
 
+    /**
+     * Construct HashKeyRangeForLease from Kinesis HashKeyRange
+     * @param hashKeyRange
+     * @return HashKeyRangeForLease
+     */
     public static HashKeyRangeForLease fromHashKeyRange(HashKeyRange hashKeyRange) {
         return new HashKeyRangeForLease(hashKeyRange.startingHashKey(), hashKeyRange.endingHashKey());
     }
