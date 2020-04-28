@@ -20,6 +20,7 @@ import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.ToString;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import java.util.Collection;
@@ -96,6 +97,7 @@ public class Lease {
     private Long ownerSwitchesSinceCheckpoint = 0L;
     private Set<String> parentShardIds = new HashSet<>();
     private Set<String> childShardIds = new HashSet<>();
+    private HashKeyRangeForLease hashKeyRangeForLease;
 
     /**
      * Copy constructor, used by clone().
@@ -105,7 +107,8 @@ public class Lease {
     protected Lease(Lease lease) {
         this(lease.leaseKey(), lease.leaseOwner(), lease.leaseCounter(), lease.concurrencyToken(),
                 lease.lastCounterIncrementNanos(), lease.checkpoint(), lease.pendingCheckpoint(),
-                lease.ownerSwitchesSinceCheckpoint(), lease.parentShardIds(), lease.childShardIds(), lease.pendingCheckpointState());
+                lease.ownerSwitchesSinceCheckpoint(), lease.parentShardIds(), lease.childShardIds(),
+                lease.pendingCheckpointState(), lease.hashKeyRangeForLease());
     }
 
     @Deprecated
@@ -114,14 +117,14 @@ public class Lease {
                  final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint,
                  final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds) {
         this(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos, checkpoint, pendingCheckpoint,
-                ownerSwitchesSinceCheckpoint, parentShardIds, new HashSet<>(), null);
+                ownerSwitchesSinceCheckpoint, parentShardIds, new HashSet<>(), null, null);
     }
 
     public Lease(final String leaseKey, final String leaseOwner, final Long leaseCounter,
                     final UUID concurrencyToken, final Long lastCounterIncrementNanos,
                     final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint,
                     final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds, final Set<String> childShardIds,
-                    final byte[] pendingCheckpointState) {
+                    final byte[] pendingCheckpointState, final HashKeyRangeForLease hashKeyRangeForLease) {
         this.leaseKey = leaseKey;
         this.leaseOwner = leaseOwner;
         this.leaseCounter = leaseCounter;
@@ -135,6 +138,9 @@ public class Lease {
         }
         if (childShardIds != null) {
             this.childShardIds.addAll(childShardIds);
+        }
+        if (hashKeyRangeForLease != null) {
+            this.hashKeyRangeForLease = hashKeyRangeForLease;
         }
         this.pendingCheckpointState = pendingCheckpointState;
     }
@@ -158,7 +164,8 @@ public class Lease {
         pendingCheckpoint(lease.pendingCheckpoint);
         pendingCheckpointState(lease.pendingCheckpointState);
         parentShardIds(lease.parentShardIds);
-        childShardIds(lease.childShardIds());
+        childShardIds(lease.childShardIds);
+        hashKeyRange(lease.hashKeyRangeForLease);
     }
 
     /**
@@ -272,6 +279,18 @@ public class Lease {
      */
     public void childShardIds(@NonNull final Collection<String> childShardIds) {
         this.childShardIds.addAll(childShardIds);
+    }
+
+    /**
+     * Set the hash range key for this shard.
+     * @param hashKeyRangeForLease
+     */
+    public void hashKeyRange(final HashKeyRangeForLease hashKeyRangeForLease) {
+        if(this.hashKeyRangeForLease == null) {
+            this.hashKeyRangeForLease = hashKeyRangeForLease;
+        } else {
+            throw new IllegalArgumentException("hashKeyRange is immutable");
+        }
     }
 
     /**

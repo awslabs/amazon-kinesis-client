@@ -45,6 +45,7 @@ import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -56,6 +57,8 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import static software.amazon.kinesis.common.HashKeyRangeForLease.fromHashKeyRange;
 
 /**
  * Helper class to sync leases with shards of the Kinesis stream.
@@ -757,6 +760,7 @@ public class HierarchicalShardSyncer {
         }
         newLease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
         newLease.ownerSwitchesSinceCheckpoint(0L);
+        newLease.hashKeyRange(fromHashKeyRange(childShard.hashKeyRange()));
         return newLease;
     }
 
@@ -772,6 +776,7 @@ public class HierarchicalShardSyncer {
         newLease.ownerSwitchesSinceCheckpoint(0L);
         newLease.streamIdentifier(streamIdentifier.serialize());
         newLease.shardId(childShard.shardId());
+        newLease.hashKeyRange(fromHashKeyRange(childShard.hashKeyRange()));
         return newLease;
     }
 
@@ -794,7 +799,7 @@ public class HierarchicalShardSyncer {
         }
         newLease.parentShardIds(parentShardIds);
         newLease.ownerSwitchesSinceCheckpoint(0L);
-
+        newLease.hashKeyRange(fromHashKeyRange(shard.hashKeyRange()));
         return newLease;
     }
 
@@ -812,6 +817,7 @@ public class HierarchicalShardSyncer {
         newLease.ownerSwitchesSinceCheckpoint(0L);
         newLease.streamIdentifier(streamIdentifier.serialize());
         newLease.shardId(shard.shardId());
+        newLease.hashKeyRange(fromHashKeyRange(shard.hashKeyRange()));
         return newLease;
     }
 
