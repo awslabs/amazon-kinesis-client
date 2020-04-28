@@ -197,7 +197,7 @@ public class KinesisShardDetector implements ShardDetector {
 
             try {
                 try {
-                    result = FutureUtils.resolveOrCancelFuture(kinesisClient.listShards(request.build()), kinesisRequestTimeout);
+                    result = getListShardsResponse(request.build());
                 } catch (ExecutionException e) {
                     throw exceptionManager.apply(e.getCause());
                 } catch (InterruptedException e) {
@@ -247,5 +247,11 @@ public class KinesisShardDetector implements ShardDetector {
 
         log.debug("{}. Age doesn't exceed limit of {} seconds.", message, listShardsCacheAllowedAgeInSeconds);
         return false;
+    }
+
+    @Override
+    public ListShardsResponse getListShardsResponse(ListShardsRequest request) throws
+            ExecutionException, TimeoutException, InterruptedException {
+        return FutureUtils.resolveOrCancelFuture(kinesisClient.listShards(request), kinesisRequestTimeout);
     }
 }
