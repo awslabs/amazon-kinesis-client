@@ -163,7 +163,6 @@ public class Lease {
         pendingCheckpointState(lease.pendingCheckpointState);
         parentShardIds(lease.parentShardIds);
         childShardIds(lease.childShardIds);
-        hashKeyRange(lease.hashKeyRangeForLease);
     }
 
     /**
