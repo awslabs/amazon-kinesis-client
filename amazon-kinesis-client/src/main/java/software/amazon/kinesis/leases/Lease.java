@@ -139,9 +139,7 @@ public class Lease {
         if (childShardIds != null) {
             this.childShardIds.addAll(childShardIds);
         }
-        if (hashKeyRangeForLease != null) {
-            this.hashKeyRangeForLease = hashKeyRangeForLease;
-        }
+        this.hashKeyRangeForLease = hashKeyRangeForLease;
         this.pendingCheckpointState = pendingCheckpointState;
     }
 
@@ -286,9 +284,9 @@ public class Lease {
      * @param hashKeyRangeForLease
      */
     public void hashKeyRange(final HashKeyRangeForLease hashKeyRangeForLease) {
-        if(this.hashKeyRangeForLease == null) {
+        if (this.hashKeyRangeForLease == null) {
             this.hashKeyRangeForLease = hashKeyRangeForLease;
-        } else {
+        } else if (!this.hashKeyRangeForLease.equals(hashKeyRangeForLease)) {
             throw new IllegalArgumentException("hashKeyRange is immutable");
         }
     }

@@ -15,57 +15,63 @@
 
 package software.amazon.kinesis.common;
 
-import com.google.common.base.Joiner;
-import lombok.Data;
+import lombok.NonNull;
+import lombok.Value;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 
-@Data
-@Accessors(fluent = true)
+import java.math.BigInteger;
+
+@Value @Accessors(fluent = true)
 /**
  * Lease POJO to hold the starting hashkey range and ending hashkey range of kinesis shards.
  */
 public class HashKeyRangeForLease {
 
-    private static final String DELIM = ":";
-
-    private final String startingHashKey;
-    private final String endingHashKey;
+    private final BigInteger startingHashKey;
+    private final BigInteger endingHashKey;
 
     /**
-     * Serialize the HashKeyRangeForLease for persisting in external storage
-     * @return Serialized string
+     * Serialize the startingHashKey for persisting in external storage
+     *
+     * @return Serialized startingHashKey
      */
-    public String serialize() {
-        return Joiner.on(DELIM).join(startingHashKey, endingHashKey);
+    public String serializedStartingHashKey() {
+        return startingHashKey.toString();
     }
 
-    @Override
-    public String toString() {
-        return serialize();
+    /**
+     * Serialize the endingHashKey for persisting in external storage
+     *
+     * @return Serialized endingHashKey
+     */
+    public String serializedEndingHashKey() {
+        return endingHashKey.toString();
     }
 
     /**
      * Deserialize from serialized hashKeyRange string from external storage.
-     * @param hashKeyRange
+     *
+     * @param startingHashKeyStr
+     * @param endingHashKeyStr
      * @return HashKeyRangeForLease
      */
-    public static HashKeyRangeForLease deserialize(String hashKeyRange) {
-        final String[] hashKeyTokens = hashKeyRange.split(DELIM);
-        Validate.isTrue(hashKeyTokens.length == 2, "HashKeyRange should have exactly two tokens");
-        // Assuming that startingHashKey and endingHashRange are not same.
-        Validate.isTrue(!hashKeyTokens[0].equals(hashKeyTokens[1]), "StartingHashKey and EndingHashKey should not be same");
-        Validate.isTrue(hashKeyTokens[0].compareTo(hashKeyTokens[1]) < 0, "StartingHashKey must be less than EndingHashKey");
-        return new HashKeyRangeForLease(hashKeyTokens[0], hashKeyTokens[1]);
+    public static HashKeyRangeForLease deserialize(@NonNull String startingHashKeyStr, @NonNull String endingHashKeyStr) {
+        final BigInteger startingHashKey = new BigInteger(startingHashKeyStr);
+        final BigInteger endingHashKey = new BigInteger(endingHashKeyStr);
+        Validate.isTrue(startingHashKey.compareTo(endingHashKey) < 0,
+                "StartingHashKey %s must be less than EndingHashKey %s ", startingHashKeyStr, endingHashKeyStr);
+        return new HashKeyRangeForLease(startingHashKey, endingHashKey);
     }
 
     /**
      * Construct HashKeyRangeForLease from Kinesis HashKeyRange
+     *
      * @param hashKeyRange
      * @return HashKeyRangeForLease
      */
     public static HashKeyRangeForLease fromHashKeyRange(HashKeyRange hashKeyRange) {
-        return new HashKeyRangeForLease(hashKeyRange.startingHashKey(), hashKeyRange.endingHashKey());
+        return deserialize(hashKeyRange.startingHashKey(), hashKeyRange.endingHashKey());
     }
 }

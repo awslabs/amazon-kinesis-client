@@ -20,6 +20,7 @@ package software.amazon.kinesis.leases;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doNothing;
@@ -40,11 +41,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -120,7 +123,6 @@ public class HierarchicalShardSyncerTest {
         final List<Shard> shards = Collections.emptyList();
         final List<Lease> leases = Collections.emptyList();
         final HierarchicalShardSyncer.LeaseSynchronizer emptyLeaseTableSynchronizer = new HierarchicalShardSyncer.EmptyLeaseTableSynchronizer();
-
         assertThat(HierarchicalShardSyncer.determineNewLeasesToCreate(emptyLeaseTableSynchronizer, shards, leases,
                 INITIAL_POSITION_LATEST).isEmpty(), equalTo(true));
     }
@@ -154,6 +156,8 @@ public class HierarchicalShardSyncerTest {
 
         final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(emptyLeaseTableSynchronizer,
                 shards, currentLeases, INITIAL_POSITION_LATEST);
+        validateHashRangeinLease(newLeases);
+
         final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final Set<String> expectedLeaseShardIds = new HashSet<>(Arrays.asList(shardId0, shardId1));
 
@@ -177,6 +181,7 @@ public class HierarchicalShardSyncerTest {
 
         final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(emptyLeaseTableSynchronizer,
                 shards, currentLeases, INITIAL_POSITION_LATEST, new HashSet<>(), MULTI_STREAM_ARGS);
+        validateHashRangeinLease(newLeases);
         final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final Set<String> expectedLeaseIds = new HashSet<>(
                 toMultiStreamLeaseList(Arrays.asList(shardId0, shardId1)));
@@ -213,6 +218,7 @@ public class HierarchicalShardSyncerTest {
 
         final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(leaseSynchronizer, shards, currentLeases,
                 INITIAL_POSITION_LATEST, inconsistentShardIds);
+        validateHashRangeinLease(newLeases);
         final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final Set<String> expectedLeaseShardIds = new HashSet<>(Arrays.asList(shardId0, shardId1));
         assertThat(newLeases.size(), equalTo(expectedLeaseShardIds.size()));
@@ -248,10 +254,20 @@ public class HierarchicalShardSyncerTest {
         final List<Lease> newLeases = HierarchicalShardSyncer.determineNewLeasesToCreate(leaseSynchronizer, shards, currentLeases,
                 INITIAL_POSITION_LATEST, inconsistentShardIds, MULTI_STREAM_ARGS);
         final Set<String> newLeaseKeys = newLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
+        validateHashRangeinLease(newLeases);
         final Set<String> expectedLeaseShardIds = new HashSet<>(
                 toMultiStreamLeaseList(Arrays.asList(shardId0, shardId1)));
         assertThat(newLeases.size(), equalTo(expectedLeaseShardIds.size()));
         assertThat(newLeaseKeys, equalTo(expectedLeaseShardIds));
+    }
+
+    private void validateHashRangeinLease(List<Lease> leases) {
+        final Consumer<Lease> leaseValidation = lease -> {
+            Validate.notNull(lease.hashKeyRangeForLease());
+            Validate.isTrue(lease.hashKeyRangeForLease().startingHashKey()
+                    .compareTo(lease.hashKeyRangeForLease().endingHashKey()) < 0);
+        };
+        leases.forEach(lease -> leaseValidation.accept(lease));
     }
 
     /**
@@ -295,6 +311,7 @@ public class HierarchicalShardSyncerTest {
         final Set<ExtendedSequenceNumber> extendedSequenceNumbers = requestLeases.stream().map(Lease::checkpoint)
                 .collect(Collectors.toSet());
 
+        validateHashRangeinLease(requestLeases);
         assertThat(requestLeases.size(), equalTo(expectedShardIds.size()));
         assertThat(requestLeaseKeys, equalTo(expectedShardIds));
         assertThat(extendedSequenceNumbers.size(), equalTo(1));
@@ -329,6 +346,7 @@ public class HierarchicalShardSyncerTest {
         final Set<ExtendedSequenceNumber> extendedSequenceNumbers = requestLeases.stream().map(Lease::checkpoint)
                 .collect(Collectors.toSet());
 
+        validateHashRangeinLease(requestLeases);
         assertThat(requestLeases.size(), equalTo(expectedShardIds.size()));
         assertThat(requestLeaseKeys, equalTo(expectedShardIds));
         assertThat(extendedSequenceNumbers.size(), equalTo(1));
@@ -376,6 +394,8 @@ public class HierarchicalShardSyncerTest {
         assertThat(requestLeaseKeys, equalTo(expectedShardIds));
         assertThat(extendedSequenceNumbers.size(), equalTo(1));
 
+        validateHashRangeinLease(requestLeases);
+
         extendedSequenceNumbers.forEach(seq -> assertThat(seq, equalTo(ExtendedSequenceNumber.LATEST)));
 
         verify(shardDetector, never()).listShards();
@@ -412,7 +432,7 @@ public class HierarchicalShardSyncerTest {
         assertThat(requestLeases.size(), equalTo(expectedShardIds.size()));
         assertThat(requestLeaseKeys, equalTo(expectedShardIds));
         assertThat(extendedSequenceNumbers.size(), equalTo(1));
-
+        validateHashRangeinLease(requestLeases);
         extendedSequenceNumbers.forEach(seq -> assertThat(seq, equalTo(ExtendedSequenceNumber.LATEST)));
 
         verify(shardDetector, never()).listShards();
@@ -444,7 +464,7 @@ public class HierarchicalShardSyncerTest {
         final Set<String> requestLeaseKeys = requestLeases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
         final Set<ExtendedSequenceNumber> extendedSequenceNumbers = requestLeases.stream().map(Lease::checkpoint)
                                                                                  .collect(Collectors.toSet());
-
+        validateHashRangeinLease(requestLeases);
         assertThat(requestLeases.size(), equalTo(expectedShardIds.size()));
         assertThat(extendedSequenceNumbers.size(), equalTo(0));
 
