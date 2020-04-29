@@ -271,7 +271,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
      * {@inheritDoc}
      */
     @Override
-    public boolean updateLease(Lease lease, UUID concurrencyToken, @NonNull String operation, String shardId)
+        public boolean updateLease(Lease lease, UUID concurrencyToken, @NonNull String operation, String shardId)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(lease, "lease cannot be null");
         verifyNotNull(lease.leaseKey(), "leaseKey cannot be null");
@@ -302,8 +302,10 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
             if(lease instanceof MultiStreamLease) {
                 MetricsUtil.addStreamId(scope,
                         StreamIdentifier.multiStreamInstance(((MultiStreamLease) lease).streamIdentifier()));
+                MetricsUtil.addShardId(scope, ((MultiStreamLease) lease).shardId());
+            } else {
+                MetricsUtil.addShardId(scope, shardId);
             }
-            MetricsUtil.addShardId(scope, shardId);
         }
 
         long startTime = System.currentTimeMillis();

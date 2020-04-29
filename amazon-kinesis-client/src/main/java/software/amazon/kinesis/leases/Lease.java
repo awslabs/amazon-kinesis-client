@@ -163,7 +163,6 @@ public class Lease {
         pendingCheckpointState(lease.pendingCheckpointState);
         parentShardIds(lease.parentShardIds);
         childShardIds(lease.childShardIds);
-        hashKeyRange(lease.hashKeyRangeForLease);
     }
 
     /**
@@ -283,7 +282,7 @@ public class Lease {
      * Set the hash range key for this shard.
      * @param hashKeyRangeForLease
      */
-    public void hashKeyRange(final HashKeyRangeForLease hashKeyRangeForLease) {
+    public void hashKeyRange(HashKeyRangeForLease hashKeyRangeForLease) {
         if (this.hashKeyRangeForLease == null) {
             this.hashKeyRangeForLease = hashKeyRangeForLease;
         } else if (!this.hashKeyRangeForLease.equals(hashKeyRangeForLease)) {
