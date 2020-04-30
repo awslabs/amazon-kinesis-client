@@ -105,7 +105,7 @@ public interface LeaseRefresher {
      * @throws ProvisionedThroughputException if DynamoDB get fails due to lack of capacity
      * @throws DependencyException if DynamoDB get fails in an unexpected way
      * 
-     * @return lease for the specified shardId, or null if one doesn't exist
+     * @return lease for the specified leaseKey, or null if one doesn't exist
      */
     Lease getLease(String leaseKey) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 

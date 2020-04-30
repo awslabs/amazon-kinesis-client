@@ -111,7 +111,6 @@ public class Scheduler implements Runnable {
     private static final long LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 3 * 1000L;
     private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 1 * 1000L;
     private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
-    private static final long HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS = 5000L;
     private static final long NEW_STREAM_CHECK_INTERVAL_MILLIS = 1 * 60 * 1000L;
     private static final String MULTI_STREAM_TRACKER = "MultiStreamTracker";
     private static final String ACTIVE_STREAMS_COUNT = "ActiveStreams.Count";
@@ -289,8 +288,8 @@ public class Scheduler implements Runnable {
         this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer(isMultiStreamMode);
         this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
         this.leaderElectedPeriodicShardSyncManager = new PeriodicShardSyncManager(
-                leaseManagementConfig.workerIdentifier(), leaderDecider, currentStreamConfigMap,
-                shardSyncTaskManagerProvider);
+                leaseManagementConfig.workerIdentifier(), leaderDecider, leaseRefresher, currentStreamConfigMap,
+                shardSyncTaskManagerProvider, isMultiStreamMode);
     }
 
     /**
@@ -351,11 +350,10 @@ public class Scheduler implements Runnable {
                     } else {
                         log.info("LeaseCoordinator is already running. No need to start it.");
                     }
-                    log.info("Scheduling periodicShardSync)");
+                    log.info("Scheduling periodicShardSync");
                     // leaderElectedPeriodicShardSyncManager.start(shardSyncTasks);
                     // TODO: enable periodicShardSync after https://github.com/jushkem/amazon-kinesis-client/pull/2 is merged
                     // TODO: Determine if waitUntilHashRangeCovered() is needed.
-                    //waitUntilHashRangeCovered();
                     streamSyncWatch.start();
                     isDone = true;
                 } catch (LeasingException e) {
@@ -396,18 +394,6 @@ public class Scheduler implements Runnable {
             Thread.sleep(LEASE_TABLE_CHECK_FREQUENCY_MILLIS);
         }
         return shouldInitiateLeaseSync;
-    }
-
-    private void waitUntilHashRangeCovered() throws InterruptedException {
-
-        // TODO: Currently this call is not in use. We may need to implement this method later. Created SIM to track the work: https://sim.amazon.com/issues/KinesisLTR-202
-        // TODO: For future implementation, streamToShardSyncTaskManagerMap might not contain the most up to date snapshot of active streams.
-        // Should use currentStreamConfigMap to determine the streams to check.
-        while (!leaderElectedPeriodicShardSyncManager.hashRangeCovered()) {
-            // wait until entire hash range is covered
-            log.info("Hash range is not covered yet. Checking again in {} ms", HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS);
-            Thread.sleep(HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS);
-        }
     }
 
     @VisibleForTesting
