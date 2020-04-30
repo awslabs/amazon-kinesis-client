@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.amazonaws.services.kinesis.model.ShardFilter;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
@@ -420,6 +421,16 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
      */
     @Override
     public List<Shard> getShardList() throws ResourceNotFoundException {
+        List<Shard> shards = new LinkedList<Shard>();
+        shards.addAll(shardList);
+        return shards;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<Shard> getShardListWithFilter(ShardFilter shardFilter) throws ResourceNotFoundException {
         List<Shard> shards = new LinkedList<Shard>();
         shards.addAll(shardList);
         return shards;

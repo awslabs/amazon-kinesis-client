@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.amazonaws.services.kinesis.model.ShardFilter;
+import com.amazonaws.services.kinesis.model.ShardFilterType;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -130,7 +132,14 @@ class KinesisShardSyncer implements ShardSyncer {
             boolean cleanupLeasesOfCompletedShards, boolean ignoreUnexpectedChildShards)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
             KinesisClientLibIOException {
-        List<Shard> latestShards = getShardList(kinesisProxy);
+
+        // In the case where the lease table is empty, we want to synchronize the minimal amount of shards possible
+        // based on the given initial position.
+        // TODO: Implement shard list filtering on non-empty lease table case
+        final List<Shard> latestShards = leaseManager.isLeaseTableEmpty()
+                ? getShardListAtInitialPosition(kinesisProxy, initialPosition)
+                : getCompleteShardList(kinesisProxy);
+
         syncShardLeases(kinesisProxy, leaseManager, initialPosition, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, latestShards);
     }
 
@@ -156,7 +165,7 @@ class KinesisShardSyncer implements ShardSyncer {
             KinesisClientLibIOException {
         List<Shard> shards;
         if(CollectionUtils.isNullOrEmpty(latestShards)) {
-            shards = getShardList(kinesisProxy);
+            shards = getCompleteShardList(kinesisProxy);
         } else {
             shards = latestShards;
         }
@@ -345,13 +354,51 @@ class KinesisShardSyncer implements ShardSyncer {
         return shardIdToChildShardIdsMap;
     }
 
-    private List<Shard> getShardList(IKinesisProxy kinesisProxy) throws KinesisClientLibIOException {
+    private List<Shard> getCompleteShardList(IKinesisProxy kinesisProxy) throws KinesisClientLibIOException {
         List<Shard> shards = kinesisProxy.getShardList();
         if (shards == null) {
             throw new KinesisClientLibIOException(
                     "Stream is not in ACTIVE OR UPDATING state - will retry getting the shard list.");
         }
         return shards;
+    }
+
+    private List<Shard> getShardListAtInitialPosition(IKinesisProxy kinesisProxy,
+                                                      InitialPositionInStreamExtended initialPosition)
+            throws KinesisClientLibIOException {
+
+        final ShardFilter shardFilter = getShardFilterAtInitialPosition(initialPosition);
+        final List<Shard> shards = kinesisProxy.getShardListWithFilter(shardFilter);
+
+        if (shards == null) {
+            throw new KinesisClientLibIOException(
+                    "Stream is not in ACTIVE OR UPDATING state - will retry getting the shard list.");
+        }
+
+        return shards;
+    }
+
+    private static ShardFilter getShardFilterAtInitialPosition(InitialPositionInStreamExtended initialPosition) {
+        ShardFilter shardFilter = new ShardFilter();
+
+        switch (initialPosition.getInitialPositionInStream()) {
+            case LATEST:
+                shardFilter = shardFilter.withType(ShardFilterType.AT_LATEST);
+                break;
+            case TRIM_HORIZON:
+                shardFilter = shardFilter.withType(ShardFilterType.AT_TRIM_HORIZON);
+                break;
+            case AT_TIMESTAMP:
+                shardFilter = shardFilter.withType(ShardFilterType.AT_TIMESTAMP)
+                        .withTimestamp(initialPosition.getTimestamp());
+                break;
+            default:
+                throw new IllegalArgumentException(initialPosition.getInitialPositionInStream()
+                        + " is not a supported initial position in a Kinesis stream. Supported initial positions are"
+                        + " AT_LATEST, AT_TRIM_HORIZON, and AT_TIMESTAMP.");
+        }
+
+        return shardFilter;
     }
 
     /**
@@ -630,7 +677,7 @@ class KinesisShardSyncer implements ShardSyncer {
         if (!garbageLeases.isEmpty()) {
             LOG.info("Found " + garbageLeases.size() + " candidate leases for cleanup. Refreshing list of"
                     + " Kinesis shards to pick up recent/latest shards");
-            List<Shard> currentShardList = getShardList(kinesisProxy);
+            List<Shard> currentShardList = getCompleteShardList(kinesisProxy);
             Set<String> currentKinesisShardIds = new HashSet<>();
             for (Shard shard : currentShardList) {
                 currentKinesisShardIds.add(shard.getShardId());
