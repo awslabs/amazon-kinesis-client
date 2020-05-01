@@ -14,14 +14,16 @@
  */
 package software.amazon.kinesis.coordinator;
 
+import com.google.common.annotations.VisibleForTesting;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.utils.CollectionUtils;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
-import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.MultiStreamLease;
@@ -29,19 +31,21 @@ import software.amazon.kinesis.leases.ShardSyncTaskManager;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-import software.amazon.kinesis.lifecycle.ConsumerTask;
 import software.amazon.kinesis.lifecycle.TaskResult;
 
+import java.io.Serializable;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -55,6 +59,8 @@ import java.util.stream.Collectors;
 class PeriodicShardSyncManager {
     private static final long INITIAL_DELAY = 60 * 1000L;
     private static final long PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 5 * 60 * 1000L;
+    private static final BigInteger MIN_HASH_KEY = BigInteger.ZERO;
+    private static final BigInteger MAX_HASH_KEY = new BigInteger("2").pow(128).subtract(BigInteger.ONE);
 
     private final String workerId;
     private final LeaderDecider leaderDecider;
@@ -177,12 +183,90 @@ class PeriodicShardSyncManager {
      * Checks if the entire hash range is covered
      * @return true if covered, false otherwise
      */
-    public boolean isHashRangeComplete(List<Lease> leases) {
-        if(CollectionUtils.isNullOrEmpty(leases)) {
+    private boolean isHashRangeCompleteForLeases(List<Lease> leases) {
+        if (CollectionUtils.isNullOrEmpty(leases)) {
             return false;
         } else {
-//            leases.stream().filter(lease -> lease.checkpoint().isShardEnd())
-            return false;
+            List<HashKeyRangeForLease> hashRangesForActiveLeases = leases.stream()
+                    .filter(lease -> lease.checkpoint() != null && !lease.checkpoint().isShardEnd())
+                    .map(lease -> lease.hashKeyRangeForLease())
+                    .collect(Collectors.toList());
+            return !checkForHoleInHashKeyRanges(hashRangesForActiveLeases, MIN_HASH_KEY, MAX_HASH_KEY).isPresent();
+        }
+    }
+
+    @VisibleForTesting
+    static Optional<HashRangeHole> checkForHoleInHashKeyRanges(List<HashKeyRangeForLease> hashKeyRanges,
+            BigInteger minHashKey, BigInteger maxHashKey) {
+        List<HashKeyRangeForLease> mergedHashKeyRanges = sortAndMergeOverlappingHashRanges(hashKeyRanges);
+
+        if (!mergedHashKeyRanges.get(0).startingHashKey().equals(minHashKey) || !mergedHashKeyRanges
+                .get(mergedHashKeyRanges.size() - 1).endingHashKey().equals(maxHashKey)) {
+            log.error("Incomplete hash range found between {} and {}.", mergedHashKeyRanges.get(0),
+                    mergedHashKeyRanges.get(mergedHashKeyRanges.size() - 1));
+            return Optional.of(new HashRangeHole(mergedHashKeyRanges.get(0),
+                    mergedHashKeyRanges.get(mergedHashKeyRanges.size() - 1)));
+        }
+        if (mergedHashKeyRanges.size() > 1) {
+            for (int i = 1; i < mergedHashKeyRanges.size(); i++) {
+                final HashKeyRangeForLease hashRangeAtStartOfPossibleHole = mergedHashKeyRanges.get(i - 1);
+                final HashKeyRangeForLease hashRangeAtEndOfPossibleHole = mergedHashKeyRanges.get(i);
+                final BigInteger startOfPossibleHole = hashRangeAtStartOfPossibleHole.endingHashKey();
+                final BigInteger endOfPossibleHole = hashRangeAtEndOfPossibleHole.startingHashKey();
+
+                if (!endOfPossibleHole.subtract(startOfPossibleHole).equals(BigInteger.ONE)) {
+                    log.error("Incomplete hash range found between {} and {}.", hashRangeAtStartOfPossibleHole,
+                            hashRangeAtEndOfPossibleHole);
+                    return Optional.of(new HashRangeHole(hashRangeAtStartOfPossibleHole, hashRangeAtEndOfPossibleHole));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    @VisibleForTesting
+    static List<HashKeyRangeForLease> sortAndMergeOverlappingHashRanges(List<HashKeyRangeForLease> hashKeyRanges) {
+        if(hashKeyRanges.size() == 0 || hashKeyRanges.size() == 1)
+            return hashKeyRanges;
+
+        Collections.sort(hashKeyRanges, new HashKeyRangeComparator());
+
+        final HashKeyRangeForLease first = hashKeyRanges.get(0);
+        BigInteger start = first.startingHashKey();
+        BigInteger end = first.endingHashKey();
+
+        final List<HashKeyRangeForLease> result = new ArrayList<>();
+
+        for (int i = 1; i < hashKeyRanges.size(); i++) {
+            HashKeyRangeForLease current = hashKeyRanges.get(i);
+            if (current.startingHashKey().compareTo(end) <= 0) {
+                end = current.endingHashKey().max(end);
+            } else {
+                result.add(new HashKeyRangeForLease(start, end));
+                start = current.startingHashKey();
+                end = current.endingHashKey();
+            }
+        }
+        result.add(new HashKeyRangeForLease(start, end));
+        return result;
+    }
+
+    @Value
+    private static class HashRangeHole {
+        private final HashKeyRangeForLease hashRangeAtStartOfPossibleHole;
+        private final HashKeyRangeForLease hashRangeAtEndOfPossibleHole;
+    }
+
+    /**
+     * Helper class to compare leases based on their hash range.
+     */
+    private static class HashKeyRangeComparator implements Comparator<HashKeyRangeForLease>, Serializable {
+
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public int compare(HashKeyRangeForLease hashKeyRange, HashKeyRangeForLease otherHashKeyRange) {
+            return hashKeyRange.startingHashKey().compareTo(otherHashKeyRange.startingHashKey());
         }
     }
 }
