@@ -47,11 +47,8 @@ import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -92,7 +89,7 @@ public class ShutdownTask implements ConsumerTask {
 
     private final List<ChildShard> childShards;
 
-    private static final Function<ShardInfo, String> shardInfoIdProvider = shardInfo -> shardInfo
+    private static final Function<ShardInfo, String> leaseKeyProvider = shardInfo -> shardInfo
             .streamIdentifierSerOpt().map(s -> s + ":" + shardInfo.shardId()).orElse(shardInfo.shardId());
     /*
      * Invokes ShardRecordProcessor shutdown() API.
@@ -110,7 +107,7 @@ public class ShutdownTask implements ConsumerTask {
         try {
             try {
                 log.debug("Invoking shutdown() for shard {}, concurrencyToken {}. Shutdown reason: {}",
-                          shardInfoIdProvider.apply(shardInfo), shardInfo.concurrencyToken(), reason);
+                        leaseKeyProvider.apply(shardInfo), shardInfo.concurrencyToken(), reason);
 
                 final long startTime = System.currentTimeMillis();
                 if (reason == ShutdownReason.SHARD_END) {
@@ -123,7 +120,7 @@ public class ShutdownTask implements ConsumerTask {
                         createLeasesForChildShardsIfNotExist();
                         updateLeasesForChildShards();
                     } else {
-                        log.warn("Shard {} no longer exists. Shutting down consumer with SHARD_END reason without creating leases for child shards.", shardInfoIdProvider.apply(shardInfo));
+                        log.warn("Shard {} no longer exists. Shutting down consumer with SHARD_END reason without creating leases for child shards.", leaseKeyProvider.apply(shardInfo));
                     }
 
                     recordProcessorCheckpointer
@@ -136,23 +133,23 @@ public class ShutdownTask implements ConsumerTask {
                     throwOnApplicationException(() -> shardRecordProcessor.leaseLost(LeaseLostInput.builder().build()), scope, startTime);
                 }
 
-                log.debug("Shutting down retrieval strategy for shard {}.", shardInfoIdProvider.apply(shardInfo));
+                log.debug("Shutting down retrieval strategy for shard {}.", leaseKeyProvider.apply(shardInfo));
                 recordsPublisher.shutdown();
-                log.debug("Record processor completed shutdown() for shard {}", shardInfoIdProvider.apply(shardInfo));
+                log.debug("Record processor completed shutdown() for shard {}", leaseKeyProvider.apply(shardInfo));
 
                 return new TaskResult(null);
             } catch (Exception e) {
                 if (e instanceof CustomerApplicationException) {
-                    log.error("Shard {}: Application exception. ", shardInfoIdProvider.apply(shardInfo), e);
+                    log.error("Shard {}: Application exception. ", leaseKeyProvider.apply(shardInfo), e);
                 } else {
-                    log.error("Shard {}: Caught exception: ", shardInfoIdProvider.apply(shardInfo), e);
+                    log.error("Shard {}: Caught exception: ", leaseKeyProvider.apply(shardInfo), e);
                 }
                 exception = e;
                 // backoff if we encounter an exception.
                 try {
                     Thread.sleep(this.backoffTimeMillis);
                 } catch (InterruptedException ie) {
-                    log.debug("Shard {}: Interrupted sleep", shardInfoIdProvider.apply(shardInfo), ie);
+                    log.debug("Shard {}: Interrupted sleep", leaseKeyProvider.apply(shardInfo), ie);
                 }
             }
         } finally {
@@ -168,7 +165,7 @@ public class ShutdownTask implements ConsumerTask {
         if (lastCheckpointValue == null
                 || !lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END)) {
             throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
-                                                       + shardInfoIdProvider.apply(shardInfo) + ". Application must checkpoint upon shard end. " +
+                                                       + leaseKeyProvider.apply(shardInfo) + ". Application must checkpoint upon shard end. " +
                                                        "See ShardRecordProcessor.shardEnded javadocs for more information.");
         }
     }
@@ -177,7 +174,7 @@ public class ShutdownTask implements ConsumerTask {
         try {
             action.run();
         } catch (Exception e) {
-            throw new CustomerApplicationException("Customer application throws exception for shard " + shardInfoIdProvider.apply(shardInfo) +": ", e);
+            throw new CustomerApplicationException("Customer application throws exception for shard " + leaseKeyProvider.apply(shardInfo) +": ", e);
         } finally {
             MetricsUtil.addLatency(metricsScope, RECORD_PROCESSOR_SHUTDOWN_METRIC, startTime, MetricsLevel.SUMMARY);
         }
@@ -195,12 +192,12 @@ public class ShutdownTask implements ConsumerTask {
 
     private void updateLeasesForChildShards()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(shardInfoIdProvider.apply(shardInfo));
+        final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
         Set<String> childShardIds = childShards.stream().map(ChildShard::shardId).collect(Collectors.toSet());
 
         final Lease updatedLease = currentLease.copy();
         updatedLease.childShardIds(childShardIds);
-        leaseCoordinator.updateLease(updatedLease, UUID.fromString(shardInfo.concurrencyToken()), SHUTDOWN_TASK_OPERATION, shardInfoIdProvider.apply(shardInfo));
+        leaseCoordinator.updateLease(updatedLease, UUID.fromString(shardInfo.concurrencyToken()), SHUTDOWN_TASK_OPERATION, leaseKeyProvider.apply(shardInfo));
     }
 
     /*
@@ -233,7 +230,7 @@ public class ShutdownTask implements ConsumerTask {
     }
 
     private void dropLease() {
-        Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(shardInfo.shardId());
+        Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
         leaseCoordinator.dropLease(currentLease);
         if(currentLease != null) {
             log.warn("Dropped lease for shutting down ShardConsumer: " + currentLease.leaseKey());

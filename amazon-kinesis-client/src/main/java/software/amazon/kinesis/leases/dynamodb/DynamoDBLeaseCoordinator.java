@@ -349,8 +349,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
     @Override
     public boolean updateLease(final Lease lease, final UUID concurrencyToken, final String operation,
-            final String shardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return leaseRenewer.updateLease(lease, concurrencyToken, operation, shardId);
+            final String singleStreamShardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        return leaseRenewer.updateLease(lease, concurrencyToken, operation, singleStreamShardId);
     }
 
     /**

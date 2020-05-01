@@ -663,10 +663,10 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      * {@inheritDoc}
      */
     @Override
-    public ExtendedSequenceNumber getCheckpoint(String shardId)
+    public ExtendedSequenceNumber getCheckpoint(String leaseKey)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         ExtendedSequenceNumber checkpoint = null;
-        Lease lease = getLease(shardId);
+        Lease lease = getLease(leaseKey);
         if (lease != null) {
             checkpoint = lease.checkpoint();
         }

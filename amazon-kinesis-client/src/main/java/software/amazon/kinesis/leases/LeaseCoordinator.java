@@ -92,6 +92,9 @@ public interface LeaseCoordinator {
      *
      * @param lease lease object containing updated values
      * @param concurrencyToken obtained by calling Lease.concurrencyToken for a currently held lease
+     * @param operation that performs updateLease
+     * @param singleStreamShardId for metrics emission in single stream mode. MultiStream mode will get the
+     *                            shardId from the lease object
      *
      * @return true if update succeeded, false otherwise
      *
@@ -99,7 +102,7 @@ public interface LeaseCoordinator {
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    boolean updateLease(Lease lease, UUID concurrencyToken, String operation, String shardId)
+    boolean updateLease(Lease lease, UUID concurrencyToken, String operation, String singleStreamShardId)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**

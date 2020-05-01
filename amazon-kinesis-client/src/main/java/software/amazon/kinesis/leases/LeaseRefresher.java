@@ -99,7 +99,7 @@ public interface LeaseRefresher {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * @param shardId Get the lease for this shardId
+     * @param leaseKey Get the lease for this leasekey
      * 
      * @throws InvalidStateException if lease table does not exist
      * @throws ProvisionedThroughputException if DynamoDB get fails due to lack of capacity
@@ -107,7 +107,7 @@ public interface LeaseRefresher {
      * 
      * @return lease for the specified shardId, or null if one doesn't exist
      */
-    Lease getLease(String shardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    Lease getLease(String leaseKey) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
      * Renew a lease by incrementing the lease counter. Conditional on the leaseCounter in DynamoDB matching the leaseCounter
@@ -206,13 +206,13 @@ public interface LeaseRefresher {
      * Gets the current checkpoint of the shard. This is useful in the resharding use case
      * where we will wait for the parent shard to complete before starting on the records from a child shard.
      *
-     * @param shardId Checkpoint of this shard will be returned
+     * @param leaseKey Checkpoint of this shard will be returned
      * @return Checkpoint of this shard, or null if the shard record doesn't exist.
      *
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws InvalidStateException if lease table does not exist
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    ExtendedSequenceNumber getCheckpoint(String shardId)
+    ExtendedSequenceNumber getCheckpoint(String leaseKey)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException;
 }

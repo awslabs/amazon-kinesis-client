@@ -195,11 +195,11 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
-    public Lease getLease(String shardId)
+    public Lease getLease(String leaseKey)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         throwExceptions("getLease", ExceptionThrowingLeaseRefresherMethods.GETLEASE);
 
-        return leaseRefresher.getLease(shardId);
+        return leaseRefresher.getLease(leaseKey);
     }
 
     @Override
@@ -216,7 +216,7 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
-    public ExtendedSequenceNumber getCheckpoint(final String shardId)
+    public ExtendedSequenceNumber getCheckpoint(final String leaseKey)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         return null;
     }
