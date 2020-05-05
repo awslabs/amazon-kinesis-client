@@ -32,6 +32,7 @@ import software.amazon.awssdk.services.dynamodb.model.KeyType;
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.leases.DynamoUtils;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseSerializer;
@@ -54,6 +55,8 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String PENDING_CHECKPOINT_STATE_KEY = "pendingCheckpointState";
     private static final String PARENT_SHARD_ID_KEY = "parentShardId";
     private static final String CHILD_SHARD_IDS_KEY = "childShardIds";
+    private static final String STARTING_HASH_KEY = "startingHashKey";
+    private static final String ENDING_HASH_KEY = "endingHashKey";
 
     @Override
     public Map<String, AttributeValue> toDynamoRecord(final Lease lease) {
@@ -83,6 +86,11 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
 
         if (lease.pendingCheckpointState() != null) {
             result.put(PENDING_CHECKPOINT_STATE_KEY, DynamoUtils.createAttributeValue(lease.checkpoint().subSequenceNumber()));
+        }
+
+        if(lease.hashKeyRangeForLease() != null) {
+            result.put(STARTING_HASH_KEY, DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedStartingHashKey()));
+            result.put(ENDING_HASH_KEY, DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedEndingHashKey()));
         }
 
         return result;
@@ -118,6 +126,12 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
         }
 
         leaseToUpdate.pendingCheckpointState(DynamoUtils.safeGetByteArray(dynamoRecord, PENDING_CHECKPOINT_STATE_KEY));
+
+        final String startingHashKey, endingHashKey;
+        if (!Strings.isNullOrEmpty(startingHashKey = DynamoUtils.safeGetString(dynamoRecord, STARTING_HASH_KEY))
+                && !Strings.isNullOrEmpty(endingHashKey = DynamoUtils.safeGetString(dynamoRecord, ENDING_HASH_KEY))) {
+            leaseToUpdate.hashKeyRange(HashKeyRangeForLease.deserialize(startingHashKey, endingHashKey));
+        }
 
         return leaseToUpdate;
     }
@@ -244,6 +258,11 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
 
         if (!CollectionUtils.isNullOrEmpty(lease.childShardIds())) {
             result.put(CHILD_SHARD_IDS_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.childShardIds())));
+        }
+
+        if(lease.hashKeyRangeForLease() != null) {
+            result.put(STARTING_HASH_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedStartingHashKey())));
+            result.put(ENDING_HASH_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedEndingHashKey())));
         }
 
         return result;

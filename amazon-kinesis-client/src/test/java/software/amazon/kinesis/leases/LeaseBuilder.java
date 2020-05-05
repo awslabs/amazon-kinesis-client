@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import lombok.Setter;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @Setter
@@ -36,9 +37,11 @@ public class LeaseBuilder {
     private Set<String> parentShardIds  = new HashSet<>();
     private Set<String> childShardIds = new HashSet<>();
     private byte[] pendingCheckpointState;
+    private HashKeyRangeForLease hashKeyRangeForLease;
 
     public Lease build() {
         return new Lease(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos, checkpoint,
-                         pendingCheckpoint, ownerSwitchesSinceCheckpoint, parentShardIds, childShardIds, pendingCheckpointState);
+                         pendingCheckpoint, ownerSwitchesSinceCheckpoint, parentShardIds, childShardIds,
+                         pendingCheckpointState, hashKeyRangeForLease);
     }
 }
