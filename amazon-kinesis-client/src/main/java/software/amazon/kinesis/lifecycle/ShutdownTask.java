@@ -183,9 +183,13 @@ public class ShutdownTask implements ConsumerTask {
     private void createLeasesForChildShardsIfNotExist()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         for(ChildShard childShard : childShards) {
-            if(leaseCoordinator.getCurrentlyHeldLease(childShard.shardId()) == null) {
+            final String leaseKey = shardInfo.streamIdentifierSerOpt()
+                                             .map(s -> s + ":" + childShard.shardId())
+                                             .orElse(childShard.shardId());
+            if(leaseCoordinator.getCurrentlyHeldLease(leaseKey) == null) {
                 final Lease leaseToCreate = hierarchicalShardSyncer.createLeaseForChildShard(childShard, shardDetector.streamIdentifier());
                 leaseCoordinator.leaseRefresher().createLeaseIfNotExists(leaseToCreate);
+                log.info("Shard {}: Created child shard lease: {}", shardInfo.shardId(), leaseToCreate.leaseKey());
             }
         }
     }
@@ -198,6 +202,7 @@ public class ShutdownTask implements ConsumerTask {
         final Lease updatedLease = currentLease.copy();
         updatedLease.childShardIds(childShardIds);
         leaseCoordinator.updateLease(updatedLease, UUID.fromString(shardInfo.concurrencyToken()), SHUTDOWN_TASK_OPERATION, leaseKeyProvider.apply(shardInfo));
+        log.info("Shard {}: Updated current lease {} with child shard information: {}", shardInfo.shardId(), currentLease.leaseKey(), childShardIds);
     }
 
     /*

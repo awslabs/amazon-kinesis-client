@@ -46,6 +46,7 @@ import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.Lease;
@@ -107,6 +108,10 @@ public class ShutdownTaskTest {
     public void setUp() throws Exception {
         doNothing().when(recordsPublisher).shutdown();
         when(recordProcessorCheckpointer.checkpointer()).thenReturn(checkpointer);
+        final Lease childLease = new Lease();
+        childLease.leaseKey("childShardLeaseKey");
+        when(hierarchicalShardSyncer.createLeaseForChildShard(Matchers.any(ChildShard.class), Matchers.any(StreamIdentifier.class)))
+                .thenReturn(childLease);
 
         shardInfo = new ShardInfo(shardId, concurrencyToken, Collections.emptySet(),
                 ExtendedSequenceNumber.LATEST);

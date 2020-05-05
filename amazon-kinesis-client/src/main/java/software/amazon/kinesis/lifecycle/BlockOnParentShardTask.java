@@ -25,6 +25,8 @@ import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import java.util.function.Function;
+
 /**
  * Task to block until processing of all data records in the parent shard(s) is completed.
  * We check if we have checkpoint(s) for the parent shard(s).
@@ -59,7 +61,8 @@ public class BlockOnParentShardTask implements ConsumerTask {
         try {
             boolean blockedOnParentShard = false;
             for (String shardId : shardInfo.parentShardIds()) {
-                Lease lease = leaseRefresher.getLease(shardId);
+                final String leaseKey = shardInfo.streamIdentifierSerOpt().map(s -> s + ":" + shardId).orElse(shardId);
+                final Lease lease = leaseRefresher.getLease(leaseKey);
                 if (lease != null) {
                     ExtendedSequenceNumber checkpoint = lease.checkpoint();
                     if ((checkpoint == null) || (!checkpoint.equals(ExtendedSequenceNumber.SHARD_END))) {
