@@ -54,8 +54,7 @@ public class BlockOnParentShardTask implements ConsumerTask {
     @Override
     public TaskResult call() {
         Exception exception = null;
-        final String shardInfoId = shardInfo.streamIdentifierSerOpt().map(s -> s + ":" + shardInfo.shardId())
-                .orElse(shardInfo.shardId());
+        final String shardInfoId = ShardInfo.getLeaseKey(shardInfo);
         try {
             boolean blockedOnParentShard = false;
             for (String shardId : shardInfo.parentShardIds()) {

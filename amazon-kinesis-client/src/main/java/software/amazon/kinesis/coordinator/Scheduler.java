@@ -851,8 +851,7 @@ public class Scheduler implements Runnable {
                     if (!firstItem) {
                         builder.append(", ");
                     }
-                    builder.append(shardInfo.streamIdentifierSerOpt().map(s -> s + ":" + shardInfo.shardId())
-                            .orElse(shardInfo.shardId()));
+                    builder.append(ShardInfo.getLeaseKey(shardInfo));
                     firstItem = false;
                 }
                 slog.info("Current stream shard assignments: " + builder.toString());
@@ -948,8 +947,7 @@ public class Scheduler implements Runnable {
                 ShardConsumer consumer = shardInfoShardConsumerMap.get(shard);
                 if (consumer.leaseLost()) {
                     shardInfoShardConsumerMap.remove(shard);
-                    log.debug("Removed consumer for {} as lease has been lost",
-                            shard.streamIdentifierSerOpt().map(s -> s + ":" + shard.shardId()).orElse(shard.shardId()));
+                    log.debug("Removed consumer for {} as lease has been lost", ShardInfo.getLeaseKey(shard));
                 } else {
                     consumer.executeLifecycle();
                 }
