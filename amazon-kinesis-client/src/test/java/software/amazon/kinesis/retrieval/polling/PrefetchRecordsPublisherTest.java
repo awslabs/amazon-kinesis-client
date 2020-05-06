@@ -28,6 +28,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.spy;
@@ -60,7 +61,9 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
@@ -73,9 +76,11 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
@@ -84,6 +89,7 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -107,6 +113,8 @@ public class PrefetchRecordsPublisherTest {
     private InitialPositionInStreamExtended initialPosition;
     @Mock
     private ExtendedSequenceNumber sequenceNumber;
+    @Mock
+    private ThrottlingReporter throttlingReporter;
 
     private List<Record> records;
     private ExecutorService executorService;
@@ -115,7 +123,6 @@ public class PrefetchRecordsPublisherTest {
     private String operation = "ProcessTask";
     private GetRecordsResponse getRecordsResponse;
     private Record record;
-    private RequestDetails requestDetails;
 
     @Before
     public void setup() {
@@ -132,7 +139,8 @@ public class PrefetchRecordsPublisherTest {
                 IDLE_MILLIS_BETWEEN_CALLS,
                 new NullMetricsFactory(),
                 operation,
-                "shardId");
+                "shardId",
+                throttlingReporter);
         spyQueue = spy(getRecordsCache.getPublisherSession().prefetchRecordsQueue());
         records = spy(new ArrayList<>());
         getRecordsResponse = GetRecordsResponse.builder().records(records).build();
@@ -497,6 +505,23 @@ public class PrefetchRecordsPublisherTest {
         verify(dataFetcher).resetIterator(eq(responses.get(0).nextShardIterator()),
                 eq(responses.get(0).records().get(0).sequenceNumber()), any());
 
+    }
+
+    @Test
+    public void testProvisionedThroughputExceededExceptionIsRegisteredInReporter() {
+        GetRecordsResponse response = GetRecordsResponse.builder().millisBehindLatest(100L).records(Collections.emptyList()).build();
+        ProvisionedThroughputExceededException throughputExceededException =
+                ProvisionedThroughputExceededException.builder().build();
+        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenThrow(throughputExceededException).thenReturn(response);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        RecordsRetrieved records = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000);
+        InOrder inOrder = Mockito.inOrder(throttlingReporter);
+        inOrder.verify(throttlingReporter).throttled();
+        inOrder.verify(throttlingReporter, atLeastOnce()).success();
+        inOrder.verifyNoMoreInteractions();
+        assertThat(records.processRecordsInput().millisBehindLatest(), equalTo(response.millisBehindLatest()));
     }
 
     private RecordsRetrieved evictPublishedEvent(PrefetchRecordsPublisher publisher, String shardId) {

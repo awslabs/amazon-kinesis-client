@@ -99,8 +99,6 @@ public class ProcessTaskTest {
     private ShardRecordProcessor shardRecordProcessor;
     @Mock
     private ShardRecordProcessorCheckpointer checkpointer;
-    @Mock
-    private ThrottlingReporter throttlingReporter;
 
     private ProcessTask processTask;
 
@@ -120,8 +118,8 @@ public class ProcessTaskTest {
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil,
             boolean skipShardSync) {
         return new ProcessTask(shardInfo, shardRecordProcessor, checkpointer, taskBackoffTimeMillis,
-                skipShardSync, shardDetector, throttlingReporter,
-                processRecordsInput, shouldCallProcessRecordsEvenForEmptyRecordList, IDLE_TIME_IN_MILLISECONDS,
+                skipShardSync, shardDetector, processRecordsInput,
+                shouldCallProcessRecordsEvenForEmptyRecordList, IDLE_TIME_IN_MILLISECONDS,
                 aggregatorUtil, new NullMetricsFactory());
     }
 
@@ -498,8 +496,6 @@ public class ProcessTaskTest {
         when(checkpointer.lastCheckpointValue()).thenReturn(lastCheckpointValue);
         when(checkpointer.largestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
         processTask.call();
-        verify(throttlingReporter).success();
-        verify(throttlingReporter, never()).throttled();
         ArgumentCaptor<ProcessRecordsInput> recordsCaptor = ArgumentCaptor.forClass(ProcessRecordsInput.class);
         verify(shardRecordProcessor).processRecords(recordsCaptor.capture());
 

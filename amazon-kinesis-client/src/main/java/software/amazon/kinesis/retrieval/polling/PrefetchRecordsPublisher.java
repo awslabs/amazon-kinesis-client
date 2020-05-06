@@ -44,6 +44,7 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
@@ -60,6 +61,7 @@ import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDeliveryActionIfRequired;
@@ -100,6 +102,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     private Instant lastEventDeliveryTime = Instant.EPOCH;
     private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
+    private final ThrottlingReporter throttlingReporter;
 
     @Data
     @Accessors(fluent = true)
@@ -208,7 +211,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                                     final long idleMillisBetweenCalls,
                                     @NonNull final MetricsFactory metricsFactory,
                                     @NonNull final String operation,
-                                    @NonNull final String shardId) {
+                                    @NonNull final String shardId,
+                                    @NonNull final ThrottlingReporter throttlingReporter) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
@@ -223,6 +227,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         Validate.notEmpty(operation, "Operation cannot be empty");
         this.operation = operation;
         this.shardId = shardId;
+        this.throttlingReporter = throttlingReporter;
     }
 
     @Override
@@ -444,6 +449,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     publisherSession.highestSequenceNumber(recordsRetrieved.lastBatchSequenceNumber);
                     addArrivedRecordsInput(recordsRetrieved);
                     drainQueueForRequests();
+                    throttlingReporter.success();
                 } catch (PositionResetException pse) {
                     throw pse;
                 } catch (RetryableRetrievalException rre) {
@@ -457,6 +463,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     scope.addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
                     publisherSession.dataFetcher().restartIterator();
+                } catch (ProvisionedThroughputExceededException e) {
+                    throttlingReporter.throttled();
                 } catch (SdkException e) {
                     log.error("{} :  Exception thrown while fetching records from Kinesis", shardId, e);
                 } catch (Throwable e) {

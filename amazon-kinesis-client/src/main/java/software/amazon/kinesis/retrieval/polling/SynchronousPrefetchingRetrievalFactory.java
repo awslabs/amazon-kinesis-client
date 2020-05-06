@@ -27,6 +27,7 @@ import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 
 /**
  *
@@ -78,6 +79,7 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
         return new PrefetchRecordsPublisher(recordsFetcherFactory.maxPendingProcessRecordsInput(),
                 recordsFetcherFactory.maxByteSize(), recordsFetcherFactory.maxRecordsCount(), maxRecords,
                 createGetRecordsRetrievalStrategy(shardInfo, metricsFactory), executorService, idleMillisBetweenCalls,
-                metricsFactory, "Prefetching", shardInfo.shardId());
+                metricsFactory, "Prefetching", shardInfo.shardId(),
+                new ThrottlingReporter(5, shardInfo.shardId()));
     }
 }

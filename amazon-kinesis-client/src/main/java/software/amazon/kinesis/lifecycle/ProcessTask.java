@@ -54,7 +54,6 @@ public class ProcessTask implements ConsumerTask {
     private final TaskType taskType = TaskType.PROCESS;
     private final long backoffTimeMillis;
     private final Shard shard;
-    private final ThrottlingReporter throttlingReporter;
     private final boolean shouldCallProcessRecordsEvenForEmptyRecordList;
     private final long idleTimeInMilliseconds;
     private final ProcessRecordsInput processRecordsInput;
@@ -67,7 +66,6 @@ public class ProcessTask implements ConsumerTask {
                        long backoffTimeMillis,
                        boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
                        ShardDetector shardDetector,
-                       @NonNull ThrottlingReporter throttlingReporter,
                        ProcessRecordsInput processRecordsInput,
                        boolean shouldCallProcessRecordsEvenForEmptyRecordList,
                        long idleTimeInMilliseconds,
@@ -77,7 +75,6 @@ public class ProcessTask implements ConsumerTask {
         this.shardRecordProcessor = shardRecordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
         this.backoffTimeMillis = backoffTimeMillis;
-        this.throttlingReporter = throttlingReporter;
         this.processRecordsInput = processRecordsInput;
         this.shouldCallProcessRecordsEvenForEmptyRecordList = shouldCallProcessRecordsEvenForEmptyRecordList;
         this.idleTimeInMilliseconds = idleTimeInMilliseconds;
@@ -125,7 +122,6 @@ public class ProcessTask implements ConsumerTask {
                     return new TaskResult(null, true);
                 }
 
-                throttlingReporter.success();
                 List<KinesisClientRecord> records = deaggregateAnyKplRecords(processRecordsInput.records());
 
 
