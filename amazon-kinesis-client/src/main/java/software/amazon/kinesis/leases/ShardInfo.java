@@ -144,7 +144,7 @@ public class ShardInfo {
     }
 
     /**
-     * Utility method to derive lease key from ShardInfo
+     * Utility method to derive lease key from ShardInfo.
      * @param shardInfo
      * @return lease key
      */
@@ -152,10 +152,16 @@ public class ShardInfo {
         return getLeaseKey(shardInfo, shardInfo.shardId());
     }
 
-    public static String getLeaseKey(ShardInfo shardInfo, String shardId) {
+    /**
+     * Utility method to derive lease key from ShardInfo and shardId to override.
+     * @param shardInfo
+     * @param shardIdOverride
+     * @return lease key
+     */
+    public static String getLeaseKey(ShardInfo shardInfo, String shardIdOverride) {
         return shardInfo.streamIdentifierSerOpt().isPresent() ?
-               MultiStreamLease.getLeaseKey(shardInfo.streamIdentifierSerOpt().get(), shardId) :
-               shardId;
+               MultiStreamLease.getLeaseKey(shardInfo.streamIdentifierSerOpt().get(), shardIdOverride) :
+               shardIdOverride;
     }
 
 }
