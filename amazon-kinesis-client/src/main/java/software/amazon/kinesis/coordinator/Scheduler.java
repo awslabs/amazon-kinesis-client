@@ -58,6 +58,7 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -164,6 +165,7 @@ public class Scheduler implements Runnable {
     private final long schedulerInitializationBackoffTimeMillis;
     private final LeaderDecider leaderDecider;
     private final Map<StreamIdentifier, Instant> staleStreamDeletionMap = new HashMap<>();
+    private final LeaseCleanupManager leaseCleanupManager;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -289,6 +291,8 @@ public class Scheduler implements Runnable {
         this.leaderElectedPeriodicShardSyncManager = new PeriodicShardSyncManager(
                 leaseManagementConfig.workerIdentifier(), leaderDecider, leaseRefresher, currentStreamConfigMap,
                 shardSyncTaskManagerProvider, isMultiStreamMode);
+        this.leaseCleanupManager = this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode)
+                .createLeaseCleanupManager(metricsFactory);
     }
 
     /**
@@ -339,6 +343,13 @@ public class Scheduler implements Runnable {
                         }
                     } else {
                         log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
+                    }
+
+                    if (!leaseCleanupManager.isRunning()) {
+                        log.info("Starting LeaseCleanupManager.");
+                        leaseCleanupManager.start();
+                    } else {
+                        log.info("LeaseCleanupManager is already running. No need to start it");
                     }
 
                     // If we reach this point, then we either skipped the lease sync or did not have any exception
@@ -397,27 +408,12 @@ public class Scheduler implements Runnable {
     void runProcessLoop() {
         try {
             Set<ShardInfo> assignedShards = new HashSet<>();
-            final Set<ShardInfo> completedShards = new HashSet<>();
             for (ShardInfo shardInfo : getShardInfoForAssignments()) {
                 ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo,
-                        processorConfig.shardRecordProcessorFactory());
+                        processorConfig.shardRecordProcessorFactory(), leaseCleanupManager);
 
-                if (shardConsumer.isShutdown() && shardConsumer.shutdownReason().equals(ShutdownReason.SHARD_END)) {
-                    completedShards.add(shardInfo);
-                } else {
-                    shardConsumer.executeLifecycle();
-                }
+                shardConsumer.executeLifecycle();
                 assignedShards.add(shardInfo);
-            }
-
-            for (ShardInfo completedShard : completedShards) {
-                final StreamIdentifier streamIdentifier = getStreamIdentifier(completedShard.streamIdentifierSerOpt());
-                final StreamConfig streamConfig = currentStreamConfigMap
-                        .getOrDefault(streamIdentifier, getDefaultStreamConfig(streamIdentifier));
-                if (createOrGetShardSyncTaskManager(streamConfig).submitShardSyncTask()) {
-                    log.info("{} : Found completed shard, initiated new ShardSyncTak for {} ",
-                            streamIdentifier.serialize(), completedShard.toString());
-                }
             }
 
             // clean up shard consumers for unassigned shards
@@ -868,7 +864,8 @@ public class Scheduler implements Runnable {
      * @return ShardConsumer for the shard
      */
     ShardConsumer createOrGetShardConsumer(@NonNull final ShardInfo shardInfo,
-                                           @NonNull final ShardRecordProcessorFactory shardRecordProcessorFactory) {
+                                           @NonNull final ShardRecordProcessorFactory shardRecordProcessorFactory,
+                                           @NonNull final LeaseCleanupManager leaseCleanupManager) {
         ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
         // Instantiate a new consumer if we don't have one, or the one we
         // had was from an earlier
@@ -877,7 +874,7 @@ public class Scheduler implements Runnable {
         // completely processed (shutdown reason terminate).
         if ((consumer == null)
                 || (consumer.isShutdown() && consumer.shutdownReason().equals(ShutdownReason.LEASE_LOST))) {
-            consumer = buildConsumer(shardInfo, shardRecordProcessorFactory);
+            consumer = buildConsumer(shardInfo, shardRecordProcessorFactory, leaseCleanupManager);
             shardInfoShardConsumerMap.put(shardInfo, consumer);
             slog.infoForce("Created new shardConsumer for : " + shardInfo);
         }
@@ -889,12 +886,14 @@ public class Scheduler implements Runnable {
     }
 
     protected ShardConsumer buildConsumer(@NonNull final ShardInfo shardInfo,
-                                          @NonNull final ShardRecordProcessorFactory shardRecordProcessorFactory) {
+                                          @NonNull final ShardRecordProcessorFactory shardRecordProcessorFactory,
+                                          @NonNull final LeaseCleanupManager leaseCleanupManager) {
         ShardRecordProcessorCheckpointer checkpointer = coordinatorConfig.coordinatorFactory().createRecordProcessorCheckpointer(shardInfo,
                         checkpoint);
         // The only case where streamName is not available will be when multistreamtracker not set. In this case,
         // get the default stream name for the single stream application.
         final StreamIdentifier streamIdentifier = getStreamIdentifier(shardInfo.streamIdentifierSerOpt());
+
         // Irrespective of single stream app or multi stream app, streamConfig should always be available.
         // If we have a shardInfo, that is not present in currentStreamConfigMap for whatever reason, then return default stream config
         // to gracefully complete the reading.
@@ -922,7 +921,8 @@ public class Scheduler implements Runnable {
                 shardDetectorProvider.apply(streamConfig),
                 aggregatorUtil,
                 hierarchicalShardSyncerProvider.apply(streamConfig),
-                metricsFactory);
+                metricsFactory,
+                leaseCleanupManager);
         return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(),
                 argument, lifecycleConfig.taskExecutionListener(), lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
     }

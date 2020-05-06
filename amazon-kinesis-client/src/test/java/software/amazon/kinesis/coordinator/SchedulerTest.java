@@ -73,6 +73,7 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.exceptions.KinesisClientLibNonRetryableException;
+import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -153,6 +154,8 @@ public class SchedulerTest {
     private WorkerStateChangeListener workerStateChangeListener;
     @Mock
     private MultiStreamTracker multiStreamTracker;
+    @Mock
+    private LeaseCleanupManager leaseCleanupManager;
 
     private Map<StreamIdentifier, ShardSyncTaskManager> shardSyncTaskManagerMap;
     private Map<StreamIdentifier, ShardDetector> shardDetectorMap;
@@ -219,9 +222,9 @@ public class SchedulerTest {
         final String shardId = "shardId-000000000000";
         final String concurrencyToken = "concurrencyToken";
         final ShardInfo shardInfo = new ShardInfo(shardId, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
-        final ShardConsumer shardConsumer1 = scheduler.createOrGetShardConsumer(shardInfo, shardRecordProcessorFactory);
+        final ShardConsumer shardConsumer1 = scheduler.createOrGetShardConsumer(shardInfo, shardRecordProcessorFactory, leaseCleanupManager);
         assertNotNull(shardConsumer1);
-        final ShardConsumer shardConsumer2 = scheduler.createOrGetShardConsumer(shardInfo, shardRecordProcessorFactory);
+        final ShardConsumer shardConsumer2 = scheduler.createOrGetShardConsumer(shardInfo, shardRecordProcessorFactory, leaseCleanupManager);
         assertNotNull(shardConsumer2);
 
         assertSame(shardConsumer1, shardConsumer2);
@@ -229,7 +232,7 @@ public class SchedulerTest {
         final String anotherConcurrencyToken = "anotherConcurrencyToken";
         final ShardInfo shardInfo2 = new ShardInfo(shardId, anotherConcurrencyToken, null,
                 ExtendedSequenceNumber.TRIM_HORIZON);
-        final ShardConsumer shardConsumer3 = scheduler.createOrGetShardConsumer(shardInfo2, shardRecordProcessorFactory);
+        final ShardConsumer shardConsumer3 = scheduler.createOrGetShardConsumer(shardInfo2, shardRecordProcessorFactory, leaseCleanupManager);
         assertNotNull(shardConsumer3);
 
         assertNotSame(shardConsumer1, shardConsumer3);
@@ -261,9 +264,9 @@ public class SchedulerTest {
         schedulerSpy.runProcessLoop();
         schedulerSpy.runProcessLoop();
 
-        verify(schedulerSpy).buildConsumer(same(initialShardInfo.get(0)), eq(shardRecordProcessorFactory));
-        verify(schedulerSpy, never()).buildConsumer(same(firstShardInfo.get(0)), eq(shardRecordProcessorFactory));
-        verify(schedulerSpy, never()).buildConsumer(same(secondShardInfo.get(0)), eq(shardRecordProcessorFactory));
+        verify(schedulerSpy).buildConsumer(same(initialShardInfo.get(0)), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
+        verify(schedulerSpy, never()).buildConsumer(same(firstShardInfo.get(0)), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
+        verify(schedulerSpy, never()).buildConsumer(same(secondShardInfo.get(0)), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
         verify(checkpoint).getCheckpointObject(eq(shardId));
     }
 
@@ -279,10 +282,10 @@ public class SchedulerTest {
                 ExtendedSequenceNumber.TRIM_HORIZON);
         final ShardInfo shardInfo1 = new ShardInfo(shard1, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
 
-        final ShardConsumer shardConsumer0 = scheduler.createOrGetShardConsumer(shardInfo0, shardRecordProcessorFactory);
+        final ShardConsumer shardConsumer0 = scheduler.createOrGetShardConsumer(shardInfo0, shardRecordProcessorFactory, leaseCleanupManager);
         final ShardConsumer shardConsumer0WithAnotherConcurrencyToken =
-                scheduler.createOrGetShardConsumer(shardInfo0WithAnotherConcurrencyToken, shardRecordProcessorFactory);
-        final ShardConsumer shardConsumer1 = scheduler.createOrGetShardConsumer(shardInfo1, shardRecordProcessorFactory);
+                scheduler.createOrGetShardConsumer(shardInfo0WithAnotherConcurrencyToken, shardRecordProcessorFactory, leaseCleanupManager);
+        final ShardConsumer shardConsumer1 = scheduler.createOrGetShardConsumer(shardInfo1, shardRecordProcessorFactory, leaseCleanupManager);
 
         Set<ShardInfo> shards = new HashSet<>();
         shards.add(shardInfo0);
@@ -397,11 +400,11 @@ public class SchedulerTest {
         schedulerSpy.runProcessLoop();
 
         initialShardInfo.stream().forEach(
-                shardInfo -> verify(schedulerSpy).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory)));
+                shardInfo -> verify(schedulerSpy).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), same(leaseCleanupManager)));
         firstShardInfo.stream().forEach(
-                shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory)));
+                shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager)));
         secondShardInfo.stream().forEach(
-                shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory)));
+                shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager)));
 
     }
 
@@ -1070,6 +1073,11 @@ public class SchedulerTest {
         @Override
         public ShardDetector createShardDetector(StreamConfig streamConfig) {
             return shardDetectorMap.get(streamConfig.streamIdentifier());
+        }
+
+        @Override
+        public LeaseCleanupManager createLeaseCleanupManager(MetricsFactory metricsFactory) {
+            return leaseCleanupManager;
         }
     }
 
