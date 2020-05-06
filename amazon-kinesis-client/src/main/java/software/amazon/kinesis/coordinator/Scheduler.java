@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -509,6 +510,25 @@ public class Scheduler implements Runnable {
                     }
                 };
 
+                if (formerStreamsLeasesDeletionStrategy.shouldCleanupLeasesForDeletedStreams()) {
+                    // We do lease sync for old streams, before leaving to the deletion strategy to delete leases for
+                    // strategy detected leases. Also, for deleted streams we expect the shard sync to remove the
+                    // leases.
+                    Iterator<StreamIdentifier> currentSetOfStreamsIter = currentStreamConfigMap.keySet().iterator();
+                    while (currentSetOfStreamsIter.hasNext()) {
+                        StreamIdentifier streamIdentifier = currentSetOfStreamsIter.next();
+                        if (!newStreamConfigMap.containsKey(streamIdentifier)) {
+                            log.info("Found old/deleted stream: " + streamIdentifier
+                                    + ". Syncing shards of that stream.");
+                            ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(
+                                    currentStreamConfigMap.get(streamIdentifier));
+                            shardSyncTaskManager.syncShardAndLeaseInfo();
+                            currentSetOfStreamsIter.remove();
+                            streamsSynced.add(streamIdentifier);
+                        }
+                    }
+                }
+
                 if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION) {
                     // Now, we are identifying the stale/old streams and enqueuing it for deferred deletion.
                     // It is assumed that all the workers will always have the latest and consistent snapshot of streams
@@ -611,7 +631,7 @@ public class Scheduler implements Runnable {
                         .groupingBy(MultiStreamLease::streamIdentifier,
                                 Collectors.toCollection(ArrayList::new)));
             }
-            log.warn("Found old/deleted stream: " + streamIdentifier + ". Deleting leases of this stream.");
+            log.warn("Found old/deleted stream: " + streamIdentifier + ". Directly deleting leases of this stream.");
             // Deleting leases will cause the workers to shutdown the record processors for these shards.
             if (deleteMultiStreamLeases(streamIdToShardsMap.get(streamIdentifier.serialize()))) {
                 currentStreamConfigMap.remove(streamIdentifier);

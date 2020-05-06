@@ -95,7 +95,6 @@ import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.Checkpointer;
-import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
