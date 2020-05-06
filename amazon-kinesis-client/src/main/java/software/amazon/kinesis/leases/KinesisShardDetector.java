@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -39,6 +40,7 @@ import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.utils.CollectionUtils;
@@ -179,6 +181,7 @@ public class KinesisShardDetector implements ShardDetector {
 
     private ListShardsResponse listShards(ShardFilter shardFilter, final String nextToken) {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
+        exceptionManager.add(ResourceNotFoundException.class, t -> t);
         exceptionManager.add(LimitExceededException.class, t -> t);
         exceptionManager.add(ResourceInUseException.class, t -> t);
         exceptionManager.add(KinesisException.class, t -> t);
@@ -194,7 +197,6 @@ public class KinesisShardDetector implements ShardDetector {
         int remainingRetries = maxListShardsRetryAttempts;
 
         while (result == null) {
-
             try {
                 try {
                     result = getListShardsResponse(request.build());
@@ -218,6 +220,12 @@ public class KinesisShardDetector implements ShardDetector {
                     log.debug("Stream {} : Sleep  was interrupted ", streamIdentifier, ie);
                 }
                 lastException = e;
+            } catch (ResourceNotFoundException e) {
+                log.warn("Got ResourceNotFoundException when fetching shard list for {}. Stream no longer exists.",
+                        streamIdentifier.streamName());
+                return ListShardsResponse.builder().shards(Collections.emptyList())
+                        .nextToken(null)
+                        .build();
             } catch (TimeoutException te) {
                 throw new RuntimeException(te);
             }
