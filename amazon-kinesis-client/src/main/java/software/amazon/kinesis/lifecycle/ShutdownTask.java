@@ -196,6 +196,7 @@ public class ShutdownTask implements ConsumerTask {
 
         final Lease updatedLease = currentLease.copy();
         updatedLease.childShardIds(childShardIds);
+        // TODO : the following update will silently fail. Make changes to use the new leaserefresher#updateLease(Lease lease, UpdateField updateField)
         leaseCoordinator.updateLease(updatedLease, UUID.fromString(shardInfo.concurrencyToken()), SHUTDOWN_TASK_OPERATION, leaseKeyProvider.apply(shardInfo));
         log.info("Shard {}: Updated current lease {} with child shard information: {}", shardInfo.shardId(), currentLease.leaseKey(), childShardIds);
     }
