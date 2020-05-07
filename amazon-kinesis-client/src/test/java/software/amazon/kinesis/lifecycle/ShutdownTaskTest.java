@@ -127,11 +127,12 @@ public class ShutdownTaskTest {
      * This test is for the scenario that customer doesn't implement checkpoint in their implementation
      */
     @Test
-    public final void testCallWhenApplicationDoesNotCheckpoint() {
+    public final void testCallWhenApplicationDoesNotCheckpoint() throws Exception {
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("3298"));
         Lease heldLease = createLease("shardId-0", "leaseOwner", Collections.singleton("parentShardId"));
         when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
+        when(leaseCoordinator.updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString())).thenReturn(true);
 
         final TaskResult result = task.call();
         assertNotNull(result.getException());
@@ -174,6 +175,7 @@ public class ShutdownTaskTest {
         Lease heldLease = createLease("shardId-0", "leaseOwner", Collections.singleton("parentShardId"));
         when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
+        when(leaseCoordinator.updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString())).thenReturn(true);
 
         final TaskResult result = task.call();
         assertNull(result.getException());
