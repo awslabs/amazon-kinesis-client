@@ -115,7 +115,7 @@ public class ShutdownTask implements ConsumerTask {
                     // This scenario could happen when customer deletes the stream while leaving the KCL application running.
                     if (!CollectionUtils.isNullOrEmpty(childShards)) {
                         createLeasesForChildShardsIfNotExist();
-                        updateLeasesForChildShards();
+                        updateLeasesWithChildShards();
                     } else {
                         log.warn("Shard {} no longer exists. Shutting down consumer with SHARD_END reason without creating leases for child shards.", leaseKeyProvider.apply(shardInfo));
                     }
@@ -189,7 +189,7 @@ public class ShutdownTask implements ConsumerTask {
         }
     }
 
-    private void updateLeasesForChildShards()
+    private void updateLeasesWithChildShards()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
         Set<String> childShardIds = childShards.stream().map(ChildShard::shardId).collect(Collectors.toSet());

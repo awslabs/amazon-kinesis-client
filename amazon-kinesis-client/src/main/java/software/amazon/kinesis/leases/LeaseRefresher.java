@@ -192,6 +192,21 @@ public interface LeaseRefresher {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
+     * Update application-specific fields of the given lease in DynamoDB. Does not update fields managed by the leasing
+     * library such as leaseCounter, leaseOwner, or leaseKey.
+     *
+     * @return true if update succeeded, false otherwise
+     *
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
+     */
+    default void updateLease(Lease lease, UpdateField updateField)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throw new UnsupportedOperationException("updateLeaseWithNoExpectation is not implemented");
+    }
+
+    /**
      * Check (synchronously) if there are any leases in the lease table.
      * 
      * @return true if there are no leases in the lease table

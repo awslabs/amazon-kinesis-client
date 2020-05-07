@@ -126,7 +126,11 @@ public class ShardSyncTaskManager {
         this.lock = new ReentrantLock();
     }
 
-    public TaskResult executeShardSyncTask() {
+    /**
+     * Call a ShardSyncTask and return the Task Result.
+     * @return the Task Result.
+     */
+    public TaskResult callShardSyncTask() {
         final ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetector,
                                                leaseRefresher,
                                                initialPositionInStream,
@@ -140,7 +144,11 @@ public class ShardSyncTaskManager {
         return metricCollectingTask.call();
     }
 
-    public boolean syncShardAndLeaseInfo() {
+    /**
+     * Cast a ShardSyncTask and return if the casting is successful.
+     * @return if the casting is successful.
+     */
+    public boolean castShardSyncTask() {
         try {
             lock.lock();
             return checkAndSubmitNextTask();
@@ -197,7 +205,7 @@ public class ShardSyncTaskManager {
             log.error("Caught exception running {} task: ", currentTask.taskType(), exception != null ? exception : taskResult.getException());
         }
         // Acquire lock here. If shardSyncRequestPending is false in this completionStage and
-        // syncShardAndLeaseInfo is invoked, before completion stage exits (future completes)
+        // castShardSyncTask is invoked, before completion stage exits (future completes)
         // but right after the value of shardSyncRequestPending is checked, it will result in
         // shardSyncRequestPending being set to true, but no pending futures to trigger the next
         // ShardSyncTask. By executing this stage in a Reentrant lock, we ensure that if the

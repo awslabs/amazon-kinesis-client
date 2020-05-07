@@ -351,7 +351,7 @@ public class Scheduler implements Runnable {
                         log.info("LeaseCoordinator is already running. No need to start it.");
                     }
                     log.info("Scheduling periodicShardSync");
-                    // leaderElectedPeriodicShardSyncManager.start(shardSyncTasks);
+                    leaderElectedPeriodicShardSyncManager.start();
                     // TODO: enable periodicShardSync after https://github.com/jushkem/amazon-kinesis-client/pull/2 is merged
                     // TODO: Determine if waitUntilHashRangeCovered() is needed.
                     streamSyncWatch.start();
@@ -417,7 +417,7 @@ public class Scheduler implements Runnable {
                 final StreamIdentifier streamIdentifier = getStreamIdentifier(completedShard.streamIdentifierSerOpt());
                 final StreamConfig streamConfig = currentStreamConfigMap
                         .getOrDefault(streamIdentifier, getDefaultStreamConfig(streamIdentifier));
-                if (createOrGetShardSyncTaskManager(streamConfig).syncShardAndLeaseInfo()) {
+                if (createOrGetShardSyncTaskManager(streamConfig).castShardSyncTask()) {
                     log.info("{} : Found completed shard, initiated new ShardSyncTak for {} ",
                             streamIdentifier.serialize(), completedShard.toString());
                 }
@@ -480,7 +480,7 @@ public class Scheduler implements Runnable {
                     if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
                         log.info("Found new stream to process: " + streamIdentifier + ". Syncing shards of that stream.");
                         ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(newStreamConfigMap.get(streamIdentifier));
-                        shardSyncTaskManager.syncShardAndLeaseInfo();
+                        shardSyncTaskManager.castShardSyncTask();
                         currentStreamConfigMap.put(streamIdentifier, newStreamConfigMap.get(streamIdentifier));
                         streamsSynced.add(streamIdentifier);
                     } else {
@@ -508,7 +508,7 @@ public class Scheduler implements Runnable {
                                     + ". Syncing shards of that stream.");
                             ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(
                                     currentStreamConfigMap.get(streamIdentifier));
-                            shardSyncTaskManager.syncShardAndLeaseInfo();
+                            shardSyncTaskManager.castShardSyncTask();
                             currentSetOfStreamsIter.remove();
                             streamsSynced.add(streamIdentifier);
                         }

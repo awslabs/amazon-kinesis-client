@@ -190,7 +190,7 @@ public class SchedulerTest {
                 });
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
         when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
-        when(shardSyncTaskManager.executeShardSyncTask()).thenReturn(new TaskResult(null));
+        when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
         when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(MetricsFactory.class))).thenReturn(recordsPublisher);
         when(shardDetector.streamIdentifier()).thenReturn(mock(StreamIdentifier.class));
 
@@ -1036,7 +1036,7 @@ public class SchedulerTest {
             shardDetectorMap.put(streamConfig.streamIdentifier(), shardDetector);
             when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
             when(shardDetector.streamIdentifier()).thenReturn(streamConfig.streamIdentifier());
-            when(shardSyncTaskManager.executeShardSyncTask()).thenReturn(new TaskResult(null));
+            when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
             if(shardSyncFirstAttemptFailure) {
                 when(shardDetector.listShards())
                         .thenThrow(new RuntimeException("Service Exception"))
