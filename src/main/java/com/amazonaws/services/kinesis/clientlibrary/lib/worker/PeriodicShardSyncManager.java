@@ -58,12 +58,29 @@ class PeriodicShardSyncManager {
 
     public synchronized TaskResult start() {
         if (!isRunning) {
+            final Runnable periodicShardSyncer = () -> {
+                try {
+                    runShardSync();
+                } catch (Throwable t) {
+                    LOG.error("Error running shard sync.", t);
+                }
+            };
+
             shardSyncThreadPool
-                    .scheduleWithFixedDelay(this::runShardSync, INITIAL_DELAY, PERIODIC_SHARD_SYNC_INTERVAL_MILLIS,
+                    .scheduleWithFixedDelay(periodicShardSyncer, INITIAL_DELAY, PERIODIC_SHARD_SYNC_INTERVAL_MILLIS,
                             TimeUnit.MILLISECONDS);
             isRunning = true;
         }
         return new TaskResult(null);
+    }
+
+    /**
+     * Runs ShardSync once, without scheduling further periodic ShardSyncs.
+     * @return TaskResult from shard sync
+     */
+    public synchronized TaskResult syncShardsOnce() {
+        LOG.info("Syncing shards once from worker " + workerId);
+        return metricsEmittingShardSyncTask.call();
     }
 
     public void stop() {
@@ -77,15 +94,12 @@ class PeriodicShardSyncManager {
     }
 
     private void runShardSync() {
-        try {
-            if (leaderDecider.isLeader(workerId)) {
-                LOG.debug(String.format("WorkerId %s is a leader, running the shard sync task", workerId));
-                metricsEmittingShardSyncTask.call();
-            } else {
-                LOG.debug(String.format("WorkerId %s is not a leader, not running the shard sync task", workerId));
-            }
-        } catch (Throwable t) {
-            LOG.error("Error during runShardSync.", t);
+        if (leaderDecider.isLeader(workerId)) {
+            LOG.debug(String.format("WorkerId %s is a leader, running the shard sync task", workerId));
+            metricsEmittingShardSyncTask.call();
+        } else {
+            LOG.debug(String.format("WorkerId %s is not a leader, not running the shard sync task", workerId));
         }
+
     }
 }

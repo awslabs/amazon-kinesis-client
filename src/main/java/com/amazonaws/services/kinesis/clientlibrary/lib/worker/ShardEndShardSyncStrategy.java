@@ -42,6 +42,7 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
     @Override
     public TaskResult onWorkerInitialization() {
+        // TODO: Start leaderElectedPeriodicShardSyncManager in background
         LOG.debug(String.format("onWorkerInitialization is NoOp for ShardSyncStrategyType %s", getStrategyType().toString()));
         return new TaskResult(null);
     }
@@ -65,6 +66,7 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
     @Override
     public void onWorkerShutDown() {
+        // TODO: Shut down leaderElectedPeriodicShardSyncManager
         LOG.debug(String.format("Stop is NoOp for ShardSyncStrategyType %s", getStrategyType().toString()));
     }
 }

@@ -18,7 +18,6 @@ import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,7 +29,6 @@ import java.util.stream.Stream;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
-import com.amazonaws.services.kinesis.leases.impl.Lease;
 import com.amazonaws.services.kinesis.model.ShardFilter;
 import com.amazonaws.services.kinesis.model.ShardFilterType;
 import org.apache.commons.logging.Log;
@@ -60,7 +58,7 @@ import com.amazonaws.services.kinesis.model.Shard;
 
 import junit.framework.Assert;
 
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -1816,10 +1814,13 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         final IKinesisProxy kinesisProxy = spy(new KinesisLocalFileProxy(dataFile.getAbsolutePath()));
 
+        // Make sure ListShardsWithFilter is called in all public shard sync methods
         shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, initialPosition,
                 cleanupLeasesOfCompletedShards, false);
+        shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, initialPosition,
+                cleanupLeasesOfCompletedShards, false, null);
 
-        verify(kinesisProxy, atLeastOnce()).getShardListWithFilter(shardFilter);
+        verify(kinesisProxy, atLeast(2)).getShardListWithFilter(shardFilter);
         verify(kinesisProxy, never()).getShardList();
     }
 

@@ -72,6 +72,7 @@ import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseBuilder;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsScope;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Condition;
@@ -158,6 +159,7 @@ public class WorkerTest {
 
     private static final String KINESIS_SHARD_ID_FORMAT = "kinesis-0-0-%d";
     private static final String CONCURRENCY_TOKEN_FORMAT = "testToken-%d";
+    private static final String WORKER_ID = "workerId";
 
     private RecordsFetcherFactory recordsFetcherFactory;
     private KinesisClientLibConfiguration config;
@@ -194,7 +196,7 @@ public class WorkerTest {
 
     @Before
     public void setup() {
-        config = spy(new KinesisClientLibConfiguration("app", null, null, null));
+        config = spy(new KinesisClientLibConfiguration("app", null, null, WORKER_ID));
         recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory());
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
     }
@@ -244,7 +246,7 @@ public class WorkerTest {
     @Test
     public final void testGetStageName() {
         final String stageName = "testStageName";
-        config = new KinesisClientLibConfiguration(stageName, null, null, null);
+        config = new KinesisClientLibConfiguration(stageName, null, null, WORKER_ID);
         Worker worker = new Worker(v1RecordProcessorFactory, config);
         Assert.assertEquals(stageName, worker.getApplicationName());
     }
@@ -253,7 +255,7 @@ public class WorkerTest {
     public final void testCreateOrGetShardConsumer() {
         final String stageName = "testStageName";
         IRecordProcessorFactory streamletFactory = SAMPLE_RECORD_PROCESSOR_FACTORY_V2;
-        config = new KinesisClientLibConfiguration(stageName, null, null, null);
+        config = new KinesisClientLibConfiguration(stageName, null, null, WORKER_ID);
         IKinesisProxy proxy = null;
         ICheckpoint checkpoint = null;
         int maxRecords = 1;
@@ -372,7 +374,7 @@ public class WorkerTest {
     public final void testCleanupShardConsumers() {
         final String stageName = "testStageName";
         IRecordProcessorFactory streamletFactory = SAMPLE_RECORD_PROCESSOR_FACTORY_V2;
-        config = new KinesisClientLibConfiguration(stageName, null, null, null);
+        config = new KinesisClientLibConfiguration(stageName, null, null, WORKER_ID);
         IKinesisProxy proxy = null;
         ICheckpoint checkpoint = null;
         int maxRecords = 1;
@@ -429,12 +431,12 @@ public class WorkerTest {
     }
 
     @Test
-    public final void testInitializationFailureWithRetries() {
+    public final void testInitializationFailureWithRetries() throws Exception {
         String stageName = "testInitializationWorker";
         IRecordProcessorFactory recordProcessorFactory = new TestStreamletFactory(null, null);
-        config = new KinesisClientLibConfiguration(stageName, null, null, null);
+        config = new KinesisClientLibConfiguration(stageName, null, null, WORKER_ID);
         int count = 0;
-        when(proxy.getShardList()).thenThrow(new RuntimeException(Integer.toString(count++)));
+        when(proxy.getShardListWithFilter(any())).thenThrow(new RuntimeException(Integer.toString(count++)));
         int maxRecords = 2;
         long idleTimeInMilliseconds = 1L;
         StreamConfig streamConfig =
@@ -443,6 +445,7 @@ public class WorkerTest {
                         idleTimeInMilliseconds,
                         callProcessRecordsForEmptyRecordList, skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        when(leaseManager.isLeaseTableEmpty()).thenReturn(true);
         ExecutorService execService = Executors.newSingleThreadExecutor();
         long shardPollInterval = 0L;
         Worker worker =
@@ -463,6 +466,79 @@ public class WorkerTest {
                         shardPrioritization);
         worker.run();
         Assert.assertTrue(count > 0);
+    }
+
+    @Test
+    public final void testInitializationWaitsWhenLeaseTableIsEmpty() throws Exception {
+        final String stageName = "testInitializationWorker";
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        when(leaseManager.isLeaseTableEmpty()).thenReturn(true);
+
+        final int maxRecords = 2;
+        final long idleTimeInMilliseconds = 1L;
+        final StreamConfig streamConfig = new StreamConfig(proxy, maxRecords, idleTimeInMilliseconds,
+                callProcessRecordsForEmptyRecordList, skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
+
+        final long shardPollInterval = 0L;
+        final Worker worker =
+                new Worker(stageName,
+                        v2RecordProcessorFactory,
+                        config,
+                        streamConfig, INITIAL_POSITION_TRIM_HORIZON,
+                        shardPollInterval,
+                        shardSyncIntervalMillis,
+                        cleanupLeasesUponShardCompletion,
+                        leaseCoordinator,
+                        leaseCoordinator,
+                        Executors.newSingleThreadExecutor(),
+                        nullMetricsFactory,
+                        taskBackoffTimeMillis,
+                        failoverTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
+                        shardPrioritization);
+
+        final long startTime = System.currentTimeMillis();
+        worker.shouldInitiateLeaseSync();
+        final long endTime = System.currentTimeMillis();
+
+        assertTrue(endTime - startTime > Worker.MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
+        assertTrue(endTime - startTime < Worker.MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS + Worker.LEASE_TABLE_CHECK_FREQUENCY_MILLIS);
+    }
+
+    @Test
+    public final void testInitializationDoesntWaitWhenLeaseTableIsNotEmpty() throws Exception {
+        final String stageName = "testInitializationWorker";
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        when(leaseManager.isLeaseTableEmpty()).thenReturn(false);
+
+        final int maxRecords = 2;
+        final long idleTimeInMilliseconds = 1L;
+        final StreamConfig streamConfig = new StreamConfig(proxy, maxRecords, idleTimeInMilliseconds,
+                callProcessRecordsForEmptyRecordList, skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
+
+        final long shardPollInterval = 0L;
+        final Worker worker =
+                new Worker(stageName,
+                        v2RecordProcessorFactory,
+                        config,
+                        streamConfig, INITIAL_POSITION_TRIM_HORIZON,
+                        shardPollInterval,
+                        shardSyncIntervalMillis,
+                        cleanupLeasesUponShardCompletion,
+                        leaseCoordinator,
+                        leaseCoordinator,
+                        Executors.newSingleThreadExecutor(),
+                        nullMetricsFactory,
+                        taskBackoffTimeMillis,
+                        failoverTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
+                        shardPrioritization);
+
+        final long startTime = System.currentTimeMillis();
+        worker.shouldInitiateLeaseSync();
+        final long endTime = System.currentTimeMillis();
+
+        assertTrue(endTime - startTime < Worker.MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
     }
 
     /**
@@ -576,6 +652,7 @@ public class WorkerTest {
 
         final ExecutorService executorService = mock(ThreadPoolExecutor.class);
         final CWMetricsFactory cwMetricsFactory = mock(CWMetricsFactory.class);
+        when(cwMetricsFactory.createMetrics()).thenReturn(mock(IMetricsScope.class));
         // Make sure that worker thread is run before invoking shutdown.
         final CountDownLatch workerStarted = new CountDownLatch(1);
         doAnswer(new Answer<Boolean>() {
@@ -1708,7 +1785,7 @@ public class WorkerTest {
     public void testBuilderSetRegionAndEndpointToClient() {
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
         final String endpoint = "TestEndpoint";
-        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null)
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, WORKER_ID)
                 .withRegionName(Regions.US_WEST_2.getName())
                 .withKinesisEndpoint(endpoint)
                 .withDynamoDBEndpoint(endpoint);
@@ -1736,7 +1813,7 @@ public class WorkerTest {
     public void testBuilderSetRegionToClient() {
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
         String region = Regions.US_WEST_2.getName();
-        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null)
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, WORKER_ID)
                 .withRegionName(region);
 
         Worker.Builder builder = new Worker.Builder();
@@ -1763,7 +1840,7 @@ public class WorkerTest {
     @Test
     public void testBuilderGenerateClients() {
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
-        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null);
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, WORKER_ID);
         Worker.Builder builder = spy(new Worker.Builder().recordProcessorFactory(recordProcessorFactory).config(config));
         ArgumentCaptor<AwsClientBuilder> builderCaptor = ArgumentCaptor.forClass(AwsClientBuilder.class);
 
@@ -1789,7 +1866,7 @@ public class WorkerTest {
     public void testBuilderGenerateClientsWithRegion() {
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
         String region = Regions.US_WEST_2.getName();
-        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null)
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, WORKER_ID)
                 .withRegionName(region);
         ArgumentCaptor<AwsClientBuilder> builderCaptor = ArgumentCaptor.forClass(AwsClientBuilder.class);
 
@@ -1809,7 +1886,7 @@ public class WorkerTest {
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
         String region = Regions.US_WEST_2.getName();
         String endpointUrl = "TestEndpoint";
-        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, null)
+        KinesisClientLibConfiguration config = new KinesisClientLibConfiguration("TestApp", null, null, WORKER_ID)
                 .withRegionName(region).withKinesisEndpoint(endpointUrl).withDynamoDBEndpoint(endpointUrl);
 
         Worker.Builder builder = spy(new Worker.Builder());

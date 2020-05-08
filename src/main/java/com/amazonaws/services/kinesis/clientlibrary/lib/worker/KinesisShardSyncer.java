@@ -177,7 +177,7 @@ class KinesisShardSyncer implements ShardSyncer {
 
         List<Shard> shards;
         if(CollectionUtils.isNullOrEmpty(latestShards)) {
-            shards = getCompleteShardList(kinesisProxy);
+            shards = getShardListAtInitialPosition(kinesisProxy, initialPosition);
         } else {
             shards = latestShards;
         }
