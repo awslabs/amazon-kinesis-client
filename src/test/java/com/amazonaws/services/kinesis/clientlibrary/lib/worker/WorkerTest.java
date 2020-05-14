@@ -1782,6 +1782,64 @@ public class WorkerTest {
     }
 
     @Test
+    public void testBuilderWithDefaultShardSyncStrategy() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        Worker worker = new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .config(config)
+                .build();
+
+        Assert.assertNotNull(worker.getLeaderDecider());
+        Assert.assertNotNull(worker.getPeriodicShardSyncManager());
+    }
+
+    @Test
+    public void testBuilderWithPeriodicShardSyncStrategyAndDefaultLeaderDecider() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        when(config.getShardSyncStrategyType()).thenReturn(ShardSyncStrategyType.PERIODIC);
+        Worker worker = new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .config(config)
+                .build();
+
+        Assert.assertNotNull(worker.getLeaderDecider());
+        Assert.assertNotNull(worker.getPeriodicShardSyncManager());
+    }
+
+    @Test
+    public void testBuilderWithPeriodicShardSyncStrategyAndCustomLeaderDecider() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        when(config.getShardSyncStrategyType()).thenReturn(ShardSyncStrategyType.PERIODIC);
+
+        LeaderDecider leaderDecider = mock(LeaderDecider.class);
+        Worker worker = new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .config(config)
+                .leaderDecider(leaderDecider)
+                .build();
+
+        Assert.assertSame(leaderDecider, worker.getLeaderDecider());
+        Assert.assertNotNull(worker.getPeriodicShardSyncManager());
+    }
+
+    @Test
+    public void testCustomLeaderDeciderNotAllowedForShardEndShardSync() {
+        IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
+        when(config.getShardSyncStrategyType()).thenReturn(ShardSyncStrategyType.SHARD_END);
+
+        LeaderDecider leaderDecider = mock(LeaderDecider.class);
+        Worker worker = new Worker.Builder()
+                .recordProcessorFactory(recordProcessorFactory)
+                .config(config)
+                .leaderDecider(leaderDecider)
+                .build();
+
+        // Worker should override custom leaderDecider and use default instead
+        Assert.assertNotSame(leaderDecider, worker.getLeaderDecider());
+        Assert.assertNotNull(worker.getPeriodicShardSyncManager());
+    }
+
+    @Test
     public void testBuilderSetRegionAndEndpointToClient() {
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
         final String endpoint = "TestEndpoint";
