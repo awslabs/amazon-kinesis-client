@@ -129,6 +129,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
         try {
             result = getRecordsResultQueue.take().withCacheExitTime(Instant.now());
             prefetchCounters.removed(result);
+            log.info("Shard " + shardId + ": Number of records remaining in queue is " + getRecordsResultQueue.size());
         } catch (InterruptedException e) {
             log.error("Interrupted while getting records from the cache", e);
         }
@@ -177,7 +178,6 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
                         
                         MetricsHelper.getMetricsScope().addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.Count,
                                 MetricsLevel.SUMMARY);
-                        
                         dataFetcher.restartIterator();
                     } catch (SdkClientException e) {
                         log.error("Exception thrown while fetching records from Kinesis", e);

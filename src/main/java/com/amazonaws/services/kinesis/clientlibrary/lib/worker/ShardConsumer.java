@@ -15,11 +15,14 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 
+import com.amazonaws.services.kinesis.model.ChildShard;
+import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -65,6 +68,9 @@ class ShardConsumer {
     private long currentTaskSubmitTime;
     private Future<TaskResult> future;
     private ShardSyncStrategy shardSyncStrategy;
+
+    @Getter
+    private List<ChildShard> childShards;
 
     @Getter
     private final GetRecordsCache getRecordsCache;
@@ -321,6 +327,10 @@ class ShardConsumer {
             TaskResult result = future.get();
             if (result.getException() == null) {
                 if (result.isShardEndReached()) {
+                    if (!CollectionUtils.isNullOrEmpty(result.getChildShards())) {
+                        childShards = result.getChildShards();
+                        LOG.info("Shard " + shardInfo.getShardId() + ": Setting childShards in ShardConsumer: " + childShards);
+                    }
                     return TaskOutcome.END_OF_SHARD;
                 }
                 return TaskOutcome.SUCCESSFUL;
@@ -420,6 +430,7 @@ class ShardConsumer {
     void updateState(TaskOutcome taskOutcome) {
         if (taskOutcome == TaskOutcome.END_OF_SHARD) {
             markForShutdown(ShutdownReason.TERMINATE);
+            LOG.info("Shard " + shardInfo.getShardId() + ": Mark for shutdown with reason TERMINATE");
         }
         if (isShutdownRequested() && taskOutcome != TaskOutcome.FAILURE) {
             currentState = currentState.shutdownTransition(shutdownReason);
