@@ -200,6 +200,11 @@ public class KinesisClientLibConfiguration {
      */
     public static final int DEFAULT_MAX_LIST_SHARDS_RETRY_ATTEMPTS = 50;
 
+    /**
+     * The number of times the {@link Worker} will try to initialize before giving up.
+     */
+    public static final int DEFAULT_MAX_INITIALIZATION_ATTEMPTS = 20;
+
     @Getter
     private BillingMode billingMode;
     private String applicationName;
@@ -265,6 +270,9 @@ public class KinesisClientLibConfiguration {
     
     @Getter
     private int maxListShardsRetryAttempts = DEFAULT_MAX_LIST_SHARDS_RETRY_ATTEMPTS;
+
+    @Getter
+    private int maxInitializationAttempts = DEFAULT_MAX_INITIALIZATION_ATTEMPTS;
 
     /**
      * Constructor.
@@ -1456,6 +1464,16 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withMaxListShardsRetryAttempts(int maxListShardsRetryAttempts) {
         checkIsValuePositive("maxListShardsRetryAttempts", maxListShardsRetryAttempts);
         this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
+        return this;
+    }
+
+    /**
+     * @param maxInitializationAttempts Max number of Worker initialization attempts before giving up
+     * @return
+     */
+    public KinesisClientLibConfiguration withMaxInitializationAttempts(int maxInitializationAttempts) {
+        checkIsValuePositive("maxInitializationAttempts", maxInitializationAttempts);
+        this.maxInitializationAttempts = maxInitializationAttempts;
         return this;
     }
 }

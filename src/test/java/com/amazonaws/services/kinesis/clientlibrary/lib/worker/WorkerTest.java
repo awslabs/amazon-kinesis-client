@@ -197,6 +197,7 @@ public class WorkerTest {
     @Before
     public void setup() {
         config = spy(new KinesisClientLibConfiguration("app", null, null, WORKER_ID));
+        config.withMaxInitializationAttempts(1);
         recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory());
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
     }
@@ -435,6 +436,8 @@ public class WorkerTest {
         String stageName = "testInitializationWorker";
         IRecordProcessorFactory recordProcessorFactory = new TestStreamletFactory(null, null);
         config = new KinesisClientLibConfiguration(stageName, null, null, WORKER_ID);
+        config.withMaxInitializationAttempts(2);
+
         int count = 0;
         when(proxy.getShardListWithFilter(any())).thenThrow(new RuntimeException(Integer.toString(count++)));
         int maxRecords = 2;
@@ -612,7 +615,6 @@ public class WorkerTest {
 
     @Test
     public final void testWorkerShutsDownOwnedResources() throws Exception {
-
         final long failoverTimeMillis = 20L;
 
         // Make sure that worker thread is run before invoking shutdown.

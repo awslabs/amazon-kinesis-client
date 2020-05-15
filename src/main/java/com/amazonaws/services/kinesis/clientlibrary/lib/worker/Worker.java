@@ -94,7 +94,6 @@ public class Worker implements Runnable {
 
     // Default configs for periodic shard sync
     private static final int SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC = 0;
-    private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
     private static final int PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT = 1; //Default for KCL.
     static final long LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 3 * 1000L;
     static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 1 * 1000L;
@@ -661,7 +660,8 @@ public class Worker implements Runnable {
             initialize();
             LOG.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e1) {
-            LOG.error("Unable to initialize after " + MAX_INITIALIZATION_ATTEMPTS + " attempts. Shutting down.", e1);
+            LOG.error("Unable to initialize after " + config.getMaxInitializationAttempts() + " attempts. " +
+                    "Shutting down.", e1);
             shutdown();
         }
 
@@ -714,7 +714,7 @@ public class Worker implements Runnable {
         boolean isDone = false;
         Exception lastException = null;
 
-        for (int i = 0; (!isDone) && (i < MAX_INITIALIZATION_ATTEMPTS); i++) {
+        for (int i = 0; (!isDone) && (i < config.getMaxInitializationAttempts()); i++) {
             try {
                 LOG.info("Initialization attempt " + (i + 1));
                 LOG.info("Initializing LeaseCoordinator");
