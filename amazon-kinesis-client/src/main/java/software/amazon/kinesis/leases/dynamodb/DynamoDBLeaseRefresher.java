@@ -661,7 +661,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
-    public void updateLease(Lease lease, UpdateField updateField)
+    public void updateLeaseWithMetaInfo(Lease lease, UpdateField updateField)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         log.debug("Updating lease without expectation {}", lease);
         final AWSExceptionManager exceptionManager = createExceptionManager();

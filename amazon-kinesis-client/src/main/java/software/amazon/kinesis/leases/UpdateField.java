@@ -14,6 +14,13 @@
  */
 package software.amazon.kinesis.leases;
 
+/**
+ * These are the special fields that will be updated only once during the lifetime of the lease.
+ * Since these are meta information that will not affect lease ownership or data durability, we allow
+ * any elected leader  or worker to set these fields directly without any conditional checks.
+ * Note that though HASH_KEY_RANGE will be available during lease initialization in newer versions, we keep this
+ * for backfilling while rolling forward to newer versions.
+ */
 public enum UpdateField {
     CHILD_SHARDS, HASH_KEY_RANGE
 }

@@ -33,7 +33,6 @@ import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -72,128 +71,49 @@ public class PeriodicShardSyncManagerTest {
     }
 
     @Test
-    public void testIfHashRangesAreNotMergedWhenNoOverlappingIntervalsGiven() {
-        List<HashKeyRangeForLease> hashRanges = new ArrayList<HashKeyRangeForLease>() {{
-            add(deserialize("0", "1"));
-            add(deserialize("2", "3"));
-            add(deserialize("4", "23"));
-            add(deserialize("24", "30"));
-        }};
-        List<HashKeyRangeForLease> sortAndMergedHashRanges = PeriodicShardSyncManager
-                .sortAndMergeOverlappingHashRanges(hashRanges);
-        Assert.assertEquals(hashRanges, sortAndMergedHashRanges);
-    }
-
-    @Test
-    public void testIfHashRangesAreSortedWhenNoOverlappingIntervalsGiven() {
-        List<HashKeyRangeForLease> hashRanges = new ArrayList<HashKeyRangeForLease>() {{
-            add(deserialize("2", "3"));
-            add(deserialize("0", "1"));
-            add(deserialize("24", "30"));
-            add(deserialize("4", "23"));
-        }};
-        List<HashKeyRangeForLease> hashRangesCopy = new ArrayList<>();
-        hashRangesCopy.addAll(hashRanges);
-        List<HashKeyRangeForLease> sortAndMergedHashRanges = PeriodicShardSyncManager
-                .sortAndMergeOverlappingHashRanges(hashRangesCopy);
-        Assert.assertEquals(hashRangesCopy, sortAndMergedHashRanges);
-        Assert.assertNotEquals(hashRanges, sortAndMergedHashRanges);
-    }
-
-    @Test
-    public void testIfHashRangesAreMergedWhenOverlappingIntervalsGivenCase1() {
-        List<HashKeyRangeForLease> hashRanges = new ArrayList<HashKeyRangeForLease>() {{
-            add(deserialize("0", "1"));
-            add(deserialize("2", "3"));
-            add(deserialize("4", "23"));
-            add(deserialize("6", "23"));
-            add(deserialize("24", "30"));
-        }};
-        List<HashKeyRangeForLease> expectedHashRanges = new ArrayList<HashKeyRangeForLease>() {{
-            add(deserialize("0", "1"));
-            add(deserialize("2", "3"));
-            add(deserialize("4", "23"));
-            add(deserialize("24", "30"));
-        }};
-        List<HashKeyRangeForLease> sortAndMergedHashRanges = PeriodicShardSyncManager
-                .sortAndMergeOverlappingHashRanges(hashRanges);
-        Assert.assertEquals(expectedHashRanges, sortAndMergedHashRanges);
-    }
-
-    @Test
-    public void testIfHashRangesAreMergedWhenOverlappingIntervalsGivenCase2() {
-        List<HashKeyRangeForLease> hashRanges = new ArrayList<HashKeyRangeForLease>() {{
-            add(deserialize("0", "1"));
-            add(deserialize("2", "3"));
-            add(deserialize("4", "5"));
-            add(deserialize("4", "23"));
-            add(deserialize("24", "30"));
-        }};
-        List<HashKeyRangeForLease> expectedHashRanges = new ArrayList<HashKeyRangeForLease>() {{
-            add(deserialize("0", "1"));
-            add(deserialize("2", "3"));
-            add(deserialize("4", "23"));
-            add(deserialize("24", "30"));
-        }};
-        List<HashKeyRangeForLease> sortAndMergedHashRanges = PeriodicShardSyncManager
-                .sortAndMergeOverlappingHashRanges(hashRanges);
-        Assert.assertEquals(expectedHashRanges, sortAndMergedHashRanges);
-    }
-
-    @Test
-    public void testIfHashRangesAreMergedWhenOverlappingIntervalsGivenCase3() {
-        List<HashKeyRangeForLease> hashRanges = new ArrayList<HashKeyRangeForLease>() {{
-            add(deserialize("0", "1"));
-            add(deserialize("2", "3"));
-            add(deserialize("4", "23"));
-            add(deserialize("4", "5"));
-            add(deserialize("24", "30"));
-        }};
-        List<HashKeyRangeForLease> expectedHashRanges = new ArrayList<HashKeyRangeForLease>() {{
-            add(deserialize("0", "1"));
-            add(deserialize("2", "3"));
-            add(deserialize("4", "23"));
-            add(deserialize("24", "30"));
-        }};
-        List<HashKeyRangeForLease> sortAndMergedHashRanges = PeriodicShardSyncManager
-                .sortAndMergeOverlappingHashRanges(hashRanges);
-        Assert.assertEquals(expectedHashRanges, sortAndMergedHashRanges);
-    }
-
-    @Test
     public void testForFailureWhenHashRangesAreIncomplete() {
-        List<HashKeyRangeForLease> hashRanges = new ArrayList<HashKeyRangeForLease>() {{
+        List<Lease> hashRanges = new ArrayList<HashKeyRangeForLease>() {{
             add(deserialize("0", "1"));
             add(deserialize("2", "3"));
             add(deserialize("4", "23"));
             add(deserialize("6", "23"));
-            add(deserialize("25", "30")); // Missing interval here
-        }};
+            add(deserialize("25", MAX_HASH_KEY.toString())); // Missing interval here
+        }}.stream().map(hashKeyRangeForLease -> {
+            Lease lease = new MultiStreamLease();
+            lease.hashKeyRange(hashKeyRangeForLease);
+            lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+            return lease;
+        }).collect(Collectors.toList());
         Assert.assertTrue(PeriodicShardSyncManager
-                .checkForHoleInHashKeyRanges(streamIdentifier, hashRanges, BigInteger.ZERO, BigInteger.valueOf(30)).isPresent());
+                .checkForHoleInHashKeyRanges(streamIdentifier, hashRanges).isPresent());
     }
 
     @Test
     public void testForSuccessWhenHashRangesAreComplete() {
-        List<HashKeyRangeForLease> hashRanges = new ArrayList<HashKeyRangeForLease>() {{
+        List<Lease> hashRanges = new ArrayList<HashKeyRangeForLease>() {{
             add(deserialize("0", "1"));
             add(deserialize("2", "3"));
             add(deserialize("4", "23"));
             add(deserialize("6", "23"));
-            add(deserialize("24", "30"));
-        }};
+            add(deserialize("24", MAX_HASH_KEY.toString()));
+        }}.stream().map(hashKeyRangeForLease -> {
+            Lease lease = new MultiStreamLease();
+            lease.hashKeyRange(hashKeyRangeForLease);
+            lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+            return lease;
+        }).collect(Collectors.toList());
         Assert.assertFalse(PeriodicShardSyncManager
-                .checkForHoleInHashKeyRanges(streamIdentifier, hashRanges, BigInteger.ZERO, BigInteger.valueOf(30)).isPresent());
+                .checkForHoleInHashKeyRanges(streamIdentifier, hashRanges).isPresent());
     }
 
     @Test
     public void testIfShardSyncIsInitiatedWhenNoLeasesArePassed() {
-        Assert.assertTrue(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, null));
+        Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, null).shouldDoShardSync());
     }
 
     @Test
     public void testIfShardSyncIsInitiatedWhenEmptyLeasesArePassed() {
-        Assert.assertTrue(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, new ArrayList<>()));
+        Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, new ArrayList<>()).shouldDoShardSync());
     }
 
     @Test
@@ -211,7 +131,7 @@ public class PeriodicShardSyncManagerTest {
             return lease;
         }).collect(Collectors.toList());
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases)));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
     }
 
     @Test
@@ -229,8 +149,8 @@ public class PeriodicShardSyncManagerTest {
             return lease;
         }).collect(Collectors.toList());
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases)));
-        Assert.assertTrue(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
+        Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
     }
 
     @Test
@@ -252,8 +172,8 @@ public class PeriodicShardSyncManagerTest {
             return lease;
         }).collect(Collectors.toList());
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases)));
-        Assert.assertTrue(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
+        Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
     }
 
     @Test
@@ -271,8 +191,8 @@ public class PeriodicShardSyncManagerTest {
             return lease;
         }).collect(Collectors.toList());
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases)));
-        Assert.assertTrue(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
+        Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
     }
 
     @Test
@@ -290,7 +210,7 @@ public class PeriodicShardSyncManagerTest {
             return lease;
         }).collect(Collectors.toList());
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases)));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         List<Lease> multiStreamLeases2 = new ArrayList<HashKeyRangeForLease>() {{
             add(deserialize(MIN_HASH_KEY.toString(), "1"));
             add(deserialize("2", "3")); // Hole between 3 and 5
@@ -305,8 +225,8 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
         // Resetting the holes
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases2)));
-        Assert.assertTrue(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases2));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases2).shouldDoShardSync()));
+        Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases2).shouldDoShardSync());
     }
 
     @Test
@@ -324,7 +244,7 @@ public class PeriodicShardSyncManagerTest {
             return lease;
         }).collect(Collectors.toList());
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases)));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         List<Lease> multiStreamLeases2 = new ArrayList<HashKeyRangeForLease>() {{
             add(deserialize(MIN_HASH_KEY.toString(), "1"));
             add(deserialize("2", "3")); // Hole between 3 and 5
@@ -339,11 +259,11 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
         // Resetting the holes
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases2)));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases2).shouldDoShardSync()));
         // Resetting the holes
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases)));
-        Assert.assertTrue(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
+        Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
     }
 
     @Test
@@ -385,8 +305,8 @@ public class PeriodicShardSyncManagerTest {
 
         // Assert that shard sync should never trigger
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases)));
-        Assert.assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
+        Assert.assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
 
         // Assert that all the leases now has hashRanges set.
         for(Lease lease : multiStreamLeases) {
@@ -433,8 +353,8 @@ public class PeriodicShardSyncManagerTest {
 
         // Assert that shard sync should never trigger
         IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
-                .assertFalse(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases)));
-        Assert.assertTrue(periodicShardSyncManager.shouldDoShardSync(streamIdentifier, multiStreamLeases));
+                .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
+        Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
 
         // Assert that all the leases now has hashRanges set.
         for(Lease lease : multiStreamLeases) {

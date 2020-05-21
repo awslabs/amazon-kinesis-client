@@ -417,7 +417,7 @@ public class Scheduler implements Runnable {
                 final StreamIdentifier streamIdentifier = getStreamIdentifier(completedShard.streamIdentifierSerOpt());
                 final StreamConfig streamConfig = currentStreamConfigMap
                         .getOrDefault(streamIdentifier, getDefaultStreamConfig(streamIdentifier));
-                if (createOrGetShardSyncTaskManager(streamConfig).castShardSyncTask()) {
+                if (createOrGetShardSyncTaskManager(streamConfig).submitShardSyncTask()) {
                     log.info("{} : Found completed shard, initiated new ShardSyncTak for {} ",
                             streamIdentifier.serialize(), completedShard.toString());
                 }
@@ -480,7 +480,7 @@ public class Scheduler implements Runnable {
                     if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
                         log.info("Found new stream to process: " + streamIdentifier + ". Syncing shards of that stream.");
                         ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(newStreamConfigMap.get(streamIdentifier));
-                        shardSyncTaskManager.castShardSyncTask();
+                        shardSyncTaskManager.submitShardSyncTask();
                         currentStreamConfigMap.put(streamIdentifier, newStreamConfigMap.get(streamIdentifier));
                         streamsSynced.add(streamIdentifier);
                     } else {
@@ -508,7 +508,7 @@ public class Scheduler implements Runnable {
                                     + ". Syncing shards of that stream.");
                             ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(
                                     currentStreamConfigMap.get(streamIdentifier));
-                            shardSyncTaskManager.castShardSyncTask();
+                            shardSyncTaskManager.submitShardSyncTask();
                             currentSetOfStreamsIter.remove();
                             streamsSynced.add(streamIdentifier);
                         }

@@ -145,10 +145,10 @@ public class ShardSyncTaskManager {
     }
 
     /**
-     * Cast a ShardSyncTask and return if the casting is successful.
+     * Submit a ShardSyncTask and return if the submission is successful.
      * @return if the casting is successful.
      */
-    public boolean castShardSyncTask() {
+    public boolean submitShardSyncTask() {
         try {
             lock.lock();
             return checkAndSubmitNextTask();
@@ -205,7 +205,7 @@ public class ShardSyncTaskManager {
             log.error("Caught exception running {} task: ", currentTask.taskType(), exception != null ? exception : taskResult.getException());
         }
         // Acquire lock here. If shardSyncRequestPending is false in this completionStage and
-        // castShardSyncTask is invoked, before completion stage exits (future completes)
+        // submitShardSyncTask is invoked, before completion stage exits (future completes)
         // but right after the value of shardSyncRequestPending is checked, it will result in
         // shardSyncRequestPending being set to true, but no pending futures to trigger the next
         // ShardSyncTask. By executing this stage in a Reentrant lock, we ensure that if the

@@ -19,6 +19,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.Value;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.services.kinesis.model.Shard;
@@ -161,25 +162,28 @@ class PeriodicShardSyncManager {
 
                 // For each of the stream, check if shard sync needs to be done based on the leases state.
                 for (Map.Entry<StreamIdentifier, StreamConfig> streamConfigEntry : currentStreamConfigMap.entrySet()) {
-                    if (shouldDoShardSync(streamConfigEntry.getKey(),
-                            streamToLeasesMap.get(streamConfigEntry.getKey()))) {
-                        log.info("Periodic shard syncer initiating shard sync for {}", streamConfigEntry.getKey());
+                    final ShardSyncResponse shardSyncResponse = checkForShardSync(streamConfigEntry.getKey(),
+                            streamToLeasesMap.get(streamConfigEntry.getKey()));
+                    if (shardSyncResponse.shouldDoShardSync()) {
+                        log.info("Periodic shard syncer initiating shard sync for {} due to the reason - ",
+                                streamConfigEntry.getKey(), shardSyncResponse.reasonForDecision());
                         final ShardSyncTaskManager shardSyncTaskManager = shardSyncTaskManagerProvider
                                 .apply(streamConfigEntry.getValue());
-                        if (!shardSyncTaskManager.castShardSyncTask()) {
+                        if (!shardSyncTaskManager.submitShardSyncTask()) {
                             log.warn(
-                                    "Failed to submit shard sync task for stream {}. This could be due to the previous shard sync task not finished.",
+                                    "Failed to submit shard sync task for stream {}. This could be due to the previous pending shard sync task.",
                                     shardSyncTaskManager.shardDetector().streamIdentifier().streamName());
                         }
                     } else {
-                        log.info("Skipping shard sync for {} as either hash ranges are complete in the lease table or leases hole confidence is not achieved.", streamConfigEntry.getKey());
+                        log.info("Skipping shard sync for {} due to the reason - {}", streamConfigEntry.getKey(),
+                                shardSyncResponse.reasonForDecision());
                     }
                 }
             } catch (Exception e) {
                 log.error("Caught exception while running periodic shard syncer.", e);
             }
         } else {
-            log.debug(String.format("WorkerId %s is not a leader, not running the shard sync task", workerId));
+            log.debug("WorkerId {} is not a leader, not running the shard sync task", workerId);
         }
     }
 
@@ -204,25 +208,41 @@ class PeriodicShardSyncManager {
     }
 
     @VisibleForTesting
-    boolean shouldDoShardSync(StreamIdentifier streamIdentifier, List<Lease> leases) {
+    ShardSyncResponse checkForShardSync(StreamIdentifier streamIdentifier, List<Lease> leases) {
         if (CollectionUtils.isNullOrEmpty(leases)) {
             // If the leases is null or empty then we need to do shard sync
             log.info("No leases found for {}. Will be triggering shard sync", streamIdentifier);
-            return true;
+            return new ShardSyncResponse(true, "No leases found for " + streamIdentifier);
         }
         // Check if there are any holes in the leases and return the first hole if present.
         Optional<HashRangeHole> hashRangeHoleOpt = hasHoleInLeases(streamIdentifier, leases);
         if (hashRangeHoleOpt.isPresent()) {
             // If hole is present, check if the hole is detected consecutively in previous occurrences.
             // If hole is determined with high confidence return true; return false otherwise
-            return hashRangeHoleTrackerMap.computeIfAbsent(streamIdentifier, s -> new HashRangeHoleTracker())
+            // We are using the high confidence factor to avoid shard sync on any holes during resharding and
+            // lease cleanups or any intermittent issues.
+            final HashRangeHoleTracker hashRangeHoleTracker = hashRangeHoleTrackerMap
+                    .computeIfAbsent(streamIdentifier, s -> new HashRangeHoleTracker());
+            final boolean hasHoleWithHighConfidence = hashRangeHoleTracker
                     .hasHighConfidenceOfHoleWith(hashRangeHoleOpt.get());
+            return new ShardSyncResponse(hasHoleWithHighConfidence,
+                    "Detected same hole for " + hashRangeHoleTracker.getNumConsecutiveHoles()
+                            + " times. Shard sync will be initiated when threshold breaches "
+                            + CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY);
 
         } else {
             // If hole is not present, clear any previous tracking for this stream and return false;
             hashRangeHoleTrackerMap.remove(streamIdentifier);
-            return false;
+            return new ShardSyncResponse(false, "Hash Ranges are complete for " + streamIdentifier);
         }
+    }
+
+    @Value
+    @Accessors(fluent = true)
+    @VisibleForTesting
+    static class ShardSyncResponse {
+        private final boolean shouldDoShardSync;
+        private final String reasonForDecision;
     }
 
     private Optional<HashRangeHole> hasHoleInLeases(StreamIdentifier streamIdentifier, List<Lease> leases) {
@@ -230,9 +250,7 @@ class PeriodicShardSyncManager {
         List<Lease> activeLeases = leases.stream()
                 .filter(lease -> lease.checkpoint() != null && !lease.checkpoint().isShardEnd()).collect(Collectors.toList());
         List<Lease> activeLeasesWithHashRanges = fillWithHashRangesIfRequired(streamIdentifier, activeLeases);
-        List<HashKeyRangeForLease> hashRangesForActiveLeases = activeLeasesWithHashRanges.stream()
-                .map(lease -> lease.hashKeyRangeForLease()).collect(Collectors.toList());
-        return checkForHoleInHashKeyRanges(streamIdentifier, hashRangesForActiveLeases, MIN_HASH_KEY, MAX_HASH_KEY);
+        return checkForHoleInHashKeyRanges(streamIdentifier, activeLeasesWithHashRanges);
     }
 
     // If leases are missing hashranges information, update the leases in-memory as well as in the lease storage
@@ -259,7 +277,7 @@ class PeriodicShardSyncManager {
                     }
                     lease.hashKeyRange(fromHashKeyRange(shard.hashKeyRange()));
                     try {
-                        leaseRefresher.updateLease(lease, UpdateField.HASH_KEY_RANGE);
+                        leaseRefresher.updateLeaseWithMetaInfo(lease, UpdateField.HASH_KEY_RANGE);
                     } catch (Exception e) {
                         log.warn(
                                 "Unable to update hash range key information for lease {} of stream {}. This may result in explicit lease sync.",
@@ -275,38 +293,46 @@ class PeriodicShardSyncManager {
 
     @VisibleForTesting
     static Optional<HashRangeHole> checkForHoleInHashKeyRanges(StreamIdentifier streamIdentifier,
-            List<HashKeyRangeForLease> hashKeyRanges, BigInteger minHashKey, BigInteger maxHashKey) {
-        // Sort and merge the overlapping hash ranges.
-        List<HashKeyRangeForLease> mergedHashKeyRanges = sortAndMergeOverlappingHashRanges(hashKeyRanges);
-
-        if(mergedHashKeyRanges.isEmpty()) {
-            log.error("No valid hashranges found for stream {} between {} and {}.", streamIdentifier,
-                    MIN_HASH_KEY, MAX_HASH_KEY);
-            return Optional.of(new HashRangeHole(new HashKeyRangeForLease(MIN_HASH_KEY, MAX_HASH_KEY),
-                    new HashKeyRangeForLease(MIN_HASH_KEY, MAX_HASH_KEY)));
+            List<Lease> leasesWithHashKeyRanges) {
+        // Sort the hash ranges by starting hash key.
+        List<Lease> sortedLeasesWithHashKeyRanges = sortLeasesByHashRange(leasesWithHashKeyRanges);
+        if(sortedLeasesWithHashKeyRanges.isEmpty()) {
+            log.error("No leases with valid hashranges found for stream {}", streamIdentifier);
+            return Optional.of(new HashRangeHole());
         }
-
         // Validate for hashranges bounds.
-        if (!mergedHashKeyRanges.get(0).startingHashKey().equals(minHashKey) || !mergedHashKeyRanges
-                .get(mergedHashKeyRanges.size() - 1).endingHashKey().equals(maxHashKey)) {
+        if (!sortedLeasesWithHashKeyRanges.get(0).hashKeyRangeForLease().startingHashKey().equals(MIN_HASH_KEY) || !sortedLeasesWithHashKeyRanges
+                .get(sortedLeasesWithHashKeyRanges.size() - 1).hashKeyRangeForLease().endingHashKey().equals(MAX_HASH_KEY)) {
             log.error("Incomplete hash range found for stream {} between {} and {}.", streamIdentifier,
-                    mergedHashKeyRanges.get(0),
-                    mergedHashKeyRanges.get(mergedHashKeyRanges.size() - 1));
-            return Optional.of(new HashRangeHole(mergedHashKeyRanges.get(0),
-                    mergedHashKeyRanges.get(mergedHashKeyRanges.size() - 1)));
+                    sortedLeasesWithHashKeyRanges.get(0),
+                    sortedLeasesWithHashKeyRanges.get(sortedLeasesWithHashKeyRanges.size() - 1));
+            return Optional.of(new HashRangeHole(sortedLeasesWithHashKeyRanges.get(0),
+                    sortedLeasesWithHashKeyRanges.get(sortedLeasesWithHashKeyRanges.size() - 1)));
         }
         // Check for any holes in the sorted hashrange intervals.
-        if (mergedHashKeyRanges.size() > 1) {
-            for (int i = 1; i < mergedHashKeyRanges.size(); i++) {
-                final HashKeyRangeForLease hashRangeAtStartOfPossibleHole = mergedHashKeyRanges.get(i - 1);
-                final HashKeyRangeForLease hashRangeAtEndOfPossibleHole = mergedHashKeyRanges.get(i);
-                final BigInteger startOfPossibleHole = hashRangeAtStartOfPossibleHole.endingHashKey();
-                final BigInteger endOfPossibleHole = hashRangeAtEndOfPossibleHole.startingHashKey();
-
-                if (!endOfPossibleHole.subtract(startOfPossibleHole).equals(BigInteger.ONE)) {
-                    log.error("Incomplete hash range found for {} between {} and {}.", streamIdentifier,
-                            hashRangeAtStartOfPossibleHole, hashRangeAtEndOfPossibleHole);
-                    return Optional.of(new HashRangeHole(hashRangeAtStartOfPossibleHole, hashRangeAtEndOfPossibleHole));
+        if (sortedLeasesWithHashKeyRanges.size() > 1) {
+            Lease leftMostLeaseToReportInCaseOfHole = sortedLeasesWithHashKeyRanges.get(0);
+            HashKeyRangeForLease leftLeaseHashRange = leftMostLeaseToReportInCaseOfHole.hashKeyRangeForLease();
+            for (int i = 1; i < sortedLeasesWithHashKeyRanges.size(); i++) {
+                final HashKeyRangeForLease rightLeaseHashRange = sortedLeasesWithHashKeyRanges.get(i).hashKeyRangeForLease();
+                final BigInteger rangeDiff = rightLeaseHashRange.startingHashKey().subtract(leftLeaseHashRange.endingHashKey());
+                // Case of overlapping leases when the rangediff is 0 or negative.
+                // signum() will be -1 for negative and 0 if value is 0.
+                // Merge the range for further tracking.
+                if (rangeDiff.signum() <= 0) {
+                    leftLeaseHashRange = new HashKeyRangeForLease(leftLeaseHashRange.startingHashKey(),
+                            leftLeaseHashRange.endingHashKey().max(rightLeaseHashRange.endingHashKey()));
+                } else {
+                    // Case of non overlapping leases when rangediff is positive. signum() will be 1 for positive.
+                    // If rangeDiff is 1, then it is a case of continuous hashrange. If not, it is a hole.
+                    if (!rangeDiff.equals(BigInteger.ONE)) {
+                        log.error("Incomplete hash range found for {} between {} and {}.", streamIdentifier,
+                                leftMostLeaseToReportInCaseOfHole, sortedLeasesWithHashKeyRanges.get(i));
+                        return Optional.of(new HashRangeHole(leftMostLeaseToReportInCaseOfHole,
+                                sortedLeasesWithHashKeyRanges.get(i)));
+                    }
+                    leftMostLeaseToReportInCaseOfHole = sortedLeasesWithHashKeyRanges.get(i);
+                    leftLeaseHashRange = rightLeaseHashRange;
                 }
             }
         }
@@ -314,41 +340,31 @@ class PeriodicShardSyncManager {
     }
 
     @VisibleForTesting
-    static List<HashKeyRangeForLease> sortAndMergeOverlappingHashRanges(
-            List<HashKeyRangeForLease> hashKeyRanges) {
-        if (hashKeyRanges.size() == 0 || hashKeyRanges.size() == 1)
-            return hashKeyRanges;
-
-        Collections.sort(hashKeyRanges, new HashKeyRangeComparator());
-
-        final HashKeyRangeForLease first = hashKeyRanges.get(0);
-        BigInteger start = first.startingHashKey();
-        BigInteger end = first.endingHashKey();
-
-        final List<HashKeyRangeForLease> result = new ArrayList<>();
-
-        for (int i = 1; i < hashKeyRanges.size(); i++) {
-            HashKeyRangeForLease current = hashKeyRanges.get(i);
-            if (current.startingHashKey().compareTo(end) <= 0) {
-                end = current.endingHashKey().max(end);
-            } else {
-                result.add(new HashKeyRangeForLease(start, end));
-                start = current.startingHashKey();
-                end = current.endingHashKey();
-            }
-        }
-        result.add(new HashKeyRangeForLease(start, end));
-        return result;
+    static List<Lease> sortLeasesByHashRange(List<Lease> leasesWithHashKeyRanges) {
+        if (leasesWithHashKeyRanges.size() == 0 || leasesWithHashKeyRanges.size() == 1)
+            return leasesWithHashKeyRanges;
+        Collections.sort(leasesWithHashKeyRanges, new HashKeyRangeComparator());
+        return leasesWithHashKeyRanges;
     }
 
     @Value
     private static class HashRangeHole {
-        private final HashKeyRangeForLease hashRangeAtStartOfPossibleHole;
-        private final HashKeyRangeForLease hashRangeAtEndOfPossibleHole;
+        HashRangeHole() {
+            leaseAtEndOfPossibleHole = leaseAtStartOfPossibleHole = null;
+        }
+
+        HashRangeHole(Lease leaseAtStartOfPossibleHole, Lease leaseAtEndOfPossibleHole) {
+            this.leaseAtStartOfPossibleHole = leaseAtStartOfPossibleHole;
+            this.leaseAtEndOfPossibleHole = leaseAtEndOfPossibleHole;
+        }
+
+        private final Lease leaseAtStartOfPossibleHole;
+        private final Lease leaseAtEndOfPossibleHole;
     }
 
     private static class HashRangeHoleTracker {
         private HashRangeHole hashRangeHole;
+        @Getter
         private Integer numConsecutiveHoles;
 
         public boolean hasHighConfidenceOfHoleWith(@NonNull HashRangeHole hashRangeHole) {
@@ -365,12 +381,17 @@ class PeriodicShardSyncManager {
     /**
      * Helper class to compare leases based on their hash range.
      */
-    private static class HashKeyRangeComparator implements Comparator<HashKeyRangeForLease>, Serializable {
+    private static class HashKeyRangeComparator implements Comparator<Lease>, Serializable {
 
         private static final long serialVersionUID = 1L;
 
-        @Override public int compare(HashKeyRangeForLease hashKeyRange, HashKeyRangeForLease otherHashKeyRange) {
-            return hashKeyRange.startingHashKey().compareTo(otherHashKeyRange.startingHashKey());
+        @Override public int compare(Lease lease, Lease otherLease) {
+            Validate.notNull(lease);
+            Validate.notNull(otherLease);
+            Validate.notNull(lease.hashKeyRangeForLease());
+            Validate.notNull(otherLease.hashKeyRangeForLease());
+            return lease.hashKeyRangeForLease().startingHashKey()
+                    .compareTo(otherLease.hashKeyRangeForLease().startingHashKey());
         }
     }
 }

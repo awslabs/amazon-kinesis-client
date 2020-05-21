@@ -201,7 +201,7 @@ public interface LeaseRefresher {
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    default void updateLease(Lease lease, UpdateField updateField)
+    default void updateLeaseWithMetaInfo(Lease lease, UpdateField updateField)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         throw new UnsupportedOperationException("updateLeaseWithNoExpectation is not implemented");
     }
