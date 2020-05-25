@@ -75,7 +75,7 @@ public class BlockOnParentShardTaskTest {
      * @throws DependencyException
      */
     @Test
-    public final void testCallWhenParentsHaveFinished()
+    public final void testCallShouldNotThrowBlockedOnParentWhenParentsHaveFinished()
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
 
         ShardInfo shardInfo = null;
@@ -116,7 +116,7 @@ public class BlockOnParentShardTaskTest {
      * @throws DependencyException
      */
     @Test
-    public final void testCallWhenParentsHaveFinishedMultiStream()
+    public final void testCallShouldNotThrowBlockedOnParentWhenParentsHaveFinishedMultiStream()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
 
         ShardInfo shardInfo = null;
