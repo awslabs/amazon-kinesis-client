@@ -352,8 +352,6 @@ public class Scheduler implements Runnable {
                     }
                     log.info("Scheduling periodicShardSync");
                     leaderElectedPeriodicShardSyncManager.start();
-                    // TODO: enable periodicShardSync after https://github.com/jushkem/amazon-kinesis-client/pull/2 is merged
-                    // TODO: Determine if waitUntilHashRangeCovered() is needed.
                     streamSyncWatch.start();
                     isDone = true;
                 } catch (LeasingException e) {

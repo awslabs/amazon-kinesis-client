@@ -32,6 +32,13 @@ public class HashKeyRangeForLease {
     private final BigInteger startingHashKey;
     private final BigInteger endingHashKey;
 
+    public HashKeyRangeForLease(BigInteger startingHashKey, BigInteger endingHashKey) {
+        Validate.isTrue(startingHashKey.compareTo(endingHashKey) < 0,
+                "StartingHashKey %s must be less than EndingHashKey %s ", startingHashKey, endingHashKey);
+        this.startingHashKey = startingHashKey;
+        this.endingHashKey = endingHashKey;
+    }
+
     /**
      * Serialize the startingHashKey for persisting in external storage
      *

@@ -15,6 +15,7 @@
 package software.amazon.kinesis.coordinator;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ComparisonChain;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
@@ -245,7 +246,8 @@ class PeriodicShardSyncManager {
         private final String reasonForDecision;
     }
 
-    private Optional<HashRangeHole> hasHoleInLeases(StreamIdentifier streamIdentifier, List<Lease> leases) {
+    @VisibleForTesting
+    Optional<HashRangeHole> hasHoleInLeases(StreamIdentifier streamIdentifier, List<Lease> leases) {
         // Filter the leases with any checkpoint other than shard end.
         List<Lease> activeLeases = leases.stream()
                 .filter(lease -> lease.checkpoint() != null && !lease.checkpoint().isShardEnd()).collect(Collectors.toList());
@@ -385,13 +387,16 @@ class PeriodicShardSyncManager {
 
         private static final long serialVersionUID = 1L;
 
-        @Override public int compare(Lease lease, Lease otherLease) {
+        @Override
+        public int compare(Lease lease, Lease otherLease) {
             Validate.notNull(lease);
             Validate.notNull(otherLease);
             Validate.notNull(lease.hashKeyRangeForLease());
             Validate.notNull(otherLease.hashKeyRangeForLease());
-            return lease.hashKeyRangeForLease().startingHashKey()
-                    .compareTo(otherLease.hashKeyRangeForLease().startingHashKey());
+            return ComparisonChain.start()
+                    .compare(lease.hashKeyRangeForLease().startingHashKey(), otherLease.hashKeyRangeForLease().startingHashKey())
+                    .compare(lease.hashKeyRangeForLease().endingHashKey(), otherLease.hashKeyRangeForLease().endingHashKey())
+                    .result();
         }
     }
 }
