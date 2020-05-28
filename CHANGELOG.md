@@ -1,5 +1,14 @@
 # Changelog
 
+### Release 2.2.11 (May 28, 2020)
+[Milestone#51](https://github.com/awslabs/amazon-kinesis-client/milestone/51)
+* Adjusting HTTP2 initial window size to 512 KB
+  * [PR#706](https://github.com/awslabs/amazon-kinesis-client/pull/706)
+* Updating protobuf-java to version 3.11.4
+  * [PR#718](https://github.com/awslabs/amazon-kinesis-client/pull/718)
+* Updating the AWS Java SDK to version 2.13.25
+  * [PR#722](https://github.com/awslabs/amazon-kinesis-client/pull/722)
+  
 ### Release 2.2.10 (March 26, 2020)
 [Milestone#48](https://github.com/awslabs/amazon-kinesis-client/milestone/48)
 * Fixing a bug in DynamoDB billing mode support for special regions.

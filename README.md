@@ -47,7 +47,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.2.9</version>
+      <version>2.2.11</version>
   </dependency>
   ```
 
@@ -63,12 +63,14 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Release 2.2.10 (March 26, 2020)
-[Milestone#48](https://github.com/awslabs/amazon-kinesis-client/milestone/48)
-* Fixing a bug in DynamoDB billing mode support for special regions.
-  * [PR#703](https://github.com/awslabs/amazon-kinesis-client/pull/703)
-* Adding request id logging to ShardConsumerSubscriber.
-  * [PR#705](https://github.com/awslabs/amazon-kinesis-client/pull/705)
+### Release 2.2.11 (May 28, 2020)
+[Milestone#51](https://github.com/awslabs/amazon-kinesis-client/milestone/51)
+* Adjusting HTTP2 initial window size to 512 KB
+  * [PR#706](https://github.com/awslabs/amazon-kinesis-client/pull/706)
+* Updating protobuf-java to version 3.11.4
+  * [PR#718](https://github.com/awslabs/amazon-kinesis-client/pull/718)
+* Updating the AWS Java SDK to version 2.13.25
+  * [PR#722](https://github.com/awslabs/amazon-kinesis-client/pull/722)
 
 ### For remaining release notes check **[CHANGELOG.md][changelog-md]**.
 
