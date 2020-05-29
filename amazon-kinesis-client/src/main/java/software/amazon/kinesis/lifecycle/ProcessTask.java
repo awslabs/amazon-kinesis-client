@@ -76,8 +76,7 @@ public class ProcessTask implements ConsumerTask {
                        @NonNull AggregatorUtil aggregatorUtil,
                        @NonNull MetricsFactory metricsFactory) {
         this.shardInfo = shardInfo;
-        this.shardInfoId = shardInfo.streamIdentifierSerOpt().map(s -> s + ":" + shardInfo.shardId())
-                .orElse(shardInfo.shardId());
+        this.shardInfoId = ShardInfo.getLeaseKey(shardInfo);
         this.shardRecordProcessor = shardRecordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
         this.backoffTimeMillis = backoffTimeMillis;

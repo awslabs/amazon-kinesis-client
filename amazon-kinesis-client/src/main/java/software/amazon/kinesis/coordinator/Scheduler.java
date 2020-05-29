@@ -111,7 +111,6 @@ public class Scheduler implements Runnable {
     private static final long LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 3 * 1000L;
     private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 1 * 1000L;
     private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
-    private static final long HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS = 5000L;
     private static final long NEW_STREAM_CHECK_INTERVAL_MILLIS = 1 * 60 * 1000L;
     private static final String MULTI_STREAM_TRACKER = "MultiStreamTracker";
     private static final String ACTIVE_STREAMS_COUNT = "ActiveStreams.Count";
@@ -289,8 +288,8 @@ public class Scheduler implements Runnable {
         this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer(isMultiStreamMode);
         this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
         this.leaderElectedPeriodicShardSyncManager = new PeriodicShardSyncManager(
-                leaseManagementConfig.workerIdentifier(), leaderDecider, currentStreamConfigMap,
-                shardSyncTaskManagerProvider);
+                leaseManagementConfig.workerIdentifier(), leaderDecider, leaseRefresher, currentStreamConfigMap,
+                shardSyncTaskManagerProvider, isMultiStreamMode);
     }
 
     /**
@@ -351,11 +350,8 @@ public class Scheduler implements Runnable {
                     } else {
                         log.info("LeaseCoordinator is already running. No need to start it.");
                     }
-                    log.info("Scheduling periodicShardSync)");
-                    // leaderElectedPeriodicShardSyncManager.start(shardSyncTasks);
-                    // TODO: enable periodicShardSync after https://github.com/jushkem/amazon-kinesis-client/pull/2 is merged
-                    // TODO: Determine if waitUntilHashRangeCovered() is needed.
-                    //waitUntilHashRangeCovered();
+                    log.info("Scheduling periodicShardSync");
+                    leaderElectedPeriodicShardSyncManager.start();
                     streamSyncWatch.start();
                     isDone = true;
                 } catch (LeasingException e) {
@@ -398,18 +394,6 @@ public class Scheduler implements Runnable {
         return shouldInitiateLeaseSync;
     }
 
-    private void waitUntilHashRangeCovered() throws InterruptedException {
-
-        // TODO: Currently this call is not in use. We may need to implement this method later. Created SIM to track the work: https://sim.amazon.com/issues/KinesisLTR-202
-        // TODO: For future implementation, streamToShardSyncTaskManagerMap might not contain the most up to date snapshot of active streams.
-        // Should use currentStreamConfigMap to determine the streams to check.
-        while (!leaderElectedPeriodicShardSyncManager.hashRangeCovered()) {
-            // wait until entire hash range is covered
-            log.info("Hash range is not covered yet. Checking again in {} ms", HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS);
-            Thread.sleep(HASH_RANGE_COVERAGE_CHECK_FREQUENCY_MILLIS);
-        }
-    }
-
     @VisibleForTesting
     void runProcessLoop() {
         try {
@@ -431,7 +415,7 @@ public class Scheduler implements Runnable {
                 final StreamIdentifier streamIdentifier = getStreamIdentifier(completedShard.streamIdentifierSerOpt());
                 final StreamConfig streamConfig = currentStreamConfigMap
                         .getOrDefault(streamIdentifier, getDefaultStreamConfig(streamIdentifier));
-                if (createOrGetShardSyncTaskManager(streamConfig).syncShardAndLeaseInfo()) {
+                if (createOrGetShardSyncTaskManager(streamConfig).submitShardSyncTask()) {
                     log.info("{} : Found completed shard, initiated new ShardSyncTak for {} ",
                             streamIdentifier.serialize(), completedShard.toString());
                 }
@@ -494,7 +478,7 @@ public class Scheduler implements Runnable {
                     if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
                         log.info("Found new stream to process: " + streamIdentifier + ". Syncing shards of that stream.");
                         ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(newStreamConfigMap.get(streamIdentifier));
-                        shardSyncTaskManager.syncShardAndLeaseInfo();
+                        shardSyncTaskManager.submitShardSyncTask();
                         currentStreamConfigMap.put(streamIdentifier, newStreamConfigMap.get(streamIdentifier));
                         streamsSynced.add(streamIdentifier);
                     } else {
@@ -522,7 +506,7 @@ public class Scheduler implements Runnable {
                                     + ". Syncing shards of that stream.");
                             ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(
                                     currentStreamConfigMap.get(streamIdentifier));
-                            shardSyncTaskManager.syncShardAndLeaseInfo();
+                            shardSyncTaskManager.submitShardSyncTask();
                             currentSetOfStreamsIter.remove();
                             streamsSynced.add(streamIdentifier);
                         }
@@ -865,8 +849,7 @@ public class Scheduler implements Runnable {
                     if (!firstItem) {
                         builder.append(", ");
                     }
-                    builder.append(shardInfo.streamIdentifierSerOpt().map(s -> s + ":" + shardInfo.shardId())
-                            .orElse(shardInfo.shardId()));
+                    builder.append(ShardInfo.getLeaseKey(shardInfo));
                     firstItem = false;
                 }
                 slog.info("Current stream shard assignments: " + builder.toString());
@@ -962,8 +945,7 @@ public class Scheduler implements Runnable {
                 ShardConsumer consumer = shardInfoShardConsumerMap.get(shard);
                 if (consumer.leaseLost()) {
                     shardInfoShardConsumerMap.remove(shard);
-                    log.debug("Removed consumer for {} as lease has been lost",
-                            shard.streamIdentifierSerOpt().map(s -> s + ":" + shard.shardId()).orElse(shard.shardId()));
+                    log.debug("Removed consumer for {} as lease has been lost", ShardInfo.getLeaseKey(shard));
                 } else {
                     consumer.executeLifecycle();
                 }

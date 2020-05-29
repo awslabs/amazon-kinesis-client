@@ -15,15 +15,10 @@
 package software.amazon.kinesis.lifecycle;
 
 import com.google.common.annotations.VisibleForTesting;
-
-import java.util.List;
-import java.util.function.Function;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
-import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -47,8 +42,10 @@ import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -89,8 +86,8 @@ public class ShutdownTask implements ConsumerTask {
 
     private final List<ChildShard> childShards;
 
-    private static final Function<ShardInfo, String> leaseKeyProvider = shardInfo -> shardInfo
-            .streamIdentifierSerOpt().map(s -> s + ":" + shardInfo.shardId()).orElse(shardInfo.shardId());
+    private static final Function<ShardInfo, String> leaseKeyProvider = shardInfo -> ShardInfo.getLeaseKey(shardInfo);
+
     /*
      * Invokes ShardRecordProcessor shutdown() API.
      * (non-Javadoc)
@@ -118,7 +115,7 @@ public class ShutdownTask implements ConsumerTask {
                     // This scenario could happen when customer deletes the stream while leaving the KCL application running.
                     if (!CollectionUtils.isNullOrEmpty(childShards)) {
                         createLeasesForChildShardsIfNotExist();
-                        updateLeasesForChildShards();
+                        updateLeaseWithChildShards();
                     } else {
                         log.warn("Shard {} no longer exists. Shutting down consumer with SHARD_END reason without creating leases for child shards.", leaseKeyProvider.apply(shardInfo));
                     }
@@ -192,13 +189,14 @@ public class ShutdownTask implements ConsumerTask {
         }
     }
 
-    private void updateLeasesForChildShards()
+    private void updateLeaseWithChildShards()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
         Set<String> childShardIds = childShards.stream().map(ChildShard::shardId).collect(Collectors.toSet());
 
         final Lease updatedLease = currentLease.copy();
         updatedLease.childShardIds(childShardIds);
+        // TODO : Make changes to use the new leaserefresher#updateLease(Lease lease, UpdateField updateField)
         final boolean updateResult = leaseCoordinator.updateLease(updatedLease, UUID.fromString(shardInfo.concurrencyToken()), SHUTDOWN_TASK_OPERATION, leaseKeyProvider.apply(shardInfo));
         if (!updateResult) {
             throw new InvalidStateException("Failed to update parent lease with child shard information for shard " + shardInfo.shardId());
@@ -219,28 +217,6 @@ public class ShutdownTask implements ConsumerTask {
     @VisibleForTesting
     public ShutdownReason getReason() {
         return reason;
-    }
-
-    private boolean isShardInContextParentOfAny(List<Shard> shards) {
-        for(Shard shard : shards) {
-            if (isChildShardOfShardInContext(shard)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isChildShardOfShardInContext(Shard shard) {
-        return (StringUtils.equals(shard.parentShardId(), shardInfo.shardId())
-                || StringUtils.equals(shard.adjacentParentShardId(), shardInfo.shardId()));
-    }
-
-    private void dropLease() {
-        Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
-        leaseCoordinator.dropLease(currentLease);
-        if(currentLease != null) {
-            log.warn("Dropped lease for shutting down ShardConsumer: " + currentLease.leaseKey());
-        }
     }
 
 }

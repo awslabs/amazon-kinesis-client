@@ -163,7 +163,6 @@ public class Lease {
         pendingCheckpointState(lease.pendingCheckpointState);
         parentShardIds(lease.parentShardIds);
         childShardIds(lease.childShardIds);
-        hashKeyRange(lease.hashKeyRangeForLease);
     }
 
     /**
@@ -308,4 +307,6 @@ public class Lease {
     public Lease copy() {
         return new Lease(this);
     }
+
+
 }

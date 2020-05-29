@@ -24,6 +24,7 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
@@ -70,8 +71,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         this.bufferSize = bufferSize;
         this.shardConsumer = shardConsumer;
         this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
-        this.shardInfoId = shardConsumer.shardInfo().streamIdentifierSerOpt()
-                .map(s -> s + ":" + shardConsumer.shardInfo().shardId()).orElse(shardConsumer.shardInfo().shardId());
+        this.shardInfoId = ShardInfo.getLeaseKey(shardConsumer.shardInfo());
     }
 
 

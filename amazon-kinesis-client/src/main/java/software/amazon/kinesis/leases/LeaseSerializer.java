@@ -108,6 +108,15 @@ public interface LeaseSerializer {
     Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease);
 
     /**
+     * @param lease
+     * @param updateField
+     * @return the attribute value map that updates application-specific data for a lease
+     */
+    default Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease, UpdateField updateField) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
      * @return the key schema for creating a DynamoDB table to store leases
      */
     Collection<KeySchemaElement> getKeySchema();
@@ -116,4 +125,5 @@ public interface LeaseSerializer {
      * @return attribute definitions for creating a DynamoDB table to store leases
      */
     Collection<AttributeDefinition> getAttributeDefinitions();
+
 }

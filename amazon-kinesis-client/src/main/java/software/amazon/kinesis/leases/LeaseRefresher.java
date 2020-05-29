@@ -105,7 +105,7 @@ public interface LeaseRefresher {
      * @throws ProvisionedThroughputException if DynamoDB get fails due to lack of capacity
      * @throws DependencyException if DynamoDB get fails in an unexpected way
      * 
-     * @return lease for the specified shardId, or null if one doesn't exist
+     * @return lease for the specified leaseKey, or null if one doesn't exist
      */
     Lease getLease(String leaseKey) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
@@ -190,6 +190,21 @@ public interface LeaseRefresher {
      */
     boolean updateLease(Lease lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+
+    /**
+     * Update application-specific fields of the given lease in DynamoDB. Does not update fields managed by the leasing
+     * library such as leaseCounter, leaseOwner, or leaseKey.
+     *
+     * @return true if update succeeded, false otherwise
+     *
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
+     */
+    default void updateLeaseWithMetaInfo(Lease lease, UpdateField updateField)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throw new UnsupportedOperationException("updateLeaseWithNoExpectation is not implemented");
+    }
 
     /**
      * Check (synchronously) if there are any leases in the lease table.

@@ -35,6 +35,7 @@ import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseSerializer;
+import software.amazon.kinesis.leases.UpdateField;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -657,6 +658,27 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         lease.leaseCounter(lease.leaseCounter() + 1);
         return true;
+    }
+
+    @Override
+    public void updateLeaseWithMetaInfo(Lease lease, UpdateField updateField)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        log.debug("Updating lease without expectation {}", lease);
+        final AWSExceptionManager exceptionManager = createExceptionManager();
+        Map<String, AttributeValueUpdate> updates = serializer.getDynamoUpdateLeaseUpdate(lease, updateField);
+        UpdateItemRequest request = UpdateItemRequest.builder().tableName(table).key(serializer.getDynamoHashKey(lease))
+                .attributeUpdates(updates).build();
+        try {
+            try {
+                FutureUtils.resolveOrCancelFuture(dynamoDBClient.updateItem(request), dynamoDbRequestTimeout);
+            } catch (ExecutionException e) {
+                throw exceptionManager.apply(e.getCause());
+            } catch (InterruptedException e) {
+                throw new DependencyException(e);
+            }
+        } catch (DynamoDbException | TimeoutException e) {
+            throw convertAndRethrowExceptions("update", lease.leaseKey(), e);
+        }
     }
 
     /**

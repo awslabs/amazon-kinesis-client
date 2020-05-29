@@ -36,6 +36,7 @@ import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.leases.DynamoUtils;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseSerializer;
+import software.amazon.kinesis.leases.UpdateField;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -265,6 +266,28 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
             result.put(ENDING_HASH_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedEndingHashKey())));
         }
 
+        return result;
+    }
+
+    @Override
+    public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease,
+            UpdateField updateField) {
+        Map<String, AttributeValueUpdate> result = new HashMap<>();
+        switch (updateField) {
+        case CHILD_SHARDS:
+            if (!CollectionUtils.isNullOrEmpty(lease.childShardIds())) {
+                result.put(CHILD_SHARD_IDS_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.childShardIds())));
+            }
+            break;
+        case HASH_KEY_RANGE:
+            if (lease.hashKeyRangeForLease() != null) {
+                result.put(STARTING_HASH_KEY, putUpdate(
+                        DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedStartingHashKey())));
+                result.put(ENDING_HASH_KEY, putUpdate(
+                        DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedEndingHashKey())));
+            }
+            break;
+        }
         return result;
     }
 

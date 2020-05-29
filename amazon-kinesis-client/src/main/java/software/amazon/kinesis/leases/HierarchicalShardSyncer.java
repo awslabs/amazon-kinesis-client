@@ -45,7 +45,6 @@ import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -341,7 +340,7 @@ public class HierarchicalShardSyncer {
                         "Stream " + streamName + " is not in ACTIVE OR UPDATING state - will retry getting the shard list.");
             }
 
-            if (hashRangeOfShardsIsComplete(shards)) {
+            if (isHashRangeOfShardsComplete(shards)) {
                 return shards;
             }
 
@@ -359,7 +358,7 @@ public class HierarchicalShardSyncer {
                 " is not in ACTIVE OR UPDATING state - will retry getting the shard list."));
     }
 
-    private static boolean hashRangeOfShardsIsComplete(@NonNull List<Shard> shards) {
+    private static boolean isHashRangeOfShardsComplete(@NonNull List<Shard> shards) {
 
         if (shards.isEmpty()) {
             throw new IllegalStateException("No shards found when attempting to validate complete hash range.");
