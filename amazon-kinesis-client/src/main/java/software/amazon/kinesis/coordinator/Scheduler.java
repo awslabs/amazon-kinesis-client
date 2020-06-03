@@ -891,7 +891,6 @@ public class Scheduler implements Runnable {
 
     protected ShardConsumer buildConsumer(@NonNull final ShardInfo shardInfo,
                                           @NonNull final ShardRecordProcessorFactory shardRecordProcessorFactory) {
-        RecordsPublisher cache = retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, metricsFactory);
         ShardRecordProcessorCheckpointer checkpointer = coordinatorConfig.coordinatorFactory().createRecordProcessorCheckpointer(shardInfo,
                         checkpoint);
         // The only case where streamName is not available will be when multistreamtracker not set. In this case,
@@ -902,6 +901,7 @@ public class Scheduler implements Runnable {
         // to gracefully complete the reading.
         final StreamConfig streamConfig = currentStreamConfigMap.getOrDefault(streamIdentifier, getDefaultStreamConfig(streamIdentifier));
         Validate.notNull(streamConfig, "StreamConfig should not be null");
+        RecordsPublisher cache = retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, streamConfig, metricsFactory);
         ShardConsumerArgument argument = new ShardConsumerArgument(shardInfo,
                 streamConfig.streamIdentifier(),
                 leaseCoordinator,

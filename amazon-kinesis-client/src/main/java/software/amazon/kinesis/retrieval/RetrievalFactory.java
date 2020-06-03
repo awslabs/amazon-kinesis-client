@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.retrieval;
 
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
 
@@ -24,5 +25,10 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 public interface RetrievalFactory {
     GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(ShardInfo shardInfo, MetricsFactory metricsFactory);
 
+    @Deprecated
     RecordsPublisher createGetRecordsCache(ShardInfo shardInfo, MetricsFactory metricsFactory);
+
+    default RecordsPublisher createGetRecordsCache(ShardInfo shardInfo, StreamConfig streamConfig, MetricsFactory metricsFactory) {
+        return createGetRecordsCache(shardInfo, metricsFactory);
+    }
 }

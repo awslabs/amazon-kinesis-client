@@ -15,14 +15,15 @@
 
 package software.amazon.kinesis.common;
 
-import lombok.Value;
+import lombok.Data;
 import lombok.experimental.Accessors;
 
-@Value
+@Data
 @Accessors(fluent = true)
 public class StreamConfig {
-    StreamIdentifier streamIdentifier;
-    InitialPositionInStreamExtended initialPositionInStreamExtended;
+    private final StreamIdentifier streamIdentifier;
+    private final InitialPositionInStreamExtended initialPositionInStreamExtended;
+    private String consumerArn;
 }
 
 

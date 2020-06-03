@@ -25,12 +25,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -50,6 +52,13 @@ public class FanOutConfigTest {
     private FanOutConsumerRegistration consumerRegistration;
     @Mock
     private KinesisAsyncClient kinesisClient;
+    @Mock
+    private StreamConfig streamConfig;
+
+    @Before
+    public void setup() {
+        when(streamConfig.consumerArn()).thenReturn(null);
+    }
 
     @Test
     public void testNoRegisterIfConsumerArnSet() throws Exception {
@@ -68,9 +77,22 @@ public class FanOutConfigTest {
         ShardInfo shardInfo = mock(ShardInfo.class);
 //        doReturn(Optional.of(StreamIdentifier.singleStreamInstance(TEST_STREAM_NAME).serialize())).when(shardInfo).streamIdentifier();
         doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
-        retrievalFactory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
+        retrievalFactory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
         assertThat(retrievalFactory, not(nullValue()));
         verify(consumerRegistration).getOrCreateStreamConsumerArn();
+    }
+
+    @Test
+    public void testRegisterNotCalledWhenConsumerArnSetInMultiStreamMode() throws Exception {
+        when(streamConfig.consumerArn()).thenReturn("consumerArn");
+        FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
+                .streamName(TEST_STREAM_NAME);
+        RetrievalFactory retrievalFactory = config.retrievalFactory();
+        ShardInfo shardInfo = mock(ShardInfo.class);
+        doReturn(Optional.of("account:stream:12345")).when(shardInfo).streamIdentifierSerOpt();
+        retrievalFactory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
+        assertThat(retrievalFactory, not(nullValue()));
+        verify(consumerRegistration, never()).getOrCreateStreamConsumerArn();
     }
 
     @Test
@@ -94,7 +116,7 @@ public class FanOutConfigTest {
         RetrievalFactory factory = config.retrievalFactory();
         ShardInfo shardInfo = mock(ShardInfo.class);
         doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
-        factory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
+        factory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
         assertThat(factory, not(nullValue()));
 
         TestingConfig testingConfig = (TestingConfig) config;
@@ -109,7 +131,7 @@ public class FanOutConfigTest {
         RetrievalFactory factory = config.retrievalFactory();
         ShardInfo shardInfo = mock(ShardInfo.class);
         doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
-        factory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
+        factory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
         assertThat(factory, not(nullValue()));
         TestingConfig testingConfig = (TestingConfig) config;
         assertThat(testingConfig.stream, equalTo(TEST_STREAM_NAME));
@@ -123,7 +145,7 @@ public class FanOutConfigTest {
         RetrievalFactory factory = config.retrievalFactory();
         ShardInfo shardInfo = mock(ShardInfo.class);
         doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
-        factory.createGetRecordsCache(shardInfo, mock(MetricsFactory.class));
+        factory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
         assertThat(factory, not(nullValue()));
 
         TestingConfig testingConfig = (TestingConfig) config;

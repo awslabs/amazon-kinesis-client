@@ -63,6 +63,7 @@ public class StreamIdentifier {
 
     /**
      * Create a multi stream instance for StreamIdentifier from serialized stream identifier.
+     * The serialized stream identifier should be of the format account:stream:creationepoch
      * @param streamIdentifierSer
      * @return StreamIdentifier
      */
