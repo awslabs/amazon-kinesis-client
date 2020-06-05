@@ -15,6 +15,8 @@
 package software.amazon.kinesis.leases.dynamodb;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyLong;
@@ -54,6 +56,8 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
+import software.amazon.awssdk.services.dynamodb.model.TableDescription;
+import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
@@ -147,6 +151,46 @@ public class DynamoDBLeaseRefresherTest {
         when(leaseSerializer.getDynamoNonexistantExpectation()).thenReturn(Collections.emptyMap());
 
         verifyCancel(mockPutItemFuture, () -> leaseRefresher.createLeaseIfNotExists(lease));
+    }
+
+    @Test
+    public void testWaitUntilLeaseTableExistsUpdatingStatus() throws Exception {
+        when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(anyLong(), any()))
+                .thenReturn(DescribeTableResponse.builder()
+                        .table(TableDescription.builder().tableStatus(TableStatus.UPDATING).build())
+                        .build());
+        assertTrue(leaseRefresher.waitUntilLeaseTableExists(0, 0));
+    }
+
+    @Test
+    public void testWaitUntilLeaseTableExistsActiveStatus() throws Exception {
+        when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(anyLong(), any()))
+                .thenReturn(DescribeTableResponse.builder()
+                        .table(TableDescription.builder().tableStatus(TableStatus.ACTIVE).build())
+                        .build());
+        assertTrue(leaseRefresher.waitUntilLeaseTableExists(0, 0));
+    }
+
+    @Test
+    public void testWaitUntilLeaseTableExistsCreatingStatus() throws Exception {
+        when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(anyLong(), any()))
+                .thenReturn(DescribeTableResponse.builder()
+                        .table(TableDescription.builder().tableStatus(TableStatus.CREATING).build())
+                        .build());
+        assertFalse(leaseRefresher.waitUntilLeaseTableExists(0, 0));
+    }
+
+    @Test
+    public void testWaitUntilLeaseTableExistsDeletingStatus() throws Exception {
+        when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(anyLong(), any()))
+                .thenReturn(DescribeTableResponse.builder()
+                        .table(TableDescription.builder().tableStatus(TableStatus.DELETING).build())
+                        .build());
+        assertFalse(leaseRefresher.waitUntilLeaseTableExists(0, 0));
     }
 
     @Test

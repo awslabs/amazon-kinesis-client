@@ -190,7 +190,8 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      */
     @Override
     public boolean leaseTableExists() throws DependencyException {
-        return TableStatus.ACTIVE == tableStatus();
+        TableStatus tableStatus = tableStatus();
+        return TableStatus.ACTIVE == tableStatus || TableStatus.UPDATING == tableStatus;
     }
 
     private TableStatus tableStatus() throws DependencyException {
