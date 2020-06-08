@@ -74,7 +74,7 @@ public class HierarchicalShardSyncer {
 
     private final boolean isMultiStreamMode;
 
-    private String streamIdentifier = "";
+    private final String streamIdentifier;
 
     private static final String MIN_HASH_KEY = BigInteger.ZERO.toString();
     private static final String MAX_HASH_KEY = new BigInteger("2").pow(128).subtract(BigInteger.ONE).toString();
@@ -84,10 +84,12 @@ public class HierarchicalShardSyncer {
 
     public HierarchicalShardSyncer() {
         isMultiStreamMode = false;
+        streamIdentifier = "SingleStreamMode";
     }
 
-    public HierarchicalShardSyncer(final boolean isMultiStreamMode) {
+    public HierarchicalShardSyncer(final boolean isMultiStreamMode, final String streamIdentifier) {
         this.isMultiStreamMode = isMultiStreamMode;
+        this.streamIdentifier = streamIdentifier;
     }
 
     private static final BiFunction<Lease, MultiStreamArgs, String> shardIdFromLeaseDeducer =
@@ -118,7 +120,6 @@ public class HierarchicalShardSyncer {
             final MetricsScope scope, final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
             final boolean garbageCollectLeases, final boolean isLeaseTableEmpty)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException, InterruptedException {
-        this.streamIdentifier = shardDetector.streamIdentifier().serialize();
         final List<Shard> latestShards = isLeaseTableEmpty ?
                 getShardListAtInitialPosition(shardDetector, initialPosition) : getShardList(shardDetector);
         checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition, latestShards, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope, garbageCollectLeases,
@@ -132,7 +133,6 @@ public class HierarchicalShardSyncer {
             final MetricsScope scope, final boolean garbageCollectLeases, final boolean isLeaseTableEmpty)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
 
-        this.streamIdentifier = shardDetector.streamIdentifier().serialize();
         //TODO: Need to add multistream support for this https://sim.amazon.com/issues/KinesisLTR-191
 
         if (!CollectionUtils.isNullOrEmpty(latestShards)) {

@@ -112,7 +112,7 @@ public class HierarchicalShardSyncerTest {
     }
 
     private void setupMultiStream() {
-        hierarchicalShardSyncer = new HierarchicalShardSyncer(true);
+        hierarchicalShardSyncer = new HierarchicalShardSyncer(true, STREAM_IDENTIFIER);
         when(shardDetector.streamIdentifier()).thenReturn(StreamIdentifier.multiStreamInstance(STREAM_IDENTIFIER));
     }
 

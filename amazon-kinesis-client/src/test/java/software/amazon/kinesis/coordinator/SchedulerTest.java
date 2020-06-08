@@ -73,6 +73,7 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.exceptions.KinesisClientLibNonRetryableException;
+import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseManagementFactory;
@@ -153,11 +154,13 @@ public class SchedulerTest {
     @Mock
     private MultiStreamTracker multiStreamTracker;
 
-    private Map<StreamIdentifier, ShardSyncTaskManager> shardSyncTaskManagerMap = new HashMap<>();
-    private Map<StreamIdentifier, ShardDetector> shardDetectorMap = new HashMap<>();
+    private Map<StreamIdentifier, ShardSyncTaskManager> shardSyncTaskManagerMap;
+    private Map<StreamIdentifier, ShardDetector> shardDetectorMap;
 
     @Before
     public void setup() {
+        shardSyncTaskManagerMap = new HashMap<>();
+        shardDetectorMap = new HashMap<>();
         shardRecordProcessorFactory = new TestShardRecordProcessorFactory();
 
         checkpointConfig = new CheckpointConfig().checkpointFactory(new TestKinesisCheckpointFactory());
@@ -190,6 +193,7 @@ public class SchedulerTest {
                 });
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
         when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
+        when(shardSyncTaskManager.hierarchicalShardSyncer()).thenReturn(new HierarchicalShardSyncer());
         when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
         when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(StreamConfig.class), any(MetricsFactory.class))).thenReturn(recordsPublisher);
         when(shardDetector.streamIdentifier()).thenReturn(mock(StreamIdentifier.class));
@@ -334,6 +338,8 @@ public class SchedulerTest {
         scheduler.initialize();
         shardDetectorMap.values().stream()
                 .forEach(shardDetector -> verify(shardDetector, times(1)).listShards());
+        shardSyncTaskManagerMap.values().stream()
+                .forEach(shardSyncTM -> verify(shardSyncTM, times(1)).hierarchicalShardSyncer());
     }
 
     @Test
@@ -352,6 +358,10 @@ public class SchedulerTest {
                 .forEach(shardDetector -> verify(shardDetector, atLeast(2)).listShards());
         shardDetectorMap.values().stream()
                 .forEach(shardDetector -> verify(shardDetector, atMost(5)).listShards());
+        shardSyncTaskManagerMap.values().stream()
+                .forEach(shardSyncTM -> verify(shardSyncTM, atLeast(2)).hierarchicalShardSyncer());
+        shardSyncTaskManagerMap.values().stream()
+                .forEach(shardSyncTM -> verify(shardSyncTM, atMost(5)).hierarchicalShardSyncer());
     }
 
 
@@ -1035,6 +1045,8 @@ public class SchedulerTest {
             shardSyncTaskManagerMap.put(streamConfig.streamIdentifier(), shardSyncTaskManager);
             shardDetectorMap.put(streamConfig.streamIdentifier(), shardDetector);
             when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
+            final HierarchicalShardSyncer hierarchicalShardSyncer = new HierarchicalShardSyncer();
+            when(shardSyncTaskManager.hierarchicalShardSyncer()).thenReturn(hierarchicalShardSyncer);
             when(shardDetector.streamIdentifier()).thenReturn(streamConfig.streamIdentifier());
             when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
             if(shardSyncFirstAttemptFailure) {
