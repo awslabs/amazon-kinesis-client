@@ -96,6 +96,18 @@ public class FanOutConfigTest {
     }
 
     @Test
+    public void testRegisterCalledWhenConsumerArnNotSetInMultiStreamMode() throws Exception {
+        FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
+                .streamName(TEST_STREAM_NAME);
+        RetrievalFactory retrievalFactory = config.retrievalFactory();
+        ShardInfo shardInfo = mock(ShardInfo.class);
+        doReturn(Optional.of("account:stream:12345")).when(shardInfo).streamIdentifierSerOpt();
+        retrievalFactory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
+        assertThat(retrievalFactory, not(nullValue()));
+        verify(consumerRegistration).getOrCreateStreamConsumerArn();
+    }
+
+    @Test
     public void testDependencyExceptionInConsumerCreation() throws Exception {
         FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
                 .streamName(TEST_STREAM_NAME);
