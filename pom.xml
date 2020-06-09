@@ -37,10 +37,15 @@
       <artifactId>aws-java-sdk-dynamodb</artifactId>
       <version>${aws-java-sdk.version}</version>
     </dependency>
+    <!--<dependency>-->
+      <!--<groupId>com.amazonaws</groupId>-->
+      <!--<artifactId>aws-java-sdk-kinesis</artifactId>-->
+      <!--<version>${aws-java-sdk.version}</version>-->
+    <!--</dependency>-->
     <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-kinesis</artifactId>
-      <version>${aws-java-sdk.version}</version>
+      <groupId>dummy</groupId>
+      <artifactId>test</artifactId>
+      <version>1.0</version>
     </dependency>
     <dependency>
       <groupId>com.amazonaws</groupId>
