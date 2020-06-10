@@ -19,6 +19,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -37,8 +38,8 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
 
     private final KinesisAsyncClient kinesisClient;
     private final String defaultStreamName;
-    private final Function<String, String> consumerArnProvider;
-    private Map<String,String> streamToConsumerArnMap = new HashMap<>();
+    private final String defaultConsumerName;
+    private final Function<String, String> consumerArnCreator;
 
     @Override
     public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(final ShardInfo shardInfo,
@@ -48,19 +49,27 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
 
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
+            final StreamConfig streamConfig,
             final MetricsFactory metricsFactory) {
         final Optional<String> streamIdentifierStr = shardInfo.streamIdentifierSerOpt();
         final String streamName;
         if(streamIdentifierStr.isPresent()) {
             streamName = StreamIdentifier.multiStreamInstance(streamIdentifierStr.get()).streamName();
             return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
-                    streamToConsumerArnMap.computeIfAbsent(streamName, consumerArnProvider::apply),
+                    getOrCreateConsumerArn(streamName, streamConfig.consumerArn()),
                     streamIdentifierStr.get());
         } else {
-            streamName = defaultStreamName;
             return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
-                    streamToConsumerArnMap.computeIfAbsent(streamName, consumerArnProvider::apply));
+                    getOrCreateConsumerArn(defaultStreamName, defaultConsumerName));
         }
+    }
 
+    @Override
+    public RecordsPublisher createGetRecordsCache(ShardInfo shardInfo, MetricsFactory metricsFactory) {
+        throw new UnsupportedOperationException("FanoutRetrievalFactory needs StreamConfig Info");
+    }
+
+    private String getOrCreateConsumerArn(String streamName, String consumerArn) {
+        return consumerArn != null ? consumerArn : consumerArnCreator.apply(streamName);
     }
 }

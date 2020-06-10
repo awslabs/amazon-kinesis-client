@@ -80,17 +80,11 @@ public class FanOutConfig implements RetrievalSpecificConfig {
      */
     private long retryBackoffMillis = 1000;
 
-    @Override
-    public RetrievalFactory retrievalFactory() {
-        return new FanOutRetrievalFactory(kinesisClient, streamName, this::getOrCreateConsumerArn);
+    @Override public RetrievalFactory retrievalFactory() {
+        return new FanOutRetrievalFactory(kinesisClient, streamName, consumerArn, this::getOrCreateConsumerArn);
     }
 
-    // TODO : LTR. Need Stream Specific ConsumerArn to be passed from Customer
     private String getOrCreateConsumerArn(String streamName) {
-        if (consumerArn != null) {
-            return consumerArn;
-        }
-
         FanOutConsumerRegistration registration = createConsumerRegistration(streamName);
         try {
             return registration.getOrCreateStreamConsumerArn();
