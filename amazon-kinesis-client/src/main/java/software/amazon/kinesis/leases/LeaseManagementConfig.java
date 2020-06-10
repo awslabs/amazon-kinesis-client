@@ -276,19 +276,6 @@ public class LeaseManagementConfig {
         return hierarchicalShardSyncer;
     }
 
-    /**
-     * Vends HierarchicalShardSyncer based on MultiStreamingMode. With MultiStreamMode shard syncer creates
-     * leases to accommodate more than one stream.
-     * @param isMultiStreamingMode
-     * @return HierarchicalShardSyncer
-     */
-    public HierarchicalShardSyncer hierarchicalShardSyncer(boolean isMultiStreamingMode) {
-        if(hierarchicalShardSyncer == null) {
-            hierarchicalShardSyncer = new HierarchicalShardSyncer(isMultiStreamingMode);
-        }
-        return hierarchicalShardSyncer;
-    }
-
     @Deprecated
     public LeaseManagementFactory leaseManagementFactory() {
         if (leaseManagementFactory == null) {
@@ -351,12 +338,13 @@ public class LeaseManagementConfig {
                     cacheMissWarningModulus(),
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
-                    hierarchicalShardSyncer(isMultiStreamingMode),
+                    hierarchicalShardSyncer(),
                     tableCreatorCallback(),
                     dynamoDbRequestTimeout(),
                     billingMode(),
                     leaseSerializer,
-                    customShardDetectorProvider());
+                    customShardDetectorProvider(),
+                    isMultiStreamingMode);
         }
         return leaseManagementFactory;
     }

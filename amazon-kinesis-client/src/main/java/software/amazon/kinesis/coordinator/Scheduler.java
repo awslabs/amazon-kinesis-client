@@ -160,7 +160,7 @@ public class Scheduler implements Runnable {
     private final Function<StreamConfig, ShardDetector> shardDetectorProvider;
     private final boolean ignoreUnexpetedChildShards;
     private final AggregatorUtil aggregatorUtil;
-    private final HierarchicalShardSyncer hierarchicalShardSyncer;
+    private final Function<StreamConfig, HierarchicalShardSyncer> hierarchicalShardSyncerProvider;
     private final long schedulerInitializationBackoffTimeMillis;
     private final LeaderDecider leaderDecider;
     private final Map<StreamIdentifier, Instant> staleStreamDeletionMap = new HashMap<>();
@@ -284,8 +284,7 @@ public class Scheduler implements Runnable {
         this.shardDetectorProvider = streamConfig -> createOrGetShardSyncTaskManager(streamConfig).shardDetector();
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
-        // TODO : LTR : Check if this needs to be per stream.
-        this.hierarchicalShardSyncer = leaseManagementConfig.hierarchicalShardSyncer(isMultiStreamMode);
+        this.hierarchicalShardSyncerProvider = streamConfig -> createOrGetShardSyncTaskManager(streamConfig).hierarchicalShardSyncer();
         this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
         this.leaderElectedPeriodicShardSyncManager = new PeriodicShardSyncManager(
                 leaseManagementConfig.workerIdentifier(), leaderDecider, leaseRefresher, currentStreamConfigMap,
@@ -922,7 +921,7 @@ public class Scheduler implements Runnable {
                 ignoreUnexpetedChildShards,
                 shardDetectorProvider.apply(streamConfig),
                 aggregatorUtil,
-                hierarchicalShardSyncer,
+                hierarchicalShardSyncerProvider.apply(streamConfig),
                 metricsFactory);
         return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(),
                 argument, lifecycleConfig.taskExecutionListener(), lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
