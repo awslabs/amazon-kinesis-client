@@ -27,7 +27,6 @@ public class ShardSyncer {
      * @param shardDetector
      * @param leaseRefresher
      * @param initialPosition
-     * @param cleanupLeasesOfCompletedShards
      * @param ignoreUnexpectedChildShards
      * @param scope
      * @throws DependencyException
@@ -38,10 +37,9 @@ public class ShardSyncer {
     @Deprecated
     public static synchronized void checkAndCreateLeasesForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
-            final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
-            final MetricsScope scope) throws DependencyException, InvalidStateException, ProvisionedThroughputException,
-            KinesisClientLibIOException, InterruptedException {
+            final boolean ignoreUnexpectedChildShards, final MetricsScope scope)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException, InterruptedException {
             HIERARCHICAL_SHARD_SYNCER.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
-                    scope, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, garbageCollectLeases, leaseRefresher.isLeaseTableEmpty());
+                    scope, ignoreUnexpectedChildShards, leaseRefresher.isLeaseTableEmpty());
     }
 }
