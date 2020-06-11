@@ -157,7 +157,12 @@ public class LeaseCleanupManager {
                 if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
                     try {
                         childShardKeys = getChildShardsFromService(shardInfo, streamIdentifier);
-                        updateLeaseWithChildShards(leasePendingDeletion, childShardKeys);
+
+                        if (childShardKeys == null) {
+                            log.error("No child shards returned from service for shard {} for {}.", shardInfo.shardId(), streamIdentifier.streamName());
+                        } else {
+                            updateLeaseWithChildShards(leasePendingDeletion, childShardKeys);
+                        }
                     } catch (ExecutionException e) {
                         throw exceptionManager.apply(e.getCause());
                     } finally {
