@@ -33,6 +33,7 @@ import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.LeaseCleanupConfig;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
@@ -47,6 +48,16 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 public class LeaseManagementConfig {
 
     public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofMinutes(1);
+
+    public static final long DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(1).toMillis();
+    public static final long DEFAULT_COMPLETED_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(5).toMillis();
+    public static final long DEFAULT_GARBAGE_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(30).toMillis();
+
+    public static final LeaseCleanupConfig DEFAULT_LEASE_CLEANUP_CONFIG = LeaseCleanupConfig.builder()
+            .leaseCleanupIntervalMillis(DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS)
+            .completedLeaseCleanupIntervalMillis(DEFAULT_COMPLETED_LEASE_CLEANUP_INTERVAL_MILLIS)
+            .garbageLeaseCleanupIntervalMillis(DEFAULT_GARBAGE_LEASE_CLEANUP_INTERVAL_MILLIS)
+            .build();
 
     /**
      * Name of the table to use in DynamoDB
@@ -107,6 +118,15 @@ public class LeaseManagementConfig {
      * <p>Default value: true</p>
      */
     private boolean cleanupLeasesUponShardCompletion = true;
+
+    /**
+     * Configuration for lease cleanup in {@link LeaseCleanupManager}.
+     *
+     * <p>Default lease cleanup interval value: 1 minute.</p>
+     * <p>Default completed lease cleanup threshold: 5 minute.</p>
+     * <p>Default garbage lease cleanup threshold: 30 minute.</p>
+     */
+    private final LeaseCleanupConfig leaseCleanupConfig = DEFAULT_LEASE_CLEANUP_CONFIG;
 
     /**
      * The max number of leases (shards) this worker should process.
@@ -344,7 +364,8 @@ public class LeaseManagementConfig {
                     billingMode(),
                     leaseSerializer,
                     customShardDetectorProvider(),
-                    isMultiStreamingMode);
+                    isMultiStreamingMode,
+                    leaseCleanupConfig());
         }
         return leaseManagementFactory;
     }

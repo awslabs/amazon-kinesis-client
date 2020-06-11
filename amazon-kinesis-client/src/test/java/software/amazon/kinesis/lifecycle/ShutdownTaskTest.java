@@ -19,7 +19,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -27,8 +26,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -41,8 +38,6 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
-import software.amazon.awssdk.services.kinesis.model.SequenceNumberRange;
-import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -50,13 +45,16 @@ import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseHelper;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardObjectHelper;
 import software.amazon.kinesis.leases.exceptions.CustomerApplicationException;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.LeasePendingDeletion;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
@@ -86,6 +84,7 @@ public class ShutdownTaskTest {
     private boolean ignoreUnexpectedChildShards = false;
     private ShardInfo shardInfo;
     private ShutdownTask task;
+    private StreamIdentifier streamIdentifier = StreamIdentifier.singleStreamInstance("streamName");
     
     @Mock
     private RecordsPublisher recordsPublisher;
@@ -103,6 +102,8 @@ public class ShutdownTaskTest {
     private HierarchicalShardSyncer hierarchicalShardSyncer;
     @Mock
     private ShardRecordProcessor shardRecordProcessor;
+    @Mock
+    private LeaseCleanupManager leaseCleanupManager;
 
     @Before
     public void setUp() throws Exception {
@@ -119,7 +120,7 @@ public class ShutdownTaskTest {
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShards());
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShards(), streamIdentifier, leaseCleanupManager);
     }
 
     /**
@@ -129,8 +130,9 @@ public class ShutdownTaskTest {
     @Test
     public final void testCallWhenApplicationDoesNotCheckpoint() throws Exception {
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("3298"));
-        Lease heldLease = createLease("shardId-0", "leaseOwner", Collections.singleton("parentShardId"));
+        Lease heldLease = LeaseHelper.createLease("shardId-0", "leaseOwner", Collections.singleton("parentShardId"), Collections.emptyList(), ExtendedSequenceNumber.LATEST);
         when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
+        when(leaseRefresher.getLease("shardId-0")).thenReturn(heldLease);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
         when(leaseCoordinator.updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString())).thenReturn(true);
 
@@ -169,13 +171,14 @@ public class ShutdownTaskTest {
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShards());
+                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShards(), streamIdentifier, leaseCleanupManager);
 
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
-        Lease heldLease = createLease("shardId-0", "leaseOwner", Collections.singleton("parentShardId"));
+        Lease heldLease = LeaseHelper.createLease("shardId-0", "leaseOwner", Collections.singleton("parentShardId"));
         when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
         when(leaseCoordinator.updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString())).thenReturn(true);
+        when(leaseRefresher.getLease("shardId-0")).thenReturn(heldLease);
 
         final TaskResult result = task.call();
         assertNull(result.getException());
@@ -185,6 +188,7 @@ public class ShutdownTaskTest {
         verify(leaseCoordinator).updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString());
         verify(leaseRefresher, times(2)).createLeaseIfNotExists(Matchers.any(Lease.class));
         verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
+        verify(leaseCleanupManager, times(1)).enqueueForDeletion(any(LeasePendingDeletion.class));
     }
 
     /**
@@ -192,23 +196,24 @@ public class ShutdownTaskTest {
      * This test is for the scenario that a ShutdownTask is created for detecting a false Shard End.
      */
     @Test
-    public final void testCallWhenShardNotFound() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public final void testCallWhenShardNotFound() throws Exception {
+        final Lease heldLease = LeaseHelper.createLease("shardId-4", "leaseOwner", Collections.emptyList());
         shardInfo = new ShardInfo("shardId-4", concurrencyToken, Collections.emptySet(),
                                   ExtendedSequenceNumber.LATEST);
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
                                 SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
                                 ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, new ArrayList<>());
+                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, new ArrayList<>(), streamIdentifier, leaseCleanupManager);
 
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
+        when(leaseRefresher.getLease("shardId-4")).thenReturn(heldLease);
+        when(leaseCoordinator.getCurrentlyHeldLease("shardId-4")).thenReturn(heldLease);
 
         final TaskResult result = task.call();
         assertNull(result.getException());
         verify(recordsPublisher).shutdown();
-        verify(shardRecordProcessor).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
-        verify(leaseCoordinator, never()).getCurrentlyHeldLease(shardInfo.shardId());
         verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
         verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
     }
@@ -220,11 +225,11 @@ public class ShutdownTaskTest {
     @Test
     public final void testCallWhenLeaseLost() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         shardInfo = new ShardInfo("shardId-4", concurrencyToken, Collections.emptySet(),
-                                  ExtendedSequenceNumber.LATEST);
+                ExtendedSequenceNumber.LATEST);
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
-                                LEASE_LOST_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
-                                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                                hierarchicalShardSyncer, NULL_METRICS_FACTORY, new ArrayList<>());
+                LEASE_LOST_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY, new ArrayList<>(), streamIdentifier, leaseCleanupManager);
 
         final TaskResult result = task.call();
         assertNull(result.getException());
@@ -232,10 +237,9 @@ public class ShutdownTaskTest {
         verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor).leaseLost(LeaseLostInput.builder().build());
         verify(leaseCoordinator, never()).getAssignments();
-        verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
-        verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
+        verify(leaseRefresher, never()).createLeaseIfNotExists(any(Lease.class));
+        verify(leaseCoordinator, never()).dropLease(any(Lease.class));
     }
-
     /**
      * Test method for {@link ShutdownTask#taskType()}.
      */
@@ -262,14 +266,4 @@ public class ShutdownTaskTest {
         childShards.add(rightChild);
         return  childShards;
     }
-
-    private Lease createLease(String leaseKey, String leaseOwner, Collection<String> parentShardIds) {
-        Lease lease = new Lease();
-        lease.leaseKey(leaseKey);
-        lease.leaseOwner(leaseOwner);
-        lease.parentShardIds(parentShardIds);
-
-        return lease;
-    }
-
 }

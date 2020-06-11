@@ -15,6 +15,10 @@
 package software.amazon.kinesis.lifecycle;
 
 import com.google.common.annotations.VisibleForTesting;
+
+import java.util.List;
+import java.util.Optional;
+
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,13 +27,16 @@ import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.CustomerApplicationException;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.LeasePendingDeletion;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
@@ -42,7 +49,6 @@ import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -85,6 +91,10 @@ public class ShutdownTask implements ConsumerTask {
     private final TaskType taskType = TaskType.SHUTDOWN;
 
     private final List<ChildShard> childShards;
+    @NonNull
+    private final StreamIdentifier streamIdentifier;
+    @NonNull
+    private final LeaseCleanupManager leaseCleanupManager;
 
     private static final Function<ShardInfo, String> leaseKeyProvider = shardInfo -> ShardInfo.getLeaseKey(shardInfo);
 
@@ -113,19 +123,26 @@ public class ShutdownTask implements ConsumerTask {
                     // This would happen when KinesisDataFetcher(for polling mode) or FanOutRecordsPublisher(for StoS mode) catches ResourceNotFound exception.
                     // In this case, KinesisDataFetcher and FanOutRecordsPublisher will send out SHARD_END signal to trigger a shutdown task with empty list of childShards.
                     // This scenario could happen when customer deletes the stream while leaving the KCL application running.
+                    final Lease currentShardLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
+
                     if (!CollectionUtils.isNullOrEmpty(childShards)) {
                         createLeasesForChildShardsIfNotExist();
-                        updateLeaseWithChildShards();
-                    } else {
-                        log.warn("Shard {} no longer exists. Shutting down consumer with SHARD_END reason without creating leases for child shards.", leaseKeyProvider.apply(shardInfo));
+                        updateLeaseWithChildShards(currentShardLease);
                     }
 
-                    recordProcessorCheckpointer
-                            .sequenceNumberAtShardEnd(recordProcessorCheckpointer.largestPermittedCheckpointValue());
-                    recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
-                    // Call the shardRecordsProcessor to checkpoint with SHARD_END sequence number.
-                    // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
-                    throwOnApplicationException(() -> applicationCheckpointAndVerification(), scope, startTime);
+                    final Lease leaseFromDdb = Optional.ofNullable(leaseCoordinator.leaseRefresher().getLease(leaseKeyProvider.apply(shardInfo)))
+                            .orElseThrow(() -> new IllegalStateException("Lease for shard " + leaseKeyProvider.apply(shardInfo) + " does not exist."));
+                    if (!leaseFromDdb.checkpoint().equals(ExtendedSequenceNumber.SHARD_END)) {
+                        recordProcessorCheckpointer
+                                .sequenceNumberAtShardEnd(recordProcessorCheckpointer.largestPermittedCheckpointValue());
+                        recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
+                        // Call the shardRecordsProcessor to checkpoint with SHARD_END sequence number.
+                        // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
+                        throwOnApplicationException(() -> applicationCheckpointAndVerification(), scope, startTime);
+                    }
+
+                    final LeasePendingDeletion garbageLease = new LeasePendingDeletion(streamIdentifier, currentShardLease, shardInfo);
+                    leaseCleanupManager.enqueueForDeletion(garbageLease);
                 } else {
                     throwOnApplicationException(() -> shardRecordProcessor.leaseLost(LeaseLostInput.builder().build()), scope, startTime);
                 }
@@ -162,8 +179,8 @@ public class ShutdownTask implements ConsumerTask {
         if (lastCheckpointValue == null
                 || !lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END)) {
             throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
-                                                       + leaseKeyProvider.apply(shardInfo) + ". Application must checkpoint upon shard end. " +
-                                                       "See ShardRecordProcessor.shardEnded javadocs for more information.");
+                    + leaseKeyProvider.apply(shardInfo) + ". Application must checkpoint upon shard end. " +
+                    "See ShardRecordProcessor.shardEnded javadocs for more information.");
         }
     }
 
@@ -189,9 +206,8 @@ public class ShutdownTask implements ConsumerTask {
         }
     }
 
-    private void updateLeaseWithChildShards()
+    private void updateLeaseWithChildShards(Lease currentLease)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        final Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
         Set<String> childShardIds = childShards.stream().map(ChildShard::shardId).collect(Collectors.toSet());
 
         final Lease updatedLease = currentLease.copy();
@@ -206,7 +222,7 @@ public class ShutdownTask implements ConsumerTask {
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerTask#taskType()
      */
     @Override

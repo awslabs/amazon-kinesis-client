@@ -46,6 +46,7 @@ import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
@@ -102,6 +103,8 @@ public class ConsumerStatesTest {
     private ProcessRecordsInput processRecordsInput;
     @Mock
     private TaskExecutionListener taskExecutionListener;
+    @Mock
+    private LeaseCleanupManager leaseCleanupManager;
 
     private long parentShardPollIntervalMillis = 0xCAFE;
     private boolean cleanupLeasesOfCompletedShards = true;
@@ -122,7 +125,7 @@ public class ConsumerStatesTest {
                 taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,
                 INITIAL_POSITION_IN_STREAM, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector,
-                new AggregatorUtil(), hierarchicalShardSyncer, metricsFactory);
+                new AggregatorUtil(), hierarchicalShardSyncer, metricsFactory, leaseCleanupManager);
         when(shardInfo.shardId()).thenReturn("shardId-000000000000");
         when(shardInfo.streamIdentifierSerOpt()).thenReturn(Optional.of(StreamIdentifier.singleStreamInstance(STREAM_NAME).serialize()));
         consumer = spy(new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis,
@@ -148,7 +151,7 @@ public class ConsumerStatesTest {
         assertThat(state.successTransition(), equalTo(ShardConsumerState.INITIALIZING.consumerState()));
         for (ShutdownReason shutdownReason : ShutdownReason.values()) {
             assertThat(state.shutdownTransition(shutdownReason),
-                    equalTo(ShardConsumerState.SHUTDOWN_COMPLETE.consumerState()));
+                    equalTo(ShardConsumerState.SHUTTING_DOWN.consumerState()));
         }
 
         assertThat(state.state(), equalTo(ShardConsumerState.WAITING_ON_PARENT_SHARDS));

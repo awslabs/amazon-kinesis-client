@@ -39,4 +39,6 @@ public interface LeaseManagementFactory {
         throw new UnsupportedOperationException();
     }
 
+    LeaseCleanupManager createLeaseCleanupManager(MetricsFactory metricsFactory);
+
 }
