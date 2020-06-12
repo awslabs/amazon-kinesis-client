@@ -29,7 +29,7 @@ public interface FormerStreamsLeasesDeletionStrategy {
      * StreamIdentifiers for which leases needs to be cleaned up in the lease table.
      * @return
      */
-    List<StreamIdentifier> streamIdentifiers();
+    List<StreamIdentifier> streamIdentifiersForLeaseCleanup();
 
     /**
      * Duration to wait before deleting the leases for this stream.
@@ -42,12 +42,6 @@ public interface FormerStreamsLeasesDeletionStrategy {
      * @return
      */
     StreamsLeasesDeletionType leaseDeletionType();
-
-    /**
-     * Should the leases be cleaned up for deleted streams
-     * @return true if leases be cleaned up for deleted streams; false otherwise.
-     */
-    boolean shouldCleanupLeasesForDeletedStreams();
 
     /**
      * StreamsLeasesDeletionType identifying the different lease cleanup strategies.
@@ -64,7 +58,7 @@ public interface FormerStreamsLeasesDeletionStrategy {
     final class NoLeaseDeletionStrategy implements FormerStreamsLeasesDeletionStrategy {
 
         @Override
-        public final List<StreamIdentifier> streamIdentifiers() {
+        public final List<StreamIdentifier> streamIdentifiersForLeaseCleanup() {
             throw new UnsupportedOperationException("StreamIdentifiers not required");
         }
 
@@ -76,37 +70,6 @@ public interface FormerStreamsLeasesDeletionStrategy {
         @Override
         public final StreamsLeasesDeletionType leaseDeletionType() {
             return StreamsLeasesDeletionType.NO_STREAMS_LEASES_DELETION;
-        }
-
-        @Override
-        public final boolean shouldCleanupLeasesForDeletedStreams() {
-            return false;
-        }
-    }
-
-    /**
-     * Strategy for not cleaning up leases for former streams.
-     */
-    final class OnlyDeletedStreamsLeasesCleanupStrategy implements FormerStreamsLeasesDeletionStrategy {
-
-        @Override
-        public final List<StreamIdentifier> streamIdentifiers() {
-            throw new UnsupportedOperationException("StreamIdentifiers not required");
-        }
-
-        @Override
-        public final Duration waitPeriodToDeleteFormerStreams() {
-            return Duration.ZERO;
-        }
-
-        @Override
-        public final StreamsLeasesDeletionType leaseDeletionType() {
-            return StreamsLeasesDeletionType.NO_STREAMS_LEASES_DELETION;
-        }
-
-        @Override
-        public final boolean shouldCleanupLeasesForDeletedStreams() {
-            return true;
         }
     }
 
@@ -117,7 +80,7 @@ public interface FormerStreamsLeasesDeletionStrategy {
     abstract class AutoDetectionAndDeferredDeletionStrategy implements FormerStreamsLeasesDeletionStrategy {
 
         @Override
-        public final List<StreamIdentifier> streamIdentifiers() {
+        public final List<StreamIdentifier> streamIdentifiersForLeaseCleanup() {
             throw new UnsupportedOperationException("StreamIdentifiers not required");
         }
 
@@ -125,15 +88,10 @@ public interface FormerStreamsLeasesDeletionStrategy {
         public final StreamsLeasesDeletionType leaseDeletionType() {
             return StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION;
         }
-
-        @Override
-        public boolean shouldCleanupLeasesForDeletedStreams() {
-            return false;
-        }
     }
 
     /**
-     * Strategy to detect the streams for deletion through {@link #streamIdentifiers()} provided by customer at runtime
+     * Strategy to detect the streams for deletion through {@link #streamIdentifiersForLeaseCleanup()} provided by customer at runtime
      * and do deferred deletion based on {@link #waitPeriodToDeleteFormerStreams()}
      */
     abstract class ProvidedStreamsDeferredDeletionStrategy implements FormerStreamsLeasesDeletionStrategy {
@@ -141,11 +99,6 @@ public interface FormerStreamsLeasesDeletionStrategy {
         @Override
         public final StreamsLeasesDeletionType leaseDeletionType() {
             return StreamsLeasesDeletionType.PROVIDED_STREAMS_DEFERRED_DELETION;
-        }
-
-        @Override
-        public boolean shouldCleanupLeasesForDeletedStreams() {
-            return false;
         }
     }
 
