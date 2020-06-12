@@ -292,7 +292,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean isLeaseTableEmpty()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return list(1, null).isEmpty();
+        return list(1, 1, null).isEmpty();
     }
 
     /**
@@ -305,7 +305,23 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      * @throws DependencyException if DynamoDB scan fail in an unexpected way
      * @throws ProvisionedThroughputException if DynamoDB scan fail due to exceeded capacity
      */
-    List<Lease> list(Integer limit, StreamIdentifier streamIdentifier) throws DependencyException, InvalidStateException,
+    List<Lease> list(Integer limit, StreamIdentifier streamIdentifier)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        return list(limit, Integer.MAX_VALUE, streamIdentifier);
+    }
+
+    /**
+     * List with the given page size. Package access for integration testing.
+     *
+     * @param limit number of items to consider at a time - used by integration tests to force paging.
+     * @param maxPages mad paginated scan calls
+     * @param streamIdentifier streamIdentifier for multi-stream mode. Can be null.
+     * @return list of leases
+     * @throws InvalidStateException if table does not exist
+     * @throws DependencyException if DynamoDB scan fail in an unexpected way
+     * @throws ProvisionedThroughputException if DynamoDB scan fail due to exceeded capacity
+     */
+    private List<Lease> list(Integer limit, Integer maxPages, StreamIdentifier streamIdentifier) throws DependencyException, InvalidStateException,
             ProvisionedThroughputException {
 
         log.debug("Listing leases from table {}", table);
@@ -341,7 +357,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                     }
 
                     Map<String, AttributeValue> lastEvaluatedKey = scanResult.lastEvaluatedKey();
-                    if (CollectionUtils.isNullOrEmpty(lastEvaluatedKey)) {
+                    if (CollectionUtils.isNullOrEmpty(lastEvaluatedKey) || --maxPages <= 0) {
                         // Signify that we're done.
                         scanResult = null;
                         log.debug("lastEvaluatedKey was null - scan finished.");
