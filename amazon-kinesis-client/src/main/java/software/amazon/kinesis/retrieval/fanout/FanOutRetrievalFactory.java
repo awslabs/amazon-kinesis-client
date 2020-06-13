@@ -38,8 +38,10 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
 
     private final KinesisAsyncClient kinesisClient;
     private final String defaultStreamName;
-    private final String defaultConsumerName;
+    private final String defaultConsumerArn;
     private final Function<String, String> consumerArnCreator;
+
+    private Map<StreamIdentifier, String> implicitConsumerArnTracker = new HashMap<>();
 
     @Override
     public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(final ShardInfo shardInfo,
@@ -52,15 +54,15 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
             final StreamConfig streamConfig,
             final MetricsFactory metricsFactory) {
         final Optional<String> streamIdentifierStr = shardInfo.streamIdentifierSerOpt();
-        final String streamName;
         if(streamIdentifierStr.isPresent()) {
-            streamName = StreamIdentifier.multiStreamInstance(streamIdentifierStr.get()).streamName();
+            final StreamIdentifier streamIdentifier = StreamIdentifier.multiStreamInstance(streamIdentifierStr.get());
             return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
-                    getOrCreateConsumerArn(streamName, streamConfig.consumerArn()),
+                    getOrCreateConsumerArn(streamIdentifier, streamConfig.consumerArn()),
                     streamIdentifierStr.get());
         } else {
+            final StreamIdentifier streamIdentifier = StreamIdentifier.singleStreamInstance(defaultStreamName);
             return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
-                    getOrCreateConsumerArn(defaultStreamName, defaultConsumerName));
+                    getOrCreateConsumerArn(streamIdentifier, defaultConsumerArn));
         }
     }
 
@@ -69,7 +71,8 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
         throw new UnsupportedOperationException("FanoutRetrievalFactory needs StreamConfig Info");
     }
 
-    private String getOrCreateConsumerArn(String streamName, String consumerArn) {
-        return consumerArn != null ? consumerArn : consumerArnCreator.apply(streamName);
+    private String getOrCreateConsumerArn(StreamIdentifier streamIdentifier, String consumerArn) {
+        return consumerArn != null ? consumerArn : implicitConsumerArnTracker
+                    .computeIfAbsent(streamIdentifier, sId -> consumerArnCreator.apply(sId.streamName()));
     }
 }
