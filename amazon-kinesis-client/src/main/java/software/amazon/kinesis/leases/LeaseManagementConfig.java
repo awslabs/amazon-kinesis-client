@@ -52,6 +52,9 @@ public class LeaseManagementConfig {
     public static final long DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(1).toMillis();
     public static final long DEFAULT_COMPLETED_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(5).toMillis();
     public static final long DEFAULT_GARBAGE_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(30).toMillis();
+    public static final long DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 2 * 60 * 1000L;
+    public static final int DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY = 3;
+
 
     public static final LeaseCleanupConfig DEFAULT_LEASE_CLEANUP_CONFIG = LeaseCleanupConfig.builder()
             .leaseCleanupIntervalMillis(DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS)
@@ -194,6 +197,20 @@ public class LeaseManagementConfig {
     private Duration dynamoDbRequestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
     private BillingMode billingMode = BillingMode.PROVISIONED;
+
+    /**
+     * Frequency (in millis) of the auditor job to scan for partial leases in the lease table.
+     * If the auditor detects any hole in the leases for a stream, then it would trigger shard sync based on
+     * {@link #leasesRecoveryAuditorInconsistencyConfidenceThreshold}
+     */
+    private long leasesRecoveryAuditorExecutionFrequencyMillis = DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS;
+
+    /**
+     * Confidence threshold for the periodic auditor job to determine if leases for a stream in the lease table
+     * is inconsistent. If the auditor finds same set of inconsistencies consecutively for a stream for this many times,
+     * then it would trigger a shard sync.
+     */
+    private int leasesRecoveryAuditorInconsistencyConfidenceThreshold = DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY;
 
     /**
      * The initial position for getting records from Kinesis streams.
