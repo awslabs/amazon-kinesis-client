@@ -298,14 +298,12 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         }
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, operation);
-        if (StringUtils.isNotEmpty(singleStreamShardId)) {
-            if(lease instanceof MultiStreamLease) {
-                MetricsUtil.addStreamId(scope,
-                        StreamIdentifier.multiStreamInstance(((MultiStreamLease) lease).streamIdentifier()));
-                MetricsUtil.addShardId(scope, ((MultiStreamLease) lease).shardId());
-            } else {
-                MetricsUtil.addShardId(scope, singleStreamShardId);
-            }
+        if (lease instanceof MultiStreamLease) {
+            MetricsUtil.addStreamId(scope,
+                    StreamIdentifier.multiStreamInstance(((MultiStreamLease) lease).streamIdentifier()));
+            MetricsUtil.addShardId(scope, ((MultiStreamLease) lease).shardId());
+        } else if (StringUtils.isNotEmpty(singleStreamShardId)) {
+            MetricsUtil.addShardId(scope, singleStreamShardId);
         }
 
         long startTime = System.currentTimeMillis();

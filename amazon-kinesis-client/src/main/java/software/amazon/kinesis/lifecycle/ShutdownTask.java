@@ -132,9 +132,6 @@ public class ShutdownTask implements ConsumerTask {
                         final Lease leaseFromDdb = Optional.ofNullable(leaseCoordinator.leaseRefresher().getLease(leaseKeyProvider.apply(shardInfo)))
                                 .orElseThrow(() -> new IllegalStateException("Lease for shard " + leaseKeyProvider.apply(shardInfo) + " does not exist."));
                         if (!leaseFromDdb.checkpoint().equals(ExtendedSequenceNumber.SHARD_END)) {
-                            recordProcessorCheckpointer
-                                    .sequenceNumberAtShardEnd(recordProcessorCheckpointer.largestPermittedCheckpointValue());
-                            recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
                             // Call the shardRecordsProcessor to checkpoint with SHARD_END sequence number.
                             // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
                             throwOnApplicationException(() -> applicationCheckpointAndVerification(), scope, startTime);
@@ -167,8 +164,6 @@ public class ShutdownTask implements ConsumerTask {
                             } catch (Exception e) {
                                 log.error("Unable to cleanup garbage lease {} for {}", currentShardLease.leaseKey(),
                                         streamIdentifier, e);
-                            } finally {
-
                             }
                         }
                     }
@@ -203,6 +198,9 @@ public class ShutdownTask implements ConsumerTask {
     }
 
     private void applicationCheckpointAndVerification() {
+        recordProcessorCheckpointer
+                .sequenceNumberAtShardEnd(recordProcessorCheckpointer.largestPermittedCheckpointValue());
+        recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
         shardRecordProcessor.shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         final ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.lastCheckpointValue();
         if (lastCheckpointValue == null
