@@ -43,7 +43,6 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
-import software.amazon.kinesis.metrics.NullMetricsScope;
 
 import java.io.Serializable;
 import java.math.BigInteger;
@@ -53,7 +52,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -77,7 +75,7 @@ class PeriodicShardSyncManager {
     static final BigInteger MIN_HASH_KEY = BigInteger.ZERO;
     @VisibleForTesting
     static final BigInteger MAX_HASH_KEY = new BigInteger("2").pow(128).subtract(BigInteger.ONE);
-    static final String PERODIC_SHARD_SYNC_MANAGER = "PeriodicShardSyncManager";
+    static final String PERIODIC_SHARD_SYNC_MANAGER = "PeriodicShardSyncManager";
     private Map<StreamIdentifier, HashRangeHoleTracker> hashRangeHoleTrackerMap = new HashMap<>();
 
     private final String workerId;
@@ -175,7 +173,8 @@ class PeriodicShardSyncManager {
         if (leaderDecider.isLeader(workerId)) {
             log.info(String.format("WorkerId %s is leader, running the periodic shard sync task", workerId));
 
-            final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, PERODIC_SHARD_SYNC_MANAGER);
+            final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory,
+                    PERIODIC_SHARD_SYNC_MANAGER);
             int numStreamsWithPartialLeases = 0;
             int numStreamsToSync = 0;
             boolean isRunSuccess = false;
@@ -248,7 +247,7 @@ class PeriodicShardSyncManager {
         if (CollectionUtils.isNullOrEmpty(leases)) {
             // If the leases is null or empty then we need to do shard sync
             log.info("No leases found for {}. Will be triggering shard sync", streamIdentifier);
-            return new ShardSyncResponse(true, false,"No leases found for " + streamIdentifier);
+            return new ShardSyncResponse(true, false, "No leases found for " + streamIdentifier);
         }
         // Check if there are any holes in the leases and return the first hole if present.
         Optional<HashRangeHole> hashRangeHoleOpt = hasHoleInLeases(streamIdentifier, leases);
