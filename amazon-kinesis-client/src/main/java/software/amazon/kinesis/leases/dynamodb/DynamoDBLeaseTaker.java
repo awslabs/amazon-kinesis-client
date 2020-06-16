@@ -499,10 +499,13 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      */
     private Map<String, Integer> computeLeaseCounts(List<Lease> expiredLeases) {
         Map<String, Integer> leaseCounts = new HashMap<>();
+        // The set will give much faster lookup than the original list, an
+        // important optimization when the list is large
+        Set<Lease> expiredLeasesSet = new HashSet<>(expiredLeases);
 
         // Compute the number of leases per worker by looking through allLeases and ignoring leases that have expired.
         for (Lease lease : allLeases.values()) {
-            if (!expiredLeases.contains(lease)) {
+            if (!expiredLeasesSet.contains(lease)) {
                 String leaseOwner = lease.leaseOwner();
                 Integer oldCount = leaseCounts.get(leaseOwner);
                 if (oldCount == null) {
