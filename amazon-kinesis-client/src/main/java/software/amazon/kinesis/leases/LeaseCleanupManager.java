@@ -44,6 +44,7 @@ import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
@@ -116,11 +117,22 @@ public class LeaseCleanupManager {
             //TODO: Optimize verifying duplicate entries https://sim.amazon.com/issues/KinesisLTR-597.
             if (!deletionQueue.contains(leasePendingDeletion)) {
                 log.debug("Enqueuing lease {} for deferred deletion.", lease.leaseKey());
-                deletionQueue.add(leasePendingDeletion);
+                if (!deletionQueue.add(leasePendingDeletion)) {
+                    log.warn("Unable to enqueue lease {} for deletion.", lease.leaseKey());
+                }
             } else {
                 log.warn("Lease {} is already pending deletion, not enqueueing for deletion.", lease.leaseKey());
             }
         }
+    }
+
+    /**
+     * Check if lease was already enqueued for deletion.
+     * @param leasePendingDeletion
+     * @return true if enqueued for deletion; false otherwise.
+     */
+    public boolean isEnqueuedForDeletion(LeasePendingDeletion leasePendingDeletion) {
+        return deletionQueue.contains(leasePendingDeletion);
     }
 
     /**
@@ -139,7 +151,8 @@ public class LeaseCleanupManager {
         return garbageLeaseStopwatch.elapsed(TimeUnit.MILLISECONDS) >= garbageLeaseCleanupIntervalMillis;
     }
 
-    private LeaseCleanupResult cleanupLease(LeasePendingDeletion leasePendingDeletion) throws TimeoutException,
+    public LeaseCleanupResult cleanupLease(LeasePendingDeletion leasePendingDeletion,
+            boolean timeToCheckForCompletedShard, boolean timeToCheckForGarbageShard) throws TimeoutException,
             InterruptedException, DependencyException, ProvisionedThroughputException, InvalidStateException {
         final Lease lease = leasePendingDeletion.lease();
         final ShardInfo shardInfo = leasePendingDeletion.shardInfo();
@@ -150,9 +163,11 @@ public class LeaseCleanupManager {
         boolean cleanedUpCompletedLease = false;
         boolean cleanedUpGarbageLease = false;
         boolean alreadyCheckedForGarbageCollection = false;
+        boolean wereChildShardsPresent = false;
+        boolean wasResourceNotFound = false;
 
         try {
-            if (cleanupLeasesUponShardCompletion && timeToCheckForCompletedShard()) {
+            if (cleanupLeasesUponShardCompletion && timeToCheckForCompletedShard) {
                 Set<String> childShardKeys = leaseCoordinator.leaseRefresher().getLease(lease.leaseKey()).childShardIds();
                 if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
                     try {
@@ -172,18 +187,21 @@ public class LeaseCleanupManager {
                 cleanedUpCompletedLease = cleanupLeaseForCompletedShard(lease, shardInfo, childShardKeys);
             }
 
-            if (!alreadyCheckedForGarbageCollection && timeToCheckForGarbageShard()) {
+            if (!alreadyCheckedForGarbageCollection && timeToCheckForGarbageShard) {
                 try {
-                    getChildShardsFromService(shardInfo, streamIdentifier);
+                    wereChildShardsPresent = !CollectionUtils
+                            .isNullOrEmpty(getChildShardsFromService(shardInfo, streamIdentifier));
                 } catch (ExecutionException e) {
                     throw exceptionManager.apply(e.getCause());
                 }
             }
         } catch (ResourceNotFoundException e) {
+            wasResourceNotFound = true;
             cleanedUpGarbageLease = cleanupLeaseForGarbageShard(lease);
         }
 
-        return new LeaseCleanupResult(cleanedUpCompletedLease, cleanedUpGarbageLease);
+        return new LeaseCleanupResult(cleanedUpCompletedLease, cleanedUpGarbageLease, wereChildShardsPresent,
+                wasResourceNotFound);
     }
 
     private Set<String> getChildShardsFromService(ShardInfo shardInfo, StreamIdentifier streamIdentifier)
@@ -289,22 +307,23 @@ public class LeaseCleanupManager {
                 final LeasePendingDeletion leasePendingDeletion = deletionQueue.poll();
                 final String leaseKey = leasePendingDeletion.lease().leaseKey();
                 final StreamIdentifier streamIdentifier = leasePendingDeletion.streamIdentifier();
-                boolean deletionFailed = true;
+                boolean deletionSucceeded = false;
                 try {
-                    final LeaseCleanupResult leaseCleanupResult = cleanupLease(leasePendingDeletion);
+                    final LeaseCleanupResult leaseCleanupResult = cleanupLease(leasePendingDeletion,
+                            timeToCheckForCompletedShard(), timeToCheckForGarbageShard());
                     completedLeaseCleanedUp |= leaseCleanupResult.cleanedUpCompletedLease();
                     garbageLeaseCleanedUp |= leaseCleanupResult.cleanedUpGarbageLease();
 
                     if (leaseCleanupResult.leaseCleanedUp()) {
                         log.debug("Successfully cleaned up lease {} for {}", leaseKey, streamIdentifier);
-                        deletionFailed = false;
+                        deletionSucceeded = true;
                     }
                 } catch (Exception e) {
                     log.error("Failed to cleanup lease {} for {}. Will re-enqueue for deletion and retry on next " +
                             "scheduled execution.", leaseKey, streamIdentifier, e);
                 }
 
-                if (deletionFailed) {
+                if (!deletionSucceeded) {
                     log.debug("Did not cleanup lease {} for {}. Re-enqueueing for deletion.", leaseKey, streamIdentifier);
                     failedDeletions.add(leasePendingDeletion);
                 }
@@ -332,9 +351,11 @@ public class LeaseCleanupManager {
     }
 
     @Value
-    private class LeaseCleanupResult {
+    public static class LeaseCleanupResult {
         boolean cleanedUpCompletedLease;
         boolean cleanedUpGarbageLease;
+        boolean wereChildShardsPresent;
+        boolean wasResourceNotFound;
 
         public boolean leaseCleanedUp() {
             return cleanedUpCompletedLease | cleanedUpGarbageLease;

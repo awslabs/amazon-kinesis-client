@@ -128,21 +128,50 @@ public class ShutdownTask implements ConsumerTask {
                     if (!CollectionUtils.isNullOrEmpty(childShards)) {
                         createLeasesForChildShardsIfNotExist();
                         updateLeaseWithChildShards(currentShardLease);
-                    }
 
-                    final Lease leaseFromDdb = Optional.ofNullable(leaseCoordinator.leaseRefresher().getLease(leaseKeyProvider.apply(shardInfo)))
-                            .orElseThrow(() -> new IllegalStateException("Lease for shard " + leaseKeyProvider.apply(shardInfo) + " does not exist."));
-                    if (!leaseFromDdb.checkpoint().equals(ExtendedSequenceNumber.SHARD_END)) {
-                        recordProcessorCheckpointer
-                                .sequenceNumberAtShardEnd(recordProcessorCheckpointer.largestPermittedCheckpointValue());
-                        recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
-                        // Call the shardRecordsProcessor to checkpoint with SHARD_END sequence number.
-                        // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
-                        throwOnApplicationException(() -> applicationCheckpointAndVerification(), scope, startTime);
-                    }
+                        final Lease leaseFromDdb = Optional.ofNullable(leaseCoordinator.leaseRefresher().getLease(leaseKeyProvider.apply(shardInfo)))
+                                .orElseThrow(() -> new IllegalStateException("Lease for shard " + leaseKeyProvider.apply(shardInfo) + " does not exist."));
+                        if (!leaseFromDdb.checkpoint().equals(ExtendedSequenceNumber.SHARD_END)) {
+                            recordProcessorCheckpointer
+                                    .sequenceNumberAtShardEnd(recordProcessorCheckpointer.largestPermittedCheckpointValue());
+                            recordProcessorCheckpointer.largestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
+                            // Call the shardRecordsProcessor to checkpoint with SHARD_END sequence number.
+                            // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
+                            throwOnApplicationException(() -> applicationCheckpointAndVerification(), scope, startTime);
+                        }
 
-                    final LeasePendingDeletion garbageLease = new LeasePendingDeletion(streamIdentifier, currentShardLease, shardInfo);
-                    leaseCleanupManager.enqueueForDeletion(garbageLease);
+                        final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(streamIdentifier, currentShardLease, shardInfo);
+                        leaseCleanupManager.enqueueForDeletion(leasePendingDeletion);
+
+                    } else {
+                        // This might be a case of ResourceNotFound from Service. Directly validate and delete lease, if required.
+                        final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(streamIdentifier,
+                                currentShardLease, shardInfo);
+                        if (!leaseCleanupManager.isEnqueuedForDeletion(leasePendingDeletion)) {
+                            final LeaseCleanupManager.LeaseCleanupResult leaseCleanupResult;
+                            try {
+                                leaseCleanupResult = leaseCleanupManager
+                                        .cleanupLease(leasePendingDeletion, false, true);
+                                if (leaseCleanupResult.leaseCleanedUp()) {
+                                    log.info("Cleaned up garbage lease {} for {}. Details : {}",
+                                            currentShardLease.leaseKey(), streamIdentifier, leaseCleanupResult);
+                                } else {
+                                    log.error("Unable to cleanup garbage lease {} for {}. Details : {} ",
+                                            currentShardLease.leaseKey(), streamIdentifier, leaseCleanupResult);
+                                    // If we are unable to delete this lease and the reason being RNF, then enqueue it
+                                    // for deletion, so that we don't end up consuming service TPS on any bugs.
+                                    if (leaseCleanupResult.wasResourceNotFound()) {
+                                        leaseCleanupManager.enqueueForDeletion(leasePendingDeletion);
+                                    }
+                                }
+                            } catch (Exception e) {
+                                log.error("Unable to cleanup garbage lease {} for {}", currentShardLease.leaseKey(),
+                                        streamIdentifier, e);
+                            } finally {
+
+                            }
+                        }
+                    }
                 } else {
                     throwOnApplicationException(() -> shardRecordProcessor.leaseLost(LeaseLostInput.builder().build()), scope, startTime);
                 }
