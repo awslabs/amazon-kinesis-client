@@ -173,9 +173,10 @@ public class LeaseCleanupManager {
                     try {
                         childShardKeys = getChildShardsFromService(shardInfo, streamIdentifier);
 
-                        if (childShardKeys == null) {
+                        if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
                             log.error("No child shards returned from service for shard {} for {}.", shardInfo.shardId(), streamIdentifier.streamName());
                         } else {
+                            wereChildShardsPresent = true;
                             updateLeaseWithChildShards(leasePendingDeletion, childShardKeys);
                         }
                     } catch (ExecutionException e) {
@@ -183,6 +184,8 @@ public class LeaseCleanupManager {
                     } finally {
                         alreadyCheckedForGarbageCollection = true;
                     }
+                } else {
+                    wereChildShardsPresent = true;
                 }
                 cleanedUpCompletedLease = cleanupLeaseForCompletedShard(lease, shardInfo, childShardKeys);
             }
