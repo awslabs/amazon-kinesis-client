@@ -146,6 +146,7 @@ public class ShutdownTask implements ConsumerTask {
                                 // in the case of RNF Exception.
                                 attemptShardEndCheckpointing(scope, startTime);
                             } finally {
+                                // Attempt to garbage collect if this shard is no longer associated with the stream.
                                 // If we don't want to cleanup the garbage shard without successful shard end
                                 // checkpointing, remove the try finally construct and only execute the methods.
                                 attemptGarbageCollectionOfLeaseAndEnqueueOnFailure(leasePendingDeletion, currentShardLease);
