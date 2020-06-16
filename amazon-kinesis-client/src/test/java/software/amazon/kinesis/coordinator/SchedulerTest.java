@@ -482,7 +482,7 @@ public class SchedulerTest {
     public final void testMultiStreamStaleStreamsAreNotDeletedImmediatelyProvidedListStrategy()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
-            @Override public List<StreamIdentifier> streamIdentifiers() {
+            @Override public List<StreamIdentifier> streamIdentifiersForLeaseCleanup() {
                 return null;
             }
 
@@ -497,7 +497,7 @@ public class SchedulerTest {
     public final void testMultiStreamStaleStreamsAreNotDeletedImmediatelyProvidedListStrategy2()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
-            @Override public List<StreamIdentifier> streamIdentifiers() {
+            @Override public List<StreamIdentifier> streamIdentifiersForLeaseCleanup() {
                 return IntStream.range(1, 3).mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
                         Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345))).collect(
                         Collectors.toCollection(ArrayList::new));
@@ -555,7 +555,7 @@ public class SchedulerTest {
     public final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriodWithProvidedListStrategy()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
-            @Override public List<StreamIdentifier> streamIdentifiers() {
+            @Override public List<StreamIdentifier> streamIdentifiersForLeaseCleanup() {
                 return null;
             }
 
@@ -575,7 +575,7 @@ public class SchedulerTest {
     public final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriodWithProvidedListStrategy2()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
-            @Override public List<StreamIdentifier> streamIdentifiers() {
+            @Override public List<StreamIdentifier> streamIdentifiersForLeaseCleanup() {
                 return IntStream.range(1, 3).mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
                         Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345))).collect(
                         Collectors.toCollection(ArrayList::new));
@@ -639,7 +639,7 @@ public class SchedulerTest {
     public final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediatelyWithProvidedListStrategy()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
-            @Override public List<StreamIdentifier> streamIdentifiers() {
+            @Override public List<StreamIdentifier> streamIdentifiersForLeaseCleanup() {
                 return null;
             }
 
@@ -654,7 +654,7 @@ public class SchedulerTest {
     public final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediatelyWithProvidedListStrategy2()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new ProvidedStreamsDeferredDeletionStrategy() {
-            @Override public List<StreamIdentifier> streamIdentifiers() {
+            @Override public List<StreamIdentifier> streamIdentifiersForLeaseCleanup() {
                 return IntStream.range(1, 3)
                         .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
                                 Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)))

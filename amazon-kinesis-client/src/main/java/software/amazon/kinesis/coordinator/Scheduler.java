@@ -113,6 +113,7 @@ public class Scheduler implements Runnable {
     private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 1 * 1000L;
     private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
     private static final long NEW_STREAM_CHECK_INTERVAL_MILLIS = 1 * 60 * 1000L;
+    private static final boolean SHOULD_DO_LEASE_SYNC_FOR_OLD_STREAMS = false;
     private static final String MULTI_STREAM_TRACKER = "MultiStreamTracker";
     private static final String ACTIVE_STREAMS_COUNT = "ActiveStreams.Count";
     private static final String PENDING_STREAMS_DELETION_COUNT = "StreamsPendingDeletion.Count";
@@ -290,7 +291,9 @@ public class Scheduler implements Runnable {
         this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
         this.leaderElectedPeriodicShardSyncManager = new PeriodicShardSyncManager(
                 leaseManagementConfig.workerIdentifier(), leaderDecider, leaseRefresher, currentStreamConfigMap,
-                shardSyncTaskManagerProvider, isMultiStreamMode);
+                shardSyncTaskManagerProvider, isMultiStreamMode, metricsFactory,
+                leaseManagementConfig.leasesRecoveryAuditorExecutionFrequencyMillis(),
+                leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold());
         this.leaseCleanupManager = this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode)
                 .createLeaseCleanupManager(metricsFactory);
     }
@@ -489,10 +492,9 @@ public class Scheduler implements Runnable {
                     }
                 };
 
-                if (formerStreamsLeasesDeletionStrategy.shouldCleanupLeasesForDeletedStreams()) {
+                if (SHOULD_DO_LEASE_SYNC_FOR_OLD_STREAMS) {
                     // We do lease sync for old streams, before leaving to the deletion strategy to delete leases for
-                    // strategy detected leases. Also, for deleted streams we expect the shard sync to remove the
-                    // leases.
+                    // strategy detected leases.
                     Iterator<StreamIdentifier> currentSetOfStreamsIter = currentStreamConfigMap.keySet().iterator();
                     while (currentSetOfStreamsIter.hasNext()) {
                         StreamIdentifier streamIdentifier = currentSetOfStreamsIter.next();
@@ -531,13 +533,13 @@ public class Scheduler implements Runnable {
                     currentStreamConfigMap.keySet().stream().forEach(streamIdentifier -> enqueueStreamLeaseDeletionOperation.accept(streamIdentifier));
 
                 } else if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == StreamsLeasesDeletionType.PROVIDED_STREAMS_DEFERRED_DELETION) {
-                    Optional.ofNullable(formerStreamsLeasesDeletionStrategy.streamIdentifiers()).ifPresent(
+                    Optional.ofNullable(formerStreamsLeasesDeletionStrategy.streamIdentifiersForLeaseCleanup()).ifPresent(
                             streamIdentifiers -> streamIdentifiers.stream().forEach(streamIdentifier -> enqueueStreamLeaseDeletionOperation.accept(streamIdentifier)));
                 }
 
-                // Now let's scan the streamIdentifiers eligible for deferred deletion and delete them.
+                // Now let's scan the streamIdentifiersForLeaseCleanup eligible for deferred deletion and delete them.
                 // StreamIdentifiers are eligible for deletion only when the deferment period has elapsed and
-                // the streamIdentifiers are not present in the latest snapshot.
+                // the streamIdentifiersForLeaseCleanup are not present in the latest snapshot.
                 final Map<Boolean, Set<StreamIdentifier>> staleStreamIdDeletionDecisionMap = staleStreamDeletionMap.keySet().stream().collect(Collectors
                         .partitioningBy(streamIdentifier -> newStreamConfigMap.containsKey(streamIdentifier), Collectors.toSet()));
                 final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream().filter(streamIdentifier ->

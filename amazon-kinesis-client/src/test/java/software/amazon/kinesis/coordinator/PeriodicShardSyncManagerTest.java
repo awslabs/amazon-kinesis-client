@@ -34,6 +34,7 @@ import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import java.math.BigInteger;
@@ -49,9 +50,9 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.common.HashKeyRangeForLease.deserialize;
-import static software.amazon.kinesis.coordinator.PeriodicShardSyncManager.CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY;
 import static software.amazon.kinesis.coordinator.PeriodicShardSyncManager.MAX_HASH_KEY;
 import static software.amazon.kinesis.coordinator.PeriodicShardSyncManager.MIN_HASH_KEY;
+import static software.amazon.kinesis.leases.LeaseManagementConfig.DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY;
 
 @RunWith(MockitoJUnitRunner.class)
 
@@ -72,7 +73,7 @@ public class PeriodicShardSyncManagerTest {
     public void setup() {
         streamIdentifier = StreamIdentifier.multiStreamInstance("123:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager("worker", leaderDecider, leaseRefresher, currentStreamConfigMap,
-                shardSyncTaskManagerProvider, true);
+                shardSyncTaskManagerProvider, true, new NullMetricsFactory(), 2 * 60 * 1000, 3);
     }
 
     @Test
@@ -173,7 +174,7 @@ public class PeriodicShardSyncManagerTest {
             lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             return lease;
         }).collect(Collectors.toList());
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
     }
 
@@ -191,7 +192,7 @@ public class PeriodicShardSyncManagerTest {
             lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             return lease;
         }).collect(Collectors.toList());
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
     }
@@ -214,7 +215,7 @@ public class PeriodicShardSyncManagerTest {
             }
             return lease;
         }).collect(Collectors.toList());
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
     }
@@ -233,7 +234,7 @@ public class PeriodicShardSyncManagerTest {
             lease.checkpoint(ExtendedSequenceNumber.SHARD_END);
             return lease;
         }).collect(Collectors.toList());
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
     }
@@ -252,7 +253,7 @@ public class PeriodicShardSyncManagerTest {
             lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             return lease;
         }).collect(Collectors.toList());
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         List<Lease> multiStreamLeases2 = new ArrayList<HashKeyRangeForLease>() {{
             add(deserialize(MIN_HASH_KEY.toString(), "1"));
@@ -267,7 +268,7 @@ public class PeriodicShardSyncManagerTest {
             return lease;
         }).collect(Collectors.toList());
         // Resetting the holes
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases2).shouldDoShardSync()));
         Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases2).shouldDoShardSync());
     }
@@ -286,7 +287,7 @@ public class PeriodicShardSyncManagerTest {
             lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             return lease;
         }).collect(Collectors.toList());
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         List<Lease> multiStreamLeases2 = new ArrayList<HashKeyRangeForLease>() {{
             add(deserialize(MIN_HASH_KEY.toString(), "1"));
@@ -301,10 +302,10 @@ public class PeriodicShardSyncManagerTest {
             return lease;
         }).collect(Collectors.toList());
         // Resetting the holes
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases2).shouldDoShardSync()));
         // Resetting the holes
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
     }
@@ -347,7 +348,7 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
 
         // Assert that shard sync should never trigger
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         Assert.assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
 
@@ -395,7 +396,7 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
 
         // Assert that shard sync should never trigger
-        IntStream.range(1, CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY).forEach(i -> Assert
+        IntStream.range(1, DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY).forEach(i -> Assert
                 .assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync()));
         Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
 
