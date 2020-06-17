@@ -129,6 +129,9 @@ public class HierarchicalShardSyncer {
 
         if (!CollectionUtils.isNullOrEmpty(latestShards)) {
             log.debug("{} - Num shards: {}", streamIdentifier, latestShards.size());
+        } else {
+            log.warn("Skipping shard sync for {} as no shards found from service.", streamIdentifier);
+            return;
         }
 
         final Map<String, Shard> shardIdToShardMap = constructShardIdToShardMap(latestShards);
