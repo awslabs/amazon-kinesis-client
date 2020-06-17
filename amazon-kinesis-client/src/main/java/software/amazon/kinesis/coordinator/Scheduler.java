@@ -492,24 +492,6 @@ public class Scheduler implements Runnable {
                     }
                 };
 
-                if (SHOULD_DO_LEASE_SYNC_FOR_OLD_STREAMS) {
-                    // We do lease sync for old streams, before leaving to the deletion strategy to delete leases for
-                    // strategy detected leases.
-                    Iterator<StreamIdentifier> currentSetOfStreamsIter = currentStreamConfigMap.keySet().iterator();
-                    while (currentSetOfStreamsIter.hasNext()) {
-                        StreamIdentifier streamIdentifier = currentSetOfStreamsIter.next();
-                        if (!newStreamConfigMap.containsKey(streamIdentifier)) {
-                            log.info("Found old/deleted stream: " + streamIdentifier
-                                    + ". Syncing shards of that stream.");
-                            ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(
-                                    currentStreamConfigMap.get(streamIdentifier));
-                            shardSyncTaskManager.submitShardSyncTask();
-                            currentSetOfStreamsIter.remove();
-                            streamsSynced.add(streamIdentifier);
-                        }
-                    }
-                }
-
                 if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION) {
                     // Now, we are identifying the stale/old streams and enqueuing it for deferred deletion.
                     // It is assumed that all the workers will always have the latest and consistent snapshot of streams
@@ -535,6 +517,29 @@ public class Scheduler implements Runnable {
                 } else if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == StreamsLeasesDeletionType.PROVIDED_STREAMS_DEFERRED_DELETION) {
                     Optional.ofNullable(formerStreamsLeasesDeletionStrategy.streamIdentifiersForLeaseCleanup()).ifPresent(
                             streamIdentifiers -> streamIdentifiers.stream().forEach(streamIdentifier -> enqueueStreamLeaseDeletionOperation.accept(streamIdentifier)));
+                } else {
+                    // Remove the old/stale streams identified through the new and existing streams list, without
+                    // cleaning up their leases. Disabling deprecated shard sync + lease cleanup through a flag.
+                    Iterator<StreamIdentifier> currentSetOfStreamsIter = currentStreamConfigMap.keySet().iterator();
+                    while (currentSetOfStreamsIter.hasNext()) {
+                        StreamIdentifier streamIdentifier = currentSetOfStreamsIter.next();
+                        if (!newStreamConfigMap.containsKey(streamIdentifier)) {
+                            if (SHOULD_DO_LEASE_SYNC_FOR_OLD_STREAMS) {
+                                log.info(
+                                        "Found old/deleted stream : {}. Triggering shard sync. Removing from tracked active streams."
+                                                + streamIdentifier);
+                                ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(
+                                        currentStreamConfigMap.get(streamIdentifier));
+                                shardSyncTaskManager.submitShardSyncTask();
+                            } else {
+                                log.info(
+                                        "Found old/deleted stream : {}. Removing from tracked active streams, but not cleaning up leases,"
+                                                + " as part of this workflow" + streamIdentifier);
+                            }
+                            currentSetOfStreamsIter.remove();
+                            streamsSynced.add(streamIdentifier);
+                        }
+                    }
                 }
 
                 // Now let's scan the streamIdentifiersForLeaseCleanup eligible for deferred deletion and delete them.
