@@ -577,8 +577,9 @@ public class Worker implements Runnable {
 
     /**
      * Create shard sync strategy and corresponding {@link LeaderDecider} based on provided configs. PERIODIC
-     * {@link ShardSyncStrategyType} honors custom leaderDeciders for leader election strategy. All other
-     * {@link ShardSyncStrategyType}s permit only a default single-leader strategy.
+     * {@link ShardSyncStrategyType} honors custom leaderDeciders for leader election strategy, and does not permit
+     * skipping shard syncs if the hash range is complete. All other {@link ShardSyncStrategyType}s permit only a
+     * default single-leader strategy, and will skip shard syncs unless a hole in the hash range is detected.
      */
     private void createShardSyncStrategy(ShardSyncStrategyType strategyType,
                                          LeaderDecider leaderDecider,
@@ -587,7 +588,7 @@ public class Worker implements Runnable {
             case PERIODIC:
                 this.leaderDecider = getOrCreateLeaderDecider(leaderDecider);
                 this.leaderElectedPeriodicShardSyncManager =
-                        getOrCreatePeriodicShardSyncManager(periodicShardSyncManager);
+                        getOrCreatePeriodicShardSyncManager(periodicShardSyncManager, false);
                 this.shardSyncStrategy = createPeriodicShardSyncStrategy();
                 break;
             case SHARD_END:
@@ -598,7 +599,7 @@ public class Worker implements Runnable {
                 }
                 this.leaderDecider = getOrCreateLeaderDecider(null);
                 this.leaderElectedPeriodicShardSyncManager =
-                        getOrCreatePeriodicShardSyncManager(periodicShardSyncManager);
+                        getOrCreatePeriodicShardSyncManager(periodicShardSyncManager, true);
                 this.shardSyncStrategy = createShardEndShardSyncStrategy();
         }
 
@@ -1255,9 +1256,10 @@ public class Worker implements Runnable {
                 Executors.newSingleThreadScheduledExecutor(), PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
     }
 
-    private PeriodicShardSyncManager getOrCreatePeriodicShardSyncManager(PeriodicShardSyncManager periodicShardSyncManager) {
-        // TODO: Configure periodicShardSyncManager with either mandatory shard sync (PERIODIC) or hash range
-        // validation based shard sync (SHARD_END) based on configured shard sync strategy
+    /** A non-null PeriodicShardSyncManager can only provided from unit tests. Any application code will create the
+     * PeriodicShardSyncManager for the first time here. */
+    private PeriodicShardSyncManager getOrCreatePeriodicShardSyncManager(PeriodicShardSyncManager periodicShardSyncManager,
+                                                                         boolean isAuditorMode) {
         if (periodicShardSyncManager != null) {
             return periodicShardSyncManager;
         }
@@ -1272,7 +1274,10 @@ public class Worker implements Runnable {
                         SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
                         shardSyncer,
                         null),
-                metricsFactory);
+                metricsFactory,
+                leaseCoordinator.getLeaseManager(),
+                streamConfig.getStreamProxy(),
+                isAuditorMode);
     }
 
     /**

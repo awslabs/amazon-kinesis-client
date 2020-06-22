@@ -141,6 +141,10 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
         return subSequenceNumber;
     }
 
+    public boolean isShardEnd() {
+        return sequenceNumber.equals(SentinelCheckpoint.SHARD_END.toString());
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();

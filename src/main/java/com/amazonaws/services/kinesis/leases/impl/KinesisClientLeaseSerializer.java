@@ -15,6 +15,7 @@
 package com.amazonaws.services.kinesis.leases.impl;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.amazonaws.services.dynamodbv2.model.AttributeAction;
@@ -26,7 +27,10 @@ import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseSerializer;
 import com.amazonaws.services.kinesis.leases.util.DynamoUtils;
+import com.amazonaws.util.CollectionUtils;
 import com.google.common.base.Strings;
+
+import static com.amazonaws.services.kinesis.leases.impl.UpdateField.HASH_KEY_RANGE;
 
 /**
  * An implementation of ILeaseSerializer for KinesisClientLease objects.
@@ -39,6 +43,9 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
     private static final String PENDING_CHECKPOINT_SEQUENCE_KEY = "pendingCheckpoint";
     private static final String PENDING_CHECKPOINT_SUBSEQUENCE_KEY = "pendingCheckpointSubSequenceNumber";
     public final String PARENT_SHARD_ID_KEY = "parentShardId";
+    private static final String CHILD_SHARD_IDS_KEY = "childShardIds";
+    private static final String STARTING_HASH_KEY = "startingHashKey";
+    private static final String ENDING_HASH_KEY = "endingHashKey";
 
     private final LeaseSerializer baseSerializer = new LeaseSerializer(KinesisClientLease.class);
 
@@ -150,6 +157,28 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
         } else {
             result.put(PENDING_CHECKPOINT_SEQUENCE_KEY, new AttributeValueUpdate().withAction(AttributeAction.DELETE));
             result.put(PENDING_CHECKPOINT_SUBSEQUENCE_KEY, new AttributeValueUpdate().withAction(AttributeAction.DELETE));
+        }
+
+        return result;
+    }
+
+    @Override
+    public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(KinesisClientLease lease,
+                                                                        UpdateField updateField) {
+        Map<String, AttributeValueUpdate> result = new HashMap<>();
+
+        switch (updateField) {
+            case CHILD_SHARDS:
+                // TODO: Implement update fields for child shards
+                break;
+            case HASH_KEY_RANGE:
+                if (lease.getHashKeyRange() != null) {
+                    result.put(STARTING_HASH_KEY, new AttributeValueUpdate(DynamoUtils.createAttributeValue(
+                            lease.getHashKeyRange().serializedStartingHashKey()), AttributeAction.PUT));
+                    result.put(ENDING_HASH_KEY, new AttributeValueUpdate(DynamoUtils.createAttributeValue(
+                            lease.getHashKeyRange().serializedEndingHashKey()), AttributeAction.PUT));
+                }
+                break;
         }
 
         return result;

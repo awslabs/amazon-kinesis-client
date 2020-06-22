@@ -178,6 +178,12 @@ public class LeaseSerializer implements ILeaseSerializer<Lease> {
     }
 
     @Override
+    public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease, UpdateField updateField) {
+        // There is no application-specific data in Lease - just return a map that increments the counter.
+        return new HashMap<String, AttributeValueUpdate>();
+    }
+
+    @Override
     public Collection<KeySchemaElement> getKeySchema() {
         List<KeySchemaElement> keySchema = new ArrayList<KeySchemaElement>();
         keySchema.add(new KeySchemaElement().withAttributeName(LEASE_KEY_KEY).withKeyType(KeyType.HASH));

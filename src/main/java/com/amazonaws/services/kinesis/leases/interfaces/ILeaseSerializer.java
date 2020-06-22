@@ -23,6 +23,7 @@ import com.amazonaws.services.dynamodbv2.model.AttributeValueUpdate;
 import com.amazonaws.services.dynamodbv2.model.ExpectedAttributeValue;
 import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
 import com.amazonaws.services.kinesis.leases.impl.Lease;
+import com.amazonaws.services.kinesis.leases.impl.UpdateField;
 
 /**
  * Utility class that manages the mapping of Lease objects/operations to records in DynamoDB.
@@ -103,6 +104,15 @@ public interface ILeaseSerializer<T extends Lease> {
      *         counter
      */
     public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(T lease);
+
+    /**
+     * @param lease
+     * @param updateField
+     * @return the attribute value map that updates application-specific data for a lease
+     */
+    default Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(T lease, UpdateField updateField) {
+        throw new UnsupportedOperationException();
+    }
 
     /**
      * @return the key schema for creating a DynamoDB table to store leases

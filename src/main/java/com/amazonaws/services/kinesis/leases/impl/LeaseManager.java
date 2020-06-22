@@ -590,6 +590,35 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         return true;
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void updateLeaseWithMetaInfo(T lease, UpdateField updateField)
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        verifyNotNull(lease, "lease cannot be null");
+        verifyNotNull(updateField, "updateField cannot be null");
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Updating lease " + lease + " for field " + updateField);
+        }
+
+        UpdateItemRequest request = new UpdateItemRequest();
+        request.setTableName(table);
+        request.setKey(serializer.getDynamoHashKey(lease));
+        request.setExpected(serializer.getDynamoLeaseCounterExpectation(lease));
+
+        Map<String, AttributeValueUpdate> updates = serializer.getDynamoUpdateLeaseUpdate(lease, updateField);
+        updates.putAll(serializer.getDynamoUpdateLeaseUpdate(lease));
+        request.setAttributeUpdates(updates);
+
+        try {
+            dynamoDBClient.updateItem(request);
+        } catch (AmazonClientException e) {
+            throw convertAndRethrowExceptions("update", lease.getLeaseKey(), e);
+        }
+    }
+
     /*
      * This method contains boilerplate exception handling - it throws or returns something to be thrown. The
      * inconsistency there exists to satisfy the compiler when this method is used at the end of non-void methods.

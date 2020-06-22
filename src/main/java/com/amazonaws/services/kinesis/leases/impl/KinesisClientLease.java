@@ -30,6 +30,8 @@ public class KinesisClientLease extends Lease {
     private ExtendedSequenceNumber pendingCheckpoint;
     private Long ownerSwitchesSinceCheckpoint = 0L;
     private Set<String> parentShardIds = new HashSet<String>();
+    private Set<String> childShardIds = new HashSet<String>();
+    private HashKeyRangeForLease hashKeyRangeForLease;
 
     public KinesisClientLease() {
 
@@ -41,17 +43,22 @@ public class KinesisClientLease extends Lease {
         this.pendingCheckpoint = other.getPendingCheckpoint();
         this.ownerSwitchesSinceCheckpoint = other.getOwnerSwitchesSinceCheckpoint();
         this.parentShardIds.addAll(other.getParentShardIds());
+        this.childShardIds = other.getChildShardIds();
+        this.hashKeyRangeForLease = other.getHashKeyRange();
     }
 
     KinesisClientLease(String leaseKey, String leaseOwner, Long leaseCounter, UUID concurrencyToken,
             Long lastCounterIncrementNanos, ExtendedSequenceNumber checkpoint, ExtendedSequenceNumber pendingCheckpoint,
-            Long ownerSwitchesSinceCheckpoint, Set<String> parentShardIds) {
+            Long ownerSwitchesSinceCheckpoint, Set<String> parentShardIds, Set<String> childShardIds,
+            HashKeyRangeForLease hashKeyRangeForLease) {
         super(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos);
 
         this.checkpoint = checkpoint;
         this.pendingCheckpoint = pendingCheckpoint;
         this.ownerSwitchesSinceCheckpoint = ownerSwitchesSinceCheckpoint;
         this.parentShardIds.addAll(parentShardIds);
+        this.childShardIds.addAll(childShardIds);
+        this.hashKeyRangeForLease = hashKeyRangeForLease;
     }
 
     /**
@@ -101,6 +108,20 @@ public class KinesisClientLease extends Lease {
     }
 
     /**
+     * @return shardIds that are the children of this lease. Used for resharding.
+     */
+    public Set<String> getChildShardIds() {
+        return new HashSet<String>(childShardIds);
+    }
+
+    /**
+     * @return hash key range that this lease covers.
+     */
+    public HashKeyRangeForLease getHashKeyRange() {
+        return hashKeyRangeForLease;
+    }
+
+    /**
      * Sets checkpoint.
      * 
      * @param checkpoint may not be null
@@ -141,6 +162,29 @@ public class KinesisClientLease extends Lease {
 
         this.parentShardIds.clear();
         this.parentShardIds.addAll(parentShardIds);
+    }
+
+    /**
+     * Sets childShardIds.
+     *
+     * @param childShardIds may not be null
+     */
+    public void setChildShardIds(Collection<String> childShardIds) {
+        verifyNotNull(childShardIds, "childShardIds should not be null");
+
+        this.childShardIds.clear();
+        this.childShardIds.addAll(childShardIds);
+    }
+
+    /**
+     * Sets hashKeyRangeForLease.
+     *
+     * @param hashKeyRangeForLease may not be null
+     */
+    public void setHashKeyRange(HashKeyRangeForLease hashKeyRangeForLease) {
+        verifyNotNull(hashKeyRangeForLease, "hashKeyRangeForLease should not be null");
+
+        this.hashKeyRangeForLease = hashKeyRangeForLease;
     }
     
     private void verifyNotNull(Object object, String message) {

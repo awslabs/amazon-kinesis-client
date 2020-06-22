@@ -174,6 +174,8 @@ public class WorkerTest {
     @Mock
     private IKinesisProxy proxy;
     @Mock
+    private StreamConfig streamConfig;
+    @Mock
     private WorkerThreadPoolExecutor executorService;
     @Mock
     private WorkerCWMetricsFactory cwMetricsFactory;
@@ -200,6 +202,8 @@ public class WorkerTest {
         config.withMaxInitializationAttempts(1);
         recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory());
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(mock(ILeaseManager.class));
+        when(streamConfig.getStreamProxy()).thenReturn(kinesisProxy);
     }
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
@@ -257,7 +261,6 @@ public class WorkerTest {
         final String stageName = "testStageName";
         IRecordProcessorFactory streamletFactory = SAMPLE_RECORD_PROCESSOR_FACTORY_V2;
         config = new KinesisClientLibConfiguration(stageName, null, null, WORKER_ID);
-        IKinesisProxy proxy = null;
         ICheckpoint checkpoint = null;
         int maxRecords = 1;
         int idleTimeInMilliseconds = 1000;
@@ -306,7 +309,6 @@ public class WorkerTest {
     public void testWorkerLoopWithCheckpoint() {
         final String stageName = "testStageName";
         IRecordProcessorFactory streamletFactory = SAMPLE_RECORD_PROCESSOR_FACTORY_V2;
-        IKinesisProxy proxy = null;
         ICheckpoint checkpoint = null;
         int maxRecords = 1;
         int idleTimeInMilliseconds = 1000;
@@ -376,7 +378,6 @@ public class WorkerTest {
         final String stageName = "testStageName";
         IRecordProcessorFactory streamletFactory = SAMPLE_RECORD_PROCESSOR_FACTORY_V2;
         config = new KinesisClientLibConfiguration(stageName, null, null, WORKER_ID);
-        IKinesisProxy proxy = null;
         ICheckpoint checkpoint = null;
         int maxRecords = 1;
         int idleTimeInMilliseconds = 1000;
@@ -866,7 +867,6 @@ public class WorkerTest {
 
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
-        StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
@@ -954,7 +954,6 @@ public class WorkerTest {
     public void testShutdownCallableNotAllowedTwice() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
-        StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
@@ -1019,7 +1018,6 @@ public class WorkerTest {
     public void testGracefulShutdownSingleFuture() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
-        StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
@@ -1107,7 +1105,6 @@ public class WorkerTest {
 
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
-        StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
 
@@ -1190,7 +1187,6 @@ public class WorkerTest {
         when(completedLease.getParentShardIds()).thenReturn(Collections.singleton(parentShardId));
         when(completedLease.getCheckpoint()).thenReturn(ExtendedSequenceNumber.SHARD_END);
         when(completedLease.getConcurrencyToken()).thenReturn(UUID.randomUUID());
-        final StreamConfig streamConfig = mock(StreamConfig.class);
         final IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
         final List<KinesisClientLease> leases = Collections.singletonList(completedLease);
         final List<ShardInfo> currentAssignments = new ArrayList<>();
@@ -1238,7 +1234,6 @@ public class WorkerTest {
     public void testRequestShutdownWithLostLease() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
-        StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
@@ -1351,7 +1346,6 @@ public class WorkerTest {
     public void testRequestShutdownWithAllLeasesLost() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
-        StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
@@ -1469,7 +1463,6 @@ public class WorkerTest {
     public void testLeaseCancelledAfterShutdownRequest() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
-        StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);
@@ -1553,7 +1546,6 @@ public class WorkerTest {
     public void testEndOfShardAfterShutdownRequest() throws Exception {
 
         IRecordProcessorFactory recordProcessorFactory = mock(IRecordProcessorFactory.class);
-        StreamConfig streamConfig = mock(StreamConfig.class);
         IMetricsFactory metricsFactory = mock(IMetricsFactory.class);
 
         ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("123", 0L);

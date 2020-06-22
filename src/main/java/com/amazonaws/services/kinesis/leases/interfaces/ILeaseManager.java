@@ -20,6 +20,7 @@ import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.Lease;
+import com.amazonaws.services.kinesis.leases.impl.UpdateField;
 
 /**
  * Supports basic CRUD operations for Leases.
@@ -179,6 +180,19 @@ public interface ILeaseManager<T extends Lease> {
      */
     public boolean updateLease(T lease)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+
+    /**
+     * Update application-specific fields of the given lease in DynamoDB. Does not update fields managed by the leasing
+     * library such as leaseCounter, leaseOwner, or leaseKey.
+     **
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
+     */
+    default void updateLeaseWithMetaInfo(T lease, UpdateField updateField)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throw new UnsupportedOperationException("updateLeaseWithMetaInfo is not implemented.");
+    }
 
     /**
      * Check (synchronously) if there are any leases in the lease table.
