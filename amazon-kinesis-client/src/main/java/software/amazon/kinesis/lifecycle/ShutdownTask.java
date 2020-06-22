@@ -113,8 +113,8 @@ public class ShutdownTask implements ConsumerTask {
 
         try {
             try {
-                log.debug("Invoking shutdown() for shard {}, concurrencyToken {}. Shutdown reason: {}",
-                        leaseKeyProvider.apply(shardInfo), shardInfo.concurrencyToken(), reason);
+                log.debug("Invoking shutdown() for shard {} with child shards {} , concurrencyToken {}. Shutdown reason: {}",
+                        leaseKeyProvider.apply(shardInfo), childShards, shardInfo.concurrencyToken(), reason);
 
                 final long startTime = System.currentTimeMillis();
                 if (reason == ShutdownReason.SHARD_END) {

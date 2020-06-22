@@ -423,7 +423,9 @@ public class Scheduler implements Runnable {
             cleanupShardConsumers(assignedShards);
 
             // check for new streams and sync with the scheduler state
-            checkAndSyncStreamShardsAndLeases();
+            if (isLeader()) {
+                checkAndSyncStreamShardsAndLeases();
+            }
 
             logExecutorState();
             slog.info("Sleeping ...");
@@ -438,6 +440,10 @@ public class Scheduler implements Runnable {
             }
         }
         slog.resetInfoLogging();
+    }
+
+    private boolean isLeader() {
+        return leaderDecider.isLeader(leaseManagementConfig.workerIdentifier());
     }
 
 
