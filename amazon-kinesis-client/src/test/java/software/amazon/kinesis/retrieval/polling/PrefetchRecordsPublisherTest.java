@@ -146,6 +146,14 @@ public class PrefetchRecordsPublisherTest {
     }
 
     @Test
+    public void testDataFetcherIsNotReInitializedOnMultipleCacheStarts() {
+        getRecordsCache.start(sequenceNumber, initialPosition);
+        getRecordsCache.start(sequenceNumber, initialPosition);
+        getRecordsCache.start(sequenceNumber, initialPosition);
+        verify(dataFetcher, times(1)).initialize(any(ExtendedSequenceNumber.class), any());
+    }
+
+    @Test
     public void testGetRecords() {
         record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
 

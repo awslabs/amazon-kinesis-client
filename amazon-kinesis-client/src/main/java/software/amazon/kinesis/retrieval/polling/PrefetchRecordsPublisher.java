@@ -230,12 +230,12 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         if (executorService.isShutdown()) {
             throw new IllegalStateException("ExecutorService has been shutdown.");
         }
-
-        publisherSession.init(extendedSequenceNumber, initialPositionInStreamExtended);
-
         if (!started) {
-            log.info("{} : Starting prefetching thread.", streamAndShardId);
+            publisherSession.init(extendedSequenceNumber, initialPositionInStreamExtended);
+            log.info("{} : Starting prefetching thread and initializing publisher session.", streamAndShardId);
             executorService.execute(defaultGetRecordsCacheDaemon);
+        } else {
+            log.info("{} : Skipping publisher start as it was already started.", streamAndShardId);
         }
         started = true;
     }
