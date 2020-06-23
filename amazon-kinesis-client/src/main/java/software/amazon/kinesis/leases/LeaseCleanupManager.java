@@ -114,20 +114,16 @@ public class LeaseCleanupManager {
             log.warn("Cannot enqueue lease {} for deferred deletion - instance doesn't hold the lease for that shard.",
                     lease.leaseKey());
         } else {
-            //TODO: Optimize verifying duplicate entries https://sim.amazon.com/issues/KinesisLTR-597.
-            if (!deletionQueue.contains(leasePendingDeletion)) {
-                log.debug("Enqueuing lease {} for deferred deletion.", lease.leaseKey());
-                if (!deletionQueue.add(leasePendingDeletion)) {
-                    log.warn("Unable to enqueue lease {} for deletion.", lease.leaseKey());
-                }
-            } else {
-                log.warn("Lease {} is already pending deletion, not enqueueing for deletion.", lease.leaseKey());
+            log.debug("Enqueuing lease {} for deferred deletion.", lease.leaseKey());
+            if (!deletionQueue.add(leasePendingDeletion)) {
+                log.warn("Unable to enqueue lease {} for deletion.", lease.leaseKey());
             }
         }
     }
 
     /**
      * Check if lease was already enqueued for deletion.
+     * //TODO: Optimize verifying duplicate entries https://sim.amazon.com/issues/KinesisLTR-597.
      * @param leasePendingDeletion
      * @return true if enqueued for deletion; false otherwise.
      */
@@ -168,26 +164,39 @@ public class LeaseCleanupManager {
 
         try {
             if (cleanupLeasesUponShardCompletion && timeToCheckForCompletedShard) {
-                Set<String> childShardKeys = leaseCoordinator.leaseRefresher().getLease(lease.leaseKey()).childShardIds();
-                if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
-                    try {
-                        childShardKeys = getChildShardsFromService(shardInfo, streamIdentifier);
+                final Lease leaseFromDDB = leaseCoordinator.leaseRefresher().getLease(lease.leaseKey());
+                if(leaseFromDDB != null) {
+                    Set<String> childShardKeys = leaseFromDDB.childShardIds();
+                    if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
+                        try {
+                            childShardKeys = getChildShardsFromService(shardInfo, streamIdentifier);
 
-                        if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
-                            log.error("No child shards returned from service for shard {} for {}.", shardInfo.shardId(), streamIdentifier.streamName());
-                        } else {
-                            wereChildShardsPresent = true;
-                            updateLeaseWithChildShards(leasePendingDeletion, childShardKeys);
+                            if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
+                                log.error(
+                                        "No child shards returned from service for shard {} for {} while cleaning up lease.",
+                                        shardInfo.shardId(), streamIdentifier.streamName());
+                            } else {
+                                wereChildShardsPresent = true;
+                                updateLeaseWithChildShards(leasePendingDeletion, childShardKeys);
+                            }
+                        } catch (ExecutionException e) {
+                            throw exceptionManager.apply(e.getCause());
+                        } finally {
+                            alreadyCheckedForGarbageCollection = true;
                         }
-                    } catch (ExecutionException e) {
-                        throw exceptionManager.apply(e.getCause());
-                    } finally {
-                        alreadyCheckedForGarbageCollection = true;
+                    } else {
+                        wereChildShardsPresent = true;
+                    }
+                    try {
+                        cleanedUpCompletedLease = cleanupLeaseForCompletedShard(lease, shardInfo, childShardKeys);
+                    } catch (Exception e) {
+                        // Suppressing the exception here, so that we can attempt for garbage cleanup.
+                        log.warn("Unable to cleanup lease for shard {} in {}", shardInfo.shardId(), streamIdentifier.streamName(), e);
                     }
                 } else {
-                    wereChildShardsPresent = true;
+                    log.info("Lease not present in lease table while cleaning the shard {} of {}", shardInfo.shardId(), streamIdentifier.streamName());
+                    cleanedUpCompletedLease = true;
                 }
-                cleanedUpCompletedLease = cleanupLeaseForCompletedShard(lease, shardInfo, childShardKeys);
             }
 
             if (!alreadyCheckedForGarbageCollection && timeToCheckForGarbageShard) {
@@ -256,20 +265,24 @@ public class LeaseCleanupManager {
     // 2. Its parent shard lease(s) have already been deleted.
     private boolean cleanupLeaseForCompletedShard(Lease lease, ShardInfo shardInfo, Set<String> childShardKeys)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException, IllegalStateException {
-        final Set<String> processedChildShardLeases = new HashSet<>();
+        final Set<String> processedChildShardLeaseKeys = new HashSet<>();
+        final Set<String> childShardLeaseKeys = childShardKeys.stream().map(ck -> ShardInfo.getLeaseKey(shardInfo, ck))
+                .collect(Collectors.toSet());
 
-        for (String childShardKey : childShardKeys) {
-            final Lease childShardLease = Optional.ofNullable(leaseCoordinator.leaseRefresher().getLease(childShardKey)).orElseThrow(
-                    () -> new IllegalStateException("Child lease " + childShardKey + " for completed shard not found in " +
-                            "lease table - not cleaning up lease " + lease));
+        for (String childShardLeaseKey : childShardLeaseKeys) {
+            final Lease childShardLease = Optional.ofNullable(
+                    leaseCoordinator.leaseRefresher().getLease(childShardLeaseKey))
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Child lease " + childShardLeaseKey + " for completed shard not found in "
+                                    + "lease table - not cleaning up lease " + lease));
 
-            if (!childShardLease.checkpoint().equals(ExtendedSequenceNumber.TRIM_HORIZON)
-                    && !childShardLease.checkpoint().equals(ExtendedSequenceNumber.AT_TIMESTAMP)) {
-                processedChildShardLeases.add(childShardLease.leaseKey());
+            if (!childShardLease.checkpoint().equals(ExtendedSequenceNumber.TRIM_HORIZON) && !childShardLease
+                    .checkpoint().equals(ExtendedSequenceNumber.AT_TIMESTAMP)) {
+                processedChildShardLeaseKeys.add(childShardLease.leaseKey());
             }
         }
 
-        if (!allParentShardLeasesDeleted(lease, shardInfo) || !Objects.equals(childShardKeys, processedChildShardLeases)) {
+        if (!allParentShardLeasesDeleted(lease, shardInfo) || !Objects.equals(childShardLeaseKeys, processedChildShardLeaseKeys)) {
             return false;
         }
 
@@ -320,6 +333,8 @@ public class LeaseCleanupManager {
                     if (leaseCleanupResult.leaseCleanedUp()) {
                         log.debug("Successfully cleaned up lease {} for {}", leaseKey, streamIdentifier);
                         deletionSucceeded = true;
+                    } else {
+                        log.warn("Unable to clean up lease {} for {} due to {}", leaseKey, streamIdentifier, leaseCleanupResult);
                     }
                 } catch (Exception e) {
                     log.error("Failed to cleanup lease {} for {}. Will re-enqueue for deletion and retry on next " +

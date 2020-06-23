@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.utils.CollectionUtils;
+import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -101,7 +102,7 @@ public class ShutdownTask implements ConsumerTask {
     /*
      * Invokes ShardRecordProcessor shutdown() API.
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerTask#call()
      */
     @Override
@@ -113,7 +114,7 @@ public class ShutdownTask implements ConsumerTask {
 
         try {
             try {
-                log.debug("Invoking shutdown() for shard {} with child shards {} , concurrencyToken {}. Shutdown reason: {}",
+                log.debug("Invoking shutdown() for shard {} with childShards {}, concurrencyToken {}. Shutdown reason: {}",
                         leaseKeyProvider.apply(shardInfo), childShards, shardInfo.concurrencyToken(), reason);
 
                 final long startTime = System.currentTimeMillis();
@@ -124,34 +125,19 @@ public class ShutdownTask implements ConsumerTask {
                     // In this case, KinesisDataFetcher and FanOutRecordsPublisher will send out SHARD_END signal to trigger a shutdown task with empty list of childShards.
                     // This scenario could happen when customer deletes the stream while leaving the KCL application running.
                     final Lease currentShardLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
+                    Validate.validState(currentShardLease != null,
+                            "%s : Lease not owned by the current worker. Leaving ShardEnd handling to new owner.",
+                            leaseKeyProvider.apply(shardInfo));
                     final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(streamIdentifier,
                             currentShardLease, shardInfo);
 
                     if (!CollectionUtils.isNullOrEmpty(childShards)) {
                         createLeasesForChildShardsIfNotExist();
                         updateLeaseWithChildShards(currentShardLease);
-                        // Attempt to do shard checkpointing and throw on exception.
+                    }
+                    if (!leaseCleanupManager.isEnqueuedForDeletion(leasePendingDeletion)) {
                         attemptShardEndCheckpointing(scope, startTime);
-                        // Enqueue completed shard for deletion.
                         leaseCleanupManager.enqueueForDeletion(leasePendingDeletion);
-
-                    } else {
-                        // This might be a case of ResourceNotFound from Service. Directly validate and delete lease, if required.
-                        // If already enqueued for deletion as part of this worker, do not attempt to shard end checkpoint
-                        // or lease cleanup. Else try to shard end checkpoint and cleanup the lease if the shard is a
-                        // garbage shard.
-                        if (!leaseCleanupManager.isEnqueuedForDeletion(leasePendingDeletion)) {
-                            try {
-                                // Do a best effort shard end checkpointing, before attempting to cleanup the lease,
-                                // in the case of RNF Exception.
-                                attemptShardEndCheckpointing(scope, startTime);
-                            } finally {
-                                // Attempt to garbage collect if this shard is no longer associated with the stream.
-                                // If we don't want to cleanup the garbage shard without successful shard end
-                                // checkpointing, remove the try finally construct and only execute the methods.
-                                attemptGarbageCollectionOfLeaseAndEnqueueOnFailure(leasePendingDeletion, currentShardLease);
-                            }
-                        }
                     }
                 } else {
                     throwOnApplicationException(() -> shardRecordProcessor.leaseLost(LeaseLostInput.builder().build()), scope, startTime);
@@ -192,29 +178,6 @@ public class ShutdownTask implements ConsumerTask {
             // Call the shardRecordsProcessor to checkpoint with SHARD_END sequence number.
             // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
             throwOnApplicationException(() -> applicationCheckpointAndVerification(), scope, startTime);
-        }
-    }
-
-    private void attemptGarbageCollectionOfLeaseAndEnqueueOnFailure(LeasePendingDeletion leasePendingDeletion, Lease currentShardLease) {
-        final LeaseCleanupManager.LeaseCleanupResult leaseCleanupResult;
-        try {
-            leaseCleanupResult = leaseCleanupManager
-                    .cleanupLease(leasePendingDeletion, false, true);
-            if (leaseCleanupResult.leaseCleanedUp()) {
-                log.info("Cleaned up garbage lease {} for {}. Details : {}",
-                        currentShardLease.leaseKey(), streamIdentifier, leaseCleanupResult);
-            } else {
-                log.error("Unable to cleanup potential garbage lease {} for {}. Details : {} ",
-                        currentShardLease.leaseKey(), streamIdentifier, leaseCleanupResult);
-                // If we are unable to delete this lease and the reason being RNF, then enqueue it
-                // for deletion, so that we don't end up consuming service TPS on any bugs.
-                if (leaseCleanupResult.wasResourceNotFound()) {
-                    leaseCleanupManager.enqueueForDeletion(leasePendingDeletion);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Unable to cleanup potential garbage lease {} for {}", currentShardLease.leaseKey(),
-                    streamIdentifier, e);
         }
     }
 
