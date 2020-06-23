@@ -423,7 +423,9 @@ public class Scheduler implements Runnable {
             cleanupShardConsumers(assignedShards);
 
             // check for new streams and sync with the scheduler state
-            checkAndSyncStreamShardsAndLeases();
+            if (isLeader()) {
+                checkAndSyncStreamShardsAndLeases();
+            }
 
             logExecutorState();
             slog.info("Sleeping ...");
@@ -438,6 +440,10 @@ public class Scheduler implements Runnable {
             }
         }
         slog.resetInfoLogging();
+    }
+
+    private boolean isLeader() {
+        return leaderDecider.isLeader(leaseManagementConfig.workerIdentifier());
     }
 
 
@@ -526,15 +532,14 @@ public class Scheduler implements Runnable {
                         if (!newStreamConfigMap.containsKey(streamIdentifier)) {
                             if (SHOULD_DO_LEASE_SYNC_FOR_OLD_STREAMS) {
                                 log.info(
-                                        "Found old/deleted stream : {}. Triggering shard sync. Removing from tracked active streams."
-                                                + streamIdentifier);
+                                        "Found old/deleted stream : {}. Triggering shard sync. Removing from tracked active streams.", streamIdentifier);
                                 ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(
                                         currentStreamConfigMap.get(streamIdentifier));
                                 shardSyncTaskManager.submitShardSyncTask();
                             } else {
                                 log.info(
                                         "Found old/deleted stream : {}. Removing from tracked active streams, but not cleaning up leases,"
-                                                + " as part of this workflow" + streamIdentifier);
+                                                + " as part of this workflow", streamIdentifier);
                             }
                             currentSetOfStreamsIter.remove();
                             streamsSynced.add(streamIdentifier);
