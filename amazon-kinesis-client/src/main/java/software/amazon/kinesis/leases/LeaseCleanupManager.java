@@ -105,7 +105,8 @@ public class LeaseCleanupManager {
     }
 
     /**
-     * Enqueues a lease for deletion.
+     * Enqueues a lease for deletion without check for duplicate entry. Use {@link #isEnqueuedForDeletion}
+     * for checking the duplicate entries.
      * @param leasePendingDeletion
      */
     public void enqueueForDeletion(LeasePendingDeletion leasePendingDeletion) {

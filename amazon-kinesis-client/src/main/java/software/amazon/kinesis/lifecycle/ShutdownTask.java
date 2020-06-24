@@ -136,8 +136,18 @@ public class ShutdownTask implements ConsumerTask {
                         updateLeaseWithChildShards(currentShardLease);
                     }
                     if (!leaseCleanupManager.isEnqueuedForDeletion(leasePendingDeletion)) {
-                        attemptShardEndCheckpointing(scope, startTime);
-                        leaseCleanupManager.enqueueForDeletion(leasePendingDeletion);
+                        boolean isSuccess = false;
+                        try {
+                            isSuccess = attemptShardEndCheckpointing(scope, startTime);
+                        } finally {
+                            // Check if either the shard end ddb persist is successful or
+                            // if childshards is empty. When child shards is empty then either it is due to
+                            // completed shard being reprocessed or we got RNF from service.
+                            // For these cases enqueue the lease for deletion.
+                            if (isSuccess || !CollectionUtils.isNullOrEmpty(childShards)) {
+                                leaseCleanupManager.enqueueForDeletion(leasePendingDeletion);
+                            }
+                        }
                     }
                 } else {
                     throwOnApplicationException(() -> shardRecordProcessor.leaseLost(LeaseLostInput.builder().build()), scope, startTime);
@@ -169,7 +179,7 @@ public class ShutdownTask implements ConsumerTask {
         return new TaskResult(exception);
     }
 
-    private void attemptShardEndCheckpointing(MetricsScope scope, long startTime)
+    private boolean attemptShardEndCheckpointing(MetricsScope scope, long startTime)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException,
             CustomerApplicationException {
         final Lease leaseFromDdb = Optional.ofNullable(leaseCoordinator.leaseRefresher().getLease(leaseKeyProvider.apply(shardInfo)))
@@ -179,6 +189,7 @@ public class ShutdownTask implements ConsumerTask {
             // The shardEnded is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling shardEnded.
             throwOnApplicationException(() -> applicationCheckpointAndVerification(), scope, startTime);
         }
+        return true;
     }
 
     private void applicationCheckpointAndVerification() {

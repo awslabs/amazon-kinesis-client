@@ -225,49 +225,6 @@ public class LeaseCleanupManagerTest {
         verify(leaseRefresher, times(1)).deleteLease(heldLease);
     }
 
-    /**
-     * Tests that if a lease deletion fails, it's re-enqueued for deletion.
-     */
-    @Test
-    public final void testFailedDeletionsReEnqueued() throws Exception {
-        shardInfo = new ShardInfo("shardId-0", concurrencyToken, Collections.emptySet(),
-                ExtendedSequenceNumber.LATEST);
-
-        final Lease heldLease = LeaseHelper.createLease(shardInfo.shardId(), "leaseOwner", Collections.singleton("parentShardId"));
-
-        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
-        when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.shardId())).thenReturn(heldLease);
-        when(kinesis.getShardIterator(any(GetShardIteratorRequest.class))).thenThrow(Exception.class);
-
-        leaseCleanupManager.enqueueForDeletion(new LeasePendingDeletion(streamIdentifier, heldLease, shardInfo));
-        leaseCleanupManager.enqueueForDeletion(new LeasePendingDeletion(streamIdentifier, heldLease, shardInfo));
-        Assert.assertEquals(1, leaseCleanupManager.leasesPendingDeletion());
-    }
-
-    /**
-     * Tests duplicate leases are not enqueued for deletion.
-     */
-    @Test
-    public final void testNoDuplicateLeasesEnqueued() {
-        // Disable lease cleanup so that the queue isn't drained while the test is running.
-        cleanupLeasesOfCompletedShards = false;
-        leaseCleanupManager = new LeaseCleanupManager(leaseCoordinator, kinesis,
-                NULL_METRICS_FACTORY, maxFutureWait, deletionThreadPool, cleanupLeasesOfCompletedShards, leaseCleanupIntervalMillis,
-                completedLeaseCleanupIntervalMillis, garbageLeaseCleanupIntervalMillis);
-        shardInfo = new ShardInfo("shardId-0", concurrencyToken, Collections.emptySet(),
-                ExtendedSequenceNumber.LATEST);
-        final Lease heldLease = LeaseHelper.createLease(shardInfo.shardId(), "leaseOwner", Collections.singleton("parentShardId"));
-
-        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
-        when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.shardId())).thenReturn(heldLease);
-
-        // Enqueue the same lease twice.
-        leaseCleanupManager.enqueueForDeletion(new LeasePendingDeletion(streamIdentifier, heldLease, shardInfo));
-        Assert.assertEquals(1, leaseCleanupManager.leasesPendingDeletion());
-        leaseCleanupManager.enqueueForDeletion(new LeasePendingDeletion(streamIdentifier, heldLease, shardInfo));
-        Assert.assertEquals(1, leaseCleanupManager.leasesPendingDeletion());
-    }
-
     private final void verifyExpectedDeletedLeasesCompletedShardCase(ShardInfo shardInfo, List<ChildShard> childShards,
                                                                      ExtendedSequenceNumber extendedSequenceNumber,
                                                                      int expectedDeletedLeases) throws Exception {
