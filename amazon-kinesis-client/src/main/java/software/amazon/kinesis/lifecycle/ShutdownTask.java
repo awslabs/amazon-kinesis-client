@@ -144,7 +144,7 @@ public class ShutdownTask implements ConsumerTask {
                             // if childshards is empty. When child shards is empty then either it is due to
                             // completed shard being reprocessed or we got RNF from service.
                             // For these cases enqueue the lease for deletion.
-                            if (isSuccess || !CollectionUtils.isNullOrEmpty(childShards)) {
+                            if (isSuccess || CollectionUtils.isNullOrEmpty(childShards)) {
                                 leaseCleanupManager.enqueueForDeletion(leasePendingDeletion);
                             }
                         }
