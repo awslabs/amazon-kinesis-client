@@ -153,7 +153,7 @@ public class ShutdownTaskTest {
 
         final TaskResult result = task.call();
         assertNotNull(result.getException());
-        assertTrue(result.getException() instanceof KinesisClientLibIOException);
+        assertTrue(result.getException() instanceof IllegalStateException);
         verify(recordsPublisher, never()).shutdown();
         verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());

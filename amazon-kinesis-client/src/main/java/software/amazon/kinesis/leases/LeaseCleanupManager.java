@@ -105,7 +105,8 @@ public class LeaseCleanupManager {
     }
 
     /**
-     * Enqueues a lease for deletion.
+     * Enqueues a lease for deletion without check for duplicate entry. Use {@link #isEnqueuedForDeletion}
+     * for checking the duplicate entries.
      * @param leasePendingDeletion
      */
     public void enqueueForDeletion(LeasePendingDeletion leasePendingDeletion) {
@@ -135,7 +136,7 @@ public class LeaseCleanupManager {
      * Returns how many leases are currently waiting in the queue pending deletion.
      * @return number of leases pending deletion.
      */
-    public int leasesPendingDeletion() {
+    private int leasesPendingDeletion() {
         return deletionQueue.size();
     }
 
@@ -310,6 +311,7 @@ public class LeaseCleanupManager {
 
     @VisibleForTesting
     void cleanupLeases() {
+        log.info("Number of pending leases to clean before the scan : {}", leasesPendingDeletion());
         if (deletionQueue.isEmpty()) {
             log.debug("No leases pending deletion.");
         } else if (timeToCheckForCompletedShard() | timeToCheckForGarbageShard()) {
@@ -340,24 +342,22 @@ public class LeaseCleanupManager {
                     log.error("Failed to cleanup lease {} for {}. Will re-enqueue for deletion and retry on next " +
                             "scheduled execution.", leaseKey, streamIdentifier, e);
                 }
-
                 if (!deletionSucceeded) {
                     log.debug("Did not cleanup lease {} for {}. Re-enqueueing for deletion.", leaseKey, streamIdentifier);
                     failedDeletions.add(leasePendingDeletion);
                 }
             }
-
             if (completedLeaseCleanedUp) {
                 log.debug("At least one completed lease was cleaned up - restarting interval");
                 completedLeaseStopwatch.reset().start();
             }
-
             if (garbageLeaseCleanedUp) {
                 log.debug("At least one garbage lease was cleaned up - restarting interval");
                 garbageLeaseStopwatch.reset().start();
             }
-
             deletionQueue.addAll(failedDeletions);
+
+            log.info("Number of pending leases to clean after the scan : {}", leasesPendingDeletion());
         }
     }
 
