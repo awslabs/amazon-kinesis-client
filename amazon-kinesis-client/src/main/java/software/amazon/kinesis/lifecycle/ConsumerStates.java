@@ -258,14 +258,12 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(ShardConsumerArgument argument, ShardConsumer consumer, ProcessRecordsInput input) {
-            ThrottlingReporter throttlingReporter = new ThrottlingReporter(5, argument.shardInfo().shardId());
             return new ProcessTask(argument.shardInfo(),
                     argument.shardRecordProcessor(),
                     argument.recordProcessorCheckpointer(),
                     argument.taskBackoffTimeMillis(),
                     argument.skipShardSyncAtWorkerInitializationIfLeasesExist(),
                     argument.shardDetector(),
-                    throttlingReporter,
                     input,
                     argument.shouldCallProcessRecordsEvenForEmptyRecordList(),
                     argument.idleTimeInMilliseconds(),

@@ -25,6 +25,7 @@ import software.amazon.kinesis.retrieval.DataFetchingStrategy;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 
 @Slf4j
 @KinesisClientInternalApi
@@ -45,7 +46,8 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
                         .newFixedThreadPool(1,
                                 new ThreadFactoryBuilder().setDaemon(true)
                                         .setNameFormat("prefetch-cache-" + shardId + "-%04d").build()),
-                idleMillisBetweenCalls, metricsFactory, "ProcessTask", shardId);
+                idleMillisBetweenCalls, metricsFactory, "ProcessTask", shardId,
+                new ThrottlingReporter(5, shardId));
 
     }
 
