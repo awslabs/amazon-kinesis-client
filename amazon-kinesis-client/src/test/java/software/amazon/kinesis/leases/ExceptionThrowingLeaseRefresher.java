@@ -216,6 +216,11 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
+    public boolean isLeaseTableEmptyForStreamIdentifier(StreamIdentifier streamIdentifier) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        return false;
+    }
+
+    @Override
     public ExtendedSequenceNumber getCheckpoint(final String leaseKey)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         return null;

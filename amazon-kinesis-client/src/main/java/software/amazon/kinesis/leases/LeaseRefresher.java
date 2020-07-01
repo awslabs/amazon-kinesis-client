@@ -218,6 +218,19 @@ public interface LeaseRefresher {
     boolean isLeaseTableEmpty() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
+     * Check (synchronously) if there are any leases in the lease table for a given stream identifier.
+     *
+     * @param streamIdentifier for multi-stream mode. Can be null.
+     * @return true if there are no leases in the lease table
+     *
+     * @throws DependencyException if DynamoDB scan fails in an unexpected way
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
+     */
+    boolean isLeaseTableEmptyForStreamIdentifier(StreamIdentifier streamIdentifier) throws DependencyException,
+            InvalidStateException, ProvisionedThroughputException;
+
+    /**
      * Gets the current checkpoint of the shard. This is useful in the resharding use case
      * where we will wait for the parent shard to complete before starting on the records from a child shard.
      *

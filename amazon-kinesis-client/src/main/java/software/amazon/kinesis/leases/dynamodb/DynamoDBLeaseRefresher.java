@@ -292,7 +292,13 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean isLeaseTableEmpty()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return list(1, 1, null).isEmpty();
+        return isLeaseTableEmptyForStreamIdentifier(null);
+    }
+
+    @Override
+    public boolean isLeaseTableEmptyForStreamIdentifier(StreamIdentifier streamIdentifier)
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        return list(1, 1, streamIdentifier).isEmpty();
     }
 
     /**
