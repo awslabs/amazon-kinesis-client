@@ -335,8 +335,7 @@ public class HierarchicalShardSyncerTest {
         setupMultiStream();
         hierarchicalShardSyncer
                 .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
-                        SCOPE, false, dynamoDBLeaseRefresher.isLeaseTableEmptyForStreamIdentifier(
-                                StreamIdentifier.multiStreamInstance(STREAM_IDENTIFIER)));
+                        SCOPE, false, dynamoDBLeaseRefresher.isLeaseTableEmpty());
 
         final Set<String> expectedShardIds = new HashSet<>(
                 toMultiStreamLeaseList(Arrays.asList("shardId-4", "shardId-8", "shardId-9", "shardId-10")));
@@ -418,8 +417,8 @@ public class HierarchicalShardSyncerTest {
         setupMultiStream();
         hierarchicalShardSyncer
                 .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
-                        latestShards, false, SCOPE, dynamoDBLeaseRefresher.isLeaseTableEmptyForStreamIdentifier(
-                                StreamIdentifier.multiStreamInstance(STREAM_IDENTIFIER)));
+                        latestShards, false, SCOPE,
+                        dynamoDBLeaseRefresher.isLeaseTableEmpty());
 
         final Set<String> expectedShardIds = new HashSet<>(
                 toMultiStreamLeaseList(Arrays.asList("shardId-4", "shardId-8", "shardId-9", "shardId-10")));
@@ -683,7 +682,7 @@ public class HierarchicalShardSyncerTest {
         try {
             hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher,
                     INITIAL_POSITION_TRIM_HORIZON, SCOPE, false,
-                    dynamoDBLeaseRefresher.isLeaseTableEmptyForStreamIdentifier(StreamIdentifier.multiStreamInstance(STREAM_IDENTIFIER)));
+                    dynamoDBLeaseRefresher.isLeaseTableEmpty());
         } finally {
             verify(shardDetector).listShards();
             verify(dynamoDBLeaseRefresher, never()).listLeases();
@@ -763,8 +762,7 @@ public class HierarchicalShardSyncerTest {
         setupMultiStream();
         hierarchicalShardSyncer
                 .checkAndCreateLeaseForNewShards(shardDetector, dynamoDBLeaseRefresher, INITIAL_POSITION_LATEST,
-                        SCOPE, true, dynamoDBLeaseRefresher.isLeaseTableEmptyForStreamIdentifier(
-                                StreamIdentifier.multiStreamInstance(STREAM_IDENTIFIER)));
+                        SCOPE, true, dynamoDBLeaseRefresher.isLeaseTableEmpty());
 
         final List<Lease> leases = leaseCaptor.getAllValues();
         final Set<String> leaseKeys = leases.stream().map(Lease::leaseKey).collect(Collectors.toSet());
