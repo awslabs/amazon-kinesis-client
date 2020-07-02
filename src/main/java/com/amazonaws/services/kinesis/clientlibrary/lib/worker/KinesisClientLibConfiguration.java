@@ -176,6 +176,16 @@ public class KinesisClientLibConfiguration {
     public static final ShardSyncStrategyType DEFAULT_SHARD_SYNC_STRATEGY_TYPE = ShardSyncStrategyType.SHARD_END;
 
     /**
+     * Default Lease Recovery Auditor execution period for SHARD_END ShardSyncStrategyType.
+     */
+    public static final long LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS = 2 * 60 * 1000L;
+
+    /**
+     * Default Lease Recovery Auditor inconsistency confidence threshold for running full shard sync for HARD_END ShardSyncStrategyType.
+     */
+    public static final int LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD = 3;
+
+    /**
      * Default Shard prioritization strategy.
      */
     public static final ShardPrioritization DEFAULT_SHARD_PRIORITIZATION = new NoOpShardPrioritization();
@@ -246,6 +256,8 @@ public class KinesisClientLibConfiguration {
     private ShardPrioritization shardPrioritization;
     private long shutdownGraceMillis;
     private ShardSyncStrategyType shardSyncStrategyType;
+    private long leasesRecoveryAuditorExecutionFrequencyMillis;
+    private int leasesRecoveryAuditorInconsistencyConfidenceThreshold;
 
     @Getter
     private Optional<Integer> timeoutInSeconds = Optional.empty();
@@ -515,6 +527,8 @@ public class KinesisClientLibConfiguration {
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardSyncStrategyType = DEFAULT_SHARD_SYNC_STRATEGY_TYPE;
+        this.leasesRecoveryAuditorExecutionFrequencyMillis = LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS;
+        this.leasesRecoveryAuditorInconsistencyConfidenceThreshold = LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = new SimpleRecordsFetcherFactory();
         this.billingMode = billingMode;
@@ -625,6 +639,8 @@ public class KinesisClientLibConfiguration {
                 InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardSyncStrategyType = DEFAULT_SHARD_SYNC_STRATEGY_TYPE;
+        this.leasesRecoveryAuditorExecutionFrequencyMillis = LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS;
+        this.leasesRecoveryAuditorInconsistencyConfidenceThreshold = LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = recordsFetcherFactory;
         this.shutdownGraceMillis = shutdownGraceMillis;
@@ -870,6 +886,20 @@ public class KinesisClientLibConfiguration {
      */
     public ShardSyncStrategyType getShardSyncStrategyType() {
         return shardSyncStrategyType;
+    }
+
+    /**
+     * @return leasesRecoveryAuditorExecutionFrequencyMillis to be used by SHARD_END ShardSyncStrategyType.
+     */
+    public long getLeasesRecoveryAuditorExecutionFrequencyMillis() {
+        return leasesRecoveryAuditorExecutionFrequencyMillis;
+    }
+
+    /**
+     * @return leasesRecoveryAuditorInconsistencyConfidenceThreshold to be used by SHARD_END ShardSyncStrategyType.
+     */
+    public int getLeasesRecoveryAuditorInconsistencyConfidenceThreshold() {
+        return leasesRecoveryAuditorInconsistencyConfidenceThreshold;
     }
 
     /**
@@ -1246,6 +1276,24 @@ public class KinesisClientLibConfiguration {
      */
     public KinesisClientLibConfiguration withShardSyncStrategyType(ShardSyncStrategyType shardSyncStrategyType) {
         this.shardSyncStrategyType = shardSyncStrategyType;
+        return this;
+    }
+
+    /**
+     * @param leasesRecoveryAuditorExecutionFrequencyMillis Leases Recovery Auditor Execution period.
+     * @return {@link KinesisClientLibConfiguration}
+     */
+    public KinesisClientLibConfiguration withLeasesRecoveryAuditorExecutionFrequencyMillis(long leasesRecoveryAuditorExecutionFrequencyMillis) {
+        this.leasesRecoveryAuditorExecutionFrequencyMillis = leasesRecoveryAuditorExecutionFrequencyMillis;
+        return this;
+    }
+
+    /**
+     * @param leasesRecoveryAuditorInconsistencyConfidenceThreshold Leases Recovery Auditor Execution inconsistency confidence threshold.
+     * @return {@link KinesisClientLibConfiguration}
+     */
+    public KinesisClientLibConfiguration withLeasesRecoveryAuditorInconsistencyConfidenceThreshold(int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
+        this.leasesRecoveryAuditorInconsistencyConfidenceThreshold = leasesRecoveryAuditorInconsistencyConfidenceThreshold;
         return this;
     }
 
