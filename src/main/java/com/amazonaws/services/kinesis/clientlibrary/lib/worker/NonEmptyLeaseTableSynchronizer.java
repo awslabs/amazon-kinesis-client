@@ -47,8 +47,10 @@ class NonEmptyLeaseTableSynchronizer implements LeaseSynchronizer {
      * Note: Package level access only for testing purposes.
      *
      * For each open (no ending sequence number) shard without open parents that doesn't already have a lease,
-     * determine if it is a descendent of any shard which is or will be processed (e.g. for which a lease exists):
-     * If so, set checkpoint of the shard to TrimHorizon and also create leases for ancestors if needed.
+     * determine if it is a descendant of any shard which is or will be processed (e.g. for which a lease exists):
+     * If so, create a lease for the first ancestor that needs to be processed (if needed). We will create leases
+     * for no more than one level in the ancestry tree. Once we find the first ancestor that needs to be processed,
+     * we will avoid creating leases for further descendants of that ancestor.
      * If not, set checkpoint of the shard to the initial position specified by the client.
      * To check if we need to create leases for ancestors, we use the following rules:
      *   * If we began (or will begin) processing data for a shard, then we must reach end of that shard before
@@ -67,10 +69,17 @@ class NonEmptyLeaseTableSynchronizer implements LeaseSynchronizer {
      * 0 1 2 3 4   5   - shards till epoch 102
      * \ / \ / |   |
      *  6   7  4   5   - shards from epoch 103 - 205
-     *   \ /   |  / \
-     *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
-     * Current leases: (3, 4, 5)
-     * New leases to create: (2, 6, 7, 8, 9, 10)
+     *  \  /   |  / \
+     *   8     4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
+     *
+     * Current leases: (4, 5, 7)
+     *
+     * If initial position is LATEST:
+     *   - New leases to create: (6)
+     * If initial position is TRIM_HORIZON:
+     *   - New leases to create: (0, 1)
+     * If initial position is AT_TIMESTAMP(epoch=200):
+     *   - New leases to create: (0, 1)
      *
      * The leases returned are sorted by the starting sequence number - following the same order
      * when persisting the leases in DynamoDB will ensure that we recover gracefully if we fail
@@ -104,7 +113,8 @@ class NonEmptyLeaseTableSynchronizer implements LeaseSynchronizer {
         }
 
         List<Shard> openShards = KinesisShardSyncer.getOpenShards(shards);
-        Map<String, Boolean> memoizationContext = new HashMap<>();
+        final KinesisShardSyncer.MemoizationContext memoizationContext = new KinesisShardSyncer.MemoizationContext();
+
 
         // Iterate over the open shards and find those that don't have any lease entries.
         for (Shard shard : openShards) {
@@ -115,43 +125,30 @@ class NonEmptyLeaseTableSynchronizer implements LeaseSynchronizer {
             } else if (inconsistentShardIds.contains(shardId)) {
                 LOG.info("shardId " + shardId + " is an inconsistent child.  Not creating a lease");
             } else {
-                LOG.debug("Need to create a lease for shardId " + shardId);
-                KinesisClientLease newLease = KinesisShardSyncer.newKCLLease(shard);
+                LOG.debug("Beginning traversal of ancestry tree for shardId " + shardId);
+
+                // A shard is a descendant if at least one if its ancestors exists in the lease table.
+                // We will create leases for only one level in the ancestry tree. Once we find the first ancestor
+                // that needs to be processed in order to complete the hash range, we will not create leases for
+                // further descendants of that ancestor.
                 boolean isDescendant = KinesisShardSyncer.checkIfDescendantAndAddNewLeasesForAncestors(shardId,
                         initialPosition, shardIdsOfCurrentLeases, shardIdToShardMapOfAllKinesisShards,
                         shardIdToNewLeaseMap, memoizationContext);
 
-                /**
-                 * If the shard is a descendant and the specified initial position is AT_TIMESTAMP, then the
-                 * checkpoint should be set to AT_TIMESTAMP, else to TRIM_HORIZON. For AT_TIMESTAMP, we will add a
-                 * lease just like we do for TRIM_HORIZON. However we will only return back records with server-side
-                 * timestamp at or after the specified initial position timestamp.
-                 *
-                 * Shard structure (each level depicts a stream segment):
-                 * 0 1 2 3 4   5   - shards till epoch 102
-                 * \ / \ / |   |
-                 *  6   7  4   5   - shards from epoch 103 - 205
-                 *   \ /   |  /\
-                 *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
-                 *
-                 * Current leases: empty set
-                 *
-                 * For the above example, suppose the initial position in stream is set to AT_TIMESTAMP with
-                 * timestamp value 206. We will then create new leases for all the shards (with checkpoint set to
-                 * AT_TIMESTAMP), including the ancestor shards with epoch less than 206. However as we begin
-                 * processing the ancestor shards, their checkpoints would be updated to SHARD_END and their leases
-                 * would then be deleted since they won't have records with server-side timestamp at/after 206. And
-                 * after that we will begin processing the descendant shards with epoch at/after 206 and we will
-                 * return the records that meet the timestamp requirement for these shards.
-                 */
-                if (isDescendant && !initialPosition.getInitialPositionInStream()
-                        .equals(InitialPositionInStream.AT_TIMESTAMP)) {
-                    newLease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
-                } else {
+                // If shard is a descendant, the leases for its ancestors were already created above. Open shards
+                // that are NOT descendants will not have leases yet, so we create them here. We will not create
+                // leases for open shards that ARE descendants yet - leases for these shards will be created upon
+                // SHARD_END of their parents.
+                if (!isDescendant) {
+                    LOG.debug("ShardId " + shardId + " has no ancestors. Creating a lease.");
+                    final KinesisClientLease newLease = KinesisShardSyncer.newKCLLease(shard);
                     newLease.setCheckpoint(KinesisShardSyncer.convertToCheckpoint(initialPosition));
+                    LOG.debug("Set checkpoint of " + newLease.getLeaseKey() + " to " + newLease.getCheckpoint());
+                    shardIdToNewLeaseMap.put(shardId, newLease);
+                } else {
+                    LOG.debug("ShardId " + shardId + " is a descendant whose ancestors should already have leases. " +
+                            "Not creating a lease.");
                 }
-                LOG.debug("Set checkpoint of " + newLease.getLeaseKey() + " to " + newLease.getCheckpoint());
-                shardIdToNewLeaseMap.put(shardId, newLease);
             }
         }
 
