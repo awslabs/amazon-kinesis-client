@@ -30,7 +30,7 @@ public class KinesisClientLeaseBuilder {
     private ExtendedSequenceNumber pendingCheckpoint;
     private Long ownerSwitchesSinceCheckpoint = 0L;
     private Set<String> parentShardIds  = new HashSet<>();
-    private Set<String> childShardIds  = new HashSet<>();
+    private Set<String> childShardIds = new HashSet<>();
     private HashKeyRangeForLease hashKeyRangeForLease;
 
     public KinesisClientLeaseBuilder withLeaseKey(String leaseKey) {
@@ -90,7 +90,6 @@ public class KinesisClientLeaseBuilder {
 
     public KinesisClientLease build() {
         return new KinesisClientLease(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos,
-                checkpoint, pendingCheckpoint, ownerSwitchesSinceCheckpoint, parentShardIds, childShardIds,
-                hashKeyRangeForLease);
+                checkpoint, pendingCheckpoint, ownerSwitchesSinceCheckpoint, parentShardIds, childShardIds, hashKeyRangeForLease);
     }
 }
