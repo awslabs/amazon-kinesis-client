@@ -27,6 +27,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
@@ -511,8 +512,19 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     }
 
     private boolean isValidEvent(SubscribeToShardEvent event) {
-        return event.continuationSequenceNumber() == null ? !CollectionUtils.isNullOrEmpty(event.childShards())
-                                                          : event.childShards() != null && event.childShards().isEmpty();
+        if (event.continuationSequenceNumber() == null && CollectionUtils.isNullOrEmpty(event.childShards()) ||
+            event.continuationSequenceNumber() != null && !CollectionUtils.isNullOrEmpty(event.childShards())) {
+            return false;
+        }
+
+        if(!CollectionUtils.isNullOrEmpty(event.childShards())) {
+            for (ChildShard childShard : event.childShards()) {
+                if (CollectionUtils.isNullOrEmpty(childShard.parentShards())) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private void updateAvailableQueueSpaceAndRequestUpstream(RecordFlow triggeringFlow) {

@@ -28,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
@@ -340,8 +341,18 @@ public class KinesisDataFetcher implements DataFetcher {
     }
 
     private boolean isValidResponse(GetRecordsResponse response) {
-        return response.nextShardIterator() == null ? !CollectionUtils.isNullOrEmpty(response.childShards())
-                                                    : response.childShards() != null && response.childShards().isEmpty();
+        if (response.nextShardIterator() == null && CollectionUtils.isNullOrEmpty(response.childShards()) ||
+            response.nextShardIterator() != null && !CollectionUtils.isNullOrEmpty(response.childShards())) {
+            return false;
+        }
+        if (!CollectionUtils.isNullOrEmpty(response.childShards())) {
+            for (ChildShard childShard : response.childShards()) {
+                if (CollectionUtils.isNullOrEmpty(childShard.parentShards())) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private AWSExceptionManager createExceptionManager() {

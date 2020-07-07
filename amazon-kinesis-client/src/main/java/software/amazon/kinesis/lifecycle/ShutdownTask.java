@@ -35,6 +35,7 @@ import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.UpdateField;
 import software.amazon.kinesis.leases.exceptions.CustomerApplicationException;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.LeasePendingDeletion;
@@ -116,25 +117,37 @@ public class ShutdownTask implements ConsumerTask {
             try {
                 log.debug("Invoking shutdown() for shard {} with childShards {}, concurrencyToken {}. Shutdown reason: {}",
                         leaseKeyProvider.apply(shardInfo), childShards, shardInfo.concurrencyToken(), reason);
+                ShutdownReason localReason = reason;
 
                 final long startTime = System.currentTimeMillis();
-                if (reason == ShutdownReason.SHARD_END) {
+                final Lease currentShardLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
+                if (localReason == ShutdownReason.SHARD_END) {
                     // Create new lease for the child shards if they don't exist.
                     // We have one valid scenario that shutdown task got created with SHARD_END reason and an empty list of childShards.
                     // This would happen when KinesisDataFetcher(for polling mode) or FanOutRecordsPublisher(for StoS mode) catches ResourceNotFound exception.
                     // In this case, KinesisDataFetcher and FanOutRecordsPublisher will send out SHARD_END signal to trigger a shutdown task with empty list of childShards.
                     // This scenario could happen when customer deletes the stream while leaving the KCL application running.
-                    final Lease currentShardLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
                     Validate.validState(currentShardLease != null,
-                            "%s : Lease not owned by the current worker. Leaving ShardEnd handling to new owner.",
-                            leaseKeyProvider.apply(shardInfo));
-                    final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(streamIdentifier,
-                            currentShardLease, shardInfo);
-
-                    if (!CollectionUtils.isNullOrEmpty(childShards)) {
-                        createLeasesForChildShardsIfNotExist();
-                        updateLeaseWithChildShards(currentShardLease);
+                                        "%s : Lease not owned by the current worker. Leaving ShardEnd handling to new owner.",
+                                        leaseKeyProvider.apply(shardInfo));
+                    try {
+                        if (!CollectionUtils.isNullOrEmpty(childShards)) {
+                            createLeasesForChildShardsIfNotExist();
+                            updateLeaseWithChildShards(currentShardLease);
+                        }
+                    } catch (InvalidStateException e) {
+                        // If invalidStateException happens, it indicates we are missing childShard related information.
+                        // In this scenario, we should shutdown the shardConsumer with LEASE_LOST reason to allow other worker to take the lease and retry getting
+                        // childShard information in the processTask.
+                        localReason = ShutdownReason.LEASE_LOST;
+                        dropLease();
+                        log.warn("Shard " + shardInfo.shardId() + ": Exception happened while shutting down shardConsumer with LEASE_LOST reason. " +
+                                         "Dropping the lease and shutting down shardConsumer using ZOMBIE reason. Exception: ", e);
                     }
+                }
+
+                if (localReason == ShutdownReason.SHARD_END) {
+                    final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(streamIdentifier, currentShardLease, shardInfo);
                     if (!leaseCleanupManager.isEnqueuedForDeletion(leasePendingDeletion)) {
                         boolean isSuccess = false;
                         try {
@@ -234,11 +247,7 @@ public class ShutdownTask implements ConsumerTask {
 
         final Lease updatedLease = currentLease.copy();
         updatedLease.childShardIds(childShardIds);
-        // TODO : Make changes to use the new leaserefresher#updateLease(Lease lease, UpdateField updateField)
-        final boolean updateResult = leaseCoordinator.updateLease(updatedLease, UUID.fromString(shardInfo.concurrencyToken()), SHUTDOWN_TASK_OPERATION, leaseKeyProvider.apply(shardInfo));
-        if (!updateResult) {
-            throw new InvalidStateException("Failed to update parent lease with child shard information for shard " + shardInfo.shardId());
-        }
+        leaseCoordinator.leaseRefresher().updateLeaseWithMetaInfo(updatedLease, UpdateField.CHILD_SHARDS);
         log.info("Shard {}: Updated current lease {} with child shard information: {}", shardInfo.shardId(), currentLease.leaseKey(), childShardIds);
     }
 
@@ -257,4 +266,15 @@ public class ShutdownTask implements ConsumerTask {
         return reason;
     }
 
+    private void dropLease() {
+        Lease currentLease = leaseCoordinator.getCurrentlyHeldLease(leaseKeyProvider.apply(shardInfo));
+        if (currentLease == null) {
+            log.warn("Shard " + shardInfo.shardId() + ": Lease already dropped. Will shutdown the shardConsumer directly.");
+            return;
+        }
+        leaseCoordinator.dropLease(currentLease);
+        if(currentLease != null) {
+            log.warn("Dropped lease for shutting down ShardConsumer: " + currentLease.leaseKey());
+        }
+    }
 }
