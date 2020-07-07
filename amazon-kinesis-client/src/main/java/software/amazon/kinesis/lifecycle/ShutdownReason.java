@@ -31,6 +31,13 @@ import static software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerStat
  * that they have successfully processed all the records (processing of child shards can then begin).
  */
 public enum ShutdownReason {
+
+    /**
+     * Processing Records threw an unrecoverable error. Shutdown the processor and recreate.
+     */
+    UNRECOVERABLE(4, ShardConsumerState.SHUTTING_DOWN.consumerState()),
+
+
     /**
      * Processing will be moved to a different record processor (fail over, load balancing use cases).
      * Applications SHOULD NOT checkpoint their progress (as another record processor may have already started

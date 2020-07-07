@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.processor;
 
+import software.amazon.kinesis.exceptions.ShutdownException;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -43,7 +44,7 @@ public interface ShardRecordProcessor {
      * @param processRecordsInput Provides the records to be processed as well as information and capabilities related
      *        to them (eg checkpointing).
      */
-    void processRecords(ProcessRecordsInput processRecordsInput);
+    void processRecords(ProcessRecordsInput processRecordsInput) throws ShutdownException;
 
     /**
      * Called when the lease that tied to this record processor has been lost. Once the lease has been lost the record
