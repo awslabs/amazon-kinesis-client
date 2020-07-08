@@ -14,6 +14,10 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.model.ChildShard;
+
+import java.util.List;
+
 /**
  * Used to capture information from a task that we want to communicate back to the higher layer.
  * E.g. exception thrown when executing the task, if we reach end of a shard.
@@ -26,6 +30,9 @@ class TaskResult {
     // Any exception caught while executing the task.
     private Exception exception;
 
+    // List of childShards of the current shard. This field is only required for the task result when we reach end of a shard.
+    private List<ChildShard> childShards;
+
     /**
      * @return the shardEndReached
      */
@@ -34,11 +41,21 @@ class TaskResult {
     }
 
     /**
+     * @return the list of childShards.
+     */
+    protected List<ChildShard> getChildShards() { return childShards; }
+
+    /**
      * @param shardEndReached the shardEndReached to set
      */
     protected void setShardEndReached(boolean shardEndReached) {
         this.shardEndReached = shardEndReached;
     }
+
+    /**
+     * @param childShards the list of childShards to set
+     */
+    protected void setChildShards(List<ChildShard> childShards) { this.childShards = childShards; }
 
     /**
      * @return the exception
@@ -68,6 +85,12 @@ class TaskResult {
     TaskResult(Exception e, boolean isShardEndReached) {
         this.exception = e;
         this.shardEndReached = isShardEndReached;
+    }
+
+    TaskResult(Exception e, boolean isShardEndReached, List<ChildShard> childShards) {
+        this.exception = e;
+        this.shardEndReached = isShardEndReached;
+        this.childShards = childShards;
     }
 
 }

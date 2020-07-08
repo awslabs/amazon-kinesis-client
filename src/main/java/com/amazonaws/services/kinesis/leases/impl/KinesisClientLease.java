@@ -30,8 +30,9 @@ public class KinesisClientLease extends Lease {
     private ExtendedSequenceNumber pendingCheckpoint;
     private Long ownerSwitchesSinceCheckpoint = 0L;
     private Set<String> parentShardIds = new HashSet<String>();
-    private Set<String> childShardIds = new HashSet<String>();
+    private Set<String> childShardIds = new HashSet<>();
     private HashKeyRangeForLease hashKeyRangeForLease;
+
 
     public KinesisClientLease() {
 
@@ -43,7 +44,7 @@ public class KinesisClientLease extends Lease {
         this.pendingCheckpoint = other.getPendingCheckpoint();
         this.ownerSwitchesSinceCheckpoint = other.getOwnerSwitchesSinceCheckpoint();
         this.parentShardIds.addAll(other.getParentShardIds());
-        this.childShardIds = other.getChildShardIds();
+        this.childShardIds.addAll(other.getChildShardIds());
         this.hashKeyRangeForLease = other.getHashKeyRange();
     }
 
@@ -76,6 +77,7 @@ public class KinesisClientLease extends Lease {
         setCheckpoint(casted.checkpoint);
         setPendingCheckpoint(casted.pendingCheckpoint);
         setParentShardIds(casted.parentShardIds);
+        setChildShardIds(casted.childShardIds);
     }
 
     /**
@@ -108,7 +110,7 @@ public class KinesisClientLease extends Lease {
     }
 
     /**
-     * @return shardIds that are the children of this lease. Used for resharding.
+     * @return shardIds for the child shards of the current shard. Used for resharding.
      */
     public Set<String> getChildShardIds() {
         return new HashSet<String>(childShardIds);
@@ -170,9 +172,6 @@ public class KinesisClientLease extends Lease {
      * @param childShardIds may not be null
      */
     public void setChildShardIds(Collection<String> childShardIds) {
-        verifyNotNull(childShardIds, "childShardIds should not be null");
-
-        this.childShardIds.clear();
         this.childShardIds.addAll(childShardIds);
     }
 
@@ -186,7 +185,7 @@ public class KinesisClientLease extends Lease {
 
         this.hashKeyRangeForLease = hashKeyRangeForLease;
     }
-    
+
     private void verifyNotNull(Object object, String message) {
         if (object == null) {
             throw new IllegalArgumentException(message);

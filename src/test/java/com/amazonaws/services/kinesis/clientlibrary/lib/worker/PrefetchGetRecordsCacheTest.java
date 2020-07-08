@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -98,6 +99,8 @@ public class PrefetchGetRecordsCacheTest {
 
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(getRecordsResult);
         when(getRecordsResult.getRecords()).thenReturn(records);
+        when(getRecordsResult.getNextShardIterator()).thenReturn("testNextShardIterator");
+        when(getRecordsResult.getChildShards()).thenReturn(Collections.emptyList());
     }
 
     @Test
@@ -203,7 +206,7 @@ public class PrefetchGetRecordsCacheTest {
     }
     
     @Test
-    public void testExpiredIteratorException() {
+    public void testExpiredIteratorException() throws Exception{
         getRecordsCache.start();
         
         when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL)).thenThrow(ExpiredIteratorException.class).thenReturn(getRecordsResult);

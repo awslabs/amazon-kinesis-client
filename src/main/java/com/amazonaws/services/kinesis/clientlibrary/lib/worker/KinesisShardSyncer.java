@@ -28,9 +28,11 @@ import java.util.Set;
 
 import com.amazonaws.services.kinesis.leases.impl.Lease;
 import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
+import com.amazonaws.services.kinesis.model.ChildShard;
 import com.amazonaws.services.kinesis.model.ShardFilter;
 import com.amazonaws.services.kinesis.model.ShardFilterType;
 import com.amazonaws.util.CollectionUtils;
+import lombok.NoArgsConstructor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.lang3.StringUtils;
@@ -457,7 +459,7 @@ class KinesisShardSyncer implements ShardSyncer {
     /**
      * Note: Package level access for testing purposes only.
      * Check if this shard is a descendant of a shard that is (or will be) processed.
-     * Create leases for the ancestors of this shard as required.
+     * Create leases for the first ancestor of this shard that needs to be processed, as required.
      * See javadoc of determineNewLeasesToCreate() for rules and example.
      *
      * @param shardId The shardId to check.
@@ -473,9 +475,10 @@ class KinesisShardSyncer implements ShardSyncer {
     static boolean checkIfDescendantAndAddNewLeasesForAncestors(String shardId,
             InitialPositionInStreamExtended initialPosition, Set<String> shardIdsOfCurrentLeases,
             Map<String, Shard> shardIdToShardMapOfAllKinesisShards,
-            Map<String, KinesisClientLease> shardIdToLeaseMapOfNewShards, Map<String, Boolean> memoizationContext) {
+            Map<String, KinesisClientLease> shardIdToLeaseMapOfNewShards, MemoizationContext memoizationContext) {
 
-        Boolean previousValue = memoizationContext.get(shardId);
+        final Boolean previousValue = memoizationContext.isDescendant(shardId);
+
         if (previousValue != null) {
             return previousValue;
         }
@@ -495,10 +498,13 @@ class KinesisShardSyncer implements ShardSyncer {
                 shard = shardIdToShardMapOfAllKinesisShards.get(shardId);
                 parentShardIds = getParentShardIds(shard, shardIdToShardMapOfAllKinesisShards);
                 for (String parentShardId : parentShardIds) {
-                    // Check if the parent is a descendant, and include its ancestors.
-                    if (checkIfDescendantAndAddNewLeasesForAncestors(parentShardId, initialPosition,
-                            shardIdsOfCurrentLeases, shardIdToShardMapOfAllKinesisShards, shardIdToLeaseMapOfNewShards,
-                            memoizationContext)) {
+                    // Check if the parent is a descendant, and include its ancestors. Or, if the parent is NOT a
+                    // descendant but we should create a lease for it anyway (e.g. to include in processing from
+                    // TRIM_HORIZON or AT_TIMESTAMP). If either is true, then we mark the current shard as a descendant.
+                    final boolean isParentDescendant = checkIfDescendantAndAddNewLeasesForAncestors(parentShardId,
+                            initialPosition, shardIdsOfCurrentLeases, shardIdToShardMapOfAllKinesisShards,
+                            shardIdToLeaseMapOfNewShards, memoizationContext);
+                    if (isParentDescendant || memoizationContext.shouldCreateLease(parentShardId)) {
                         isDescendant = true;
                         descendantParentShardIds.add(parentShardId);
                         LOG.debug("Parent shard " + parentShardId + " is a descendant.");
@@ -511,37 +517,76 @@ class KinesisShardSyncer implements ShardSyncer {
                 if (isDescendant) {
                     for (String parentShardId : parentShardIds) {
                         if (!shardIdsOfCurrentLeases.contains(parentShardId)) {
-                            LOG.debug("Need to create a lease for shardId " + parentShardId);
                             KinesisClientLease lease = shardIdToLeaseMapOfNewShards.get(parentShardId);
+
+                            // If the lease for the parent shard does not already exist, there are two cases in which we
+                            // would want to create it:
+                            // - If we have already marked the parentShardId for lease creation in a prior recursive
+                            //   call. This could happen if we are trying to process from TRIM_HORIZON or AT_TIMESTAMP.
+                            // - If the parent shard is not a descendant but the current shard is a descendant, then
+                            //   the parent shard is the oldest shard in the shard hierarchy that does not have an
+                            //   ancestor in the lease table (the adjacent parent is necessarily a descendant, and
+                            //   therefore covered in the lease table). So we should create a lease for the parent.
+
                             if (lease == null) {
-                                lease = newKCLLease(shardIdToShardMapOfAllKinesisShards.get(parentShardId));
-                                shardIdToLeaseMapOfNewShards.put(parentShardId, lease);
+                                if (memoizationContext.shouldCreateLease(parentShardId) ||
+                                        !descendantParentShardIds.contains(parentShardId)) {
+                                    LOG.debug("Need to create a lease for shardId " + parentShardId);
+                                    lease = newKCLLease(shardIdToShardMapOfAllKinesisShards.get(parentShardId));
+                                    shardIdToLeaseMapOfNewShards.put(parentShardId, lease);
+                                }
                             }
 
-                            if (descendantParentShardIds.contains(parentShardId) && !initialPosition
-                                    .getInitialPositionInStream().equals(InitialPositionInStream.AT_TIMESTAMP)) {
-                                lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
-                            } else {
-                                lease.setCheckpoint(convertToCheckpoint(initialPosition));
+                            /**
+                             * If the shard is a descendant and the specified initial position is AT_TIMESTAMP, then the
+                             * checkpoint should be set to AT_TIMESTAMP, else to TRIM_HORIZON. For AT_TIMESTAMP, we will
+                             * add a lease just like we do for TRIM_HORIZON. However we will only return back records
+                             * with server-side timestamp at or after the specified initial position timestamp.
+                             *
+                             * Shard structure (each level depicts a stream segment):
+                             * 0 1 2 3 4   5   - shards till epoch 102
+                             * \ / \ / |   |
+                             *  6   7  4   5   - shards from epoch 103 - 205
+                             *   \ /   |  /\
+                             *    8    4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
+                             *
+                             * Current leases: (4, 5, 7)
+                             *
+                             * For the above example, suppose the initial position in stream is set to AT_TIMESTAMP with
+                             * timestamp value 206. We will then create new leases for all the shards 0 and 1 (with
+                             * checkpoint set AT_TIMESTAMP), even though these ancestor shards have an epoch less than
+                             * 206. However as we begin processing the ancestor shards, their checkpoints would be
+                             * updated to SHARD_END and their leases would then be deleted since they won't have records
+                             * with server-side timestamp at/after 206. And after that we will begin processing the
+                             * descendant shards with epoch at/after 206 and we will return the records that meet the
+                             * timestamp requirement for these shards.
+                             */
+                            if (lease != null) {
+                                if (descendantParentShardIds.contains(parentShardId) && !initialPosition
+                                        .getInitialPositionInStream().equals(InitialPositionInStream.AT_TIMESTAMP)) {
+                                    lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+                                } else {
+                                    lease.setCheckpoint(convertToCheckpoint(initialPosition));
+                                }
                             }
                         }
                     }
                 } else {
-                    // This shard should be included, if the customer wants to process all records in the stream or
-                    // if the initial position is AT_TIMESTAMP. For AT_TIMESTAMP, we will add a lease just like we do
-                    // for TRIM_HORIZON. However we will only return back records with server-side timestamp at or
-                    // after the specified initial position timestamp.
+                    // This shard is not a descendant, but should still be included if the customer wants to process all
+                    // records in the stream or if the initial position is AT_TIMESTAMP. For AT_TIMESTAMP, we will add a
+                    // lease just like we do for TRIM_HORIZON. However we will only return back records with server-side
+                    // timestamp at or after the specified initial position timestamp.
                     if (initialPosition.getInitialPositionInStream().equals(InitialPositionInStream.TRIM_HORIZON)
                             || initialPosition.getInitialPositionInStream()
                             .equals(InitialPositionInStream.AT_TIMESTAMP)) {
-                        isDescendant = true;
+                        memoizationContext.setShouldCreateLease(shardId, true);
                     }
                 }
 
             }
         }
 
-        memoizationContext.put(shardId, isDescendant);
+        memoizationContext.setIsDescendant(shardId, isDescendant);
         return isDescendant;
     }
     // CHECKSTYLE:ON CyclomaticComplexity
@@ -736,6 +781,29 @@ class KinesisShardSyncer implements ShardSyncer {
     }
 
     /**
+     * Helper method to create a new KinesisClientLease POJO for a ChildShard.
+     * Note: Package level access only for testing purposes
+     *
+     * @param childShard
+     * @return
+     */
+    static KinesisClientLease newKCLLeaseForChildShard(ChildShard childShard) throws InvalidStateException {
+        final KinesisClientLease newLease = new KinesisClientLease();
+        newLease.setLeaseKey(childShard.getShardId());
+        final List<String> parentShardIds = new ArrayList<>();
+        if (!CollectionUtils.isNullOrEmpty(childShard.getParentShards())) {
+            parentShardIds.addAll(childShard.getParentShards());
+        } else {
+            throw new InvalidStateException("Unable to populate new lease for child shard " + childShard.getShardId()
+            + " because parent shards cannot be found.");
+        }
+        newLease.setParentShardIds(parentShardIds);
+        newLease.setOwnerSwitchesSinceCheckpoint(0L);
+        newLease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        return newLease;
+    }
+
+    /**
      * Helper method to construct a shardId->Shard map for the specified list of shards.
      *
      * @param shards List of shards
@@ -834,4 +902,28 @@ class KinesisShardSyncer implements ShardSyncer {
 
     }
 
+    /**
+     * Helper class to pass around state between recursive traversals of shard hierarchy.
+     */
+    @NoArgsConstructor
+    static class MemoizationContext {
+        private Map<String, Boolean> isDescendantMap = new HashMap<>();
+        private Map<String, Boolean> shouldCreateLeaseMap = new HashMap<>();
+
+        Boolean isDescendant(String shardId) {
+            return isDescendantMap.get(shardId);
+        }
+
+        void setIsDescendant(String shardId, Boolean isDescendant) {
+            isDescendantMap.put(shardId, isDescendant);
+        }
+
+        Boolean shouldCreateLease(String shardId) {
+            return shouldCreateLeaseMap.computeIfAbsent(shardId, x -> Boolean.FALSE);
+        }
+
+        void setShouldCreateLease(String shardId, Boolean shouldCreateLease) {
+            shouldCreateLeaseMap.put(shardId, shouldCreateLease);
+        }
+    }
 }

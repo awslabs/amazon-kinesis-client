@@ -24,11 +24,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import com.amazonaws.services.kinesis.clientlibrary.proxies.ShardListWrappingShardClosureVerificationResponse;
+import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
+import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.model.ChildShard;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
 import com.amazonaws.services.kinesis.model.Shard;
@@ -60,7 +66,7 @@ public class ShutdownTaskTest {
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
 
     Set<String> defaultParentShardIds = new HashSet<>();
-    String defaultConcurrencyToken = "testToken4398";
+    String defaultConcurrencyToken = UUID.randomUUID().toString();
     String defaultShardId = "shardId-0";
     ShardInfo defaultShardInfo = new ShardInfo(defaultShardId,
             defaultConcurrencyToken,
@@ -71,9 +77,15 @@ public class ShutdownTaskTest {
 
 
     @Mock
+    private IKinesisProxy kinesisProxy;
+    @Mock
     private GetRecordsCache getRecordsCache;
     @Mock
     private ShardSyncStrategy shardSyncStrategy;
+    @Mock
+    private ILeaseManager<KinesisClientLease> leaseManager;
+    @Mock
+    private KinesisClientLibLeaseCoordinator leaseCoordinator;
 
     /**
      * @throws java.lang.Exception
@@ -95,6 +107,10 @@ public class ShutdownTaskTest {
     @Before
     public void setUp() throws Exception {
         doNothing().when(getRecordsCache).shutdown();
+        final KinesisClientLease parentLease = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        when(leaseCoordinator.getCurrentlyHeldLease(defaultShardId)).thenReturn(parentLease);
+        when(leaseCoordinator.updateLease(any(KinesisClientLease.class), any(UUID.class))).thenReturn(true);
     }
 
     /**
@@ -111,12 +127,6 @@ public class ShutdownTaskTest {
     public final void testCallWhenApplicationDoesNotCheckpoint() {
         RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
         when(checkpointer.getLastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("3298"));
-        IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
-        List<Shard> shards = constructShardListForGraphA();
-        when(kinesisProxy.getShardList()).thenReturn(shards);
-        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardListWrappingShardClosureVerificationResponse(true, shards));
-        KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
-        ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
@@ -132,31 +142,29 @@ public class ShutdownTaskTest {
                 TASK_BACKOFF_TIME_MILLIS,
                 getRecordsCache,
                 shardSyncer,
-                shardSyncStrategy);
+                shardSyncStrategy,
+                constructChildShards());
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
+        final String expectedExceptionMessage = "Application didn't checkpoint at end of shard shardId-0. " +
+                "Application must checkpoint upon shutdown. See IRecordProcessor.shutdown javadocs for more information.";
+        Assert.assertEquals(expectedExceptionMessage, result.getException().getMessage());
     }
 
     /**
      * Test method for {@link ShutdownTask#call()}.
      */
     @Test
-    public final void testCallWhenSyncingShardsThrows() {
+    public final void testCallWhenCreatingLeaseThrows() throws Exception {
         RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
         when(checkpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
-        List<Shard> shards = constructShardListForGraphA();
-        IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
-        when(kinesisProxy.getShardList()).thenReturn(shards);
-        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardListWrappingShardClosureVerificationResponse(true, shards));
-        KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
-        ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
-        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
 
-        when(shardSyncStrategy.onShardConsumerShutDown(shards)).thenReturn(new TaskResult(new KinesisClientLibIOException("")));
+        final String exceptionMessage = "InvalidStateException is thrown.";
+        when(leaseManager.createLeaseIfNotExists(any(KinesisClientLease.class))).thenThrow(new InvalidStateException(exceptionMessage));
         ShutdownTask task = new ShutdownTask(defaultShardInfo,
                 defaultRecordProcessor,
                 checkpointer,
@@ -169,30 +177,21 @@ public class ShutdownTaskTest {
                 TASK_BACKOFF_TIME_MILLIS,
                 getRecordsCache,
                 shardSyncer,
-                shardSyncStrategy);
+                shardSyncStrategy,
+                constructChildShards());
         TaskResult result = task.call();
-        verify(shardSyncStrategy).onShardConsumerShutDown(shards);
-        Assert.assertNotNull(result.getException());
-        Assert.assertTrue(result.getException() instanceof KinesisClientLibIOException);
         verify(getRecordsCache).shutdown();
+        verify(leaseCoordinator).dropLease(any(KinesisClientLease.class));
+        Assert.assertNull(result.getException());
     }
 
     @Test
-    public final void testCallWhenShardEnd() {
+    public final void testCallWhenShardEnd() throws Exception {
         RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
         when(checkpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
-        List<Shard> shards = constructShardListForGraphA();
-        IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
-        when(kinesisProxy.getShardList()).thenReturn(shards);
-        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardListWrappingShardClosureVerificationResponse(true, shards));
-        KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
-        ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
-        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
-        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
 
-        when(shardSyncStrategy.onShardConsumerShutDown(shards)).thenReturn(new TaskResult(null));
         ShutdownTask task = new ShutdownTask(defaultShardInfo,
                                              defaultRecordProcessor,
                                              checkpointer,
@@ -205,35 +204,26 @@ public class ShutdownTaskTest {
                                              TASK_BACKOFF_TIME_MILLIS,
                                              getRecordsCache,
                                              shardSyncer,
-                                             shardSyncStrategy);
+                                             shardSyncStrategy,
+                                             constructChildShards());
         TaskResult result = task.call();
-        verify(shardSyncStrategy).onShardConsumerShutDown(shards);
-        verify(kinesisProxy, times(1)).verifyShardClosure(anyString());
+        verify(leaseManager, times(2)).createLeaseIfNotExists(any(KinesisClientLease.class));
+        verify(leaseCoordinator).updateLease(any(KinesisClientLease.class), any(UUID.class));
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
-        verify(leaseCoordinator, never()).dropLease(any());
     }
 
     @Test
-    public final void testCallWhenFalseShardEnd() {
+    public final void testCallWhenShardNotFound() throws Exception {
         ShardInfo shardInfo = new ShardInfo("shardId-4",
                                                    defaultConcurrencyToken,
                                                    defaultParentShardIds,
                                                    ExtendedSequenceNumber.LATEST);
         RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
         when(checkpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
-        List<Shard> shards = constructShardListForGraphA();
-        IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
-        when(kinesisProxy.getShardList()).thenReturn(shards);
-        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardListWrappingShardClosureVerificationResponse(false, shards));
-        KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
-        ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
-        when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId())).thenReturn(new KinesisClientLease());
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
-
-        when(shardSyncStrategy.onShardConsumerShutDown(shards)).thenReturn(new TaskResult(null));
 
         ShutdownTask task = new ShutdownTask(shardInfo,
                                              defaultRecordProcessor,
@@ -247,31 +237,23 @@ public class ShutdownTaskTest {
                                              TASK_BACKOFF_TIME_MILLIS,
                                              getRecordsCache,
                                              shardSyncer,
-                                             shardSyncStrategy);
+                                             shardSyncStrategy,
+                                             Collections.emptyList());
         TaskResult result = task.call();
-        verify(shardSyncStrategy, never()).onShardConsumerShutDown(shards);
-        verify(kinesisProxy, times(1)).verifyShardClosure(anyString());
+        verify(leaseManager, never()).createLeaseIfNotExists(any(KinesisClientLease.class));
+        verify(leaseCoordinator, never()).updateLease(any(KinesisClientLease.class), any(UUID.class));
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
-        verify(leaseCoordinator).dropLease(any());
     }
 
     @Test
-    public final void testCallWhenLeaseLost() {
+    public final void testCallWhenLeaseLost() throws Exception {
         RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
         when(checkpointer.getLastCheckpointValue()).thenReturn(new ExtendedSequenceNumber("3298"));
-        List<Shard> shards = constructShardListForGraphA();
-        IKinesisProxy kinesisProxy = mock(IKinesisProxy.class);
-        when(kinesisProxy.getShardList()).thenReturn(shards);
-        when(kinesisProxy.verifyShardClosure(anyString())).thenReturn(new ShardListWrappingShardClosureVerificationResponse(false, shards));
-        KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
-        ILeaseManager<KinesisClientLease> leaseManager = mock(KinesisClientLeaseManager.class);
-        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
 
-        when(shardSyncStrategy.onShardConsumerShutDown(shards)).thenReturn(new TaskResult(null));
         ShutdownTask task = new ShutdownTask(defaultShardInfo,
                                              defaultRecordProcessor,
                                              checkpointer,
@@ -284,13 +266,13 @@ public class ShutdownTaskTest {
                                              TASK_BACKOFF_TIME_MILLIS,
                                              getRecordsCache,
                                              shardSyncer,
-                                             shardSyncStrategy);
+                                             shardSyncStrategy,
+                                             Collections.emptyList());
         TaskResult result = task.call();
-        verify(shardSyncStrategy, never()).onShardConsumerShutDown(shards);
-        verify(kinesisProxy, never()).getShardList();
+        verify(leaseManager, never()).createLeaseIfNotExists(any(KinesisClientLease.class));
+        verify(leaseCoordinator, never()).updateLease(any(KinesisClientLease.class), any(UUID.class));
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
-        verify(leaseCoordinator, never()).dropLease(any());
     }
 
     /**
@@ -299,10 +281,39 @@ public class ShutdownTaskTest {
     @Test
     public final void testGetTaskType() {
         KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
-        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, leaseCoordinator, 0, getRecordsCache, shardSyncer, shardSyncStrategy);
+        ShutdownTask task = new ShutdownTask(null, null, null, null,
+                                             null, null, false,
+                                             false, leaseCoordinator, 0,
+                                             getRecordsCache, shardSyncer, shardSyncStrategy, Collections.emptyList());
         Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
     }
 
+    private List<ChildShard> constructChildShards() {
+        List<ChildShard> childShards = new ArrayList<>();
+        List<String> parentShards = new ArrayList<>();
+        parentShards.add(defaultShardId);
+
+        ChildShard leftChild = new ChildShard();
+        leftChild.setShardId("ShardId-1");
+        leftChild.setParentShards(parentShards);
+        leftChild.setHashKeyRange(ShardObjectHelper.newHashKeyRange("0", "49"));
+        childShards.add(leftChild);
+
+        ChildShard rightChild = new ChildShard();
+        rightChild.setShardId("ShardId-2");
+        rightChild.setParentShards(parentShards);
+        rightChild.setHashKeyRange(ShardObjectHelper.newHashKeyRange("50", "99"));
+        childShards.add(rightChild);
+        return childShards;
+    }
+
+    private KinesisClientLease createLease(String leaseKey, String leaseOwner, Collection<String> parentShardIds) {
+        KinesisClientLease lease = new KinesisClientLease();
+        lease.setLeaseKey(leaseKey);
+        lease.setLeaseOwner(leaseOwner);
+        lease.setParentShardIds(parentShardIds);
+        return lease;
+    }
 
     /*
      * Helper method to construct a shard list for graph A. Graph A is defined below.
