@@ -43,6 +43,7 @@ import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.BatchUniqueIdentifier;
+import software.amazon.kinesis.retrieval.DataRetrievalUtil;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
@@ -485,7 +486,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 // Since the triggeringFlow is active flow, it will then trigger the handleFlowError call.
                 // Since the exception is not ResourceNotFoundException, it will trigger onError in the ShardConsumerSubscriber.
                 // The ShardConsumerSubscriber will finally cancel the subscription.
-                if (!isValidEvent(recordBatchEvent)) {
+                if (!DataRetrievalUtil.isValidResult(recordBatchEvent.continuationSequenceNumber(), recordBatchEvent.childShards())) {
                     throw new InvalidStateException("RecordBatchEvent for flow " + triggeringFlow.toString() + " is invalid."
                                                + " event.continuationSequenceNumber: " + recordBatchEvent.continuationSequenceNumber()
                                                + ". event.childShards: " + recordBatchEvent.childShards());
@@ -509,22 +510,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 errorOccurred(triggeringFlow, t);
             }
         }
-    }
-
-    private boolean isValidEvent(SubscribeToShardEvent event) {
-        if (event.continuationSequenceNumber() == null && CollectionUtils.isNullOrEmpty(event.childShards()) ||
-            event.continuationSequenceNumber() != null && !CollectionUtils.isNullOrEmpty(event.childShards())) {
-            return false;
-        }
-
-        if(!CollectionUtils.isNullOrEmpty(event.childShards())) {
-            for (ChildShard childShard : event.childShards()) {
-                if (CollectionUtils.isNullOrEmpty(childShard.parentShards())) {
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 
     private void updateAvailableQueueSpaceAndRequestUpstream(RecordFlow triggeringFlow) {
