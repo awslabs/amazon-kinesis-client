@@ -406,12 +406,12 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
         parentShards.add(iterator.shardId);
 
         ChildShard leftChild = new ChildShard();
-        leftChild.setShardId("ShardId-1");
+        leftChild.setShardId("shardId-1");
         leftChild.setParentShards(parentShards);
         childShards.add(leftChild);
 
         ChildShard rightChild = new ChildShard();
-        rightChild.setShardId("ShardId-2");
+        rightChild.setShardId("shardId-2");
         rightChild.setParentShards(parentShards);
         childShards.add(rightChild);
         return childShards;
