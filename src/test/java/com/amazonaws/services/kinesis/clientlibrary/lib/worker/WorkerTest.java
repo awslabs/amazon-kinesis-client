@@ -2194,7 +2194,7 @@ public class WorkerTest {
         Shard shard1 = ShardObjectHelper.newShard("shardId-1", "shardId-0", null, range1, keyRange);
         shards.add(shard1);
 
-        Shard shard2 = ShardObjectHelper.newShard("shardId-2", null, "shardId-0", range2, keyRange);
+        Shard shard2 = ShardObjectHelper.newShard("shardId-2", "shardId-0", null, range2, keyRange);
         shards.add(shard2);
 
         return shards;
