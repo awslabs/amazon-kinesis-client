@@ -689,10 +689,6 @@ public class Worker implements Runnable {
                 assignedShards.add(shardInfo);
             }
 
-            if (foundCompletedShard) {
-                shardSyncStrategy.onFoundCompletedShard();
-            }
-
             // clean up shard consumers for unassigned shards
             cleanupShardConsumers(assignedShards);
 
