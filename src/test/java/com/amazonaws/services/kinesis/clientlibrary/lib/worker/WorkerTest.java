@@ -2184,7 +2184,8 @@ public class WorkerTest {
     private List<Shard> createShardListWithOneSplit() {
         List<Shard> shards = new ArrayList<Shard>();
         SequenceNumberRange range0 = ShardObjectHelper.newSequenceNumberRange("39428", "987324");
-        SequenceNumberRange range1 = ShardObjectHelper.newSequenceNumberRange("987325", null);
+        SequenceNumberRange range1 = ShardObjectHelper.newSequenceNumberRange("39428", "100000");
+        SequenceNumberRange range2 = ShardObjectHelper.newSequenceNumberRange("100001", "987324");
         HashKeyRange keyRange =
                 ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, ShardObjectHelper.MAX_HASH_KEY);
         Shard shard0 = ShardObjectHelper.newShard("shardId-0", null, null, range0, keyRange);
@@ -2192,6 +2193,9 @@ public class WorkerTest {
 
         Shard shard1 = ShardObjectHelper.newShard("shardId-1", "shardId-0", null, range1, keyRange);
         shards.add(shard1);
+
+        Shard shard2 = ShardObjectHelper.newShard("shardId-2", null, "shardId-0", range2, keyRange);
+        shards.add(shard2);
 
         return shards;
     }
