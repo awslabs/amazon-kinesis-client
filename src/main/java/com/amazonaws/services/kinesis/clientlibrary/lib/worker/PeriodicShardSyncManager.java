@@ -26,6 +26,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
@@ -180,8 +181,8 @@ class PeriodicShardSyncManager {
 
             try {
                 final ShardSyncResponse shardSyncResponse = checkForShardSync();
-                MetricsHelper.addSuccessAndLatency(runStartMillis, shardSyncResponse.shouldDoShardSync(), MetricsLevel.SUMMARY);
-                MetricsHelper.addSuccessAndLatency(runStartMillis, shardSyncResponse.isHoleDetected(), MetricsLevel.SUMMARY);
+                MetricsHelper.getMetricsScope().addData("ShouldDoShardSync", shardSyncResponse.shouldDoShardSync() ? 1 : 0, StandardUnit.Count, MetricsLevel.SUMMARY);
+                MetricsHelper.getMetricsScope().addData("HashRangeHoleDetected", shardSyncResponse.isHoleDetected() ? 1 : 0, StandardUnit.Count, MetricsLevel.SUMMARY);
                 if (shardSyncResponse.shouldDoShardSync()) {
                     LOG.info("Periodic shard syncer initiating shard sync due to the reason - " +
                             shardSyncResponse.reasonForDecision());

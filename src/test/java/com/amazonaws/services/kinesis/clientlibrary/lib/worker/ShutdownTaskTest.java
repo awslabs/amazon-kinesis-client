@@ -34,6 +34,7 @@ import java.util.UUID;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.ShardListWrappingShardClosureVerificationResponse;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.leases.impl.UpdateField;
 import com.amazonaws.services.kinesis.model.ChildShard;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
@@ -110,7 +111,6 @@ public class ShutdownTaskTest {
         final KinesisClientLease parentLease = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         when(leaseCoordinator.getCurrentlyHeldLease(defaultShardId)).thenReturn(parentLease);
-        when(leaseCoordinator.updateLease(any(KinesisClientLease.class), any(UUID.class))).thenReturn(true);
     }
 
     /**
@@ -208,7 +208,7 @@ public class ShutdownTaskTest {
                                              constructChildShards());
         TaskResult result = task.call();
         verify(leaseManager, times(2)).createLeaseIfNotExists(any(KinesisClientLease.class));
-        verify(leaseCoordinator).updateLease(any(KinesisClientLease.class), any(UUID.class));
+        verify(leaseManager).updateLeaseWithMetaInfo(any(KinesisClientLease.class), any(UpdateField.class));
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
     }
@@ -241,7 +241,7 @@ public class ShutdownTaskTest {
                                              Collections.emptyList());
         TaskResult result = task.call();
         verify(leaseManager, never()).createLeaseIfNotExists(any(KinesisClientLease.class));
-        verify(leaseCoordinator, never()).updateLease(any(KinesisClientLease.class), any(UUID.class));
+        verify(leaseManager, never()).updateLeaseWithMetaInfo(any(KinesisClientLease.class), any(UpdateField.class));
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
     }
@@ -270,7 +270,7 @@ public class ShutdownTaskTest {
                                              Collections.emptyList());
         TaskResult result = task.call();
         verify(leaseManager, never()).createLeaseIfNotExists(any(KinesisClientLease.class));
-        verify(leaseCoordinator, never()).updateLease(any(KinesisClientLease.class), any(UUID.class));
+        verify(leaseManager, never()).updateLeaseWithMetaInfo(any(KinesisClientLease.class), any(UpdateField.class));
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
     }
