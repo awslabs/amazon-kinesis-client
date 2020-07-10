@@ -181,7 +181,7 @@ public class KinesisClientLibConfiguration {
     public static final long LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS = 2 * 60 * 1000L;
 
     /**
-     * Default Lease Recovery Auditor inconsistency confidence threshold for running full shard sync for HARD_END ShardSyncStrategyType.
+     * Default Lease Recovery Auditor inconsistency confidence threshold for running full shard sync for SHARD_END ShardSyncStrategyType.
      */
     public static final int LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD = 3;
 
