@@ -28,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
@@ -47,10 +48,13 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.DataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
+import software.amazon.kinesis.retrieval.DataRetrievalUtil;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisDataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import static software.amazon.kinesis.retrieval.DataRetrievalUtil.isValidResult;
 
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
@@ -289,7 +293,7 @@ public class KinesisDataFetcher implements DataFetcher {
     public GetRecordsResponse getGetRecordsResponse(GetRecordsRequest request) throws ExecutionException, InterruptedException, TimeoutException {
         final GetRecordsResponse response = FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(request),
                 maxFutureWait);
-        if (!isValidResponse(response)) {
+        if (!isValidResult(response.nextShardIterator(), response.childShards())) {
             throw new RetryableRetrievalException("GetRecords response is not valid for shard: " + streamAndShardId
                     + ". nextShardIterator: " + response.nextShardIterator()
                     + ". childShards: " + response.childShards() + ". Will retry GetRecords with the same nextIterator.");
@@ -337,11 +341,6 @@ public class KinesisDataFetcher implements DataFetcher {
                     success, startTime, MetricsLevel.DETAILED);
             MetricsUtil.endScope(metricsScope);
         }
-    }
-
-    private boolean isValidResponse(GetRecordsResponse response) {
-        return response.nextShardIterator() == null ? !CollectionUtils.isNullOrEmpty(response.childShards())
-                                                    : response.childShards() != null && response.childShards().isEmpty();
     }
 
     private AWSExceptionManager createExceptionManager() {

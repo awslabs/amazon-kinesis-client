@@ -27,6 +27,7 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
@@ -60,6 +61,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDeliveryActionIfRequired;
+import static software.amazon.kinesis.retrieval.DataRetrievalUtil.isValidResult;
 
 @Slf4j
 @KinesisClientInternalApi
@@ -484,7 +486,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 // Since the triggeringFlow is active flow, it will then trigger the handleFlowError call.
                 // Since the exception is not ResourceNotFoundException, it will trigger onError in the ShardConsumerSubscriber.
                 // The ShardConsumerSubscriber will finally cancel the subscription.
-                if (!isValidEvent(recordBatchEvent)) {
+                if (!isValidResult(recordBatchEvent.continuationSequenceNumber(), recordBatchEvent.childShards())) {
                     throw new InvalidStateException("RecordBatchEvent for flow " + triggeringFlow.toString() + " is invalid."
                                                + " event.continuationSequenceNumber: " + recordBatchEvent.continuationSequenceNumber()
                                                + ". event.childShards: " + recordBatchEvent.childShards());
@@ -508,11 +510,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 errorOccurred(triggeringFlow, t);
             }
         }
-    }
-
-    private boolean isValidEvent(SubscribeToShardEvent event) {
-        return event.continuationSequenceNumber() == null ? !CollectionUtils.isNullOrEmpty(event.childShards())
-                                                          : event.childShards() != null && event.childShards().isEmpty();
     }
 
     private void updateAvailableQueueSpaceAndRequestUpstream(RecordFlow triggeringFlow) {

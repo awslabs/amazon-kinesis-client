@@ -52,6 +52,7 @@ import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardObjectHelper;
+import software.amazon.kinesis.leases.UpdateField;
 import software.amazon.kinesis.leases.exceptions.CustomerApplicationException;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.LeasePendingDeletion;
@@ -148,16 +149,18 @@ public class ShutdownTaskTest {
     @Test
     public final void testCallWhenCreatingNewLeasesThrows() throws Exception {
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        Lease heldLease = LeaseHelper.createLease("shardId-0", "leaseOwner", Collections.singleton("parentShardId"));
+        when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
-        when(leaseRefresher.createLeaseIfNotExists(Matchers.any(Lease.class))).thenThrow(new KinesisClientLibIOException("KinesisClientLibIOException"));
+        when(hierarchicalShardSyncer.createLeaseForChildShard(Matchers.any(ChildShard.class), Matchers.any(StreamIdentifier.class)))
+                .thenThrow(new InvalidStateException("InvalidStateException is thrown"));
 
         final TaskResult result = task.call();
-        assertNotNull(result.getException());
-        assertTrue(result.getException() instanceof IllegalStateException);
-        verify(recordsPublisher, never()).shutdown();
+        assertNull(result.getException());
+        verify(recordsPublisher).shutdown();
         verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
-        verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
-        verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
+        verify(shardRecordProcessor).leaseLost(LeaseLostInput.builder().build());
+        verify(leaseCoordinator).dropLease(Matchers.any(Lease.class));
     }
 
     /**
@@ -185,7 +188,7 @@ public class ShutdownTaskTest {
         verify(recordsPublisher).shutdown();
         verify(shardRecordProcessor).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
-        verify(leaseCoordinator).updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString());
+        verify(leaseRefresher).updateLeaseWithMetaInfo(Matchers.any(Lease.class), Matchers.any(UpdateField.class));
         verify(leaseRefresher, times(2)).createLeaseIfNotExists(Matchers.any(Lease.class));
         verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
         verify(leaseCleanupManager, times(1)).enqueueForDeletion(any(LeasePendingDeletion.class));
