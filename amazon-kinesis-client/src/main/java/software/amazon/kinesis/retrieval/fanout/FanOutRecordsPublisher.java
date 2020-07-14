@@ -43,7 +43,6 @@ import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.BatchUniqueIdentifier;
-import software.amazon.kinesis.retrieval.DataRetrievalUtil;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
@@ -62,6 +61,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDeliveryActionIfRequired;
+import static software.amazon.kinesis.retrieval.DataRetrievalUtil.isValidResult;
 
 @Slf4j
 @KinesisClientInternalApi
@@ -486,7 +486,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 // Since the triggeringFlow is active flow, it will then trigger the handleFlowError call.
                 // Since the exception is not ResourceNotFoundException, it will trigger onError in the ShardConsumerSubscriber.
                 // The ShardConsumerSubscriber will finally cancel the subscription.
-                if (!DataRetrievalUtil.isValidResult(recordBatchEvent.continuationSequenceNumber(), recordBatchEvent.childShards())) {
+                if (!isValidResult(recordBatchEvent.continuationSequenceNumber(), recordBatchEvent.childShards())) {
                     throw new InvalidStateException("RecordBatchEvent for flow " + triggeringFlow.toString() + " is invalid."
                                                + " event.continuationSequenceNumber: " + recordBatchEvent.continuationSequenceNumber()
                                                + ". event.childShards: " + recordBatchEvent.childShards());

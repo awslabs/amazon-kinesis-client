@@ -54,6 +54,8 @@ import software.amazon.kinesis.retrieval.KinesisDataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import static software.amazon.kinesis.retrieval.DataRetrievalUtil.isValidResult;
+
 /**
  * Used to get data from Amazon Kinesis. Tracks iterator state internally.
  */
@@ -291,7 +293,7 @@ public class KinesisDataFetcher implements DataFetcher {
     public GetRecordsResponse getGetRecordsResponse(GetRecordsRequest request) throws ExecutionException, InterruptedException, TimeoutException {
         final GetRecordsResponse response = FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(request),
                 maxFutureWait);
-        if (!DataRetrievalUtil.isValidResult(response.nextShardIterator(), response.childShards())) {
+        if (!isValidResult(response.nextShardIterator(), response.childShards())) {
             throw new RetryableRetrievalException("GetRecords response is not valid for shard: " + streamAndShardId
                     + ". nextShardIterator: " + response.nextShardIterator()
                     + ". childShards: " + response.childShards() + ". Will retry GetRecords with the same nextIterator.");
