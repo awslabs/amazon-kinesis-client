@@ -44,6 +44,7 @@ import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.Lease;
@@ -197,7 +198,7 @@ public class ShutdownTaskTest {
     }
 
     @Test
-    public final void testCallThrowsWhenParentInfoNotPresentInLease() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public final void testCallThrowsUntilParentInfoNotPresentInLease() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         shardInfo = new ShardInfo("shardId-0", concurrencyToken, Collections.emptySet(),
                 ExtendedSequenceNumber.LATEST);
         task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
@@ -209,37 +210,93 @@ public class ShutdownTaskTest {
         Lease heldLease = LeaseHelper.createLease("shardId-0", "leaseOwner", ImmutableList.of("parent1", "parent2"));
         Lease parentLease = LeaseHelper.createLease("shardId-1", "leaseOwner", Collections.emptyList());
         when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
-        when(leaseCoordinator.getCurrentlyHeldLease("shardId-1")).thenReturn(null, parentLease);
+        when(leaseCoordinator.getCurrentlyHeldLease("shardId-1"))
+                .thenReturn(null, null, null, null, null, parentLease);
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
         when(leaseCoordinator.updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString())).thenReturn(true);
         when(leaseRefresher.getLease("shardId-0")).thenReturn(heldLease);
         // Return null lease first time to simulate partial parent lease info
-        when(leaseRefresher.getLease("shardId-1")).thenReturn(null, parentLease);
+        when(leaseRefresher.getLease("shardId-1"))
+                .thenReturn(null, null, null, null, null, parentLease);
 
-        // Make first attempt with partial parent info in lease table
-        TaskResult result = task.call();
-        assertNotNull(result.getException());
-        assertTrue(result.getException() instanceof InvalidStateException);
-        assertTrue(result.getException().getMessage().contains("has partial parent information in lease table"));
-        verify(recordsPublisher, never()).shutdown();
-        verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
-        verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
-        verify(leaseCoordinator, never()).updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString());
-        verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
-        verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
-        verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
+        // Make first 5 attempts with partial parent info in lease table
+        for (int i = 0; i < 5; i++) {
+            TaskResult result = task.call();
+            assertNotNull(result.getException());
+            assertTrue(result.getException() instanceof BlockedOnParentShardException);
+            assertTrue(result.getException().getMessage().contains("has partial parent information in lease table"));
+            verify(recordsPublisher, never()).shutdown();
+            verify(shardRecordProcessor, never())
+                    .shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
+            verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
+            verify(leaseCoordinator, never())
+                    .updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString());
+            verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
+            verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
+            verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
+        }
 
         // make next attempt with complete parent info in lease table
-        result = task.call();
+        TaskResult result = task.call();
         assertNull(result.getException());
         verify(recordsPublisher).shutdown();
         verify(shardRecordProcessor).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
         verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
-        verify(leaseCoordinator).updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString());
+        verify(leaseRefresher).updateLeaseWithMetaInfo(Matchers.any(Lease.class), Matchers.any(UpdateField.class));
         verify(leaseRefresher, times(1)).createLeaseIfNotExists(Matchers.any(Lease.class));
         verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
         verify(leaseCleanupManager, times(1)).enqueueForDeletion(any(LeasePendingDeletion.class));
+    }
 
+    @Test
+    public final void testCallTriggersLeaseLossWhenParentInfoNotPresentInLease() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        shardInfo = new ShardInfo("shardId-0", concurrencyToken, Collections.emptySet(),
+                ExtendedSequenceNumber.LATEST);
+        task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
+                SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShard(), streamIdentifier, leaseCleanupManager);
+
+        when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        Lease heldLease = LeaseHelper.createLease("shardId-0", "leaseOwner", ImmutableList.of("parent1", "parent2"));
+        Lease parentLease = LeaseHelper.createLease("shardId-1", "leaseOwner", Collections.emptyList());
+        when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
+        when(leaseCoordinator.getCurrentlyHeldLease("shardId-1"))
+                .thenReturn(null, null, null, null, null, null, null, null, null, null, null);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
+        when(leaseCoordinator.updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString())).thenReturn(true);
+        when(leaseRefresher.getLease("shardId-0")).thenReturn(heldLease);
+        // Return null lease first time to simulate partial parent lease info
+        when(leaseRefresher.getLease("shardId-1"))
+                .thenReturn(null, null, null, null, null, null, null, null, null, null, null);
+
+        // Make first 10 attempts with partial parent info in lease table
+        for (int i = 0; i < 10; i++) {
+            TaskResult result = task.call();
+            assertNotNull(result.getException());
+            assertTrue(result.getException() instanceof BlockedOnParentShardException);
+            assertTrue(result.getException().getMessage().contains("has partial parent information in lease table"));
+            verify(recordsPublisher, never()).shutdown();
+            verify(shardRecordProcessor, never())
+                    .shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
+            verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
+            verify(leaseCoordinator, never())
+                    .updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString());
+            verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
+            verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
+            verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
+        }
+
+        // make final attempt with incomplete parent info in lease table
+        TaskResult result = task.call();
+        assertNull(result.getException());
+        verify(recordsPublisher).shutdown();
+        verify(shardRecordProcessor, never()).shardEnded(ShardEndedInput.builder().checkpointer(recordProcessorCheckpointer).build());
+        verify(shardRecordProcessor).leaseLost(LeaseLostInput.builder().build());
+        verify(leaseRefresher, never()).updateLeaseWithMetaInfo(Matchers.any(Lease.class), Matchers.any(UpdateField.class));
+        verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
+        verify(leaseCoordinator).dropLease(Matchers.any(Lease.class));
+        verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
     }
 
     /**
