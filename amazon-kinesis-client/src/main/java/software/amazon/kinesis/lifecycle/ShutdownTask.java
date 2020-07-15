@@ -130,7 +130,7 @@ public class ShutdownTask implements ConsumerTask {
                         // If InvalidStateException happens, it indicates we have a non recoverable error in short term.
                         // In this scenario, we should shutdown the shardConsumer with LEASE_LOST reason to allow other worker to take the lease and retry shutting down.
                         log.warn("Lease {}: Invalid state encountered while shutting down shardConsumer with SHARD_END reason. " +
-                                "Dropping the lease and shutting down shardConsumer using LEASE_LOST reason. ", currentShardLease.leaseKey(), e);
+                                "Dropping the lease and shutting down shardConsumer using LEASE_LOST reason. ", leaseKeyProvider.apply(shardInfo), e);
                         dropLease(currentShardLease);
                         throwOnApplicationException(leaseLostAction, scope, startTime);
                     }
