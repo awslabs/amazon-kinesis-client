@@ -14,9 +14,11 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
+import com.amazonaws.services.kinesis.leases.impl.UpdateField;
 import com.amazonaws.services.kinesis.model.ChildShard;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.logging.Log;
@@ -32,8 +34,8 @@ import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -44,6 +46,7 @@ class ShutdownTask implements ITask {
     private static final Log LOG = LogFactory.getLog(ShutdownTask.class);
 
     private static final String RECORD_PROCESSOR_SHUTDOWN_METRIC = "RecordProcessor.shutdown";
+    private int retryLeftForValidParentState = 10;
 
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
@@ -107,43 +110,8 @@ class ShutdownTask implements ITask {
         try {
             LOG.info("Invoking shutdown() for shard " + shardInfo.getShardId() + ", concurrencyToken: "
                      + shardInfo.getConcurrencyToken() + ", original Shutdown reason: " + reason + ". childShards:" + childShards);
-            ShutdownReason localReason = reason;
-            /*
-             * Revalidate if the current shard is closed before shutting down the shard consumer with reason SHARD_END
-             * If current shard is not closed, shut down the shard consumer with reason LEASE_LOST that allows active
-             * workers to contend for the lease of this shard.
-             */
-            if(localReason == ShutdownReason.TERMINATE) {
-                // Create new lease for the child shards if they don't exist.
-                // We have one valid scenario that shutdown task got created with SHARD_END reason and an empty list of childShards.
-                // This would happen when KinesisDataFetcher catches ResourceNotFound exception.
-                // In this case, KinesisDataFetcher will send out SHARD_END signal to trigger a shutdown task with empty list of childShards.
-                // This scenario could happen when customer deletes the stream while leaving the KCL application running.
-                try {
-                    if (!CollectionUtils.isNullOrEmpty(childShards)) {
-                        createLeasesForChildShardsIfNotExist();
-                        updateCurrentLeaseWithChildShards();
-                    } else {
-                        LOG.warn("Shard " + shardInfo.getShardId()
-                                         + ": Shutting down consumer with SHARD_END reason without creating leases for child shards.");
-                    }
-                } catch (InvalidStateException e) {
-                    // If invalidStateException happens, it indicates we are missing childShard related information.
-                    // In this scenario, we should shutdown the shardConsumer with ZOMBIE reason to allow other worker to take the lease and retry getting
-                    // childShard information in the processTask.
-                    localReason = ShutdownReason.ZOMBIE;
-                    dropLease();
-                    LOG.warn("Shard " + shardInfo.getShardId() + ": Exception happened while shutting down shardConsumer with TERMINATE reason. " +
-                                     "Dropping the lease and shutting down shardConsumer using ZOMBIE reason. Exception: ", e);
-                }
-            }
 
-            // If we reached end of the shard, set sequence number to SHARD_END.
-            if (localReason == ShutdownReason.TERMINATE) {
-                recordProcessorCheckpointer.setSequenceNumberAtShardEnd(
-                        recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
-                recordProcessorCheckpointer.setLargestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
-            }
+            ShutdownReason localReason = attemptPersistingChildShardInfoAndOverrideShutdownReasonOnFailure(reason);
 
             final ShutdownInput shutdownInput = new ShutdownInput()
                     .withShutdownReason(localReason)
@@ -191,7 +159,67 @@ class ShutdownTask implements ITask {
         return new TaskResult(exception);
     }
 
+    private ShutdownReason attemptPersistingChildShardInfoAndOverrideShutdownReasonOnFailure(ShutdownReason originalReason)
+        throws DependencyException, ProvisionedThroughputException {
+        ShutdownReason shutdownReason = originalReason;
+        if(originalReason == ShutdownReason.TERMINATE) {
+            // For TERMINATE shutdown reason, try to create and persist childShard leases before setting checkpoint.
+            try {
+                final KinesisClientLease currentLease = leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId());
+                if (currentLease == null) {
+                    throw new InvalidStateException(shardInfo.getShardId()
+                                                            + " : Lease not owned by the current worker. Leaving ShardEnd handling to new owner.");
+                }
+                if (!CollectionUtils.isNullOrEmpty(childShards)) {
+                    createLeasesForChildShardsIfNotExist();
+                    updateCurrentLeaseWithChildShards(currentLease);
+                    recordProcessorCheckpointer.setSequenceNumberAtShardEnd(
+                            recordProcessorCheckpointer.getLargestPermittedCheckpointValue());
+                    recordProcessorCheckpointer.setLargestPermittedCheckpointValue(ExtendedSequenceNumber.SHARD_END);
+                } else {
+                    LOG.warn("Shard " + shardInfo.getShardId()
+                                     + ": Shutting down consumer with SHARD_END reason without creating leases for child shards.");
+                }
+            } catch (InvalidStateException e) {
+                // If invalidStateException happens, it indicates we are missing childShard related information.
+                // In this scenario, we should shutdown the shardConsumer with ZOMBIE reason to allow other worker to take the lease and retry getting
+                // childShard information in the processTask.
+                shutdownReason = ShutdownReason.ZOMBIE;
+                dropLease();
+                LOG.warn("Shard " + shardInfo.getShardId() + ": Exception happened while shutting down shardConsumer with TERMINATE reason. " +
+                                 "Dropping the lease and shutting down shardConsumer using ZOMBIE reason. Exception: ", e);
+            }
+
+        }
+        return shutdownReason;
+    }
+
     private void createLeasesForChildShardsIfNotExist() throws InvalidStateException, DependencyException, ProvisionedThroughputException {
+        // For child shard resulted from merge of two parent shards, verify if both the parents are either present or
+        // not present in the lease table before creating the lease entry.
+        if (!CollectionUtils.isNullOrEmpty(childShards) && childShards.size() == 1) {
+            final ChildShard childShard = childShards.get(0);
+            final List<String> parentLeaseKeys = childShard.getParentShards();
+
+            if (parentLeaseKeys.size() != 2) {
+                throw new InvalidStateException("Shard " + shardInfo.getShardId()+ "'s only child shard " + childShard
+                                                        + " does not contain other parent information.");
+            } else {
+                boolean isValidLeaseTableState = Objects.isNull(leaseCoordinator.getLeaseManager().getLease(parentLeaseKeys.get(0))) ==
+                                                 Objects.isNull(leaseCoordinator.getLeaseManager().getLease(parentLeaseKeys.get(1)));
+                if (!isValidLeaseTableState) {
+                    if(--retryLeftForValidParentState >= 0) {
+                        throw new BlockedOnParentShardException(
+                                "Shard " + shardInfo.getShardId() + "'s only child shard " + childShard
+                                        + " has partial parent information in lease table. Hence deferring lease creation of child shard.");
+                    } else {
+                        throw new InvalidStateException("Shard " + shardInfo.getShardId() + "'s only child shard " + childShard
+                                                                + " has partial parent information in lease table.");
+                    }
+                }
+            }
+        }
+        // Attempt create leases for child shards.
         for (ChildShard childShard : childShards) {
             final String leaseKey = childShard.getShardId();
             if (leaseCoordinator.getLeaseManager().getLease(leaseKey) == null) {
@@ -202,18 +230,10 @@ class ShutdownTask implements ITask {
         }
     }
 
-    private void updateCurrentLeaseWithChildShards() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        final KinesisClientLease currentLease = leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId());
-        if (currentLease == null) {
-            throw new InvalidStateException("Failed to retrieve current lease for shard " + shardInfo.getShardId());
-        }
+    private void updateCurrentLeaseWithChildShards(KinesisClientLease currentLease) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final Set<String> childShardIds = childShards.stream().map(ChildShard::getShardId).collect(Collectors.toSet());
-
         currentLease.setChildShardIds(childShardIds);
-        final boolean updateResult = leaseCoordinator.updateLease(currentLease, UUID.fromString(shardInfo.getConcurrencyToken()));
-        if (!updateResult) {
-            throw new InvalidStateException("Failed to update parent lease with child shard information for shard " + shardInfo.getShardId());
-        }
+        leaseCoordinator.getLeaseManager().updateLeaseWithMetaInfo(currentLease, UpdateField.CHILD_SHARDS);
         LOG.info("Shard " + shardInfo.getShardId() + ": Updated current lease with child shard information: " + currentLease.getLeaseKey());
     }
 
