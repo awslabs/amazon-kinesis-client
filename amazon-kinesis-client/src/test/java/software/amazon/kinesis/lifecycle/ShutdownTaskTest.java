@@ -20,11 +20,14 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.lifecycle.ShutdownTask.RETRY_RANDOM_MAX_RANGE;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -201,11 +204,6 @@ public class ShutdownTaskTest {
     public final void testCallThrowsUntilParentInfoNotPresentInLease() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         shardInfo = new ShardInfo("shardId-0", concurrencyToken, Collections.emptySet(),
                 ExtendedSequenceNumber.LATEST);
-        task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
-                SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
-                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShard(), streamIdentifier, leaseCleanupManager);
-
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
         Lease heldLease = LeaseHelper.createLease("shardId-0", "leaseOwner", ImmutableList.of("parent1", "parent2"));
         Lease parentLease = LeaseHelper.createLease("shardId-1", "leaseOwner", Collections.emptyList());
@@ -221,6 +219,11 @@ public class ShutdownTaskTest {
 
         // Make first 5 attempts with partial parent info in lease table
         for (int i = 0; i < 5; i++) {
+            ShutdownTask task = spy(new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
+                    SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
+                    ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                    hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShard(), streamIdentifier, leaseCleanupManager));
+            when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(false);
             TaskResult result = task.call();
             assertNotNull(result.getException());
             assertTrue(result.getException() instanceof BlockedOnParentShardException);
@@ -232,11 +235,17 @@ public class ShutdownTaskTest {
             verify(leaseCoordinator, never())
                     .updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString());
             verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
+            verify(task, times(1)).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
             verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
             verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
         }
 
         // make next attempt with complete parent info in lease table
+        ShutdownTask task = spy(new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
+                SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShard(), streamIdentifier, leaseCleanupManager));
+        when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(false);
         TaskResult result = task.call();
         assertNull(result.getException());
         verify(recordsPublisher).shutdown();
@@ -244,6 +253,7 @@ public class ShutdownTaskTest {
         verify(shardRecordProcessor, never()).leaseLost(LeaseLostInput.builder().build());
         verify(leaseRefresher).updateLeaseWithMetaInfo(Matchers.any(Lease.class), Matchers.any(UpdateField.class));
         verify(leaseRefresher, times(1)).createLeaseIfNotExists(Matchers.any(Lease.class));
+        verify(task, never()).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
         verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
         verify(leaseCleanupManager, times(1)).enqueueForDeletion(any(LeasePendingDeletion.class));
     }
@@ -252,10 +262,6 @@ public class ShutdownTaskTest {
     public final void testCallTriggersLeaseLossWhenParentInfoNotPresentInLease() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         shardInfo = new ShardInfo("shardId-0", concurrencyToken, Collections.emptySet(),
                 ExtendedSequenceNumber.LATEST);
-        task = new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
-                SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
-                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
-                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShard(), streamIdentifier, leaseCleanupManager);
 
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
         Lease heldLease = LeaseHelper.createLease("shardId-0", "leaseOwner", ImmutableList.of("parent1", "parent2"));
@@ -272,6 +278,11 @@ public class ShutdownTaskTest {
 
         // Make first 10 attempts with partial parent info in lease table
         for (int i = 0; i < 10; i++) {
+            ShutdownTask task = spy(new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
+                    SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
+                    ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                    hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShard(), streamIdentifier, leaseCleanupManager));
+            when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(false);
             TaskResult result = task.call();
             assertNotNull(result.getException());
             assertTrue(result.getException() instanceof BlockedOnParentShardException);
@@ -283,11 +294,17 @@ public class ShutdownTaskTest {
             verify(leaseCoordinator, never())
                     .updateLease(Matchers.any(Lease.class), Matchers.any(UUID.class), Matchers.anyString(), Matchers.anyString());
             verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
+            verify(task, times(1)).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
             verify(leaseCoordinator, never()).dropLease(Matchers.any(Lease.class));
             verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
         }
 
         // make final attempt with incomplete parent info in lease table
+        ShutdownTask task = spy(new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
+                SHARD_END_SHUTDOWN_REASON, INITIAL_POSITION_TRIM_HORIZON, cleanupLeasesOfCompletedShards,
+                ignoreUnexpectedChildShards, leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher,
+                hierarchicalShardSyncer, NULL_METRICS_FACTORY, constructChildShard(), streamIdentifier, leaseCleanupManager));
+        when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(true);
         TaskResult result = task.call();
         assertNull(result.getException());
         verify(recordsPublisher).shutdown();
@@ -295,6 +312,7 @@ public class ShutdownTaskTest {
         verify(shardRecordProcessor).leaseLost(LeaseLostInput.builder().build());
         verify(leaseRefresher, never()).updateLeaseWithMetaInfo(Matchers.any(Lease.class), Matchers.any(UpdateField.class));
         verify(leaseRefresher, never()).createLeaseIfNotExists(Matchers.any(Lease.class));
+        verify(task, times(1)).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
         verify(leaseCoordinator).dropLease(Matchers.any(Lease.class));
         verify(leaseCleanupManager, never()).enqueueForDeletion(any(LeasePendingDeletion.class));
     }
