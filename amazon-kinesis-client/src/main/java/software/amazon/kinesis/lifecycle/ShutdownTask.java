@@ -52,6 +52,7 @@ import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -65,6 +66,8 @@ import java.util.stream.Collectors;
 public class ShutdownTask implements ConsumerTask {
     private static final String SHUTDOWN_TASK_OPERATION = "ShutdownTask";
     private static final String RECORD_PROCESSOR_SHUTDOWN_METRIC = "RecordProcessor.shutdown";
+    @VisibleForTesting
+    static final int RETRY_RANDOM_MAX_RANGE = 10;
 
     @NonNull
     private final ShardInfo shardInfo;
@@ -99,7 +102,6 @@ public class ShutdownTask implements ConsumerTask {
     private final LeaseCleanupManager leaseCleanupManager;
 
     private static final Function<ShardInfo, String> leaseKeyProvider = shardInfo -> ShardInfo.getLeaseKey(shardInfo);
-    private int retryLeftForValidParentState = 10;
 
     /*
      * Invokes ShardRecordProcessor shutdown() API.
@@ -253,7 +255,7 @@ public class ShutdownTask implements ConsumerTask {
                         Objects.isNull(leaseCoordinator.leaseRefresher().getLease(parentLeaseKeys.get(0))) == Objects
                                 .isNull(leaseCoordinator.leaseRefresher().getLease(parentLeaseKeys.get(1)));
                 if (!isValidLeaseTableState) {
-                    if (--retryLeftForValidParentState >= 0) {
+                    if (!isOneInNProbability(RETRY_RANDOM_MAX_RANGE)) {
                         throw new BlockedOnParentShardException(
                                 "Shard " + shardInfo.shardId() + "'s only child shard " + childShard
                                         + " has partial parent information in lease table. Hence deferring lease creation of child shard.");
@@ -274,6 +276,15 @@ public class ShutdownTask implements ConsumerTask {
                 log.info("Shard {}: Created child shard lease: {}", shardInfo.shardId(), leaseToCreate.leaseKey());
             }
         }
+    }
+
+    /**
+     * Returns true for 1 in N probability.
+     */
+    @VisibleForTesting
+    boolean isOneInNProbability(int n) {
+        Random r = new Random();
+        return 1 == r.nextInt((n - 1) + 1) + 1;
     }
 
     private void updateLeaseWithChildShards(Lease currentLease)
