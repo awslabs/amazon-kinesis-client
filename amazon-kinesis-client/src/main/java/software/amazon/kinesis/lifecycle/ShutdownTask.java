@@ -67,7 +67,7 @@ public class ShutdownTask implements ConsumerTask {
     private static final String SHUTDOWN_TASK_OPERATION = "ShutdownTask";
     private static final String RECORD_PROCESSOR_SHUTDOWN_METRIC = "RecordProcessor.shutdown";
     @VisibleForTesting
-    static final int RETRY_RANDOM_MAX_RANGE = 10;
+    static final int RETRY_RANDOM_MAX_RANGE = 30;
 
     @NonNull
     private final ShardInfo shardInfo;
@@ -185,7 +185,7 @@ public class ShutdownTask implements ConsumerTask {
             updateLeaseWithChildShards(currentShardLease);
         }
         final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(streamIdentifier, currentShardLease,
-                shardInfo);
+                shardInfo, shardDetector);
         if (!leaseCleanupManager.isEnqueuedForDeletion(leasePendingDeletion)) {
             boolean isSuccess = false;
             try {

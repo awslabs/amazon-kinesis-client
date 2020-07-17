@@ -15,18 +15,12 @@
 
 package software.amazon.kinesis.leases;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
-import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
-import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
-import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
-import software.amazon.awssdk.services.kinesis.model.GetShardIteratorResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.LeasePendingDeletion;
@@ -39,7 +33,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
@@ -73,7 +66,7 @@ public class LeaseCleanupManagerTest {
     @Mock
     private LeaseCoordinator leaseCoordinator;
     @Mock
-    private KinesisAsyncClient kinesis;
+    private ShardDetector shardDetector;
     @Mock
     private ScheduledExecutorService deletionThreadPool;
 
@@ -82,9 +75,9 @@ public class LeaseCleanupManagerTest {
         shardInfo = new ShardInfo(shardId, concurrencyToken, Collections.emptySet(),
                 ExtendedSequenceNumber.LATEST);
         streamIdentifier = StreamIdentifier.singleStreamInstance("streamName");
-        leaseCleanupManager = new LeaseCleanupManager(leaseCoordinator, kinesis,
-                NULL_METRICS_FACTORY, maxFutureWait, deletionThreadPool, cleanupLeasesOfCompletedShards, leaseCleanupIntervalMillis,
-                completedLeaseCleanupIntervalMillis, garbageLeaseCleanupIntervalMillis);
+        leaseCleanupManager = new LeaseCleanupManager(leaseCoordinator, NULL_METRICS_FACTORY, deletionThreadPool,
+                cleanupLeasesOfCompletedShards, leaseCleanupIntervalMillis, completedLeaseCleanupIntervalMillis,
+                garbageLeaseCleanupIntervalMillis);
 
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
         when(leaseCoordinator.updateLease(any(Lease.class), any(UUID.class), any(String.class), any(String.class))).thenReturn(true);
@@ -124,8 +117,8 @@ public class LeaseCleanupManagerTest {
                 ExtendedSequenceNumber.LATEST);
         cleanupLeasesOfCompletedShards = false;
 
-        leaseCleanupManager = new LeaseCleanupManager(leaseCoordinator, kinesis, NULL_METRICS_FACTORY, maxFutureWait,
-                deletionThreadPool, cleanupLeasesOfCompletedShards, leaseCleanupIntervalMillis, completedLeaseCleanupIntervalMillis,
+        leaseCleanupManager = new LeaseCleanupManager(leaseCoordinator, NULL_METRICS_FACTORY, deletionThreadPool,
+                cleanupLeasesOfCompletedShards, leaseCleanupIntervalMillis, completedLeaseCleanupIntervalMillis,
                 garbageLeaseCleanupIntervalMillis);
 
         verifyExpectedDeletedLeasesCompletedShardCase(shardInfo, childShardsForSplit(), ExtendedSequenceNumber.LATEST, 0);
@@ -206,8 +199,8 @@ public class LeaseCleanupManagerTest {
 
         cleanupLeasesOfCompletedShards = false;
 
-        leaseCleanupManager = new LeaseCleanupManager(leaseCoordinator, kinesis, NULL_METRICS_FACTORY, maxFutureWait,
-                deletionThreadPool, cleanupLeasesOfCompletedShards, leaseCleanupIntervalMillis, completedLeaseCleanupIntervalMillis,
+        leaseCleanupManager = new LeaseCleanupManager(leaseCoordinator, NULL_METRICS_FACTORY, deletionThreadPool,
+                cleanupLeasesOfCompletedShards, leaseCleanupIntervalMillis, completedLeaseCleanupIntervalMillis,
                 garbageLeaseCleanupIntervalMillis);
 
         testLeaseDeletedWhenShardDoesNotExist(heldLease);
@@ -216,12 +209,13 @@ public class LeaseCleanupManagerTest {
     public void testLeaseDeletedWhenShardDoesNotExist(Lease heldLease) throws Exception {
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
         when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.shardId())).thenReturn(heldLease);
-        when(kinesis.getShardIterator(any(GetShardIteratorRequest.class))).thenThrow(ResourceNotFoundException.class);
+        when(shardDetector.getChildShards(any(String.class))).thenThrow(ResourceNotFoundException.class);
         when(leaseRefresher.getLease(heldLease.leaseKey())).thenReturn(heldLease);
 
-        leaseCleanupManager.enqueueForDeletion(new LeasePendingDeletion(streamIdentifier, heldLease, shardInfo));
+        leaseCleanupManager.enqueueForDeletion(new LeasePendingDeletion(streamIdentifier, heldLease, shardInfo, shardDetector));
         leaseCleanupManager.cleanupLeases();
 
+        verify(shardDetector, times(1)).getChildShards(shardInfo.shardId());
         verify(leaseRefresher, times(1)).deleteLease(heldLease);
     }
 
@@ -256,20 +250,10 @@ public class LeaseCleanupManagerTest {
             }
         }
 
-        GetShardIteratorResponse getShardIteratorResponse = GetShardIteratorResponse.builder()
-                .shardIterator("123")
-                .build();
-        when(kinesis.getShardIterator(any(GetShardIteratorRequest.class))).thenReturn(CompletableFuture.completedFuture(getShardIteratorResponse));
-
-        GetRecordsResponse getRecordsResponse = GetRecordsResponse.builder()
-                .records(Collections.emptyList())
-                .childShards(childShards)
-                .build();
-        when(kinesis.getRecords(any(GetRecordsRequest.class))).thenReturn(CompletableFuture.completedFuture(getRecordsResponse));
-
-        leaseCleanupManager.enqueueForDeletion(new LeasePendingDeletion(streamIdentifier, lease, shardInfo));
+        leaseCleanupManager.enqueueForDeletion(new LeasePendingDeletion(streamIdentifier, lease, shardInfo, shardDetector));
         leaseCleanupManager.cleanupLeases();
 
+        verify(shardDetector, times(1)).getChildShards(shardInfo.shardId());
         verify(leaseRefresher, times(expectedDeletedLeases)).deleteLease(any(Lease.class));
     }
 

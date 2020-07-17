@@ -24,16 +24,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
-import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
-import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
-import software.amazon.awssdk.services.kinesis.model.GetShardIteratorResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
-import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.utils.CollectionUtils;
-import software.amazon.kinesis.common.FutureUtils;
-import software.amazon.kinesis.common.KinesisRequestsBuilder;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.LeasePendingDeletion;
@@ -43,8 +35,6 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-import java.time.Duration;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
@@ -69,11 +59,7 @@ public class LeaseCleanupManager {
     @NonNull
     private final LeaseCoordinator leaseCoordinator;
     @NonNull
-    private final KinesisAsyncClient kinesisClient;
-    @NonNull
     private final MetricsFactory metricsFactory;
-    @NonNull
-    private final Duration maxFutureWait;
     @NonNull
     private final ScheduledExecutorService deletionThreadPool;
     private final boolean cleanupLeasesUponShardCompletion;
@@ -85,7 +71,6 @@ public class LeaseCleanupManager {
 
     private final Queue<LeasePendingDeletion> deletionQueue = new ConcurrentLinkedQueue<>();
 
-    private static final int MAX_RECORDS = 1;
     private static final long INITIAL_DELAY = 0L;
 
     @Getter
@@ -170,7 +155,7 @@ public class LeaseCleanupManager {
                     Set<String> childShardKeys = leaseFromDDB.childShardIds();
                     if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
                         try {
-                            childShardKeys = getChildShardsFromService(shardInfo, streamIdentifier);
+                            childShardKeys = leasePendingDeletion.getChildShardsFromService();
 
                             if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
                                 log.error(
@@ -203,7 +188,7 @@ public class LeaseCleanupManager {
             if (!alreadyCheckedForGarbageCollection && timeToCheckForGarbageShard) {
                 try {
                     wereChildShardsPresent = !CollectionUtils
-                            .isNullOrEmpty(getChildShardsFromService(shardInfo, streamIdentifier));
+                            .isNullOrEmpty(leasePendingDeletion.getChildShardsFromService());
                 } catch (ExecutionException e) {
                     throw exceptionManager.apply(e.getCause());
                 }
@@ -216,29 +201,6 @@ public class LeaseCleanupManager {
         return new LeaseCleanupResult(cleanedUpCompletedLease, cleanedUpGarbageLease, wereChildShardsPresent,
                 wasResourceNotFound);
     }
-
-    private Set<String> getChildShardsFromService(ShardInfo shardInfo, StreamIdentifier streamIdentifier)
-            throws InterruptedException, ExecutionException, TimeoutException {
-        final GetShardIteratorRequest getShardIteratorRequest = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
-                .streamName(streamIdentifier.streamName())
-                .shardIteratorType(ShardIteratorType.LATEST)
-                .shardId(shardInfo.shardId())
-                .build();
-
-        final GetShardIteratorResponse getShardIteratorResponse =
-                FutureUtils.resolveOrCancelFuture(kinesisClient.getShardIterator(getShardIteratorRequest), maxFutureWait);
-
-        final GetRecordsRequest getRecordsRequest = KinesisRequestsBuilder.getRecordsRequestBuilder()
-                .shardIterator(getShardIteratorResponse.shardIterator())
-                .limit(MAX_RECORDS)
-                .build();
-
-        final GetRecordsResponse getRecordsResponse =
-                FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(getRecordsRequest), maxFutureWait);
-
-        return getRecordsResponse.childShards().stream().map(c -> c.shardId()).collect(Collectors.toSet());
-    }
-
 
     // A lease that ended with SHARD_END from ResourceNotFoundException is safe to delete if it no longer exists in the
     // stream (known explicitly from ResourceNotFound being thrown when processing this shard),

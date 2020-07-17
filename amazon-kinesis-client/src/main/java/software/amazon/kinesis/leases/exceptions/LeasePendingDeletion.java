@@ -20,7 +20,13 @@ import lombok.Value;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
+
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 /**
  * Helper class for cleaning up leases.
@@ -32,4 +38,16 @@ public class LeasePendingDeletion {
     private final StreamIdentifier streamIdentifier;
     private final Lease lease;
     private final ShardInfo shardInfo;
+    private final ShardDetector shardDetector;
+
+    /**
+     * Discovers the child shards for this lease.
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     * @throws TimeoutException
+     */
+    public Set<String> getChildShardsFromService() throws InterruptedException, ExecutionException, TimeoutException {
+        return shardDetector.getChildShards(shardInfo.shardId()).stream().map(c -> c.shardId()).collect(Collectors.toSet());
+    }
 }

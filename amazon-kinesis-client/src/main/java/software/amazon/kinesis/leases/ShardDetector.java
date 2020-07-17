@@ -16,6 +16,10 @@
 package software.amazon.kinesis.leases;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.Shard;
@@ -48,7 +52,9 @@ public interface ShardDetector {
      * @param  ShardFilter
      * @return Shards
      */
-    List<Shard> listShardsWithFilter(ShardFilter shardFilter);
+    default List<Shard> listShardsWithFilter(ShardFilter shardFilter) {
+        throw new UnsupportedOperationException("listShardsWithFilter not available.");
+    }
 
     /**
      * Gets stream identifier.
@@ -65,5 +71,19 @@ public interface ShardDetector {
      * @param request list shards request
      * @return ListShardsResponse which contains list shards response
      */
-    ListShardsResponse getListShardsResponse(ListShardsRequest request) throws Exception;
+    default ListShardsResponse getListShardsResponse(ListShardsRequest request) throws Exception {
+        throw new UnsupportedOperationException("getListShardsResponse not available.");
+    }
+
+    /**
+     * Gets the children shards of a shard.
+     * @param shardId
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     * @throws TimeoutException
+     */
+    default List<ChildShard> getChildShards(String shardId) throws InterruptedException, ExecutionException, TimeoutException {
+        throw new UnsupportedOperationException("getChildShards not available.");
+    }
 }

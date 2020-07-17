@@ -551,8 +551,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      */
     @Override
     public LeaseCleanupManager createLeaseCleanupManager(MetricsFactory metricsFactory) {
-        return new LeaseCleanupManager(createLeaseCoordinator(metricsFactory), kinesisClient,
-                metricsFactory, dynamoDbRequestTimeout, Executors.newSingleThreadScheduledExecutor(),
+        return new LeaseCleanupManager(createLeaseCoordinator(metricsFactory),
+                metricsFactory, Executors.newSingleThreadScheduledExecutor(),
                 cleanupLeasesUponShardCompletion, leaseCleanupConfig.leaseCleanupIntervalMillis(),
                 leaseCleanupConfig.completedLeaseCleanupIntervalMillis(),
                 leaseCleanupConfig.garbageLeaseCleanupIntervalMillis());
