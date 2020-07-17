@@ -48,7 +48,7 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 public class DynamoDBLeaseTaker implements LeaseTaker {
     private static final int TAKE_RETRIES = 3;
     private static final int SCAN_RETRIES = 1;
-    private static final int VERY_OLD_LEASE_DURATION_NANOS_MULTIPLIER = 3;
+    private long veryOldLeaseDurationNanosMultiplier = 3;
 
     // See note on TAKE_LEASES_DIMENSION(Callable) for why we have this callable.
     private static final Callable<Long> SYSTEM_CLOCK_CALLABLE = System::nanoTime;
@@ -93,6 +93,18 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             throw new IllegalArgumentException("maxLeasesForWorker should be >= 1");
         }
         this.maxLeasesForWorker = maxLeasesForWorker;
+        return this;
+    }
+
+    /**
+     * Overrides the default very old lease duration nanos multiplier to increase the threshold for taking very old leases.
+     * Setting this to a higher value than 3 will increase the threshold for very old lease taking.
+     *
+     * @param veryOldLeaseDurationNanosMultipler Very old lease duration multiplier for adjusting very old lease taking.
+     * @return LeaseTaker
+     */
+    public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultipler(long veryOldLeaseDurationNanosMultipler) {
+        this.veryOldLeaseDurationNanosMultiplier = veryOldLeaseDurationNanosMultipler;
         return this;
     }
 
@@ -382,7 +394,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             // later) but obeying the maximum limit per worker.
             veryOldLeases = allLeases.values().stream()
                     .filter(lease -> System.nanoTime() - lease.lastCounterIncrementNanos()
-                            > VERY_OLD_LEASE_DURATION_NANOS_MULTIPLIER * leaseDurationNanos)
+                            > veryOldLeaseDurationNanosMultiplier * leaseDurationNanos)
                     .collect(Collectors.toList());
 
             if (!veryOldLeases.isEmpty()) {
