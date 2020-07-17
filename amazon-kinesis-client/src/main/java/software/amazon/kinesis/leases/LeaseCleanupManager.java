@@ -210,7 +210,7 @@ public class LeaseCleanupManager {
             }
         } catch (ResourceNotFoundException e) {
             wasResourceNotFound = true;
-            cleanedUpGarbageLease = cleanupLeaseForGarbageShard(lease);
+            cleanedUpGarbageLease = cleanupLeaseForGarbageShard(lease, e);
         }
 
         return new LeaseCleanupResult(cleanedUpCompletedLease, cleanedUpGarbageLease, wereChildShardsPresent,
@@ -242,8 +242,8 @@ public class LeaseCleanupManager {
 
     // A lease that ended with SHARD_END from ResourceNotFoundException is safe to delete if it no longer exists in the
     // stream (known explicitly from ResourceNotFound being thrown when processing this shard),
-    private boolean cleanupLeaseForGarbageShard(Lease lease) throws DependencyException, ProvisionedThroughputException, InvalidStateException {
-        log.info("Deleting lease {} as it is not present in the stream.", lease);
+    private boolean cleanupLeaseForGarbageShard(Lease lease, Throwable e) throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        log.warn("Deleting lease {} as it is not present in the stream.", lease, e);
         leaseCoordinator.leaseRefresher().deleteLease(lease);
         return true;
     }
@@ -333,7 +333,7 @@ public class LeaseCleanupManager {
                     garbageLeaseCleanedUp |= leaseCleanupResult.cleanedUpGarbageLease();
 
                     if (leaseCleanupResult.leaseCleanedUp()) {
-                        log.debug("Successfully cleaned up lease {} for {}", leaseKey, streamIdentifier);
+                        log.info("Successfully cleaned up lease {} for {} due to {}", leaseKey, streamIdentifier, leaseCleanupResult);
                         deletionSucceeded = true;
                     } else {
                         log.warn("Unable to clean up lease {} for {} due to {}", leaseKey, streamIdentifier, leaseCleanupResult);
