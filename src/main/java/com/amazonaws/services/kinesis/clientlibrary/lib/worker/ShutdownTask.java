@@ -35,6 +35,7 @@ import com.google.common.annotations.VisibleForTesting;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -46,7 +47,8 @@ class ShutdownTask implements ITask {
     private static final Log LOG = LogFactory.getLog(ShutdownTask.class);
 
     private static final String RECORD_PROCESSOR_SHUTDOWN_METRIC = "RecordProcessor.shutdown";
-    private int retryLeftForValidParentState = 10;
+    @VisibleForTesting
+    static final int RETRY_RANDOM_MAX_RANGE = 10;
 
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
@@ -208,7 +210,7 @@ class ShutdownTask implements ITask {
                 boolean isValidLeaseTableState = Objects.isNull(leaseCoordinator.getLeaseManager().getLease(parentLeaseKeys.get(0))) ==
                                                  Objects.isNull(leaseCoordinator.getLeaseManager().getLease(parentLeaseKeys.get(1)));
                 if (!isValidLeaseTableState) {
-                    if(--retryLeftForValidParentState >= 0) {
+                    if(!isOneInNProbability(RETRY_RANDOM_MAX_RANGE)) {
                         throw new BlockedOnParentShardException(
                                 "Shard " + shardInfo.getShardId() + "'s only child shard " + childShard
                                         + " has partial parent information in lease table. Hence deferring lease creation of child shard.");
@@ -228,6 +230,15 @@ class ShutdownTask implements ITask {
                 LOG.info("Shard " + shardInfo.getShardId() + " : Created child shard lease: " + leaseToCreate.getLeaseKey());
             }
         }
+    }
+
+    /**
+     * Returns true for 1 in N probability.
+     */
+    @VisibleForTesting
+    boolean isOneInNProbability(int n) {
+        Random r = new Random();
+        return 1 == r.nextInt((n - 1) + 1) + 1;
     }
 
     private void updateCurrentLeaseWithChildShards(KinesisClientLease currentLease) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
