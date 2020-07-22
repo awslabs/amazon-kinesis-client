@@ -17,7 +17,6 @@ package software.amazon.kinesis.leases;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -27,6 +26,7 @@ import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.coordinator.ExecutorStateEvent;
 import software.amazon.kinesis.lifecycle.ConsumerTask;
 import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -186,6 +186,9 @@ public class ShardSyncTaskManager {
                             metricsFactory);
             future = CompletableFuture.supplyAsync(() -> currentTask.call(), executorService)
                                       .whenComplete((taskResult, exception) -> handlePendingShardSyncs(exception, taskResult));
+
+            log.info(new ExecutorStateEvent(executorService).message());
+
             submittedNewTask = true;
             if (log.isDebugEnabled()) {
                 log.debug("Submitted new {} task.", currentTask.taskType());
