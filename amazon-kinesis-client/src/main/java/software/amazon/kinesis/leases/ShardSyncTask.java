@@ -67,11 +67,11 @@ public class ShardSyncTask implements ConsumerTask {
         boolean shardSyncSuccess = true;
 
         try {
-            hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher,
+            boolean didPerformShardSync = hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher,
                     initialPosition, scope, ignoreUnexpectedChildShards,
                     leaseRefresher.isLeaseTableEmpty());
 
-            if (shardSyncTaskIdleTimeMillis > 0) {
+            if (didPerformShardSync && shardSyncTaskIdleTimeMillis > 0) {
                 Thread.sleep(shardSyncTaskIdleTimeMillis);
             }
         } catch (Exception e) {
