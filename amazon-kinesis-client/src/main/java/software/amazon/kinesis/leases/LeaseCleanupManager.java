@@ -82,6 +82,7 @@ public class LeaseCleanupManager {
      */
     public void start() {
         log.debug("Starting lease cleanup thread.");
+        isRunning = true;
         completedLeaseStopwatch.start();
         garbageLeaseStopwatch.start();
 
