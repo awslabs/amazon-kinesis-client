@@ -420,6 +420,7 @@ public class ShardSyncerTest {
                 cleanupLeasesOfCompletedShards, true, shards);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
+        expectedLeaseShardIds.add("shardId-1000"); // dummy lease will still be in the table.
         expectedLeaseShardIds.add("shardId-4");
         expectedLeaseShardIds.add("shardId-5");
         expectedLeaseShardIds.add("shardId-8");
@@ -691,31 +692,6 @@ public class ShardSyncerTest {
         dataFile.delete();
     }
 
-    /**
-     * Test bootstrapShardLeases() - cleanup garbage leases.
-     *
-     * @throws ProvisionedThroughputException
-     * @throws InvalidStateException
-     * @throws DependencyException
-     * @throws IOException
-     * @throws KinesisClientLibIOException
-     */
-    @Test
-    public final void testBootstrapShardLeasesCleanupGarbage()
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException, IOException,
-            KinesisClientLibIOException {
-        String garbageShardId = "shardId-garbage-001";
-        KinesisClientLease garbageLease = shardSyncer.newKCLLease(ShardObjectHelper.newShard(garbageShardId,
-                null,
-                null,
-                ShardObjectHelper.newSequenceNumberRange("101", null)));
-        garbageLease.setCheckpoint(new ExtendedSequenceNumber("999"));
-        leaseManager.createLeaseIfNotExists(garbageLease);
-        Assert.assertEquals(garbageShardId, leaseManager.getLease(garbageShardId).getLeaseKey());
-        testBootstrapShardLeasesAtStartingPosition(INITIAL_POSITION_LATEST);
-        Assert.assertNull(leaseManager.getLease(garbageShardId));
-    }
-
     private void testBootstrapShardLeasesAtStartingPosition(InitialPositionInStreamExtended initialPosition)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, IOException,
             KinesisClientLibIOException {
@@ -730,7 +706,7 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
 
-        shardSyncer.bootstrapShardLeases(kinesisProxy, leaseManager, initialPosition, cleanupLeasesOfCompletedShards,
+        shardSyncer.bootstrapShardLeases(kinesisProxy, leaseManager, initialPosition,
                 false);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Assert.assertEquals(2, newLeases.size());
@@ -2265,81 +2241,6 @@ public class ShardSyncerTest {
 
         currentKinesisShardIds.add(adjacentParentShardId);
         Assert.assertFalse(leaseCleanupValidator.isCandidateForCleanup(lease, currentKinesisShardIds));
-    }
-
-    /**
-     * Test cleanup of lease for a shard that has been fully processed (and processing of child shards has begun).
-     *
-     * @throws DependencyException
-     * @throws InvalidStateException
-     * @throws ProvisionedThroughputException
-     */
-    @Test
-    public final void testCleanupLeaseForClosedShard()
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        String closedShardId = "shardId-2";
-        KinesisClientLease leaseForClosedShard = newLease(closedShardId);
-        leaseForClosedShard.setCheckpoint(new ExtendedSequenceNumber("1234"));
-        leaseManager.createLeaseIfNotExists(leaseForClosedShard);
-
-        Set<String> childShardIds = new HashSet<>();
-        List<KinesisClientLease> trackedLeases = new ArrayList<>();
-        Set<String> parentShardIds = new HashSet<>();
-        parentShardIds.add(closedShardId);
-        String childShardId1 = "shardId-5";
-        KinesisClientLease childLease1 = newLease(childShardId1);
-        childLease1.setParentShardIds(parentShardIds);
-        childLease1.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
-        String childShardId2 = "shardId-7";
-        KinesisClientLease childLease2 = newLease(childShardId2);
-        childLease2.setParentShardIds(parentShardIds);
-        childLease2.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
-        Map<String, KinesisClientLease> trackedLeaseMap = shardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-
-        // empty list of leases
-        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        Assert.assertNotNull(leaseManager.getLease(closedShardId));
-
-        // closed shard has not been fully processed yet (checkpoint != SHARD_END)
-        trackedLeases.add(leaseForClosedShard);
-        trackedLeaseMap = shardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        Assert.assertNotNull(leaseManager.getLease(closedShardId));
-
-        // closed shard has been fully processed yet (checkpoint == SHARD_END)
-        leaseForClosedShard.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
-        leaseManager.updateLease(leaseForClosedShard);
-        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        Assert.assertNull(leaseManager.getLease(closedShardId));
-
-        // lease for only one child exists
-        childShardIds.add(childShardId1);
-        childShardIds.add(childShardId2);
-        leaseManager.createLeaseIfNotExists(leaseForClosedShard);
-        leaseManager.createLeaseIfNotExists(childLease1);
-        trackedLeases.add(childLease1);
-        trackedLeaseMap = shardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        Assert.assertNotNull(leaseManager.getLease(closedShardId));
-
-        // leases for both children exists, but they are both at TRIM_HORIZON
-        leaseManager.createLeaseIfNotExists(childLease2);
-        trackedLeases.add(childLease2);
-        trackedLeaseMap = shardSyncer.constructShardIdToKCLLeaseMap(trackedLeases);
-        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        Assert.assertNotNull(leaseManager.getLease(closedShardId));
-
-        // leases for both children exists, one is at TRIM_HORIZON
-        childLease1.setCheckpoint(new ExtendedSequenceNumber("34890"));
-        leaseManager.updateLease(childLease1);
-        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        Assert.assertNotNull(leaseManager.getLease(closedShardId));
-
-        // leases for both children exists, NONE of them are at TRIM_HORIZON
-        childLease2.setCheckpoint(new ExtendedSequenceNumber("43789"));
-        leaseManager.updateLease(childLease2);
-        shardSyncer.cleanupLeaseForClosedShard(closedShardId, childShardIds, trackedLeaseMap, leaseManager);
-        Assert.assertNull(leaseManager.getLease(closedShardId));
     }
 
     /**

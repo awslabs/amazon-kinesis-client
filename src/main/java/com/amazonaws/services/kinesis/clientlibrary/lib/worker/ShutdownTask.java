@@ -14,10 +14,12 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.leases.LeasePendingDeletion;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
 import com.amazonaws.services.kinesis.leases.impl.UpdateField;
 import com.amazonaws.services.kinesis.model.ChildShard;
 import com.amazonaws.util.CollectionUtils;
@@ -65,6 +67,7 @@ class ShutdownTask implements ITask {
     private final ShardSyncer shardSyncer;
     private final ShardSyncStrategy shardSyncStrategy;
     private final List<ChildShard> childShards;
+    private final LeaseCleanupManager leaseCleanupManager;
 
     /**
      * Constructor.
@@ -81,7 +84,8 @@ class ShutdownTask implements ITask {
             KinesisClientLibLeaseCoordinator leaseCoordinator,
             long backoffTimeMillis,
             GetRecordsCache getRecordsCache, ShardSyncer shardSyncer,
-            ShardSyncStrategy shardSyncStrategy, List<ChildShard> childShards) {
+            ShardSyncStrategy shardSyncStrategy, List<ChildShard> childShards,
+            LeaseCleanupManager leaseCleanupManager) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -96,6 +100,7 @@ class ShutdownTask implements ITask {
         this.shardSyncer = shardSyncer;
         this.shardSyncStrategy = shardSyncStrategy;
         this.childShards = childShards;
+        this.leaseCleanupManager = leaseCleanupManager;
     }
 
     /*
@@ -123,12 +128,28 @@ class ShutdownTask implements ITask {
                 recordProcessor.shutdown(shutdownInput);
                 ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
 
+                final boolean successfullyCheckpointedShardEnd = lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END);
+
                 if (localReason == ShutdownReason.TERMINATE) {
-                    if ((lastCheckpointValue == null)
-                            || (!lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END))) {
+                    if ((lastCheckpointValue == null) || (!successfullyCheckpointedShardEnd)) {
                         throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
                                 + shardInfo.getShardId() + ". Application must checkpoint upon shutdown. " +
                                 "See IRecordProcessor.shutdown javadocs for more information.");
+                    }
+
+                    // Check if either the shard end ddb persist is successful or
+                    // if childshards is empty. When child shards is empty then either it is due to
+                    // completed shard being reprocessed or we got RNF from service.
+                    // For these cases enqueue the lease for deletion.
+                    if (successfullyCheckpointedShardEnd || CollectionUtils.isNullOrEmpty(childShards)) {
+                        final KinesisClientLease currentLease = leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId());
+                        final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(currentLease, shardInfo);
+
+                        if (!leaseCleanupManager.isEnqueuedForDeletion(leasePendingDeletion)) {
+                            leaseCleanupManager.enqueueForDeletion(leasePendingDeletion);
+                        }
+
+                        //TODO: Add shard end checkpointing here.
                     }
                 }
                 LOG.debug("Shutting down retrieval strategy.");

@@ -8,6 +8,7 @@ import java.util.Set;
 /**
  * Represents the class that decides if a lease is eligible for cleanup.
  */
+@Deprecated
 public interface LeaseCleanupValidator {
 
     /**

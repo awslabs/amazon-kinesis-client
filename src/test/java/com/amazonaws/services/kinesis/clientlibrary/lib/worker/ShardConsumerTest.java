@@ -54,6 +54,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
+import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Description;
@@ -138,6 +140,7 @@ public class ShardConsumerTest {
         recordsFetcherFactory = spy(new SimpleRecordsFetcherFactory());
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
         when(config.getLogWarningForTaskAfterMillis()).thenReturn(Optional.empty());
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
     }
 
     /**
@@ -475,6 +478,8 @@ public class ShardConsumerTest {
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         when(leaseManager.getLease(eq(parentShardId))).thenReturn(parentLease);
         when(parentLease.getCheckpoint()).thenReturn(ExtendedSequenceNumber.TRIM_HORIZON);
+        when(recordProcessorCheckpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        when(streamConfig.getStreamProxy()).thenReturn(streamProxy);
 
         final ShardConsumer consumer =
                 new ShardConsumer(shardInfo,
@@ -507,6 +512,9 @@ public class ShardConsumerTest {
         assertThat(consumer.getShutdownReason(), equalTo(ShutdownReason.REQUESTED));
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard();
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
+        Thread.sleep(50L);
+        consumer.beginShutdown();
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
         assertThat(consumer.isShutdown(), is(true));
         verify(shutdownNotification, times(1)).shutdownComplete();
@@ -704,19 +712,19 @@ public class ShardConsumerTest {
 
         StreamConfig streamConfig =
                 new StreamConfig(fileBasedProxy,
-                                 maxRecords,
-                                 idleTimeMS,
-                                 callProcessRecordsForEmptyRecordList,
-                                 skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
+                        maxRecords,
+                        idleTimeMS,
+                        callProcessRecordsForEmptyRecordList,
+                        skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
         ShardInfo shardInfo = new ShardInfo(streamShardId, testConcurrencyToken, null, null);
 
         dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
 
         getRecordsCache = spy(new BlockingGetRecordsCache(maxRecords,
-                                                          new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
+                new SynchronousGetRecordsRetrievalStrategy(dataFetcher)));
         when(recordsFetcherFactory.createRecordsFetcher(any(GetRecordsRetrievalStrategy.class), anyString(),
-                                                        any(IMetricsFactory.class), anyInt()))
+                any(IMetricsFactory.class), anyInt()))
                 .thenReturn(getRecordsCache);
 
         RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
@@ -732,29 +740,29 @@ public class ShardConsumerTest {
 
         ShardConsumer consumer =
                 new ShardConsumer(shardInfo,
-                                  streamConfig,
-                                  checkpoint,
-                                  processor,
-                                  recordProcessorCheckpointer,
-                                  leaseCoordinator,
-                                  parentShardPollIntervalMillis,
-                                  cleanupLeasesOfCompletedShards,
-                                  executorService,
-                                  metricsFactory,
-                                  taskBackoffTimeMillis,
-                                  KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
-                                  dataFetcher,
-                                  Optional.empty(),
-                                  Optional.empty(),
-                                  config,
-                                  shardSyncer,
-                                  shardSyncStrategy);
+                        streamConfig,
+                        checkpoint,
+                        processor,
+                        recordProcessorCheckpointer,
+                        leaseCoordinator,
+                        parentShardPollIntervalMillis,
+                        cleanupLeasesOfCompletedShards,
+                        executorService,
+                        metricsFactory,
+                        taskBackoffTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
+                        dataFetcher,
+                        Optional.empty(),
+                        Optional.empty(),
+                        config,
+                        shardSyncer,
+                        shardSyncStrategy);
 
         List<String> parentShardIds = new ArrayList<>();
         parentShardIds.add(shardInfo.getShardId());
         when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId())).thenReturn(createLease(shardInfo.getShardId(),
-                                                                                                    "leaseOwner",
-                                                                                                    parentShardIds));
+                "leaseOwner",
+                parentShardIds));
         when(leaseCoordinator.updateLease(any(KinesisClientLease.class), any(UUID.class))).thenReturn(true);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
@@ -1111,7 +1119,7 @@ public class ShardConsumerTest {
 
     //@formatter:off (gets the formatting wrong)
     private void verifyConsumedRecords(List<Record> expectedRecords,
-            List<Record> actualRecords) {
+                                       List<Record> actualRecords) {
         //@formatter:on
         assertThat(actualRecords.size(), is(equalTo(expectedRecords.size())));
         ListIterator<Record> expectedIter = expectedRecords.listIterator();
@@ -1141,7 +1149,7 @@ public class ShardConsumerTest {
     }
 
     Matcher<InitializationInput> initializationInputMatcher(final ExtendedSequenceNumber checkpoint,
-            final ExtendedSequenceNumber pendingCheckpoint) {
+                                                            final ExtendedSequenceNumber pendingCheckpoint) {
         return new TypeSafeMatcher<InitializationInput>() {
             @Override
             protected boolean matchesSafely(InitializationInput item) {

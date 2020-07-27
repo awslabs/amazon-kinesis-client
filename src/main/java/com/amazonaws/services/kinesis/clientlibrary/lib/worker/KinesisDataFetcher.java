@@ -17,10 +17,8 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.Set;
 
 import com.amazonaws.SdkClientException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.model.ChildShard;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;

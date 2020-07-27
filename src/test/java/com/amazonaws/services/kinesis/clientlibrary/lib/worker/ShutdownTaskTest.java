@@ -40,6 +40,7 @@ import com.amazonaws.services.kinesis.clientlibrary.proxies.ShardListWrappingSha
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.impl.UpdateField;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
 import com.amazonaws.services.kinesis.model.ChildShard;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
@@ -94,6 +95,8 @@ public class ShutdownTaskTest {
     private KinesisClientLibLeaseCoordinator leaseCoordinator;
     @Mock
     private IRecordProcessor defaultRecordProcessor;
+    @Mock
+    private LeaseCleanupManager leaseCleanupManager;
 
     /**
      * @throws java.lang.Exception
@@ -150,7 +153,8 @@ public class ShutdownTaskTest {
                 getRecordsCache,
                 shardSyncer,
                 shardSyncStrategy,
-                constructSplitChildShards());
+                constructSplitChildShards(),
+                leaseCleanupManager);
         TaskResult result = task.call();
         assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
@@ -185,7 +189,8 @@ public class ShutdownTaskTest {
                 getRecordsCache,
                 shardSyncer,
                 shardSyncStrategy,
-                constructSplitChildShards());
+                constructSplitChildShards(),
+                leaseCleanupManager);
         TaskResult result = task.call();
         verify(getRecordsCache).shutdown();
         verify(leaseCoordinator).dropLease(any(KinesisClientLease.class));
@@ -221,7 +226,8 @@ public class ShutdownTaskTest {
                                                      getRecordsCache,
                                                      shardSyncer,
                                                      shardSyncStrategy,
-                                                     constructMergeChildShards()));
+                                                     constructMergeChildShards(),
+                                                     leaseCleanupManager));
             when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(false);
             TaskResult result = task.call();
             assertNotNull(result.getException());
@@ -246,7 +252,8 @@ public class ShutdownTaskTest {
                                                  getRecordsCache,
                                                  shardSyncer,
                                                  shardSyncStrategy,
-                                                 constructMergeChildShards()));
+                                                 constructMergeChildShards(),
+                                                 leaseCleanupManager));
         when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(false);
         TaskResult result = task.call();
         assertNull(result.getException());
@@ -283,7 +290,8 @@ public class ShutdownTaskTest {
                                                      getRecordsCache,
                                                      shardSyncer,
                                                      shardSyncStrategy,
-                                                     constructMergeChildShards()));
+                                                     constructMergeChildShards(),
+                                                     leaseCleanupManager));
             when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(false);
             TaskResult result = task.call();
             assertNotNull(result.getException());
@@ -307,7 +315,8 @@ public class ShutdownTaskTest {
                                                  getRecordsCache,
                                                  shardSyncer,
                                                  shardSyncStrategy,
-                                                 constructMergeChildShards()));
+                                                 constructMergeChildShards(),
+                                                 leaseCleanupManager));
         when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(true);
         TaskResult result = task.call();
         assertNull(result.getException());
@@ -337,7 +346,8 @@ public class ShutdownTaskTest {
                                              getRecordsCache,
                                              shardSyncer,
                                              shardSyncStrategy,
-                                             constructSplitChildShards());
+                                             constructSplitChildShards(),
+                                             leaseCleanupManager);
         TaskResult result = task.call();
         verify(leaseManager, times(2)).createLeaseIfNotExists(any(KinesisClientLease.class));
         verify(leaseManager).updateLeaseWithMetaInfo(any(KinesisClientLease.class), any(UpdateField.class));
@@ -370,7 +380,8 @@ public class ShutdownTaskTest {
                                              getRecordsCache,
                                              shardSyncer,
                                              shardSyncStrategy,
-                                             Collections.emptyList());
+                                             Collections.emptyList(),
+                                             leaseCleanupManager);
         TaskResult result = task.call();
         verify(leaseManager, never()).createLeaseIfNotExists(any(KinesisClientLease.class));
         verify(leaseManager, never()).updateLeaseWithMetaInfo(any(KinesisClientLease.class), any(UpdateField.class));
@@ -399,7 +410,8 @@ public class ShutdownTaskTest {
                                              getRecordsCache,
                                              shardSyncer,
                                              shardSyncStrategy,
-                                             Collections.emptyList());
+                                             Collections.emptyList(),
+                                             leaseCleanupManager);
         TaskResult result = task.call();
         verify(leaseManager, never()).createLeaseIfNotExists(any(KinesisClientLease.class));
         verify(leaseManager, never()).updateLeaseWithMetaInfo(any(KinesisClientLease.class), any(UpdateField.class));
@@ -416,7 +428,7 @@ public class ShutdownTaskTest {
         ShutdownTask task = new ShutdownTask(null, null, null, null,
                                              null, null, false,
                                              false, leaseCoordinator, 0,
-                                             getRecordsCache, shardSyncer, shardSyncStrategy, Collections.emptyList());
+                                             getRecordsCache, shardSyncer, shardSyncStrategy, Collections.emptyList(), leaseCleanupManager);
         Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
     }
 

@@ -124,7 +124,7 @@ public class ConsumerStatesTest {
         assertThat(state.successTransition(), equalTo(ShardConsumerState.INITIALIZING.getConsumerState()));
         for (ShutdownReason shutdownReason : ShutdownReason.values()) {
             assertThat(state.shutdownTransition(shutdownReason),
-                    equalTo(ShardConsumerState.SHUTDOWN_COMPLETE.getConsumerState()));
+                    equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
         }
 
         assertThat(state.getState(), equalTo(ShardConsumerState.WAITING_ON_PARENT_SHARDS));
