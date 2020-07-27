@@ -193,6 +193,16 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
     }
 
     @Override
+    public Map<String, ExpectedAttributeValue> getDynamoExistantExpectation() {
+        Map<String, ExpectedAttributeValue> result = new HashMap<>();
+
+        ExpectedAttributeValue expectedAV = ExpectedAttributeValue.builder().exists(true).build();
+        result.put(LEASE_KEY_KEY, expectedAV);
+
+        return result;
+    }
+
+    @Override
     public Map<String, AttributeValueUpdate> getDynamoLeaseCounterUpdate(final Lease lease) {
         return getDynamoLeaseCounterUpdate(lease.leaseCounter());
     }
