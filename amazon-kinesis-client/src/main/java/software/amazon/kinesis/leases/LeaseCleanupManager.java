@@ -82,14 +82,14 @@ public class LeaseCleanupManager {
      */
     public void start() {
         if (!isRunning) {
-            log.debug("Starting lease cleanup thread.");
+            log.info("Starting lease cleanup thread.");
             completedLeaseStopwatch.reset().start();
             garbageLeaseStopwatch.reset().start();
             deletionThreadPool.scheduleAtFixedRate(new LeaseCleanupThread(), INITIAL_DELAY, leaseCleanupIntervalMillis,
                     TimeUnit.MILLISECONDS);
             isRunning = true;
         } else {
-            log.debug("Lease cleanup thread already running, no need to start.");
+            log.info("Lease cleanup thread already running, no need to start.");
         }
     }
 
