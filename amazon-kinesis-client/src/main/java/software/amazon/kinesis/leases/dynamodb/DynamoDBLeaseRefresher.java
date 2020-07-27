@@ -681,8 +681,10 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         log.debug("Updating lease without expectation {}", lease);
         final AWSExceptionManager exceptionManager = createExceptionManager();
+        exceptionManager.add(ConditionalCheckFailedException.class, t -> t);
         Map<String, AttributeValueUpdate> updates = serializer.getDynamoUpdateLeaseUpdate(lease, updateField);
         UpdateItemRequest request = UpdateItemRequest.builder().tableName(table).key(serializer.getDynamoHashKey(lease))
+                .expected(serializer.getDynamoExistantExpectation())
                 .attributeUpdates(updates).build();
         try {
             try {
@@ -692,6 +694,9 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             } catch (InterruptedException e) {
                 throw new DependencyException(e);
             }
+        } catch (ConditionalCheckFailedException e) {
+            log.warn("Lease update failed for lease with key {} because the lease did not exist at the time of the update",
+                    lease.leaseKey(), e);
         } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("update", lease.leaseKey(), e);
         }
