@@ -136,7 +136,7 @@ public class LeaseCleanupManager {
     }
 
     public LeaseCleanupResult cleanupLease(LeasePendingDeletion leasePendingDeletion,
-                                           boolean timeToCheckForCompletedShard, boolean timeToCheckForGarbageShard) throws TimeoutException,
+            boolean timeToCheckForCompletedShard, boolean timeToCheckForGarbageShard) throws TimeoutException,
             InterruptedException, DependencyException, ProvisionedThroughputException, InvalidStateException {
         final Lease lease = leasePendingDeletion.lease();
         final ShardInfo shardInfo = leasePendingDeletion.shardInfo();
