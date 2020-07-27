@@ -348,12 +348,7 @@ public class Scheduler implements Runnable {
                         log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
                     }
 
-                    if (!leaseCleanupManager.isRunning()) {
-                        log.info("Starting LeaseCleanupManager.");
-                        leaseCleanupManager.start();
-                    } else {
-                        log.info("LeaseCleanupManager is already running. No need to start it");
-                    }
+                    leaseCleanupManager.start();
 
                     // If we reach this point, then we either skipped the lease sync or did not have any exception
                     // for any of the shard sync in the previous attempt.

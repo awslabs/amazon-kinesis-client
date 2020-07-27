@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.leases;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -81,6 +82,16 @@ public class LeaseCleanupManagerTest {
 
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
         when(leaseCoordinator.updateLease(any(Lease.class), any(UUID.class), any(String.class), any(String.class))).thenReturn(true);
+    }
+
+    /**
+     * Tests subsequent calls to start {@link LeaseCleanupManager}.
+     */
+    @Test
+    public final void testSubsequentStarts() {
+        leaseCleanupManager.start();
+        Assert.assertTrue(leaseCleanupManager.isRunning());
+        leaseCleanupManager.start();
     }
 
     /**
