@@ -85,7 +85,7 @@ public interface LeaseSerializer {
      * @return the attribute value map asserting that a lease does exist.
      */
     default Map<String, ExpectedAttributeValue> getDynamoExistantExpectation() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("DynamoExistantExpectation is not implemented");
     }
 
     /**
