@@ -620,7 +620,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         UpdateItemRequest request = new UpdateItemRequest();
         request.setTableName(table);
         request.setKey(serializer.getDynamoHashKey(lease));
-        request.setExpected(serializer.getDynamoLeaseCounterExpectation(lease));
+        request.setExpected(serializer.getDynamoExistantExpectation(lease.getLeaseKey()));
 
         Map<String, AttributeValueUpdate> updates = serializer.getDynamoUpdateLeaseUpdate(lease, updateField);
         updates.putAll(serializer.getDynamoUpdateLeaseUpdate(lease));

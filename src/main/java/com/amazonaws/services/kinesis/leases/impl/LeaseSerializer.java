@@ -138,6 +138,16 @@ public class LeaseSerializer implements ILeaseSerializer<Lease> {
     }
 
     @Override
+    public Map<String, ExpectedAttributeValue> getDynamoExistantExpectation(final String leaseKey) {
+        Map<String, ExpectedAttributeValue> result = new HashMap<>();
+
+        ExpectedAttributeValue expectedAV = new ExpectedAttributeValue(DynamoUtils.createAttributeValue(leaseKey));
+        result.put(LEASE_KEY_KEY, expectedAV);
+
+        return result;
+    }
+
+    @Override
     public Map<String, AttributeValueUpdate> getDynamoLeaseCounterUpdate(Lease lease) {
         return getDynamoLeaseCounterUpdate(lease.getLeaseCounter());
     }
