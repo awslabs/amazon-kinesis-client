@@ -141,7 +141,9 @@ public class LeaseSerializer implements ILeaseSerializer<Lease> {
     public Map<String, ExpectedAttributeValue> getDynamoExistantExpectation(final String leaseKey) {
         Map<String, ExpectedAttributeValue> result = new HashMap<>();
 
-        ExpectedAttributeValue expectedAV = new ExpectedAttributeValue(DynamoUtils.createAttributeValue(leaseKey));
+        ExpectedAttributeValue expectedAV = new ExpectedAttributeValue();
+        expectedAV.setValue(DynamoUtils.createAttributeValue(leaseKey));
+        expectedAV.setExists(true);
         result.put(LEASE_KEY_KEY, expectedAV);
 
         return result;
