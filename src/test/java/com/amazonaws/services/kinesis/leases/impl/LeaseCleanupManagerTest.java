@@ -26,6 +26,7 @@ import com.amazonaws.services.kinesis.model.ChildShard;
 import com.amazonaws.services.kinesis.model.GetRecordsResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -80,6 +81,16 @@ public class LeaseCleanupManagerTest {
                 ExtendedSequenceNumber.LATEST);
         leaseCleanupManager = new LeaseCleanupManager(kinesis, leaseManager, deletionThreadPool, NULL_METRICS_FACTORY,
                 cleanupLeasesOfCompletedShards, leaseCleanupIntervalMillis, completedLeaseCleanupIntervalMillis, garbageLeaseCleanupIntervalMillis, maxRecords);
+    }
+
+    /**
+     * Tests subsequent calls to start {@link LeaseCleanupManager}.
+     */
+    @Test
+    public final void testSubsequentStarts() {
+        leaseCleanupManager.start();
+        Assert.assertTrue(leaseCleanupManager.isRunning());
+        leaseCleanupManager.start();
     }
 
     /**
