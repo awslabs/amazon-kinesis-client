@@ -16,8 +16,6 @@ package software.amazon.kinesis.leases;
 
 import java.util.Collection;
 import java.util.Map;
-
-
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
@@ -82,9 +80,10 @@ public interface LeaseSerializer {
     Map<String, ExpectedAttributeValue> getDynamoNonexistantExpectation();
 
     /**
+     * @param leaseKey
      * @return the attribute value map asserting that a lease does exist.
      */
-    default Map<String, ExpectedAttributeValue> getDynamoExistantExpectation() {
+    default Map<String, ExpectedAttributeValue> getDynamoExistentExpectation(String leaseKey) {
         throw new UnsupportedOperationException("DynamoExistantExpectation is not implemented");
     }
 
