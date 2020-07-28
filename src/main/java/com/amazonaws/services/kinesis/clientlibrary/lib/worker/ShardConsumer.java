@@ -54,6 +54,7 @@ class ShardConsumer {
     private final ExecutorService executorService;
     private final ShardInfo shardInfo;
     private final KinesisDataFetcher dataFetcher;
+    @Getter
     private final IMetricsFactory metricsFactory;
     private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private ICheckpoint checkpoint;
@@ -221,7 +222,6 @@ class ShardConsumer {
      * @param maxGetRecordsThreadPool max number of threads in the getRecords thread pool
      * @param config Kinesis library configuration
      * @param shardSyncer shardSyncer instance used to check and create new leases
-     * @param leaseCleanupManager used to clean up leases in lease table.
      */
     @Deprecated
     ShardConsumer(ShardInfo shardInfo,
