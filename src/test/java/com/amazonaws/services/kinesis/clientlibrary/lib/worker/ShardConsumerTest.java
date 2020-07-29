@@ -583,7 +583,12 @@ public class ShardConsumerTest {
                 .thenReturn(getRecordsCache);
         when(leaseManager.getLease(anyString())).thenReturn(null);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
-        when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId())).thenReturn(new KinesisClientLease());
+        List<String> parentShardIds = new ArrayList<>();
+        parentShardIds.add("parentShardId");
+        KinesisClientLease currentLease = createLease(streamShardId, "leaseOwner", parentShardIds);
+        currentLease.setCheckpoint(new ExtendedSequenceNumber("testSequenceNumbeer"));
+        when(leaseManager.getLease(streamShardId)).thenReturn(currentLease);
+        when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId())).thenReturn(currentLease);
 
         RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
                 shardInfo,
@@ -705,7 +710,11 @@ public class ShardConsumerTest {
         final int idleTimeMS = 0; // keep unit tests fast
         ICheckpoint checkpoint = new InMemoryCheckpointImpl(startSeqNum.toString());
         checkpoint.setCheckpoint(streamShardId, ExtendedSequenceNumber.TRIM_HORIZON, testConcurrencyToken);
-        when(leaseManager.getLease(anyString())).thenReturn(null);
+        List<String> parentShardIds = new ArrayList<>();
+        parentShardIds.add("parentShardId");
+        KinesisClientLease currentLease = createLease(streamShardId, "leaseOwner", parentShardIds);
+        currentLease.setCheckpoint(new ExtendedSequenceNumber("testSequenceNumbeer"));
+        when(leaseManager.getLease(streamShardId)).thenReturn(currentLease);
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
 
         TransientShutdownErrorTestStreamlet processor = new TransientShutdownErrorTestStreamlet();
@@ -758,11 +767,7 @@ public class ShardConsumerTest {
                         shardSyncer,
                         shardSyncStrategy);
 
-        List<String> parentShardIds = new ArrayList<>();
-        parentShardIds.add(shardInfo.getShardId());
-        when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId())).thenReturn(createLease(shardInfo.getShardId(),
-                "leaseOwner",
-                parentShardIds));
+        when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId())).thenReturn(currentLease);
         when(leaseCoordinator.updateLease(any(KinesisClientLease.class), any(UUID.class))).thenReturn(true);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));

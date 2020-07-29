@@ -620,7 +620,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         UpdateItemRequest request = new UpdateItemRequest();
         request.setTableName(table);
         request.setKey(serializer.getDynamoHashKey(lease));
-        request.setExpected(serializer.getDynamoLeaseCounterExpectation(lease));
+        request.setExpected(serializer.getDynamoExistentExpectation(lease.getLeaseKey()));
 
         Map<String, AttributeValueUpdate> updates = serializer.getDynamoUpdateLeaseUpdate(lease, updateField);
         updates.putAll(serializer.getDynamoUpdateLeaseUpdate(lease));
@@ -628,6 +628,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
 
         try {
             dynamoDBClient.updateItem(request);
+        } catch (ConditionalCheckFailedException e) {
+            LOG.warn("Lease update failed for lease with key " + lease.getLeaseKey() + " because the lease did not exist at the time of the update", e);
         } catch (AmazonClientException e) {
             throw convertAndRethrowExceptions("update", lease.getLeaseKey(), e);
         }

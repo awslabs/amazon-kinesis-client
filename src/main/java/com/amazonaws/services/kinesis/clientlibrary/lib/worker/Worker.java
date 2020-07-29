@@ -733,12 +733,7 @@ public class Worker implements Runnable {
                     }
                 }
 
-                if (!leaseCleanupManager.isRunning()) {
-                    LOG.info("Starting LeaseCleanupManager.");
-                    leaseCleanupManager.start();
-                } else {
-                    LOG.info("LeaseCleanupManager is already running. No need to start it.");
-                }
+                leaseCleanupManager.start();
 
                 // If we reach this point, then we either skipped the lease sync or did not have any exception for the
                 // shard sync in the previous attempt.

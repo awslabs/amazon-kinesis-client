@@ -14,11 +14,15 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,10 +35,15 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.ShardListWrappingShardClosureVerificationResponse;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
+import com.amazonaws.services.kinesis.leases.exceptions.CustomerApplicationException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.leases.impl.UpdateField;
 import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.ChildShard;
 import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.SequenceNumberRange;
@@ -56,6 +65,7 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownTask.RETRY_RANDOM_MAX_RANGE;
 
 /**
  *
@@ -73,8 +83,8 @@ public class ShutdownTaskTest {
             defaultConcurrencyToken,
             defaultParentShardIds,
             ExtendedSequenceNumber.LATEST);
-    IRecordProcessor defaultRecordProcessor = new TestStreamlet();
     ShardSyncer shardSyncer = new KinesisShardSyncer(new KinesisLeaseCleanupValidator());
+    IMetricsFactory metricsFactory = new NullMetricsFactory();
 
 
     @Mock
@@ -87,6 +97,8 @@ public class ShutdownTaskTest {
     private ILeaseManager<KinesisClientLease> leaseManager;
     @Mock
     private KinesisClientLibLeaseCoordinator leaseCoordinator;
+    @Mock
+    private IRecordProcessor defaultRecordProcessor;
     @Mock
     private LeaseCleanupManager leaseCleanupManager;
 
@@ -111,9 +123,11 @@ public class ShutdownTaskTest {
     public void setUp() throws Exception {
         doNothing().when(getRecordsCache).shutdown();
         final KinesisClientLease parentLease = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        parentLease.setCheckpoint(new ExtendedSequenceNumber("3298"));
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         when(leaseCoordinator.getCurrentlyHeldLease(defaultShardId)).thenReturn(parentLease);
-        when(leaseCoordinator.updateLease(any(KinesisClientLease.class), any(UUID.class))).thenReturn(true);
+        when(leaseManager.getLease(defaultShardId)).thenReturn(parentLease);
+
     }
 
     /**
@@ -146,13 +160,12 @@ public class ShutdownTaskTest {
                 getRecordsCache,
                 shardSyncer,
                 shardSyncStrategy,
-                constructChildShards(),
+                constructSplitChildShards(),
                 leaseCleanupManager);
         TaskResult result = task.call();
-        Assert.assertNotNull(result.getException());
-        Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
-        final String expectedExceptionMessage = "Application didn't checkpoint at end of shard shardId-0. " +
-                "Application must checkpoint upon shutdown. See IRecordProcessor.shutdown javadocs for more information.";
+        assertNotNull(result.getException());
+        Assert.assertTrue(result.getException() instanceof CustomerApplicationException);
+        final String expectedExceptionMessage = "Customer application throws exception for shard shardId-0";
         Assert.assertEquals(expectedExceptionMessage, result.getException().getMessage());
     }
 
@@ -182,12 +195,142 @@ public class ShutdownTaskTest {
                 getRecordsCache,
                 shardSyncer,
                 shardSyncStrategy,
-                constructChildShards(),
+                constructSplitChildShards(),
                 leaseCleanupManager);
         TaskResult result = task.call();
         verify(getRecordsCache).shutdown();
         verify(leaseCoordinator).dropLease(any(KinesisClientLease.class));
         Assert.assertNull(result.getException());
+    }
+
+    @Test
+    public final void testCallWhenParentInfoNotPresentInLease() throws Exception {
+        RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
+        when(checkpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        boolean cleanupLeasesOfCompletedShards = false;
+        boolean ignoreUnexpectedChildShards = false;
+
+        KinesisClientLease currentLease = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        currentLease.setCheckpoint(new ExtendedSequenceNumber("3298"));
+        KinesisClientLease adjacentParentLease = createLease("ShardId-1", "leaseOwner", Collections.emptyList());
+        when(leaseCoordinator.getCurrentlyHeldLease(defaultShardId)).thenReturn( currentLease);
+        when(leaseManager.getLease(defaultShardId)).thenReturn(currentLease);
+        when(leaseManager.getLease("ShardId-1")).thenReturn(null, null, null, null, null, adjacentParentLease);
+
+        // Make first 5 attempts with partial parent info in lease table
+        for (int i = 0; i < 5; i++) {
+            ShutdownTask task = spy(new ShutdownTask(defaultShardInfo,
+                                                     defaultRecordProcessor,
+                                                     checkpointer,
+                                                     ShutdownReason.TERMINATE,
+                                                     kinesisProxy,
+                                                     INITIAL_POSITION_TRIM_HORIZON,
+                                                     cleanupLeasesOfCompletedShards,
+                                                     ignoreUnexpectedChildShards,
+                                                     leaseCoordinator,
+                                                     TASK_BACKOFF_TIME_MILLIS,
+                                                     getRecordsCache,
+                                                     shardSyncer,
+                                                     shardSyncStrategy,
+                                                     constructMergeChildShards(),
+                                                     leaseCleanupManager));
+            when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(false);
+            TaskResult result = task.call();
+            assertNotNull(result.getException());
+            assertTrue(result.getException() instanceof BlockedOnParentShardException);
+            assertTrue(result.getException().getMessage().contains("has partial parent information in lease table"));
+            verify(task, times(1)).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
+            verify(getRecordsCache, never()).shutdown();
+            verify(defaultRecordProcessor, never()).shutdown(any(ShutdownInput.class));
+        }
+
+        // Make next attempt with complete parent info in lease table
+        ShutdownTask task = spy(new ShutdownTask(defaultShardInfo,
+                                                 defaultRecordProcessor,
+                                                 checkpointer,
+                                                 ShutdownReason.TERMINATE,
+                                                 kinesisProxy,
+                                                 INITIAL_POSITION_TRIM_HORIZON,
+                                                 cleanupLeasesOfCompletedShards,
+                                                 ignoreUnexpectedChildShards,
+                                                 leaseCoordinator,
+                                                 TASK_BACKOFF_TIME_MILLIS,
+                                                 getRecordsCache,
+                                                 shardSyncer,
+                                                 shardSyncStrategy,
+                                                 constructMergeChildShards(),
+                                                 leaseCleanupManager));
+        when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(false);
+        TaskResult result = task.call();
+        assertNull(result.getException());
+        verify(task, never()).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
+        verify(getRecordsCache).shutdown();
+        verify(defaultRecordProcessor).shutdown(any(ShutdownInput.class));
+        verify(leaseCoordinator, never()).dropLease(currentLease);
+    }
+
+    @Test
+    public final void testCallTriggersLeaseLossWhenParentInfoNotPresentInLease() throws Exception {
+        RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
+        when(checkpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        boolean cleanupLeasesOfCompletedShards = false;
+        boolean ignoreUnexpectedChildShards = false;
+
+        KinesisClientLease currentLease = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        when(leaseCoordinator.getCurrentlyHeldLease(defaultShardId)).thenReturn( currentLease);
+        when(leaseManager.getLease(defaultShardId)).thenReturn(currentLease);
+        when(leaseManager.getLease("ShardId-1")).thenReturn(null, null, null, null, null, null, null, null, null, null, null);
+
+        for (int i = 0; i < 10; i++) {
+            ShutdownTask task = spy(new ShutdownTask(defaultShardInfo,
+                                                     defaultRecordProcessor,
+                                                     checkpointer,
+                                                     ShutdownReason.TERMINATE,
+                                                     kinesisProxy,
+                                                     INITIAL_POSITION_TRIM_HORIZON,
+                                                     cleanupLeasesOfCompletedShards,
+                                                     ignoreUnexpectedChildShards,
+                                                     leaseCoordinator,
+                                                     TASK_BACKOFF_TIME_MILLIS,
+                                                     getRecordsCache,
+                                                     shardSyncer,
+                                                     shardSyncStrategy,
+                                                     constructMergeChildShards(),
+                                                     leaseCleanupManager));
+            when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(false);
+            TaskResult result = task.call();
+            assertNotNull(result.getException());
+            assertTrue(result.getException() instanceof BlockedOnParentShardException);
+            assertTrue(result.getException().getMessage().contains("has partial parent information in lease table"));
+            verify(task, times(1)).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
+            verify(getRecordsCache, never()).shutdown();
+            verify(defaultRecordProcessor, never()).shutdown(any(ShutdownInput.class));
+        }
+
+        ShutdownTask task = spy(new ShutdownTask(defaultShardInfo,
+                                                 defaultRecordProcessor,
+                                                 checkpointer,
+                                                 ShutdownReason.TERMINATE,
+                                                 kinesisProxy,
+                                                 INITIAL_POSITION_TRIM_HORIZON,
+                                                 cleanupLeasesOfCompletedShards,
+                                                 ignoreUnexpectedChildShards,
+                                                 leaseCoordinator,
+                                                 TASK_BACKOFF_TIME_MILLIS,
+                                                 getRecordsCache,
+                                                 shardSyncer,
+                                                 shardSyncStrategy,
+                                                 constructMergeChildShards(),
+                                                 leaseCleanupManager));
+        when(task.isOneInNProbability(RETRY_RANDOM_MAX_RANGE)).thenReturn(true);
+        TaskResult result = task.call();
+        assertNull(result.getException());
+        verify(task, times(1)).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
+        verify(getRecordsCache).shutdown();
+        verify(defaultRecordProcessor).shutdown(any(ShutdownInput.class));
+        verify(leaseCoordinator).dropLease(currentLease);
     }
 
     @Test
@@ -210,11 +353,11 @@ public class ShutdownTaskTest {
                                              getRecordsCache,
                                              shardSyncer,
                                              shardSyncStrategy,
-                                             constructChildShards(),
+                                             constructSplitChildShards(),
                                              leaseCleanupManager);
         TaskResult result = task.call();
         verify(leaseManager, times(2)).createLeaseIfNotExists(any(KinesisClientLease.class));
-        verify(leaseCoordinator).updateLease(any(KinesisClientLease.class), any(UUID.class));
+        verify(leaseManager).updateLeaseWithMetaInfo(any(KinesisClientLease.class), any(UpdateField.class));
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
     }
@@ -248,7 +391,7 @@ public class ShutdownTaskTest {
                                              leaseCleanupManager);
         TaskResult result = task.call();
         verify(leaseManager, never()).createLeaseIfNotExists(any(KinesisClientLease.class));
-        verify(leaseCoordinator, never()).updateLease(any(KinesisClientLease.class), any(UUID.class));
+        verify(leaseManager, never()).updateLeaseWithMetaInfo(any(KinesisClientLease.class), any(UpdateField.class));
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
     }
@@ -278,7 +421,7 @@ public class ShutdownTaskTest {
                                              leaseCleanupManager);
         TaskResult result = task.call();
         verify(leaseManager, never()).createLeaseIfNotExists(any(KinesisClientLease.class));
-        verify(leaseCoordinator, never()).updateLease(any(KinesisClientLease.class), any(UUID.class));
+        verify(leaseManager, never()).updateLeaseWithMetaInfo(any(KinesisClientLease.class), any(UpdateField.class));
         Assert.assertNull(result.getException());
         verify(getRecordsCache).shutdown();
     }
@@ -296,7 +439,7 @@ public class ShutdownTaskTest {
         Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
     }
 
-    private List<ChildShard> constructChildShards() {
+    private List<ChildShard> constructSplitChildShards() {
         List<ChildShard> childShards = new ArrayList<>();
         List<String> parentShards = new ArrayList<>();
         parentShards.add(defaultShardId);
@@ -312,6 +455,21 @@ public class ShutdownTaskTest {
         rightChild.setParentShards(parentShards);
         rightChild.setHashKeyRange(ShardObjectHelper.newHashKeyRange("50", "99"));
         childShards.add(rightChild);
+        return childShards;
+    }
+
+    private List<ChildShard> constructMergeChildShards() {
+        List<ChildShard> childShards = new ArrayList<>();
+        List<String> parentShards = new ArrayList<>();
+        parentShards.add(defaultShardId);
+        parentShards.add("ShardId-1");
+
+        ChildShard childShard = new ChildShard();
+        childShard.setShardId("ShardId-2");
+        childShard.setParentShards(parentShards);
+        childShard.setHashKeyRange(ShardObjectHelper.newHashKeyRange("0", "99"));
+        childShards.add(childShard);
+
         return childShards;
     }
 
