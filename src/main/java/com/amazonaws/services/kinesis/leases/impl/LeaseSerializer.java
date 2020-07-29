@@ -138,7 +138,7 @@ public class LeaseSerializer implements ILeaseSerializer<Lease> {
     }
 
     @Override
-    public Map<String, ExpectedAttributeValue> getDynamoExistantExpectation(final String leaseKey) {
+    public Map<String, ExpectedAttributeValue> getDynamoExistentExpectation(final String leaseKey) {
         Map<String, ExpectedAttributeValue> result = new HashMap<>();
 
         ExpectedAttributeValue expectedAV = new ExpectedAttributeValue();

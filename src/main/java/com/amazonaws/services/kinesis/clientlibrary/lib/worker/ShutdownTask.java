@@ -22,7 +22,6 @@ import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
 import com.amazonaws.services.kinesis.leases.impl.UpdateField;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.amazonaws.services.kinesis.model.ChildShard;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.logging.Log;
@@ -33,8 +32,6 @@ import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.List;
@@ -51,10 +48,8 @@ class ShutdownTask implements ITask {
 
     private static final Log LOG = LogFactory.getLog(ShutdownTask.class);
 
-    private static final String SHUTDOWN_TASK_OPERATION = "ShutdownTask";
-    private static final String RECORD_PROCESSOR_SHUTDOWN_METRIC = "RecordProcessor.shutdown";
     @VisibleForTesting
-    static final int RETRY_RANDOM_MAX_RANGE = 10;
+    static final int RETRY_RANDOM_MAX_RANGE = 50;
 
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
@@ -72,7 +67,6 @@ class ShutdownTask implements ITask {
     private final ShardSyncStrategy shardSyncStrategy;
     private final List<ChildShard> childShards;
     private final LeaseCleanupManager leaseCleanupManager;
-    private final IMetricsFactory metricsFactory;
 
     /**
      * Constructor.
@@ -90,7 +84,7 @@ class ShutdownTask implements ITask {
             long backoffTimeMillis,
             GetRecordsCache getRecordsCache, ShardSyncer shardSyncer,
             ShardSyncStrategy shardSyncStrategy, List<ChildShard> childShards,
-            LeaseCleanupManager leaseCleanupManager, IMetricsFactory metricsFactory) {
+            LeaseCleanupManager leaseCleanupManager) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -106,7 +100,6 @@ class ShutdownTask implements ITask {
         this.shardSyncStrategy = shardSyncStrategy;
         this.childShards = childShards;
         this.leaseCleanupManager = leaseCleanupManager;
-        this.metricsFactory = metricsFactory;
     }
 
     /*
@@ -117,61 +110,55 @@ class ShutdownTask implements ITask {
      */
     @Override
     public TaskResult call() {
-        MetricsHelper.startScope(metricsFactory, SHUTDOWN_TASK_OPERATION);
         Exception exception;
 
+        LOG.info("Invoking shutdown() for shard " + shardInfo.getShardId() + ", concurrencyToken: "
+                         + shardInfo.getConcurrencyToken() + ", original Shutdown reason: " + reason + ". childShards:" + childShards);
+
         try {
-            LOG.info("Invoking shutdown() for shard " + shardInfo.getShardId() + ", concurrencyToken: "
-                             + shardInfo.getConcurrencyToken() + ", original Shutdown reason: " + reason + ". childShards:" + childShards);
+            final KinesisClientLease currentShardLease = leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId());
+            final Runnable leaseLostAction = () -> takeLeaseLostAction();
 
-            try {
-                final long startTime = System.currentTimeMillis();
-                final KinesisClientLease currentShardLease = leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId());
-                final Runnable leaseLostAction = () -> takeLeaseLostAction();
-
-                if (reason == ShutdownReason.TERMINATE) {
-                    try {
-                        takeShardEndAction(currentShardLease, startTime);
-                    } catch (InvalidStateException e) {
-                        // If InvalidStateException happens, it indicates we have a non recoverable error in short term.
-                        // In this scenario, we should shutdown the shardConsumer with ZOMBIE reason to allow other worker to take the lease and retry shutting down.
-                        LOG.warn("Lease " + shardInfo.getShardId() + ": Invalid state encountered while shutting down shardConsumer with TERMINATE reason. " +
-                                         "Dropping the lease and shutting down shardConsumer using ZOMBIE reason. ", e);
-                        dropLease(currentShardLease);
-                        throwOnApplicationException(leaseLostAction, startTime);
-                    }
-                } else {
-                    throwOnApplicationException(leaseLostAction, startTime);
-                }
-
-                LOG.debug("Shutting down retrieval strategy.");
-                getRecordsCache.shutdown();
-                LOG.debug("Record processor completed shutdown() for shard " + shardInfo.getShardId());
-                return new TaskResult(null);
-            } catch (Exception e) {
-                if (e instanceof CustomerApplicationException) {
-                    LOG.error("Shard " + shardInfo.getShardId() + ": Application exception: ", e);
-                } else {
-                    LOG.error("Shard " + shardInfo.getShardId() + ": Caught exception: ", e);
-                }
-
-                exception = e;
-                // backoff if we encounter an exception.
+            if (reason == ShutdownReason.TERMINATE) {
                 try {
-                    Thread.sleep(this.backoffTimeMillis);
-                } catch (InterruptedException ie) {
-                    LOG.debug("Interrupted sleep", ie);
+                    takeShardEndAction(currentShardLease);
+                } catch (InvalidStateException e) {
+                    // If InvalidStateException happens, it indicates we have a non recoverable error in short term.
+                    // In this scenario, we should shutdown the shardConsumer with ZOMBIE reason to allow other worker to take the lease and retry shutting down.
+                    LOG.warn("Lease " + shardInfo.getShardId() + ": Invalid state encountered while shutting down shardConsumer with TERMINATE reason. " +
+                                     "Dropping the lease and shutting down shardConsumer using ZOMBIE reason. ", e);
+                    dropLease(currentShardLease);
+                    throwOnApplicationException(leaseLostAction);
                 }
+            } else {
+                throwOnApplicationException(leaseLostAction);
             }
-        } finally {
-            MetricsHelper.endScope();
+
+            LOG.debug("Shutting down retrieval strategy.");
+            getRecordsCache.shutdown();
+            LOG.debug("Record processor completed shutdown() for shard " + shardInfo.getShardId());
+            return new TaskResult(null);
+        } catch (Exception e) {
+            if (e instanceof CustomerApplicationException) {
+                LOG.error("Shard " + shardInfo.getShardId() + ": Application exception: ", e);
+            } else {
+                LOG.error("Shard " + shardInfo.getShardId() + ": Caught exception: ", e);
+            }
+
+            exception = e;
+            // backoff if we encounter an exception.
+            try {
+                Thread.sleep(this.backoffTimeMillis);
+            } catch (InterruptedException ie) {
+                LOG.debug("Interrupted sleep", ie);
+            }
         }
 
         return new TaskResult(exception);
     }
 
     // Involves persisting child shard info, attempt to checkpoint and enqueueing lease for cleanup.
-    private void takeShardEndAction(KinesisClientLease currentShardLease, long startTime)
+    private void takeShardEndAction(KinesisClientLease currentShardLease)
         throws InvalidStateException, DependencyException, ProvisionedThroughputException, CustomerApplicationException {
         // Create new lease for the child shards if they don't exist.
         // We have one valid scenario that shutdown task got created with SHARD_END reason and an empty list of childShards.
@@ -194,7 +181,7 @@ class ShutdownTask implements ITask {
         if (!leaseCleanupManager.isEnqueuedForDeletion(leasePendingDeletion)) {
             boolean isSuccess = false;
             try {
-                isSuccess = attemptShardEndCheckpointing(startTime);
+                isSuccess = attemptShardEndCheckpointing();
             } finally {
                 // Check if either the shard end ddb persist is successful or
                 // if childshards is empty. When child shards is empty then either it is due to
@@ -214,14 +201,14 @@ class ShutdownTask implements ITask {
         recordProcessor.shutdown(leaseLostShutdownInput);
     }
 
-    private boolean attemptShardEndCheckpointing(long startTime)
+    private boolean attemptShardEndCheckpointing()
         throws DependencyException, ProvisionedThroughputException, InvalidStateException, CustomerApplicationException {
         final KinesisClientLease leaseFromDdb = Optional.ofNullable(leaseCoordinator.getLeaseManager().getLease(shardInfo.getShardId()))
                 .orElseThrow(() -> new InvalidStateException("Lease for shard " + shardInfo.getShardId() + " does not exist."));
         if (!leaseFromDdb.getCheckpoint().equals(ExtendedSequenceNumber.SHARD_END)) {
             // Call the recordProcessor to checkpoint with SHARD_END sequence number.
             // The recordProcessor.shutdown is implemented by customer. We should validate if the SHARD_END checkpointing is successful after calling recordProcessor.shutdown.
-            throwOnApplicationException(() -> applicationCheckpointAndVerification(), startTime);
+            throwOnApplicationException(() -> applicationCheckpointAndVerification());
         }
         return true;
     }
@@ -246,13 +233,11 @@ class ShutdownTask implements ITask {
         }
     }
 
-    private void throwOnApplicationException(Runnable action, long startTime) throws CustomerApplicationException {
+    private void throwOnApplicationException(Runnable action) throws CustomerApplicationException {
         try {
             action.run();
         } catch (Exception e) {
             throw new CustomerApplicationException("Customer application throws exception for shard " + shardInfo.getShardId(), e);
-        } finally {
-            MetricsHelper.addLatency(RECORD_PROCESSOR_SHUTDOWN_METRIC, startTime, MetricsLevel.SUMMARY);
         }
     }
 

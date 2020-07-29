@@ -532,8 +532,7 @@ class ConsumerStates {
                     consumer.getTaskBackoffTimeMillis(),
                     consumer.getGetRecordsCache(), consumer.getShardSyncer(),
                     consumer.getShardSyncStrategy(), consumer.getChildShards(),
-                    consumer.getLeaseCleanupManager(),
-                    consumer.getMetricsFactory());
+                    consumer.getLeaseCleanupManager());
         }
 
         @Override

@@ -54,7 +54,6 @@ class ShardConsumer {
     private final ExecutorService executorService;
     private final ShardInfo shardInfo;
     private final KinesisDataFetcher dataFetcher;
-    @Getter
     private final IMetricsFactory metricsFactory;
     private final KinesisClientLibLeaseCoordinator leaseCoordinator;
     private ICheckpoint checkpoint;
