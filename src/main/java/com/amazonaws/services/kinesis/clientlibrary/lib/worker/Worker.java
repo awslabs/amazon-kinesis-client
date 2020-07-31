@@ -1281,19 +1281,21 @@ public class Worker implements Runnable {
         }
 
         return new PeriodicShardSyncManager(config.getWorkerIdentifier(),
-                leaderDecider,
-                new ShardSyncTask(streamConfig.getStreamProxy(),
-                        leaseCoordinator.getLeaseManager(),
-                        config.getInitialPositionInStreamExtended(),
-                        config.shouldCleanupLeasesUponShardCompletion(),
-                        config.shouldIgnoreUnexpectedChildShards(),
-                        SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
-                        shardSyncer,
-                        null),
-                metricsFactory,
-                leaseCoordinator.getLeaseManager(),
-                streamConfig.getStreamProxy(),
-                isAuditorMode);
+                                            leaderDecider,
+                                            new ShardSyncTask(streamConfig.getStreamProxy(),
+                                                    leaseCoordinator.getLeaseManager(),
+                                                    config.getInitialPositionInStreamExtended(),
+                                                    config.shouldCleanupLeasesUponShardCompletion(),
+                                                    config.shouldIgnoreUnexpectedChildShards(),
+                                                    SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
+                                                    shardSyncer,
+                                                    null),
+                                            metricsFactory,
+                                            leaseCoordinator.getLeaseManager(),
+                                            streamConfig.getStreamProxy(),
+                                            isAuditorMode,
+                                            config.getLeasesRecoveryAuditorExecutionFrequencyMillis(),
+                                            config.getLeasesRecoveryAuditorInconsistencyConfidenceThreshold());
     }
 
     /**

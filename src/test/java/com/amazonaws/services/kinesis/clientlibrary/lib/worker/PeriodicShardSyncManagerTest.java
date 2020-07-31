@@ -39,7 +39,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.PeriodicShardSyncManager.CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY;
 import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.PeriodicShardSyncManager.MAX_HASH_KEY;
 import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.PeriodicShardSyncManager.MIN_HASH_KEY;
 import static com.amazonaws.services.kinesis.leases.impl.HashKeyRangeForLease.deserialize;
@@ -49,6 +48,8 @@ import static org.mockito.Mockito.when;
 public class PeriodicShardSyncManagerTest {
 
     private static final String WORKER_ID = "workerId";
+    public static final long LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS = 2 * 60 * 1000L;
+    public static final int LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD = 3;
 
     /** Manager for PERIODIC shard sync strategy */
     private PeriodicShardSyncManager periodicShardSyncManager;
@@ -70,9 +71,11 @@ public class PeriodicShardSyncManagerTest {
     @Before
     public void setup() {
         periodicShardSyncManager = new PeriodicShardSyncManager(WORKER_ID, leaderDecider, shardSyncTask,
-                metricsFactory, leaseManager, kinesisProxy, false);
+                metricsFactory, leaseManager, kinesisProxy, false, LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS,
+                LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD);
         auditorPeriodicShardSyncManager = new PeriodicShardSyncManager(WORKER_ID, leaderDecider, shardSyncTask,
-                metricsFactory, leaseManager, kinesisProxy, true);
+                metricsFactory, leaseManager, kinesisProxy, true, LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS, 
+                LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD);
     }
 
     @Test
@@ -179,7 +182,7 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
 
         when(leaseManager.listLeases()).thenReturn(leases);
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
@@ -201,7 +204,7 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
 
         when(leaseManager.listLeases()).thenReturn(leases);
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
@@ -229,7 +232,7 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
 
         when(leaseManager.listLeases()).thenReturn(leases);
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
@@ -253,7 +256,7 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
 
         when(leaseManager.listLeases()).thenReturn(leases);
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
@@ -277,7 +280,7 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
 
         when(leaseManager.listLeases()).thenReturn(leases1);
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
@@ -297,7 +300,7 @@ public class PeriodicShardSyncManagerTest {
 
         // Resetting the holes
         when(leaseManager.listLeases()).thenReturn(leases2);
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
@@ -321,7 +324,7 @@ public class PeriodicShardSyncManagerTest {
         }).collect(Collectors.toList());
 
         when(leaseManager.listLeases()).thenReturn(leases1);
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
@@ -341,13 +344,13 @@ public class PeriodicShardSyncManagerTest {
 
         // Resetting the holes
         when(leaseManager.listLeases()).thenReturn(leases2);
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
         // Resetting the holes again
         when(leaseManager.listLeases()).thenReturn(leases1);
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
@@ -392,7 +395,7 @@ public class PeriodicShardSyncManagerTest {
         when(leaseManager.listLeases()).thenReturn(leases);
 
         // Assert that SHARD_END shard sync should never trigger, but PERIODIC shard sync should always trigger
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }
@@ -442,7 +445,7 @@ public class PeriodicShardSyncManagerTest {
         when(leaseManager.listLeases()).thenReturn(leases);
 
         // Assert that shard sync should trigger after breaching threshold
-        for (int i = 1; i < CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY; i++) {
+        for (int i = 1; i < LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD; i++) {
             Assert.assertTrue(periodicShardSyncManager.checkForShardSync().shouldDoShardSync());
             Assert.assertFalse(auditorPeriodicShardSyncManager.checkForShardSync().shouldDoShardSync());
         }

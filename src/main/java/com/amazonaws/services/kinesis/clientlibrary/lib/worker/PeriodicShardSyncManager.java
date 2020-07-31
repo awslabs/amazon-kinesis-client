@@ -26,6 +26,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import com.amazonaws.services.cloudwatch.model.StandardUnit;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
@@ -34,7 +35,9 @@ import com.amazonaws.services.kinesis.leases.impl.HashKeyRangeForLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.UpdateField;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
+import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
+import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.util.CollectionUtils;
 import com.google.common.annotations.VisibleForTesting;
@@ -65,16 +68,12 @@ class PeriodicShardSyncManager {
     /** DEFAULT interval is used for PERIODIC {@link ShardSyncStrategyType}. */
     private static final long DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 1000L;
 
-    /** AUDITOR interval is used for non-PERIODIC {@link ShardSyncStrategyType} auditor processes. */
-    private static final long AUDITOR_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 2 * 60 * 1000L;
-
     /** Parameters for validating hash range completeness when running in auditor mode. */
     @VisibleForTesting
     static final BigInteger MIN_HASH_KEY = BigInteger.ZERO;
     @VisibleForTesting
     static final BigInteger MAX_HASH_KEY = new BigInteger("2").pow(128).subtract(BigInteger.ONE);
-    @VisibleForTesting
-    static final int CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY = 3;
+    static final String PERIODIC_SHARD_SYNC_MANAGER = "PeriodicShardSyncManager";
     private final HashRangeHoleTracker hashRangeHoleTracker = new HashRangeHoleTracker();
 
     private final String workerId;
@@ -86,6 +85,9 @@ class PeriodicShardSyncManager {
     private final boolean isAuditorMode;
     private final long periodicShardSyncIntervalMillis;
     private boolean isRunning;
+    private final IMetricsFactory metricsFactory;
+    private final int leasesRecoveryAuditorInconsistencyConfidenceThreshold;
+
 
     PeriodicShardSyncManager(String workerId,
                              LeaderDecider leaderDecider,
@@ -93,9 +95,12 @@ class PeriodicShardSyncManager {
                              IMetricsFactory metricsFactory,
                              ILeaseManager<KinesisClientLease> leaseManager,
                              IKinesisProxy kinesisProxy,
-                             boolean isAuditorMode) {
+                             boolean isAuditorMode,
+                             long leasesRecoveryAuditorExecutionFrequencyMillis,
+                             int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
        this(workerId, leaderDecider, shardSyncTask, Executors.newSingleThreadScheduledExecutor(), metricsFactory,
-               leaseManager, kinesisProxy, isAuditorMode);
+            leaseManager, kinesisProxy, isAuditorMode, leasesRecoveryAuditorExecutionFrequencyMillis,
+            leasesRecoveryAuditorInconsistencyConfidenceThreshold);
     }
 
     PeriodicShardSyncManager(String workerId,
@@ -105,7 +110,9 @@ class PeriodicShardSyncManager {
                              IMetricsFactory metricsFactory,
                              ILeaseManager<KinesisClientLease> leaseManager,
                              IKinesisProxy kinesisProxy,
-                             boolean isAuditorMode) {
+                             boolean isAuditorMode,
+                             long leasesRecoveryAuditorExecutionFrequencyMillis,
+                             int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
         Validate.notBlank(workerId, "WorkerID is required to initialize PeriodicShardSyncManager.");
         Validate.notNull(leaderDecider, "LeaderDecider is required to initialize PeriodicShardSyncManager.");
         Validate.notNull(shardSyncTask, "ShardSyncTask is required to initialize PeriodicShardSyncManager.");
@@ -115,11 +122,13 @@ class PeriodicShardSyncManager {
         this.shardSyncThreadPool = shardSyncThreadPool;
         this.leaseManager = leaseManager;
         this.kinesisProxy = kinesisProxy;
+        this.metricsFactory = metricsFactory;
         this.isAuditorMode = isAuditorMode;
+        this.leasesRecoveryAuditorInconsistencyConfidenceThreshold = leasesRecoveryAuditorInconsistencyConfidenceThreshold;
         if (isAuditorMode) {
             Validate.notNull(this.leaseManager, "LeaseManager is required for non-PERIODIC shard sync strategies.");
             Validate.notNull(this.kinesisProxy, "KinesisProxy is required for non-PERIODIC shard sync strategies.");
-            this.periodicShardSyncIntervalMillis = AUDITOR_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS;
+            this.periodicShardSyncIntervalMillis = leasesRecoveryAuditorExecutionFrequencyMillis;
         } else {
             this.periodicShardSyncIntervalMillis = DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS;
         }
@@ -166,8 +175,14 @@ class PeriodicShardSyncManager {
         if (leaderDecider.isLeader(workerId)) {
             LOG.debug("WorkerId " + workerId + " is a leader, running the shard sync task");
 
+            MetricsHelper.startScope(metricsFactory, PERIODIC_SHARD_SYNC_MANAGER);
+            boolean isRunSuccess = false;
+            final long runStartMillis = System.currentTimeMillis();
+
             try {
                 final ShardSyncResponse shardSyncResponse = checkForShardSync();
+                MetricsHelper.getMetricsScope().addData("InitiatingShardSync", shardSyncResponse.shouldDoShardSync() ? 1 : 0, StandardUnit.Count, MetricsLevel.SUMMARY);
+                MetricsHelper.getMetricsScope().addData("DetectedIncompleteLease", shardSyncResponse.isHoleDetected() ? 1 : 0, StandardUnit.Count, MetricsLevel.SUMMARY);
                 if (shardSyncResponse.shouldDoShardSync()) {
                     LOG.info("Periodic shard syncer initiating shard sync due to the reason - " +
                             shardSyncResponse.reasonForDecision());
@@ -175,8 +190,12 @@ class PeriodicShardSyncManager {
                 } else {
                     LOG.info("Skipping shard sync due to the reason - " + shardSyncResponse.reasonForDecision());
                 }
+                isRunSuccess = true;
             } catch (Exception e) {
                 LOG.error("Caught exception while running periodic shard syncer.", e);
+            } finally {
+                MetricsHelper.addSuccessAndLatency(runStartMillis, isRunSuccess, MetricsLevel.SUMMARY);
+                MetricsHelper.endScope();
             }
         } else {
             LOG.debug("WorkerId " + workerId + " is not a leader, not running the shard sync task");
@@ -189,7 +208,7 @@ class PeriodicShardSyncManager {
 
         if (!isAuditorMode) {
             // If we are running with PERIODIC shard sync strategy, we should sync every time.
-            return new ShardSyncResponse(true, "Syncing every time with PERIODIC shard sync strategy.");
+            return new ShardSyncResponse(true, false, "Syncing every time with PERIODIC shard sync strategy.");
         }
 
         // Get current leases from DynamoDB.
@@ -198,7 +217,7 @@ class PeriodicShardSyncManager {
         if (CollectionUtils.isNullOrEmpty(currentLeases)) {
             // If the current leases are null or empty, then we need to initiate a shard sync.
             LOG.info("No leases found. Will trigger a shard sync.");
-            return new ShardSyncResponse(true, "No leases found.");
+            return new ShardSyncResponse(true, false, "No leases found.");
         }
 
         // Check if there are any holes in the hash range covered by current leases. Return the first hole if present.
@@ -210,13 +229,13 @@ class PeriodicShardSyncManager {
             final boolean hasHoleWithHighConfidence =
                     hashRangeHoleTracker.hashHighConfidenceOfHoleWith(hashRangeHoleOpt.get());
 
-            return new ShardSyncResponse(hasHoleWithHighConfidence,
+            return new ShardSyncResponse(hasHoleWithHighConfidence, true,
                     "Detected the same hole for " + hashRangeHoleTracker.getNumConsecutiveHoles() + " times. " +
-                    "Will initiate shard sync after reaching threshold: " + CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY);
+                    "Will initiate shard sync after reaching threshold: " + leasesRecoveryAuditorInconsistencyConfidenceThreshold);
         } else {
             // If hole is not present, clear any previous hole tracking and return false.
             hashRangeHoleTracker.reset();
-            return new ShardSyncResponse(false, "Hash range is complete.");
+            return new ShardSyncResponse(false, false, "Hash range is complete.");
         }
     }
 
@@ -331,6 +350,7 @@ class PeriodicShardSyncManager {
     @VisibleForTesting
     static class ShardSyncResponse {
         private final boolean shouldDoShardSync;
+        private final boolean isHoleDetected;
         private final String reasonForDecision;
     }
 
@@ -350,7 +370,7 @@ class PeriodicShardSyncManager {
         }
     }
 
-    private static class HashRangeHoleTracker {
+    private class HashRangeHoleTracker {
         private HashRangeHole hashRangeHole;
         @Getter
         private Integer numConsecutiveHoles;
@@ -363,7 +383,7 @@ class PeriodicShardSyncManager {
                 this.numConsecutiveHoles = 1;
             }
 
-            return numConsecutiveHoles >= CONSECUTIVE_HOLES_FOR_TRIGGERING_RECOVERY;
+            return numConsecutiveHoles >= leasesRecoveryAuditorInconsistencyConfidenceThreshold;
         }
 
         public void reset() {
