@@ -10,6 +10,7 @@ import java.util.Set;
 /**
  * Represents the class that decides if a lease is eligible for cleanup.
  */
+@Deprecated
 class KinesisLeaseCleanupValidator implements LeaseCleanupValidator {
 
     private static final Log LOG = LogFactory.getLog(KinesisLeaseCleanupValidator.class);

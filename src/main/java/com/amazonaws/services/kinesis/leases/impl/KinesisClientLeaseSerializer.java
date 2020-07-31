@@ -121,6 +121,11 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
     }
 
     @Override
+    public Map<String, ExpectedAttributeValue> getDynamoExistentExpectation(final String leaseKey) {
+        return baseSerializer.getDynamoExistentExpectation(leaseKey);
+    }
+
+    @Override
     public Map<String, AttributeValueUpdate> getDynamoLeaseCounterUpdate(KinesisClientLease lease) {
         return baseSerializer.getDynamoLeaseCounterUpdate(lease);
     }

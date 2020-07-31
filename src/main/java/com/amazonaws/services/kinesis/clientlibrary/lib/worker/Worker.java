@@ -39,6 +39,7 @@ import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
 import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
 import com.amazonaws.services.kinesis.leases.impl.LeaseTaker;
@@ -156,6 +157,8 @@ public class Worker implements Runnable {
     private LeaderDecider leaderDecider;
     private ShardSyncStrategy shardSyncStrategy;
     private PeriodicShardSyncManager leaderElectedPeriodicShardSyncManager;
+
+    private final LeaseCleanupManager leaseCleanupManager;
 
     /**
      * Constructor.
@@ -573,6 +576,10 @@ public class Worker implements Runnable {
         this.workerStateChangeListener = workerStateChangeListener;
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.CREATED);
         createShardSyncStrategy(config.getShardSyncStrategyType(), leaderDecider, periodicShardSyncManager);
+        this.leaseCleanupManager = LeaseCleanupManager.createOrGetInstance(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
+                Executors.newSingleThreadScheduledExecutor(), metricsFactory, cleanupLeasesUponShardCompletion,
+                config.leaseCleanupIntervalMillis(), config.completedLeaseCleanupThresholdMillis(),
+                config.garbageLeaseCleanupThresholdMillis(), config.getMaxRecords());
     }
 
     /**
@@ -725,6 +732,8 @@ public class Worker implements Runnable {
                         throw result.getException();
                     }
                 }
+
+                leaseCleanupManager.start();
 
                 // If we reach this point, then we either skipped the lease sync or did not have any exception for the
                 // shard sync in the previous attempt.
@@ -1111,12 +1120,21 @@ public class Worker implements Runnable {
     }
 
     protected ShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
-        IRecordProcessor recordProcessor = processorFactory.createProcessor();
+        final IRecordProcessor recordProcessor = processorFactory.createProcessor();
+        final RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
+                shardInfo,
+                checkpointTracker,
+                new SequenceNumberValidator(
+                        streamConfig.getStreamProxy(),
+                        shardInfo.getShardId(),
+                        streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
+                metricsFactory);
 
         return new ShardConsumer(shardInfo,
                 streamConfig,
                 checkpointTracker,
                 recordProcessor,
+                recordProcessorCheckpointer,
                 leaseCoordinator,
                 parentShardPollIntervalMillis,
                 cleanupLeasesUponShardCompletion,
@@ -1124,9 +1142,11 @@ public class Worker implements Runnable {
                 metricsFactory,
                 taskBackoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
+                new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo),
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
-                config, shardSyncer, shardSyncStrategy);
+                config, shardSyncer, shardSyncStrategy,
+                leaseCleanupManager);
     }
 
     /**

@@ -181,8 +181,8 @@ class PeriodicShardSyncManager {
 
             try {
                 final ShardSyncResponse shardSyncResponse = checkForShardSync();
-                MetricsHelper.getMetricsScope().addData("ShouldDoShardSync", shardSyncResponse.shouldDoShardSync() ? 1 : 0, StandardUnit.Count, MetricsLevel.SUMMARY);
-                MetricsHelper.getMetricsScope().addData("HashRangeHoleDetected", shardSyncResponse.isHoleDetected() ? 1 : 0, StandardUnit.Count, MetricsLevel.SUMMARY);
+                MetricsHelper.getMetricsScope().addData("InitiatingShardSync", shardSyncResponse.shouldDoShardSync() ? 1 : 0, StandardUnit.Count, MetricsLevel.SUMMARY);
+                MetricsHelper.getMetricsScope().addData("DetectedIncompleteLease", shardSyncResponse.isHoleDetected() ? 1 : 0, StandardUnit.Count, MetricsLevel.SUMMARY);
                 if (shardSyncResponse.shouldDoShardSync()) {
                     LOG.info("Periodic shard syncer initiating shard sync due to the reason - " +
                             shardSyncResponse.reasonForDecision());

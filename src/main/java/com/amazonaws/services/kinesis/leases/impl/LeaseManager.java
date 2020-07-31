@@ -240,7 +240,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
      */
     @Override
     public boolean isLeaseTableEmpty() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return list(1).isEmpty();
+        return list(1, 1).isEmpty();
     }
 
     /**
@@ -253,6 +253,20 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
      * @throws ProvisionedThroughputException if DynamoDB scan fail due to exceeded capacity
      */
     List<T> list(Integer limit) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        return list(limit, Integer.MAX_VALUE);
+    }
+
+    /**
+     * List with the given page size, up to a limit of paginated calls.
+     *
+     * @param limit number of items to consider at a time - used by integration tests to force paging.
+     * @param maxPages max number of paginated scan calls.
+     * @return list of leases
+     * @throws InvalidStateException if table does not exist
+     * @throws DependencyException if DynamoDB scan fail in an unexpected way
+     * @throws ProvisionedThroughputException if DynamoDB scan fail due to exceeded capacity
+     */
+    private List<T> list(Integer limit, Integer maxPages) throws InvalidStateException, ProvisionedThroughputException, DependencyException {
         if (LOG.isDebugEnabled()) {
             LOG.debug("Listing leases from table " + table);
         }
@@ -277,7 +291,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
                 }
 
                 Map<String, AttributeValue> lastEvaluatedKey = scanResult.getLastEvaluatedKey();
-                if (lastEvaluatedKey == null) {
+                if (lastEvaluatedKey == null || --maxPages <= 0) {
                     // Signify that we're done.
                     scanResult = null;
                     if (LOG.isDebugEnabled()) {
@@ -606,7 +620,7 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         UpdateItemRequest request = new UpdateItemRequest();
         request.setTableName(table);
         request.setKey(serializer.getDynamoHashKey(lease));
-        request.setExpected(serializer.getDynamoLeaseCounterExpectation(lease));
+        request.setExpected(serializer.getDynamoExistentExpectation(lease.getLeaseKey()));
 
         Map<String, AttributeValueUpdate> updates = serializer.getDynamoUpdateLeaseUpdate(lease, updateField);
         updates.putAll(serializer.getDynamoUpdateLeaseUpdate(lease));
@@ -614,6 +628,8 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
 
         try {
             dynamoDBClient.updateItem(request);
+        } catch (ConditionalCheckFailedException e) {
+            LOG.warn("Lease update failed for lease with key " + lease.getLeaseKey() + " because the lease did not exist at the time of the update", e);
         } catch (AmazonClientException e) {
             throw convertAndRethrowExceptions("update", lease.getLeaseKey(), e);
         }

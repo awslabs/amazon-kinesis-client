@@ -27,6 +27,7 @@ import com.amazonaws.services.dynamodbv2.model.ListTablesResult;
 import com.amazonaws.services.dynamodbv2.model.TableDescription;
 import com.amazonaws.services.dynamodbv2.model.TableStatus;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
+import com.amazonaws.services.kinesis.model.HashKeyRange;
 import junit.framework.Assert;
 
 import org.junit.Test;
@@ -122,6 +123,37 @@ public class LeaseManagerIntegrationTest extends LeaseIntegrationTest {
         leaseManager.takeLease(lease, "bar");
 
         Assert.assertFalse(leaseManager.renewLease(leaseCopy));
+    }
+
+    /**
+     * Tests leaseManager.updateLeaseWithMetaInfo() when the lease is deleted before updating it with meta info
+     */
+    @Test
+    public void testDeleteLeaseThenUpdateLeaseWithMetaInfo() throws LeasingException {
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        KinesisClientLease lease = builder.withLease("1").build().get("1");
+        final String leaseKey = lease.getLeaseKey();
+        leaseManager.deleteLease(lease);
+        leaseManager.updateLeaseWithMetaInfo(lease, UpdateField.HASH_KEY_RANGE);
+        final KinesisClientLease deletedLease = leaseManager.getLease(leaseKey);
+        Assert.assertNull(deletedLease);
+    }
+
+    /**
+     * Tests leaseManager.updateLeaseWithMetaInfo() on hashKeyRange update
+     */
+    @Test
+    public void testUpdateLeaseWithMetaInfo() throws LeasingException {
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseManager);
+        KinesisClientLease lease = builder.withLease("1").build().get("1");
+        final String leaseKey = lease.getLeaseKey();
+        final HashKeyRangeForLease hashKeyRangeForLease = HashKeyRangeForLease.fromHashKeyRange(new HashKeyRange()
+                                                                                                   .withStartingHashKey("1")
+                                                                                                   .withEndingHashKey("2"));
+        lease.setHashKeyRange(hashKeyRangeForLease);
+        leaseManager.updateLeaseWithMetaInfo(lease, UpdateField.HASH_KEY_RANGE);
+        final KinesisClientLease updatedLease = leaseManager.getLease(leaseKey);
+        Assert.assertEquals(lease, updatedLease);
     }
 
     /**

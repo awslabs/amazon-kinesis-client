@@ -25,24 +25,24 @@ import com.amazonaws.services.kinesis.model.Shard;
 /**
  * Helper class to create Shard, SequenceRange and related objects.
  */
-class ShardObjectHelper {
+public class ShardObjectHelper {
 
     private static final int EXPONENT = 128;
     
     /**
      * Max value of a sequence number (2^128 -1). Useful for defining sequence number range for a shard.
      */
-    static final String MAX_SEQUENCE_NUMBER = new BigInteger("2").pow(EXPONENT).subtract(BigInteger.ONE).toString();
+    public static final String MAX_SEQUENCE_NUMBER = new BigInteger("2").pow(EXPONENT).subtract(BigInteger.ONE).toString();
     
     /**
      * Min value of a sequence number (0). Useful for defining sequence number range for a shard.
      */
-    static final String MIN_SEQUENCE_NUMBER = BigInteger.ZERO.toString();
+    public static final String MIN_SEQUENCE_NUMBER = BigInteger.ZERO.toString();
 
     /**
      * Max value of a hash key (2^128 -1). Useful for defining hash key range for a shard.
      */
-    static final String MAX_HASH_KEY = new BigInteger("2").pow(EXPONENT).subtract(BigInteger.ONE).toString();
+    public static final String MAX_HASH_KEY = new BigInteger("2").pow(EXPONENT).subtract(BigInteger.ONE).toString();
     
     /**
      * Min value of a hash key (0). Useful for defining sequence number range for a shard.
@@ -63,7 +63,7 @@ class ShardObjectHelper {
      * @param sequenceNumberRange
      * @return
      */
-    static Shard newShard(String shardId,
+    public static Shard newShard(String shardId,
             String parentShardId,
             String adjacentParentShardId,
             SequenceNumberRange sequenceNumberRange) {
@@ -78,7 +78,7 @@ class ShardObjectHelper {
      * @param hashKeyRange
      * @return
      */
-    static Shard newShard(String shardId,
+    public static Shard newShard(String shardId,
             String parentShardId,
             String adjacentParentShardId,
             SequenceNumberRange sequenceNumberRange,
@@ -98,7 +98,7 @@ class ShardObjectHelper {
      * @param endingSequenceNumber
      * @return
      */
-    static SequenceNumberRange newSequenceNumberRange(String startingSequenceNumber, String endingSequenceNumber) {
+    public static SequenceNumberRange newSequenceNumberRange(String startingSequenceNumber, String endingSequenceNumber) {
         SequenceNumberRange range = new SequenceNumberRange();
         range.setStartingSequenceNumber(startingSequenceNumber);
         range.setEndingSequenceNumber(endingSequenceNumber);
@@ -110,14 +110,14 @@ class ShardObjectHelper {
      * @param endingHashKey
      * @return
      */
-    static HashKeyRange newHashKeyRange(String startingHashKey, String endingHashKey) {
+    public static HashKeyRange newHashKeyRange(String startingHashKey, String endingHashKey) {
         HashKeyRange range = new HashKeyRange();
         range.setStartingHashKey(startingHashKey);
         range.setEndingHashKey(endingHashKey);
         return range;
     }
     
-    static List<String> getParentShardIds(Shard shard) {
+    public static List<String> getParentShardIds(Shard shard) {
         List<String> parentShardIds = new ArrayList<>(2);
         if (shard.getAdjacentParentShardId() != null) {
             parentShardIds.add(shard.getAdjacentParentShardId());
