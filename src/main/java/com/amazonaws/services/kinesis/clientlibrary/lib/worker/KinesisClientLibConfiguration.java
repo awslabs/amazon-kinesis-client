@@ -93,7 +93,7 @@ public class KinesisClientLibConfiguration {
     /**
      * Interval to run lease cleanup thread in {@link LeaseCleanupManager}.
      */
-    private static final long DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofHours(1).toMillis();
+    private static final long DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(1).toMillis();
 
     /**
      * Threshold in millis at which to check if there are any completed leases (leases for shards which have been
