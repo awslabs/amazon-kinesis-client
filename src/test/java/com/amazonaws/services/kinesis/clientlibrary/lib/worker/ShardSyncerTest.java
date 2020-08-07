@@ -70,6 +70,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -521,8 +522,6 @@ public class ShardSyncerTest {
         for (int c = 1; c <= maxCallingCount; c = c + 2) {
             testCheckAndCreateLeasesForNewShardsAtSpecifiedPositionAndClosedShardImpl(
                     ExceptionThrowingLeaseManagerMethods.CREATELEASEIFNOTEXISTS, c, INITIAL_POSITION_TRIM_HORIZON, expectedLeaseKeysToCreate);
-            // Need to clean up lease manager every time after calling KinesisShardSyncer
-            leaseManager.deleteAll();
         }
     }
 
@@ -542,6 +541,7 @@ public class ShardSyncerTest {
             // Only need to try two times.
             for (int i = 1; i <= 2; i++) {
                 try {
+                    leaseManager.deleteAll();
                     shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy,
                             exceptionThrowingLeaseManager,
                             position,
@@ -2412,10 +2412,13 @@ public class ShardSyncerTest {
         // Make sure ListShardsWithFilter is called in all public shard sync methods
         shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, initialPosition,
                 cleanupLeasesOfCompletedShards, false);
+
+        leaseManager.deleteAll();
+
         shardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, initialPosition,
                 cleanupLeasesOfCompletedShards, false, null);
 
-        verify(kinesisProxy, atLeast(2)).getShardListWithFilter(shardFilter);
+        verify(kinesisProxy, times(2)).getShardListWithFilter(shardFilter);
         verify(kinesisProxy, never()).getShardList();
     }
 
