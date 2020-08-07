@@ -25,6 +25,7 @@ import java.util.Map;
  * It also limits number of shards that will be available for initialization based on their depth.
  * It doesn't make a lot of sense to work on a shard that has too many unfinished parents.
  */
+@Deprecated
 public class ParentsFirstShardPrioritization implements
         ShardPrioritization {
     private static final SortingNode PROCESSING_NODE = new SortingNode(null, Integer.MIN_VALUE);
