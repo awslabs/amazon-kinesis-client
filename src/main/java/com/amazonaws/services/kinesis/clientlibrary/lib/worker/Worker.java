@@ -1469,7 +1469,7 @@ public class Worker implements Runnable {
             }
 
             if (shardPrioritization == null) {
-                shardPrioritization = new ParentsFirstShardPrioritization(1);
+                shardPrioritization = new NoOpShardPrioritization();
             }
 
             if (kinesisProxy == null) {
