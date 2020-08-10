@@ -15,17 +15,21 @@
 
 package software.amazon.kinesis.leases;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.isA;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
+import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
+import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
+import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.kinesis.model.Shard;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,21 +40,16 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
-import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
-import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
-import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
-import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
-import software.amazon.awssdk.services.kinesis.model.Shard;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.isA;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.junit.Assert.assertThat;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  *
@@ -143,19 +142,17 @@ public class KinesisShardDetectorTest {
         }
     }
 
-    @Test(expected = ResourceNotFoundException.class)
-    public void testListShardsResourceNotFound() {
+    @Test
+    public void testListShardsResourceNotFoundReturnsEmptyResponse() {
         final CompletableFuture<ListShardsResponse> future = CompletableFuture.supplyAsync(() -> {
             throw ResourceNotFoundException.builder().build();
         });
-
         when(client.listShards(any(ListShardsRequest.class))).thenReturn(future);
 
-        try {
-            shardDetector.listShards();
-        } finally {
-            verify(client).listShards(any(ListShardsRequest.class));
-        }
+        List<Shard> shards = shardDetector.listShards();
+
+        Assert.assertEquals(0, shards.size());
+        verify(client).listShards(any(ListShardsRequest.class));
     }
 
     @Test

@@ -28,7 +28,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 @ToString(exclude = "isThreadPoolExecutor")
 @Slf4j
 @KinesisClientInternalApi
-class ExecutorStateEvent implements DiagnosticEvent {
+public class ExecutorStateEvent implements DiagnosticEvent {
     private static final String MESSAGE = "Current thread pool executor state: ";
 
     private boolean isThreadPoolExecutor;
@@ -41,6 +41,11 @@ class ExecutorStateEvent implements DiagnosticEvent {
     private int maximumPoolSize;
 
     ExecutorStateEvent(ExecutorService executor, LeaseCoordinator leaseCoordinator) {
+        this(executor);
+        this.leasesOwned = leaseCoordinator.getAssignments().size();
+    }
+
+    public ExecutorStateEvent(ExecutorService executor) {
         if (executor instanceof ThreadPoolExecutor) {
             this.isThreadPoolExecutor = true;
 
@@ -52,8 +57,6 @@ class ExecutorStateEvent implements DiagnosticEvent {
             this.largestPoolSize = ex.getLargestPoolSize();
             this.maximumPoolSize = ex.getMaximumPoolSize();
         }
-
-        this.leasesOwned = leaseCoordinator.getAssignments().size();
     }
 
     @Override

@@ -14,6 +14,21 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseIntegrationTest;
+import software.amazon.kinesis.leases.UpdateField;
+import software.amazon.kinesis.leases.exceptions.LeasingException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -23,19 +38,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
-
-import java.util.Collection;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import software.amazon.kinesis.leases.Lease;
-import software.amazon.kinesis.leases.LeaseIntegrationTest;
-import software.amazon.kinesis.leases.exceptions.LeasingException;
 
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest {
@@ -71,7 +73,7 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
         Collection<Lease> expected = builder.build().values();
 
         // The / 3 here ensures that we will test Dynamo's paging mechanics.
-        List<Lease> actual = leaseRefresher.list(numRecordsToPut / 3);
+        List<Lease> actual = leaseRefresher.list(numRecordsToPut / 3, null);
 
         for (Lease lease : actual) {
             assertNotNull(expected.remove(lease));
@@ -99,6 +101,38 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
     public void testGetNull() throws LeasingException {
         Lease actual = leaseRefresher.getLease("bogusShardId");
         assertNull(actual);
+    }
+
+    /**
+     * Tests leaseRefresher.updateLeaseWithMetaInfo() when the lease is deleted before updating it with meta info
+     */
+    @Test
+    public void testDeleteLeaseThenUpdateLeaseWithMetaInfo() throws LeasingException {
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
+        Lease lease = builder.withLease("1").build().get("1");
+        final String leaseKey = lease.leaseKey();
+        leaseRefresher.deleteLease(lease);
+        leaseRefresher.updateLeaseWithMetaInfo(lease, UpdateField.HASH_KEY_RANGE);
+        final Lease deletedLease = leaseRefresher.getLease(leaseKey);
+        Assert.assertNull(deletedLease);
+    }
+
+    /**
+     * Tests leaseRefresher.updateLeaseWithMetaInfo() on hashKeyRange update
+     */
+    @Test
+    public void testUpdateLeaseWithMetaInfo() throws LeasingException {
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
+        Lease lease = builder.withLease("1").build().get("1");
+        final String leaseKey = lease.leaseKey();
+        final HashKeyRangeForLease hashKeyRangeForLease = HashKeyRangeForLease.fromHashKeyRange(HashKeyRange.builder()
+                .startingHashKey("1")
+                .endingHashKey("2")
+                .build());
+        lease.hashKeyRange(hashKeyRangeForLease);
+        leaseRefresher.updateLeaseWithMetaInfo(lease, UpdateField.HASH_KEY_RANGE);
+        final Lease updatedLease = leaseRefresher.getLease(leaseKey);
+        Assert.assertEquals(lease, updatedLease);
     }
 
     /**
@@ -237,6 +271,18 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
 
         Lease newLease = leaseRefresher.getLease(lease.leaseKey());
         assertNull(newLease);
+    }
+
+    @Test
+    public void testUpdateLease() throws LeasingException {
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
+        Lease lease = builder.withLease("1").build().get("1");
+        Lease updatedLease = lease.copy();
+        updatedLease.childShardIds(Collections.singleton("updatedChildShardId"));
+
+        leaseRefresher.updateLease(updatedLease);
+        Lease newLease = leaseRefresher.getLease(lease.leaseKey());
+        assertEquals(Collections.singleton("updatedChildShardId"), newLease.childShardIds());
     }
 
     /**

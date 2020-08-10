@@ -17,31 +17,47 @@ package software.amazon.kinesis.retrieval.polling;
 
 import java.time.Duration;
 import java.util.Optional;
-
+import java.util.function.Function;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
+import software.amazon.kinesis.retrieval.DataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 import software.amazon.kinesis.retrieval.RetrievalSpecificConfig;
 
 @Accessors(fluent = true)
-@Data
 @Getter
+@Setter
+@ToString
+@EqualsAndHashCode
 public class PollingConfig implements RetrievalSpecificConfig {
 
     public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
     /**
+     * Configurable functional interface to override the existing DataFetcher.
+     */
+    Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider;
+    /**
      * Name of the Kinesis stream.
      *
      * @return String
      */
-    @NonNull
-    private final String streamName;
+    private String streamName;
+
+    /**
+     * @param kinesisClient Client used to access Kinesis services.
+     */
+    public PollingConfig(KinesisAsyncClient kinesisClient) {
+        this.kinesisClient = kinesisClient;
+    }
 
     /**
      * Client used to access to Kinesis service.
@@ -59,6 +75,15 @@ public class PollingConfig implements RetrievalSpecificConfig {
      * </p>
      */
     private int maxRecords = 10000;
+
+    /**
+     * @param streamName    Name of Kinesis stream.
+     * @param kinesisClient Client used to access Kinesis serivces.
+     */
+    public PollingConfig(String streamName, KinesisAsyncClient kinesisClient) {
+        this.kinesisClient = kinesisClient;
+        this.streamName = streamName;
+    }
 
     /**
      * The value for how long the ShardConsumer should sleep if no records are returned from the call to
@@ -105,6 +130,6 @@ public class PollingConfig implements RetrievalSpecificConfig {
     @Override
     public RetrievalFactory retrievalFactory() {
         return new SynchronousBlockingRetrievalFactory(streamName(), kinesisClient(), recordsFetcherFactory,
-                maxRecords(), kinesisRequestTimeout);
+                maxRecords(), kinesisRequestTimeout, dataFetcherProvider);
     }
 }

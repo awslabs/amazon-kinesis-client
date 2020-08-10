@@ -19,6 +19,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import lombok.NonNull;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+import software.amazon.kinesis.common.StreamIdentifier;
 
 /**
  *
@@ -26,6 +27,7 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 public class MetricsUtil {
     public static final String OPERATION_DIMENSION_NAME = "Operation";
     public static final String SHARD_ID_DIMENSION_NAME = "ShardId";
+    public static final String STREAM_IDENTIFIER = "StreamId";
     private static final String WORKER_IDENTIFIER_DIMENSION = "WorkerIdentifier";
     private static final String TIME_METRIC = "Time";
     private static final String SUCCESS_METRIC = "Success";
@@ -49,6 +51,11 @@ public class MetricsUtil {
 
     public static void addShardId(@NonNull final MetricsScope metricsScope, @NonNull final String shardId) {
         addOperation(metricsScope, SHARD_ID_DIMENSION_NAME, shardId);
+    }
+
+    public static void addStreamId(@NonNull final MetricsScope metricsScope, @NonNull final StreamIdentifier streamId) {
+        streamId.accountIdOptional()
+                .ifPresent(acc -> addOperation(metricsScope, STREAM_IDENTIFIER, streamId.serialize()));
     }
 
     public static void addWorkerIdentifier(@NonNull final MetricsScope metricsScope,
@@ -85,6 +92,11 @@ public class MetricsUtil {
         final String metricName = StringUtils.isEmpty(dimension) ? SUCCESS_METRIC
                 : String.format("%s.%s", dimension, SUCCESS_METRIC);
         metricsScope.addData(metricName, success ? 1 : 0, StandardUnit.COUNT, metricsLevel);
+    }
+
+    public static void addCount(@NonNull final MetricsScope metricsScope, final String dimension,
+            final long count, @NonNull final MetricsLevel metricsLevel) {
+        metricsScope.addData(dimension, count, StandardUnit.COUNT, metricsLevel);
     }
 
     public static void endScope(@NonNull final MetricsScope metricsScope) {

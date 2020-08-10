@@ -146,7 +146,7 @@ class ConsumerStates {
 
         @Override
         public ConsumerState shutdownTransition(ShutdownReason shutdownReason) {
-            return ShardConsumerState.SHUTDOWN_COMPLETE.consumerState();
+            return ShardConsumerState.SHUTTING_DOWN.consumerState();
         }
 
         @Override
@@ -496,7 +496,10 @@ class ConsumerStates {
                     argument.taskBackoffTimeMillis(),
                     argument.recordsPublisher(),
                     argument.hierarchicalShardSyncer(),
-                    argument.metricsFactory());
+                    argument.metricsFactory(),
+                    input == null ? null : input.childShards(),
+                    argument.streamIdentifier(),
+                    argument.leaseCleanupManager());
         }
 
         @Override

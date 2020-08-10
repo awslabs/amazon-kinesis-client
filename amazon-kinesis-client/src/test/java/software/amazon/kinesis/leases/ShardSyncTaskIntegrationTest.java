@@ -118,7 +118,8 @@ public class ShardSyncTaskIntegrationTest {
         leaseRefresher.deleteAll();
         Set<String> shardIds = shardDetector.listShards().stream().map(Shard::shardId).collect(Collectors.toSet());
         ShardSyncTask syncTask = new ShardSyncTask(shardDetector, leaseRefresher,
-                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST), false, false, 0L,
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST),
+                false, true, false, 0L,
                 hierarchicalShardSyncer, NULL_METRICS_FACTORY);
         syncTask.call();
         List<Lease> leases = leaseRefresher.listLeases();

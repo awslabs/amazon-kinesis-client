@@ -15,10 +15,13 @@
 
 package software.amazon.kinesis.retrieval;
 
+import java.util.function.Function;
+import software.amazon.kinesis.retrieval.polling.DataFetcher;
+
 public interface RetrievalSpecificConfig {
     /**
      * Creates and returns a retrieval factory for the specific configuration
-     * 
+     *
      * @return a retrieval factory that can create an appropriate retriever
      */
     RetrievalFactory retrievalFactory();

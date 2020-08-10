@@ -19,34 +19,41 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import org.apache.commons.lang3.StringUtils;
-
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.Synchronized;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
+import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
+import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
+import software.amazon.awssdk.services.kinesis.model.GetShardIteratorResponse;
 import software.amazon.awssdk.services.kinesis.model.KinesisException;
 import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
 import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.KinesisRequestsBuilder;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 
 /**
@@ -59,8 +66,8 @@ public class KinesisShardDetector implements ShardDetector {
 
     @NonNull
     private final KinesisAsyncClient kinesisClient;
-    @NonNull
-    private final String streamName;
+    @NonNull @Getter
+    private final StreamIdentifier streamIdentifier;
     private final long listShardsBackoffTimeInMillis;
     private final int maxListShardsRetryAttempts;
     private final long listShardsCacheAllowedAgeInSeconds;
@@ -77,16 +84,16 @@ public class KinesisShardDetector implements ShardDetector {
     public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
             int maxListShardsRetryAttempts, long listShardsCacheAllowedAgeInSeconds, int maxCacheMissesBeforeReload,
             int cacheMissWarningModulus) {
-        this(kinesisClient, streamName, listShardsBackoffTimeInMillis, maxListShardsRetryAttempts,
+        this(kinesisClient, StreamIdentifier.singleStreamInstance(streamName), listShardsBackoffTimeInMillis, maxListShardsRetryAttempts,
                 listShardsCacheAllowedAgeInSeconds, maxCacheMissesBeforeReload, cacheMissWarningModulus,
                 LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
     }
 
-    public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
+    public KinesisShardDetector(KinesisAsyncClient kinesisClient, StreamIdentifier streamIdentifier, long listShardsBackoffTimeInMillis,
             int maxListShardsRetryAttempts, long listShardsCacheAllowedAgeInSeconds, int maxCacheMissesBeforeReload,
             int cacheMissWarningModulus, Duration kinesisRequestTimeout) {
         this.kinesisClient = kinesisClient;
-        this.streamName = streamName;
+        this.streamIdentifier = streamIdentifier;
         this.listShardsBackoffTimeInMillis = listShardsBackoffTimeInMillis;
         this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
         this.listShardsCacheAllowedAgeInSeconds = listShardsCacheAllowedAgeInSeconds;
@@ -149,12 +156,18 @@ public class KinesisShardDetector implements ShardDetector {
     @Override
     @Synchronized
     public List<Shard> listShards() {
+        return listShardsWithFilter(null);
+    }
+
+    @Override
+    @Synchronized
+    public List<Shard> listShardsWithFilter(ShardFilter shardFilter) {
         final List<Shard> shards = new ArrayList<>();
         ListShardsResponse result;
         String nextToken = null;
 
         do {
-            result = listShards(nextToken);
+            result = listShards(shardFilter, nextToken);
 
             if (result == null) {
                 /*
@@ -172,15 +185,16 @@ public class KinesisShardDetector implements ShardDetector {
         return shards;
     }
 
-    private ListShardsResponse listShards(final String nextToken) {
+    private ListShardsResponse listShards(ShardFilter shardFilter, final String nextToken) {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
+        exceptionManager.add(ResourceNotFoundException.class, t -> t);
         exceptionManager.add(LimitExceededException.class, t -> t);
         exceptionManager.add(ResourceInUseException.class, t -> t);
         exceptionManager.add(KinesisException.class, t -> t);
 
-        ListShardsRequest.Builder request = KinesisRequestsBuilder.listShardsRequestBuilder();
+        ListShardsRequest.Builder request = KinesisRequestsBuilder.listShardsRequestBuilder().shardFilter(shardFilter);
         if (StringUtils.isEmpty(nextToken)) {
-            request = request.streamName(streamName);
+            request = request.streamName(streamIdentifier.streamName());
         } else {
             request = request.nextToken(nextToken);
         }
@@ -189,10 +203,9 @@ public class KinesisShardDetector implements ShardDetector {
         int remainingRetries = maxListShardsRetryAttempts;
 
         while (result == null) {
-
             try {
                 try {
-                    result = FutureUtils.resolveOrCancelFuture(kinesisClient.listShards(request.build()), kinesisRequestTimeout);
+                    result = getListShardsResponse(request.build());
                 } catch (ExecutionException e) {
                     throw exceptionManager.apply(e.getCause());
                 } catch (InterruptedException e) {
@@ -205,14 +218,20 @@ public class KinesisShardDetector implements ShardDetector {
                         + " Active or Updating)");
                 return null;
             } catch (LimitExceededException e) {
-                log.info("Got LimitExceededException when listing shards {}. Backing off for {} millis.", streamName,
+                log.info("Got LimitExceededException when listing shards {}. Backing off for {} millis.", streamIdentifier,
                         listShardsBackoffTimeInMillis);
                 try {
                     Thread.sleep(listShardsBackoffTimeInMillis);
                 } catch (InterruptedException ie) {
-                    log.debug("Stream {} : Sleep  was interrupted ", streamName, ie);
+                    log.debug("Stream {} : Sleep  was interrupted ", streamIdentifier, ie);
                 }
                 lastException = e;
+            } catch (ResourceNotFoundException e) {
+                log.warn("Got ResourceNotFoundException when fetching shard list for {}. Stream no longer exists.",
+                        streamIdentifier.streamName());
+                return ListShardsResponse.builder().shards(Collections.emptyList())
+                        .nextToken(null)
+                        .build();
             } catch (TimeoutException te) {
                 throw new RuntimeException(te);
             }
@@ -242,5 +261,32 @@ public class KinesisShardDetector implements ShardDetector {
 
         log.debug("{}. Age doesn't exceed limit of {} seconds.", message, listShardsCacheAllowedAgeInSeconds);
         return false;
+    }
+
+    @Override
+    public ListShardsResponse getListShardsResponse(ListShardsRequest request) throws
+            ExecutionException, TimeoutException, InterruptedException {
+        return FutureUtils.resolveOrCancelFuture(kinesisClient.listShards(request), kinesisRequestTimeout);
+    }
+
+    @Override
+    public List<ChildShard> getChildShards(final String shardId) throws InterruptedException, ExecutionException, TimeoutException {
+        final GetShardIteratorRequest getShardIteratorRequest = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
+                .streamName(streamIdentifier.streamName())
+                .shardIteratorType(ShardIteratorType.LATEST)
+                .shardId(shardId)
+                .build();
+
+        final GetShardIteratorResponse getShardIteratorResponse =
+                FutureUtils.resolveOrCancelFuture(kinesisClient.getShardIterator(getShardIteratorRequest), kinesisRequestTimeout);
+
+        final GetRecordsRequest getRecordsRequest = KinesisRequestsBuilder.getRecordsRequestBuilder()
+                .shardIterator(getShardIteratorResponse.shardIterator())
+                .build();
+
+        final GetRecordsResponse getRecordsResponse =
+                FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(getRecordsRequest), kinesisRequestTimeout);
+
+        return getRecordsResponse.childShards();
     }
 }

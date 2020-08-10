@@ -68,7 +68,7 @@ public class ShardObjectHelper {
             String parentShardId,
             String adjacentParentShardId,
             SequenceNumberRange sequenceNumberRange) {
-        return newShard(shardId, parentShardId, adjacentParentShardId, sequenceNumberRange, null);
+        return newShard(shardId, parentShardId, adjacentParentShardId, sequenceNumberRange, HashKeyRange.builder().startingHashKey("1").endingHashKey("100").build());
     }
 
     /** Helper method to create a new shard object.

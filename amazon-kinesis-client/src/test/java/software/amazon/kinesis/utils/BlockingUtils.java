@@ -35,4 +35,17 @@ public class BlockingUtils {
             throw new RuntimeException("No records found");
         }
     }
+
+    public static boolean blockUntilConditionSatisfied(Supplier<Boolean> conditionSupplier, long timeoutMillis) {
+        while(!conditionSupplier.get() && timeoutMillis > 0 ) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            timeoutMillis -= 100;
+        }
+        return conditionSupplier.get();
+    }
+
 }

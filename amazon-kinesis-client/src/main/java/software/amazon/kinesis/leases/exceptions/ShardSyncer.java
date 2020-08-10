@@ -19,6 +19,7 @@ import software.amazon.kinesis.metrics.MetricsScope;
 @Deprecated
 public class ShardSyncer {
     private static final HierarchicalShardSyncer HIERARCHICAL_SHARD_SYNCER = new HierarchicalShardSyncer();
+    private static final boolean garbageCollectLeases = true;
 
     /**
      * <p>NOTE: This method is deprecated and will be removed in a future release.</p>
@@ -26,7 +27,6 @@ public class ShardSyncer {
      * @param shardDetector
      * @param leaseRefresher
      * @param initialPosition
-     * @param cleanupLeasesOfCompletedShards
      * @param ignoreUnexpectedChildShards
      * @param scope
      * @throws DependencyException
@@ -37,10 +37,9 @@ public class ShardSyncer {
     @Deprecated
     public static synchronized void checkAndCreateLeasesForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
-            final boolean cleanupLeasesOfCompletedShards, final boolean ignoreUnexpectedChildShards,
-            final MetricsScope scope) throws DependencyException, InvalidStateException, ProvisionedThroughputException,
-            KinesisClientLibIOException {
-        HIERARCHICAL_SHARD_SYNCER.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
-                cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, scope);
+            final boolean ignoreUnexpectedChildShards, final MetricsScope scope)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException, InterruptedException {
+            HIERARCHICAL_SHARD_SYNCER.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
+                    scope, ignoreUnexpectedChildShards, leaseRefresher.isLeaseTableEmpty());
     }
 }

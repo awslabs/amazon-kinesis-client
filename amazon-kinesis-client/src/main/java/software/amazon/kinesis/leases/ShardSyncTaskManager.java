@@ -14,9 +14,11 @@
  */
 package software.amazon.kinesis.leases;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 
@@ -24,6 +26,7 @@ import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.coordinator.ExecutorStateEvent;
 import software.amazon.kinesis.lifecycle.ConsumerTask;
 import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -45,6 +48,7 @@ public class ShardSyncTaskManager {
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesUponShardCompletion;
+    private final boolean garbageCollectLeases;
     private final boolean ignoreUnexpectedChildShards;
     private final long shardSyncIdleTimeMillis;
     @NonNull
@@ -53,6 +57,10 @@ public class ShardSyncTaskManager {
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
     @NonNull
     private final MetricsFactory metricsFactory;
+    private ConsumerTask currentTask;
+    private CompletableFuture<TaskResult> future;
+    private AtomicBoolean shardSyncRequestPending;
+    private final ReentrantLock lock;
 
     /**
      * Constructor.
@@ -77,11 +85,14 @@ public class ShardSyncTaskManager {
         this.leaseRefresher = leaseRefresher;
         this.initialPositionInStream = initialPositionInStream;
         this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        this.garbageCollectLeases = true;
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
         this.hierarchicalShardSyncer = new HierarchicalShardSyncer();
         this.metricsFactory = metricsFactory;
+        this.shardSyncRequestPending = new AtomicBoolean(false);
+        this.lock = new ReentrantLock();
     }
 
     /**
@@ -105,21 +116,48 @@ public class ShardSyncTaskManager {
         this.leaseRefresher = leaseRefresher;
         this.initialPositionInStream = initialPositionInStream;
         this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
+        this.garbageCollectLeases = true;
         this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
         this.hierarchicalShardSyncer = hierarchicalShardSyncer;
         this.metricsFactory = metricsFactory;
+        this.shardSyncRequestPending = new AtomicBoolean(false);
+        this.lock = new ReentrantLock();
     }
 
-    private ConsumerTask currentTask;
-    private Future<TaskResult> future;
-
-    public synchronized boolean syncShardAndLeaseInfo() {
-        return checkAndSubmitNextTask();
+    /**
+     * Call a ShardSyncTask and return the Task Result.
+     * @return the Task Result.
+     */
+    public TaskResult callShardSyncTask() {
+        final ShardSyncTask shardSyncTask = new ShardSyncTask(shardDetector,
+                                               leaseRefresher,
+                                               initialPositionInStream,
+                                               cleanupLeasesUponShardCompletion,
+                                               garbageCollectLeases,
+                                               ignoreUnexpectedChildShards,
+                                               shardSyncIdleTimeMillis,
+                                               hierarchicalShardSyncer,
+                                               metricsFactory);
+        final ConsumerTask metricCollectingTask = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory);
+        return metricCollectingTask.call();
     }
 
-    private synchronized boolean checkAndSubmitNextTask() {
+    /**
+     * Submit a ShardSyncTask and return if the submission is successful.
+     * @return if the casting is successful.
+     */
+    public boolean submitShardSyncTask() {
+        try {
+            lock.lock();
+            return checkAndSubmitNextTask();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private boolean checkAndSubmitNextTask() {
         boolean submittedNewTask = false;
         if ((future == null) || future.isCancelled() || future.isDone()) {
             if ((future != null) && future.isDone()) {
@@ -140,23 +178,54 @@ public class ShardSyncTaskManager {
                                     leaseRefresher,
                                     initialPositionInStream,
                                     cleanupLeasesUponShardCompletion,
+                                    garbageCollectLeases,
                                     ignoreUnexpectedChildShards,
                                     shardSyncIdleTimeMillis,
                                     hierarchicalShardSyncer,
                                     metricsFactory),
                             metricsFactory);
-            future = executorService.submit(currentTask);
+            future = CompletableFuture.supplyAsync(() -> currentTask.call(), executorService)
+                                      .whenComplete((taskResult, exception) -> handlePendingShardSyncs(exception, taskResult));
+
+            log.info(new ExecutorStateEvent(executorService).message());
+
             submittedNewTask = true;
             if (log.isDebugEnabled()) {
                 log.debug("Submitted new {} task.", currentTask.taskType());
             }
         } else {
             if (log.isDebugEnabled()) {
-                log.debug("Previous {} task still pending.  Not submitting new task.", currentTask.taskType());
+                log.debug("Previous {} task still pending.  Not submitting new task. "
+                          + "Enqueued a request that will be executed when the current request completes.", currentTask.taskType());
             }
+            shardSyncRequestPending.compareAndSet(false /*expected*/, true /*update*/);
         }
-
         return submittedNewTask;
+    }
+
+    private void handlePendingShardSyncs(Throwable exception, TaskResult taskResult) {
+        if (exception != null || taskResult.getException() != null) {
+            log.error("Caught exception running {} task: ", currentTask.taskType(), exception != null ? exception : taskResult.getException());
+        }
+        // Acquire lock here. If shardSyncRequestPending is false in this completionStage and
+        // submitShardSyncTask is invoked, before completion stage exits (future completes)
+        // but right after the value of shardSyncRequestPending is checked, it will result in
+        // shardSyncRequestPending being set to true, but no pending futures to trigger the next
+        // ShardSyncTask. By executing this stage in a Reentrant lock, we ensure that if the
+        // previous task is in this completion stage, checkAndSubmitNextTask is not invoked
+        // until this completionStage exits.
+        try {
+            lock.lock();
+            if (shardSyncRequestPending.get()) {
+                shardSyncRequestPending.set(false);
+                // reset future to null, so next call creates a new one
+                // without trying to get results from the old future.
+                future = null;
+                checkAndSubmitNextTask();
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
 }

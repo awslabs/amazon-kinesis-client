@@ -22,6 +22,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -48,6 +49,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 
 import lombok.extern.slf4j.Slf4j;
@@ -86,6 +88,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
     private String operation = "ProcessTask";
     private String streamName = "streamName";
     private String shardId = "shardId-000000000000";
+    private String nextShardIterator = "testNextShardIterator";
 
     @Mock
     private KinesisAsyncClient kinesisClient;
@@ -249,7 +252,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
 
         @Override
         public DataFetcherResult getRecords() {
-            GetRecordsResponse getRecordsResult = GetRecordsResponse.builder().records(new ArrayList<>(records)).millisBehindLatest(1000L).build();
+            GetRecordsResponse getRecordsResult = GetRecordsResponse.builder().records(new ArrayList<>(records)).nextShardIterator(nextShardIterator).millisBehindLatest(1000L).build();
 
             return new AdvancingResult(getRecordsResult);
         }

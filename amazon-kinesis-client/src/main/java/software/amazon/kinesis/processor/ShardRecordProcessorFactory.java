@@ -15,6 +15,8 @@
 
 package software.amazon.kinesis.processor;
 
+import software.amazon.kinesis.common.StreamIdentifier;
+
 /**
  *
  */
@@ -25,4 +27,13 @@ public interface ShardRecordProcessorFactory {
      * @return
      */
     ShardRecordProcessor shardRecordProcessor();
+
+    /**
+     * Returns a new instance of the ShardRecordProcessor for a stream identifier
+     * @param streamIdentifier
+     * @return ShardRecordProcessor
+     */
+    default ShardRecordProcessor shardRecordProcessor(StreamIdentifier streamIdentifier) {
+        return shardRecordProcessor();
+    }
 }

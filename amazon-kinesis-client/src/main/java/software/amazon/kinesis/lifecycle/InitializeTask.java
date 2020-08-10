@@ -21,6 +21,7 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -75,9 +76,10 @@ public class InitializeTask implements ConsumerTask {
 
         try {
             log.debug("Initializing ShardId {}", shardInfo);
-            Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.shardId());
+            final String leaseKey = ShardInfo.getLeaseKey(shardInfo);
+            Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(leaseKey);
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.checkpoint();
-            log.debug("[{}]: Checkpoint: {} -- Initial Position: {}", shardInfo.shardId(), initialCheckpoint,
+            log.debug("[{}]: Checkpoint: {} -- Initial Position: {}", leaseKey, initialCheckpoint,
                     initialPositionInStream);
 
             cache.start(initialCheckpoint, initialPositionInStream);
@@ -90,6 +92,7 @@ public class InitializeTask implements ConsumerTask {
                     .shardId(shardInfo.shardId())
                     .extendedSequenceNumber(initialCheckpoint)
                     .pendingCheckpointSequenceNumber(initialCheckpointObject.pendingCheckpoint())
+                    .pendingCheckpointState(initialCheckpointObject.pendingCheckpointState())
                     .build();
 
             final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory,

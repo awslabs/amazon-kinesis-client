@@ -19,6 +19,7 @@ import java.util.List;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -54,6 +55,7 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
         DELETELEASE(9),
         DELETEALL(10),
         UPDATELEASE(11),
+        LISTLEASESFORSTREAM(12),
         NONE(Integer.MIN_VALUE);
 
         private Integer index;
@@ -130,6 +132,13 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
+    public List<Lease> listLeasesForStream(StreamIdentifier streamIdentifier) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throwExceptions("listLeasesForStream", ExceptionThrowingLeaseRefresherMethods.LISTLEASESFORSTREAM);
+
+        return leaseRefresher.listLeasesForStream(streamIdentifier);
+    }
+
+    @Override
     public List<Lease> listLeases()
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         throwExceptions("listLeases", ExceptionThrowingLeaseRefresherMethods.LISTLEASES);
@@ -186,11 +195,11 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
-    public Lease getLease(String shardId)
+    public Lease getLease(String leaseKey)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         throwExceptions("getLease", ExceptionThrowingLeaseRefresherMethods.GETLEASE);
 
-        return leaseRefresher.getLease(shardId);
+        return leaseRefresher.getLease(leaseKey);
     }
 
     @Override
@@ -207,7 +216,7 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
-    public ExtendedSequenceNumber getCheckpoint(final String shardId)
+    public ExtendedSequenceNumber getCheckpoint(final String leaseKey)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         return null;
     }

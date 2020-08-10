@@ -15,16 +15,75 @@
 
 package software.amazon.kinesis.leases;
 
-import software.amazon.awssdk.services.kinesis.model.Shard;
-
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
+import software.amazon.awssdk.services.kinesis.model.ListShardsRequest;
+import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
+import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.awssdk.services.kinesis.model.ShardFilter;
+import software.amazon.kinesis.common.StreamIdentifier;
 
 /**
  *
  */
 public interface ShardDetector {
+
+    /**
+     * Gets shard based on shardId.
+     *
+     * @param shardId
+     * @return Shard
+     */
     Shard shard(String shardId);
 
+    /**
+     * List shards.
+     *
+     * @return Shards
+     */
     List<Shard> listShards();
 
+    /**
+     * List shards with shard filter.
+     *
+     * @param  ShardFilter
+     * @return Shards
+     */
+    default List<Shard> listShardsWithFilter(ShardFilter shardFilter) {
+        throw new UnsupportedOperationException("listShardsWithFilter not available.");
+    }
+
+    /**
+     * Gets stream identifier.
+     *
+     * @return StreamIdentifier
+     */
+    default StreamIdentifier streamIdentifier() {
+        throw new UnsupportedOperationException("StreamName not available");
+    }
+
+    /**
+     * Gets a list shards response based on the request.
+     *
+     * @param request list shards request
+     * @return ListShardsResponse which contains list shards response
+     */
+    default ListShardsResponse getListShardsResponse(ListShardsRequest request) throws Exception {
+        throw new UnsupportedOperationException("getListShardsResponse not available.");
+    }
+
+    /**
+     * Gets the children shards of a shard.
+     * @param shardId
+     * @return
+     * @throws InterruptedException
+     * @throws ExecutionException
+     * @throws TimeoutException
+     */
+    default List<ChildShard> getChildShards(String shardId) throws InterruptedException, ExecutionException, TimeoutException {
+        throw new UnsupportedOperationException("getChildShards not available.");
+    }
 }

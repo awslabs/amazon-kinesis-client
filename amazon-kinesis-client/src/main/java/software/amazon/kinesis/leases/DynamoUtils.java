@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.leases;
 
+import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
@@ -36,6 +37,14 @@ public class DynamoUtils {
         return AttributeValue.builder().ss(collectionValue).build();
     }
 
+    public static AttributeValue createAttributeValue(byte[] byteBufferValue) {
+        if (byteBufferValue == null) {
+            throw new IllegalArgumentException("Byte buffer attributeValues cannot be null or empty.");
+        }
+
+        return AttributeValue.builder().b(SdkBytes.fromByteArray(byteBufferValue)).build();
+    }
+
     public static AttributeValue createAttributeValue(String stringValue) {
         if (stringValue == null || stringValue.isEmpty()) {
             throw new IllegalArgumentException("String attributeValues cannot be null or empty.");
@@ -50,6 +59,15 @@ public class DynamoUtils {
         }
 
         return AttributeValue.builder().n(longValue.toString()).build();
+    }
+
+    public static byte[] safeGetByteArray(Map<String, AttributeValue> dynamoRecord, String key) {
+        AttributeValue av = dynamoRecord.get(key);
+        if (av == null) {
+            return null;
+        } else {
+            return av.b().asByteArray();
+        }
     }
 
     public static Long safeGetLong(Map<String, AttributeValue> dynamoRecord, String key) {

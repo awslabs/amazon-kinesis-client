@@ -16,6 +16,7 @@ package software.amazon.kinesis.leases;
 
 import java.util.List;
 
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -61,6 +62,18 @@ public interface LeaseRefresher {
     boolean waitUntilLeaseTableExists(long secondsBetweenPolls, long timeoutSeconds) throws DependencyException;
 
     /**
+     * List all leases for a given stream synchronously.
+     *
+     * @throws DependencyException if DynamoDB scan fails in an unexpected way
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
+     *
+     * @return list of leases
+     */
+    List<Lease> listLeasesForStream(StreamIdentifier streamIdentifier) throws DependencyException, InvalidStateException,
+            ProvisionedThroughputException;
+
+    /**
      * List all objects in table synchronously.
      * 
      * @throws DependencyException if DynamoDB scan fails in an unexpected way
@@ -86,15 +99,15 @@ public interface LeaseRefresher {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
-     * @param shardId Get the lease for this shardId
+     * @param leaseKey Get the lease for this leasekey
      * 
      * @throws InvalidStateException if lease table does not exist
      * @throws ProvisionedThroughputException if DynamoDB get fails due to lack of capacity
      * @throws DependencyException if DynamoDB get fails in an unexpected way
      * 
-     * @return lease for the specified shardId, or null if one doesn't exist
+     * @return lease for the specified leaseKey, or null if one doesn't exist
      */
-    Lease getLease(String shardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    Lease getLease(String leaseKey) throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
      * Renew a lease by incrementing the lease counter. Conditional on the leaseCounter in DynamoDB matching the leaseCounter
@@ -179,6 +192,21 @@ public interface LeaseRefresher {
         throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
+     * Update application-specific fields of the given lease in DynamoDB. Does not update fields managed by the leasing
+     * library such as leaseCounter, leaseOwner, or leaseKey.
+     *
+     * @return true if update succeeded, false otherwise
+     *
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
+     */
+    default void updateLeaseWithMetaInfo(Lease lease, UpdateField updateField)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throw new UnsupportedOperationException("updateLeaseWithNoExpectation is not implemented");
+    }
+
+    /**
      * Check (synchronously) if there are any leases in the lease table.
      * 
      * @return true if there are no leases in the lease table
@@ -193,13 +221,13 @@ public interface LeaseRefresher {
      * Gets the current checkpoint of the shard. This is useful in the resharding use case
      * where we will wait for the parent shard to complete before starting on the records from a child shard.
      *
-     * @param shardId Checkpoint of this shard will be returned
+     * @param leaseKey Checkpoint of this shard will be returned
      * @return Checkpoint of this shard, or null if the shard record doesn't exist.
      *
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws InvalidStateException if lease table does not exist
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
-    ExtendedSequenceNumber getCheckpoint(String shardId)
+    ExtendedSequenceNumber getCheckpoint(String leaseKey)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException;
 }
