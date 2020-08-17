@@ -47,4 +47,12 @@ public class InitializationInput {
      * completing the checkpoint.
      */
     private final ExtendedSequenceNumber pendingCheckpointSequenceNumber;
+
+    /**
+     * The last pending application state of the previous record processor. May be null.
+     *
+     * This will only be set if the previous record processor had prepared a checkpoint, but lost its lease before
+     * completing the checkpoint.
+     */
+    private final byte[] pendingCheckpointState;
 }

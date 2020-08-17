@@ -17,13 +17,14 @@ package software.amazon.kinesis.retrieval.polling;
 
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
-
 import lombok.NonNull;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
+import software.amazon.kinesis.retrieval.KinesisDataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
@@ -65,11 +66,20 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
         this.maxFutureWait = maxFutureWait;
     }
 
-    @Override
-    public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
+    @Override public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
-        return new SynchronousGetRecordsRetrievalStrategy(new KinesisDataFetcher(kinesisClient, streamName,
-                shardInfo.shardId(), maxRecords, metricsFactory, maxFutureWait));
+        final StreamIdentifier streamIdentifier = shardInfo.streamIdentifierSerOpt().isPresent() ?
+                StreamIdentifier.multiStreamInstance(shardInfo.streamIdentifierSerOpt().get()) :
+                StreamIdentifier.singleStreamInstance(streamName);
+
+        return new SynchronousGetRecordsRetrievalStrategy(
+                new KinesisDataFetcher(kinesisClient, new KinesisDataFetcherProviderConfig(
+                        streamIdentifier,
+                        shardInfo.shardId(),
+                        metricsFactory,
+                        maxRecords,
+                        maxFutureWait
+                )));
     }
 
     @Override

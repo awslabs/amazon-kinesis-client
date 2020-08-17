@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
-import software.amazon.kinesis.checkpoint.Checkpoint;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -32,6 +31,7 @@ public class InMemoryCheckpointer implements Checkpointer {
     private Map<String, ExtendedSequenceNumber> checkpoints = new HashMap<>();
     private Map<String, ExtendedSequenceNumber> flushpoints = new HashMap<>();
     private Map<String, ExtendedSequenceNumber> pendingCheckpoints = new HashMap<>();
+    private Map<String, byte[]> pendingCheckpointStates = new HashMap<>();
 
     private String operation;
 
@@ -39,14 +39,15 @@ public class InMemoryCheckpointer implements Checkpointer {
      * {@inheritDoc}
      */
     @Override
-    public void setCheckpoint(String shardId, ExtendedSequenceNumber checkpointValue, String concurrencyToken)
+    public void setCheckpoint(String leaseKey, ExtendedSequenceNumber checkpointValue, String concurrencyToken)
         throws KinesisClientLibException {
-        checkpoints.put(shardId, checkpointValue);
-        flushpoints.put(shardId, checkpointValue);
-        pendingCheckpoints.remove(shardId);
+        checkpoints.put(leaseKey, checkpointValue);
+        flushpoints.put(leaseKey, checkpointValue);
+        pendingCheckpoints.remove(leaseKey);
+        pendingCheckpointStates.remove(leaseKey);
 
         if (log.isDebugEnabled()) {
-            log.debug("shardId: {} checkpoint: {}", shardId, checkpointValue);
+            log.debug("shardId: {} checkpoint: {}", leaseKey, checkpointValue);
         }
 
     }
@@ -55,25 +56,32 @@ public class InMemoryCheckpointer implements Checkpointer {
      * {@inheritDoc}
      */
     @Override
-    public ExtendedSequenceNumber getCheckpoint(String shardId) throws KinesisClientLibException {
-        ExtendedSequenceNumber checkpoint = flushpoints.get(shardId);
-        log.debug("checkpoint shardId: {} checkpoint: {}",  shardId, checkpoint);
+    public ExtendedSequenceNumber getCheckpoint(String leaseKey) throws KinesisClientLibException {
+        ExtendedSequenceNumber checkpoint = flushpoints.get(leaseKey);
+        log.debug("checkpoint shardId: {} checkpoint: {}", leaseKey, checkpoint);
         return checkpoint;
     }
 
     @Override
-    public void prepareCheckpoint(String shardId, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
+    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
             throws KinesisClientLibException {
-        pendingCheckpoints.put(shardId, pendingCheckpoint);
+        prepareCheckpoint(leaseKey, pendingCheckpoint, concurrencyToken, null);
     }
 
     @Override
-    public Checkpoint getCheckpointObject(String shardId) throws KinesisClientLibException {
-        ExtendedSequenceNumber checkpoint = flushpoints.get(shardId);
-        ExtendedSequenceNumber pendingCheckpoint = pendingCheckpoints.get(shardId);
+    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken, byte[] pendingCheckpointState) throws KinesisClientLibException {
+        pendingCheckpoints.put(leaseKey, pendingCheckpoint);
+        pendingCheckpointStates.put(leaseKey, pendingCheckpointState);
+    }
 
-        Checkpoint checkpointObj = new Checkpoint(checkpoint, pendingCheckpoint);
-        log.debug("getCheckpointObject shardId: {}, {}", shardId, checkpointObj);
+    @Override
+    public Checkpoint getCheckpointObject(String leaseKey) throws KinesisClientLibException {
+        ExtendedSequenceNumber checkpoint = flushpoints.get(leaseKey);
+        ExtendedSequenceNumber pendingCheckpoint = pendingCheckpoints.get(leaseKey);
+        byte[] pendingCheckpointState = pendingCheckpointStates.get(leaseKey);
+
+        Checkpoint checkpointObj = new Checkpoint(checkpoint, pendingCheckpoint, pendingCheckpointState);
+        log.debug("getCheckpointObject shardId: {}, {}", leaseKey, checkpointObj);
         return checkpointObj;
     }
 

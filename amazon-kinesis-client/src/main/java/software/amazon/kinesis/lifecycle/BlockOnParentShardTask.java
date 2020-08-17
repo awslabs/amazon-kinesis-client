@@ -54,28 +54,29 @@ public class BlockOnParentShardTask implements ConsumerTask {
     @Override
     public TaskResult call() {
         Exception exception = null;
-
+        final String shardInfoId = ShardInfo.getLeaseKey(shardInfo);
         try {
             boolean blockedOnParentShard = false;
             for (String shardId : shardInfo.parentShardIds()) {
-                Lease lease = leaseRefresher.getLease(shardId);
+                final String leaseKey = ShardInfo.getLeaseKey(shardInfo, shardId);
+                final Lease lease = leaseRefresher.getLease(leaseKey);
                 if (lease != null) {
                     ExtendedSequenceNumber checkpoint = lease.checkpoint();
                     if ((checkpoint == null) || (!checkpoint.equals(ExtendedSequenceNumber.SHARD_END))) {
-                        log.debug("Shard {} is not yet done. Its current checkpoint is {}", shardId, checkpoint);
+                        log.debug("Shard {} is not yet done. Its current checkpoint is {}", shardInfoId, checkpoint);
                         blockedOnParentShard = true;
                         exception = new BlockedOnParentShardException("Parent shard not yet done");
                         break;
                     } else {
-                        log.debug("Shard {} has been completely processed.", shardId);
+                        log.debug("Shard {} has been completely processed.", shardInfoId);
                     }
                 } else {
-                    log.info("No lease found for shard {}. Not blocking on completion of this shard.", shardId);
+                    log.info("No lease found for shard {}. Not blocking on completion of this shard.", shardInfoId);
                 }
             }
 
             if (!blockedOnParentShard) {
-                log.info("No need to block on parents {} of shard {}", shardInfo.parentShardIds(), shardInfo.shardId());
+                log.info("No need to block on parents {} of shard {}", shardInfo.parentShardIds(), shardInfoId);
                 return new TaskResult(null);
             }
         } catch (Exception e) {
@@ -85,7 +86,7 @@ public class BlockOnParentShardTask implements ConsumerTask {
         try {
             Thread.sleep(parentShardPollIntervalMillis);
         } catch (InterruptedException e) {
-            log.error("Sleep interrupted when waiting on parent shard(s) of {}", shardInfo.shardId(), e);
+            log.error("Sleep interrupted when waiting on parent shard(s) of {}", shardInfoId, e);
         }
 
         return new TaskResult(exception);

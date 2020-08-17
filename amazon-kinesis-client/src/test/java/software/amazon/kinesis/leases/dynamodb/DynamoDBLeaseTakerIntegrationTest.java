@@ -16,22 +16,17 @@ package software.amazon.kinesis.leases.dynamodb;
 
 import java.util.Collection;
 import java.util.Map;
-
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-
 import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
-
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
 
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
@@ -105,7 +100,28 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
 
         builder.withLease("4", "bar").build();
 
+        // setting multiplier to unusually high number to avoid very old lease taking
+        taker.withVeryOldLeaseDurationNanosMultipler(5000000000L);
         builder.takeMutateAssert(taker, 2);
+    }
+
+    /**
+     * Verify that we take all very old leases by setting up an environment where there are 4 leases and 2 workers,
+     * only one of which holds a lease. This leaves 3 free leases. LeaseTaker should take all 3 leases since they
+     * are denoted as very old.
+     */
+    @Test
+    public void testVeryOldLeaseTaker() throws LeasingException {
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
+
+        for (int i = 0; i < 3; i++) {
+            builder.withLease(Integer.toString(i), null);
+        }
+
+        builder.withLease("4", "bar").build();
+
+        // setting multiplier to unusually high number to avoid very old lease taking
+        builder.takeMutateAssert(taker, 3);
     }
 
     /**

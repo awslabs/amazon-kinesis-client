@@ -67,6 +67,7 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
         return ProcessRecordsInput.builder()
                 .records(records)
                 .millisBehindLatest(getRecordsResult.millisBehindLatest())
+                .childShards(getRecordsResult.childShards())
                 .build();
     }
 

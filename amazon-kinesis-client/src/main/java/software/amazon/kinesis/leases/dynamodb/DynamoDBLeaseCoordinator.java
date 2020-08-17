@@ -38,6 +38,7 @@ import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseRenewer;
 import software.amazon.kinesis.leases.LeaseTaker;
+import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
@@ -348,8 +349,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
     @Override
     public boolean updateLease(final Lease lease, final UUID concurrencyToken, final String operation,
-            final String shardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return leaseRenewer.updateLease(lease, concurrencyToken, operation, shardId);
+            final String singleStreamShardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        return leaseRenewer.updateLease(lease, concurrencyToken, operation, singleStreamShardId);
     }
 
     /**
@@ -377,9 +378,19 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         return leases.stream().map(DynamoDBLeaseCoordinator::convertLeaseToAssignment).collect(Collectors.toList());
     }
 
+    /**
+     * Utility method to convert the basic lease or multistream lease to ShardInfo
+     * @param lease
+     * @return ShardInfo
+     */
     public static ShardInfo convertLeaseToAssignment(final Lease lease) {
-        return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
-                lease.checkpoint());
+        if (lease instanceof MultiStreamLease) {
+            return new ShardInfo(((MultiStreamLease) lease).shardId(), lease.concurrencyToken().toString(), lease.parentShardIds(),
+                    lease.checkpoint(), ((MultiStreamLease) lease).streamIdentifier());
+        } else {
+            return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
+                    lease.checkpoint());
+        }
     }
 
     /**

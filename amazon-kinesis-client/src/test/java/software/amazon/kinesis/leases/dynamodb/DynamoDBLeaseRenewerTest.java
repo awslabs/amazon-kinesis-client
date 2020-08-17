@@ -37,6 +37,7 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
+import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -55,7 +56,8 @@ public class DynamoDBLeaseRenewerTest {
     private LeaseRefresher leaseRefresher;
 
     private static Lease newLease(String leaseKey) {
-        return new Lease(leaseKey, "LeaseOwner", 0L, UUID.randomUUID(), System.nanoTime(), null, null, null, new HashSet<>());
+        return new Lease(leaseKey, "LeaseOwner", 0L, UUID.randomUUID(), System.nanoTime(), null, null, null,
+                new HashSet<>(), new HashSet<>(), null, HashKeyRangeForLease.deserialize("1", "2"));
     }
 
     @Before

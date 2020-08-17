@@ -15,18 +15,29 @@
 
 package software.amazon.kinesis.retrieval;
 
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
+import lombok.ToString;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
+import software.amazon.kinesis.retrieval.polling.PollingConfig;
 
 /**
  * Used by the KCL to configure the retrieval of records from Kinesis.
  */
-@Data
+@Getter
+@Setter
+@ToString
+@EqualsAndHashCode
 @Accessors(fluent = true)
 public class RetrievalConfig {
     /**
@@ -34,7 +45,7 @@ public class RetrievalConfig {
      */
     public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java";
 
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.2.12-SNAPSHOT";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.3.0";
 
     /**
      * Client used to make calls to Kinesis for records retrieval
@@ -42,14 +53,14 @@ public class RetrievalConfig {
     @NonNull
     private final KinesisAsyncClient kinesisClient;
 
-    /**
-     * The name of the stream to process records from.
-     */
-    @NonNull
-    private final String streamName;
-
     @NonNull
     private final String applicationName;
+
+
+    /**
+     * AppStreamTracker either for multi stream tracking or single stream
+     */
+    private Either<MultiStreamTracker, StreamConfig> appStreamTracker;
 
     /**
      * Backoff time between consecutive ListShards calls.
@@ -84,15 +95,77 @@ public class RetrievalConfig {
 
     private RetrievalFactory retrievalFactory;
 
-    public RetrievalFactory retrievalFactory() {
+    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull String streamName,
+                           @NonNull String applicationName) {
+        this.kinesisClient = kinesisAsyncClient;
+        this.appStreamTracker = Either
+                .right(new StreamConfig(StreamIdentifier.singleStreamInstance(streamName), initialPositionInStreamExtended));
+        this.applicationName = applicationName;
+    }
 
+    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull MultiStreamTracker multiStreamTracker,
+                           @NonNull String applicationName) {
+        this.kinesisClient = kinesisAsyncClient;
+        this.appStreamTracker = Either.left(multiStreamTracker);
+        this.applicationName = applicationName;
+    }
+
+    public RetrievalConfig initialPositionInStreamExtended(InitialPositionInStreamExtended initialPositionInStreamExtended) {
+        final StreamConfig[] streamConfig = new StreamConfig[1];
+        this.appStreamTracker.apply(multiStreamTracker -> {
+            throw new IllegalArgumentException(
+                    "Cannot set initialPositionInStreamExtended when multiStreamTracker is set");
+        }, sc -> streamConfig[0] = sc);
+        this.appStreamTracker = Either
+                .right(new StreamConfig(streamConfig[0].streamIdentifier(), initialPositionInStreamExtended));
+        return this;
+    }
+
+    public RetrievalConfig retrievalSpecificConfig(RetrievalSpecificConfig retrievalSpecificConfig) {
+        this.retrievalSpecificConfig = retrievalSpecificConfig;
+        validateFanoutConfig();
+        validatePollingConfig();
+        return this;
+    }
+
+    public RetrievalFactory retrievalFactory() {
         if (retrievalFactory == null) {
             if (retrievalSpecificConfig == null) {
-                retrievalSpecificConfig = new FanOutConfig(kinesisClient()).streamName(streamName())
+                retrievalSpecificConfig = new FanOutConfig(kinesisClient())
                         .applicationName(applicationName());
+                retrievalSpecificConfig = appStreamTracker.map(multiStreamTracker -> retrievalSpecificConfig,
+                        streamConfig -> ((FanOutConfig) retrievalSpecificConfig).streamName(streamConfig.streamIdentifier().streamName()));
             }
             retrievalFactory = retrievalSpecificConfig.retrievalFactory();
         }
         return retrievalFactory;
+    }
+
+    private void validateFanoutConfig() {
+        // If we are in multistream mode and if retrievalSpecificConfig is an instance of FanOutConfig and if consumerArn is set throw exception.
+        boolean isFanoutConfig = retrievalSpecificConfig instanceof FanOutConfig;
+        boolean isInvalidFanoutConfig = isFanoutConfig && appStreamTracker.map(
+                multiStreamTracker -> ((FanOutConfig) retrievalSpecificConfig).consumerArn() != null
+                                || ((FanOutConfig) retrievalSpecificConfig).streamName() != null,
+                streamConfig -> streamConfig.streamIdentifier() == null
+                                || streamConfig.streamIdentifier().streamName() == null);
+        if(isInvalidFanoutConfig) {
+            throw new IllegalArgumentException(
+                    "Invalid config: Either in multi-stream mode with streamName/consumerArn configured or in single-stream mode with no streamName configured");
+        }
+    }
+
+    private void validatePollingConfig() {
+        boolean isPollingConfig = retrievalSpecificConfig instanceof PollingConfig;
+        boolean isInvalidPollingConfig = isPollingConfig && appStreamTracker.map(
+                multiStreamTracker ->
+                        ((PollingConfig) retrievalSpecificConfig).streamName() != null,
+                streamConfig ->
+                        streamConfig.streamIdentifier() == null || streamConfig.streamIdentifier().streamName() == null);
+
+        if (isInvalidPollingConfig) {
+            throw new IllegalArgumentException(
+                    "Invalid config: Either in multi-stream mode with streamName configured or in single-stream mode with no streamName configured");
+        }
     }
 }

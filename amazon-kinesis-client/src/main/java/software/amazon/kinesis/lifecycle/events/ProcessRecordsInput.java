@@ -23,6 +23,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
@@ -56,6 +57,7 @@ public class ProcessRecordsInput {
      * The records received from Kinesis. These records may have been de-aggregated if they were published by the KPL.
      */
     private List<KinesisClientRecord> records;
+
     /**
      * A checkpointer that the {@link ShardRecordProcessor} can use to checkpoint its progress.
      */
@@ -66,6 +68,11 @@ public class ProcessRecordsInput {
      * This value does not include the {@link #timeSpentInCache()}.
      */
     private Long millisBehindLatest;
+    /**
+     * A list of child shards if the current GetRecords request reached the shard end.
+     * If not at the shard end, this should be an empty list.
+     */
+    private List<ChildShard> childShards;
 
     /**
      * How long the records spent waiting to be dispatched to the {@link ShardRecordProcessor}

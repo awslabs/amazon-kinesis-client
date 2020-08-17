@@ -36,9 +36,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseRenewer;
+import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
@@ -269,7 +271,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
      * {@inheritDoc}
      */
     @Override
-    public boolean updateLease(Lease lease, UUID concurrencyToken, @NonNull String operation, String shardId)
+    public boolean updateLease(Lease lease, UUID concurrencyToken, @NonNull String operation, String singleStreamShardId)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(lease, "lease cannot be null");
         verifyNotNull(lease.leaseKey(), "leaseKey cannot be null");
@@ -296,8 +298,12 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         }
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, operation);
-        if (StringUtils.isNotEmpty(shardId)) {
-            MetricsUtil.addShardId(scope, shardId);
+        if (lease instanceof MultiStreamLease) {
+            MetricsUtil.addStreamId(scope,
+                    StreamIdentifier.multiStreamInstance(((MultiStreamLease) lease).streamIdentifier()));
+            MetricsUtil.addShardId(scope, ((MultiStreamLease) lease).shardId());
+        } else if (StringUtils.isNotEmpty(singleStreamShardId)) {
+            MetricsUtil.addShardId(scope, singleStreamShardId);
         }
 
         long startTime = System.currentTimeMillis();

@@ -24,6 +24,7 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
@@ -40,8 +41,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     private final int bufferSize;
     private final ShardConsumer shardConsumer;
     private final int readTimeoutsToIgnoreBeforeWarning;
+    private final String shardInfoId;
     private volatile int readTimeoutSinceLastRead = 0;
-
     @VisibleForTesting
     final Object lockObject = new Object();
     // This holds the last time an attempt of request to upstream service was made including the first try to
@@ -70,6 +71,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         this.bufferSize = bufferSize;
         this.shardConsumer = shardConsumer;
         this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
+        this.shardInfoId = ShardInfo.getLeaseKey(shardConsumer.shardInfo());
     }
 
 
@@ -107,7 +109,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         if (retrievalFailure != null) {
             synchronized (lockObject) {
                 String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests",
-                        shardConsumer.shardInfo().shardId());
+                        shardInfoId);
                 if (retrievalFailure instanceof RetryableRetrievalException) {
                     log.debug(logMessage, retrievalFailure.getCause());
                 } else {
@@ -130,7 +132,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 if (timeSinceLastResponse.toMillis() > maxTimeBetweenRequests) {
                     log.error(
                             "{}: Last request was dispatched at {}, but no response as of {} ({}).  Cancelling subscription, and restarting. Last successful request details -- {}",
-                            shardConsumer.shardInfo().shardId(), lastRequestTime, now, timeSinceLastResponse, recordsPublisher.getLastSuccessfulRequestDetails());
+                            shardInfoId, lastRequestTime, now, timeSinceLastResponse, recordsPublisher.getLastSuccessfulRequestDetails());
                     cancel();
 
                     // Start the subscription again which will update the lastRequestTime as well.
@@ -157,7 +159,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                     subscription);
 
         } catch (Throwable t) {
-            log.warn("{}: Caught exception from handleInput", shardConsumer.shardInfo().shardId(), t);
+            log.warn("{}: Caught exception from handleInput", shardInfoId, t);
             synchronized (lockObject) {
                 dispatchFailure = t;
             }
@@ -192,8 +194,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     protected void logOnErrorWarning(Throwable t) {
         log.warn(
                 "{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
-                        + "recreate the subscription as neccessary to continue processing. Last successful request details -- {}",
-                shardConsumer.shardInfo().shardId(), recordsPublisher.getLastSuccessfulRequestDetails(), t);
+                        + "recreate the subscription as necessary to continue processing. Last successful request details -- {}",
+                shardInfoId, recordsPublisher.getLastSuccessfulRequestDetails(), t);
     }
 
     protected void logOnErrorReadTimeoutWarning(Throwable t) {
@@ -202,14 +204,14 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 + "are seeing this warning frequently consider increasing the SDK timeouts "
                 + "by providing an OverrideConfiguration to the kinesis client. Alternatively you"
                 + "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
-                + "intermittant ReadTimeout warnings. Last successful request details -- {}",
-                shardConsumer.shardInfo().shardId(), recordsPublisher.getLastSuccessfulRequestDetails(), t);
+                + "intermittent ReadTimeout warnings. Last successful request details -- {}",
+                shardInfoId, recordsPublisher.getLastSuccessfulRequestDetails(), t);
     }
 
     @Override
     public void onComplete() {
         log.debug("{}: onComplete(): Received onComplete.  Activity should be triggered externally",
-                shardConsumer.shardInfo().shardId());
+                shardInfoId);
     }
 
     public void cancel() {

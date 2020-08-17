@@ -16,14 +16,11 @@ package software.amazon.kinesis.leases;
 
 import java.util.Collection;
 import java.util.Map;
-
-
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
 import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
-import software.amazon.kinesis.leases.Lease;
 
 /**
  * Utility class that manages the mapping of Lease objects/operations to records in DynamoDB.
@@ -45,6 +42,11 @@ public interface LeaseSerializer {
      * @return a deserialized lease object representing the attribute value map
      */
     Lease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord);
+
+
+    default Lease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord, Lease leaseToUpdate) {
+        throw new UnsupportedOperationException();
+    }
 
     /**
      * @param lease
@@ -78,6 +80,14 @@ public interface LeaseSerializer {
     Map<String, ExpectedAttributeValue> getDynamoNonexistantExpectation();
 
     /**
+     * @param leaseKey
+     * @return the attribute value map asserting that a lease does exist.
+     */
+    default Map<String, ExpectedAttributeValue> getDynamoExistentExpectation(String leaseKey) {
+        throw new UnsupportedOperationException("DynamoExistantExpectation is not implemented");
+    }
+
+    /**
      * @param lease
      * @return the attribute value map that increments a lease counter
      */
@@ -104,6 +114,15 @@ public interface LeaseSerializer {
     Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease);
 
     /**
+     * @param lease
+     * @param updateField
+     * @return the attribute value map that updates application-specific data for a lease
+     */
+    default Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease, UpdateField updateField) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
      * @return the key schema for creating a DynamoDB table to store leases
      */
     Collection<KeySchemaElement> getKeySchema();
@@ -112,4 +131,5 @@ public interface LeaseSerializer {
      * @return attribute definitions for creating a DynamoDB table to store leases
      */
     Collection<AttributeDefinition> getAttributeDefinitions();
+
 }

@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -30,10 +31,12 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.utils.BlockingUtils.blockUntilConditionSatisfied;
 import static software.amazon.kinesis.utils.BlockingUtils.blockUntilRecordsAvailable;
 import static software.amazon.kinesis.utils.ProcessRecordsInputMatcher.eqProcessRecordsInput;
 
@@ -46,6 +49,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -56,6 +60,7 @@ import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -71,11 +76,14 @@ import io.reactivex.Flowable;
 import io.reactivex.schedulers.Schedulers;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
+import software.amazon.kinesis.leases.ShardObjectHelper;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
@@ -98,11 +106,12 @@ public class PrefetchRecordsPublisherTest {
     private static final int MAX_SIZE = 5;
     private static final int MAX_RECORDS_COUNT = 15000;
     private static final long IDLE_MILLIS_BETWEEN_CALLS = 0L;
+    private static final String NEXT_SHARD_ITERATOR = "testNextShardIterator";
 
     @Mock
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     @Mock
-    private KinesisDataFetcher dataFetcher;
+    private DataFetcher dataFetcher;
     @Mock
     private InitialPositionInStreamExtended initialPosition;
     @Mock
@@ -119,8 +128,8 @@ public class PrefetchRecordsPublisherTest {
 
     @Before
     public void setup() {
-        when(getRecordsRetrievalStrategy.getDataFetcher()).thenReturn(dataFetcher);
-
+        when(getRecordsRetrievalStrategy.dataFetcher()).thenReturn(dataFetcher);
+        when(dataFetcher.getStreamIdentifier()).thenReturn(StreamIdentifier.singleStreamInstance("testStream"));
         executorService = spy(Executors.newFixedThreadPool(1));
         getRecordsCache = new PrefetchRecordsPublisher(
                 MAX_SIZE,
@@ -135,9 +144,48 @@ public class PrefetchRecordsPublisherTest {
                 "shardId");
         spyQueue = spy(getRecordsCache.getPublisherSession().prefetchRecordsQueue());
         records = spy(new ArrayList<>());
-        getRecordsResponse = GetRecordsResponse.builder().records(records).build();
+        getRecordsResponse = GetRecordsResponse.builder().records(records).nextShardIterator(NEXT_SHARD_ITERATOR).childShards(new ArrayList<>()).build();
 
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(getRecordsResponse);
+    }
+
+    @Test
+    public void testDataFetcherIsNotReInitializedOnMultipleCacheStarts() {
+        getRecordsCache.start(sequenceNumber, initialPosition);
+        getRecordsCache.start(sequenceNumber, initialPosition);
+        getRecordsCache.start(sequenceNumber, initialPosition);
+        verify(dataFetcher, times(1)).initialize(any(ExtendedSequenceNumber.class), any());
+    }
+
+    @Test
+    public void testPrefetchPublisherInternalStateNotModifiedWhenPrefetcherThreadStartFails() {
+        doThrow(new RejectedExecutionException()).doThrow(new RejectedExecutionException()).doCallRealMethod()
+                .when(executorService).execute(any());
+        // Initialize try 1
+        tryPrefetchCacheStart();
+        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+        verifyInternalState(0);
+        // Initialize try 2
+        tryPrefetchCacheStart();
+        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+        verifyInternalState(0);
+        // Initialize try 3
+        tryPrefetchCacheStart();
+        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+        verifyInternalState(MAX_SIZE);
+        verify(dataFetcher, times(3)).initialize(any(ExtendedSequenceNumber.class), any());
+    }
+
+    private void tryPrefetchCacheStart() {
+        try {
+            getRecordsCache.start(sequenceNumber, initialPosition);
+        } catch (Exception e) {
+            // suppress exception
+        }
+    }
+
+    private void verifyInternalState(int queueSize) {
+        Assert.assertTrue(getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == queueSize);
     }
 
     @Test
@@ -154,9 +202,65 @@ public class PrefetchRecordsPublisherTest {
                 .processRecordsInput();
 
         assertEquals(expectedRecords, result.records());
+        assertEquals(new ArrayList<>(), result.childShards());
 
         verify(executorService).execute(any());
         verify(getRecordsRetrievalStrategy, atLeast(1)).getRecords(eq(MAX_RECORDS_PER_CALL));
+    }
+
+    @Test
+    public void testGetRecordsWithInvalidResponse() {
+        record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
+
+        when(records.size()).thenReturn(1000);
+
+        GetRecordsResponse response = GetRecordsResponse.builder().records(records).build();
+        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(response);
+        when(dataFetcher.isShardEndReached()).thenReturn(false);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        try {
+            ProcessRecordsInput result = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
+                    .processRecordsInput();
+        } catch (Exception e) {
+            assertEquals("No records found", e.getMessage());
+        }
+    }
+
+    @Test
+    public void testGetRecordsWithShardEnd() {
+        records = new ArrayList<>();
+
+        final List<KinesisClientRecord> expectedRecords = new ArrayList<>();
+
+        List<ChildShard> childShards = new ArrayList<>();
+        List<String> parentShards = new ArrayList<>();
+        parentShards.add("shardId");
+        ChildShard leftChild = ChildShard.builder()
+                                         .shardId("shardId-000000000001")
+                                         .parentShards(parentShards)
+                                         .hashKeyRange(ShardObjectHelper.newHashKeyRange("0", "49"))
+                                         .build();
+        ChildShard rightChild = ChildShard.builder()
+                                          .shardId("shardId-000000000002")
+                                          .parentShards(parentShards)
+                                          .hashKeyRange(ShardObjectHelper.newHashKeyRange("50", "99"))
+                                          .build();
+        childShards.add(leftChild);
+        childShards.add(rightChild);
+
+        GetRecordsResponse response = GetRecordsResponse.builder().records(records).childShards(childShards).build();
+        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(response);
+        when(dataFetcher.isShardEndReached()).thenReturn(true);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+        ProcessRecordsInput result = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
+                .processRecordsInput();
+
+        assertEquals(expectedRecords, result.records());
+        assertEquals(childShards, result.childShards());
+        assertTrue(result.isAtShardEnd());
     }
 
     // TODO: Broken test
@@ -269,7 +373,7 @@ public class PrefetchRecordsPublisherTest {
     @Test
     public void testRetryableRetrievalExceptionContinues() {
 
-        GetRecordsResponse response = GetRecordsResponse.builder().millisBehindLatest(100L).records(Collections.emptyList()).build();
+        GetRecordsResponse response = GetRecordsResponse.builder().millisBehindLatest(100L).records(Collections.emptyList()).nextShardIterator(NEXT_SHARD_ITERATOR).build();
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenThrow(new RetryableRetrievalException("Timeout", new TimeoutException("Timeout"))).thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
@@ -292,7 +396,7 @@ public class PrefetchRecordsPublisherTest {
 
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenAnswer( i -> GetRecordsResponse.builder().records(
                 Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber(++sequenceNumberInResponse[0] + "").build())
-                .build());
+                .nextShardIterator(NEXT_SHARD_ITERATOR).build());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -383,7 +487,7 @@ public class PrefetchRecordsPublisherTest {
         // to the subscriber.
         GetRecordsResponse response = GetRecordsResponse.builder().records(
                 Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
-                .build();
+                .nextShardIterator(NEXT_SHARD_ITERATOR).build();
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);

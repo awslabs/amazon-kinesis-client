@@ -60,7 +60,7 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
     public synchronized void checkpoint()
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
         if (log.isDebugEnabled()) {
-            log.debug("Checkpointing {}, token {} at largest permitted value {}", shardInfo.shardId(),
+            log.debug("Checkpointing {}, token {} at largest permitted value {}", ShardInfo.getLeaseKey(shardInfo),
                     shardInfo.concurrencyToken(), this.largestPermittedCheckpointValue);
         }
         advancePosition(this.largestPermittedCheckpointValue);
@@ -116,7 +116,7 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
                 && newCheckpoint.compareTo(largestPermittedCheckpointValue) <= 0) {
 
             if (log.isDebugEnabled()) {
-                log.debug("Checkpointing {}, token {} at specific extended sequence number {}", shardInfo.shardId(),
+                log.debug("Checkpointing {}, token {} at specific extended sequence number {}", ShardInfo.getLeaseKey(shardInfo),
                         shardInfo.concurrencyToken(), newCheckpoint);
             }
             this.advancePosition(newCheckpoint);
@@ -144,8 +144,15 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
      * {@inheritDoc}
      */
     @Override
-    public synchronized PreparedCheckpointer prepareCheckpoint(Record record)
-            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+    public PreparedCheckpointer prepareCheckpoint(byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+        return prepareCheckpoint(largestPermittedCheckpointValue.sequenceNumber(), applicationState);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public PreparedCheckpointer prepareCheckpoint(Record record, byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
         //
         // TODO: UserRecord Deprecation
         //
@@ -154,8 +161,17 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
         } /*else if (record instanceof UserRecord) {
             return prepareCheckpoint(record.sequenceNumber(), ((UserRecord) record).subSequenceNumber());
         } */ else {
-            return prepareCheckpoint(record.sequenceNumber(), 0);
+            return prepareCheckpoint(record.sequenceNumber(), 0, applicationState);
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public synchronized PreparedCheckpointer prepareCheckpoint(Record record)
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+        return prepareCheckpoint(record, null);
     }
 
     /**
@@ -171,9 +187,26 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
      * {@inheritDoc}
      */
     @Override
+    public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, byte[] applicationState)
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
+        return prepareCheckpoint(sequenceNumber, 0, applicationState);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public synchronized PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+        return prepareCheckpoint(sequenceNumber, subSequenceNumber, null);
+    }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber, byte[] applicationState)
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
         if (subSequenceNumber < 0) {
             throw new IllegalArgumentException("Could not checkpoint at invalid, negative subsequence number "
                     + subSequenceNumber);
@@ -189,9 +222,9 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
 
             if (log.isDebugEnabled()) {
                 log.debug("Preparing checkpoint {}, token {} at specific extended sequence number {}",
-                        shardInfo.shardId(), shardInfo.concurrencyToken(), pendingCheckpoint);
+                        ShardInfo.getLeaseKey(shardInfo), shardInfo.concurrencyToken(), pendingCheckpoint);
             }
-            return doPrepareCheckpoint(pendingCheckpoint);
+            return doPrepareCheckpoint(pendingCheckpoint, applicationState);
         } else {
             throw new IllegalArgumentException(String.format(
                     "Could not prepare checkpoint at extended sequence number %s as it did not fall into acceptable "
@@ -252,10 +285,10 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
         if (extendedSequenceNumber != null && !extendedSequenceNumber.equals(lastCheckpointValue)) {
             try {
                 if (log.isDebugEnabled()) {
-                    log.debug("Setting {}, token {} checkpoint to {}", shardInfo.shardId(),
+                    log.debug("Setting {}, token {} checkpoint to {}", ShardInfo.getLeaseKey(shardInfo),
                             shardInfo.concurrencyToken(), checkpointToRecord);
                 }
-                checkpointer.setCheckpoint(shardInfo.shardId(), checkpointToRecord, shardInfo.concurrencyToken());
+                checkpointer.setCheckpoint(ShardInfo.getLeaseKey(shardInfo), checkpointToRecord, shardInfo.concurrencyToken());
                 lastCheckpointValue = checkpointToRecord;
             } catch (ThrottlingException | ShutdownException | InvalidStateException
                     | KinesisClientLibDependencyException e) {
@@ -290,7 +323,7 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
      * @throws ThrottlingException
      * @throws ShutdownException
      */
-    private PreparedCheckpointer doPrepareCheckpoint(ExtendedSequenceNumber extendedSequenceNumber)
+    private PreparedCheckpointer doPrepareCheckpoint(ExtendedSequenceNumber extendedSequenceNumber, byte[] applicationState)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
 
         ExtendedSequenceNumber newPrepareCheckpoint = extendedSequenceNumber;
@@ -308,7 +341,7 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
         }
 
         try {
-            checkpointer.prepareCheckpoint(shardInfo.shardId(), newPrepareCheckpoint, shardInfo.concurrencyToken());
+            checkpointer.prepareCheckpoint(ShardInfo.getLeaseKey(shardInfo), newPrepareCheckpoint, shardInfo.concurrencyToken(), applicationState);
         } catch (ThrottlingException | ShutdownException | InvalidStateException
                 | KinesisClientLibDependencyException e) {
             throw e;
