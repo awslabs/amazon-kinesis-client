@@ -5,7 +5,7 @@
 * [Milestone#50](https://github.com/awslabs/amazon-kinesis-client/milestone/50)
 
 * Behavior of shard synchronization is moving from each worker independently learning about all existing shards to workers only discovering the children of shards that each worker owns. This optimizes memory usage, lease table IOPS usage, and number of calls made to kinesis for streams with high shard counts and/or frequent resharding.
-* When bootstrapping an empty lease table, KCL utilizes the `ListShard` API's filtering option (the ShardFilter optional request parameter) to retrieve and create leases only for a snapshot of shards open at the time specified by the `ShardFilter` parameter. The `ShardFilter` parameter enables you to filter out the response of the `ListShards` API, using the `Type` parameter. KCL uses the `Type` filter parameter and the following of its valid values to identify and return a snapshot of open shards that might require new leases.
+* When bootstrapping an empty lease table, KCL utilizes the ListShard API's filtering option (the ShardFilter optional request parameter) to retrieve and create leases only for a snapshot of shards open at the time specified by the ShardFilter parameter. The ShardFilter parameter enables you to filter out the response of the ListShards API, using the Type parameter. KCL uses the Type filter parameter and the following of its valid values to identify and return a snapshot of open shards that might require new leases.
 	* Currently, the following shard filters are supported:
 		* `AT_TRIM_HORIZON` - the response includes all the shards that were open at `TRIM_HORIZON`.
 		* `AT_LATEST` - the response includes only the currently open shards of the data stream.
@@ -13,9 +13,9 @@
 	* `ShardFilter` is used when creating leases for an empty lease table to initialize leases for a snapshot of shards specified at `KinesisClientLibConfiguration#initialPositionInStreamExtended`.
 	* For more information about ShardFilter, see the [official AWS documentation on ShardFilter](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ShardFilter.html).
 
-* Introducing support for the `ChildShards` response of the `GetRecords` and the `SubscribeToShard` APIs to perform lease/shard synchronization that happens at `SHARD_END` for closed shards, allowing a KCL worker to only create leases for the child shards of the shard it finished processing.
-	* For shared throughout consumer applications, this uses the `ChildShards` response of the `GetRecords` API. For dedicated throughput (enhanced fan-out) consumer applications, this uses the `ChildShards` response of the `SubscribeToShard` API.
-	* For more information, see the official AWS Documentation on [GetRecords](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_GetRecords.html), [SubscribeToShard](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_SubscribeToShard.html), and [ChildShard](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ChildShard.html).
+* Introducing support for the `ChildShards` response of the `GetRecords` API to perform lease/shard synchronization that happens at `SHARD_END` for closed shards, allowing a KCL worker to only create leases for the child shards of the shard it finished processing.
+	* For KCL 1.x applications, this uses the `ChildShards` response of the `GetRecords` API.
+	* For more information, see the official AWS Documentation on [GetRecords](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_GetRecords.html) and [ChildShard](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_ChildShard.html).
 
 * KCL now also performs additional periodic shard/lease scans in order to identify any potential holes in the lease table to ensure the complete hash range of the stream is being processed and create leases for them if required. When `KinesisClientLibConfiguration#shardSyncStrategyType` is set to `ShardSyncStrategyType.SHARD_END`, `PeriodicShardSyncManager#leasesRecoveryAuditorInconsistencyConfidenceThreshold` will be used to determine the threshold for number of consecutive scans containing holes in the lease table after which to enforce a shard sync. When `KinesisClientLibConfiguration#shardSyncStrategyType` is set to `ShardSyncStrategyType.PERIODIC`, `leasesRecoveryAuditorInconsistencyConfidenceThreshold` is ignored.
 	* New configuration options are available to configure `PeriodicShardSyncManager` in `KinesisClientLibConfiguration`
@@ -41,7 +41,7 @@
 	| garbageLeaseCleanupIntervalMillis   | 30 minutes | Interval at which to check if a lease is garbage (i.e trimmed past the stream's retention period) or not. |
 
 * Including an optimization to `KinesisShardSyncer` to only create leases for one layer of shards.
-* Changing default shard prioritization strategy to be `NoOpShardPrioritization` to allow prioritization of completed shards. Customers who are upgrading to this version and are reading from `TRIM_HORIZON` should continue using `ParentFirstPrioritization` while upgr    ading.
+* Changing default shard prioritization strategy to be `NoOpShardPrioritization` to allow prioritization of completed shards. Customers who are upgrading to this version and are reading from `TRIM_HORIZON` should continue using `ParentFirstPrioritization` while upgrading.
 * Upgrading version of AWS SDK to 1.11.844.
 * [#719](https://github.com/awslabs/amazon-kinesis-client/pull/719) Upgrading version of Google Protobuf to 3.11.4.
 * [#712](https://github.com/awslabs/amazon-kinesis-client/pull/712) Allowing KCL to consider lease tables in `UPDATING` healthy.
