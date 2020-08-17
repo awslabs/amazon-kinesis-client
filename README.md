@@ -73,7 +73,7 @@ To make it easier for developers to write record processors in other languages, 
 
 * Including an optimization to `KinesisShardSyncer` to only create leases for one layer of shards.
 * Changing default shard prioritization strategy to be `NoOpShardPrioritization` to allow prioritization of completed shards. Customers who are upgrading to this version and are reading from `TRIM_HORIZON` should continue using `ParentFirstPrioritization` while upgrading.
-* Upgrading version of AWS SDK to 2.13.X.
+* Upgrading version of AWS SDK to 1.11.844.
 * [#719](https://github.com/awslabs/amazon-kinesis-client/pull/719) Upgrading version of Google Protobuf to 3.11.4.
 * [#712](https://github.com/awslabs/amazon-kinesis-client/pull/712) Allowing KCL to consider lease tables in `UPDATING` healthy.
 
