@@ -28,6 +28,7 @@ import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
+import com.amazonaws.services.kinesis.model.ShardFilter;
 
 /**
  * IKinesisProxy implementation that wraps another implementation and collects metrics.
@@ -172,6 +173,22 @@ public class MetricsCollectingKinesisProxyDecorator implements IKinesisProxy {
         boolean success = false;
         try {
             List<Shard> response = other.getShardList();
+            success = true;
+            return response;
+        } finally {
+            MetricsHelper.addSuccessAndLatency(getShardListMetric, startTime, success, MetricsLevel.DETAILED);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<Shard> getShardListWithFilter(ShardFilter shardFilter) throws ResourceNotFoundException {
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        try {
+            List<Shard> response = other.getShardListWithFilter(shardFilter);
             success = true;
             return response;
         } finally {

@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
+import com.amazonaws.services.kinesis.model.ChildShard;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -132,7 +133,7 @@ public class KinesisDataFetcherTest {
     }
 
     @Test
-    public void testadvanceIteratorTo() throws KinesisClientLibException {
+    public void testadvanceIteratorTo() throws Exception {
         IKinesisProxy kinesis = mock(IKinesisProxy.class);
         ICheckpoint checkpoint = mock(ICheckpoint.class);
 
@@ -146,9 +147,13 @@ public class KinesisDataFetcherTest {
         GetRecordsResult outputA = new GetRecordsResult();
         List<Record> recordsA = new ArrayList<Record>();
         outputA.setRecords(recordsA);
+        outputA.setNextShardIterator("nextShardIteratorA");
+        outputA.setChildShards(Collections.emptyList());
         GetRecordsResult outputB = new GetRecordsResult();
         List<Record> recordsB = new ArrayList<Record>();
         outputB.setRecords(recordsB);
+        outputB.setNextShardIterator("nextShardIteratorB");
+        outputB.setChildShards(Collections.emptyList());
 
         when(kinesis.getIterator(SHARD_ID, AT_SEQUENCE_NUMBER, seqA)).thenReturn(iteratorA);
         when(kinesis.getIterator(SHARD_ID, AT_SEQUENCE_NUMBER, seqB)).thenReturn(iteratorB);
@@ -166,7 +171,7 @@ public class KinesisDataFetcherTest {
     }
 
     @Test
-    public void testadvanceIteratorToTrimHorizonLatestAndAtTimestamp() {
+    public void testadvanceIteratorToTrimHorizonLatestAndAtTimestamp() throws Exception{
         IKinesisProxy kinesis = mock(IKinesisProxy.class);
 
         KinesisDataFetcher fetcher = new KinesisDataFetcher(kinesis, SHARD_INFO);
@@ -189,7 +194,7 @@ public class KinesisDataFetcherTest {
     }
 
     @Test
-    public void testGetRecordsWithResourceNotFoundException() {
+    public void testGetRecordsWithResourceNotFoundException() throws Exception {
         // Set up arguments used by proxy
         String nextIterator = "TestShardIterator";
         int maxRecords = 100;
@@ -211,11 +216,12 @@ public class KinesisDataFetcherTest {
     }
     
     @Test
-    public void testNonNullGetRecords() {
+    public void testNonNullGetRecords() throws Exception {
         String nextIterator = "TestIterator";
         int maxRecords = 100;
         
         KinesisProxy mockProxy = mock(KinesisProxy.class);
+        when(mockProxy.getIterator(anyString(), anyString())).thenReturn("targetIterator");
         doThrow(new ResourceNotFoundException("Test Exception")).when(mockProxy).get(nextIterator, maxRecords);
 
         KinesisDataFetcher dataFetcher = new KinesisDataFetcher(mockProxy, SHARD_INFO);
@@ -232,17 +238,25 @@ public class KinesisDataFetcherTest {
         final String NEXT_ITERATOR_ONE = "NextIteratorOne";
         final String NEXT_ITERATOR_TWO = "NextIteratorTwo";
         when(kinesisProxy.getIterator(anyString(), anyString())).thenReturn(INITIAL_ITERATOR);
-        GetRecordsResult iteratorOneResults = mock(GetRecordsResult.class);
-        when(iteratorOneResults.getNextShardIterator()).thenReturn(NEXT_ITERATOR_ONE);
+
+        GetRecordsResult iteratorOneResults = new GetRecordsResult();
+        iteratorOneResults.setNextShardIterator(NEXT_ITERATOR_ONE);
+        iteratorOneResults.setChildShards(Collections.emptyList());
         when(kinesisProxy.get(eq(INITIAL_ITERATOR), anyInt())).thenReturn(iteratorOneResults);
 
-        GetRecordsResult iteratorTwoResults = mock(GetRecordsResult.class);
+        GetRecordsResult iteratorTwoResults = new GetRecordsResult();
+        iteratorTwoResults.setNextShardIterator(NEXT_ITERATOR_TWO);
+        iteratorTwoResults.setChildShards(Collections.emptyList());
         when(kinesisProxy.get(eq(NEXT_ITERATOR_ONE), anyInt())).thenReturn(iteratorTwoResults);
-        when(iteratorTwoResults.getNextShardIterator()).thenReturn(NEXT_ITERATOR_TWO);
 
-        GetRecordsResult finalResult = mock(GetRecordsResult.class);
+        GetRecordsResult finalResult = new GetRecordsResult();
+        finalResult.setNextShardIterator(null);
+        List<ChildShard> childShards = new ArrayList<>();
+        ChildShard childShard = new ChildShard();
+        childShard.setParentShards(Collections.singletonList("parentShardId"));
+        childShards.add(childShard);
+        finalResult.setChildShards(childShards);
         when(kinesisProxy.get(eq(NEXT_ITERATOR_TWO), anyInt())).thenReturn(finalResult);
-        when(finalResult.getNextShardIterator()).thenReturn(null);
 
         KinesisDataFetcher dataFetcher = new KinesisDataFetcher(kinesisProxy, SHARD_INFO);
         dataFetcher.initialize("TRIM_HORIZON",
@@ -276,13 +290,14 @@ public class KinesisDataFetcherTest {
     }
     
     @Test
-    public void testRestartIterator() {
+    public void testRestartIterator() throws Exception{
         GetRecordsResult getRecordsResult = mock(GetRecordsResult.class);
-        GetRecordsResult restartGetRecordsResult = new GetRecordsResult();
+        GetRecordsResult restartGetRecordsResult = mock(GetRecordsResult.class);
         Record record = mock(Record.class);
         final String initialIterator = "InitialIterator";
         final String nextShardIterator = "NextShardIterator";
         final String restartShardIterator = "RestartIterator";
+        final String restartNextShardIterator = "RestartNextIterator";
         final String sequenceNumber = "SequenceNumber";
         final String iteratorType = "AT_SEQUENCE_NUMBER";
         KinesisProxy kinesisProxy = mock(KinesisProxy.class);
@@ -292,6 +307,7 @@ public class KinesisDataFetcherTest {
         when(kinesisProxy.get(eq(initialIterator), eq(10))).thenReturn(getRecordsResult);
         when(getRecordsResult.getRecords()).thenReturn(Collections.singletonList(record));
         when(getRecordsResult.getNextShardIterator()).thenReturn(nextShardIterator);
+        when(getRecordsResult.getChildShards()).thenReturn(Collections.emptyList());
         when(record.getSequenceNumber()).thenReturn(sequenceNumber);
 
         fetcher.initialize(InitialPositionInStream.LATEST.toString(), INITIAL_POSITION_LATEST);
@@ -300,6 +316,8 @@ public class KinesisDataFetcherTest {
         verify(kinesisProxy).get(eq(initialIterator), eq(10));
 
         when(kinesisProxy.getIterator(eq(SHARD_ID), eq(iteratorType), eq(sequenceNumber))).thenReturn(restartShardIterator);
+        when(restartGetRecordsResult.getNextShardIterator()).thenReturn(restartNextShardIterator);
+        when(restartGetRecordsResult.getChildShards()).thenReturn(Collections.emptyList());
         when(kinesisProxy.get(eq(restartShardIterator), eq(10))).thenReturn(restartGetRecordsResult);
 
         fetcher.restartIterator();
@@ -309,7 +327,7 @@ public class KinesisDataFetcherTest {
     }
     
     @Test (expected = IllegalStateException.class)
-    public void testRestartIteratorNotInitialized() {
+    public void testRestartIteratorNotInitialized() throws Exception {
         KinesisDataFetcher dataFetcher = new KinesisDataFetcher(kinesisProxy, SHARD_INFO);
         dataFetcher.restartIterator();
     }
@@ -354,6 +372,8 @@ public class KinesisDataFetcherTest {
         List<Record> expectedRecords = new ArrayList<Record>();
         GetRecordsResult response = new GetRecordsResult();
         response.setRecords(expectedRecords);
+        response.setNextShardIterator("testNextShardIterator");
+        response.setChildShards(Collections.emptyList());
 
         when(kinesis.getIterator(SHARD_ID, initialPositionInStream.getTimestamp())).thenReturn(iterator);
         when(kinesis.getIterator(SHARD_ID, AT_SEQUENCE_NUMBER, seqNo)).thenReturn(iterator);

@@ -29,6 +29,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -74,6 +75,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
     private IKinesisProxy proxy;
     @Mock
     private ShardInfo shardInfo;
+    @Mock
+    private KinesisClientLibLeaseCoordinator leaseCoordinator;
     
     @Before
     public void setup() {
@@ -171,7 +174,7 @@ public class PrefetchGetRecordsCacheIntegrationTest {
     }
     
     @Test
-    public void testExpiredIteratorException() {
+    public void testExpiredIteratorException() throws Exception {
         when(dataFetcher.getRecords(eq(MAX_RECORDS_PER_CALL))).thenAnswer(new Answer<DataFetcherResult>() {
             @Override
             public DataFetcherResult answer(final InvocationOnMock invocationOnMock) throws Throwable {
@@ -215,6 +218,8 @@ public class PrefetchGetRecordsCacheIntegrationTest {
             GetRecordsResult getRecordsResult = new GetRecordsResult();
             getRecordsResult.setRecords(new ArrayList<>(records));
             getRecordsResult.setMillisBehindLatest(1000L);
+            getRecordsResult.setNextShardIterator("testNextShardIterator");
+            getRecordsResult.setChildShards(Collections.emptyList());
 
             return new AdvancingResult(getRecordsResult);
         }

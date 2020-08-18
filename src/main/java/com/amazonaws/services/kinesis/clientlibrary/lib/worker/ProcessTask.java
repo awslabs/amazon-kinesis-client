@@ -152,8 +152,8 @@ class ProcessTask implements ITask {
 
         try {
             if (dataFetcher.isShardEndReached()) {
-                LOG.info("Reached end of shard " + shardInfo.getShardId());
-                return new TaskResult(null, true);
+                LOG.info("Reached end of shard " + shardInfo.getShardId() + ". Found childShards: " + dataFetcher.getChildShards());
+                return new TaskResult(null, true, dataFetcher.getChildShards());
             }
 
             final ProcessRecordsInput processRecordsInput = getRecordsResult();
@@ -353,7 +353,7 @@ class ProcessTask implements ITask {
              * recordProcessorCheckpointer).
              */
             dataFetcher.advanceIteratorTo(recordProcessorCheckpointer.getLargestPermittedCheckpointValue()
-                    .getSequenceNumber(), streamConfig.getInitialPositionInStream());
+                                                                     .getSequenceNumber(), streamConfig.getInitialPositionInStream());
 
             // Try a second time - if we fail this time, expose the failure.
             try {

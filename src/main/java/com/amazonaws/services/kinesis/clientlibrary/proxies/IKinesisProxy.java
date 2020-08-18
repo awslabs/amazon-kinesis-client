@@ -26,6 +26,7 @@ import com.amazonaws.services.kinesis.model.InvalidArgumentException;
 import com.amazonaws.services.kinesis.model.PutRecordResult;
 import com.amazonaws.services.kinesis.model.ResourceNotFoundException;
 import com.amazonaws.services.kinesis.model.Shard;
+import com.amazonaws.services.kinesis.model.ShardFilter;
 
 /**
  * Kinesis proxy interface. Operates on a single stream (set up at initialization).
@@ -77,6 +78,17 @@ public interface IKinesisProxy {
      * @throws ResourceNotFoundException The Kinesis stream was not found.
      */
     List<Shard> getShardList() throws ResourceNotFoundException;
+
+    /**
+     * Fetch a subset shards defined for the stream using a filter on the ListShards API. This can be used to
+     * discover new shards and consume data from them, while limiting the total number of shards returned for
+     * performance or efficiency reasons.
+     *
+     * @param shardFilter currently supported filter types are AT_LATEST, AT_TRIM_HORIZON, AT_TIMESTAMP.
+     * @return List of all shards in the Kinesis stream.
+     * @throws ResourceNotFoundException The Kinesis stream was not found.
+     */
+    List<Shard> getShardListWithFilter(ShardFilter shardFilter) throws ResourceNotFoundException;
 
     /**
      * Used to verify during ShardConsumer shutdown if the provided shardId is for a shard that has been closed.

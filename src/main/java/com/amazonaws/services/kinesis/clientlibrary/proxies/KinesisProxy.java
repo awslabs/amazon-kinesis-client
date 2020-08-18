@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.amazonaws.services.kinesis.model.ShardFilter;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
@@ -309,7 +310,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
         }
     }
     
-    private ListShardsResult listShards(final String nextToken) {
+    private ListShardsResult listShards(final ShardFilter shardFilter, final String nextToken) {
         final ListShardsRequest request = new ListShardsRequest();
         request.setRequestCredentials(credentialsProvider.getCredentials());
         if (StringUtils.isEmpty(nextToken)) {
@@ -317,6 +318,11 @@ public class KinesisProxy implements IKinesisProxyExtended {
         } else {
             request.setNextToken(nextToken);
         }
+
+        if (shardFilter != null) {
+            request.setShardFilter(shardFilter);
+        }
+
         ListShardsResult result = null;
         LimitExceededException lastException = null;
         int remainingRetries = this.maxListShardsRetryAttempts;
@@ -429,29 +435,37 @@ public class KinesisProxy implements IKinesisProxyExtended {
      */
     @Override
     public synchronized List<Shard> getShardList() {
+        return getShardListWithFilter(null);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public synchronized List<Shard> getShardListWithFilter(ShardFilter shardFilter) {
         if (shardIterationState == null) {
             shardIterationState = new ShardIterationState();
         }
-        
+
         if (isKinesisClient) {
             ListShardsResult result;
             String nextToken = null;
-            
+
             do {
-                result = listShards(nextToken);
-                
+                result = listShards(shardFilter, nextToken);
+
                 if (result == null) {
                     /*
-                    * If listShards ever returns null, we should bail and return null. This indicates the stream is not
-                    * in ACTIVE or UPDATING state and we may not have accurate/consistent information about the stream.
-                    */
+                     * If listShards ever returns null, we should bail and return null. This indicates the stream is not
+                     * in ACTIVE or UPDATING state and we may not have accurate/consistent information about the stream.
+                     */
                     return null;
                 } else {
                     shardIterationState.update(result.getShards());
                     nextToken = result.getNextToken();
                 }
             } while (StringUtils.isNotEmpty(result.getNextToken()));
-            
+
         } else {
             DescribeStreamResult response;
 
@@ -459,10 +473,10 @@ public class KinesisProxy implements IKinesisProxyExtended {
                 response = getStreamInfo(shardIterationState.getLastShardId());
 
                 if (response == null) {
-                /*
-                 * If getStreamInfo ever returns null, we should bail and return null. This indicates the stream is not
-                 * in ACTIVE or UPDATING state and we may not have accurate/consistent information about the stream.
-                 */
+                    /*
+                     * If getStreamInfo ever returns null, we should bail and return null. This indicates the stream is not
+                     * in ACTIVE or UPDATING state and we may not have accurate/consistent information about the stream.
+                     */
                     return null;
                 } else {
                     shardIterationState.update(response.getStreamDescription().getShards());

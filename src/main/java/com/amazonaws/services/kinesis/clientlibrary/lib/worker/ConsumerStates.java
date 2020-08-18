@@ -199,7 +199,7 @@ class ConsumerStates {
 
         @Override
         public ConsumerState shutdownTransition(ShutdownReason shutdownReason) {
-            return ShardConsumerState.SHUTDOWN_COMPLETE.getConsumerState();
+            return ShardConsumerState.SHUTTING_DOWN.getConsumerState();
         }
 
         @Override
@@ -530,7 +530,9 @@ class ConsumerStates {
                     consumer.isIgnoreUnexpectedChildShards(),
                     consumer.getLeaseCoordinator(),
                     consumer.getTaskBackoffTimeMillis(),
-                    consumer.getGetRecordsCache(), consumer.getShardSyncer(), consumer.getShardSyncStrategy());
+                    consumer.getGetRecordsCache(), consumer.getShardSyncer(),
+                    consumer.getShardSyncStrategy(), consumer.getChildShards(),
+                    consumer.getLeaseCleanupManager());
         }
 
         @Override

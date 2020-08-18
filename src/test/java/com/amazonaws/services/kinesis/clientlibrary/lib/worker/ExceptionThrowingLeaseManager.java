@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import java.util.Arrays;
 import java.util.List;
 
+import com.amazonaws.services.kinesis.leases.impl.UpdateField;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -53,6 +54,7 @@ class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease>
         DELETELEASE(9),
         DELETEALL(10),
         UPDATELEASE(11),
+        UPDATELEASEWITHMETAINFO(12),
         NONE(Integer.MIN_VALUE);
 
         private Integer index;
@@ -198,6 +200,14 @@ class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease>
     }
 
     @Override
+    public void updateLeaseWithMetaInfo(KinesisClientLease lease, UpdateField updateField)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throwExceptions("updateLeaseWithMetaInfo", ExceptionThrowingLeaseManagerMethods.UPDATELEASEWITHMETAINFO);
+
+        leaseManager.updateLeaseWithMetaInfo(lease, updateField);
+    }
+
+    @Override
     public KinesisClientLease getLease(String shardId)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         throwExceptions("getLease", ExceptionThrowingLeaseManagerMethods.GETLEASE);
@@ -215,7 +225,7 @@ class ExceptionThrowingLeaseManager implements ILeaseManager<KinesisClientLease>
     @Override
     public boolean isLeaseTableEmpty() throws DependencyException,
         InvalidStateException, ProvisionedThroughputException {
-        return false;
+        return leaseManager.listLeases().isEmpty();
     }
 
 }

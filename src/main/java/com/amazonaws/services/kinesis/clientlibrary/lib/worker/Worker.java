@@ -29,12 +29,17 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
+import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
+import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
 import com.amazonaws.services.kinesis.leases.impl.LeaseCoordinator;
 import com.amazonaws.services.kinesis.leases.impl.LeaseRenewer;
 import com.amazonaws.services.kinesis.leases.impl.LeaseTaker;
@@ -88,9 +93,13 @@ public class Worker implements Runnable {
 
     private static final Log LOG = LogFactory.getLog(Worker.class);
 
+    // Default configs for periodic shard sync
     private static final int SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC = 0;
-    private static final int MAX_INITIALIZATION_ATTEMPTS = 20;
     private static final int PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT = 1; //Default for KCL.
+    static final long LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 3 * 1000L;
+    static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 1 * 1000L;
+    static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
+
     private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
     private static final LeaseCleanupValidator DEFAULT_LEASE_CLEANUP_VALIDATOR = new KinesisLeaseCleanupValidator();
     private static final LeaseSelector<KinesisClientLease> DEFAULT_LEASE_SELECTOR = new GenericLeaseSelector<KinesisClientLease>();
@@ -117,7 +126,7 @@ public class Worker implements Runnable {
     private final Optional<Integer> maxGetRecordsThreadPool;
 
     private final KinesisClientLibLeaseCoordinator leaseCoordinator;
-    private final ShardSyncTaskManager controlServer;
+    private final ShardSyncTaskManager shardSyncTaskManager;
 
     private final ShardPrioritization shardPrioritization;
 
@@ -147,6 +156,9 @@ public class Worker implements Runnable {
     // Periodic Shard Sync related fields
     private LeaderDecider leaderDecider;
     private ShardSyncStrategy shardSyncStrategy;
+    private PeriodicShardSyncManager leaderElectedPeriodicShardSyncManager;
+
+    private final LeaseCleanupManager leaseCleanupManager;
 
     /**
      * Constructor.
@@ -406,7 +418,7 @@ public class Worker implements Runnable {
                 config.getShardPrioritizationStrategy(),
                 config.getRetryGetRecordsInSeconds(),
                 config.getMaxGetRecordsThreadPool(),
-                DEFAULT_WORKER_STATE_CHANGE_LISTENER, DEFAULT_LEASE_CLEANUP_VALIDATOR, null /* leaderDecider */);
+                DEFAULT_WORKER_STATE_CHANGE_LISTENER, DEFAULT_LEASE_CLEANUP_VALIDATOR, null, null);
 
         // If a region name was explicitly specified, use it as the region for Amazon Kinesis and Amazon DynamoDB.
         if (config.getRegionName() != null) {
@@ -467,7 +479,7 @@ public class Worker implements Runnable {
                 shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
                 metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
                 shardPrioritization, Optional.empty(), Optional.empty(), DEFAULT_WORKER_STATE_CHANGE_LISTENER,
-                DEFAULT_LEASE_CLEANUP_VALIDATOR, null);
+                DEFAULT_LEASE_CLEANUP_VALIDATOR, null, null);
     }
 
     /**
@@ -507,6 +519,10 @@ public class Worker implements Runnable {
      *            Max number of threads in the getRecords thread pool.
      * @param leaseCleanupValidator
      *            leaseCleanupValidator instance used to validate leases
+     * @param leaderDecider
+     *            leaderDecider instance used elect shard sync leaders
+     * @param periodicShardSyncManager
+     *            manages periodic shard sync tasks
      */
     // NOTE: This has package level access solely for testing
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
@@ -517,13 +533,13 @@ public class Worker implements Runnable {
             IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
             Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener,
-            LeaseCleanupValidator leaseCleanupValidator, LeaderDecider leaderDecider) {
+            LeaseCleanupValidator leaseCleanupValidator, LeaderDecider leaderDecider, PeriodicShardSyncManager periodicShardSyncManager) {
         this(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream,
                 parentShardPollIntervalMillis, shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint,
                 leaseCoordinator, execService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist, shardPrioritization, retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool, workerStateChangeListener, new KinesisShardSyncer(leaseCleanupValidator),
-                leaderDecider);
+                leaderDecider, periodicShardSyncManager);
     }
 
     Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, KinesisClientLibConfiguration config,
@@ -533,7 +549,8 @@ public class Worker implements Runnable {
             IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
             Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool,
-            WorkerStateChangeListener workerStateChangeListener, ShardSyncer shardSyncer, LeaderDecider leaderDecider) {
+            WorkerStateChangeListener workerStateChangeListener, ShardSyncer shardSyncer, LeaderDecider leaderDecider,
+            PeriodicShardSyncManager periodicShardSyncManager) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.config = config;
@@ -547,7 +564,7 @@ public class Worker implements Runnable {
         this.leaseCoordinator = leaseCoordinator;
         this.metricsFactory = metricsFactory;
         this.shardSyncer = shardSyncer;
-        this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
+        this.shardSyncTaskManager = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
                 initialPositionInStream, cleanupLeasesUponShardCompletion, config.shouldIgnoreUnexpectedChildShards(),
                 shardSyncIdleTimeMillis, metricsFactory, executorService, shardSyncer);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
@@ -558,19 +575,42 @@ public class Worker implements Runnable {
         this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
         this.workerStateChangeListener = workerStateChangeListener;
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.CREATED);
-        this.leaderDecider = leaderDecider;
-        this.shardSyncStrategy = createShardSyncStrategy(config.getShardSyncStrategyType());
-        LOG.info(String.format("Shard sync strategy determined as %s.", shardSyncStrategy.getStrategyType().toString()));
+        createShardSyncStrategy(config.getShardSyncStrategyType(), leaderDecider, periodicShardSyncManager);
+        this.leaseCleanupManager = LeaseCleanupManager.createOrGetInstance(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
+                Executors.newSingleThreadScheduledExecutor(), metricsFactory, cleanupLeasesUponShardCompletion,
+                config.leaseCleanupIntervalMillis(), config.completedLeaseCleanupThresholdMillis(),
+                config.garbageLeaseCleanupThresholdMillis(), config.getMaxRecords());
     }
 
-    private ShardSyncStrategy createShardSyncStrategy(ShardSyncStrategyType strategyType) {
+    /**
+     * Create shard sync strategy and corresponding {@link LeaderDecider} based on provided configs. PERIODIC
+     * {@link ShardSyncStrategyType} honors custom leaderDeciders for leader election strategy, and does not permit
+     * skipping shard syncs if the hash range is complete. All other {@link ShardSyncStrategyType}s permit only a
+     * default single-leader strategy, and will skip shard syncs unless a hole in the hash range is detected.
+     */
+    private void createShardSyncStrategy(ShardSyncStrategyType strategyType,
+                                         LeaderDecider leaderDecider,
+                                         PeriodicShardSyncManager periodicShardSyncManager) {
         switch (strategyType) {
             case PERIODIC:
-               return createPeriodicShardSyncStrategy(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager());
+                this.leaderDecider = getOrCreateLeaderDecider(leaderDecider);
+                this.leaderElectedPeriodicShardSyncManager =
+                        getOrCreatePeriodicShardSyncManager(periodicShardSyncManager, false);
+                this.shardSyncStrategy = createPeriodicShardSyncStrategy();
+                break;
             case SHARD_END:
             default:
-                return createShardEndShardSyncStrategy(controlServer);
+                if (leaderDecider != null) {
+                    LOG.warn("LeaderDecider cannot be customized with non-PERIODIC shard sync strategy type. Using " +
+                             "default LeaderDecider.");
+                }
+                this.leaderDecider = getOrCreateLeaderDecider(null);
+                this.leaderElectedPeriodicShardSyncManager =
+                        getOrCreatePeriodicShardSyncManager(periodicShardSyncManager, true);
+                this.shardSyncStrategy = createShardEndShardSyncStrategy();
         }
+
+        LOG.info("Shard sync strategy determined as " + shardSyncStrategy.getStrategyType().toString());
     }
 
     private static KinesisClientLibLeaseCoordinator getLeaseCoordinator(KinesisClientLibConfiguration config,
@@ -603,6 +643,20 @@ public class Worker implements Runnable {
     }
 
     /**
+     * @return the leaderDecider
+     */
+    LeaderDecider getLeaderDecider() {
+        return leaderDecider;
+    }
+
+    /**
+     * @return the leaderElectedPeriodicShardSyncManager
+     */
+    PeriodicShardSyncManager getPeriodicShardSyncManager() {
+        return leaderElectedPeriodicShardSyncManager;
+    }
+
+    /**
      * Start consuming data from the stream, and pass it to the application record processors.
      */
     public void run() {
@@ -614,7 +668,8 @@ public class Worker implements Runnable {
             initialize();
             LOG.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e1) {
-            LOG.error("Unable to initialize after " + MAX_INITIALIZATION_ATTEMPTS + " attempts. Shutting down.", e1);
+            LOG.error("Unable to initialize after " + config.getMaxInitializationAttempts() + " attempts. " +
+                    "Shutting down.", e1);
             shutdown();
         }
 
@@ -641,10 +696,6 @@ public class Worker implements Runnable {
                 assignedShards.add(shardInfo);
             }
 
-            if (foundCompletedShard) {
-                shardSyncStrategy.onFoundCompletedShard();
-            }
-
             // clean up shard consumers for unassigned shards
             cleanupShardConsumers(assignedShards);
 
@@ -667,36 +718,38 @@ public class Worker implements Runnable {
         boolean isDone = false;
         Exception lastException = null;
 
-        for (int i = 0; (!isDone) && (i < MAX_INITIALIZATION_ATTEMPTS); i++) {
+        for (int i = 0; (!isDone) && (i < config.getMaxInitializationAttempts()); i++) {
             try {
                 LOG.info("Initialization attempt " + (i + 1));
                 LOG.info("Initializing LeaseCoordinator");
                 leaseCoordinator.initialize();
 
-                TaskResult result = null;
-                if (!skipShardSyncAtWorkerInitializationIfLeasesExist
-                        || leaseCoordinator.getLeaseManager().isLeaseTableEmpty()) {
-                    LOG.info("Syncing Kinesis shard info");
-                    ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
-                            leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
-                            config.shouldIgnoreUnexpectedChildShards(), 0L, shardSyncer, null);
-                    result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
-                } else {
-                    LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
+                // Perform initial lease sync if configs allow it, with jitter.
+                if (shouldInitiateLeaseSync()) {
+                    LOG.info(config.getWorkerIdentifier() + " worker is beginning initial lease sync.");
+                    TaskResult result = leaderElectedPeriodicShardSyncManager.syncShardsOnce();
+                    if (result.getException() != null) {
+                        throw result.getException();
+                    }
                 }
 
-                if (result == null || result.getException() == null) {
-                    if (!leaseCoordinator.isRunning()) {
-                        LOG.info("Starting LeaseCoordinator");
-                        leaseCoordinator.start();
-                    } else {
-                        LOG.info("LeaseCoordinator is already running. No need to start it.");
-                    }
-                    shardSyncStrategy.onWorkerInitialization();
-                    isDone = true;
+                leaseCleanupManager.start();
+
+                // If we reach this point, then we either skipped the lease sync or did not have any exception for the
+                // shard sync in the previous attempt.
+                if (!leaseCoordinator.isRunning()) {
+                    LOG.info("Starting LeaseCoordinator");
+                    leaseCoordinator.start();
                 } else {
-                    lastException = result.getException();
+                    LOG.info("LeaseCoordinator is already running. No need to start it.");
                 }
+
+                // All shard sync strategies' initialization handlers should begin a periodic shard sync. For
+                // PeriodicShardSync strategy, this is the main shard sync loop. For ShardEndShardSync and other
+                // shard sync strategies, this serves as an auditor background process.
+                shardSyncStrategy.onWorkerInitialization();
+                isDone = true;
+
             } catch (LeasingException e) {
                 LOG.error("Caught exception when initializing LeaseCoordinator", e);
                 lastException = e;
@@ -712,9 +765,37 @@ public class Worker implements Runnable {
         }
 
         if (!isDone) {
+            leaderElectedPeriodicShardSyncManager.stop();
             throw new RuntimeException(lastException);
+
         }
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.STARTED);
+    }
+
+    @VisibleForTesting
+    boolean shouldInitiateLeaseSync() throws InterruptedException, DependencyException, InvalidStateException,
+            ProvisionedThroughputException {
+
+        final ILeaseManager leaseManager = leaseCoordinator.getLeaseManager();
+        if (skipShardSyncAtWorkerInitializationIfLeasesExist && !leaseManager.isLeaseTableEmpty()) {
+            LOG.info("Skipping shard sync because getSkipShardSyncAtWorkerInitializationIfLeasesExist config is set " +
+                    "to TRUE and lease table is not empty.");
+            return false;
+        }
+
+        final long waitTime = ThreadLocalRandom.current().nextLong(MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS,
+                MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
+        final long waitUntil = System.currentTimeMillis() + waitTime;
+
+        boolean shouldInitiateLeaseSync = true;
+        while (System.currentTimeMillis() < waitUntil && (shouldInitiateLeaseSync = leaseManager.isLeaseTableEmpty())) {
+            // Check every 3 seconds if lease table is still empty, to minimize contention between all workers
+            // bootstrapping from empty lease table at the same time.
+            LOG.info("Lease table is still empty. Checking again in " + LEASE_TABLE_CHECK_FREQUENCY_MILLIS + " ms.");
+            Thread.sleep(LEASE_TABLE_CHECK_FREQUENCY_MILLIS);
+        }
+
+        return shouldInitiateLeaseSync;
     }
 
     /**
@@ -1039,12 +1120,21 @@ public class Worker implements Runnable {
     }
 
     protected ShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
-        IRecordProcessor recordProcessor = processorFactory.createProcessor();
+        final IRecordProcessor recordProcessor = processorFactory.createProcessor();
+        final RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
+                shardInfo,
+                checkpointTracker,
+                new SequenceNumberValidator(
+                        streamConfig.getStreamProxy(),
+                        shardInfo.getShardId(),
+                        streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
+                metricsFactory);
 
         return new ShardConsumer(shardInfo,
                 streamConfig,
                 checkpointTracker,
                 recordProcessor,
+                recordProcessorCheckpointer,
                 leaseCoordinator,
                 parentShardPollIntervalMillis,
                 cleanupLeasesUponShardCompletion,
@@ -1052,9 +1142,11 @@ public class Worker implements Runnable {
                 metricsFactory,
                 taskBackoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
+                new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo),
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
-                config, shardSyncer, shardSyncStrategy);
+                config, shardSyncer, shardSyncStrategy,
+                leaseCleanupManager);
     }
 
     /**
@@ -1163,18 +1255,47 @@ public class Worker implements Runnable {
         }
     }
 
-    private PeriodicShardSyncStrategy createPeriodicShardSyncStrategy(IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager) {
-        return new PeriodicShardSyncStrategy(
-                new PeriodicShardSyncManager(config.getWorkerIdentifier(), leaderDecider,
-                        new ShardSyncTask(kinesisProxy, leaseManager, config.getInitialPositionInStreamExtended(),
-                                config.shouldCleanupLeasesUponShardCompletion(),
-                                config.shouldIgnoreUnexpectedChildShards(), SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
-                                shardSyncer, null), metricsFactory));
+    private PeriodicShardSyncStrategy createPeriodicShardSyncStrategy() {
+        return new PeriodicShardSyncStrategy(leaderElectedPeriodicShardSyncManager);
     }
 
-    private ShardEndShardSyncStrategy createShardEndShardSyncStrategy(ShardSyncTaskManager shardSyncTaskManager) {
-        return new ShardEndShardSyncStrategy(shardSyncTaskManager);
+    private ShardEndShardSyncStrategy createShardEndShardSyncStrategy() {
+        return new ShardEndShardSyncStrategy(shardSyncTaskManager, leaderElectedPeriodicShardSyncManager);
+    }
+
+    private LeaderDecider getOrCreateLeaderDecider(LeaderDecider leaderDecider) {
+        if (leaderDecider != null) {
+            return leaderDecider;
+        }
+
+        return new DeterministicShuffleShardSyncLeaderDecider(leaseCoordinator.getLeaseManager(),
+                Executors.newSingleThreadScheduledExecutor(), PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
+    }
+
+    /** A non-null PeriodicShardSyncManager can only provided from unit tests. Any application code will create the
+     * PeriodicShardSyncManager for the first time here. */
+    private PeriodicShardSyncManager getOrCreatePeriodicShardSyncManager(PeriodicShardSyncManager periodicShardSyncManager,
+                                                                         boolean isAuditorMode) {
+        if (periodicShardSyncManager != null) {
+            return periodicShardSyncManager;
+        }
+
+        return new PeriodicShardSyncManager(config.getWorkerIdentifier(),
+                                            leaderDecider,
+                                            new ShardSyncTask(streamConfig.getStreamProxy(),
+                                                    leaseCoordinator.getLeaseManager(),
+                                                    config.getInitialPositionInStreamExtended(),
+                                                    config.shouldCleanupLeasesUponShardCompletion(),
+                                                    config.shouldIgnoreUnexpectedChildShards(),
+                                                    SHARD_SYNC_SLEEP_FOR_PERIODIC_SHARD_SYNC,
+                                                    shardSyncer,
+                                                    null),
+                                            metricsFactory,
+                                            leaseCoordinator.getLeaseManager(),
+                                            streamConfig.getStreamProxy(),
+                                            isAuditorMode,
+                                            config.getLeasesRecoveryAuditorExecutionFrequencyMillis(),
+                                            config.getLeasesRecoveryAuditorInconsistencyConfidenceThreshold());
     }
 
     /**
@@ -1241,7 +1362,6 @@ public class Worker implements Runnable {
         private ILeaseRenewer<KinesisClientLease> leaseRenewer;
         @Setter @Accessors(fluent = true)
         private ShardSyncer shardSyncer;
-
 
         @VisibleForTesting
         AmazonKinesis getKinesisClient() {
@@ -1349,7 +1469,7 @@ public class Worker implements Runnable {
             }
 
             if (shardPrioritization == null) {
-                shardPrioritization = new ParentsFirstShardPrioritization(1);
+                shardPrioritization = new NoOpShardPrioritization();
             }
 
             if (kinesisProxy == null) {
@@ -1379,7 +1499,7 @@ public class Worker implements Runnable {
             }
 
             // We expect users to either inject both LeaseRenewer and the corresponding thread-pool, or neither of them (DEFAULT).
-           if (leaseRenewer == null){
+           if (leaseRenewer == null) {
                 ExecutorService leaseRenewerThreadPool = LeaseCoordinator.getDefaultLeaseRenewalExecutorService(config.getMaxLeaseRenewalThreads());
                 leaseRenewer = new LeaseRenewer<>(leaseManager, config.getWorkerIdentifier(), config.getFailoverTimeMillis(), leaseRenewerThreadPool);
             }
@@ -1419,7 +1539,10 @@ public class Worker implements Runnable {
                     shardPrioritization,
                     config.getRetryGetRecordsInSeconds(),
                     config.getMaxGetRecordsThreadPool(),
-                    workerStateChangeListener, shardSyncer, leaderDecider);
+                    workerStateChangeListener,
+                    shardSyncer,
+                    leaderDecider,
+                    null /* PeriodicShardSyncManager */);
         }
 
         <R, T extends AwsClientBuilder<T, R>> R createClient(final T builder,

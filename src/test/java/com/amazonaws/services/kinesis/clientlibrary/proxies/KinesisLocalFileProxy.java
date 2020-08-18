@@ -25,6 +25,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,6 +34,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.amazonaws.services.kinesis.model.ChildShard;
+import com.amazonaws.services.kinesis.model.ShardFilter;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
@@ -387,12 +390,31 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
              */
             response.setNextShardIterator(serializeIterator(iterator.shardId, lastRecordsSeqNo.add(BigInteger.ONE)
                     .toString()));
+            response.setChildShards(Collections.emptyList());
             LOG.debug("Returning a non null iterator for shard " + iterator.shardId);
         } else {
+            response.setChildShards(constructChildShards(iterator));
             LOG.info("Returning null iterator for shard " + iterator.shardId);
         }
 
         return response;
+    }
+
+    private List<ChildShard> constructChildShards(IteratorInfo iterator) {
+        List<ChildShard> childShards = new ArrayList<>();
+        List<String> parentShards = new ArrayList<>();
+        parentShards.add(iterator.shardId);
+
+        ChildShard leftChild = new ChildShard();
+        leftChild.setShardId("shardId-1");
+        leftChild.setParentShards(parentShards);
+        childShards.add(leftChild);
+
+        ChildShard rightChild = new ChildShard();
+        rightChild.setShardId("shardId-2");
+        rightChild.setParentShards(parentShards);
+        childShards.add(rightChild);
+        return childShards;
     }
 
     /**
@@ -420,6 +442,16 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
      */
     @Override
     public List<Shard> getShardList() throws ResourceNotFoundException {
+        List<Shard> shards = new LinkedList<Shard>();
+        shards.addAll(shardList);
+        return shards;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<Shard> getShardListWithFilter(ShardFilter shardFilter) throws ResourceNotFoundException {
         List<Shard> shards = new LinkedList<Shard>();
         shards.addAll(shardList);
         return shards;

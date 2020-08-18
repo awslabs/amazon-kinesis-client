@@ -16,8 +16,13 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
     private static final Log LOG = LogFactory.getLog(Worker.class);
     private ShardSyncTaskManager shardSyncTaskManager;
 
-    ShardEndShardSyncStrategy(ShardSyncTaskManager shardSyncTaskManager) {
+    /** Runs periodic shard sync jobs in the background as an auditor process for shard-end syncs. */
+    private PeriodicShardSyncManager periodicShardSyncManager;
+
+    ShardEndShardSyncStrategy(ShardSyncTaskManager shardSyncTaskManager,
+                              PeriodicShardSyncManager periodicShardSyncManager) {
         this.shardSyncTaskManager = shardSyncTaskManager;
+        this.periodicShardSyncManager = periodicShardSyncManager;
     }
 
     @Override
@@ -42,8 +47,8 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
     @Override
     public TaskResult onWorkerInitialization() {
-        LOG.debug(String.format("onWorkerInitialization is NoOp for ShardSyncStrategyType %s", getStrategyType().toString()));
-        return new TaskResult(null);
+        LOG.info("Starting periodic shard sync background process for SHARD_END shard sync strategy.");
+        return periodicShardSyncManager.start();
     }
 
     @Override
@@ -65,6 +70,7 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
 
     @Override
     public void onWorkerShutDown() {
-        LOG.debug(String.format("Stop is NoOp for ShardSyncStrategyType %s", getStrategyType().toString()));
+        LOG.info("Stopping periodic shard sync background process for SHARD_END shard sync strategy.");
+        periodicShardSyncManager.stop();
     }
 }
