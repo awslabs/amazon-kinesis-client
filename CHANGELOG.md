@@ -1,7 +1,16 @@
 # Changelog
 
-### Latest Release (2.3.0 - August 17, 2020)
+### Latest Release 2.3.1 (October 20, 2020)
+[Milestone#53](https://github.com/awslabs/amazon-kinesis-client/milestone/53)
+* Introducing support for processing multiple kinesis data streams with the same KCL 2.x for java consumer application
+  * To build a consumer application that can process multiple streams at the same time, you must implement a new
+  interface called MultistreamTracker (https://github.com/awslabs/amazon-kinesis-client/blob/0c5042dadf794fe988438436252a5a8fe70b6b0b/amazon-kinesis-client/src/main/java/software/amazon/kinesis/processor/MultiStreamTracker.java)
 
+  * MultistreamTracker will also publish various metrics around the current active streams being processed, the number
+   of streams which are deleted at this time period or are pending deletion.
+
+
+### Release 2.3.0 (August 17, 2020)
 * [Milestone#52](https://github.com/awslabs/amazon-kinesis-client/milestones/52)
 
 * Behavior of shard synchronization is moving from each worker independently learning about all existing shards to workers only discovering the children of shards that each worker owns. This optimizes memory usage, lease table IOPS usage, and number of calls made to kinesis for streams with high shard counts and/or frequent resharding.
