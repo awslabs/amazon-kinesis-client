@@ -18,6 +18,7 @@ package software.amazon.kinesis.retrieval;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
+import com.amazonaws.services.schemaregistry.common.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -43,6 +44,7 @@ public class KinesisClientRecord {
     private final long subSequenceNumber;
     private final String explicitHashKey;
     private final boolean aggregated;
+    private final Schema schema;
 
     public static KinesisClientRecord fromRecord(Record record) {
         return KinesisClientRecord.builder().sequenceNumber(record.sequenceNumber())

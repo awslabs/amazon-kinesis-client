@@ -97,6 +97,7 @@ import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
+import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
 import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType;
 
@@ -167,6 +168,7 @@ public class Scheduler implements Runnable {
     private final LeaderDecider leaderDecider;
     private final Map<StreamIdentifier, Instant> staleStreamDeletionMap = new HashMap<>();
     private final LeaseCleanupManager leaseCleanupManager;
+    private final SchemaRegistryDecoder schemaRegistryDecoder;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -296,6 +298,10 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold());
         this.leaseCleanupManager = this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode)
                 .createLeaseCleanupManager(metricsFactory);
+        this.schemaRegistryDecoder =
+            this.retrievalConfig.glueSchemaRegistryDeserializer() == null ?
+                null
+                : new SchemaRegistryDecoder(this.retrievalConfig.glueSchemaRegistryDeserializer());
     }
 
     /**
@@ -929,7 +935,9 @@ public class Scheduler implements Runnable {
                 aggregatorUtil,
                 hierarchicalShardSyncerProvider.apply(streamConfig),
                 metricsFactory,
-                leaseCleanupManager);
+                leaseCleanupManager,
+                schemaRegistryDecoder
+            );
         return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(),
                 argument, lifecycleConfig.taskExecutionListener(), lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
     }

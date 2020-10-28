@@ -24,8 +24,11 @@ import static org.hamcrest.beans.HasPropertyWithValue.hasProperty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +49,9 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.schemaregistry.common.Schema;
+import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDeserializer;
+import com.google.common.collect.ImmutableList;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
@@ -60,6 +66,7 @@ import com.google.protobuf.ByteString;
 
 import lombok.Data;
 import lombok.Getter;
+import software.amazon.awssdk.services.glue.model.DataFormat;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -75,10 +82,13 @@ import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.retrieval.kpl.Messages;
 import software.amazon.kinesis.retrieval.kpl.Messages.AggregatedRecord;
+import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ProcessTaskTest {
     private static final long IDLE_TIME_IN_MILLISECONDS = 100L;
+    private static final Schema SCHEMA_REGISTRY_SCHEMA = new Schema("{}", DataFormat.AVRO.toString(), "demoSchema");
+    private static final byte[] SCHEMA_REGISTRY_PAYLOAD = new byte[] {01, 05, 03, 05};
 
     private boolean shouldCallProcessRecordsEvenForEmptyRecordList = true;
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist = true;
@@ -88,6 +98,9 @@ public class ProcessTaskTest {
     private ProcessRecordsInput processRecordsInput;
     @Mock
     private ShardDetector shardDetector;
+
+    @Mock
+    private GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer;
 
 
     private static final byte[] TEST_DATA = new byte[] { 1, 2, 3, 4 };
@@ -117,13 +130,27 @@ public class ProcessTaskTest {
                 skipShardSyncAtWorkerInitializationIfLeasesExist);
     }
 
+    private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, GlueSchemaRegistryDeserializer deserializer) {
+        return makeProcessTask(processRecordsInput, new AggregatorUtil(), skipShardSyncAtWorkerInitializationIfLeasesExist, new SchemaRegistryDecoder(deserializer));
+    }
+
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil,
             boolean skipShardSync) {
-        return new ProcessTask(shardInfo, shardRecordProcessor, checkpointer, taskBackoffTimeMillis,
-                skipShardSync, shardDetector, throttlingReporter,
-                processRecordsInput, shouldCallProcessRecordsEvenForEmptyRecordList, IDLE_TIME_IN_MILLISECONDS,
-                aggregatorUtil, new NullMetricsFactory());
+        return makeProcessTask(processRecordsInput, aggregatorUtil, skipShardSync, null);
     }
+
+    private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil, boolean skipShardSync,
+        SchemaRegistryDecoder schemaRegistryDecoder) {
+        return new ProcessTask(shardInfo, shardRecordProcessor, checkpointer, taskBackoffTimeMillis,
+            skipShardSync, shardDetector, throttlingReporter,
+            processRecordsInput, shouldCallProcessRecordsEvenForEmptyRecordList, IDLE_TIME_IN_MILLISECONDS,
+            aggregatorUtil,
+            new NullMetricsFactory(),
+            schemaRegistryDecoder
+        );
+    }
+
+
 
     @Test
     public void testProcessTaskWithShardEndReached() {
@@ -138,6 +165,11 @@ public class ProcessTaskTest {
     private KinesisClientRecord makeKinesisClientRecord(String partitionKey, String sequenceNumber, Instant arrival) {
         return KinesisClientRecord.builder().partitionKey(partitionKey).sequenceNumber(sequenceNumber)
                 .approximateArrivalTimestamp(arrival).data(ByteBuffer.wrap(TEST_DATA)).build();
+    }
+
+    private KinesisClientRecord makeKinesisClientRecord(String partitionKey, String sequenceNumber, Instant arrival, ByteBuffer data, Schema schema) {
+        return KinesisClientRecord.builder().partitionKey(partitionKey).sequenceNumber(sequenceNumber)
+            .approximateArrivalTimestamp(arrival).data(data).schema(schema).build();
     }
 
     @Test
@@ -402,6 +434,139 @@ public class ProcessTaskTest {
                 new ExtendedSequenceNumber(sequenceNumber.toString(), 0L));
 
         assertThat(outcome.processRecordsCall.records(), equalTo(expectedRecords));
+    }
+
+    @Test
+    public void testProcessTask_WhenSchemaRegistryRecordsAreSent_ProcessesThemSuccessfully() {
+        processTask = makeProcessTask(processRecordsInput, glueSchemaRegistryDeserializer);
+        final BigInteger sqn = new BigInteger(128, new Random());
+        final BigInteger previousCheckpointSqn = BigInteger.valueOf(1);
+        final String pk = UUID.randomUUID().toString();
+        final Date ts = new Date(System.currentTimeMillis() - TimeUnit.MILLISECONDS.convert(4, TimeUnit.HOURS));
+
+        //Payload set to SchemaRegistry encoded data and schema to null
+        //to mimic Schema Registry encoded message from Kinesis stream.
+        final KinesisClientRecord schemaRegistryRecord =
+            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(SCHEMA_REGISTRY_PAYLOAD), null);
+
+        final KinesisClientRecord nonSchemaRegistryRecord =
+            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
+
+        when(processRecordsInput.records())
+            .thenReturn(
+                ImmutableList.of(
+                    schemaRegistryRecord,
+                    nonSchemaRegistryRecord
+                )
+            );
+
+        doReturn(true).when(glueSchemaRegistryDeserializer).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
+        doReturn(TEST_DATA).when(glueSchemaRegistryDeserializer).getData(SCHEMA_REGISTRY_PAYLOAD);
+        doReturn(SCHEMA_REGISTRY_SCHEMA).when(glueSchemaRegistryDeserializer).getSchema(SCHEMA_REGISTRY_PAYLOAD);
+
+        ShardRecordProcessorOutcome outcome = testWithRecords(processTask, new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 0L),
+            new ExtendedSequenceNumber(previousCheckpointSqn.add(previousCheckpointSqn).toString(),  1L));
+
+        KinesisClientRecord decodedSchemaRegistryRecord =
+            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(TEST_DATA), SCHEMA_REGISTRY_SCHEMA);
+        List<KinesisClientRecord> expectedRecords =
+            ImmutableList.of(
+                decodedSchemaRegistryRecord,
+                nonSchemaRegistryRecord
+            );
+
+        List<KinesisClientRecord> actualRecords = outcome.getProcessRecordsCall().records();
+
+        assertEquals(expectedRecords, actualRecords);
+
+        verify(glueSchemaRegistryDeserializer, times(1)).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
+        verify(glueSchemaRegistryDeserializer, times(1)).getSchema(SCHEMA_REGISTRY_PAYLOAD);
+        verify(glueSchemaRegistryDeserializer, times(1)).getData(SCHEMA_REGISTRY_PAYLOAD);
+    }
+
+    @Test
+    public void testProcessTask_WhenSchemaRegistryDecodeCheckFails_IgnoresRecord() {
+        processTask = makeProcessTask(processRecordsInput, glueSchemaRegistryDeserializer);
+        final BigInteger sqn = new BigInteger(128, new Random());
+        final BigInteger previousCheckpointSqn = BigInteger.valueOf(1);
+        final String pk = UUID.randomUUID().toString();
+        final Date ts = new Date(System.currentTimeMillis() - TimeUnit.MILLISECONDS.convert(4, TimeUnit.HOURS));
+
+        //Payload set to SchemaRegistry encoded data and schema to null
+        //to mimic Schema Registry encoded message from Kinesis stream.
+        final KinesisClientRecord schemaRegistryRecord =
+            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(SCHEMA_REGISTRY_PAYLOAD), null);
+
+        final KinesisClientRecord nonSchemaRegistryRecord =
+            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
+
+        when(processRecordsInput.records())
+            .thenReturn(
+                ImmutableList.of(
+                    schemaRegistryRecord,
+                    nonSchemaRegistryRecord
+                )
+            );
+
+        doThrow(new RuntimeException("Invalid data"))
+            .when(glueSchemaRegistryDeserializer).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
+
+        ShardRecordProcessorOutcome outcome = testWithRecords(processTask, new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 0L),
+            new ExtendedSequenceNumber(previousCheckpointSqn.add(previousCheckpointSqn).toString(),  1L));
+
+        List<KinesisClientRecord> expectedRecords =
+            ImmutableList.of(
+                schemaRegistryRecord,
+                nonSchemaRegistryRecord
+            );
+
+        List<KinesisClientRecord> actualRecords = outcome.getProcessRecordsCall().records();
+
+        assertEquals(expectedRecords, actualRecords);
+    }
+
+    @Test
+    public void testProcessTask_WhenSchemaRegistryDecodingFails_IgnoresRecord() {
+        processTask = makeProcessTask(processRecordsInput, glueSchemaRegistryDeserializer);
+        final BigInteger sqn = new BigInteger(128, new Random());
+        final BigInteger previousCheckpointSqn = BigInteger.valueOf(1);
+        final String pk = UUID.randomUUID().toString();
+        final Date ts = new Date(System.currentTimeMillis() - TimeUnit.MILLISECONDS.convert(4, TimeUnit.HOURS));
+
+        //Payload set to SchemaRegistry encoded data and schema to null
+        //to mimic Schema Registry encoded message from Kinesis stream.
+        final KinesisClientRecord schemaRegistryRecord =
+            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(SCHEMA_REGISTRY_PAYLOAD), null);
+
+        final KinesisClientRecord nonSchemaRegistryRecord =
+            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
+
+        when(processRecordsInput.records())
+            .thenReturn(
+                ImmutableList.of(
+                    schemaRegistryRecord,
+                    nonSchemaRegistryRecord
+                )
+            );
+
+        doReturn(true)
+            .when(glueSchemaRegistryDeserializer).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
+
+        doThrow(new RuntimeException("Cannot decode data"))
+            .when(glueSchemaRegistryDeserializer).getData(SCHEMA_REGISTRY_PAYLOAD);
+
+        ShardRecordProcessorOutcome outcome = testWithRecords(processTask, new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 0L),
+            new ExtendedSequenceNumber(previousCheckpointSqn.add(previousCheckpointSqn).toString(),  1L));
+
+        List<KinesisClientRecord> expectedRecords =
+            ImmutableList.of(
+                schemaRegistryRecord,
+                nonSchemaRegistryRecord
+            );
+
+        List<KinesisClientRecord> actualRecords = outcome.getProcessRecordsCall().records();
+
+        assertEquals(expectedRecords, actualRecords);
     }
 
     private KinesisClientRecord createAndRegisterAggregatedRecord(BigInteger sequenceNumber,
