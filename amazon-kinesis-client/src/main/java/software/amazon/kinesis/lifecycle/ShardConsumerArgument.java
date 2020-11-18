@@ -15,7 +15,6 @@
 
 package software.amazon.kinesis.lifecycle;
 
-import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDeserializer;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
