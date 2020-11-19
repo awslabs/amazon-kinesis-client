@@ -66,7 +66,6 @@ import com.google.protobuf.ByteString;
 
 import lombok.Data;
 import lombok.Getter;
-import software.amazon.awssdk.services.glue.model.DataFormat;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -87,7 +86,7 @@ import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 @RunWith(MockitoJUnitRunner.class)
 public class ProcessTaskTest {
     private static final long IDLE_TIME_IN_MILLISECONDS = 100L;
-    private static final Schema SCHEMA_REGISTRY_SCHEMA = new Schema("{}", DataFormat.AVRO.toString(), "demoSchema");
+    private static final Schema SCHEMA_REGISTRY_SCHEMA = new Schema("{}", "AVRO", "demoSchema");
     private static final byte[] SCHEMA_REGISTRY_PAYLOAD = new byte[] {01, 05, 03, 05};
 
     private boolean shouldCallProcessRecordsEvenForEmptyRecordList = true;
