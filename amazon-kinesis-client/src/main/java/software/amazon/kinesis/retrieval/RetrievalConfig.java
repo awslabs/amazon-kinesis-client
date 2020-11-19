@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.retrieval;
 
+import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDeserializer;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
@@ -56,6 +57,12 @@ public class RetrievalConfig {
     @NonNull
     private final String applicationName;
 
+    /**
+     * Glue Schema Registry Deserializer instance.
+     * If this instance is set, KCL will try to decode messages that might be
+     * potentially encoded with Glue Schema Registry Serializer.
+     */
+    private GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer = null;
 
     /**
      * AppStreamTracker either for multi stream tracking or single stream

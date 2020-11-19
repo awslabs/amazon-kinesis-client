@@ -32,6 +32,7 @@ import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
+import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
 import java.util.concurrent.ExecutorService;
 
@@ -73,4 +74,5 @@ public class ShardConsumerArgument {
     @NonNull
     private final MetricsFactory metricsFactory;
     private final LeaseCleanupManager leaseCleanupManager;
+    private final SchemaRegistryDecoder schemaRegistryDecoder;
 }

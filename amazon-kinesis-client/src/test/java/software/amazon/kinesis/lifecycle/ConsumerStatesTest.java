@@ -60,7 +60,7 @@ import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
-
+import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ConsumerStatesTest {
@@ -117,6 +117,7 @@ public class ConsumerStatesTest {
     private boolean ignoreUnexpectedChildShards = false;
     private long idleTimeInMillis = 1000L;
     private Optional<Long> logWarningForTaskAfterMillis = Optional.empty();
+    private SchemaRegistryDecoder schemaRegistryDecoder = null;
 
     @Before
     public void setup() {
@@ -125,7 +126,7 @@ public class ConsumerStatesTest {
                 taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,
                 INITIAL_POSITION_IN_STREAM, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, shardDetector,
-                new AggregatorUtil(), hierarchicalShardSyncer, metricsFactory, leaseCleanupManager);
+                new AggregatorUtil(), hierarchicalShardSyncer, metricsFactory, leaseCleanupManager, schemaRegistryDecoder);
         when(shardInfo.shardId()).thenReturn("shardId-000000000000");
         when(shardInfo.streamIdentifierSerOpt()).thenReturn(Optional.of(StreamIdentifier.singleStreamInstance(STREAM_NAME).serialize()));
         consumer = spy(new ShardConsumer(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis,

@@ -36,6 +36,7 @@ import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
 /**
  * Task for fetching data records and invoking processRecords() on the record processor instance.
@@ -62,6 +63,7 @@ public class ProcessTask implements ConsumerTask {
     private final MetricsFactory metricsFactory;
     private final AggregatorUtil aggregatorUtil;
     private final String shardInfoId;
+    private final SchemaRegistryDecoder schemaRegistryDecoder;
 
     public ProcessTask(@NonNull ShardInfo shardInfo,
                        @NonNull ShardRecordProcessor shardRecordProcessor,
@@ -74,7 +76,8 @@ public class ProcessTask implements ConsumerTask {
                        boolean shouldCallProcessRecordsEvenForEmptyRecordList,
                        long idleTimeInMilliseconds,
                        @NonNull AggregatorUtil aggregatorUtil,
-                       @NonNull MetricsFactory metricsFactory) {
+                       @NonNull MetricsFactory metricsFactory,
+                       SchemaRegistryDecoder schemaRegistryDecoder) {
         this.shardInfo = shardInfo;
         this.shardInfoId = ShardInfo.getLeaseKey(shardInfo);
         this.shardRecordProcessor = shardRecordProcessor;
@@ -85,6 +88,7 @@ public class ProcessTask implements ConsumerTask {
         this.shouldCallProcessRecordsEvenForEmptyRecordList = shouldCallProcessRecordsEvenForEmptyRecordList;
         this.idleTimeInMilliseconds = idleTimeInMilliseconds;
         this.metricsFactory = metricsFactory;
+        this.schemaRegistryDecoder = schemaRegistryDecoder;
 
         if (!skipShardSyncAtWorkerInitializationIfLeasesExist) {
             this.shard = shardDetector.shard(shardInfo.shardId());
@@ -133,6 +137,9 @@ public class ProcessTask implements ConsumerTask {
                 throttlingReporter.success();
                 List<KinesisClientRecord> records = deaggregateAnyKplRecords(processRecordsInput.records());
 
+                if (schemaRegistryDecoder != null) {
+                    records = schemaRegistryDecoder.decode(records);
+                }
 
                 if (!records.isEmpty()) {
                     scope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
@@ -162,6 +169,8 @@ public class ProcessTask implements ConsumerTask {
             MetricsUtil.endScope(scope);
         }
     }
+
+
 
     private List<KinesisClientRecord> deaggregateAnyKplRecords(List<KinesisClientRecord> records) {
         if (shard == null) {

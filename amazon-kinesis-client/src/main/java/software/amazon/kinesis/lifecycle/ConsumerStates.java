@@ -269,7 +269,9 @@ class ConsumerStates {
                     input,
                     argument.shouldCallProcessRecordsEvenForEmptyRecordList(),
                     argument.idleTimeInMilliseconds(),
-                    argument.aggregatorUtil(), argument.metricsFactory()
+                    argument.aggregatorUtil(),
+                    argument.metricsFactory(),
+                    argument.schemaRegistryDecoder()
             );
         }
 
