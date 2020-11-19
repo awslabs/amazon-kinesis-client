@@ -1,6 +1,10 @@
 # Changelog
 
-### Latest Release 2.3.1 (October 20, 2020)
+### Latest Release 2.3.2 (November 19, 2020)
+[Milestone#54](https://github.com/awslabs/amazon-kinesis-client/milestone/54)
+* Adding support for Glue Schema Registry. Deserialize and read schemas associated with the records.
+
+### Release 2.3.1 (October 20, 2020)
 [Milestone#53](https://github.com/awslabs/amazon-kinesis-client/milestone/53)
 * Introducing support for processing multiple kinesis data streams with the same KCL 2.x for java consumer application
   * To build a consumer application that can process multiple streams at the same time, you must implement a new
