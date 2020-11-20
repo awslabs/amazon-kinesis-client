@@ -47,7 +47,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.3.1</version>
+      <version>2.3.2</version>
   </dependency>
   ```
 
@@ -57,13 +57,18 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>1.11.2</version>
+      <version>1.14.0</version>
   </dependency>
   ```
 
 ## Release Notes
 
-### Latest Release 2.3.1 (October 20, 2020)
+### Latest Release 2.3.2 (November 19, 2020)
+[Milestone#54](https://github.com/awslabs/amazon-kinesis-client/milestone/54)
+* Adding support for Glue Schema Registry. Deserialize and read schemas associated with the records.
+* Updating AWS SDK version to 2.15.31
+
+### Release 2.3.1 (October 20, 2020)
 [Milestone#53](https://github.com/awslabs/amazon-kinesis-client/milestone/53)
 * Introducing support for processing multiple kinesis data streams with the same KCL 2.x for java consumer application
   * To build a consumer application that can process multiple streams at the same time, you must implement a new
