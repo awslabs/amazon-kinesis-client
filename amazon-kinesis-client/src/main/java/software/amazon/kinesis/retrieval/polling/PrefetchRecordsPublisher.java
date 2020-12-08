@@ -86,6 +86,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private final MetricsFactory metricsFactory;
     private final long idleMillisBetweenCalls;
     private Instant lastSuccessfulCall;
+    private boolean isFirstGetCallTry = true;
     private final DefaultGetRecordsCacheDaemon defaultGetRecordsCacheDaemon;
     private boolean started = false;
     private final String operation;
@@ -489,7 +490,13 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         }
 
         private void sleepBeforeNextCall() throws InterruptedException {
-            if (lastSuccessfulCall == null) {
+            if (lastSuccessfulCall == null && isFirstGetCallTry) {
+                isFirstGetCallTry = false;
+                return;
+            }
+            // Add a sleep if lastSuccessfulCall is still null but this is not the first try to avoid retry storm
+            if(lastSuccessfulCall == null) {
+                Thread.sleep(idleMillisBetweenCalls);
                 return;
             }
             long timeSinceLastCall = Duration.between(lastSuccessfulCall, Instant.now()).abs().toMillis();
