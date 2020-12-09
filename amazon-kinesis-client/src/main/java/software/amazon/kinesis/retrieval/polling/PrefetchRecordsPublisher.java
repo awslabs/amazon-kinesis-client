@@ -42,6 +42,7 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
@@ -460,6 +461,11 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     scope.addData(EXPIRED_ITERATOR_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
 
                     publisherSession.dataFetcher().restartIterator();
+                } catch (ProvisionedThroughputExceededException e) {
+                    // Update the lastSuccessfulCall if we get a throttling exception so that we back off idleMillis
+                    // for the next call
+                    lastSuccessfulCall = Instant.now();
+                    log.error("{} :  Exception thrown while fetching records from Kinesis", streamAndShardId, e);
                 } catch (SdkException e) {
                     log.error("{} :  Exception thrown while fetching records from Kinesis", streamAndShardId, e);
                 } catch (Throwable e) {
