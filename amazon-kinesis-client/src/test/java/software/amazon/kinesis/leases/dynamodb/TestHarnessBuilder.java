@@ -111,6 +111,23 @@ public class TestHarnessBuilder {
         return result;
     }
 
+    public Map<String, Lease> stealMutateAssert(DynamoDBLeaseTaker taker, int numToTake)
+            throws LeasingException {
+        Map<String, Lease> result = taker.takeLeases(timeProvider);
+        assertEquals(numToTake, result.size());
+
+        for (Lease actual : result.values()) {
+            Lease original = leases.get(actual.leaseKey());
+            assertNotNull(original);
+
+            original.isMarkedForLeaseSteal(true)
+                    .lastCounterIncrementNanos(actual.lastCounterIncrementNanos());
+            mutateAssert(taker.getWorkerIdentifier(), original, actual);
+        }
+
+        return result;
+    }
+
     public Map<String, Lease> takeMutateAssert(DynamoDBLeaseTaker taker, String... takenShardIds)
         throws LeasingException {
         Map<String, Lease> result = taker.takeLeases(timeProvider);
