@@ -39,6 +39,7 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
+import static software.amazon.kinesis.common.CommonCalculations.*;
 
 /**
  * An implementation of {@link LeaseTaker} that uses DynamoDB via {@link LeaseRefresher}.
@@ -58,7 +59,10 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     private final LeaseRefresher leaseRefresher;
     private final String workerIdentifier;
     private final long leaseDurationNanos;
+    private final long leaseRenewalIntervalMillis;
     private final MetricsFactory metricsFactory;
+
+    private final double RENEWAL_SLACK_PERCENTAGE = 0.5;
 
     private final Map<String, Lease> allLeases = new HashMap<>();
     // TODO: Remove these defaults and use the defaults in the config
@@ -71,6 +75,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             final MetricsFactory metricsFactory) {
         this.leaseRefresher = leaseRefresher;
         this.workerIdentifier = workerIdentifier;
+        this.leaseRenewalIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, 0);
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
         this.metricsFactory = metricsFactory;
     }
@@ -153,6 +158,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, TAKE_LEASES_DIMENSION);
 
         long startTime = System.currentTimeMillis();
+        long updateAllLeasesTotalTimeMillis;
         boolean success = false;
 
         ProvisionedThroughputException lastException = null;
@@ -170,19 +176,23 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                     }
                 }
             } finally {
+                updateAllLeasesTotalTimeMillis = System.currentTimeMillis() - startTime;
                 MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
                 MetricsUtil.addSuccessAndLatency(scope, "ListLeases", success, startTime, MetricsLevel.DETAILED);
             }
 
+
             if (lastException != null) {
                 log.error("Worker {} could not scan leases table, aborting TAKE_LEASES_DIMENSION. Exception caught by"
-                                + " last retry:", workerIdentifier, lastException);
+                        + " last retry:", workerIdentifier, lastException);
                 return takenLeases;
             }
 
             List<Lease> expiredLeases = getExpiredLeases();
 
             Set<Lease> leasesToTake = computeLeasesToTake(expiredLeases);
+            leasesToTake = updateStaleLeasesWithLatestState(updateAllLeasesTotalTimeMillis, leasesToTake);
+
             Set<String> untakenLeaseKeys = new HashSet<>();
 
             for (Lease lease : leasesToTake) {
@@ -228,6 +238,32 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         }
 
         return takenLeases;
+    }
+
+    /**
+     * If update all leases takes longer than the lease renewal time,
+     * we fetch the latest lease info for the given leases that are marked for lease steal.
+     * If nothing is found (or any transient network error occurs),
+     * we default to the last known state of the lease
+     *
+     * @param updateAllLeasesEndTime How long it takes for update all leases to complete
+     * @return set of leases to take.
+     */
+    private Set<Lease> updateStaleLeasesWithLatestState(long updateAllLeasesEndTime,
+                                                        Set<Lease> leasesToTake) {
+        if (updateAllLeasesEndTime > leaseRenewalIntervalMillis * RENEWAL_SLACK_PERCENTAGE) {
+            leasesToTake = leasesToTake.stream().map(lease -> {
+                if (lease.isMarkedForLeaseSteal()) {
+                    try {
+                        return leaseRefresher.getLease(lease.leaseKey());
+                    } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
+                        log.debug("Unable to retrieve the current lease, defaulting to existing lease", e);
+                    }
+                }
+                return lease;
+            }).collect(Collectors.toSet());
+        }
+        return leasesToTake;
     }
 
     /** Package access for testing purposes.
@@ -526,8 +562,9 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         // Return random ones
         Collections.shuffle(candidates);
         int toIndex = Math.min(candidates.size(), numLeasesToSteal);
-        leasesToSteal.addAll(candidates.subList(0, toIndex));
-
+        leasesToSteal.addAll(candidates.subList(0, toIndex).stream()
+                .map(lease -> lease.isMarkedForLeaseSteal(true))
+                .collect(Collectors.toList()));
         return leasesToSteal;
     }
 
