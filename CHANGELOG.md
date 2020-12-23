@@ -1,6 +1,10 @@
 # Changelog
+### Latest Release 2.3.3 (December 23, 2020)
+[Milestone#55](https://github.com/awslabs/amazon-kinesis-client/milestone/55)
+* Fixing bug in PrefetchRecordsPublisher which was causing retry storms if initial request fails.
+* Fixing bug where idleTimeBetweenReadsInMillis property was ignored in PollingConfig.
 
-### Latest Release 2.3.2 (November 19, 2020)
+### Release 2.3.2 (November 19, 2020)
 [Milestone#54](https://github.com/awslabs/amazon-kinesis-client/milestone/54)
 * Adding support for Glue Schema Registry. Deserialize and read schemas associated with the records.
 * Updating AWS SDK version to 2.15.31
