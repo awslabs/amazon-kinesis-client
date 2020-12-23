@@ -52,6 +52,8 @@ public class PollingConfig implements RetrievalSpecificConfig {
      */
     private String streamName;
 
+    private boolean usePollingConfigIdleTimeValue;
+
     /**
      * @param kinesisClient Client used to access Kinesis services.
      */
@@ -86,7 +88,7 @@ public class PollingConfig implements RetrievalSpecificConfig {
     }
 
     /**
-     * The value for how long the ShardConsumer should sleep if no records are returned from the call to
+     * The value for how long the ShardConsumer should sleep in between calls to
      * {@link KinesisAsyncClient#getRecords(GetRecordsRequest)}.
      *
      * <p>
@@ -123,12 +125,26 @@ public class PollingConfig implements RetrievalSpecificConfig {
     private RecordsFetcherFactory recordsFetcherFactory = new SimpleRecordsFetcherFactory();
 
     /**
+     * Set the value for how long the ShardConsumer should sleep in between calls to
+     * {@link KinesisAsyncClient#getRecords(GetRecordsRequest)}. If this is not specified here the value provided in
+     * {@link RecordsFetcherFactory} will be used.
+     */
+    public void setIdleTimeBetweenReadsInMillis(long idleTimeBetweenReadsInMillis) {
+        usePollingConfigIdleTimeValue = true;
+        this.idleTimeBetweenReadsInMillis = idleTimeBetweenReadsInMillis;
+    }
+
+    /**
      * The maximum time to wait for a future request from Kinesis to complete
      */
     private Duration kinesisRequestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
     @Override
     public RetrievalFactory retrievalFactory() {
+        // Prioritize the PollingConfig specified value if its updated.
+        if(usePollingConfigIdleTimeValue) {
+            recordsFetcherFactory.idleMillisBetweenCalls(idleTimeBetweenReadsInMillis);
+        }
         return new SynchronousBlockingRetrievalFactory(streamName(), kinesisClient(), recordsFetcherFactory,
                 maxRecords(), kinesisRequestTimeout, dataFetcherProvider);
     }
