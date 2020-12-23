@@ -47,7 +47,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.3.2</version>
+      <version>2.3.3</version>
   </dependency>
   ```
 
@@ -63,7 +63,12 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release 2.3.2 (November 19, 2020)
+### Latest Release 2.3.3 (December 23, 2020)
+[Milestone#55](https://github.com/awslabs/amazon-kinesis-client/milestone/55)
+* Fixing bug in PrefetchRecordsPublisher which was causing retry storms if initial request fails.
+* Fixing bug where idleTimeBetweenReadsInMillis property was ignored in PollingConfig.
+
+### Release 2.3.2 (November 19, 2020)
 [Milestone#54](https://github.com/awslabs/amazon-kinesis-client/milestone/54)
 * Adding support for Glue Schema Registry. Deserialize and read schemas associated with the records.
 * Updating AWS SDK version to 2.15.31
