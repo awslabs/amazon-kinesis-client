@@ -427,6 +427,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, operation);
             if (publisherSession.prefetchCounters().shouldGetNewRecords()) {
                 try {
+
                     sleepBeforeNextCall();
                     GetRecordsResponse getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
                     lastSuccessfulCall = Instant.now();
