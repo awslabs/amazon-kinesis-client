@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -105,6 +106,8 @@ public class Worker implements Runnable {
     private static final LeaseSelector<KinesisClientLease> DEFAULT_LEASE_SELECTOR = new GenericLeaseSelector<KinesisClientLease>();
 
     private WorkerLog wlog = new WorkerLog();
+
+    private List<WorkerProcessLoopExceptionListener> workerProcessLoopExceptionListeners = new ArrayList<>();
 
     private final String applicationName;
     private final IRecordProcessorFactory recordProcessorFactory;
@@ -704,6 +707,12 @@ public class Worker implements Runnable {
         } catch (Exception e) {
             LOG.error(String.format("Worker.run caught exception, sleeping for %s milli seconds!",
                     String.valueOf(idleTimeInMilliseconds)), e);
+
+            // notify the listeners that an error has occurred and pass down the exception for the client to handle
+            for (WorkerProcessLoopExceptionListener workerProcessLoopExceptionListener : workerProcessLoopExceptionListeners) {
+                workerProcessLoopExceptionListener.exceptionOccured(e);
+            }
+
             try {
                 Thread.sleep(idleTimeInMilliseconds);
             } catch (InterruptedException ex) {
@@ -711,6 +720,14 @@ public class Worker implements Runnable {
             }
         }
         wlog.resetInfoLogging();
+    }
+
+    public void addWorkerProcessLoopExceptionObserver(final WorkerProcessLoopExceptionListener workerProcessLoopExceptionListener) {
+        workerProcessLoopExceptionListeners.add(workerProcessLoopExceptionListener);
+    }
+
+    public void removeWorkerProcessLoopExceptionObserver(final WorkerProcessLoopExceptionListener workerProcessLoopExceptionListener) {
+        workerProcessLoopExceptionListeners.remove(workerProcessLoopExceptionListener);
     }
 
     private void initialize() {
