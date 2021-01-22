@@ -24,10 +24,13 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.utils.BlockingUtils.blockUntilConditionSatisfied;
 import static software.amazon.kinesis.utils.BlockingUtils.blockUntilRecordsAvailable;
 
 import java.util.ArrayList;
@@ -38,6 +41,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -49,7 +53,6 @@ import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 
 import lombok.extern.slf4j.Slf4j;
@@ -222,6 +225,25 @@ public class PrefetchRecordsPublisherIntegrationTest {
         assertNotNull(processRecordsInput);
         assertTrue(processRecordsInput.records().isEmpty());
         verify(dataFetcher).restartIterator();
+    }
+
+    @Test
+    public void testExpiredIteratorExceptionWithInnerRestartIteratorException() {
+        when(dataFetcher.getRecords())
+                .thenThrow(ExpiredIteratorException.builder().message("ExpiredIterator").build())
+                .thenCallRealMethod()
+                .thenThrow(ExpiredIteratorException.builder().message("ExpiredIterator").build())
+                .thenCallRealMethod();
+
+        doThrow(IllegalStateException.class).when(dataFetcher).restartIterator();
+
+        getRecordsCache.start(extendedSequenceNumber, initialPosition);
+
+        final boolean conditionSatisfied = blockUntilConditionSatisfied(() ->
+                getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 5000);
+        Assert.assertTrue(conditionSatisfied);
+        // Asserts the exception was only thrown once for restartIterator
+        verify(dataFetcher, times(2)).restartIterator();
     }
 
     private RecordsRetrieved evictPublishedEvent(PrefetchRecordsPublisher publisher, String shardId) {

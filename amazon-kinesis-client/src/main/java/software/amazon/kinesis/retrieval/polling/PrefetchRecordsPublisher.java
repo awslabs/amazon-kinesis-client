@@ -414,11 +414,14 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     makeRetrievalAttempt();
                 } catch(PositionResetException pre) {
                     log.debug("{} : Position was reset while attempting to add item to queue.", streamAndShardId);
+                } catch (Throwable e) {
+                    log.error("{} :  Unexpected exception was thrown. This could probably be an issue or a bug." +
+                            " Please search for the exception/error online to check what is going on. If the " +
+                            "issue persists or is a recurring problem, feel free to open an issue on, " +
+                            "https://github.com/awslabs/amazon-kinesis-client.", streamAndShardId, e);
                 } finally {
                     resetLock.readLock().unlock();
                 }
-
-
             }
             callShutdownOnStrategy();
         }
@@ -469,11 +472,6 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     log.error("{} :  Exception thrown while fetching records from Kinesis", streamAndShardId, e);
                 } catch (SdkException e) {
                     log.error("{} :  Exception thrown while fetching records from Kinesis", streamAndShardId, e);
-                } catch (Throwable e) {
-                    log.error("{} :  Unexpected exception was thrown. This could probably be an issue or a bug." +
-                            " Please search for the exception/error online to check what is going on. If the " +
-                            "issue persists or is a recurring problem, feel free to open an issue on, " +
-                            "https://github.com/awslabs/amazon-kinesis-client.", streamAndShardId, e);
                 } finally {
                     MetricsUtil.endScope(scope);
                 }
