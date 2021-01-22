@@ -449,6 +449,26 @@ public class PrefetchRecordsPublisherTest {
     }
 
     @Test
+    public void testExpiredIteratorExceptionWithIllegalStateException() {
+        // This test validates that the daemon thread doesn't die when ExpiredIteratorException occurs with an
+        // IllegalStateException.
+
+        when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL))
+                .thenThrow(ExpiredIteratorException.builder().build())
+                .thenReturn(getRecordsResponse)
+                .thenThrow(ExpiredIteratorException.builder().build())
+                .thenReturn(getRecordsResponse);
+
+        doThrow(new IllegalStateException()).when(dataFetcher).restartIterator();
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+
+        // verify restartIterator was called
+        verify(dataFetcher, times(2)).restartIterator();
+    }
+
+    @Test
     public void testRetryableRetrievalExceptionContinues() {
 
         GetRecordsResponse response = GetRecordsResponse.builder().millisBehindLatest(100L).records(Collections.emptyList()).nextShardIterator(NEXT_SHARD_ITERATOR).build();
