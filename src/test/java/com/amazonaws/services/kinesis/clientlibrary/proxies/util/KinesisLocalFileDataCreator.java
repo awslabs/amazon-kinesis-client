@@ -163,6 +163,7 @@ public class KinesisLocalFileDataCreator {
             HashKeyRange hashKeyRange = new HashKeyRange();
             hashKeyRange.setStartingHashKey(hashKeyRangeStart.toString());
             hashKeyRange.setEndingHashKey(hashKeyRangeEnd.toString());
+            shard.setHashKeyRange(hashKeyRange);
             shards.add(shard);
         }
 

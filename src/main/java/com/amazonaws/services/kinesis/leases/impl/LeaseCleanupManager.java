@@ -15,6 +15,7 @@ package com.amazonaws.services.kinesis.leases.impl;
  * limitations under the License.
  */
 
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShardInfo;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
@@ -81,10 +82,8 @@ public class LeaseCleanupManager {
     @Getter
     private volatile boolean isRunning = false;
 
-    private static LeaseCleanupManager instance;
-
     /**
-     * Factory method to return a singleton instance of {@link LeaseCleanupManager}.
+     * Method to return a new instance of {@link LeaseCleanupManager}.
      * @param kinesisProxy
      * @param leaseManager
      * @param deletionThreadPool
@@ -96,17 +95,13 @@ public class LeaseCleanupManager {
      * @param maxRecords
      * @return
      */
-    public static LeaseCleanupManager createOrGetInstance(IKinesisProxy kinesisProxy, ILeaseManager leaseManager,
-                                                          ScheduledExecutorService deletionThreadPool, IMetricsFactory metricsFactory,
-                                                          boolean cleanupLeasesUponShardCompletion, long leaseCleanupIntervalMillis,
-                                                          long completedLeaseCleanupIntervalMillis, long garbageLeaseCleanupIntervalMillis,
-                                                          int maxRecords) {
-        if (instance == null) {
-            instance = new LeaseCleanupManager(kinesisProxy, leaseManager, deletionThreadPool, metricsFactory, cleanupLeasesUponShardCompletion,
-                    leaseCleanupIntervalMillis, completedLeaseCleanupIntervalMillis, garbageLeaseCleanupIntervalMillis, maxRecords);
-        }
-
-        return instance;
+    public static LeaseCleanupManager newInstance(IKinesisProxy kinesisProxy, ILeaseManager leaseManager,
+                                                  ScheduledExecutorService deletionThreadPool, IMetricsFactory metricsFactory,
+                                                  boolean cleanupLeasesUponShardCompletion, long leaseCleanupIntervalMillis,
+                                                  long completedLeaseCleanupIntervalMillis, long garbageLeaseCleanupIntervalMillis,
+                                                  int maxRecords) {
+        return new LeaseCleanupManager(kinesisProxy, leaseManager, deletionThreadPool, metricsFactory, cleanupLeasesUponShardCompletion,
+                leaseCleanupIntervalMillis, completedLeaseCleanupIntervalMillis, garbageLeaseCleanupIntervalMillis, maxRecords);
     }
 
     /**
@@ -193,6 +188,10 @@ public class LeaseCleanupManager {
 
                             if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
                                 LOG.error("No child shards returned from service for shard " + shardInfo.getShardId());
+                                // If no children shard is found in DDB and from service, then do not delete the lease
+                                throw new InvalidStateException("No child shards found for this supposedly " +
+                                        "closed shard in both local DDB and in service " + shardInfo.getShardId());
+
                             } else {
                                 wereChildShardsPresent = true;
                                 updateLeaseWithChildShards(leasePendingDeletion, childShardKeys);
@@ -296,7 +295,7 @@ public class LeaseCleanupManager {
         final KinesisClientLease updatedLease = leasePendingDeletion.lease();
         updatedLease.setChildShardIds(childShardKeys);
 
-        leaseManager.updateLease(updatedLease);
+        leaseManager.updateLeaseWithMetaInfo(updatedLease, UpdateField.CHILD_SHARDS);
     }
 
     @VisibleForTesting

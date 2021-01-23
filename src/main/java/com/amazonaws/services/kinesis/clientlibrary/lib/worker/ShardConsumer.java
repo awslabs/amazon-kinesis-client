@@ -243,7 +243,7 @@ class ShardConsumer {
         this(shardInfo, streamConfig, checkpoint, recordProcessor, recordProcessorCheckpointer, leaseCoordinator,
         parentShardPollIntervalMillis, cleanupLeasesOfCompletedShards, executorService, metricsFactory,
         backoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, kinesisDataFetcher, retryGetRecordsInSeconds,
-        maxGetRecordsThreadPool, config, shardSyncer, shardSyncStrategy, LeaseCleanupManager.createOrGetInstance(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
+        maxGetRecordsThreadPool, config, shardSyncer, shardSyncStrategy, LeaseCleanupManager.newInstance(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
                 Executors.newSingleThreadScheduledExecutor(), metricsFactory, config.shouldCleanupLeasesUponShardCompletion(),
                 config.leaseCleanupIntervalMillis(), config.completedLeaseCleanupThresholdMillis(),
                 config.garbageLeaseCleanupThresholdMillis(), config.getMaxRecords()));

@@ -45,6 +45,8 @@ import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.amazonaws.services.kinesis.model.Shard;
 
+import static com.amazonaws.services.kinesis.leases.impl.HashKeyRangeForLease.fromHashKeyRange;
+
 /**
  * Helper class to sync leases with shards of the Kinesis stream.
  * It will create new leases/activities when it discovers new Kinesis shards (bootstrap/resharding).
@@ -617,7 +619,7 @@ class KinesisShardSyncer implements ShardSyncer {
         }
         newLease.setParentShardIds(parentShardIds);
         newLease.setOwnerSwitchesSinceCheckpoint(0L);
-
+        newLease.setHashKeyRange(fromHashKeyRange(shard.getHashKeyRange()));
         return newLease;
     }
 
@@ -641,6 +643,7 @@ class KinesisShardSyncer implements ShardSyncer {
         newLease.setParentShardIds(parentShardIds);
         newLease.setOwnerSwitchesSinceCheckpoint(0L);
         newLease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+        newLease.setHashKeyRange(fromHashKeyRange(childShard.getHashKeyRange()));
         return newLease;
     }
 
