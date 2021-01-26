@@ -22,6 +22,7 @@ import com.amazonaws.services.dynamodbv2.model.AttributeAction;
 import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.dynamodbv2.model.AttributeValueUpdate;
+import com.amazonaws.services.dynamodbv2.model.ComparisonOperator;
 import com.amazonaws.services.dynamodbv2.model.ExpectedAttributeValue;
 import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
@@ -124,6 +125,19 @@ public class KinesisClientLeaseSerializer implements ILeaseSerializer<KinesisCli
     @Override
     public Map<String, ExpectedAttributeValue> getDynamoLeaseOwnerExpectation(KinesisClientLease lease) {
         return baseSerializer.getDynamoLeaseOwnerExpectation(lease);
+    }
+
+    @Override
+    public Map<String, ExpectedAttributeValue> getDynamoLeaseCheckpointExpectation(KinesisClientLease lease) {
+        Map<String, ExpectedAttributeValue> result = baseSerializer.getDynamoLeaseCheckpointExpectation(lease);
+        ExpectedAttributeValue eav;
+
+        if (!lease.getCheckpoint().equals(ExtendedSequenceNumber.SHARD_END)) {
+            eav = new ExpectedAttributeValue(DynamoUtils.createAttributeValue(ExtendedSequenceNumber.SHARD_END.getSequenceNumber()));
+            eav.setComparisonOperator(ComparisonOperator.NE);
+            result.put(CHECKPOINT_SEQUENCE_NUMBER_KEY, eav);
+        }
+        return result;
     }
 
     @Override

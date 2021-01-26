@@ -587,7 +587,9 @@ public class ShardConsumerTest {
         parentShardIds.add("parentShardId");
         KinesisClientLease currentLease = createLease(streamShardId, "leaseOwner", parentShardIds);
         currentLease.setCheckpoint(new ExtendedSequenceNumber("testSequenceNumbeer"));
-        when(leaseManager.getLease(streamShardId)).thenReturn(currentLease);
+        KinesisClientLease currentLease1 = createLease(streamShardId, "leaseOwner", parentShardIds);
+        currentLease1.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
+        when(leaseManager.getLease(streamShardId)).thenReturn(currentLease, currentLease, currentLease1);
         when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId())).thenReturn(currentLease);
 
         RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
@@ -714,7 +716,10 @@ public class ShardConsumerTest {
         parentShardIds.add("parentShardId");
         KinesisClientLease currentLease = createLease(streamShardId, "leaseOwner", parentShardIds);
         currentLease.setCheckpoint(new ExtendedSequenceNumber("testSequenceNumbeer"));
-        when(leaseManager.getLease(streamShardId)).thenReturn(currentLease);
+        KinesisClientLease currentLease1 = createLease(streamShardId, "leaseOwner", parentShardIds);
+        currentLease1.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
+        when(leaseManager.getLease(streamShardId)).thenReturn(currentLease, currentLease, currentLease1);
+
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
 
         TransientShutdownErrorTestStreamlet processor = new TransientShutdownErrorTestStreamlet();

@@ -128,6 +128,11 @@ public class LeaseSerializer implements ILeaseSerializer<Lease> {
     }
 
     @Override
+    public Map<String, ExpectedAttributeValue> getDynamoLeaseCheckpointExpectation(final Lease lease) {
+        return new HashMap<>();
+    }
+
+    @Override
     public Map<String, ExpectedAttributeValue> getDynamoNonexistantExpectation() {
         Map<String, ExpectedAttributeValue> result = new HashMap<String, ExpectedAttributeValue>();
 
