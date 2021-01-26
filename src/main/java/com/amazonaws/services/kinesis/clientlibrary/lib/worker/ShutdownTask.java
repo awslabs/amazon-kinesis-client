@@ -222,11 +222,29 @@ class ShutdownTask implements ITask {
                 .withCheckpointer(recordProcessorCheckpointer);
         recordProcessor.shutdown(shardEndShutdownInput);
 
-        final ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
+        boolean successfullyCheckpointedShardEnd = false;
 
-        final boolean successfullyCheckpointedShardEnd = lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END);
+        KinesisClientLease leaseFromDdb = null;
+        try {
+            leaseFromDdb = leaseCoordinator.getLeaseManager().getLease(shardInfo.getShardId());
+        } catch (Exception e) {
+            LOG.error("Shard " + shardInfo.getShardId() + " : Unable to get lease entry for shard to verify shard end checkpointing.", e);
+        }
 
-        if ((lastCheckpointValue == null) || (!successfullyCheckpointedShardEnd)) {
+        if (leaseFromDdb != null && leaseFromDdb.getCheckpoint() != null) {
+            successfullyCheckpointedShardEnd = leaseFromDdb.getCheckpoint().equals(ExtendedSequenceNumber.SHARD_END);
+            final ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
+            if (!leaseFromDdb.getCheckpoint().equals(lastCheckpointValue)) {
+                LOG.error("Shard " + shardInfo.getShardId() +
+                        " : Checkpoint information mismatch between authoritative source and local cache. " +
+                        "This does not affect the application flow, but cut a ticket to Kinesis when you see this. " +
+                        "Authoritative entry : " + leaseFromDdb.getCheckpoint() + " Cache entry : " + lastCheckpointValue);
+            }
+        } else {
+            LOG.error("Shard " + shardInfo.getShardId() + " : No lease checkpoint entry for shard to verify shard end checkpointing. Lease Entry : " + leaseFromDdb);
+        }
+
+        if (!successfullyCheckpointedShardEnd) {
             throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
                                                        + shardInfo.getShardId() + ". Application must checkpoint upon shutdown. " +
                                                        "See IRecordProcessor.shutdown javadocs for more information.");

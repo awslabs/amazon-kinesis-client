@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -211,11 +212,16 @@ public class ShutdownTaskTest {
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
 
-        KinesisClientLease currentLease = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
-        currentLease.setCheckpoint(new ExtendedSequenceNumber("3298"));
+        KinesisClientLease currentLease1 = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        currentLease1.setCheckpoint(new ExtendedSequenceNumber("3298"));
+        KinesisClientLease currentLease2 = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        currentLease2.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
+
         KinesisClientLease adjacentParentLease = createLease("ShardId-1", "leaseOwner", Collections.emptyList());
-        when(leaseCoordinator.getCurrentlyHeldLease(defaultShardId)).thenReturn( currentLease);
-        when(leaseManager.getLease(defaultShardId)).thenReturn(currentLease);
+        when(leaseCoordinator.getCurrentlyHeldLease(defaultShardId)).thenReturn( currentLease1);
+        // 6 times as part of parent lease get in failure mode and then two times in actual execution
+        when(leaseManager.getLease(defaultShardId)).thenReturn(currentLease1, currentLease1, currentLease1, currentLease1,
+                currentLease1, currentLease1, currentLease1, currentLease2);
         when(leaseManager.getLease("ShardId-1")).thenReturn(null, null, null, null, null, adjacentParentLease);
 
         // Make first 5 attempts with partial parent info in lease table
@@ -267,7 +273,7 @@ public class ShutdownTaskTest {
         verify(task, never()).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
         verify(getRecordsCache).shutdown();
         verify(defaultRecordProcessor).shutdown(any(ShutdownInput.class));
-        verify(leaseCoordinator, never()).dropLease(currentLease);
+        verify(leaseCoordinator, never()).dropLease(currentLease1);
     }
 
     @Test
@@ -337,6 +343,11 @@ public class ShutdownTaskTest {
     public final void testCallWhenShardEnd() throws Exception {
         RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
         when(checkpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        final KinesisClientLease parentLease1 = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        parentLease1.setCheckpoint(new ExtendedSequenceNumber("3298"));
+        final KinesisClientLease parentLease2 = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        parentLease2.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
+        when(leaseManager.getLease(defaultShardId)).thenReturn(parentLease1).thenReturn(parentLease2);
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
 
