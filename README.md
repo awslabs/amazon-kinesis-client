@@ -1,3 +1,6 @@
+# Bugs in 1.14.0
+The KCL version 1.14.0 has durability risks when you run multiple KCL applications in same JVM. Also there can be a potential stale checkpoint issue blocking children shards from processing during resharding. We are releasing a fix in 1.14.1 version. ETA - 01/28/2021
+
 # Amazon Kinesis Client Library for Java
 [![Build Status](https://travis-ci.org/awslabs/amazon-kinesis-client.svg?branch=master)](https://travis-ci.org/awslabs/amazon-kinesis-client) ![BuildStatus](https://codebuild.us-west-2.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoiaWo4bDYyUkpWaG9ZTy9zeFVoaVlWbEwxazdicDJLcmZwUUpFWVVBM0ZueEJSeFIzNkhURzdVbUd6WUZHcGNxa3BEUzNrL0I5Nzc4NE9rbXhvdEpNdlFRPSIsIml2UGFyYW1ldGVyU3BlYyI6IlZDaVZJSTM1QW95bFRTQnYiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=v1.x)
 
