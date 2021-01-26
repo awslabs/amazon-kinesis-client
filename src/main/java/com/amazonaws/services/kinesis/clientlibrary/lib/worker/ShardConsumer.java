@@ -374,7 +374,7 @@ class ShardConsumer {
     }
 
     private enum TaskOutcome {
-        SUCCESSFUL, END_OF_SHARD, NOT_COMPLETE, FAILURE
+        SUCCESSFUL, END_OF_SHARD, NOT_COMPLETE, FAILURE, LEASE_NOT_FOUND
     }
 
     private TaskOutcome determineTaskOutcome() {
@@ -391,6 +391,10 @@ class ShardConsumer {
                 return TaskOutcome.SUCCESSFUL;
             }
             logTaskException(result);
+            // This is the case of result with exception
+            if (result.isLeaseNotFound()) {
+                return TaskOutcome.LEASE_NOT_FOUND;
+            }
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
@@ -486,6 +490,10 @@ class ShardConsumer {
         if (taskOutcome == TaskOutcome.END_OF_SHARD) {
             markForShutdown(ShutdownReason.TERMINATE);
             LOG.info("Shard " + shardInfo.getShardId() + ": Mark for shutdown with reason TERMINATE");
+        }
+        if (taskOutcome == TaskOutcome.LEASE_NOT_FOUND) {
+            markForShutdown(ShutdownReason.ZOMBIE);
+            LOG.info("Shard " + shardInfo.getShardId() + ": Mark for shutdown with reason ZOMBIE as lease was not found");
         }
         if (isShutdownRequested() && taskOutcome != TaskOutcome.FAILURE) {
             currentState = currentState.shutdownTransition(shutdownReason);
