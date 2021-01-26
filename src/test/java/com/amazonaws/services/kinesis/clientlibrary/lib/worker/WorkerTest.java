@@ -204,6 +204,10 @@ public class WorkerTest {
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
         when(leaseCoordinator.getLeaseManager()).thenReturn(mock(ILeaseManager.class));
         when(streamConfig.getStreamProxy()).thenReturn(kinesisProxy);
+        Worker.MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 10;
+        Worker.MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 50;
+        Worker.LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 10;
+
     }
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES

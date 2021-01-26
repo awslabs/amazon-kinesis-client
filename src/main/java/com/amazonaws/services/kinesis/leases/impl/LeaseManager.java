@@ -624,7 +624,6 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         request.setExpected(serializer.getDynamoExistentExpectation(lease.getLeaseKey()));
 
         Map<String, AttributeValueUpdate> updates = serializer.getDynamoUpdateLeaseUpdate(lease, updateField);
-        updates.putAll(serializer.getDynamoUpdateLeaseUpdate(lease));
         request.setAttributeUpdates(updates);
 
         try {

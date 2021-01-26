@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.amazonaws.services.kinesis.model.ChildShard;
+import com.amazonaws.services.kinesis.model.HashKeyRange;
 import com.amazonaws.services.kinesis.model.ShardFilter;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -408,11 +409,13 @@ public class KinesisLocalFileProxy implements IKinesisProxy {
         ChildShard leftChild = new ChildShard();
         leftChild.setShardId("shardId-1");
         leftChild.setParentShards(parentShards);
+        leftChild.setHashKeyRange(new HashKeyRange().withStartingHashKey("0").withEndingHashKey("10"));
         childShards.add(leftChild);
 
         ChildShard rightChild = new ChildShard();
         rightChild.setShardId("shardId-2");
         rightChild.setParentShards(parentShards);
+        rightChild.setHashKeyRange(new HashKeyRange().withStartingHashKey("11").withEndingHashKey(MAX_HASHKEY_VALUE.toString()));
         childShards.add(rightChild);
         return childShards;
     }
