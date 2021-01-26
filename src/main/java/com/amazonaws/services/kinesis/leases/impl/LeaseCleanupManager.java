@@ -218,6 +218,8 @@ public class LeaseCleanupManager {
                     LOG.info("Lease not present in lease table while cleaning the shard " + shardInfo.getShardId());
                     cleanedUpCompletedLease = true;
                 }
+            } else {
+                cleanupFailureReason = "Configuration/Interval condition not satisfied to execute lease cleanup this cycle";
             }
             if (!cleanedUpCompletedLease && !alreadyCheckedForGarbageCollection && timeToCheckForGarbageShard) {
                 // throws ResourceNotFoundException
