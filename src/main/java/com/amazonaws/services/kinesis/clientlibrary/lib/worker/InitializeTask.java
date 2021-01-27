@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -79,7 +80,15 @@ class InitializeTask implements ITask {
 
         try {
             LOG.debug("Initializing ShardId " + shardInfo.getShardId());
-            Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.getShardId());
+            Checkpoint initialCheckpointObject;
+            try {
+                initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.getShardId());
+            } catch (KinesisClientLibNonRetryableException e) {
+                LOG.error("Caught exception while fetching checkpoint for " + shardInfo.getShardId(), e);
+                final TaskResult result = new TaskResult(e);
+                result.leaseNotFound();
+                return result;
+            }
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.getCheckpoint();
 
             dataFetcher.initialize(initialCheckpoint.getSequenceNumber(), streamConfig.getInitialPositionInStream());

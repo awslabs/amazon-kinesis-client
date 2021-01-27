@@ -54,8 +54,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
-import com.amazonaws.services.kinesis.leases.impl.LeaseManager;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Description;
@@ -64,7 +62,6 @@ import org.hamcrest.TypeSafeMatcher;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
@@ -245,6 +242,52 @@ public class ShardConsumerTest {
         Thread.sleep(50L);
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
     }
+
+    @Test
+    public void testInitializationStateTransitionsToShutdownOnLeaseNotFound() throws Exception {
+        ShardInfo shardInfo = new ShardInfo("s-0-0", "testToken", null, ExtendedSequenceNumber.TRIM_HORIZON);
+
+        ICheckpoint checkpoint = new KinesisClientLibLeaseCoordinator(leaseManager, "", 0, 0);
+
+        when(leaseManager.getLease(anyString())).thenReturn(null);
+        when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
+        StreamConfig streamConfig =
+                new StreamConfig(streamProxy,
+                        1,
+                        10,
+                        callProcessRecordsForEmptyRecordList,
+                        skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
+
+        ShardConsumer consumer =
+                new ShardConsumer(shardInfo,
+                        streamConfig,
+                        checkpoint,
+                        processor,
+                        leaseCoordinator,
+                        parentShardPollIntervalMillis,
+                        cleanupLeasesOfCompletedShards,
+                        executorService,
+                        metricsFactory,
+                        taskBackoffTimeMillis,
+                        KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
+                        config,
+                        shardSyncer,
+                        shardSyncStrategy);
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        consumer.consumeShard();
+        Thread.sleep(50L);
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        consumer.consumeShard();
+        Thread.sleep(50L);
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        consumer.consumeShard();
+        Thread.sleep(50L);
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
+        consumer.consumeShard();
+        Thread.sleep(50L);
+        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
+    }
+
 
     @SuppressWarnings("unchecked")
     @Test

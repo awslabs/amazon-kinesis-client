@@ -33,6 +33,8 @@ class TaskResult {
     // List of childShards of the current shard. This field is only required for the task result when we reach end of a shard.
     private List<ChildShard> childShards;
 
+    private boolean leaseNotFound;
+
     /**
      * @return the shardEndReached
      */
@@ -56,6 +58,14 @@ class TaskResult {
      * @param childShards the list of childShards to set
      */
     protected void setChildShards(List<ChildShard> childShards) { this.childShards = childShards; }
+
+    public boolean isLeaseNotFound() {
+        return leaseNotFound;
+    }
+
+    public void leaseNotFound() {
+        this.leaseNotFound = true;
+    }
 
     /**
      * @return the exception
