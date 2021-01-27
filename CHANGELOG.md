@@ -1,6 +1,15 @@
 # Changelog
 
-## Latest Release (1.14.0 - August 17, 2020)
+## Latest Release (1.14.1 - January 27, 2021)
+* [Milestone#56](https://github.com/awslabs/amazon-kinesis-client/milestone/56)
+
+* Fix for cross DDB table interference when multiple KCL applications are run in same JVM.
+* Fix and guards to avoid potential checkpoint rewind during shard end, which may block children shard processing.
+* Fix for thread cycle wastage on InitializeTask for deleted shard
+* Improved logging in LeaseCleanupManager that would indicate why certain shards are not cleaned up.
+
+
+## Release (1.14.0 - August 17, 2020)
 
 * [Milestone#50](https://github.com/awslabs/amazon-kinesis-client/milestone/50)
 

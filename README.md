@@ -1,5 +1,5 @@
-# Bugs in 1.14.0
-The KCL version 1.14.0 has cross table interference risks when you run multiple KCL applications in same JVM. Also there can be a potential stale checkpoint issue blocking children shards from processing during resharding. We are releasing a fix in 1.14.1 version. ETA - 01/28/2021
+# Bugs in 1.14.0 version
+We recommend customers to migrate to 1.14.1 to avoid [known bugs](https://github.com/awslabs/amazon-kinesis-client/issues/778) in 1.14.0 version
 
 # Amazon Kinesis Client Library for Java
 [![Build Status](https://travis-ci.org/awslabs/amazon-kinesis-client.svg?branch=master)](https://travis-ci.org/awslabs/amazon-kinesis-client) ![BuildStatus](https://codebuild.us-west-2.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoiaWo4bDYyUkpWaG9ZTy9zeFVoaVlWbEwxazdicDJLcmZwUUpFWVVBM0ZueEJSeFIzNkhURzdVbUd6WUZHcGNxa3BEUzNrL0I5Nzc4NE9rbXhvdEpNdlFRPSIsIml2UGFyYW1ldGVyU3BlYyI6IlZDaVZJSTM1QW95bFRTQnYiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=v1.x)
@@ -34,7 +34,15 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.14.0 - August 17, 2020)
+### Latest Release (1.14.1 - January 27, 2021)
+* [Milestone#56](https://github.com/awslabs/amazon-kinesis-client/milestone/56)
+
+* Fix for cross DDB table interference when multiple KCL applications are run in same JVM.
+* Fix and guards to avoid potential checkpoint rewind during shard end, which may block children shard processing.
+* Fix for thread cycle wastage on InitializeTask for deleted shard.
+* Improved logging in LeaseCleanupManager that would indicate why certain shards are not cleaned up.
+
+### Release (1.14.0 - August 17, 2020)
 
 * [Milestone#50](https://github.com/awslabs/amazon-kinesis-client/milestone/50)
 
