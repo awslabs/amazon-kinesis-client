@@ -283,7 +283,8 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
         try {
             KinesisClientLease lease = leaseManager.getLease(shardId);
             if (lease == null) {
-                throw new KinesisClientLibIOException(errorMessage);
+                // This is a KinesisClientLibNonRetryableException
+                throw new com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException(errorMessage);
             }
             return new Checkpoint(lease.getCheckpoint(), lease.getPendingCheckpoint());
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {

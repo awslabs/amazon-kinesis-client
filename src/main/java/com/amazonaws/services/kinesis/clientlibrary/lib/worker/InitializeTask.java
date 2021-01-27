@@ -14,7 +14,7 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibException;
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -83,7 +83,7 @@ class InitializeTask implements ITask {
             Checkpoint initialCheckpointObject;
             try {
                 initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.getShardId());
-            } catch (KinesisClientLibException e) {
+            } catch (KinesisClientLibNonRetryableException e) {
                 LOG.error("Caught exception while fetching checkpoint for " + shardInfo.getShardId(), e);
                 final TaskResult result = new TaskResult(e);
                 result.leaseNotFound();
