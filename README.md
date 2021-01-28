@@ -57,7 +57,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>1.14.0</version>
+      <version>1.14.1</version>
   </dependency>
   ```
 
