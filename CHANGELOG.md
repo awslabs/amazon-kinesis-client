@@ -5,8 +5,8 @@
 
 * Fix for cross DDB table interference when multiple KCL applications are run in same JVM.
 * Fix and guards to avoid potential checkpoint rewind during shard end, which may block children shard processing.
-* Fix for thread cycle wastage on InitializeTask for deleted shard
-* Improved logging in LeaseCleanupManager that would indicate why certain shards are not cleaned up.
+* Fix for thread cycle wastage on InitializeTask for deleted shard.
+* Improved logging in LeaseCleanupManager that would indicate why certain shards are not cleaned up from the lease table.
 
 
 ## Release (1.14.0 - August 17, 2020)
