@@ -18,9 +18,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.model.BillingMode;
 import com.amazonaws.services.dynamodbv2.model.DescribeTableResult;
 import com.amazonaws.services.dynamodbv2.model.ListTablesResult;
+import com.amazonaws.services.kinesis.AmazonKinesisClientBuilder;
+import com.amazonaws.services.kinesis.model.CreateStreamRequest;
 import org.joda.time.DateTime;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -51,7 +57,7 @@ import static junit.framework.TestCase.fail;
 public class ShardSyncTaskIntegrationTest {
 
     private static final String STREAM_NAME = "IntegrationTestStream02";
-    private static final String KINESIS_ENDPOINT = "https://kinesis.us-east-1.amazonaws.com";
+    private static final String KINESIS_ENDPOINT = "http://localhost:4566";
 
     private static AWSCredentialsProvider credentialsProvider;
     private IKinesisClientLeaseManager leaseManager;
@@ -63,8 +69,13 @@ public class ShardSyncTaskIntegrationTest {
      */
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
+        System.setProperty("com.amazonaws.sdk.disableCbor", "true");
+
         credentialsProvider = new DefaultAWSCredentialsProviderChain();
-        AmazonKinesis kinesis = new AmazonKinesisClient(credentialsProvider);
+        AmazonKinesis kinesis = AmazonKinesisClientBuilder.standard()
+                .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration("http://localhost:4566","us-east-1"))
+                .withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials("accessKey", "secretKey")))
+                .build();
 
         try {
             kinesis.createStream(STREAM_NAME, 1);
@@ -92,7 +103,10 @@ public class ShardSyncTaskIntegrationTest {
         boolean useConsistentReads = true;
         leaseManager =
                 new KinesisClientLeaseManager(tableName,
-                        new AmazonDynamoDBClient(credentialsProvider),
+                        AmazonDynamoDBClientBuilder.standard()
+                                .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration("http://localhost:4566", "us-east-1"))
+                                .withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials("accessKey", "secretKey")))
+                                .build(),
                         useConsistentReads,
                         billingMode);
 
@@ -140,7 +154,10 @@ public class ShardSyncTaskIntegrationTest {
     }
 
     private void cleanUpTable(String tableName) throws DependencyException {
-        AmazonDynamoDBClient client = new AmazonDynamoDBClient(DefaultAWSCredentialsProviderChain.getInstance());
+        AmazonDynamoDBClient client = (AmazonDynamoDBClient) AmazonDynamoDBClientBuilder.standard()
+                .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration("http://localhost:4566","us-east-1"))
+                .withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials("accessKey", "secretKey")))
+                .build();
         ListTablesResult tables = client.listTables();
         if(tables.getTableNames().contains(tableName)){
             leaseManager.waitUntilLeaseTableExists(2,20);
@@ -160,7 +177,10 @@ public class ShardSyncTaskIntegrationTest {
     }
 
     private void checkBillingMode(BillingMode billingMode, String tableName) {
-        AmazonDynamoDBClient client = new AmazonDynamoDBClient(DefaultAWSCredentialsProviderChain.getInstance());
+        AmazonDynamoDBClient client = (AmazonDynamoDBClient) AmazonDynamoDBClientBuilder.standard()
+                .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration("http://localhost:4566","us-east-1"))
+                .withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials("accessKey", "secretKey")))
+                .build();
         DescribeTableResult tableDetails = client.describeTable(tableName);
         if(BillingMode.PAY_PER_REQUEST.equals(billingMode)) {
             Assert.assertEquals(tableDetails.getTable().getBillingModeSummary().getBillingMode(), billingMode.name());

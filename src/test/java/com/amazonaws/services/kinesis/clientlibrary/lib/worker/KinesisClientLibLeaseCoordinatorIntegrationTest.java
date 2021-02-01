@@ -14,33 +14,28 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.Callable;
-
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
-import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
-import junit.framework.Assert;
-
-import org.junit.Before;
-import org.junit.Test;
-
-
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
 import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
+import com.amazonaws.services.kinesis.leases.impl.GenericLeaseSelector;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.leases.impl.Lease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import com.amazonaws.services.kinesis.leases.interfaces.LeaseSelector;
+import junit.framework.Assert;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.util.*;
+import java.util.concurrent.Callable;
 
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -59,7 +54,10 @@ public class KinesisClientLibLeaseCoordinatorIntegrationTest {
         final boolean useConsistentReads = true;
         LeaseSelector<KinesisClientLease> leaseSelector = new GenericLeaseSelector<>();
         if (leaseManager == null) {
-            AmazonDynamoDBClient ddb = new AmazonDynamoDBClient(new DefaultAWSCredentialsProviderChain());
+            AmazonDynamoDBClient ddb = (AmazonDynamoDBClient) AmazonDynamoDBClientBuilder.standard()
+                    .withEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration("http://localhost:4566","us-east-1"))
+                    .withCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials("accessKey", "secretKey")))
+                    .build();
             leaseManager =
                     new KinesisClientLeaseManager(TABLE_NAME, ddb, useConsistentReads,
                             KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE);
