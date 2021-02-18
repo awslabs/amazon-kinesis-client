@@ -192,9 +192,9 @@ public class KinesisShardDetector implements ShardDetector {
         exceptionManager.add(ResourceInUseException.class, t -> t);
         exceptionManager.add(KinesisException.class, t -> t);
 
-        ListShardsRequest.Builder request = KinesisRequestsBuilder.listShardsRequestBuilder().shardFilter(shardFilter);
+        ListShardsRequest.Builder request = KinesisRequestsBuilder.listShardsRequestBuilder();
         if (StringUtils.isEmpty(nextToken)) {
-            request = request.streamName(streamIdentifier.streamName());
+            request = request.streamName(streamIdentifier.streamName()).shardFilter(shardFilter);
         } else {
             request = request.nextToken(nextToken);
         }
