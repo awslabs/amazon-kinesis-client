@@ -2,7 +2,7 @@
 
 ### Latest Release 2.3.4 (February 19, 2021)
 [Milestone#56](https://github.com/awslabs/amazon-kinesis-client/milestone/56)
-* [#788](https://github.com/awslabs/amazon-kinesis-client/pull/788) Fixing a bug where paginated `ListShards` calls with the `ShardFilter` parameter would fail when initializing the lease table.
+* [#788](https://github.com/awslabs/amazon-kinesis-client/pull/788) Fixing a bug that caused paginated `ListShards` calls with the `ShardFilter` parameter to fail when the lease table was being initialized.
 
 ### Release 2.3.3 (December 23, 2020)
 [Milestone#55](https://github.com/awslabs/amazon-kinesis-client/milestone/55)
