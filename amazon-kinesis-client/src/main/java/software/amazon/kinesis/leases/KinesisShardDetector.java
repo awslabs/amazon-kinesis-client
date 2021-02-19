@@ -192,12 +192,16 @@ public class KinesisShardDetector implements ShardDetector {
         exceptionManager.add(ResourceInUseException.class, t -> t);
         exceptionManager.add(KinesisException.class, t -> t);
 
-        ListShardsRequest.Builder request = KinesisRequestsBuilder.listShardsRequestBuilder();
+        ListShardsRequest.Builder builder = KinesisRequestsBuilder.listShardsRequestBuilder();
         if (StringUtils.isEmpty(nextToken)) {
-            request = request.streamName(streamIdentifier.streamName()).shardFilter(shardFilter);
+            builder = builder.streamName(streamIdentifier.streamName()).shardFilter(shardFilter);
         } else {
-            request = request.nextToken(nextToken);
+            builder = builder.nextToken(nextToken);
         }
+
+        final ListShardsRequest request = builder.build();
+        log.info("Stream {}: listing shards with list shards request {}", streamIdentifier, request);
+
         ListShardsResponse result = null;
         LimitExceededException lastException = null;
         int remainingRetries = maxListShardsRetryAttempts;
@@ -205,7 +209,7 @@ public class KinesisShardDetector implements ShardDetector {
         while (result == null) {
             try {
                 try {
-                    result = getListShardsResponse(request.build());
+                    result = getListShardsResponse(request);
                 } catch (ExecutionException e) {
                     throw exceptionManager.apply(e.getCause());
                 } catch (InterruptedException e) {
