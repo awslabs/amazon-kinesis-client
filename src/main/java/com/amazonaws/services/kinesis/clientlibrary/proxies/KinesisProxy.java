@@ -315,13 +315,12 @@ public class KinesisProxy implements IKinesisProxyExtended {
         request.setRequestCredentials(credentialsProvider.getCredentials());
         if (StringUtils.isEmpty(nextToken)) {
             request.setStreamName(streamName);
+            request.setShardFilter(shardFilter);
         } else {
             request.setNextToken(nextToken);
         }
 
-        if (shardFilter != null) {
-            request.setShardFilter(shardFilter);
-        }
+        LOG.info("Listing shards with list shards request " + request);
 
         ListShardsResult result = null;
         LimitExceededException lastException = null;
