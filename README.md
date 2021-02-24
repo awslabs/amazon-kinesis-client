@@ -34,7 +34,11 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.14.1 - January 27, 2021)
+## Latest Release (1.14.2 - February 24, 2021)
+* [Milestone#57](https://github.com/awslabs/amazon-kinesis-client/milestone/57)
+* [#790](https://github.com/awslabs/amazon-kinesis-client/pull/790) Fixing a bug that caused paginated `ListShards` calls with the `ShardFilter` parameter to fail when the lease table was being initialized.
+
+### Release (1.14.1 - January 27, 2021)
 * [Milestone#56](https://github.com/awslabs/amazon-kinesis-client/milestone/56)
 
 * Fix for cross DDB table interference when multiple KCL applications are run in same JVM.
