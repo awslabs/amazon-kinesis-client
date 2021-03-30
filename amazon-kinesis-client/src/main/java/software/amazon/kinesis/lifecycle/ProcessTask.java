@@ -217,7 +217,7 @@ public class ProcessTask implements ConsumerTask {
         } catch (Exception e) {
             log.error("ShardId {}: Application processRecords() threw an exception when processing shard ",
                     shardInfoId, e);
-            log.error("ShardId {}: Skipping over the following data records: {}", shardInfoId, records);
+            log.debug("ShardId {}: Skipping over the following data records: {}", shardInfoId, records);
         } finally {
             MetricsUtil.addLatency(scope, RECORD_PROCESSOR_PROCESS_RECORDS_METRIC, startTime, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(scope);
