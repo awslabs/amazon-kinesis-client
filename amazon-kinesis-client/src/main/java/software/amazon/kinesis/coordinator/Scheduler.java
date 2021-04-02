@@ -40,6 +40,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -279,7 +280,8 @@ public class Scheduler implements Runnable {
                     .createWorkerStateChangeListener();
         }
         this.leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher,
-                Executors.newSingleThreadScheduledExecutor(), PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
+                Executors.newSingleThreadScheduledExecutor(),
+                PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
 //        this.retryGetRecordsInSeconds = this.retrievalConfig.retryGetRecordsInSeconds();

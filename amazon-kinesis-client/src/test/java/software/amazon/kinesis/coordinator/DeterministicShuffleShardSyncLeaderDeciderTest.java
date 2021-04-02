@@ -14,15 +14,6 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-import software.amazon.kinesis.leases.Lease;
-import software.amazon.kinesis.leases.LeaseRefresher;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -30,11 +21,23 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
-
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.booleanThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.coordinator.DeterministicShuffleShardSyncLeaderDecider.DETERMINISTIC_SHUFFLE_SEED;
 
@@ -52,12 +55,21 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     @Mock
     private ScheduledExecutorService scheduledExecutorService;
 
+    @Mock
+    private ReadWriteLock readWriteLock;
+
     private int numShardSyncWorkers;
 
     @Before
     public void setup() {
         numShardSyncWorkers = 1;
-        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher, scheduledExecutorService, numShardSyncWorkers);
+        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher,
+                scheduledExecutorService,
+                numShardSyncWorkers,
+                readWriteLock);
+
+        when(readWriteLock.readLock()).thenReturn(mock(ReentrantReadWriteLock.ReadLock.class));
+        when(readWriteLock.writeLock()).thenReturn(mock(ReentrantReadWriteLock.WriteLock.class));
     }
 
     @Test
@@ -71,6 +83,15 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
         when(leaseRefresher.listLeases()).thenReturn(new ArrayList<>());
         boolean isLeader = leaderDecider.isLeader(WORKER_ID);
         assertTrue("IsLeader should return true if no leases are returned", isLeader);
+    }
+
+    @Test
+    public void testLeaderElectionDoesNotUseLocksOnListLeasesException() throws Exception {
+        when(leaseRefresher.listLeases()).thenThrow(new DependencyException("error", new Throwable()));
+        leaderDecider.isLeader(WORKER_ID);
+        verify(leaseRefresher, times(1)).listLeases();
+        verify(readWriteLock.writeLock(), times(0)).lock();
+        verify(readWriteLock.writeLock(), times(0)).unlock();
     }
 
     @Test
@@ -100,7 +121,10 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     @Test
     public void testElectedLeadersAsPerExpectedShufflingOrderWhenUniqueWorkersLessThanMaxLeaders() {
         this.numShardSyncWorkers = 5; // More than number of unique lease owners
-        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher, scheduledExecutorService, numShardSyncWorkers);
+        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher,
+                scheduledExecutorService,
+                numShardSyncWorkers,
+                readWriteLock);
         List<Lease> leases = getLeases(3, false /*emptyLeaseOwner */, false /* duplicateLeaseOwner */, true /* activeLeases */);
         Set<String> expectedLeaders = getExpectedLeaders(leases);
         // All lease owners should be present in expected leaders set, and they should all be leaders.
