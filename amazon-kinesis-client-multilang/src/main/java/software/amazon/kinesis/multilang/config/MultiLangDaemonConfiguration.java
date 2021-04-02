@@ -19,6 +19,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -27,6 +28,7 @@ import java.util.UUID;
 import java.util.function.Function;
 
 import org.apache.commons.beanutils.BeanUtilsBean;
+import org.apache.commons.beanutils.ConvertUtils;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 import org.apache.commons.beanutils.Converter;
 import org.apache.commons.beanutils.converters.ArrayConverter;
@@ -196,6 +198,14 @@ public class MultiLangDaemonConfiguration {
     public MultiLangDaemonConfiguration(BeanUtilsBean utilsBean, ConvertUtilsBean convertUtilsBean) {
         this.utilsBean = utilsBean;
         this.convertUtilsBean = convertUtilsBean;
+
+        convertUtilsBean.register(new Converter() {
+            @Override
+            public <T> T convert(Class<T> type, Object value) {
+                Date date = new Date(Long.parseLong(value.toString()) * 1000L);
+                return type.cast(InitialPositionInStreamExtended.newInitialPositionAtTimestamp(date));
+            }
+        }, InitialPositionInStreamExtended.class);
 
         convertUtilsBean.register(new Converter() {
             @Override

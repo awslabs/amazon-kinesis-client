@@ -27,6 +27,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -91,6 +92,16 @@ public class KinesisClientLibConfiguratorTest {
         assertEquals(config.getWorkerIdentifier(), "123");
         assertEquals(config.getFailoverTimeMillis(), 100);
         assertEquals(config.getShardSyncIntervalMillis(), 500);
+    }
+
+    @Test
+    public void testWithInitialPositionInStreamExtended() {
+        MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "applicationName = app",
+                "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+                "initialPositionInStreamExtended = 1617406032" }, '\n'));
+
+        assertEquals(config.getInitialPositionInStreamExtended().getTimestamp(), new Date(1617406032000L));
+        assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.AT_TIMESTAMP);
     }
 
     @Test
