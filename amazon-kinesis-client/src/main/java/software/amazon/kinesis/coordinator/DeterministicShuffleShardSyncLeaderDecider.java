@@ -14,14 +14,6 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.utils.CollectionUtils;
-import software.amazon.kinesis.leases.Lease;
-import software.amazon.kinesis.leases.LeaseRefresher;
-import software.amazon.kinesis.leases.exceptions.DependencyException;
-import software.amazon.kinesis.leases.exceptions.InvalidStateException;
-import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
-
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashSet;
@@ -34,6 +26,13 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.utils.CollectionUtils;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 
 /**
  * An implementation of the {@code LeaderDecider} to elect leader(s) based on workerId.
@@ -55,7 +54,7 @@ class DeterministicShuffleShardSyncLeaderDecider
     private static final long ELECTION_SCHEDULING_INTERVAL_MILLIS = 5 * 60 * 1000;
     private static final int AWAIT_TERMINATION_MILLIS = 5000;
 
-    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+    private final ReadWriteLock readWriteLock;
 
     private final LeaseRefresher leaseRefresher;
     private final int numPeriodicShardSyncWorkers;
@@ -68,11 +67,29 @@ class DeterministicShuffleShardSyncLeaderDecider
      * @param leaderElectionThreadPool    Thread-pool to be used for leaderElection.
      * @param numPeriodicShardSyncWorkers Number of leaders that will be elected to perform periodic shard syncs.
      */
-    DeterministicShuffleShardSyncLeaderDecider(LeaseRefresher leaseRefresher, ScheduledExecutorService leaderElectionThreadPool,
-            int numPeriodicShardSyncWorkers) {
+    DeterministicShuffleShardSyncLeaderDecider(LeaseRefresher leaseRefresher,
+                                               ScheduledExecutorService leaderElectionThreadPool,
+                                               int numPeriodicShardSyncWorkers) {
+        this(leaseRefresher,
+                leaderElectionThreadPool,
+                numPeriodicShardSyncWorkers,
+                new ReentrantReadWriteLock());
+    }
+
+    /**
+     * @param leaseRefresher              LeaseManager instance used to fetch leases.
+     * @param leaderElectionThreadPool    Thread-pool to be used for leaderElection.
+     * @param numPeriodicShardSyncWorkers Number of leaders that will be elected to perform periodic shard syncs.
+     * @param readWriteLock               Mechanism to lock for reading and writing of critical components
+     */
+    DeterministicShuffleShardSyncLeaderDecider(LeaseRefresher leaseRefresher,
+                                               ScheduledExecutorService leaderElectionThreadPool,
+                                               int numPeriodicShardSyncWorkers,
+                                               ReadWriteLock readWriteLock) {
         this.leaseRefresher = leaseRefresher;
         this.leaderElectionThreadPool = leaderElectionThreadPool;
         this.numPeriodicShardSyncWorkers = numPeriodicShardSyncWorkers;
+        this.readWriteLock = readWriteLock;
     }
 
     /*
@@ -80,6 +97,7 @@ class DeterministicShuffleShardSyncLeaderDecider
      * as leaders (workers that will perform shard sync).
      */
     private void electLeaders() {
+        boolean acquiredLock = false;
         try {
             log.debug("Started leader election at: " + Instant.now());
             List<Lease> leases = leaseRefresher.listLeases();
@@ -91,6 +109,7 @@ class DeterministicShuffleShardSyncLeaderDecider
             // In case value is currently being read, we wait for reading to complete before updating the variable.
             // This is to prevent any ConcurrentModificationException exceptions.
             readWriteLock.writeLock().lock();
+            acquiredLock = true;
             leaders = new HashSet<>(uniqueHosts.subList(0, numShardSyncWorkers));
             log.info("Elected leaders: " + String.join(", ", leaders));
             log.debug("Completed leader election at: " + Instant.now());
@@ -99,7 +118,9 @@ class DeterministicShuffleShardSyncLeaderDecider
         } catch (Throwable t) {
             log.error("Unknown exception during leader election.", t);
         } finally {
-            readWriteLock.writeLock().unlock();
+            if (acquiredLock) {
+                readWriteLock.writeLock().unlock();
+            }
         }
     }
 
