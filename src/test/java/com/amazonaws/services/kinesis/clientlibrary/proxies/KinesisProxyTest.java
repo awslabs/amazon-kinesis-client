@@ -435,23 +435,29 @@ public class KinesisProxyTest {
         verify(mockClient).listShards(any());
     }
 
-
     @Test
     public void testNoDuplicateShardsInPartialFailure() {
         proxy.setCachedShardMap(null);
         ListShardsResult firstPage = new ListShardsResult().withShards(shards.subList(0, 2)).withNextToken(NEXT_TOKEN);
         ListShardsResult lastPage = new ListShardsResult().withShards(shards.subList(2, shards.size())).withNextToken(null);
-
-        when(mockClient.listShards(any()))
-                .thenReturn(firstPage)
-                .thenThrow(new RuntimeException("Failed!"))
-                .thenReturn(firstPage)
-                .thenReturn(lastPage);
+        when(mockClient.listShards(any())).thenReturn(firstPage).thenThrow(new RuntimeException("Failed!")) // First call
+                .thenReturn(firstPage).thenReturn(lastPage); // second call
 
         try {
             proxy.getShardList();
         } catch (Exception e) {
+            // Do nothing
         }
+        assertEquals(shards, proxy.getShardList());
+    }
+
+    @Test
+    public void testDuplicateShardResponseDedupedGracefully() {
+        proxy.setCachedShardMap(null);
+        ListShardsResult pageOfShards = new ListShardsResult().withShards(shards).withNextToken(null);
+        when(mockClient.listShards(any())).thenReturn(pageOfShards);
+
+        proxy.getShardList();
         assertEquals(shards, proxy.getShardList());
     }
 
