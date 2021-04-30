@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -485,10 +486,11 @@ public class KinesisProxy implements IKinesisProxyExtended {
                 }
             } while (response.getStreamDescription().isHasMoreShards());
         }
-        this.cachedShardMap = shards.stream().collect(Collectors.toMap(Shard::getShardId, Function.identity()));
+        final List<Shard> dedupedShards = new ArrayList<>(new LinkedHashSet<>(shards));
+        this.cachedShardMap = dedupedShards.stream().collect(Collectors.toMap(Shard::getShardId, Function.identity()));
         this.lastCacheUpdateTime = Instant.now();
 
-        return shards;
+        return dedupedShards;
     }
 
     /**
