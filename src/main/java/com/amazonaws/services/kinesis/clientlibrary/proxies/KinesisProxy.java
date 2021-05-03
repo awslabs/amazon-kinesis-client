@@ -490,7 +490,8 @@ public class KinesisProxy implements IKinesisProxyExtended {
         }
         final List<Shard> dedupedShards = new ArrayList<>(new LinkedHashSet<>(shards));
         if (dedupedShards.size() < shards.size()) {
-            LOG.warn("Found duplicate child shards in ListShards response. Request ids - " + requestIds);
+            LOG.warn("Found duplicate shards in response when sync'ing from Kinesis. " +
+                    "Request ids - " + requestIds + ". Response - " + shards);
         }
         this.cachedShardMap = dedupedShards.stream().collect(Collectors.toMap(Shard::getShardId, Function.identity()));
         this.lastCacheUpdateTime = Instant.now();
