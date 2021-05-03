@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.doReturn;
@@ -92,6 +93,7 @@ public class KinesisProxyTest {
     private static final String SHARD_4 = "shard-4";
     private static final String NOT_CACHED_SHARD = "ShardId-0005";
     private static final String NEVER_PRESENT_SHARD = "ShardId-0010";
+    private static final String REQUEST_ID = "requestId";
 
     @Mock
     private AmazonKinesis mockClient;
@@ -247,54 +249,6 @@ public class KinesisProxyTest {
         when(mockDDBStreamClient.describeStream(any(DescribeStreamRequest.class))).thenThrow(new LimitExceededException("Test"));
 
         ddbProxy.getShardList();
-    }
-
-    @Test
-    public void testGetStreamInfoStoresOffset() throws Exception {
-        when(describeStreamResult.getStreamDescription()).thenReturn(streamDescription);
-        when(streamDescription.getStreamStatus()).thenReturn(StreamStatus.ACTIVE.name());
-        Shard shard1 = mock(Shard.class);
-        Shard shard2 = mock(Shard.class);
-        Shard shard3 = mock(Shard.class);
-        List<Shard> shardList1 = Collections.singletonList(shard1);
-        List<Shard> shardList2 = Collections.singletonList(shard2);
-        List<Shard> shardList3 = Collections.singletonList(shard3);
-
-        String shardId1 = "ShardId-0001";
-        String shardId2 = "ShardId-0002";
-        String shardId3 = "ShardId-0003";
-
-        when(shard1.getShardId()).thenReturn(shardId1);
-        when(shard2.getShardId()).thenReturn(shardId2);
-        when(shard3.getShardId()).thenReturn(shardId3);
-
-        when(streamDescription.getShards()).thenReturn(shardList1).thenReturn(shardList2).thenReturn(shardList3);
-        when(streamDescription.isHasMoreShards()).thenReturn(true, true, false);
-        when(mockDDBStreamClient.describeStream(argThat(describeWithoutShardId()))).thenReturn(describeStreamResult);
-
-        when(mockDDBStreamClient.describeStream(argThat(describeWithShardId(shardId1))))
-                .thenThrow(new LimitExceededException("1"), new LimitExceededException("2"),
-                        new LimitExceededException("3"))
-                .thenReturn(describeStreamResult);
-
-        when(mockDDBStreamClient.describeStream(argThat(describeWithShardId(shardId2)))).thenReturn(describeStreamResult);
-
-        boolean limitExceeded = false;
-        try {
-            ddbProxy.getShardList();
-        } catch (LimitExceededException le) {
-            limitExceeded = true;
-        }
-        assertThat(limitExceeded, equalTo(true));
-        List<Shard> actualShards = ddbProxy.getShardList();
-        List<Shard> expectedShards = Arrays.asList(shard1, shard2, shard3);
-
-        assertThat(actualShards, equalTo(expectedShards));
-
-        verify(mockDDBStreamClient).describeStream(argThat(describeWithoutShardId()));
-        verify(mockDDBStreamClient, times(4)).describeStream(argThat(describeWithShardId(shardId1)));
-        verify(mockDDBStreamClient).describeStream(argThat(describeWithShardId(shardId2)));
-
     }
 
     @Test
@@ -481,6 +435,47 @@ public class KinesisProxyTest {
         assertThat(shard.getShardId(), equalTo(NOT_CACHED_SHARD));
 
         verify(mockClient).listShards(any());
+    }
+
+    /**
+     * Tests that if we fail halfway through a listShards call, we fail gracefully and subsequent calls are not
+     * affected by the failure of the first request.
+     */
+    @Test
+    public void testNoDuplicateShardsInPartialFailure() {
+        proxy.setCachedShardMap(null);
+
+        ListShardsResult firstPage = new ListShardsResult().withShards(shards.subList(0, 2)).withNextToken(NEXT_TOKEN);
+        ListShardsResult lastPage = new ListShardsResult().withShards(shards.subList(2, shards.size())).withNextToken(null);
+
+        when(mockClient.listShards(any()))
+                .thenReturn(firstPage).thenThrow(new RuntimeException("Failed!"))
+                .thenReturn(firstPage).thenReturn(lastPage);
+
+        try {
+            proxy.getShardList();
+            fail("First ListShards call should have failed!");
+        } catch (Exception e) {
+            // Do nothing
+        }
+        assertEquals(shards, proxy.getShardList());
+    }
+
+    /**
+     * Tests that if we receive any duplicate shard responses from the service during a shard sync, we dedup the response
+     * and continue gracefully.
+     */
+    @Test
+    public void testDuplicateShardResponseDedupedGracefully() {
+        proxy.setCachedShardMap(null);
+        List<Shard> duplicateShards = new ArrayList<>(shards);
+        duplicateShards.addAll(shards);
+        ListShardsResult pageOfShards = new ListShardsResult().withShards(duplicateShards).withNextToken(null);
+
+        when(mockClient.listShards(any())).thenReturn(pageOfShards);
+
+        proxy.getShardList();
+        assertEquals(shards, proxy.getShardList());
     }
 
     private void mockListShardsForSingleResponse(List<Shard> shards) {

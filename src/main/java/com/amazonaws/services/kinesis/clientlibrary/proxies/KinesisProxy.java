@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.amazonaws.services.kinesis.clientlibrary.utils.RequestUtil;
 import com.amazonaws.services.kinesis.model.ShardFilter;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -59,7 +61,6 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamStatus;
 
 import lombok.AccessLevel;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -81,8 +82,6 @@ public class KinesisProxy implements IKinesisProxyExtended {
 
     private AmazonKinesis client;
     private AWSCredentialsProvider credentialsProvider;
-
-    private ShardIterationState shardIterationState = null;
 
     @Setter(AccessLevel.PACKAGE)
     private volatile Map<String, Shard> cachedShardMap = null;
@@ -442,10 +441,8 @@ public class KinesisProxy implements IKinesisProxyExtended {
      */
     @Override
     public synchronized List<Shard> getShardListWithFilter(ShardFilter shardFilter) {
-        if (shardIterationState == null) {
-            shardIterationState = new ShardIterationState();
-        }
-
+        final List<Shard> shards = new ArrayList<>();
+        final List<String> requestIds = new ArrayList<>();
         if (isKinesisClient) {
             ListShardsResult result;
             String nextToken = null;
@@ -460,16 +457,18 @@ public class KinesisProxy implements IKinesisProxyExtended {
                      */
                     return null;
                 } else {
-                    shardIterationState.update(result.getShards());
+                    shards.addAll(result.getShards());
+                    requestIds.add(RequestUtil.requestId(result));
                     nextToken = result.getNextToken();
                 }
             } while (StringUtils.isNotEmpty(result.getNextToken()));
 
         } else {
             DescribeStreamResult response;
+            String lastShardId = null;
 
             do {
-                response = getStreamInfo(shardIterationState.getLastShardId());
+                response = getStreamInfo(lastShardId);
 
                 if (response == null) {
                     /*
@@ -478,16 +477,26 @@ public class KinesisProxy implements IKinesisProxyExtended {
                      */
                     return null;
                 } else {
-                    shardIterationState.update(response.getStreamDescription().getShards());
+                    final List<Shard> pageOfShards = response.getStreamDescription().getShards();
+                    shards.addAll(pageOfShards);
+                    requestIds.add(RequestUtil.requestId(response));
+
+                    final Shard lastShard = pageOfShards.get(pageOfShards.size() - 1);
+                    if (lastShardId == null || lastShardId.compareTo(lastShard.getShardId()) < 0) {
+                        lastShardId = lastShard.getShardId();
+                    }
                 }
             } while (response.getStreamDescription().isHasMoreShards());
         }
-        List<Shard> shards = shardIterationState.getShards();
-        this.cachedShardMap = shards.stream().collect(Collectors.toMap(Shard::getShardId, Function.identity()));
+        final List<Shard> dedupedShards = new ArrayList<>(new LinkedHashSet<>(shards));
+        if (dedupedShards.size() < shards.size()) {
+            LOG.warn("Found duplicate shards in response when sync'ing from Kinesis. " +
+                    "Request ids - " + requestIds + ". Response - " + shards);
+        }
+        this.cachedShardMap = dedupedShards.stream().collect(Collectors.toMap(Shard::getShardId, Function.identity()));
         this.lastCacheUpdateTime = Instant.now();
 
-        shardIterationState = new ShardIterationState();
-        return shards;
+        return dedupedShards;
     }
 
     /**
@@ -617,27 +626,4 @@ public class KinesisProxy implements IKinesisProxyExtended {
         final PutRecordResult response = client.putRecord(putRecordRequest);
         return response;
     }
-
-    @Data
-    static class ShardIterationState {
-
-        private List<Shard> shards;
-        private String lastShardId;
-
-        public ShardIterationState() {
-            shards = new ArrayList<>();
-        }
-
-        public void update(List<Shard> shards) {
-            if (shards == null || shards.isEmpty()) {
-                return;
-            }
-            this.shards.addAll(shards);
-            Shard lastShard = shards.get(shards.size() - 1);
-            if (lastShardId == null || lastShardId.compareTo(lastShard.getShardId()) < 0) {
-                lastShardId = lastShard.getShardId();
-            }
-        }
-    }
-
 }
