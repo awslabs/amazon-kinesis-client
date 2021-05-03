@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.amazonaws.services.kinesis.clientlibrary.utils.RequestUtil;
 import com.amazonaws.services.kinesis.model.ShardFilter;
 import com.amazonaws.util.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -60,7 +61,6 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamStatus;
 
 import lombok.AccessLevel;
-import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -442,7 +442,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
     @Override
     public synchronized List<Shard> getShardListWithFilter(ShardFilter shardFilter) {
         final List<Shard> shards = new ArrayList<>();
-
+        final List<String> requestIds = new ArrayList<>();
         if (isKinesisClient) {
             ListShardsResult result;
             String nextToken = null;
@@ -458,6 +458,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
                     return null;
                 } else {
                     shards.addAll(result.getShards());
+                    requestIds.add(RequestUtil.requestId(result));
                     nextToken = result.getNextToken();
                 }
             } while (StringUtils.isNotEmpty(result.getNextToken()));
@@ -478,6 +479,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
                 } else {
                     final List<Shard> pageOfShards = response.getStreamDescription().getShards();
                     shards.addAll(pageOfShards);
+                    requestIds.add(RequestUtil.requestId(response));
 
                     final Shard lastShard = pageOfShards.get(pageOfShards.size() - 1);
                     if (lastShardId == null || lastShardId.compareTo(lastShard.getShardId()) < 0) {
@@ -487,6 +489,9 @@ public class KinesisProxy implements IKinesisProxyExtended {
             } while (response.getStreamDescription().isHasMoreShards());
         }
         final List<Shard> dedupedShards = new ArrayList<>(new LinkedHashSet<>(shards));
+        if (dedupedShards.size() < shards.size()) {
+            LOG.warn("Found duplicate child shards in ListShards response. Request ids - " + requestIds);
+        }
         this.cachedShardMap = dedupedShards.stream().collect(Collectors.toMap(Shard::getShardId, Function.identity()));
         this.lastCacheUpdateTime = Instant.now();
 

@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.doReturn;
@@ -92,6 +93,7 @@ public class KinesisProxyTest {
     private static final String SHARD_4 = "shard-4";
     private static final String NOT_CACHED_SHARD = "ShardId-0005";
     private static final String NEVER_PRESENT_SHARD = "ShardId-0010";
+    private static final String REQUEST_ID = "requestId";
 
     @Mock
     private AmazonKinesis mockClient;
@@ -435,26 +437,41 @@ public class KinesisProxyTest {
         verify(mockClient).listShards(any());
     }
 
+    /**
+     * Tests that if we fail halfway through a listShards call, we fail gracefully and subsequent calls are not
+     * affected by the failure of the first request.
+     */
     @Test
     public void testNoDuplicateShardsInPartialFailure() {
         proxy.setCachedShardMap(null);
+
         ListShardsResult firstPage = new ListShardsResult().withShards(shards.subList(0, 2)).withNextToken(NEXT_TOKEN);
         ListShardsResult lastPage = new ListShardsResult().withShards(shards.subList(2, shards.size())).withNextToken(null);
-        when(mockClient.listShards(any())).thenReturn(firstPage).thenThrow(new RuntimeException("Failed!")) // First call
-                .thenReturn(firstPage).thenReturn(lastPage); // second call
+
+        when(mockClient.listShards(any()))
+                .thenReturn(firstPage).thenThrow(new RuntimeException("Failed!"))
+                .thenReturn(firstPage).thenReturn(lastPage);
 
         try {
             proxy.getShardList();
+            fail("First ListShards call should have failed!");
         } catch (Exception e) {
             // Do nothing
         }
         assertEquals(shards, proxy.getShardList());
     }
 
+    /**
+     * Tests that if we receive any duplicate shard responses from the service during a shard sync, we dedup the response
+     * and continue gracefully.
+     */
     @Test
     public void testDuplicateShardResponseDedupedGracefully() {
         proxy.setCachedShardMap(null);
-        ListShardsResult pageOfShards = new ListShardsResult().withShards(shards).withNextToken(null);
+        List<Shard> duplicateShards = new ArrayList<>(shards);
+        duplicateShards.addAll(shards);
+        ListShardsResult pageOfShards = new ListShardsResult().withShards(duplicateShards).withNextToken(null);
+
         when(mockClient.listShards(any())).thenReturn(pageOfShards);
 
         proxy.getShardList();
