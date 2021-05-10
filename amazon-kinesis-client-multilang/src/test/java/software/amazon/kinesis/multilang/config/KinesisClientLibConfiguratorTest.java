@@ -96,11 +96,12 @@ public class KinesisClientLibConfiguratorTest {
 
     @Test
     public void testWithInitialPositionInStreamExtended() {
+        long epochTimeInSeconds = 1617406032;
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "applicationName = app",
                 "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
-                "initialPositionInStreamExtended = 1617406032" }, '\n'));
+                "initialPositionInStreamExtended = " + epochTimeInSeconds}, '\n'));
 
-        assertEquals(config.getInitialPositionInStreamExtended().getTimestamp(), new Date(1617406032000L));
+        assertEquals(config.getInitialPositionInStreamExtended().getTimestamp(), new Date(epochTimeInSeconds * 1000L));
         assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.AT_TIMESTAMP);
     }
 
