@@ -29,14 +29,13 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.Optional;
 import java.util.Set;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import org.apache.commons.lang3.StringUtils;
-import org.junit.Ignore;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -46,11 +45,8 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.kinesis.common.InitialPositionInStream;
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 
@@ -103,6 +99,36 @@ public class KinesisClientLibConfiguratorTest {
 
         assertEquals(config.getInitialPositionInStreamExtended().getTimestamp(), new Date(epochTimeInSeconds * 1000L));
         assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.AT_TIMESTAMP);
+    }
+
+    @Test
+    public void testInvalidInitialPositionInStream() {
+        // AT_TIMESTAMP cannot be used as initialPositionInStream. If a user wants to specify AT_TIMESTAMP,
+        // they must specify the time with initialPositionInStreamExtended.
+        try {
+            getConfiguration(StringUtils.join(new String[] { "applicationName = app",
+            "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+            "initialPositionInStream = AT_TIMESTAMP"}, '\n'));
+            fail("Should have thrown when initialPositionInStream is set to AT_TIMESTAMP");
+        } catch (Exception e) {
+            Throwable rootCause = ExceptionUtils.getRootCause(e);
+            assertTrue(rootCause instanceof IllegalArgumentException);
+        }
+    }
+
+    @Test
+    public void testInvalidInitialPositionInStreamExtended() {
+        // initialPositionInStreamExtended takes a long value indicating seconds since epoch. If a non-long
+        // value is provided, the constructor should throw an IllegalArgumentException exception.
+        try {
+            getConfiguration(StringUtils.join(new String[] { "applicationName = app",
+            "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+            "initialPositionInStreamExtended = null"}, '\n'));
+            fail("Should have thrown when initialPositionInStreamExtended is set to null");
+        } catch (Exception e) {
+            Throwable rootCause = ExceptionUtils.getRootCause(e);
+            assertTrue(rootCause instanceof IllegalArgumentException);
+        }
     }
 
     @Test
@@ -171,12 +197,21 @@ public class KinesisClientLibConfiguratorTest {
     }
 
     @Test
-    public void testWithInitialPositionInStreamVariables() {
+    public void testWithInitialPositionInStreamTrimHorizon() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
                 "applicationName = b", "AWSCredentialsProvider = ABCD," + credentialName1, "workerId = 123",
                 "initialPositionInStream = TriM_Horizon" }, '\n'));
 
         assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.TRIM_HORIZON);
+    }
+
+    @Test
+    public void testWithInitialPositionInStreamLatest() {
+        MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
+                "applicationName = b", "AWSCredentialsProvider = ABCD," + credentialName1, "workerId = 123",
+                "initialPositionInStream = LateSt" }, '\n'));
+
+        assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.LATEST);
     }
 
     @Test
