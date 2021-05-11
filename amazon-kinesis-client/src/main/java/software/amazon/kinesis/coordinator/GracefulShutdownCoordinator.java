@@ -14,21 +14,20 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.function.Supplier;
 
 import lombok.extern.slf4j.Slf4j;
 
 class GracefulShutdownCoordinator {
 
-    Future<Boolean> startGracefulShutdown(Callable<Boolean> shutdownCallable) {
-        FutureTask<Boolean> task = new FutureTask<>(shutdownCallable);
-        Thread shutdownThread = new Thread(task, "RequestedShutdownThread");
-        shutdownThread.start();
-        return task;
-
+    CompletableFuture<Boolean> startGracefulShutdown(Callable<Boolean> shutdownCallable) {
+        CompletableFuture<Boolean> cf = new CompletableFuture<>();
+        CompletableFuture.runAsync(() -> {
+            try { cf.complete(shutdownCallable.call()); }
+            catch(Throwable ex) { cf.completeExceptionally(ex); }
+        });
+        return cf;
     }
 
     Callable<Boolean> createGracefulShutdownCallable(Callable<GracefulShutdownContext> startWorkerShutdown) {
