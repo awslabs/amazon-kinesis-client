@@ -15,7 +15,6 @@
 package software.amazon.kinesis.coordinator;
 
 import java.util.concurrent.*;
-import java.util.function.Supplier;
 
 import lombok.extern.slf4j.Slf4j;
 
