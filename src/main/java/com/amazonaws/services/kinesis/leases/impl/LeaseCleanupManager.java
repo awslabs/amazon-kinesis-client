@@ -122,7 +122,7 @@ public class LeaseCleanupManager {
     }
 
     /**
-     * Starts the lease cleanup thread, which is scheduled periodically as specified by
+     * Stops the lease cleanup thread, which is scheduled periodically as specified by
      * {@link LeaseCleanupManager#leaseCleanupIntervalMillis}
      */
     public void shutdown() {

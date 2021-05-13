@@ -1046,7 +1046,7 @@ public class Worker implements Runnable {
         // Worker.run().
         leaseCoordinator.stop();
 
-        // Stop the leash cleanup manager
+        // Stop the lease cleanup manager
         leaseCleanupManager.shutdown();
 
         // Stop the periodicShardSyncManager for the worker
