@@ -1045,6 +1045,10 @@ public class Worker implements Runnable {
         // Lost leases will force Worker to begin shutdown process for all shard consumers in
         // Worker.run().
         leaseCoordinator.stop();
+
+        // Stop the leash cleanup manager
+        leaseCleanupManager.shutdown();
+
         // Stop the periodicShardSyncManager for the worker
         if (shardSyncStrategy != null) {
             shardSyncStrategy.onWorkerShutDown();
