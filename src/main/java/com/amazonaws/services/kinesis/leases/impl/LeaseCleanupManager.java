@@ -122,6 +122,23 @@ public class LeaseCleanupManager {
     }
 
     /**
+     * Stops the lease cleanup thread, which is scheduled periodically as specified by
+     * {@link LeaseCleanupManager#leaseCleanupIntervalMillis}
+     */
+    public void shutdown() {
+        if (isRunning) {
+            LOG.info("Stopping the lease cleanup thread.");
+            completedLeaseStopwatch.stop();
+            garbageLeaseStopwatch.stop();
+            deletionThreadPool.shutdown();
+
+            isRunning = false;
+        } else {
+            LOG.info("Lease cleanup thread already stopped.");
+        }
+    }
+
+    /**
      * Enqueues a lease for deletion without check for duplicate entry. Use {@link #isEnqueuedForDeletion}
      * for checking the duplicate entries.
      * @param leasePendingDeletion

@@ -94,6 +94,18 @@ public class LeaseCleanupManagerTest {
     }
 
     /**
+     * Tests subsequent calls to shutdown {@link LeaseCleanupManager}.
+     */
+    @Test
+    public final void testSubsequentShutdowns() {
+        leaseCleanupManager.start();
+        Assert.assertTrue(leaseCleanupManager.isRunning());
+        leaseCleanupManager.shutdown();
+        Assert.assertFalse(leaseCleanupManager.isRunning());
+        leaseCleanupManager.shutdown();
+    }
+
+    /**
      * Tests that when both child shard leases are present, we are able to delete the parent shard for the completed
      * shard case.
      */
