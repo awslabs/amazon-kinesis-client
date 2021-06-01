@@ -31,15 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -187,7 +179,7 @@ public class Scheduler implements Runnable {
     /**
      * Used to ensure that only one requestedShutdown is in progress at a time.
      */
-    private Future<Boolean> gracefulShutdownFuture;
+    private CompletableFuture<Boolean> gracefulShutdownFuture;
     @VisibleForTesting
     protected boolean gracefuleShutdownStarted = false;
 
@@ -716,7 +708,7 @@ public class Scheduler implements Runnable {
      *         completed successfully. A false value indicates that a non-exception case caused the shutdown process to
      *         terminate early.
      */
-    public Future<Boolean> startGracefulShutdown() {
+    public CompletableFuture<Boolean> startGracefulShutdown() {
         synchronized (this) {
             if (gracefulShutdownFuture == null) {
                 gracefulShutdownFuture = gracefulShutdownCoordinator
