@@ -1,6 +1,18 @@
 # Changelog
 
-### Latest Release 2.3.4 (February 19, 2021)
+### Latest Release 2.3.5 (June 14, 2021)
+* [#824](https://github.com/awslabs/amazon-kinesis-client/pull/824)
+  * Upgraded logback-classic from 1.1.7 to 1.2.3
+  * Upgraded AWS Java SDK version to 1.12.3
+  * Upgraded AWS SDK version to 2.16.81
+* [#815](https://github.com/awslabs/amazon-kinesis-client/pull/815) Converted Future to CompletableFuture which helps in proper conversion to Scala using Scala Future Converters.
+* [#810](https://github.com/awslabs/amazon-kinesis-client/pull/810) Bump commons-io from 2.6 to 2.7
+* [#804](https://github.com/awslabs/amazon-kinesis-client/pull/804) Allowing user to specify an initial timestamp in which daemon will process records.
+* [#802](https://github.com/awslabs/amazon-kinesis-client/pull/802) Upgraded guava from 26.0-jre to 29.0-jre
+* [#801](https://github.com/awslabs/amazon-kinesis-client/pull/801) Fixing a bug that causes to block indefinitely when trying to unlock a lock that isn't locked.
+* [#762](https://github.com/awslabs/amazon-kinesis-client/pull/762) Added support for web identity token in multilang
+
+### Release 2.3.4 (February 19, 2021)
 [Milestone#56](https://github.com/awslabs/amazon-kinesis-client/milestone/56)
 * [#788](https://github.com/awslabs/amazon-kinesis-client/pull/788) Fixing a bug that caused paginated `ListShards` calls with the `ShardFilter` parameter to fail when the lease table was being initialized.
 
