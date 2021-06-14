@@ -67,10 +67,11 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 ## Release Notes
 
 ### Latest Release 2.3.5 (June 14, 2021)
-* [#824](https://github.com/awslabs/amazon-kinesis-client/pull/824)
-	* Upgraded logback-classic from 1.1.7 to 1.2.3
-	* Upgraded AWS Java SDK version to 1.12.3
-	* Upgraded AWS SDK version to 2.16.81
+[Milestone#59](https://github.com/awslabs/amazon-kinesis-client/milestone/59)
+* [#824](https://github.com/awslabs/amazon-kinesis-client/pull/824) Upgraded dependencies
+	* logback-classic version to 1.2.3
+	* AWS Java SDK version to 1.12.3
+	* AWS SDK version to 2.16.81
 * [#815](https://github.com/awslabs/amazon-kinesis-client/pull/815) Converted Future to CompletableFuture which helps in proper conversion to Scala using Scala Future Converters.
 * [#810](https://github.com/awslabs/amazon-kinesis-client/pull/810) Bump commons-io from 2.6 to 2.7
 * [#804](https://github.com/awslabs/amazon-kinesis-client/pull/804) Allowing user to specify an initial timestamp in which daemon will process records.
