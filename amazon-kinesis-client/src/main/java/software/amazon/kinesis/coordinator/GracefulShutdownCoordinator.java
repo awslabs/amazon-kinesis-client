@@ -14,9 +14,12 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import java.util.concurrent.*;
 
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 class GracefulShutdownCoordinator {
 
