@@ -565,10 +565,12 @@ public class Scheduler implements Runnable {
                 final Set<StreamIdentifier> staleStreamIdsToBeRevived = staleStreamIdDeletionDecisionMap.get(true);
                 removeStreamsFromStaleStreamsList(staleStreamIdsToBeRevived);
 
-                log.warn(
-                        "Streams enqueued for deletion for lease table cleanup along with their scheduled time for deletion: {} ",
-                        staleStreamDeletionMap.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
-                                entry -> entry.getValue().plus(waitPeriodToDeleteOldStreams))));
+                if (!staleStreamDeletionMap.isEmpty()) {
+                    log.warn(
+                            "Streams enqueued for deletion for lease table cleanup along with their scheduled time for deletion: {} ",
+                            staleStreamDeletionMap.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
+                                    entry -> entry.getValue().plus(waitPeriodToDeleteOldStreams))));
+                }
 
                 streamSyncWatch.reset().start();
 
