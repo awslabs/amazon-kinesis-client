@@ -828,6 +828,10 @@ public class Scheduler implements Runnable {
             // Lost leases will force Worker to begin shutdown process for all shard consumers in
             // Worker.run().
             leaseCoordinator.stop();
+
+            // Stop the lease cleanup manager
+            leaseCleanupManager.shutdown();
+
             leaderElectedPeriodicShardSyncManager.stop();
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.SHUT_DOWN);
         }
