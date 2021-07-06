@@ -71,6 +71,10 @@ public class KinesisClientLease extends Lease {
         setParentShardIds(casted.parentShardIds);
     }
 
+    public boolean isCompete() {
+        return checkpoint.equals(ExtendedSequenceNumber.SHARD_END);
+    }
+
     /**
      * @return most recently application-supplied checkpoint value. During fail over, the new worker will pick up after
      *         the old worker's last checkpoint.

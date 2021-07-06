@@ -32,6 +32,7 @@ import java.util.function.Consumer;
 
 import com.amazonaws.services.dynamodbv2.model.AmazonDynamoDBException;
 import com.amazonaws.services.dynamodbv2.model.TrimmedDataAccessException;
+import com.fivetran.external.com.amazonaws.services.kinesis.clientlibrary.exceptions.MissingIncompleteLeasesException;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -528,6 +529,7 @@ public class Worker implements Runnable {
             throw e;
         } catch (Exception e) {
             handleTrimmedDataAccessException(e);
+            handleMissingIncompleteLeasesException(e);
 
             if (causedByStreamRecordProcessingError(e))
                 throw new RuntimeException("Failing worker after irrecoverable failure: " + e.getMessage());
@@ -561,10 +563,34 @@ public class Worker implements Runnable {
     }
 
     private Optional<TrimmedDataAccessException> getTrimmedDataAccessException(Throwable t) {
-        if (t.getCause() == null) return Optional.empty();
-        if (t.getCause().getClass().equals(TrimmedDataAccessException.class)) return Optional.of( (TrimmedDataAccessException) t.getCause());
+        if (t.getClass().equals(TrimmedDataAccessException.class)) {
+            return Optional.of( (TrimmedDataAccessException) t);
+        }
+        if (t.getCause().getClass().equals(TrimmedDataAccessException.class)) {
+            return Optional.of( (TrimmedDataAccessException) t.getCause());
+        } else if (t.getCause() == null) {
+            return Optional.empty();
+        }
 
         return getTrimmedDataAccessException(t.getCause());
+    }
+
+    private void handleMissingIncompleteLeasesException(Exception e) {
+        Optional<MissingIncompleteLeasesException> maybeMissingLeaseException = getMissingIncompleteLeasesException(e);
+        if (maybeMissingLeaseException.isPresent()) throw maybeMissingLeaseException.get();
+    }
+
+    private Optional<MissingIncompleteLeasesException> getMissingIncompleteLeasesException(Throwable t) {
+        if (t.getClass().equals(MissingIncompleteLeasesException.class)) {
+            return Optional.of( (MissingIncompleteLeasesException) t);
+        }
+        if (t.getCause().getClass().equals(MissingIncompleteLeasesException.class)) {
+            return Optional.of( (MissingIncompleteLeasesException) t.getCause());
+        } else if (t.getCause() == null) {
+            return Optional.empty();
+        }
+
+        return getMissingIncompleteLeasesException(t.getCause());
     }
 
     private void initialize() {
@@ -600,7 +626,10 @@ public class Worker implements Runnable {
                     isDone = true;
                 } else {
                     lastException = result.getException();
+                    handleMissingIncompleteLeasesException(lastException);
                 }
+            } catch (MissingIncompleteLeasesException e) {
+                throw e;
             } catch (LeasingException e) {
                 LOG.error("Caught exception when initializing LeaseCoordinator", e);
                 lastException = e;
