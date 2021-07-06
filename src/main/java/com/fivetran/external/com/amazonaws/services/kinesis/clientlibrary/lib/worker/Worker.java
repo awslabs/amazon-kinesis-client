@@ -558,39 +558,26 @@ public class Worker implements Runnable {
     }
 
     private void handleTrimmedDataAccessException(Exception e) {
-        Optional<TrimmedDataAccessException> maybeTrimmedException = getTrimmedDataAccessException(e);
+        Optional<TrimmedDataAccessException> maybeTrimmedException = getCauseOfType(TrimmedDataAccessException.class, e);
         if (maybeTrimmedException.isPresent()) throw maybeTrimmedException.get();
     }
 
-    private Optional<TrimmedDataAccessException> getTrimmedDataAccessException(Throwable t) {
-        if (t.getClass().equals(TrimmedDataAccessException.class)) {
-            return Optional.of( (TrimmedDataAccessException) t);
-        }
-        if (t.getCause().getClass().equals(TrimmedDataAccessException.class)) {
-            return Optional.of( (TrimmedDataAccessException) t.getCause());
-        } else if (t.getCause() == null) {
-            return Optional.empty();
-        }
-
-        return getTrimmedDataAccessException(t.getCause());
-    }
-
     private void handleMissingIncompleteLeasesException(Exception e) {
-        Optional<MissingIncompleteLeasesException> maybeMissingLeaseException = getMissingIncompleteLeasesException(e);
+        Optional<MissingIncompleteLeasesException> maybeMissingLeaseException = getCauseOfType(MissingIncompleteLeasesException.class, e);
         if (maybeMissingLeaseException.isPresent()) throw maybeMissingLeaseException.get();
     }
 
-    private Optional<MissingIncompleteLeasesException> getMissingIncompleteLeasesException(Throwable t) {
-        if (t.getClass().equals(MissingIncompleteLeasesException.class)) {
-            return Optional.of( (MissingIncompleteLeasesException) t);
+    private <T extends Throwable> Optional<T> getCauseOfType(Class<T> clazz, Throwable t) {
+        if (t.getClass().equals(clazz)) {
+            return Optional.of( (T) t);
         }
-        if (t.getCause().getClass().equals(MissingIncompleteLeasesException.class)) {
-            return Optional.of( (MissingIncompleteLeasesException) t.getCause());
+        if (t.getCause().getClass().equals(clazz)) {
+            return Optional.of( (T) t.getCause());
         } else if (t.getCause() == null) {
             return Optional.empty();
         }
 
-        return getMissingIncompleteLeasesException(t.getCause());
+        return getCauseOfType(clazz, t.getCause());
     }
 
     private void initialize() {

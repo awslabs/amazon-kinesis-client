@@ -71,7 +71,7 @@ public class KinesisClientLease extends Lease {
         setParentShardIds(casted.parentShardIds);
     }
 
-    public boolean isCompete() {
+    public boolean isComplete() {
         return checkpoint.equals(ExtendedSequenceNumber.SHARD_END);
     }
 

@@ -625,7 +625,7 @@ class ShardSyncer {
 
             for (KinesisClientLease lease : garbageLeases) {
                 if (isCandidateForCleanup(lease, currentKinesisShardIds)) {
-                    if (lease.isCompete()) {
+                    if (lease.isComplete()) {
                         LOG.info("Deleting lease for a complete shard " + lease.getLeaseKey()
                                 + " as it is not present in Kinesis stream.");
                         leaseManager.deleteLease(lease);
@@ -702,7 +702,7 @@ class ShardSyncer {
         Set<String> shardIdsOfClosedShards = new HashSet<>();
         List<KinesisClientLease> leasesOfClosedShards = new ArrayList<>();
         for (KinesisClientLease lease : currentLeases) {
-            if (lease.isCompete()) {
+            if (lease.isComplete()) {
                 shardIdsOfClosedShards.add(lease.getLeaseKey());
                 leasesOfClosedShards.add(lease);
             }
