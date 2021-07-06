@@ -486,6 +486,10 @@ public class Worker implements Runnable {
         try {
             initialize();
             LOG.info("Initialization complete. Starting worker loop.");
+        } catch (MissingIncompleteLeasesException e1){
+            LOG.error("Unable to initialize because some incomplete leases were missing. Shutting down.", e1);
+            shutdown();
+            throw e1;
         } catch (RuntimeException e1) {
             LOG.error("Unable to initialize after " + MAX_INITIALIZATION_ATTEMPTS + " attempts. Shutting down.", e1);
             shutdown();
