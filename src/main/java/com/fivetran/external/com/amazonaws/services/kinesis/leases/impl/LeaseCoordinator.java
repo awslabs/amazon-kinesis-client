@@ -322,7 +322,7 @@ public class LeaseCoordinator<T extends Lease> {
      * Requests the cancellation of the lease taker.
      */
     public void stopLeaseTaker() {
-        takerFuture.cancel(false);
+        if (takerFuture != null) takerFuture.cancel(false);
 
     }
 
