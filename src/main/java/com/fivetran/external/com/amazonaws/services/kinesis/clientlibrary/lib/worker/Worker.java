@@ -619,12 +619,11 @@ public class Worker implements Runnable {
                     lastException = result.getException();
                     handleMissingIncompleteLeasesException(lastException);
                 }
-            } catch (MissingIncompleteLeasesException e) {
-                throw e;
             } catch (LeasingException e) {
                 LOG.error("Caught exception when initializing LeaseCoordinator", e);
                 lastException = e;
             } catch (Exception e) {
+                handleMissingIncompleteLeasesException(e);
                 lastException = e;
             }
 
