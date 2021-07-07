@@ -574,11 +574,10 @@ public class Worker implements Runnable {
     private <T extends Throwable> Optional<T> getCauseOfType(Class<T> clazz, Throwable t) {
         if (t.getClass().equals(clazz)) {
             return Optional.of( (T) t);
-        }
-        if (t.getCause().getClass().equals(clazz)) {
-            return Optional.of( (T) t.getCause());
         } else if (t.getCause() == null) {
             return Optional.empty();
+        } else if (t.getCause().getClass().equals(clazz)) {
+            return Optional.of( (T) t.getCause());
         }
 
         return getCauseOfType(clazz, t.getCause());
