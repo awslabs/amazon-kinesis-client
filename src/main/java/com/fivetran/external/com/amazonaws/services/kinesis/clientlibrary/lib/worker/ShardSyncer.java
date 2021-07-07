@@ -30,6 +30,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.lang3.StringUtils;
 
+import com.fivetran.external.com.amazonaws.services.kinesis.clientlibrary.exceptions.MissingIncompleteLeasesException;
 import com.fivetran.external.com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.KinesisClientLibIOException;
 import com.fivetran.external.com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.fivetran.external.com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
@@ -610,10 +611,11 @@ class ShardSyncer {
                 garbageLeases.add(lease);
             }
         }
-        
+
         if (!garbageLeases.isEmpty()) {
+            Set<String> unfinishedAndMissing = new HashSet<>();
             LOG.info("Found " + garbageLeases.size()
-                    + " candidate leases for cleanup. Refreshing list of" 
+                    + " candidate leases for cleanup. Refreshing list of"
                     + " Kinesis shards to pick up recent/latest shards");
             List<Shard> currentShardList = getShardList(kinesisProxy);
             Set<String> currentKinesisShardIds = new HashSet<>();
@@ -623,11 +625,17 @@ class ShardSyncer {
 
             for (KinesisClientLease lease : garbageLeases) {
                 if (isCandidateForCleanup(lease, currentKinesisShardIds)) {
-                    LOG.info("Deleting lease for shard " + lease.getLeaseKey()
-                            + " as it is not present in Kinesis stream.");
-                    leaseManager.deleteLease(lease);
+                    if (lease.isComplete()) {
+                        LOG.info("Deleting lease for a complete shard " + lease.getLeaseKey()
+                                + " as it is not present in Kinesis stream.");
+                        leaseManager.deleteLease(lease);
+                    } else {
+                        unfinishedAndMissing.add(lease.getLeaseKey());
+                    }
                 }
             }
+
+            if (!unfinishedAndMissing.isEmpty()) throw new MissingIncompleteLeasesException(unfinishedAndMissing);
         }
         
     }
@@ -694,7 +702,7 @@ class ShardSyncer {
         Set<String> shardIdsOfClosedShards = new HashSet<>();
         List<KinesisClientLease> leasesOfClosedShards = new ArrayList<>();
         for (KinesisClientLease lease : currentLeases) {
-            if (lease.getCheckpoint().equals(ExtendedSequenceNumber.SHARD_END)) {
+            if (lease.isComplete()) {
                 shardIdsOfClosedShards.add(lease.getLeaseKey());
                 leasesOfClosedShards.add(lease);
             }
