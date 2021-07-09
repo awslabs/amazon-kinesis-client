@@ -1,6 +1,14 @@
 # Changelog
 
-### Latest Release 2.3.5 (June 14, 2021)
+### Latest Release 2.3.6 (July 9, 2021)
+[Milestone#62](https://github.com/awslabs/amazon-kinesis-client/milestone/62)
+* [#836](https://github.com/awslabs/amazon-kinesis-client/pull/836) Upgraded AWS SDK version to 2.16.98
+* [#835](https://github.com/awslabs/amazon-kinesis-client/pull/835) Upgraded Glue Schema Registry version to 1.1.1
+* [#828](https://github.com/awslabs/amazon-kinesis-client/pull/828) Modified wildcard imports to individual imports.
+* [#817](https://github.com/awslabs/amazon-kinesis-client/pull/817) Updated the Worker shutdown logic to make sure that the `LeaseCleanupManager` also terminates all the threads that it has started.
+* [#794](https://github.com/awslabs/amazon-kinesis-client/pull/794) Silence warning when there are no stale streams to delete.
+
+### Release 2.3.5 (June 14, 2021)
 [Milestone#59](https://github.com/awslabs/amazon-kinesis-client/milestone/59)
 * [#824](https://github.com/awslabs/amazon-kinesis-client/pull/824) Upgraded dependencies
   * logback-classic version to 1.2.3
