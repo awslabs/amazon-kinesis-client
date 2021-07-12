@@ -21,7 +21,7 @@ package software.amazon.kinesis.leases.dynamodb;
 @FunctionalInterface
 public interface TableCreatorCallback {
     /**
-     * NoOp implemetation for TableCreatorCallback
+     * NoOp implementation for TableCreatorCallback
      */
     TableCreatorCallback NOOP_TABLE_CREATOR_CALLBACK = (TableCreatorCallbackInput tableCreatorCallbackInput) -> {
         // Do nothing
