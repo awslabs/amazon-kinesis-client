@@ -381,7 +381,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private void resetRecordsDeliveryStateOnSubscriptionOnInit() {
         // Clear any lingering records in the queue.
         if (!recordsDeliveryQueue.isEmpty()) {
-            log.warn("{}: Found non-empty queue while starting subscription. This indicates unsuccessful clean up of"
+            log.warn("{}: Found non-empty queue while starting subscription. This indicates unsuccessful clean up of "
                     + "previous subscription - {}. Last successful request details -- {}", streamAndShardId, subscribeToShardId, lastSuccessfulRequestDetails);
             recordsDeliveryQueue.clear();
         }
