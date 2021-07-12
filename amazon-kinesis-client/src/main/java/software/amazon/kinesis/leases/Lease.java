@@ -14,20 +14,20 @@
  */
 package software.amazon.kinesis.leases;
 
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.NonNull;
-import lombok.ToString;
-import lombok.experimental.Accessors;
-import software.amazon.kinesis.common.HashKeyRangeForLease;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.NonNull;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.experimental.Accessors;
+import software.amazon.kinesis.common.HashKeyRangeForLease;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
  * This class contains data pertaining to a Lease. Distributed systems may use leases to partition work across a
@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
 @NoArgsConstructor
 @Getter
 @Accessors(fluent = true)
-@EqualsAndHashCode(exclude = {"concurrencyToken", "lastCounterIncrementNanos", "childShardIds", "pendingCheckpointState"})
+@EqualsAndHashCode(exclude = {"concurrencyToken", "lastCounterIncrementNanos", "childShardIds", "pendingCheckpointState", "isMarkedForLeaseSteal"})
 @ToString
 public class Lease {
     /*
@@ -91,6 +91,16 @@ public class Lease {
      */
     private byte[] pendingCheckpointState;
 
+
+    /**
+     * Denotes whether the lease is marked for stealing. Deliberately excluded from hashCode and equals and
+     * not persisted in DynamoDB.
+     *
+     * @return flag for denoting lease is marked for stealing.
+     */
+    @Setter
+    private boolean isMarkedForLeaseSteal;
+
     /**
      * @return count of distinct lease holders between checkpoints.
      */
@@ -141,6 +151,7 @@ public class Lease {
         }
         this.hashKeyRangeForLease = hashKeyRangeForLease;
         this.pendingCheckpointState = pendingCheckpointState;
+        this.isMarkedForLeaseSteal = false;
     }
 
     /**

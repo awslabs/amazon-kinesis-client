@@ -14,6 +14,8 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -28,9 +30,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
@@ -48,6 +47,7 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
+import static software.amazon.kinesis.common.CommonCalculations.*;
 
 /**
  * LeaseCoordinator abstracts away LeaseTaker and LeaseRenewer from the application code that's using leasing. It owns
@@ -156,7 +156,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
         this.leaseRenewer = new DynamoDBLeaseRenewer(
                 leaseRefresher, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool, metricsFactory);
-        this.renewerIntervalMillis = leaseDurationMillis / 3 - epsilonMillis;
+        this.renewerIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, epsilonMillis);
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
         if (initialLeaseTableReadCapacity <= 0) {
             throw new IllegalArgumentException("readCapacity should be >= 1");

@@ -15,7 +15,9 @@
 package software.amazon.kinesis.leases.dynamodb;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -26,6 +28,7 @@ import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -150,6 +153,33 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
         assertThat(addedLeases.values().containsAll(allLeases), equalTo(true));
     }
 
+
+    /**
+     * Sets the leaseDurationMillis to 0, ensuring a get request to update the existing lease after computing
+     * leases to take
+     */
+    @Test
+    public void testSlowGetAllLeases() throws LeasingException {
+        long leaseDurationMillis = 0;
+        taker = new DynamoDBLeaseTaker(leaseRefresher,
+                "foo",
+                leaseDurationMillis,
+                new NullMetricsFactory());
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
+
+        Map<String, Lease> addedLeases = builder.withLease("1", "bar")
+                .withLease("2", "bar")
+                .withLease("5", "foo")
+                .build();
+
+        assertThat(taker.allLeases().size(), equalTo(0));
+        taker.takeLeases();
+
+        Collection<Lease> allLeases = taker.allLeases();
+        assertThat(allLeases.size(), equalTo(addedLeases.size()));
+        assertEquals(addedLeases.values().size(), allLeases.size());
+    }
+
     /**
      * Verify that LeaseTaker does not steal when it's only short 1 lease and the other worker is at target. Set up a
      * scenario where there are 4 leases held by two servers, and a third server with one lease. The third server should
@@ -189,7 +219,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
         builder.build();
 
         // Assert that one lease was stolen from baz.
-        Map<String, Lease> takenLeases = builder.takeMutateAssert(taker, 1);
+        Map<String, Lease> takenLeases = builder.stealMutateAssert(taker, 1);
 
         // Assert that it was one of baz's leases (shardId != 1)
         String shardIdStolen = takenLeases.keySet().iterator().next();
