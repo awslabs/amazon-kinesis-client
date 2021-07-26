@@ -306,7 +306,7 @@ public class LeaseManagementConfig {
 
     private LeaseManagementFactory leaseManagementFactory;
 
-    private HierarchicalShardSyncer hierarchicalShardSyncer() {
+    public HierarchicalShardSyncer hierarchicalShardSyncer() {
         if(hierarchicalShardSyncer == null) {
             hierarchicalShardSyncer = new HierarchicalShardSyncer();
         }
