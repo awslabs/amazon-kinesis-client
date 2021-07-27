@@ -503,7 +503,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         } else {
             if (log.isDebugEnabled()) {
                 log.debug("Worker {} will attempt to steal {} leases from most loaded worker {}. "
-                        + " He has {} leases, target is {}, I need {}, maxLeasesToSteatAtOneTime is {}.",
+                        + " He has {} leases, target is {}, I need {}, maxLeasesToStealAtOneTime is {}.",
                         workerIdentifier,
                         numLeasesToSteal,
                         mostLoadedWorker.getKey(),
