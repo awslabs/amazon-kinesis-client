@@ -371,10 +371,8 @@ public class Scheduler implements Runnable {
                     leaderElectedPeriodicShardSyncManager.start();
                     streamSyncWatch.start();
                     isDone = true;
-                } catch (LeasingException e) {
-                    log.error("Caught exception when initializing LeaseCoordinator", e);
-                    lastException = e;
                 } catch (Exception e) {
+                    log.error("Caught exception when initializing LeaseCoordinator", e);
                     lastException = e;
                 }
 
