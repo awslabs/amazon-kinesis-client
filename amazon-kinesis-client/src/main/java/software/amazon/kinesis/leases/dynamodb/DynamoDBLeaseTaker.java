@@ -347,6 +347,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
         List<Lease> veryOldLeases = new ArrayList<>();
 
+        final int numAvailableLeases = expiredLeases.size();
         int numLeases = 0;
         int numWorkers = 0;
         int numLeasesToReachTarget = 0;
@@ -438,7 +439,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                 log.info(
                         "Worker {} saw {} total leases, {} available leases, {} "
                                 + "workers. Target is {} leases, I have {} leases, I will take {} leases",
-                        workerIdentifier, numLeases, expiredLeases.size(), numWorkers, target, myCount,
+                        workerIdentifier, numLeases, numAvailableLeases, numWorkers, target, myCount,
                         leasesToTake.size());
             }
 
