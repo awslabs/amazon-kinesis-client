@@ -196,6 +196,15 @@ public class Lease {
     }
 
     /**
+     * @param leaseDurationNanos duration of lease in nanoseconds
+     * @param asOfNanos time in nanoseconds to check expiration as-of
+     * @return true if lease is available (unassigned or expired as-of given time), false otherwise
+     */
+    public boolean isAvailable(long leaseDurationNanos, long asOfNanos) {
+        return isUnassigned() || isExpired(leaseDurationNanos, asOfNanos);
+    }
+
+    /**
      * Sets lastCounterIncrementNanos
      * 
      * @param lastCounterIncrementNanos last renewal in nanoseconds since the epoch
@@ -308,6 +317,10 @@ public class Lease {
      */
     public void leaseOwner(String leaseOwner) {
         this.leaseOwner = leaseOwner;
+    }
+
+    public boolean isUnassigned() {
+        return leaseOwner == null;
     }
 
     /**
