@@ -531,7 +531,7 @@ class ConsumerStates {
                     consumer.getLeaseManager(),
                     consumer.getTaskBackoffTimeMillis(),
                     consumer.getGetRecordsCache(),
-                    consumer.isSuppressMissingIncompleteLeasesException()); // change here
+                    consumer.isSuppressMissingIncompleteLeasesException());
         }
 
         @Override

@@ -65,7 +65,7 @@ class ShutdownTask implements ITask {
                  ILeaseManager<KinesisClientLease> leaseManager,
                  long backoffTimeMillis, 
                  GetRecordsCache getRecordsCache,
-                 boolean isSuppressMissingIncompleteLeasesException) { // change here
+                 boolean isSuppressMissingIncompleteLeasesException) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
@@ -135,7 +135,7 @@ class ShutdownTask implements ITask {
                         initialPositionInStream,
                         cleanupLeasesOfCompletedShards,
                         ignoreUnexpectedChildShards,
-                        isSuppressMissingIncompleteLeasesException); // change here
+                        isSuppressMissingIncompleteLeasesException);
                 LOG.debug("Finished checking for child shards of shard " + shardInfo.getShardId());
             }
 

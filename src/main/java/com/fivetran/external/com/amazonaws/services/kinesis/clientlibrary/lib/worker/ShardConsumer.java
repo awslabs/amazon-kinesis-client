@@ -404,7 +404,7 @@ class ShardConsumer {
      * @return Return next task to run
      */
     private ITask getNextTask() {
-        ITask nextTask = currentState.createTask(this); // change here (add property into consumer)
+        ITask nextTask = currentState.createTask(this);
 
         if (nextTask == null) {
             return null;

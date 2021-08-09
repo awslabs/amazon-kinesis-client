@@ -54,7 +54,7 @@ class ShardSyncTask implements ITask {
             boolean cleanupLeasesUponShardCompletion,
             boolean ignoreUnexpectedChildShards,
             long shardSyncTaskIdleTimeMillis,
-            boolean suppressMissingIncompleteLeasesException) { // change here
+            boolean suppressMissingIncompleteLeasesException) {
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.initialPosition = initialPositionInStream;
@@ -77,7 +77,7 @@ class ShardSyncTask implements ITask {
                     initialPosition,
                     cleanupLeasesUponShardCompletion,
                     ignoreUnexpectedChildShards,
-                    suppressMissingIncompleteLeasesException); // change here
+                    suppressMissingIncompleteLeasesException);
             if (shardSyncTaskIdleTimeMillis > 0) {
                 Thread.sleep(shardSyncTaskIdleTimeMillis);
             }

@@ -109,7 +109,7 @@ class ShardSyncTaskManager {
                             cleanupLeasesUponShardCompletion,
                             ignoreUnexpectedChildShards,
                             shardSyncIdleTimeMillis,
-                            suppressMissingIncompleteLeasesException), metricsFactory); // change here
+                            suppressMissingIncompleteLeasesException), metricsFactory);
             future = executorService.submit(currentTask);
             submittedNewTask = true;
             if (LOG.isDebugEnabled()) {

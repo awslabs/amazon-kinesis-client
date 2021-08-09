@@ -487,7 +487,7 @@ public class Worker implements Runnable {
         this.metricsFactory = metricsFactory;
         this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
                 initialPositionInStream, cleanupLeasesUponShardCompletion, config.shouldIgnoreUnexpectedChildShards(),
-                shardSyncIdleTimeMillis, metricsFactory, executorService, suppressMissingIncompleteLeasesException); // change here
+                shardSyncIdleTimeMillis, metricsFactory, executorService, suppressMissingIncompleteLeasesException);
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.failoverTimeMillis = failoverTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -640,7 +640,7 @@ public class Worker implements Runnable {
                     LOG.info("Syncing Kinesis shard info");
                     ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
                             leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
-                            config.shouldIgnoreUnexpectedChildShards(), 0L, suppressMissingIncompleteLeasesException); // change here
+                            config.shouldIgnoreUnexpectedChildShards(), 0L, suppressMissingIncompleteLeasesException);
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
                     LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
@@ -1007,7 +1007,7 @@ public class Worker implements Runnable {
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
                 config,
-                suppressMissingIncompleteLeasesException); // change here
+                suppressMissingIncompleteLeasesException);
 
     }
 
