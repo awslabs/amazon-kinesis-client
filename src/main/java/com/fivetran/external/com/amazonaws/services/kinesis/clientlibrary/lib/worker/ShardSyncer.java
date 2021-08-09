@@ -64,9 +64,9 @@ class ShardSyncer {
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards,
             boolean ignoreUnexpectedChildShards)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException { // ignore
         syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards,
-                        ignoreUnexpectedChildShards);
+                        ignoreUnexpectedChildShards, Worker.DEFAULT_SUPPRESS_MISSING_INCOMPLETE_LEASES_EXCEPTION);
     }
 
     /**
@@ -86,9 +86,10 @@ class ShardSyncer {
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards);
+            boolean ignoreUnexpectedChildShards,
+            boolean suppressMissingIncompleteLeasesException)
+        throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException { // change here
+        syncShardLeases(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, ignoreUnexpectedChildShards, suppressMissingIncompleteLeasesException);
     }
 
     static synchronized void checkAndCreateLeasesForNewShards(IKinesisProxy kinesisProxy,
@@ -96,7 +97,7 @@ class ShardSyncer {
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesOfCompletedShards)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-        checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, false);
+        checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, initialPositionInStream, cleanupLeasesOfCompletedShards, false, Worker.DEFAULT_SUPPRESS_MISSING_INCOMPLETE_LEASES_EXCEPTION);
     }
 
     /**
@@ -117,7 +118,8 @@ class ShardSyncer {
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPosition,
             boolean cleanupLeasesOfCompletedShards,
-            boolean ignoreUnexpectedChildShards)
+            boolean ignoreUnexpectedChildShards,
+            boolean suppressMissingIncompleteLeasesException)
         throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
         List<Shard> shards = getShardList(kinesisProxy);
         LOG.debug("Num shards: " + shards.size());
@@ -150,7 +152,7 @@ class ShardSyncer {
             trackedLeases.addAll(currentLeases);            
         }
         trackedLeases.addAll(newLeasesToCreate);
-        cleanupGarbageLeases(shards, trackedLeases, kinesisProxy, leaseManager);
+        cleanupGarbageLeases(shards, trackedLeases, kinesisProxy, leaseManager, suppressMissingIncompleteLeasesException); // change here
         if (cleanupLeasesOfCompletedShards) {
             cleanupLeasesOfFinishedShards(currentLeases,
                     shardIdToShardMap,
@@ -597,7 +599,9 @@ class ShardSyncer {
     private static void cleanupGarbageLeases(List<Shard> shards,
             List<KinesisClientLease> trackedLeases,
             IKinesisProxy kinesisProxy,
-            ILeaseManager<KinesisClientLease> leaseManager)
+            ILeaseManager<KinesisClientLease> leaseManager,
+            boolean suppressMissingIncompleteLeasesException)
+
         throws KinesisClientLibIOException, DependencyException, InvalidStateException, ProvisionedThroughputException {
         Set<String> kinesisShards = new HashSet<>();
         for (Shard shard : shards) {
@@ -625,7 +629,7 @@ class ShardSyncer {
 
             for (KinesisClientLease lease : garbageLeases) {
                 if (isCandidateForCleanup(lease, currentKinesisShardIds)) {
-                    if (lease.isComplete()) {
+                    if (lease.isComplete() || suppressMissingIncompleteLeasesException) { // change here
                         LOG.info("Deleting lease for a complete shard " + lease.getLeaseKey()
                                 + " as it is not present in Kinesis stream.");
                         leaseManager.deleteLease(lease);

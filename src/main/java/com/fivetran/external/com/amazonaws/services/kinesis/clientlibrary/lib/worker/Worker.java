@@ -81,6 +81,7 @@ public class Worker implements Runnable {
     private static final int MAX_RETRIES = 4;
     private static final WorkerStateChangeListener DEFAULT_WORKER_STATE_CHANGE_LISTENER = new NoOpWorkerStateChangeListener();
     private static final boolean DEFAULT_EXITS_ON_FAILURE = false;
+    public static final boolean DEFAULT_SUPPRESS_MISSING_INCOMPLETE_LEASES_EXCEPTION = false;
 
     private WorkerLog wlog = new WorkerLog();
 
@@ -122,6 +123,8 @@ public class Worker implements Runnable {
 
     // fivetran configurables
     private final boolean exitOnFailure;
+
+    private final boolean suppressMissingIncompleteLeasesException;
 
 
     /**
@@ -434,6 +437,42 @@ public class Worker implements Runnable {
            boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
            Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener,
            boolean exitOnFailure) {
+        this(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream, parentShardPollIntervalMillis,
+                shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint, leaseCoordinator, execService,
+                metricsFactory, taskBackoffTimeMillis, failoverTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist,
+                shardPrioritization, retryGetRecordsInSeconds, maxGetRecordsThreadPool, workerStateChangeListener, exitOnFailure, DEFAULT_SUPPRESS_MISSING_INCOMPLETE_LEASES_EXCEPTION);
+    }
+
+    /**
+     * @param applicationName                  Name of the Kinesis application
+     * @param recordProcessorFactory           Used to get record processor instances for processing data from shards
+     * @param config                           Kinesis Library Configuration
+     * @param streamConfig                     Stream configuration
+     * @param initialPositionInStream          One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP. The KinesisClientLibrary will start fetching data from
+     *                                         this location in the stream when an application starts up for the first time and there are no
+     *                                         checkpoints. If there are checkpoints, we start from the checkpoint position.
+     * @param parentShardPollIntervalMillis    Wait for this long between polls to check if parent shards are done
+     * @param shardSyncIdleTimeMillis          Time between tasks to sync leases and Kinesis shards
+     * @param cleanupLeasesUponShardCompletion Clean up shards we've finished processing (don't wait till they expire in Kinesis)
+     * @param checkpoint                       Used to get/set checkpoints
+     * @param leaseCoordinator                 Lease coordinator (coordinates currently owned leases)
+     * @param execService                      ExecutorService to use for processing records (support for multi-threaded consumption)
+     * @param metricsFactory                   Metrics factory used to emit metrics
+     * @param taskBackoffTimeMillis            Backoff period when tasks encounter an exception
+     * @param shardPrioritization              Provides prioritization logic to decide which available shards process first
+     * @param retryGetRecordsInSeconds         Time in seconds to wait before the worker retries to get a record.
+     * @param maxGetRecordsThreadPool          Max number of threads in the getRecords thread pool.
+     */
+    // NOTE: This has package level access solely for testing
+    // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
+    Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, KinesisClientLibConfiguration config, StreamConfig streamConfig,
+           InitialPositionInStreamExtended initialPositionInStream, long parentShardPollIntervalMillis,
+           long shardSyncIdleTimeMillis, boolean cleanupLeasesUponShardCompletion, ICheckpoint checkpoint,
+           KinesisClientLibLeaseCoordinator leaseCoordinator, ExecutorService execService,
+           IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
+           boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
+           Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener,
+           boolean exitOnFailure, boolean suppressMissingIncompleteLeasesException) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.config = config;
@@ -448,7 +487,7 @@ public class Worker implements Runnable {
         this.metricsFactory = metricsFactory;
         this.controlServer = new ShardSyncTaskManager(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
                 initialPositionInStream, cleanupLeasesUponShardCompletion, config.shouldIgnoreUnexpectedChildShards(),
-                shardSyncIdleTimeMillis, metricsFactory, executorService);
+                shardSyncIdleTimeMillis, metricsFactory, executorService, suppressMissingIncompleteLeasesException); // change here
         this.taskBackoffTimeMillis = taskBackoffTimeMillis;
         this.failoverTimeMillis = failoverTimeMillis;
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -457,6 +496,7 @@ public class Worker implements Runnable {
         this.maxGetRecordsThreadPool = maxGetRecordsThreadPool;
         this.workerStateChangeListener = workerStateChangeListener;
         this.exitOnFailure = exitOnFailure;
+        this.suppressMissingIncompleteLeasesException = suppressMissingIncompleteLeasesException;
         workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.CREATED);
     }
 
@@ -600,7 +640,7 @@ public class Worker implements Runnable {
                     LOG.info("Syncing Kinesis shard info");
                     ShardSyncTask shardSyncTask = new ShardSyncTask(streamConfig.getStreamProxy(),
                             leaseCoordinator.getLeaseManager(), initialPosition, cleanupLeasesUponShardCompletion,
-                            config.shouldIgnoreUnexpectedChildShards(), 0L);
+                            config.shouldIgnoreUnexpectedChildShards(), 0L, suppressMissingIncompleteLeasesException); // change here
                     result = new MetricsCollectingTaskDecorator(shardSyncTask, metricsFactory).call();
                 } else {
                     LOG.info("Skipping shard sync per config setting (and lease table is not empty)");
@@ -966,7 +1006,8 @@ public class Worker implements Runnable {
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
-                config);
+                config,
+                suppressMissingIncompleteLeasesException); // change here
 
     }
 
@@ -1120,6 +1161,7 @@ public class Worker implements Runnable {
 
         // fivetran additions
         boolean exitOnFailure = DEFAULT_EXITS_ON_FAILURE;
+        private boolean suppressMissingIncompleteLeasesException = DEFAULT_SUPPRESS_MISSING_INCOMPLETE_LEASES_EXCEPTION;
 
         @VisibleForTesting
         AmazonKinesis getKinesisClient() {
@@ -1265,7 +1307,8 @@ public class Worker implements Runnable {
                     config.getRetryGetRecordsInSeconds(),
                     config.getMaxGetRecordsThreadPool(),
                     workerStateChangeListener,
-                    exitOnFailure);
+                    exitOnFailure,
+                    suppressMissingIncompleteLeasesException);
         }
 
         <R, T extends AwsClientBuilder<T, R>> R createClient(final T builder,
@@ -1300,6 +1343,11 @@ public class Worker implements Runnable {
 
         public Builder kinesisClient(AmazonKinesis kinesisClient) {
             this.kinesisClient = kinesisClient;
+            return this;
+        }
+
+        public Builder suppressMissingIncompleteLeasesException(boolean suppressMissingIncompleteLeasesException) {
+            this.suppressMissingIncompleteLeasesException = suppressMissingIncompleteLeasesException;
             return this;
         }
 

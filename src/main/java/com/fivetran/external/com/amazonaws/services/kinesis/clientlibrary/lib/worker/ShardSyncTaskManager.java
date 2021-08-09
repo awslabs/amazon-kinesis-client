@@ -47,28 +47,31 @@ class ShardSyncTaskManager {
     private boolean ignoreUnexpectedChildShards;
     private final long shardSyncIdleTimeMillis;
 
+    private final boolean suppressMissingIncompleteLeasesException;
+
 
     /**
      * Constructor.
-     * 
-     * @param kinesisProxy Proxy used to fetch streamInfo (shards)
+     *  @param kinesisProxy Proxy used to fetch streamInfo (shards)
      * @param leaseManager Lease manager (used to list and create leases for shards)
      * @param initialPositionInStream Initial position in stream
      * @param cleanupLeasesUponShardCompletion Clean up leases for shards that we've finished processing (don't wait
-     *        until they expire)
+*        until they expire)
      * @param ignoreUnexpectedChildShards Ignore child shards with open parents
      * @param shardSyncIdleTimeMillis Time between tasks to sync leases and Kinesis shards
      * @param metricsFactory Metrics factory
      * @param executorService ExecutorService to execute the shard sync tasks
+     * @param suppressMissingIncompleteLeasesException
      */
     ShardSyncTaskManager(final IKinesisProxy kinesisProxy,
-            final ILeaseManager<KinesisClientLease> leaseManager,
-            final InitialPositionInStreamExtended initialPositionInStream,
-            final boolean cleanupLeasesUponShardCompletion,
-            final boolean ignoreUnexpectedChildShards,
-            final long shardSyncIdleTimeMillis,
-            final IMetricsFactory metricsFactory,
-            ExecutorService executorService) {
+                         final ILeaseManager<KinesisClientLease> leaseManager,
+                         final InitialPositionInStreamExtended initialPositionInStream,
+                         final boolean cleanupLeasesUponShardCompletion,
+                         final boolean ignoreUnexpectedChildShards,
+                         final long shardSyncIdleTimeMillis,
+                         final IMetricsFactory metricsFactory,
+                         ExecutorService executorService,
+                         boolean suppressMissingIncompleteLeasesException) {
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;
         this.metricsFactory = metricsFactory;
@@ -77,6 +80,7 @@ class ShardSyncTaskManager {
         this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
         this.executorService = executorService;
         this.initialPositionInStream = initialPositionInStream;
+        this.suppressMissingIncompleteLeasesException = suppressMissingIncompleteLeasesException;
     }
 
     synchronized boolean syncShardAndLeaseInfo(Set<String> closedShardIds) {
@@ -104,7 +108,8 @@ class ShardSyncTaskManager {
                             initialPositionInStream,
                             cleanupLeasesUponShardCompletion,
                             ignoreUnexpectedChildShards,
-                            shardSyncIdleTimeMillis), metricsFactory);
+                            shardSyncIdleTimeMillis,
+                            suppressMissingIncompleteLeasesException), metricsFactory); // change here
             future = executorService.submit(currentTask);
             submittedNewTask = true;
             if (LOG.isDebugEnabled()) {

@@ -370,7 +370,8 @@ public class ShardConsumerTest {
                         dataFetcher,
                         Optional.empty(),
                         Optional.empty(),
-                        config);
+                        config,
+                        false);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
@@ -514,7 +515,8 @@ public class ShardConsumerTest {
                         dataFetcher,
                         Optional.empty(),
                         Optional.empty(),
-                        config);
+                        config,
+                        false);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
@@ -651,7 +653,8 @@ public class ShardConsumerTest {
                         dataFetcher,
                         Optional.empty(),
                         Optional.empty(),
-                        config);
+                        config,
+                        false);
 
         assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
@@ -774,7 +777,8 @@ public class ShardConsumerTest {
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         Optional.empty(),
                         Optional.empty(),
-                        config);
+                        config,
+                        false);
         
         assertEquals(shardConsumer.getGetRecordsCache().getGetRecordsRetrievalStrategy().getClass(),
                 SynchronousGetRecordsRetrievalStrategy.class);
@@ -804,7 +808,8 @@ public class ShardConsumerTest {
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         Optional.of(1),
                         Optional.of(2),
-                        config);
+                        config,
+                        false);
 
         assertEquals(shardConsumer.getGetRecordsCache().getGetRecordsRetrievalStrategy().getClass(),
                 AsynchronousGetRecordsRetrievalStrategy.class);

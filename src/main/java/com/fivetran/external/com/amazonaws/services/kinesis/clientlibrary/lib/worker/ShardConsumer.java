@@ -63,6 +63,8 @@ class ShardConsumer {
     
     private final GetRecordsCache getRecordsCache;
 
+    private final boolean suppressMissingIncompleteLeasesException;
+
     private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
                                                                   Optional<Integer> retryGetRecordsInSeconds,
                                                                   Optional<Integer> maxGetRecordsThreadPool,
@@ -124,7 +126,8 @@ class ShardConsumer {
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
                 Optional.empty(),
                 Optional.empty(),
-                config);
+                config,
+                Worker.DEFAULT_SUPPRESS_MISSING_INCOMPLETE_LEASES_EXCEPTION);
     }
 
     /**
@@ -155,7 +158,8 @@ class ShardConsumer {
                   boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
                   Optional<Integer> retryGetRecordsInSeconds,
                   Optional<Integer> maxGetRecordsThreadPool,
-                  KinesisClientLibConfiguration config) {
+                  KinesisClientLibConfiguration config,
+                  boolean suppressMissingIncompleteLeasesException) {
         
         this(
                 shardInfo,
@@ -180,7 +184,8 @@ class ShardConsumer {
                 new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo),
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
-                config
+                config,
+                suppressMissingIncompleteLeasesException
         );
     }
 
@@ -217,7 +222,8 @@ class ShardConsumer {
                   KinesisDataFetcher kinesisDataFetcher,
                   Optional<Integer> retryGetRecordsInSeconds,
                   Optional<Integer> maxGetRecordsThreadPool,
-                  KinesisClientLibConfiguration config) {
+                  KinesisClientLibConfiguration config,
+                  boolean suppressMissingIncompleteLeasesException) {
         this.shardInfo = shardInfo;
         this.streamConfig = streamConfig;
         this.checkpoint = checkpoint;
@@ -235,6 +241,7 @@ class ShardConsumer {
         this.getRecordsCache = config.getRecordsFetcherFactory().createRecordsFetcher(
                 makeStrategy(this.dataFetcher, retryGetRecordsInSeconds, maxGetRecordsThreadPool, this.shardInfo),
                 this.getShardInfo().getShardId(), this.metricsFactory, this.config.getMaxRecords());
+        this.suppressMissingIncompleteLeasesException = suppressMissingIncompleteLeasesException;
     }
 
     /**
@@ -397,7 +404,7 @@ class ShardConsumer {
      * @return Return next task to run
      */
     private ITask getNextTask() {
-        ITask nextTask = currentState.createTask(this);
+        ITask nextTask = currentState.createTask(this); // change here (add property into consumer)
 
         if (nextTask == null) {
             return null;
@@ -502,5 +509,9 @@ class ShardConsumer {
 
     ShutdownNotification getShutdownNotification() {
         return shutdownNotification;
+    }
+
+    public boolean isSuppressMissingIncompleteLeasesException() {
+        return suppressMissingIncompleteLeasesException;
     }
 }

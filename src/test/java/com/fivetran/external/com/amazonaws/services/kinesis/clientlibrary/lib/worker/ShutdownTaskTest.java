@@ -111,7 +111,8 @@ public class ShutdownTaskTest {
                 ignoreUnexpectedChildShards,
                 leaseManager,
                 TASK_BACKOFF_TIME_MILLIS,
-                getRecordsCache);
+                getRecordsCache,
+                false);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof IllegalArgumentException);
@@ -139,7 +140,8 @@ public class ShutdownTaskTest {
                 ignoreUnexpectedChildShards,
                 leaseManager,
                 TASK_BACKOFF_TIME_MILLIS,
-                getRecordsCache);
+                getRecordsCache,
+                false);
         TaskResult result = task.call();
         Assert.assertNotNull(result.getException());
         Assert.assertTrue(result.getException() instanceof KinesisClientLibIOException);
@@ -151,7 +153,7 @@ public class ShutdownTaskTest {
      */
     @Test
     public final void testGetTaskType() {
-        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache);
+        ShutdownTask task = new ShutdownTask(null, null, null, null, null, null, false, false, null, 0, getRecordsCache, false);
         Assert.assertEquals(TaskType.SHUTDOWN, task.getTaskType());
     }
 

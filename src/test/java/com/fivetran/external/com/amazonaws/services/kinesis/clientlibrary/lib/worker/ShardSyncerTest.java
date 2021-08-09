@@ -350,7 +350,7 @@ public class ShardSyncerTest {
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
         ShardSyncer.checkAndCreateLeasesForNewShards(kinesisProxy, leaseManager, INITIAL_POSITION_LATEST,
-                                                     cleanupLeasesOfCompletedShards, true);
+                                                     cleanupLeasesOfCompletedShards, true, false);
         List<KinesisClientLease> newLeases = leaseManager.listLeases();
         Set<String> expectedLeaseShardIds = new HashSet<String>();
         expectedLeaseShardIds.add("shardId-4");

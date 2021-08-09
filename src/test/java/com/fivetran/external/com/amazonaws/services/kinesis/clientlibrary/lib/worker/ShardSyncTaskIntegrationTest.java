@@ -125,7 +125,8 @@ public class ShardSyncTaskIntegrationTest {
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST),
                 false,
                 false,
-                0L);
+                0L,
+                false);
         syncTask.call();
         List<KinesisClientLease> leases = leaseManager.listLeases();
         Set<String> leaseKeys = new HashSet<String>();
