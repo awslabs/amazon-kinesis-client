@@ -15,6 +15,8 @@
 
 package software.amazon.kinesis.processor;
 
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 
 import java.util.List;
@@ -42,4 +44,14 @@ public interface MultiStreamTracker {
      * @return StreamsLeasesDeletionStrategy
      */
     FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy();
+
+    /**
+     * The position for getting records from an "orphaned" stream that is in the lease table but not tracked
+     * Default assumes that the stream no longer need to be tracked, so use LATEST for faster shard end.
+     *
+     * <p>Default value: {@link InitialPositionInStream#LATEST}</p>
+     */
+    default InitialPositionInStreamExtended orphanedStreamInitialPositionInStream() {
+        return InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
+    }
 }

@@ -159,6 +159,7 @@ public class Scheduler implements Runnable {
     private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
     private MultiStreamTracker multiStreamTracker;
     private FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy;
+    private InitialPositionInStreamExtended orphanedStreamInitialPositionInStream;
     private final long listShardsBackoffTimeMillis;
     private final int maxListShardsRetryAttempts;
     private final LeaseRefresher leaseRefresher;
@@ -231,6 +232,7 @@ public class Scheduler implements Runnable {
                 multiStreamTracker -> {
                     this.multiStreamTracker = multiStreamTracker;
                     this.formerStreamsLeasesDeletionStrategy = multiStreamTracker.formerStreamsLeasesDeletionStrategy();
+                    this.orphanedStreamInitialPositionInStream = multiStreamTracker.orphanedStreamInitialPositionInStream();
                     return multiStreamTracker.streamConfigList().stream()
                             .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc));
                 },
@@ -512,7 +514,7 @@ public class Scheduler implements Runnable {
                     // Worker 2 : BOOTS_UP -> A,B,C (stale)
                     //
                     // The following streams transition state among two workers are NOT considered safe, where Worker 2 might
-                    // end up deleting the leases for A and D and loose progress made so far.
+                    // end up deleting the leases for A and D and lose progress made so far.
                     // Worker 1 : A,B,C -> A,B,C,D (latest)
                     // Worker 2 : A,B,C -> B,C (stale/partial)
                     //
@@ -588,13 +590,13 @@ public class Scheduler implements Runnable {
                 (streamSyncWatch.elapsed(TimeUnit.MILLISECONDS) > NEW_STREAM_CHECK_INTERVAL_MILLIS);
     }
 
-    private void syncStreamsFromLeaseTableOnAppInit(List<MultiStreamLease> leases) {
+    @VisibleForTesting void syncStreamsFromLeaseTableOnAppInit(List<MultiStreamLease> leases) {
         final Set<StreamIdentifier> streamIdentifiers = leases.stream()
                 .map(lease -> StreamIdentifier.multiStreamInstance(lease.streamIdentifier()))
                 .collect(Collectors.toSet());
         for (StreamIdentifier streamIdentifier : streamIdentifiers) {
             if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
-                currentStreamConfigMap.put(streamIdentifier, getDefaultStreamConfig(streamIdentifier));
+                currentStreamConfigMap.put(streamIdentifier, getOrphanedStreamConfig(streamIdentifier));
             }
         }
     }
@@ -653,9 +655,9 @@ public class Scheduler implements Runnable {
         return true;
     }
 
-    // When a stream is no longer needed to be tracked, return a default StreamConfig with LATEST for faster shard end.
-    private StreamConfig getDefaultStreamConfig(StreamIdentifier streamIdentifier) {
-        return new StreamConfig(streamIdentifier, InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
+    // Generate default StreamConfig for an "orphaned" stream that is in the lease table but not tracked
+    private StreamConfig getOrphanedStreamConfig(StreamIdentifier streamIdentifier) {
+        return new StreamConfig(streamIdentifier, orphanedStreamInitialPositionInStream);
     }
 
     /**
@@ -917,7 +919,7 @@ public class Scheduler implements Runnable {
         // Irrespective of single stream app or multi stream app, streamConfig should always be available.
         // If we have a shardInfo, that is not present in currentStreamConfigMap for whatever reason, then return default stream config
         // to gracefully complete the reading.
-        final StreamConfig streamConfig = currentStreamConfigMap.getOrDefault(streamIdentifier, getDefaultStreamConfig(streamIdentifier));
+        final StreamConfig streamConfig = currentStreamConfigMap.getOrDefault(streamIdentifier, getOrphanedStreamConfig(streamIdentifier));
         Validate.notNull(streamConfig, "StreamConfig should not be null");
         RecordsPublisher cache = retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, streamConfig, metricsFactory);
         ShardConsumerArgument argument = new ShardConsumerArgument(shardInfo,
