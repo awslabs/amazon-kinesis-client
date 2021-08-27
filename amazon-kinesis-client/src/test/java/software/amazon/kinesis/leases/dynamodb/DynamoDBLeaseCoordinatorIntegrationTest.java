@@ -78,7 +78,7 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
             leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDBClient, new DynamoDBLeaseSerializer(),
                     useConsistentReads, TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
         }
-        leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
+        leaseRefresher.createLeaseTableIfNotExists();
 
         int retryLeft = ATTEMPTS;
 

@@ -68,8 +68,7 @@ public class LeaseCoordinatorExerciser {
         LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", dynamoDBClient,
                 new DynamoDBLeaseSerializer(), true, TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
 
-        if (leaseRefresher.createLeaseTableIfNotExists(INITIAL_LEASE_TABLE_READ_CAPACITY,
-                INITIAL_LEASE_TABLE_WRITE_CAPACITY)) {
+        if (leaseRefresher.createLeaseTableIfNotExists()) {
             log.info("Waiting for newly created lease table");
             if (!leaseRefresher.waitUntilLeaseTableExists(10, 300)) {
                 log.error("Table was not created in time");

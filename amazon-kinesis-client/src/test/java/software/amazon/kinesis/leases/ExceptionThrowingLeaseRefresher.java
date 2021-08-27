@@ -109,12 +109,12 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
-    public boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
+    public boolean createLeaseTableIfNotExists()
         throws ProvisionedThroughputException, DependencyException {
         throwExceptions("createLeaseTableIfNotExists",
                 ExceptionThrowingLeaseRefresherMethods.CREATELEASETABLEIFNOTEXISTS);
 
-        return leaseRefresher.createLeaseTableIfNotExists(readCapacity, writeCapacity);
+        return leaseRefresher.createLeaseTableIfNotExists();
     }
 
     @Override

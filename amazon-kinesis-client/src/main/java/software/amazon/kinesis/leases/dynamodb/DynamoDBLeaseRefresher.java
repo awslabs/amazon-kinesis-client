@@ -38,7 +38,6 @@ import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.LimitExceededException;
-import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
 import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceInUseException;
@@ -130,7 +129,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
                                   final LeaseSerializer serializer, final boolean consistentReads,
                                   @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout) {
-        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout, BillingMode.PROVISIONED);
+        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout, BillingMode.PAY_PER_REQUEST);
     }
 
     /**
@@ -160,7 +159,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      * {@inheritDoc}
      */
     @Override
-    public boolean createLeaseTableIfNotExists(@NonNull final Long readCapacity, @NonNull final Long writeCapacity)
+    public boolean createLeaseTableIfNotExists()
             throws ProvisionedThroughputException, DependencyException {
         try {
             if (tableStatus() != null) {
@@ -172,19 +171,9 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             //
             log.error("Failed to get table status for {}", table, de);
         }
-        ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
-                .writeCapacityUnits(writeCapacity).build();
-        final CreateTableRequest request;
-        if(BillingMode.PAY_PER_REQUEST.equals(billingMode)){
-            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                    .attributeDefinitions(serializer.getAttributeDefinitions())
-                    .billingMode(billingMode).build();
-        }else{
-            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                    .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput)
-                    .build();
-        }
-
+        final CreateTableRequest request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                .attributeDefinitions(serializer.getAttributeDefinitions())
+                .billingMode(billingMode).build();
 
         final AWSExceptionManager exceptionManager = createExceptionManager();
         exceptionManager.add(ResourceInUseException.class, t -> t);

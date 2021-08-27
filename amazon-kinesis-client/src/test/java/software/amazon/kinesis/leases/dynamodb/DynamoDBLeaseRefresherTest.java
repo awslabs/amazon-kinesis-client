@@ -275,7 +275,7 @@ public class DynamoDBLeaseRefresherTest {
         when(dynamoDbClient.createTable(any(CreateTableRequest.class))).thenReturn(mockCreateTableFuture);
         when(mockCreateTableFuture.get(anyLong(), any())).thenThrow(te);
 
-        verifyCancel(mockCreateTableFuture, () -> leaseRefresher.createLeaseTableIfNotExists(10L, 10L));
+        verifyCancel(mockCreateTableFuture, () -> leaseRefresher.createLeaseTableIfNotExists());
     }
 
     @Test
@@ -292,7 +292,7 @@ public class DynamoDBLeaseRefresherTest {
         when(dynamoDbClient.createTable(any(CreateTableRequest.class))).thenReturn(mockCreateTableFuture);
         when(mockCreateTableFuture.get(anyLong(), any())).thenThrow(te);
 
-        verifyCancel(mockCreateTableFuture, () -> leaseRefresher.createLeaseTableIfNotExists(10L, 10L));
+        verifyCancel(mockCreateTableFuture, () -> leaseRefresher.createLeaseTableIfNotExists());
     }
 
     @FunctionalInterface

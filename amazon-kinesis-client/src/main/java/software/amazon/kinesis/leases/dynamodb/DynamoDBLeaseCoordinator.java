@@ -211,10 +211,9 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     @Override
     public void initialize() throws ProvisionedThroughputException, DependencyException, IllegalStateException {
         final boolean newTableCreated =
-                leaseRefresher.createLeaseTableIfNotExists(initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity);
+                leaseRefresher.createLeaseTableIfNotExists();
         if (newTableCreated) {
-            log.info("Created new lease table for coordinator with initial read capacity of {} and write capacity of {}.",
-                    initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity);
+            log.info("Created new lease table for coordinator with pay per request billing mode.");
         }
         // Need to wait for table in active state.
         final long secondsBetweenPolls = 10L;
