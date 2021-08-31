@@ -54,7 +54,7 @@ public class LeaseIntegrationTest {
             try {
                 if (!leaseRefresher.leaseTableExists()) {
                     log.info("Creating lease table");
-                    leaseRefresher.createLeaseTableIfNotExists();
+                    leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
 
                     leaseRefresher.waitUntilLeaseTableExists(10, 500);
                 }

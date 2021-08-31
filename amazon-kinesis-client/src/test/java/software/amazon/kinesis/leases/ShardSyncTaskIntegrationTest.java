@@ -111,7 +111,9 @@ public class ShardSyncTaskIntegrationTest {
     @Test
     public final void testCall() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         if (!leaseRefresher.leaseTableExists()) {
-            leaseRefresher.createLeaseTableIfNotExists();
+            final Long readCapacity = 10L;
+            final Long writeCapacity = 10L;
+            leaseRefresher.createLeaseTableIfNotExists(readCapacity, writeCapacity);
         }
         leaseRefresher.deleteAll();
         Set<String> shardIds = shardDetector.listShards().stream().map(Shard::shardId).collect(Collectors.toSet());

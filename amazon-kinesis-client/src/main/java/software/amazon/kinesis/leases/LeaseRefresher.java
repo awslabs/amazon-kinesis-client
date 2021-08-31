@@ -29,6 +29,23 @@ public interface LeaseRefresher {
 
     /**
      * Creates the table that will store leases. Succeeds if table already exists.
+     * Deprecated. Use createLeaseTableIfNotExists().
+     *
+     * @param readCapacity
+     * @param writeCapacity
+     *
+     * @return true if we created a new table (table didn't exist before)
+     *
+     * @throws ProvisionedThroughputException if we cannot create the lease table due to per-AWS-account capacity
+     *         restrictions.
+     * @throws DependencyException if DynamoDB createTable fails in an unexpected way
+     */
+    @Deprecated
+    boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
+            throws ProvisionedThroughputException, DependencyException;
+
+    /**
+     * Creates the table that will store leases. Succeeds if table already exists.
      * 
      * @return true if we created a new table (table didn't exist before)
      * 

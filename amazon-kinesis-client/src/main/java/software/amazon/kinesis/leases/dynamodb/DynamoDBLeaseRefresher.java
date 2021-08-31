@@ -159,6 +159,16 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      * {@inheritDoc}
      */
     @Override
+    public boolean createLeaseTableIfNotExists(@NonNull final Long readCapacity, @NonNull final Long writeCapacity)
+            throws ProvisionedThroughputException, DependencyException {
+        // DynamoDB is now created in PayPerRequest billing mode by default. Keeping this for backward compatibility.
+        return createLeaseTableIfNotExists();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public boolean createLeaseTableIfNotExists()
             throws ProvisionedThroughputException, DependencyException {
         try {
