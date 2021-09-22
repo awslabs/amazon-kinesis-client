@@ -77,12 +77,12 @@
     <dependency>
       <groupId>software.amazon.glue</groupId>
       <artifactId>schema-registry-serde</artifactId>
-      <version>1.1.1</version>
+      <version>1.1.3</version>
     </dependency>
     <dependency>
       <groupId>software.amazon.glue</groupId>
       <artifactId>schema-registry-common</artifactId>
-      <version>1.1.1</version>
+      <version>1.1.3</version>
     </dependency>
     <dependency>
       <groupId>com.google.guava</groupId>

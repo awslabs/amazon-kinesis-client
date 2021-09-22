@@ -14,11 +14,13 @@ import java.util.List;
  */
 @Slf4j
 public class SchemaRegistryDecoder {
+    private static final String USER_AGENT_APP_NAME = "kcl";
     private final GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer;
 
     public SchemaRegistryDecoder(
         GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer) {
         this.glueSchemaRegistryDeserializer = glueSchemaRegistryDeserializer;
+        this.glueSchemaRegistryDeserializer.overrideUserAgentApp(USER_AGENT_APP_NAME);
     }
 
     /**
