@@ -77,12 +77,12 @@
     <dependency>
       <groupId>software.amazon.glue</groupId>
       <artifactId>schema-registry-serde</artifactId>
-      <version>1.1.1</version>
+      <version>1.1.4</version>
     </dependency>
     <dependency>
       <groupId>software.amazon.glue</groupId>
       <artifactId>schema-registry-common</artifactId>
-      <version>1.1.1</version>
+      <version>1.1.4</version>
     </dependency>
     <dependency>
       <groupId>com.google.guava</groupId>
@@ -321,6 +321,45 @@
             <goals>
               <goal>jar</goal>
             </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Required for generating maven version as a Java class for runtime access -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>templating-maven-plugin</artifactId>
+        <version>1.0.0</version>
+        <executions>
+          <execution>
+            <id>generate-version-class</id>
+            <goals>
+              <goal>filter-sources</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-dist</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.basedir}/target/generated-sources/java-templates/</directory>
+                  <filtering>false</filtering>
+                  <excludes>
+                  </excludes>
+                </resource>
+              </resources>
+            </configuration>
           </execution>
         </executions>
       </plugin>
