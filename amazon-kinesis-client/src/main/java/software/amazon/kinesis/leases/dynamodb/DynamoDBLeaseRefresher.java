@@ -38,6 +38,7 @@ import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.LimitExceededException;
+import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
 import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceInUseException;
@@ -162,7 +163,20 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     public boolean createLeaseTableIfNotExists(@NonNull final Long readCapacity, @NonNull final Long writeCapacity)
             throws ProvisionedThroughputException, DependencyException {
         // DynamoDB is now created in PayPerRequest billing mode by default. Keeping this for backward compatibility.
-        return createLeaseTableIfNotExists();
+        ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
+                .writeCapacityUnits(writeCapacity).build();
+        final CreateTableRequest request;
+        if(BillingMode.PAY_PER_REQUEST.equals(billingMode)){
+            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                    .attributeDefinitions(serializer.getAttributeDefinitions())
+                    .billingMode(billingMode).build();
+        }else{
+            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                    .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput)
+                    .build();
+        }
+
+        return createTableIfNotExists(request);
     }
 
     /**
@@ -170,6 +184,15 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      */
     @Override
     public boolean createLeaseTableIfNotExists()
+            throws ProvisionedThroughputException, DependencyException {
+        final CreateTableRequest request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                .attributeDefinitions(serializer.getAttributeDefinitions())
+                .billingMode(billingMode).build();
+
+        return createTableIfNotExists(request);
+    }
+
+    private boolean createTableIfNotExists(CreateTableRequest request)
             throws ProvisionedThroughputException, DependencyException {
         try {
             if (tableStatus() != null) {
@@ -181,9 +204,6 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             //
             log.error("Failed to get table status for {}", table, de);
         }
-        final CreateTableRequest request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                .attributeDefinitions(serializer.getAttributeDefinitions())
-                .billingMode(billingMode).build();
 
         final AWSExceptionManager exceptionManager = createExceptionManager();
         exceptionManager.add(ResourceInUseException.class, t -> t);

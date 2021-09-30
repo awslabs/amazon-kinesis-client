@@ -33,6 +33,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -265,7 +266,40 @@ public class DynamoDBLeaseRefresherTest {
     }
 
     @Test
-    public void testCreateLeaseTableTimesOut() throws Exception {
+    public void testCreateLeaseTableProvisionedBillingModeIfNotExists() throws Exception {
+        leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED);
+
+        when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(anyLong(), any()))
+                .thenThrow(ResourceNotFoundException.builder().message("Table doesn't exist").build());
+
+        when(dynamoDbClient.createTable(any(CreateTableRequest.class))).thenReturn(mockCreateTableFuture);
+        when(mockCreateTableFuture.get(anyLong(), any())).thenReturn(null);
+
+        final boolean result = leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
+
+        Assert.assertTrue(result);
+    }
+
+    @Test
+    public void testCreateLeaseTableIfNotExists() throws Exception {
+        when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(anyLong(), any()))
+                .thenThrow(ResourceNotFoundException.builder().message("Table doesn't exist").build());
+
+        when(dynamoDbClient.createTable(any(CreateTableRequest.class))).thenReturn(mockCreateTableFuture);
+        when(mockCreateTableFuture.get(anyLong(), any())).thenReturn(null);
+
+        final boolean result = leaseRefresher.createLeaseTableIfNotExists();
+
+        Assert.assertTrue(result);
+    }
+
+    @Test
+    public void testCreateLeaseTableProvisionedBillingModeTimesOut() throws Exception {
+        leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED);
         TimeoutException te = setRuleForDependencyTimeout();
 
         when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
@@ -279,10 +313,7 @@ public class DynamoDBLeaseRefresherTest {
     }
 
     @Test
-    public void testCreateLeaseTableBillingMode() throws Exception {
-        leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
-                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PAY_PER_REQUEST);
-
+    public void testCreateLeaseTableTimesOut() throws Exception {
         TimeoutException te = setRuleForDependencyTimeout();
 
         when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
@@ -292,7 +323,7 @@ public class DynamoDBLeaseRefresherTest {
         when(dynamoDbClient.createTable(any(CreateTableRequest.class))).thenReturn(mockCreateTableFuture);
         when(mockCreateTableFuture.get(anyLong(), any())).thenThrow(te);
 
-        verifyCancel(mockCreateTableFuture, () -> leaseRefresher.createLeaseTableIfNotExists(10L, 10L));
+        verifyCancel(mockCreateTableFuture, () -> leaseRefresher.createLeaseTableIfNotExists());
     }
 
     @FunctionalInterface
