@@ -278,7 +278,6 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             // (Re-)Cancel if current thread also interrupted
             executorService.shutdownNow();
         }
-        executorService.shutdownNow();
         started = false;
     }
 

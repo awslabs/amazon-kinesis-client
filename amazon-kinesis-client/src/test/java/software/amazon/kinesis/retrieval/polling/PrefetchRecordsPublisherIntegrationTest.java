@@ -254,7 +254,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
     public void shutdown() {
         getRecordsCache.shutdown();
         sleep(100L);
-        verify(executorService).shutdownNow();
+        verify(executorService).shutdown();
 //        verify(getRecordsRetrievalStrategy).shutdown();
     }
 

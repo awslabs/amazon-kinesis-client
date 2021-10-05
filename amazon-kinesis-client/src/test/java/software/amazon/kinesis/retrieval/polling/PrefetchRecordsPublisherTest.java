@@ -770,7 +770,7 @@ public class PrefetchRecordsPublisherTest {
     @After
     public void shutdown() {
         getRecordsCache.shutdown();
-        verify(executorService).shutdownNow();
+        verify(executorService).shutdown();
     }
 
     private void sleep(long millis) {
