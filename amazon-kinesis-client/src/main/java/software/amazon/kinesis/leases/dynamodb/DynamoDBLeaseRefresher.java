@@ -162,7 +162,6 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean createLeaseTableIfNotExists(@NonNull final Long readCapacity, @NonNull final Long writeCapacity)
             throws ProvisionedThroughputException, DependencyException {
-        // DynamoDB is now created in PayPerRequest billing mode by default. Keeping this for backward compatibility.
         ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
                 .writeCapacityUnits(writeCapacity).build();
         final CreateTableRequest request;

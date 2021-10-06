@@ -29,7 +29,7 @@ public interface LeaseRefresher {
 
     /**
      * Creates the table that will store leases. Succeeds if table already exists.
-     * Deprecated. Use createLeaseTableIfNotExists().
+     * Deprecated. Use {@link #createLeaseTableIfNotExists()}.
      *
      * @param readCapacity
      * @param writeCapacity
@@ -45,7 +45,8 @@ public interface LeaseRefresher {
             throws ProvisionedThroughputException, DependencyException;
 
     /**
-     * Creates the table that will store leases. Succeeds if table already exists.
+     * Creates the table that will store leases. Table is now created in PayPerRequest billing mode by default.
+     * Succeeds if table already exists.
      * 
      * @return true if we created a new table (table didn't exist before)
      * 
