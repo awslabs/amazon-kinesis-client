@@ -130,7 +130,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
                                   final LeaseSerializer serializer, final boolean consistentReads,
                                   @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout) {
-        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout, BillingMode.PROVISIONED);
+        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout, BillingMode.PAY_PER_REQUEST);
     }
 
     /**
@@ -162,16 +162,6 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean createLeaseTableIfNotExists(@NonNull final Long readCapacity, @NonNull final Long writeCapacity)
             throws ProvisionedThroughputException, DependencyException {
-        try {
-            if (tableStatus() != null) {
-                return newTableCreated;
-            }
-        } catch (DependencyException de) {
-            //
-            // Something went wrong with DynamoDB
-            //
-            log.error("Failed to get table status for {}", table, de);
-        }
         ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
                 .writeCapacityUnits(writeCapacity).build();
         final CreateTableRequest request;
@@ -185,6 +175,34 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                     .build();
         }
 
+        return createTableIfNotExists(request);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean createLeaseTableIfNotExists()
+            throws ProvisionedThroughputException, DependencyException {
+        final CreateTableRequest request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                .attributeDefinitions(serializer.getAttributeDefinitions())
+                .billingMode(billingMode).build();
+
+        return createTableIfNotExists(request);
+    }
+
+    private boolean createTableIfNotExists(CreateTableRequest request)
+            throws ProvisionedThroughputException, DependencyException {
+        try {
+            if (tableStatus() != null) {
+                return newTableCreated;
+            }
+        } catch (DependencyException de) {
+            //
+            // Something went wrong with DynamoDB
+            //
+            log.error("Failed to get table status for {}", table, de);
+        }
 
         final AWSExceptionManager exceptionManager = createExceptionManager();
         exceptionManager.add(ResourceInUseException.class, t -> t);

@@ -34,4 +34,3 @@ public class LeaseIntegrationBillingModePayPerRequestTest extends LeaseIntegrati
                 tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PAY_PER_REQUEST);
     }
 }
-

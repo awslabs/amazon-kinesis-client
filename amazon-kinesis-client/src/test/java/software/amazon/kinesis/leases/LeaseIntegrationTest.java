@@ -74,7 +74,7 @@ public class LeaseIntegrationTest {
 
     protected DynamoDBLeaseRefresher getLeaseRefresher() {
         return new DynamoDBLeaseRefresher(tableName, ddbClient, leaseSerializer, true,
-                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED);
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PAY_PER_REQUEST);
     }
 
 }

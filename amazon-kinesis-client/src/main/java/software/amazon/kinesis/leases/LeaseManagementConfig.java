@@ -196,7 +196,7 @@ public class LeaseManagementConfig {
 
     private Duration dynamoDbRequestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
-    private BillingMode billingMode = BillingMode.PROVISIONED;
+    private BillingMode billingMode = BillingMode.PAY_PER_REQUEST;
 
     /**
      * Frequency (in millis) of the auditor job to scan for partial leases in the lease table.

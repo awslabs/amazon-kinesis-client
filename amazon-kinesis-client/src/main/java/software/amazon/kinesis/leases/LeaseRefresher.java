@@ -29,9 +29,24 @@ public interface LeaseRefresher {
 
     /**
      * Creates the table that will store leases. Succeeds if table already exists.
-     * 
+     * Deprecated. Use {@link #createLeaseTableIfNotExists()}.
+     *
      * @param readCapacity
      * @param writeCapacity
+     *
+     * @return true if we created a new table (table didn't exist before)
+     *
+     * @throws ProvisionedThroughputException if we cannot create the lease table due to per-AWS-account capacity
+     *         restrictions.
+     * @throws DependencyException if DynamoDB createTable fails in an unexpected way
+     */
+    @Deprecated
+    boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
+            throws ProvisionedThroughputException, DependencyException;
+
+    /**
+     * Creates the table that will store leases. Table is now created in PayPerRequest billing mode by default.
+     * Succeeds if table already exists.
      * 
      * @return true if we created a new table (table didn't exist before)
      * 
@@ -39,7 +54,7 @@ public interface LeaseRefresher {
      *         restrictions.
      * @throws DependencyException if DynamoDB createTable fails in an unexpected way
      */
-    boolean createLeaseTableIfNotExists(Long readCapacity, Long writeCapacity)
+    boolean createLeaseTableIfNotExists()
         throws ProvisionedThroughputException, DependencyException;
 
     /**
