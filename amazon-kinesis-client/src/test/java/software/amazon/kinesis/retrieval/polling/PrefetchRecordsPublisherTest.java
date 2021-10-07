@@ -108,6 +108,7 @@ public class PrefetchRecordsPublisherTest {
     private static final int MAX_SIZE = 5;
     private static final int MAX_RECORDS_COUNT = 15000;
     private static final long IDLE_MILLIS_BETWEEN_CALLS = 0L;
+    private static final long AWAIT_TERMINATION_TIMEOUT = 1L;
     private static final String NEXT_SHARD_ITERATOR = "testNextShardIterator";
 
     @Mock
@@ -143,7 +144,8 @@ public class PrefetchRecordsPublisherTest {
                 IDLE_MILLIS_BETWEEN_CALLS,
                 new NullMetricsFactory(),
                 operation,
-                "shardId");
+                "shardId",
+                AWAIT_TERMINATION_TIMEOUT);
         spyQueue = spy(getRecordsCache.getPublisherSession().prefetchRecordsQueue());
         records = spy(new ArrayList<>());
         getRecordsResponse = GetRecordsResponse.builder().records(records).nextShardIterator(NEXT_SHARD_ITERATOR).childShards(new ArrayList<>()).build();
@@ -224,7 +226,8 @@ public class PrefetchRecordsPublisherTest {
                 1000,
                 new NullMetricsFactory(),
                 operation,
-                "shardId");
+                "shardId",
+                AWAIT_TERMINATION_TIMEOUT);
         // Setup the retrieval strategy to fail initial calls before succeeding
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenThrow(new
                 RetryableRetrievalException("Timed out")).thenThrow(new
@@ -258,7 +261,8 @@ public class PrefetchRecordsPublisherTest {
                 1000,
                 new NullMetricsFactory(),
                 operation,
-                "shardId");
+                "shardId",
+                AWAIT_TERMINATION_TIMEOUT);
         // Setup the retrieval strategy to fail initial calls before succeeding
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenThrow(new
                 RetryableRetrievalException("Timed out")).thenThrow(new
@@ -770,7 +774,7 @@ public class PrefetchRecordsPublisherTest {
     @After
     public void shutdown() {
         getRecordsCache.shutdown();
-        verify(executorService).shutdownNow();
+        verify(executorService).shutdown();
     }
 
     private void sleep(long millis) {

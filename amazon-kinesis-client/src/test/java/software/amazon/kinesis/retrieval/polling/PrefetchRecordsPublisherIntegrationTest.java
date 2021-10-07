@@ -81,6 +81,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
     private static final int MAX_RECORDS_COUNT = 30_000;
     private static final int MAX_RECORDS_PER_CALL = 10_000;
     private static final long IDLE_MILLIS_BETWEEN_CALLS = 500L;
+    private static final long AWAIT_TERMINATION_TIMEOUT = 1L;
     private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
 
     private PrefetchRecordsPublisher getRecordsCache;
@@ -121,7 +122,8 @@ public class PrefetchRecordsPublisherIntegrationTest {
                 IDLE_MILLIS_BETWEEN_CALLS,
                 new NullMetricsFactory(),
                 operation,
-                "test-shard");
+                "test-shard",
+                AWAIT_TERMINATION_TIMEOUT);
     }
 
     @Test
@@ -174,7 +176,8 @@ public class PrefetchRecordsPublisherIntegrationTest {
                 IDLE_MILLIS_BETWEEN_CALLS,
                 new NullMetricsFactory(),
                 operation,
-                "test-shard-2");
+                "test-shard-2",
+                AWAIT_TERMINATION_TIMEOUT);
 
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
@@ -254,7 +257,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
     public void shutdown() {
         getRecordsCache.shutdown();
         sleep(100L);
-        verify(executorService).shutdownNow();
+        verify(executorService).shutdown();
 //        verify(getRecordsRetrievalStrategy).shutdown();
     }
 
