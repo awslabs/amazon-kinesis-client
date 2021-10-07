@@ -306,10 +306,10 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 }
             }
         } catch (InterruptedException e) {
-            // Preserve interrupt status
-            Thread.currentThread().interrupt();
             // (Re-)Cancel if current thread also interrupted
             executorService.shutdownNow();
+            // Preserve interrupt status
+            Thread.currentThread().interrupt();
         }
         started = false;
     }
