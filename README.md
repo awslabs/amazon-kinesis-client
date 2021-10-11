@@ -66,7 +66,18 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release 2.3.6 (July 9, 2021)
+### Latest Release 2.3.7 (October 11, 2021)
+[Milestone#63](https://github.com/awslabs/amazon-kinesis-client/milestone/63)
+* [#842](https://github.com/awslabs/amazon-kinesis-client/pull/842) Fixing typo is debug logs.
+* [#846](https://github.com/awslabs/amazon-kinesis-client/pull/846) Fix DynamoDBLeaseTaker logging of available leases
+* [#847](https://github.com/awslabs/amazon-kinesis-client/pull/847) Make use of Java 8 to simplify computeLeaseCounts()
+* [#853](https://github.com/awslabs/amazon-kinesis-client/pull/853) Add configurable initial position for orphaned stream
+* [#854](https://github.com/awslabs/amazon-kinesis-client/pull/854) Create DynamoDB tables on On-Demand billing mode by default.
+* [#855](https://github.com/awslabs/amazon-kinesis-client/pull/855) Emit Glue Schema Registry usage metrics
+* [#857](https://github.com/awslabs/amazon-kinesis-client/pull/857) Fix to shutdown PrefetchRecordsPublisher in gracefull manner
+* [#858](https://github.com/awslabs/amazon-kinesis-client/pull/858) Upgrade AWS SDK version to 2.17.52.
+
+### Release 2.3.6 (July 9, 2021)
 [Milestone#62](https://github.com/awslabs/amazon-kinesis-client/milestone/62)
 * [#836](https://github.com/awslabs/amazon-kinesis-client/pull/836) Upgraded AWS SDK version to 2.16.98
 * [#835](https://github.com/awslabs/amazon-kinesis-client/pull/835) Upgraded Glue Schema Registry version to 1.1.1
