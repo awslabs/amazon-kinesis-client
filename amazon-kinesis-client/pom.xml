@@ -51,6 +51,7 @@
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
     <slf4j.version>1.7.25</slf4j.version>
+    <gsr.version>1.1.5</gsr.version>
   </properties>
 
   <dependencies>
@@ -77,12 +78,12 @@
     <dependency>
       <groupId>software.amazon.glue</groupId>
       <artifactId>schema-registry-serde</artifactId>
-      <version>1.1.4</version>
+      <version>${gsr.version}</version>
     </dependency>
     <dependency>
       <groupId>software.amazon.glue</groupId>
       <artifactId>schema-registry-common</artifactId>
-      <version>1.1.4</version>
+      <version>${gsr.version}</version>
     </dependency>
     <dependency>
       <groupId>com.google.guava</groupId>
