@@ -14,6 +14,8 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -40,9 +42,6 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
-import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.summingInt;
-
 /**
  * An implementation of {@link LeaseTaker} that uses DynamoDB via {@link LeaseRefresher}.
  */
@@ -63,12 +62,13 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     private final long leaseDurationNanos;
     private final MetricsFactory metricsFactory;
 
-    private final Map<String, Lease> allLeases = new HashMap<>();
     // TODO: Remove these defaults and use the defaults in the config
     private int maxLeasesForWorker = Integer.MAX_VALUE;
     private int maxLeasesToStealAtOneTime = 1;
 
     private long lastScanTimeNanos = 0L;
+
+    final Map<String, Lease> allLeases = new HashMap<>();
 
     public DynamoDBLeaseTaker(LeaseRefresher leaseRefresher, String workerIdentifier, long leaseDurationMillis,
             final MetricsFactory metricsFactory) {
@@ -542,7 +542,8 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * @param expiredLeases list of leases that are currently expired
      * @return map of workerIdentifier to lease count
      */
-    private Map<String, Integer> computeLeaseCounts(List<Lease> expiredLeases) {
+    @VisibleForTesting
+    Map<String, Integer> computeLeaseCounts(List<Lease> expiredLeases) {
         Map<String, Integer> leaseCounts = new HashMap<>();
         // The set will give much faster lookup than the original list, an
         // important optimization when the list is large
