@@ -14,8 +14,14 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
+import com.google.common.collect.ImmutableMap;
+
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
 
 import junit.framework.Assert;
 
@@ -24,12 +30,38 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseTaker;
+import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.NullMetricsScope;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-/**
- *
- */
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.when;
+
+@RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseTakerTest {
+
+    private static final String WORKER_IDENTIFIER = "foo";
+    private static final long LEASE_DURATION_MILLIS = 1000L;
+
+    private DynamoDBLeaseTaker dynamoDBLeaseTaker;
+
+    @Mock
+    private LeaseRefresher leaseRefresher;
+    @Mock
+    private MetricsFactory metricsFactory;
+    @Mock
+    private Callable<Long> timeProvider;
+
+    @Before
+    public void setup() {
+        this.dynamoDBLeaseTaker = new DynamoDBLeaseTaker(leaseRefresher, WORKER_IDENTIFIER, LEASE_DURATION_MILLIS, metricsFactory);
+    }
 
     /**
      * @throws java.lang.Exception
@@ -73,4 +105,25 @@ public class DynamoDBLeaseTakerTest {
         Assert.assertEquals("foo, bar", DynamoDBLeaseTaker.stringJoin(strings, ", "));
     }
 
+
+    @Test
+    public void test_computeLeaseCounts() throws Exception {
+        Lease lease = new Lease();
+        lease.checkpoint(new ExtendedSequenceNumber("checkpoint"));
+        lease.ownerSwitchesSinceCheckpoint(0L);
+        lease.leaseCounter(0L);
+        lease.leaseOwner(null);
+        lease.parentShardIds(Collections.singleton("parentShardId"));
+        lease.childShardIds(new HashSet<>());
+        lease.leaseKey("1");
+        final List<Lease> leases = Collections.singletonList(lease);
+
+        when(leaseRefresher.listLeases()).thenReturn(leases);
+        when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
+        when(timeProvider.call()).thenReturn(1000L);
+
+        Map<String, Lease> actualOutput = dynamoDBLeaseTaker.takeLeases(timeProvider);
+
+        assertEquals(ImmutableMap.of(), actualOutput);
+    }
 }

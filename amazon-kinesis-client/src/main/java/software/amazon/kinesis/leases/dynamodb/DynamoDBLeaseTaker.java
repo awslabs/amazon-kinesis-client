@@ -543,16 +543,30 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * @return map of workerIdentifier to lease count
      */
     private Map<String, Integer> computeLeaseCounts(List<Lease> expiredLeases) {
+        Map<String, Integer> leaseCounts = new HashMap<>();
         // The set will give much faster lookup than the original list, an
         // important optimization when the list is large
         Set<Lease> expiredLeasesSet = new HashSet<>(expiredLeases);
 
-        Map<String, Integer> leaseCounts = allLeases.values().stream()
-            .filter(lease -> !expiredLeasesSet.contains(lease))
-            .collect(groupingBy(Lease::leaseOwner, summingInt(lease -> 1)));
+        // Compute the number of leases per worker by looking through allLeases and ignoring leases that have expired.
+        for (Lease lease : allLeases.values()) {
+            if (!expiredLeasesSet.contains(lease)) {
+                String leaseOwner = lease.leaseOwner();
+                Integer oldCount = leaseCounts.get(leaseOwner);
+                if (oldCount == null) {
+                    leaseCounts.put(leaseOwner, 1);
+                } else {
+                    leaseCounts.put(leaseOwner, oldCount + 1);
+                }
+            }
+        }
 
-        // If I have no leases, I won't be represented in leaseCounts. Let's fix that.
-        leaseCounts.putIfAbsent(workerIdentifier, 0);
+        // If I have no leases, I wasn't represented in leaseCounts. Let's fix that.
+        Integer myCount = leaseCounts.get(workerIdentifier);
+        if (myCount == null) {
+            myCount = 0;
+            leaseCounts.put(workerIdentifier, myCount);
+        }
 
         return leaseCounts;
     }
