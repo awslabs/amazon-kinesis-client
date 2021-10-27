@@ -18,12 +18,15 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import junit.framework.Assert;
 
@@ -109,16 +112,14 @@ public class DynamoDBLeaseTakerTest {
 
     @Test
     public void test_computeLeaseCounts_noExpiredLease() throws Exception {
-        final Lease lease = new Lease();
-        lease.checkpoint(new ExtendedSequenceNumber("checkpoint"));
-        lease.ownerSwitchesSinceCheckpoint(0L);
-        lease.leaseCounter(0L);
-        lease.leaseOwner(null);
-        lease.parentShardIds(Collections.singleton("parentShardId"));
-        lease.childShardIds(new HashSet<>());
-        lease.leaseKey("1");
-        final List<Lease> leases = Collections.singletonList(lease);
-        dynamoDBLeaseTaker.allLeases.put("1", lease);
+        final List<Lease> leases = new ImmutableList.Builder<Lease>()
+                .add(createLease(null, "1"))
+                .add(createLease("foo", "2"))
+                .add(createLease("bar", "3"))
+                .add(createLease("baz", "4"))
+                .build();
+        dynamoDBLeaseTaker.allLeases.putAll(
+                leases.stream().collect(Collectors.toMap(Lease::leaseKey, Function.identity())));
 
         when(leaseRefresher.listLeases()).thenReturn(leases);
         when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
@@ -128,22 +129,21 @@ public class DynamoDBLeaseTakerTest {
 
         final Map<String, Integer> expectedOutput = new HashMap<>();
         expectedOutput.put(null, 1);
-        expectedOutput.put("foo", 0);
+        expectedOutput.put("foo", 1);
+        expectedOutput.put("bar", 1);
+        expectedOutput.put("baz", 1);
         assertEquals(expectedOutput, actualOutput);
     }
 
     @Test
     public void test_computeLeaseCounts_withExpiredLease() throws Exception {
-        final Lease lease = new Lease();
-        lease.checkpoint(new ExtendedSequenceNumber("checkpoint"));
-        lease.ownerSwitchesSinceCheckpoint(0L);
-        lease.leaseCounter(0L);
-        lease.leaseOwner(null);
-        lease.parentShardIds(Collections.singleton("parentShardId"));
-        lease.childShardIds(new HashSet<>());
-        lease.leaseKey("1");
-        final List<Lease> leases = Collections.singletonList(lease);
-        dynamoDBLeaseTaker.allLeases.put("1", lease);
+        final List<Lease> leases = new ImmutableList.Builder<Lease>()
+                .add(createLease("foo", "2"))
+                .add(createLease("bar", "3"))
+                .add(createLease("baz", "4"))
+                .build();
+        dynamoDBLeaseTaker.allLeases.putAll(
+                leases.stream().collect(Collectors.toMap(Lease::leaseKey, Function.identity())));
 
         when(leaseRefresher.listLeases()).thenReturn(leases);
         when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
@@ -151,6 +151,20 @@ public class DynamoDBLeaseTakerTest {
 
         final Map<String, Integer> actualOutput = dynamoDBLeaseTaker.computeLeaseCounts(leases);
 
-        assertEquals(ImmutableMap.of("foo", 0), actualOutput);
+        final Map<String, Integer> expectedOutput = new HashMap<>();
+        expectedOutput.put("foo", 0);
+        assertEquals(expectedOutput, actualOutput);
+    }
+
+    private Lease createLease(String leaseOwner, String leaseKey) {
+        final Lease lease = new Lease();
+        lease.checkpoint(new ExtendedSequenceNumber("checkpoint"));
+        lease.ownerSwitchesSinceCheckpoint(0L);
+        lease.leaseCounter(0L);
+        lease.leaseOwner(leaseOwner);
+        lease.parentShardIds(Collections.singleton("parentShardId"));
+        lease.childShardIds(new HashSet<>());
+        lease.leaseKey(leaseKey);
+        return lease;
     }
 }
