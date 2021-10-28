@@ -66,7 +66,12 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Release Notes
 
-### Latest Release 2.3.7 (October 11, 2021)
+### Latest Release 2.3.8 (October 27, 2021)
+[Milestone#64](https://github.com/awslabs/amazon-kinesis-client/milestone/64)
+* [#860](https://github.com/awslabs/amazon-kinesis-client/pull/860) Upgrade Glue schema registry from 1.1.4 to 1.1.5.
+* [#861](https://github.com/awslabs/amazon-kinesis-client/pull/861) Revert [PR#847](https://github.com/awslabs/amazon-kinesis-client/pull/847) and added new tests.
+
+### Release 2.3.7 (October 11, 2021)
 [Milestone#63](https://github.com/awslabs/amazon-kinesis-client/milestone/63)
 * [#842](https://github.com/awslabs/amazon-kinesis-client/pull/842) Fixing typo is debug logs.
 * [#846](https://github.com/awslabs/amazon-kinesis-client/pull/846) Fix DynamoDBLeaseTaker logging of available leases
