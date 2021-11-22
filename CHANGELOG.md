@@ -1,6 +1,10 @@
 # Changelog
 
-### Latest Release 2.3.8 (October 27, 2021)
+### Latest Release 2.3.9 (November 22, 2021)
+[Milestone#65](https://github.com/awslabs/amazon-kinesis-client/milestone/65)
+* [#866](https://github.com/awslabs/amazon-kinesis-client/pull/866) Update logback dependency.
+
+### Release 2.3.8 (October 27, 2021)
 [Milestone#64](https://github.com/awslabs/amazon-kinesis-client/milestone/64)
 * [#860](https://github.com/awslabs/amazon-kinesis-client/pull/860) Upgrade Glue schema registry from 1.1.4 to 1.1.5.
 * [#861](https://github.com/awslabs/amazon-kinesis-client/pull/861) Revert [PR#847](https://github.com/awslabs/amazon-kinesis-client/pull/847) due to regression for leases without owners and added new tests.
