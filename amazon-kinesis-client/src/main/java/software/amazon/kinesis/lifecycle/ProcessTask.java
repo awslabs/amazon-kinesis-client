@@ -113,23 +113,23 @@ public class ProcessTask implements ConsumerTask {
      */
     @Override
     public TaskResult call() {
-        final MetricsScope scope_app = MetricsUtil.createMetricsWithOperation(metricsFactory, APPLICATION_LEVEL_METRICS);
-        final MetricsScope scope_shard = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
+        final MetricsScope AppScope = MetricsUtil.createMetricsWithOperation(metricsFactory, APPLICATION_LEVEL_METRICS);
+        final MetricsScope ShardScope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
         shardInfo.streamIdentifierSerOpt()
-                .ifPresent(streamId -> MetricsUtil.addStreamId(scope_shard, StreamIdentifier.multiStreamInstance(streamId)));
-        MetricsUtil.addShardId(scope_shard, shardInfo.shardId());
+                .ifPresent(streamId -> MetricsUtil.addStreamId(ShardScope, StreamIdentifier.multiStreamInstance(streamId)));
+        MetricsUtil.addShardId(ShardScope, shardInfo.shardId());
         long startTimeMillis = System.currentTimeMillis();
         boolean success = false;
         try {
-            scope_shard.addData(RECORDS_PROCESSED_METRIC, 0, StandardUnit.COUNT, MetricsLevel.SUMMARY);
-            scope_shard.addData(DATA_BYTES_PROCESSED_METRIC, 0, StandardUnit.BYTES, MetricsLevel.SUMMARY);
+            ShardScope.addData(RECORDS_PROCESSED_METRIC, 0, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            ShardScope.addData(DATA_BYTES_PROCESSED_METRIC, 0, StandardUnit.BYTES, MetricsLevel.SUMMARY);
             Exception exception = null;
 
             try {
                 if (processRecordsInput.millisBehindLatest() != null) {
-                    scope_shard.addData(MILLIS_BEHIND_LATEST_METRIC, processRecordsInput.millisBehindLatest(),
+                    ShardScope.addData(MILLIS_BEHIND_LATEST_METRIC, processRecordsInput.millisBehindLatest(),
                             StandardUnit.MILLISECONDS, MetricsLevel.SUMMARY);
-                    scope_app.addData(MILLIS_BEHIND_LATEST_METRIC, processRecordsInput.millisBehindLatest(),
+                    AppScope.addData(MILLIS_BEHIND_LATEST_METRIC, processRecordsInput.millisBehindLatest(),
                             StandardUnit.MILLISECONDS, MetricsLevel.SUMMARY);
                 }
 
@@ -146,11 +146,11 @@ public class ProcessTask implements ConsumerTask {
                 }
 
                 if (!records.isEmpty()) {
-                    scope_shard.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                    ShardScope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
                 }
 
                 recordProcessorCheckpointer.largestPermittedCheckpointValue(filterAndGetMaxExtendedSequenceNumber(
-                        scope_shard, records, recordProcessorCheckpointer.lastCheckpointValue(),
+                        ShardScope, records, recordProcessorCheckpointer.lastCheckpointValue(),
                         recordProcessorCheckpointer.largestPermittedCheckpointValue()));
 
                 if (shouldCallProcessRecords(records)) {
@@ -169,9 +169,9 @@ public class ProcessTask implements ConsumerTask {
             }
             return new TaskResult(exception);
         } finally {
-            MetricsUtil.addSuccessAndLatency(scope_shard, success, startTimeMillis, MetricsLevel.SUMMARY);
-            MetricsUtil.endScope(scope_shard);
-            MetricsUtil.endScope(scope_app);
+            MetricsUtil.addSuccessAndLatency(ShardScope, success, startTimeMillis, MetricsLevel.SUMMARY);
+            MetricsUtil.endScope(ShardScope);
+            MetricsUtil.endScope(AppScope);
         }
     }
 
