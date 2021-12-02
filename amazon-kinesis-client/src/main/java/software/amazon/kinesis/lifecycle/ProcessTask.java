@@ -45,7 +45,7 @@ import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 @KinesisClientInternalApi
 public class ProcessTask implements ConsumerTask {
     private static final String PROCESS_TASK_OPERATION = "ProcessTask";
-    private static final String APPLICATION_LEVEL_METRICS = "ApplicationLevelMetrics";
+    private static final String APPLICATION_TRACKER_OPERATION = "ApplicationTracker";
     private static final String DATA_BYTES_PROCESSED_METRIC = "DataBytesProcessed";
     private static final String RECORDS_PROCESSED_METRIC = "RecordsProcessed";
     private static final String RECORD_PROCESSOR_PROCESS_RECORDS_METRIC = "RecordProcessor.processRecords";
@@ -113,7 +113,7 @@ public class ProcessTask implements ConsumerTask {
      */
     @Override
     public TaskResult call() {
-        final MetricsScope scope_app = MetricsUtil.createMetricsWithOperation(metricsFactory, APPLICATION_LEVEL_METRICS);
+        final MetricsScope scope_app = MetricsUtil.createMetricsWithOperation(metricsFactory, APPLICATION_TRACKER_OPERATION);
         final MetricsScope scope_shard = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
         shardInfo.streamIdentifierSerOpt()
                 .ifPresent(streamId -> MetricsUtil.addStreamId(scope_shard, StreamIdentifier.multiStreamInstance(streamId)));

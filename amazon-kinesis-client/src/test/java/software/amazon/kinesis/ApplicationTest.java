@@ -52,7 +52,7 @@ public class ApplicationTest {
         String streamName1 = "consumer-level-metrics-1";
         String streamName2 = "consumer-level-metrics-2";
         String region = "us-east-2";
-        String applicationName = "consumer-level-metrics-test";
+        String applicationName = "consumer-level-metrics-test-new";
 
         new ApplicationTest(applicationName, streamName1, streamName2, region).run();
     }
