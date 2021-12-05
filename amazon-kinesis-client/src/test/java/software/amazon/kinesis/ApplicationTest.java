@@ -82,7 +82,7 @@ public class ApplicationTest {
          * Sends dummy data to Kinesis. Not relevant to consuming the data with the KCL
          */
         ScheduledExecutorService producerExecutor = Executors.newSingleThreadScheduledExecutor();
-        ScheduledFuture<?> producerFuture = producerExecutor.scheduleAtFixedRate(this::publishRecord, 10, 1, TimeUnit.SECONDS);
+        ScheduledFuture<?> producerFuture = producerExecutor.scheduleAtFixedRate(this::publishRecord, 1, 1, TimeUnit.SECONDS);
 
         /**
          * Sets up configuration for the KCL, including DynamoDB and CloudWatch dependencies. The final argument, a
@@ -173,17 +173,42 @@ public class ApplicationTest {
     private void publishRecord() {
         PutRecordRequest request1 = PutRecordRequest.builder()
                 .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
-                .streamName(streamName1)
+                .streamName(streamName2)
                 .data(SdkBytes.fromByteArray(RandomUtils.nextBytes(10)))
                 .build();
         PutRecordRequest request2 = PutRecordRequest.builder()
                 .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
-                .streamName(streamName2)
-                .data(SdkBytes.fromByteArray(RandomUtils.nextBytes(10)))
+                .streamName(streamName1)
+                .data(SdkBytes.fromByteArray(RandomUtils.nextBytes(1)))
+                .build();
+        PutRecordRequest request3 = PutRecordRequest.builder()
+                .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
+                .streamName(streamName1)
+                .data(SdkBytes.fromByteArray(RandomUtils.nextBytes(1)))
+                .build();
+        PutRecordRequest request4 = PutRecordRequest.builder()
+                .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
+                .streamName(streamName1)
+                .data(SdkBytes.fromByteArray(RandomUtils.nextBytes(1)))
+                .build();
+        PutRecordRequest request5 = PutRecordRequest.builder()
+                .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
+                .streamName(streamName1)
+                .data(SdkBytes.fromByteArray(RandomUtils.nextBytes(1)))
+                .build();
+        PutRecordRequest request6 = PutRecordRequest.builder()
+                .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
+                .streamName(streamName1)
+                .data(SdkBytes.fromByteArray(RandomUtils.nextBytes(1)))
                 .build();
         try {
             kinesisClient.putRecord(request1).get();
             kinesisClient.putRecord(request2).get();
+            kinesisClient.putRecord(request3).get();
+            kinesisClient.putRecord(request4).get();
+            kinesisClient.putRecord(request5).get();
+            kinesisClient.putRecord(request6).get();
+            System.out.println("600 records published yeah");
         } catch (InterruptedException e) {
             log.info("Interrupted, assuming shutdown.");
         } catch (ExecutionException e) {
