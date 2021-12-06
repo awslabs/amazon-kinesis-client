@@ -19,6 +19,7 @@ import com.google.common.collect.Iterables;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.AccessLevel;
 import lombok.Data;
@@ -291,8 +292,10 @@ public class KinesisDataFetcher implements DataFetcher {
 
     @Override
     public GetRecordsResponse getGetRecordsResponse(GetRecordsRequest request) throws ExecutionException, InterruptedException, TimeoutException {
+        TimeUnit.SECONDS.sleep(20);
         final GetRecordsResponse response = FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(request),
                 maxFutureWait);
+        System.out.println("millisbehindlatest is " + response.millisBehindLatest());
         if (!isValidResult(response.nextShardIterator(), response.childShards())) {
             throw new RetryableRetrievalException("GetRecords response is not valid for shard: " + streamAndShardId
                     + ". nextShardIterator: " + response.nextShardIterator()
@@ -304,7 +307,7 @@ public class KinesisDataFetcher implements DataFetcher {
     @Override
     public GetRecordsRequest getGetRecordsRequest(String nextIterator)  {
         return KinesisRequestsBuilder.getRecordsRequestBuilder().shardIterator(nextIterator)
-                .limit(maxRecords).build();
+                .limit(10).build();
     }
 
     @Override

@@ -60,7 +60,7 @@ public interface Checkpointer {
 
 
     /**
-     * Record intent to checkpoint for a shard. Upon failover, the pendingCheckpointValue will be passed to the new
+     * Record intent to checkpoint for a shard. Upon failover, the pendingCheckpoint will be passed to the new
      * ShardRecordProcessor's initialize() method.
      *
      * @param leaseKey Checkpoint is specified for this shard.

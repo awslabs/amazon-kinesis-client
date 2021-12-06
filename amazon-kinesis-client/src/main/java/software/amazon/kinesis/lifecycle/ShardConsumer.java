@@ -18,10 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.*;
 import java.util.function.Function;
 
 import org.reactivestreams.Subscription;
@@ -331,7 +328,11 @@ public class ShardConsumer {
             taskIsRunning = true;
             TaskResult result;
             try {
+                TimeUnit.MILLISECONDS.sleep(20);
                 result = task.call();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                result = null;
             } finally {
                 taskIsRunning = false;
             }
