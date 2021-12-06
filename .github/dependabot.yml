@@ -1,0 +1,7 @@
+updates:
+
+- package-ecosystem: "maven"
+  directory: "/"
+  schedule: 
+    interval: "daily"
+  # Add assignees, reviewers
