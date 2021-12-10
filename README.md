@@ -34,7 +34,11 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.14.4 - June 14, 2021)
+### Latest Release (1.14.5 - Dec 10, 2021)
+* [#872](https://github.com/awslabs/amazon-kinesis-client/pull/872) Update log4j test dependency from 1.2.17 to 2.15.0
+* [#873](https://github.com/awslabs/amazon-kinesis-client/pull/873) Upgrading version of AWS Java SDK to 1.12.128
+
+### Release (1.14.4 - June 14, 2021)
 * [Milestone#61](https://github.com/awslabs/amazon-kinesis-client/milestone/61)
 * [#816](https://github.com/awslabs/amazon-kinesis-client/pull/816) Updated the Worker shutdown logic to make sure that the `LeaseCleanupManager` also terminates all the threads that it has started.
 * [#821](https://github.com/awslabs/amazon-kinesis-client/pull/821) Upgrading version of AWS Java SDK to 1.12.3
