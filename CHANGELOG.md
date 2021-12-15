@@ -1,6 +1,9 @@
 # Changelog
 
-### Latest Release (1.14.5 - Dec 10, 2021)
+### Latest Release (1.14.6 - Dec 15, 2021)
+* [#876](https://github.com/awslabs/amazon-kinesis-client/pull/876) Update log4j test dependency from 2.15.0 to 2.16.0
+
+### Release (1.14.5 - Dec 10, 2021)
 * [#872](https://github.com/awslabs/amazon-kinesis-client/pull/872) Update log4j test dependency from 1.2.17 to 2.15.0
 * [#873](https://github.com/awslabs/amazon-kinesis-client/pull/873) Upgrading version of AWS Java SDK to 1.12.128
 
