@@ -176,7 +176,7 @@
         <jdk>[1.8,)</jdk>
       </activation>
       <properties>
-        <additionalparam>-Xdoclint:none</additionalparam>
+        <doclint>none</doclint>
       </properties>
     </profile>
   </profiles>
