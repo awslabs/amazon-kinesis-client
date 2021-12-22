@@ -34,7 +34,10 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.14.6 - Dec 15, 2021)
+### Latest Release (1.14.7 - Dec 22, 2021)
+* [#881](https://github.com/awslabs/amazon-kinesis-client/pull/881) Update log4j test dependency from 2.16.0 to 2.17.0 and some other dependencies
+
+### Release (1.14.6 - Dec 15, 2021)
 * [#876](https://github.com/awslabs/amazon-kinesis-client/pull/876) Update log4j test dependency from 2.15.0 to 2.16.0
 
 ### Release (1.14.5 - Dec 10, 2021)
