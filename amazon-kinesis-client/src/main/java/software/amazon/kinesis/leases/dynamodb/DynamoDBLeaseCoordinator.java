@@ -47,7 +47,8 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
-import static software.amazon.kinesis.common.CommonCalculations.*;
+
+import static software.amazon.kinesis.common.CommonCalculations.getRenewerTakerIntervalMillis;
 
 /**
  * LeaseCoordinator abstracts away LeaseTaker and LeaseRenewer from the application code that's using leasing. It owns
