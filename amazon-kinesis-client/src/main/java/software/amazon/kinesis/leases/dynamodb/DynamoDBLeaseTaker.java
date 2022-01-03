@@ -64,7 +64,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     private final long leaseDurationNanos;
     private final long leaseRenewalIntervalMillis;
     private final MetricsFactory metricsFactory;
-    
+
     final Map<String, Lease> allLeases = new HashMap<>();
     // TODO: Remove these defaults and use the defaults in the config
     private int maxLeasesForWorker = Integer.MAX_VALUE;
@@ -260,8 +260,8 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                     try {
                         return leaseRefresher.getLease(lease.leaseKey());
                     } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
-                        log.warn("Unable to retrieve the current lease while refreshing the stale lease, "
-                                 + "defaulting to existing lease", e);
+                        log.warn("Failed to fetch latest state of the lease {} that needs to be stolen, "
+                                 + "defaulting to existing lease", lease.leaseKey(), e);
                     }
                 }
                 return lease;
