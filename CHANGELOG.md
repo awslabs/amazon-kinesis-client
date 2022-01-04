@@ -1,6 +1,13 @@
 # Changelog
 
-### Latest Release 2.3.9 (November 22, 2021)
+### Latest Release 2.3.10 (January 4, 2022)
+[Milestone#66](https://github.com/awslabs/amazon-kinesis-client/milestone/66)
+* [#868](https://github.com/awslabs/amazon-kinesis-client/pull/868) Adding a new metric: Application-level MillisBehindLatest
+* [#879](https://github.com/awslabs/amazon-kinesis-client/pull/879) Keep dependencies up-to-date
+* [#886](https://github.com/awslabs/amazon-kinesis-client/pull/886) Get latest counter before attempting a take to ensure take succeeds
+* [#888](https://github.com/awslabs/amazon-kinesis-client/pull/888) Configure dependabot for v1.x branch
+
+### Release 2.3.9 (November 22, 2021)
 [Milestone#65](https://github.com/awslabs/amazon-kinesis-client/milestone/65)
 * [#866](https://github.com/awslabs/amazon-kinesis-client/pull/866) Update logback dependency.
 
