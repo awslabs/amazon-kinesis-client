@@ -763,9 +763,12 @@ public class Scheduler implements Runnable {
             // Stop accepting new leases. Once we do this we can be sure that
             // no more leases will be acquired.
             //
-            leaseCoordinator.stopLeaseTaker();
+            Collection<Lease> leases = Collections.emptyList();
+            if (leaseCoordinator != null) {
+                leaseCoordinator.stopLeaseTaker();
+                leases = leaseCoordinator.getAssignments();
+            }
 
-            Collection<Lease> leases = leaseCoordinator.getAssignments();
             if (leases == null || leases.isEmpty()) {
                 //
                 // If there are no leases notification is already completed, but we still need to shutdown the worker.
