@@ -53,7 +53,7 @@ import java.util.stream.IntStream;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.Sets;
-import io.reactivex.plugins.RxJavaPlugins;
+import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.junit.Assert;

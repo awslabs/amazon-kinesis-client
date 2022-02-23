@@ -15,9 +15,9 @@
 package software.amazon.kinesis.lifecycle;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.reactivex.Flowable;
-import io.reactivex.Scheduler;
-import io.reactivex.schedulers.Schedulers;
+import io.reactivex.rxjava3.core.Flowable;
+import io.reactivex.rxjava3.core.Scheduler;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;

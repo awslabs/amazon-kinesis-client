@@ -2,10 +2,10 @@ package software.amazon.kinesis.retrieval.fanout;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.netty.handler.timeout.ReadTimeoutException;
-import io.reactivex.Flowable;
-import io.reactivex.Scheduler;
-import io.reactivex.schedulers.Schedulers;
-import io.reactivex.subscribers.SafeSubscriber;
+import io.reactivex.rxjava3.core.Flowable;
+import io.reactivex.rxjava3.core.Scheduler;
+import io.reactivex.rxjava3.schedulers.Schedulers;
+import io.reactivex.rxjava3.subscribers.SafeSubscriber;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
