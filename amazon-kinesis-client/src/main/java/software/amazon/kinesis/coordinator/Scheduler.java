@@ -18,7 +18,7 @@ package software.amazon.kinesis.coordinator;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 
-import io.reactivex.plugins.RxJavaPlugins;
+import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;

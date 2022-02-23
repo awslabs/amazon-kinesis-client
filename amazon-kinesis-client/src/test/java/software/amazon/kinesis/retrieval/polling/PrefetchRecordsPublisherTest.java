@@ -73,8 +73,8 @@ import org.mockito.stubbing.Answer;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
-import io.reactivex.Flowable;
-import io.reactivex.schedulers.Schedulers;
+import io.reactivex.rxjava3.core.Flowable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.core.exception.SdkException;
