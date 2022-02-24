@@ -34,7 +34,12 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.14.7 - Dec 22, 2021)
+### Latest Release (1.14.8 - Feb 24, 2021)
+* [Bump log4j-core from 2.17.0 to 2.17.1](https://github.com/awslabs/amazon-kinesis-client/commit/94b138a9d9a502ee0f4f000bb0efd2766ebadc37)
+* [Bump protobuf-java from 3.19.1 to 3.19.4](https://github.com/awslabs/amazon-kinesis-client/commit/a809b12c43c57a3d6ad3827feb60e4322614259c)
+* [Bump maven-compiler-plugin from 3.8.1 to 3.10.0](https://github.com/awslabs/amazon-kinesis-client/commit/37b5d7b9a1ccad483469ef542a6a7237462b14f2)
+
+### Release (1.14.7 - Dec 22, 2021)
 * [#881](https://github.com/awslabs/amazon-kinesis-client/pull/881) Update log4j test dependency from 2.16.0 to 2.17.0 and some other dependencies
 
 ### Release (1.14.6 - Dec 15, 2021)
