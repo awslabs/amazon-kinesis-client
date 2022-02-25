@@ -93,7 +93,7 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
-      <version>3.19.2</version>
+      <version>3.19.4</version>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>
