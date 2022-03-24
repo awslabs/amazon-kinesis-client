@@ -1,6 +1,10 @@
 # Changelog
 
-### Latest Release 2.4.0 (March 2, 2022)
+### Latest Release 2.4.1 (March 24, 2022)
+[Milestone#68](https://github.com/awslabs/amazon-kinesis-client/milestone/68)
+* [#916](https://github.com/awslabs/amazon-kinesis-client/pull/916) Upgrade to rxjava3
+
+### Release 2.4.0 (March 2, 2022)
 [Milestone#67](https://github.com/awslabs/amazon-kinesis-client/milestone/67)
 * [#894](https://github.com/awslabs/amazon-kinesis-client/pull/894) Bump protobuf-java from 3.19.1 to 3.19.2
 * [#924](https://github.com/awslabs/amazon-kinesis-client/pull/924) Support Protobuf Data format with Glue Schema Registry.
