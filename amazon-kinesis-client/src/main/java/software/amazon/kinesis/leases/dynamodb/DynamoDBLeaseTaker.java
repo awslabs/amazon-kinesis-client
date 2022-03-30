@@ -236,6 +236,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             }
 
             scope.addData("TakenLeases", takenLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            scope.addData("UntakenLeases", untakenLeaseKeys.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
         } finally {
             MetricsUtil.endScope(scope);
         }
