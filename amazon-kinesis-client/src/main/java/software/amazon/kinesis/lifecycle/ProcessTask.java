@@ -215,7 +215,7 @@ public class ProcessTask implements ConsumerTask {
                 shardInfoId);
 
         final ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder().records(records).cacheExitTime(input.cacheExitTime()).cacheEntryTime(input.cacheEntryTime())
-                .checkpointer(recordProcessorCheckpointer).millisBehindLatest(input.millisBehindLatest()).build();
+                .isAtShardEnd(input.isAtShardEnd()).checkpointer(recordProcessorCheckpointer).millisBehindLatest(input.millisBehindLatest()).build();
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
         shardInfo.streamIdentifierSerOpt()
