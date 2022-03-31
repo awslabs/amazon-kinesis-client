@@ -159,6 +159,13 @@
 [Milestone#46](https://github.com/awslabs/amazon-kinesis-client/milestone/45)
 * Updating the AWS SDK version to 2.10.56.
   * [PR#679](https://github.com/awslabs/amazon-kinesis-client/pull/679)
+  * NOTE: SDK has a known connection teardown issue when multiple H2 streams are used within a connection. This might result in shard consumers sticking to a stale service host and not progressing. If your shard consumer gets stuck, use the following configuration as a workaround. This configuration might result in up to 5X increase in total connections.
+  ```
+  KinesisAsyncClient kinesisClient = KinesisAsyncClient.builder()
+                                                       .region(region)
+                                                       .httpClientBuilder(NettyNioAsyncHttpClient.builder().maxConcurrency(Integer.MAX_VALUE).http2Configuration(Http2Configuration.builder().maxStreams(1).build())
+                                                       .build()
+  ```
 * Making ShardConsumerTest resilient to race conditions.
   * [PR#668](https://github.com/awslabs/amazon-kinesis-client/pull/668)
 * Updating integration test naming.
