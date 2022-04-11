@@ -199,11 +199,11 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     }
 
     protected void logOnErrorReadTimeoutWarning(Throwable t) {
-        log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will"
-                + " recreate the subscription as neccessary to continue processing. If you "
+        log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
+                + "recreate the subscription as necessary to continue processing. If you "
                 + "are seeing this warning frequently consider increasing the SDK timeouts "
-                + "by providing an OverrideConfiguration to the kinesis client. Alternatively you"
-                + "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
+                + "by providing an OverrideConfiguration to the kinesis client. Alternatively you "
+                + "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress "
                 + "intermittent ReadTimeout warnings. Last successful request details -- {}",
                 shardInfoId, recordsPublisher.getLastSuccessfulRequestDetails(), t);
     }
