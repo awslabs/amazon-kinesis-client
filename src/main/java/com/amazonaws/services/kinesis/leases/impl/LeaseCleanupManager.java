@@ -238,7 +238,7 @@ public class LeaseCleanupManager {
             } else {
                 cleanupFailureReason = "Configuration/Interval condition not satisfied to execute lease cleanup this cycle";
             }
-            if (!cleanedUpCompletedLease && !alreadyCheckedForGarbageCollection && timeToCheckForGarbageShard) {
+            if (cleanupLeasesUponShardCompletion && !cleanedUpCompletedLease && !alreadyCheckedForGarbageCollection && timeToCheckForGarbageShard) {
                 // throws ResourceNotFoundException
                 wereChildShardsPresent = !CollectionUtils
                             .isNullOrEmpty(getChildShardsFromService(shardInfo));
