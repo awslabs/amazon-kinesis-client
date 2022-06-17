@@ -32,6 +32,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
         @Type(value = ShutdownRequestedMessage.class, name = ShutdownRequestedMessage.ACTION),
         @Type(value = LeaseLostMessage.class, name = LeaseLostMessage.ACTION),
         @Type(value = ShardEndedMessage.class, name = ShardEndedMessage.ACTION),
+        @Type(value = LogMessage.class, name = LogMessage.ACTION),
 })
 public abstract class Message {
 
