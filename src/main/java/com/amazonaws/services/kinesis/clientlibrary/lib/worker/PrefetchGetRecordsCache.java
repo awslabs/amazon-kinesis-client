@@ -60,7 +60,7 @@ public class PrefetchGetRecordsCache implements GetRecordsCache {
     private PrefetchCounters prefetchCounters;
     private boolean started = false;
     private final String operation;
-    private final KinesisDataFetcher dataFetcher;
+    private final IDataFetcher dataFetcher;
     private final String shardId;
 
     /**

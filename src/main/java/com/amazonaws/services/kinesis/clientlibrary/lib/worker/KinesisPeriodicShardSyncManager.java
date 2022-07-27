@@ -46,7 +46,6 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.Value;
-import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -61,11 +60,12 @@ import static com.amazonaws.services.kinesis.leases.impl.HashKeyRangeForLease.fr
  */
 @Getter
 @EqualsAndHashCode
-class PeriodicShardSyncManager {
-    private static final Log LOG = LogFactory.getLog(PeriodicShardSyncManager.class);
+class KinesisPeriodicShardSyncManager implements IPeriodicShardSyncManager{
+    private static final Log LOG = LogFactory.getLog(KinesisPeriodicShardSyncManager.class);
     private static final long INITIAL_DELAY = 0;
 
     /** DEFAULT interval is used for PERIODIC {@link ShardSyncStrategyType}. */
+
     private static final long DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 1000L;
 
     /** Parameters for validating hash range completeness when running in auditor mode. */
@@ -89,30 +89,30 @@ class PeriodicShardSyncManager {
     private final int leasesRecoveryAuditorInconsistencyConfidenceThreshold;
 
 
-    PeriodicShardSyncManager(String workerId,
-                             LeaderDecider leaderDecider,
-                             ShardSyncTask shardSyncTask,
-                             IMetricsFactory metricsFactory,
-                             ILeaseManager<KinesisClientLease> leaseManager,
-                             IKinesisProxy kinesisProxy,
-                             boolean isAuditorMode,
-                             long leasesRecoveryAuditorExecutionFrequencyMillis,
-                             int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
+    KinesisPeriodicShardSyncManager(String workerId,
+                                    LeaderDecider leaderDecider,
+                                    ShardSyncTask shardSyncTask,
+                                    IMetricsFactory metricsFactory,
+                                    ILeaseManager<KinesisClientLease> leaseManager,
+                                    IKinesisProxy kinesisProxy,
+                                    boolean isAuditorMode,
+                                    long leasesRecoveryAuditorExecutionFrequencyMillis,
+                                    int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
        this(workerId, leaderDecider, shardSyncTask, Executors.newSingleThreadScheduledExecutor(), metricsFactory,
             leaseManager, kinesisProxy, isAuditorMode, leasesRecoveryAuditorExecutionFrequencyMillis,
             leasesRecoveryAuditorInconsistencyConfidenceThreshold);
     }
 
-    PeriodicShardSyncManager(String workerId,
-                             LeaderDecider leaderDecider,
-                             ShardSyncTask shardSyncTask,
-                             ScheduledExecutorService shardSyncThreadPool,
-                             IMetricsFactory metricsFactory,
-                             ILeaseManager<KinesisClientLease> leaseManager,
-                             IKinesisProxy kinesisProxy,
-                             boolean isAuditorMode,
-                             long leasesRecoveryAuditorExecutionFrequencyMillis,
-                             int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
+    KinesisPeriodicShardSyncManager(String workerId,
+                                    LeaderDecider leaderDecider,
+                                    ShardSyncTask shardSyncTask,
+                                    ScheduledExecutorService shardSyncThreadPool,
+                                    IMetricsFactory metricsFactory,
+                                    ILeaseManager<KinesisClientLease> leaseManager,
+                                    IKinesisProxy kinesisProxy,
+                                    boolean isAuditorMode,
+                                    long leasesRecoveryAuditorExecutionFrequencyMillis,
+                                    int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
         Validate.notBlank(workerId, "WorkerID is required to initialize PeriodicShardSyncManager.");
         Validate.notNull(leaderDecider, "LeaderDecider is required to initialize PeriodicShardSyncManager.");
         Validate.notNull(shardSyncTask, "ShardSyncTask is required to initialize PeriodicShardSyncManager.");
@@ -134,6 +134,7 @@ class PeriodicShardSyncManager {
         }
     }
 
+    @Override
     public synchronized TaskResult start() {
         if (!isRunning) {
             final Runnable periodicShardSyncer = () -> {
@@ -156,11 +157,13 @@ class PeriodicShardSyncManager {
      * Runs ShardSync once, without scheduling further periodic ShardSyncs.
      * @return TaskResult from shard sync
      */
+    @Override
     public synchronized TaskResult syncShardsOnce() {
         LOG.info("Syncing shards once from worker " + workerId);
         return metricsEmittingShardSyncTask.call();
     }
 
+    @Override
     public void stop() {
         if (isRunning) {
             LOG.info(String.format("Shutting down leader decider on worker %s", workerId));
@@ -344,16 +347,6 @@ class PeriodicShardSyncManager {
         Collections.sort(leasesWithHashKeyRanges, new HashKeyRangeComparator());
         return leasesWithHashKeyRanges;
     }
-
-    @Value
-    @Accessors(fluent = true)
-    @VisibleForTesting
-    static class ShardSyncResponse {
-        private final boolean shouldDoShardSync;
-        private final boolean isHoleDetected;
-        private final String reasonForDecision;
-    }
-
     @Value
     private static class HashRangeHole {
         private final HashKeyRangeForLease hashRangeAtStartOfPossibleHole;

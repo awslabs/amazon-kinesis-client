@@ -17,10 +17,10 @@ class ShardEndShardSyncStrategy implements ShardSyncStrategy {
     private ShardSyncTaskManager shardSyncTaskManager;
 
     /** Runs periodic shard sync jobs in the background as an auditor process for shard-end syncs. */
-    private PeriodicShardSyncManager periodicShardSyncManager;
+    private IPeriodicShardSyncManager periodicShardSyncManager;
 
     ShardEndShardSyncStrategy(ShardSyncTaskManager shardSyncTaskManager,
-                              PeriodicShardSyncManager periodicShardSyncManager) {
+                              IPeriodicShardSyncManager periodicShardSyncManager) {
         this.shardSyncTaskManager = shardSyncTaskManager;
         this.periodicShardSyncManager = periodicShardSyncManager;
     }

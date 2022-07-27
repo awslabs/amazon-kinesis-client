@@ -29,7 +29,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 /**
  * Task for initializing shard position and invoking the RecordProcessor initialize() API.
  */
-class InitializeTask implements ITask {
+public class InitializeTask implements ITask {
 
     private static final Log LOG = LogFactory.getLog(InitializeTask.class);
 
@@ -37,7 +37,7 @@ class InitializeTask implements ITask {
 
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
-    private final KinesisDataFetcher dataFetcher;
+    private final IDataFetcher dataFetcher;
     private final TaskType taskType = TaskType.INITIALIZE;
     private final ICheckpoint checkpoint;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
@@ -49,14 +49,14 @@ class InitializeTask implements ITask {
     /**
      * Constructor.
      */
-    InitializeTask(ShardInfo shardInfo,
-                   IRecordProcessor recordProcessor,
-                   ICheckpoint checkpoint,
-                   RecordProcessorCheckpointer recordProcessorCheckpointer,
-                   KinesisDataFetcher dataFetcher,
-                   long backoffTimeMillis,
-                   StreamConfig streamConfig,
-                   GetRecordsCache getRecordsCache) {
+    public InitializeTask(ShardInfo shardInfo,
+                          IRecordProcessor recordProcessor,
+                          ICheckpoint checkpoint,
+                          RecordProcessorCheckpointer recordProcessorCheckpointer,
+                          IDataFetcher dataFetcher,
+                          long backoffTimeMillis,
+                          StreamConfig streamConfig,
+                          GetRecordsCache getRecordsCache) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.checkpoint = checkpoint;

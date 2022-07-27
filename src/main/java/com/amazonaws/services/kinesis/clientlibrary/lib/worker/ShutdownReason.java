@@ -15,8 +15,8 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ConsumerState;
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ShardConsumerState;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisConsumerStates.ConsumerState;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisConsumerStates.ShardConsumerState;
 
 
 /**
@@ -72,7 +72,7 @@ public enum ShutdownReason {
         return reason.rank > this.rank;
     }
 
-    ConsumerState getShutdownState() {
+    public ConsumerState getShutdownState() {
         return shutdownState;
     }
 }

@@ -22,7 +22,7 @@ import java.util.List;
  * Used to capture information from a task that we want to communicate back to the higher layer.
  * E.g. exception thrown when executing the task, if we reach end of a shard.
  */
-class TaskResult {
+public class TaskResult {
 
     // Did we reach the end of the shard while processing this task.
     private boolean shardEndReached;
@@ -38,7 +38,7 @@ class TaskResult {
     /**
      * @return the shardEndReached
      */
-    protected boolean isShardEndReached() {
+    public boolean isShardEndReached() {
         return shardEndReached;
     }
 
@@ -77,7 +77,7 @@ class TaskResult {
     /**
      * @param e Any exception encountered when running the process task.
      */
-    TaskResult(Exception e) {
+    public TaskResult(Exception e) {
         this(e, false);
     }
 
