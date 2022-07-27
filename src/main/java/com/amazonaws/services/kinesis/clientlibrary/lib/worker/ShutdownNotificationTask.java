@@ -21,14 +21,14 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IShutdownNotif
 /**
  * Notifies record processor of incoming shutdown request, and gives them a chance to checkpoint.
  */
-class ShutdownNotificationTask implements ITask {
+public class ShutdownNotificationTask implements ITask {
 
     private final IRecordProcessor recordProcessor;
     private final IRecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ShutdownNotification shutdownNotification;
     private final ShardInfo shardInfo;
 
-    ShutdownNotificationTask(IRecordProcessor recordProcessor, IRecordProcessorCheckpointer recordProcessorCheckpointer, ShutdownNotification shutdownNotification, ShardInfo shardInfo) {
+    public ShutdownNotificationTask(IRecordProcessor recordProcessor, IRecordProcessorCheckpointer recordProcessorCheckpointer, ShutdownNotification shutdownNotification, ShardInfo shardInfo) {
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;
         this.shutdownNotification = shutdownNotification;

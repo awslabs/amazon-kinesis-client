@@ -39,8 +39,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.PeriodicShardSyncManager.MAX_HASH_KEY;
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.PeriodicShardSyncManager.MIN_HASH_KEY;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisPeriodicShardSyncManager.MAX_HASH_KEY;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisPeriodicShardSyncManager.MIN_HASH_KEY;
 import static com.amazonaws.services.kinesis.leases.impl.HashKeyRangeForLease.deserialize;
 import static org.mockito.Mockito.when;
 
@@ -52,10 +52,10 @@ public class PeriodicShardSyncManagerTest {
     public static final int LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD = 3;
 
     /** Manager for PERIODIC shard sync strategy */
-    private PeriodicShardSyncManager periodicShardSyncManager;
+    private KinesisPeriodicShardSyncManager periodicShardSyncManager;
 
     /** Manager for SHARD_END shard sync strategy */
-    private PeriodicShardSyncManager auditorPeriodicShardSyncManager;
+    private KinesisPeriodicShardSyncManager auditorPeriodicShardSyncManager;
 
     @Mock
     private LeaderDecider leaderDecider;
@@ -70,10 +70,10 @@ public class PeriodicShardSyncManagerTest {
 
     @Before
     public void setup() {
-        periodicShardSyncManager = new PeriodicShardSyncManager(WORKER_ID, leaderDecider, shardSyncTask,
+        periodicShardSyncManager = new KinesisPeriodicShardSyncManager(WORKER_ID, leaderDecider, shardSyncTask,
                 metricsFactory, leaseManager, kinesisProxy, false, LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS,
                 LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD);
-        auditorPeriodicShardSyncManager = new PeriodicShardSyncManager(WORKER_ID, leaderDecider, shardSyncTask,
+        auditorPeriodicShardSyncManager = new KinesisPeriodicShardSyncManager(WORKER_ID, leaderDecider, shardSyncTask,
                 metricsFactory, leaseManager, kinesisProxy, true, LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS, 
                 LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD);
     }
@@ -92,7 +92,7 @@ public class PeriodicShardSyncManagerTest {
             lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             return lease;
         }).collect(Collectors.toList());
-        Assert.assertTrue(PeriodicShardSyncManager
+        Assert.assertTrue(KinesisPeriodicShardSyncManager
                 .checkForHoleInHashKeyRanges(hashRanges).isPresent());
     }
 
@@ -110,7 +110,7 @@ public class PeriodicShardSyncManagerTest {
             lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             return lease;
         }).collect(Collectors.toList());
-        Assert.assertFalse(PeriodicShardSyncManager
+        Assert.assertFalse(KinesisPeriodicShardSyncManager
                 .checkForHoleInHashKeyRanges(hashRanges).isPresent());
     }
 
@@ -128,7 +128,7 @@ public class PeriodicShardSyncManagerTest {
             lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             return lease;
         }).collect(Collectors.toList());
-        Assert.assertFalse(PeriodicShardSyncManager
+        Assert.assertFalse(KinesisPeriodicShardSyncManager
                 .checkForHoleInHashKeyRanges(hashRanges).isPresent());
     }
 
@@ -147,7 +147,7 @@ public class PeriodicShardSyncManagerTest {
             lease.setCheckpoint(ExtendedSequenceNumber.TRIM_HORIZON);
             return lease;
         }).collect(Collectors.toList());
-        Assert.assertFalse(PeriodicShardSyncManager
+        Assert.assertFalse(KinesisPeriodicShardSyncManager
                 .checkForHoleInHashKeyRanges(hashRanges).isPresent());
     }
 

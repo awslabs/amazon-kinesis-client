@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.amazonaws.services.dynamodbv2.model.BillingMode;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
 import org.apache.commons.lang3.Validate;
 
 import com.amazonaws.ClientConfiguration;
@@ -61,7 +62,7 @@ public class KinesisClientLibConfiguration {
     public static final int DEFAULT_MAX_RECORDS = 10000;
 
     /**
-     * The default value for how long the {@link ShardConsumer} should sleep if no records are returned from the call to
+     * The default value for how long the {@link KinesisShardConsumer} should sleep if no records are returned from the call to
      * {@link com.amazonaws.services.kinesis.AmazonKinesis#getRecords(com.amazonaws.services.kinesis.model.GetRecordsRequest)}.
      */
     public static final long DEFAULT_IDLETIME_BETWEEN_READS_MILLIS = 1000L;
@@ -627,7 +628,7 @@ public class KinesisClientLibConfiguration {
      * @param billingMode The DDB Billing mode to set for lease table creation.
      * @param recordsFetcherFactory Factory to create the records fetcher to retrieve data from Kinesis for a given shard.
      * @param leaseCleanupIntervalMillis Rate at which to run lease cleanup thread in
-     *        {@link com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager}
+     *        {@link LeaseCleanupManager}
      * @param completedLeaseCleanupThresholdMillis Threshold in millis at which to check if there are any completed leases
      *        (leases for shards which have been closed as a result of a resharding operation) that need to be cleaned up.
      * @param garbageLeaseCleanupThresholdMillis Threshold in millis at which to check if there are any garbage leases
@@ -926,7 +927,7 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
-     * @return Interval in millis at which to run lease cleanup thread in {@link com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager}
+     * @return Interval in millis at which to run lease cleanup thread in {@link LeaseCleanupManager}
      */
     public long leaseCleanupIntervalMillis() {
         return leaseCleanupIntervalMillis;
@@ -1030,7 +1031,7 @@ public class KinesisClientLibConfiguration {
      * Keeping it protected to forbid outside callers from depending on this internal object.
      * @return The initialPositionInStreamExtended object.
      */
-    protected InitialPositionInStreamExtended getInitialPositionInStreamExtended() {
+    public InitialPositionInStreamExtended getInitialPositionInStreamExtended() {
         return initialPositionInStreamExtended;
     }
 
@@ -1623,7 +1624,7 @@ public class KinesisClientLibConfiguration {
 
     /**
      * @param leaseCleanupIntervalMillis Rate at which to run lease cleanup thread in
-     * {@link com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager}
+     * {@link LeaseCleanupManager}
      * @return
      */
     public KinesisClientLibConfiguration withLeaseCleanupIntervalMillis(long leaseCleanupIntervalMillis) {
