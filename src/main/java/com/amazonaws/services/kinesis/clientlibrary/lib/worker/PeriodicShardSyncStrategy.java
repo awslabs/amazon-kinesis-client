@@ -6,9 +6,9 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
  */
 class PeriodicShardSyncStrategy implements ShardSyncStrategy {
 
-    private PeriodicShardSyncManager periodicShardSyncManager;
+    private IPeriodicShardSyncManager periodicShardSyncManager;
 
-    PeriodicShardSyncStrategy(PeriodicShardSyncManager periodicShardSyncManager) {
+    PeriodicShardSyncStrategy(IPeriodicShardSyncManager periodicShardSyncManager) {
         this.periodicShardSyncManager = periodicShardSyncManager;
     }
 

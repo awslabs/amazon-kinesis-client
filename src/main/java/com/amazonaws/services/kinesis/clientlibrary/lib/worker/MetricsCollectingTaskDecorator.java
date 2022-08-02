@@ -21,7 +21,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 /**
  * Decorates an ITask and reports metrics about its timing and success/failure.
  */
-class MetricsCollectingTaskDecorator implements ITask {
+public class MetricsCollectingTaskDecorator implements ITask {
 
     private final ITask other;
     private final IMetricsFactory factory;

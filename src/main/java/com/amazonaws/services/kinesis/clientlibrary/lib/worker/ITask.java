@@ -20,7 +20,7 @@ import java.util.concurrent.Callable;
  * Interface for shard processing tasks.
  * A task may execute an application callback (e.g. initialize, process, shutdown).
  */
-interface ITask extends Callable<TaskResult> {
+public interface ITask extends Callable<TaskResult> {
 
     /**
      * Perform task logic.

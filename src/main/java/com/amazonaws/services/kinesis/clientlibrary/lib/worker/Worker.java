@@ -156,7 +156,7 @@ public class Worker implements Runnable {
     // Periodic Shard Sync related fields
     private LeaderDecider leaderDecider;
     private ShardSyncStrategy shardSyncStrategy;
-    private PeriodicShardSyncManager leaderElectedPeriodicShardSyncManager;
+    private IPeriodicShardSyncManager leaderElectedPeriodicShardSyncManager;
 
     private final LeaseCleanupManager leaseCleanupManager;
 
@@ -533,7 +533,7 @@ public class Worker implements Runnable {
             IMetricsFactory metricsFactory, long taskBackoffTimeMillis, long failoverTimeMillis,
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
             Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool, WorkerStateChangeListener workerStateChangeListener,
-            LeaseCleanupValidator leaseCleanupValidator, LeaderDecider leaderDecider, PeriodicShardSyncManager periodicShardSyncManager) {
+            LeaseCleanupValidator leaseCleanupValidator, LeaderDecider leaderDecider, IPeriodicShardSyncManager periodicShardSyncManager) {
         this(applicationName, recordProcessorFactory, config, streamConfig, initialPositionInStream,
                 parentShardPollIntervalMillis, shardSyncIdleTimeMillis, cleanupLeasesUponShardCompletion, checkpoint,
                 leaseCoordinator, execService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis,
@@ -550,7 +550,7 @@ public class Worker implements Runnable {
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
             Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool,
             WorkerStateChangeListener workerStateChangeListener, ShardSyncer shardSyncer, LeaderDecider leaderDecider,
-            PeriodicShardSyncManager periodicShardSyncManager) {
+            IPeriodicShardSyncManager periodicShardSyncManager) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.config = config;
@@ -590,7 +590,7 @@ public class Worker implements Runnable {
      */
     private void createShardSyncStrategy(ShardSyncStrategyType strategyType,
                                          LeaderDecider leaderDecider,
-                                         PeriodicShardSyncManager periodicShardSyncManager) {
+                                         IPeriodicShardSyncManager periodicShardSyncManager) {
         switch (strategyType) {
             case PERIODIC:
                 this.leaderDecider = getOrCreateLeaderDecider(leaderDecider);
@@ -652,7 +652,7 @@ public class Worker implements Runnable {
     /**
      * @return the leaderElectedPeriodicShardSyncManager
      */
-    PeriodicShardSyncManager getPeriodicShardSyncManager() {
+    IPeriodicShardSyncManager getPeriodicShardSyncManager() {
         return leaderElectedPeriodicShardSyncManager;
     }
 
@@ -1224,8 +1224,8 @@ public class Worker implements Runnable {
      *            KinesisClientLibConfiguration
      * @return Returns metrics factory based on the config.
      */
-    private static IMetricsFactory getMetricsFactory(AmazonCloudWatch cloudWatchClient,
-            KinesisClientLibConfiguration config) {
+    public static IMetricsFactory getMetricsFactory(AmazonCloudWatch cloudWatchClient,
+                                                    KinesisClientLibConfiguration config) {
         IMetricsFactory metricsFactory;
         if (config.getMetricsLevel() == MetricsLevel.NONE) {
             metricsFactory = new NullMetricsFactory();
@@ -1278,13 +1278,13 @@ public class Worker implements Runnable {
 
     /** A non-null PeriodicShardSyncManager can only provided from unit tests. Any application code will create the
      * PeriodicShardSyncManager for the first time here. */
-    private PeriodicShardSyncManager getOrCreatePeriodicShardSyncManager(PeriodicShardSyncManager periodicShardSyncManager,
-                                                                         boolean isAuditorMode) {
+    private IPeriodicShardSyncManager getOrCreatePeriodicShardSyncManager(IPeriodicShardSyncManager periodicShardSyncManager,
+                                                                                boolean isAuditorMode) {
         if (periodicShardSyncManager != null) {
             return periodicShardSyncManager;
         }
 
-        return new PeriodicShardSyncManager(config.getWorkerIdentifier(),
+        return new KinesisPeriodicShardSyncManager(config.getWorkerIdentifier(),
                                             leaderDecider,
                                             new ShardSyncTask(streamConfig.getStreamProxy(),
                                                     leaseCoordinator.getLeaseManager(),
@@ -1353,6 +1353,8 @@ public class Worker implements Runnable {
         @Setter @Accessors(fluent = true)
         private IKinesisProxy kinesisProxy;
         @Setter @Accessors(fluent = true)
+        private IPeriodicShardSyncManager periodicShardSyncManager;
+        @Setter @Accessors(fluent = true)
         private WorkerStateChangeListener workerStateChangeListener;
         @Setter @Accessors(fluent = true)
         private LeaseCleanupValidator leaseCleanupValidator;
@@ -1420,6 +1422,12 @@ public class Worker implements Runnable {
             if (config == null) {
                 throw new IllegalArgumentException(
                         "Kinesis Client Library configuration needs to be provided to build Worker");
+            }
+            if (periodicShardSyncManager != null) {
+                if (leaseManager == null || shardSyncer == null || metricsFactory == null || leaderDecider == null) {
+
+                    throw new IllegalArgumentException("LeaseManager, ShardSyncer, MetricsFactory, and LeaderDecider must be provided if PeriodicShardSyncManager is provided");
+                }
             }
             if (recordProcessorFactory == null) {
                 throw new IllegalArgumentException("A Record Processor Factory needs to be provided to build Worker");
@@ -1546,7 +1554,7 @@ public class Worker implements Runnable {
                     workerStateChangeListener,
                     shardSyncer,
                     leaderDecider,
-                    null /* PeriodicShardSyncManager */);
+                    periodicShardSyncManager);
         }
 
         <R, T extends AwsClientBuilder<T, R>> R createClient(final T builder,
