@@ -41,7 +41,7 @@ import com.amazonaws.services.kinesis.model.Shard;
 /**
  * Task for fetching data records and invoking processRecords() on the record processor instance.
  */
-class ProcessTask implements ITask {
+public class ProcessTask implements ITask {
 
     private static final Log LOG = LogFactory.getLog(ProcessTask.class);
 
@@ -55,7 +55,7 @@ class ProcessTask implements ITask {
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
-    private final KinesisDataFetcher dataFetcher;
+    private final IDataFetcher dataFetcher;
     private final TaskType taskType = TaskType.PROCESS;
     private final StreamConfig streamConfig;
     private final long backoffTimeMillis;
@@ -81,7 +81,7 @@ class ProcessTask implements ITask {
      *            The retrieval strategy for fetching records from kinesis
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
+                       RecordProcessorCheckpointer recordProcessorCheckpointer, IDataFetcher dataFetcher,
                        long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
                        GetRecordsCache getRecordsCache) {
         this(shardInfo, streamConfig, recordProcessor, recordProcessorCheckpointer, dataFetcher, backoffTimeMillis,
@@ -107,7 +107,7 @@ class ProcessTask implements ITask {
      *            determines how throttling events should be reported in the log.
      */
     public ProcessTask(ShardInfo shardInfo, StreamConfig streamConfig, IRecordProcessor recordProcessor,
-                       RecordProcessorCheckpointer recordProcessorCheckpointer, KinesisDataFetcher dataFetcher,
+                       RecordProcessorCheckpointer recordProcessorCheckpointer, IDataFetcher dataFetcher,
                        long backoffTimeMillis, boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
                        ThrottlingReporter throttlingReporter, GetRecordsCache getRecordsCache) {
         super();

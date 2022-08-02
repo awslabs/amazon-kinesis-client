@@ -15,7 +15,7 @@
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
 /**
- * Top level container for all the possible states a {@link ShardConsumer} can be in. The logic for creation of tasks,
+ * Top level container for all the possible states a {@link KinesisShardConsumer} can be in. The logic for creation of tasks,
  * and state transitions is contained within the {@link ConsumerState} objects.
  *
  * <h2>State Diagram</h2>
@@ -64,12 +64,12 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
  *                                                          +-------------------+
  * </pre>
  */
-class ConsumerStates {
+public class KinesisConsumerStates {
 
     /**
      * Enumerates processing states when working on a shard.
      */
-    enum ShardConsumerState {
+    public enum ShardConsumerState {
         // @formatter:off
         WAITING_ON_PARENT_SHARDS(new BlockedOnParentState()),
         INITIALIZING(new InitializingState()),
@@ -96,7 +96,7 @@ class ConsumerStates {
      * do when a transition occurs.
      *
      */
-    interface ConsumerState {
+    public interface ConsumerState {
         /**
          * Creates a new task for this state using the passed in consumer to build the task. If there is no task
          * required for this state it may return a null value. {@link ConsumerState}'s are allowed to modify the
@@ -106,11 +106,11 @@ class ConsumerStates {
          *            the consumer to use build the task, or execute state.
          * @return a valid task for this state or null if there is no task required.
          */
-        ITask createTask(ShardConsumer consumer);
+        ITask createTask(KinesisShardConsumer consumer);
 
         /**
          * Provides the next state of the consumer upon success of the task return by
-         * {@link ConsumerState#createTask(ShardConsumer)}.
+         * {@link ConsumerState#createTask(KinesisShardConsumer)}.
          *
          * @return the next state that the consumer should transition to, this may be the same object as the current
          *         state.
@@ -129,7 +129,7 @@ class ConsumerStates {
         ConsumerState shutdownTransition(ShutdownReason shutdownReason);
 
         /**
-         * The type of task that {@link ConsumerState#createTask(ShardConsumer)} would return. This is always a valid state
+         * The type of task that {@link ConsumerState#createTask(KinesisShardConsumer)} would return. This is always a valid state
          * even if createTask would return a null value.
          *
          * @return the type of task that this state represents.
@@ -149,7 +149,7 @@ class ConsumerStates {
     }
 
     /**
-     * The initial state that any {@link ShardConsumer} should start in.
+     * The initial state that any {@link KinesisShardConsumer} should start in.
      */
     static final ConsumerState INITIAL_STATE = ShardConsumerState.WAITING_ON_PARENT_SHARDS.getConsumerState();
 
@@ -187,7 +187,7 @@ class ConsumerStates {
     static class BlockedOnParentState implements ConsumerState {
 
         @Override
-        public ITask createTask(ShardConsumer consumer) {
+        public ITask createTask(KinesisShardConsumer consumer) {
             return new BlockOnParentShardTask(consumer.getShardInfo(), consumer.getLeaseManager(),
                     consumer.getParentShardPollIntervalMillis());
         }
@@ -247,10 +247,10 @@ class ConsumerStates {
      * </dd>
      * </dl>
      */
-    static class InitializingState implements ConsumerState {
+    public static class InitializingState implements ConsumerState {
 
         @Override
-        public ITask createTask(ShardConsumer consumer) {
+        public ITask createTask(KinesisShardConsumer consumer) {
             return new InitializeTask(consumer.getShardInfo(),
                     consumer.getRecordProcessor(),
                     consumer.getCheckpoint(),
@@ -311,7 +311,7 @@ class ConsumerStates {
     static class ProcessingState implements ConsumerState {
 
         @Override
-        public ITask createTask(ShardConsumer consumer) {
+        public ITask createTask(KinesisShardConsumer consumer) {
             return new ProcessTask(consumer.getShardInfo(),
                     consumer.getStreamConfig(),
                     consumer.getRecordProcessor(),
@@ -358,10 +358,10 @@ class ConsumerStates {
      * <h2>Valid Transitions</h2>
      * <dl>
      * <dt>Success</dt>
-     * <dd>Success shouldn't normally be called since the {@link ShardConsumer} is marked for shutdown.</dd>
+     * <dd>Success shouldn't normally be called since the {@link KinesisShardConsumer} is marked for shutdown.</dd>
      * <dt>Shutdown</dt>
      * <dd>At this point records are being retrieved, and processed. An explicit shutdown will allow the record
-     * processor one last chance to checkpoint, and then the {@link ShardConsumer} will be held in an idle state.
+     * processor one last chance to checkpoint, and then the {@link KinesisShardConsumer} will be held in an idle state.
      * <dl>
      * <dt>{@link ShutdownReason#REQUESTED}</dt>
      * <dd>Remains in the {@link ShardConsumerState#SHUTDOWN_REQUESTED}, but the state implementation changes to
@@ -377,7 +377,7 @@ class ConsumerStates {
     static class ShutdownNotificationState implements ConsumerState {
 
         @Override
-        public ITask createTask(ShardConsumer consumer) {
+        public ITask createTask(KinesisShardConsumer consumer) {
             return new ShutdownNotificationTask(consumer.getRecordProcessor(),
                     consumer.getRecordProcessorCheckpointer(),
                     consumer.getShutdownNotification(),
@@ -414,24 +414,24 @@ class ConsumerStates {
     }
 
     /**
-     * Once the {@link ShutdownNotificationState} has been completed the {@link ShardConsumer} must not re-enter any of the
-     * processing states. This state idles the {@link ShardConsumer} until the worker triggers the final shutdown state.
+     * Once the {@link ShutdownNotificationState} has been completed the {@link KinesisShardConsumer} must not re-enter any of the
+     * processing states. This state idles the {@link KinesisShardConsumer} until the worker triggers the final shutdown state.
      *
      * <h2>Valid Transitions</h2>
      * <dl>
      * <dt>Success</dt>
      * <dd>
      * <p>
-     * Success shouldn't normally be called since the {@link ShardConsumer} is marked for shutdown.
+     * Success shouldn't normally be called since the {@link KinesisShardConsumer} is marked for shutdown.
      * </p>
      * <p>
      * Remains in the {@link ShutdownNotificationCompletionState}
      * </p>
      * </dd>
      * <dt>Shutdown</dt>
-     * <dd>At this point the {@link ShardConsumer} has notified the record processor of the impending shutdown, and is
+     * <dd>At this point the {@link KinesisShardConsumer} has notified the record processor of the impending shutdown, and is
      * waiting that notification. While waiting for the notification no further processing should occur on the
-     * {@link ShardConsumer}.
+     * {@link KinesisShardConsumer}.
      * <dl>
      * <dt>{@link ShutdownReason#REQUESTED}</dt>
      * <dd>Remains in the {@link ShardConsumerState#SHUTDOWN_REQUESTED}, and the state implementation remains
@@ -447,7 +447,7 @@ class ConsumerStates {
     static class ShutdownNotificationCompletionState implements ConsumerState {
 
         @Override
-        public ITask createTask(ShardConsumer consumer) {
+        public ITask createTask(KinesisShardConsumer consumer) {
             return null;
         }
 
@@ -481,14 +481,14 @@ class ConsumerStates {
     }
 
     /**
-     * This state is entered if the {@link ShardConsumer} loses its lease, or reaches the end of the shard.
+     * This state is entered if the {@link KinesisShardConsumer} loses its lease, or reaches the end of the shard.
      *
      * <h2>Valid Transitions</h2>
      * <dl>
      * <dt>Success</dt>
      * <dd>
      * <p>
-     * Success shouldn't normally be called since the {@link ShardConsumer} is marked for shutdown.
+     * Success shouldn't normally be called since the {@link KinesisShardConsumer} is marked for shutdown.
      * </p>
      * <p>
      * Transitions to the {@link ShutdownCompleteState}
@@ -497,7 +497,7 @@ class ConsumerStates {
      * <dt>Shutdown</dt>
      * <dd>At this point the record processor has processed the final shutdown indication, and depending on the shutdown
      * reason taken the correct course of action. From this point on there should be no more interactions with the
-     * record processor or {@link ShardConsumer}.
+     * record processor or {@link KinesisShardConsumer}.
      * <dl>
      * <dt>{@link ShutdownReason#REQUESTED}</dt>
      * <dd>
@@ -519,8 +519,8 @@ class ConsumerStates {
     static class ShuttingDownState implements ConsumerState {
 
         @Override
-        public ITask createTask(ShardConsumer consumer) {
-            return new ShutdownTask(consumer.getShardInfo(),
+        public ITask createTask(KinesisShardConsumer consumer) {
+            return new KinesisShutdownTask(consumer.getShardInfo(),
                     consumer.getRecordProcessor(),
                     consumer.getRecordProcessorCheckpointer(),
                     consumer.getShutdownReason(),
@@ -562,21 +562,21 @@ class ConsumerStates {
     }
 
     /**
-     * This is the final state for the {@link ShardConsumer}. This occurs once all shutdown activities are completed.
+     * This is the final state for the {@link KinesisShardConsumer}. This occurs once all shutdown activities are completed.
      *
      * <h2>Valid Transitions</h2>
      * <dl>
      * <dt>Success</dt>
      * <dd>
      * <p>
-     * Success shouldn't normally be called since the {@link ShardConsumer} is marked for shutdown.
+     * Success shouldn't normally be called since the {@link KinesisShardConsumer} is marked for shutdown.
      * </p>
      * <p>
      * Remains in the {@link ShutdownCompleteState}
      * </p>
      * </dd>
      * <dt>Shutdown</dt>
-     * <dd>At this point the all shutdown activites are completed, and the {@link ShardConsumer} should not take any
+     * <dd>At this point the all shutdown activites are completed, and the {@link KinesisShardConsumer} should not take any
      * further actions.
      * <dl>
      * <dt>{@link ShutdownReason#REQUESTED}</dt>
@@ -599,7 +599,7 @@ class ConsumerStates {
     static class ShutdownCompleteState implements ConsumerState {
 
         @Override
-        public ITask createTask(ShardConsumer consumer) {
+        public ITask createTask(KinesisShardConsumer consumer) {
             if (consumer.getShutdownNotification() != null) {
                 consumer.getShutdownNotification().shutdownComplete();
             }
