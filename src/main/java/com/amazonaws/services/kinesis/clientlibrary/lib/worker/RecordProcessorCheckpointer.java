@@ -37,7 +37,7 @@ import com.amazonaws.services.kinesis.model.Record;
  * The Amazon Kinesis Client Library will instantiate an object and provide a reference to the application
  * RecordProcessor instance. Amazon Kinesis Client Library will create one instance per shard assignment.
  */
-class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
+public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
 
     private static final Log LOG = LogFactory.getLog(RecordProcessorCheckpointer.class);
 
@@ -62,10 +62,10 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
      * @param checkpoint Used to checkpoint progress of a RecordProcessor
      * @param validator Used for validating sequence numbers
      */
-    RecordProcessorCheckpointer(ShardInfo shardInfo,
-            ICheckpoint checkpoint,
-            SequenceNumberValidator validator,
-            IMetricsFactory metricsFactory) {
+    public RecordProcessorCheckpointer(ShardInfo shardInfo,
+                                       ICheckpoint checkpoint,
+                                       SequenceNumberValidator validator,
+                                       IMetricsFactory metricsFactory) {
         this.shardInfo = shardInfo;
         this.checkpoint = checkpoint;
         this.sequenceNumberValidator = validator;
@@ -231,7 +231,7 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
     /**
      * @return the lastCheckpointValue
      */
-    ExtendedSequenceNumber getLastCheckpointValue() {
+    public ExtendedSequenceNumber getLastCheckpointValue() {
         return lastCheckpointValue;
     }
 
@@ -244,14 +244,14 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
      *
      * @return the largest permitted checkpoint
      */
-    synchronized ExtendedSequenceNumber getLargestPermittedCheckpointValue() {
+    public synchronized ExtendedSequenceNumber getLargestPermittedCheckpointValue() {
         return largestPermittedCheckpointValue;
     }
 
     /**
      * @param largestPermittedCheckpointValue the largest permitted checkpoint
      */
-    synchronized void setLargestPermittedCheckpointValue(ExtendedSequenceNumber largestPermittedCheckpointValue) {
+    public synchronized void setLargestPermittedCheckpointValue(ExtendedSequenceNumber largestPermittedCheckpointValue) {
         this.largestPermittedCheckpointValue = largestPermittedCheckpointValue;
     }
 
@@ -262,7 +262,7 @@ class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer {
      *
      * @param extendedSequenceNumber
      */
-    synchronized void setSequenceNumberAtShardEnd(ExtendedSequenceNumber extendedSequenceNumber) {
+    public synchronized void setSequenceNumberAtShardEnd(ExtendedSequenceNumber extendedSequenceNumber) {
         this.sequenceNumberAtShardEnd = extendedSequenceNumber;
     }
 
