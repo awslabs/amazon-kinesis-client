@@ -409,7 +409,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         final String lastBatchSequenceNumber;
         final String shardIterator;
         final BatchUniqueIdentifier batchUniqueIdentifier;
-        @Accessors() @Setter(AccessLevel.NONE) boolean dispatched = false;
+        @Accessors(fluent = false) @Setter(AccessLevel.NONE) boolean dispatched = false;
 
         PrefetchRecordsRetrieved prepareForPublish() {
             return new PrefetchRecordsRetrieved(processRecordsInput.toBuilder().cacheExitTime(Instant.now()).build(),
