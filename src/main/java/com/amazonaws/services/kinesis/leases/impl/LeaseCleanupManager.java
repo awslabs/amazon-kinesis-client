@@ -114,7 +114,7 @@ public class LeaseCleanupManager {
             completedLeaseStopwatch.start();
             garbageLeaseStopwatch.start();
             deletionThreadPool.scheduleAtFixedRate(new LeaseCleanupThread(), INITIAL_DELAY, leaseCleanupIntervalMillis,
-                    TimeUnit.MILLISECONDS);
+                                                   TimeUnit.MILLISECONDS);
             isRunning = true;
         } else {
             LOG.info("Lease cleanup thread already running, no need to start.");
@@ -241,7 +241,7 @@ public class LeaseCleanupManager {
             if (!cleanedUpCompletedLease && !alreadyCheckedForGarbageCollection && timeToCheckForGarbageShard) {
                 // throws ResourceNotFoundException
                 wereChildShardsPresent = !CollectionUtils
-                        .isNullOrEmpty(getChildShardsFromService(shardInfo));
+                            .isNullOrEmpty(getChildShardsFromService(shardInfo));
             }
         } catch (ResourceNotFoundException e) {
             wasResourceNotFound = true;
@@ -296,7 +296,7 @@ public class LeaseCleanupManager {
 
         for (String childShardLeaseKey : childShardLeaseKeys) {
             final KinesisClientLease childShardLease = Optional.ofNullable(
-                            leaseManager.getLease(childShardLeaseKey))
+                    leaseManager.getLease(childShardLeaseKey))
                     .orElseThrow(() -> new IllegalStateException(
                             "Child lease " + childShardLeaseKey + " for completed shard not found in "
                                     + "lease table - not cleaning up lease " + lease));

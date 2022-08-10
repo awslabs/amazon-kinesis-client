@@ -46,8 +46,8 @@ public class BlockOnParentShardTask implements ITask {
      * @param parentShardPollIntervalMillis Sleep time if the parent shard has not completed processing
      */
     public BlockOnParentShardTask(ShardInfo shardInfo,
-                                  ILeaseManager<KinesisClientLease> leaseManager,
-                                  long parentShardPollIntervalMillis) {
+            ILeaseManager<KinesisClientLease> leaseManager,
+            long parentShardPollIntervalMillis) {
         this.shardInfo = shardInfo;
         this.leaseManager = leaseManager;
         this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;

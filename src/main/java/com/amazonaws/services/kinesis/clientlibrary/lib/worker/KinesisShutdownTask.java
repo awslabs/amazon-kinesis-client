@@ -72,18 +72,18 @@ public class KinesisShutdownTask implements ITask {
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     KinesisShutdownTask(ShardInfo shardInfo,
-                        IRecordProcessor recordProcessor,
-                        RecordProcessorCheckpointer recordProcessorCheckpointer,
-                        ShutdownReason reason,
-                        IKinesisProxy kinesisProxy,
-                        InitialPositionInStreamExtended initialPositionInStream,
-                        boolean cleanupLeasesOfCompletedShards,
-                        boolean ignoreUnexpectedChildShards,
-                        KinesisClientLibLeaseCoordinator leaseCoordinator,
-                        long backoffTimeMillis,
-                        GetRecordsCache getRecordsCache, ShardSyncer shardSyncer,
-                        ShardSyncStrategy shardSyncStrategy, List<ChildShard> childShards,
-                        LeaseCleanupManager leaseCleanupManager) {
+            IRecordProcessor recordProcessor,
+            RecordProcessorCheckpointer recordProcessorCheckpointer,
+            ShutdownReason reason,
+            IKinesisProxy kinesisProxy,
+            InitialPositionInStreamExtended initialPositionInStream,
+            boolean cleanupLeasesOfCompletedShards,
+            boolean ignoreUnexpectedChildShards,
+            KinesisClientLibLeaseCoordinator leaseCoordinator,
+            long backoffTimeMillis,
+            GetRecordsCache getRecordsCache, ShardSyncer shardSyncer,
+            ShardSyncStrategy shardSyncStrategy, List<ChildShard> childShards,
+            LeaseCleanupManager leaseCleanupManager) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.recordProcessorCheckpointer = recordProcessorCheckpointer;

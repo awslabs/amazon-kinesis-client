@@ -38,11 +38,11 @@ public class StreamConfig {
      * @param initialPositionInStream Initial position in stream
      */
     StreamConfig(IKinesisProxy proxy,
-                        int maxRecords,
-                        long idleTimeInMilliseconds,
-                        boolean callProcessRecordsEvenForEmptyRecordList,
-                        boolean validateSequenceNumberBeforeCheckpointing,
-                        InitialPositionInStreamExtended initialPositionInStream) {
+            int maxRecords,
+            long idleTimeInMilliseconds,
+            boolean callProcessRecordsEvenForEmptyRecordList,
+            boolean validateSequenceNumberBeforeCheckpointing,
+            InitialPositionInStreamExtended initialPositionInStream) {
         this.streamProxy = proxy;
         this.maxRecords = maxRecords;
         this.idleTimeInMilliseconds = idleTimeInMilliseconds;

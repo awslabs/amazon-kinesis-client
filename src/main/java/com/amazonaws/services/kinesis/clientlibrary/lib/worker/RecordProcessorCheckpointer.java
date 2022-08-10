@@ -63,9 +63,9 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
      * @param validator Used for validating sequence numbers
      */
     public RecordProcessorCheckpointer(ShardInfo shardInfo,
-                                       ICheckpoint checkpoint,
-                                       SequenceNumberValidator validator,
-                                       IMetricsFactory metricsFactory) {
+            ICheckpoint checkpoint,
+            SequenceNumberValidator validator,
+            IMetricsFactory metricsFactory) {
         this.shardInfo = shardInfo;
         this.checkpoint = checkpoint;
         this.sequenceNumberValidator = validator;

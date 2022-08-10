@@ -50,13 +50,13 @@ public class InitializeTask implements ITask {
      * Constructor.
      */
     public InitializeTask(ShardInfo shardInfo,
-                          IRecordProcessor recordProcessor,
-                          ICheckpoint checkpoint,
-                          RecordProcessorCheckpointer recordProcessorCheckpointer,
-                          IDataFetcher dataFetcher,
-                          long backoffTimeMillis,
-                          StreamConfig streamConfig,
-                          GetRecordsCache getRecordsCache) {
+                   IRecordProcessor recordProcessor,
+                   ICheckpoint checkpoint,
+                   RecordProcessorCheckpointer recordProcessorCheckpointer,
+                   IDataFetcher dataFetcher,
+                   long backoffTimeMillis,
+                   StreamConfig streamConfig,
+                   GetRecordsCache getRecordsCache) {
         this.shardInfo = shardInfo;
         this.recordProcessor = recordProcessor;
         this.checkpoint = checkpoint;

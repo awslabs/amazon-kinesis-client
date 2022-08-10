@@ -98,9 +98,9 @@ class PeriodicShardSyncManager {
                              boolean isAuditorMode,
                              long leasesRecoveryAuditorExecutionFrequencyMillis,
                              int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
-        this(workerId, leaderDecider, shardSyncTask, Executors.newSingleThreadScheduledExecutor(), metricsFactory,
-                leaseManager, kinesisProxy, isAuditorMode, leasesRecoveryAuditorExecutionFrequencyMillis,
-                leasesRecoveryAuditorInconsistencyConfidenceThreshold);
+       this(workerId, leaderDecider, shardSyncTask, Executors.newSingleThreadScheduledExecutor(), metricsFactory,
+            leaseManager, kinesisProxy, isAuditorMode, leasesRecoveryAuditorExecutionFrequencyMillis,
+            leasesRecoveryAuditorInconsistencyConfidenceThreshold);
     }
 
     PeriodicShardSyncManager(String workerId,
@@ -231,7 +231,7 @@ class PeriodicShardSyncManager {
 
             return new ShardSyncResponse(hasHoleWithHighConfidence, true,
                     "Detected the same hole for " + hashRangeHoleTracker.getNumConsecutiveHoles() + " times. " +
-                            "Will initiate shard sync after reaching threshold: " + leasesRecoveryAuditorInconsistencyConfidenceThreshold);
+                    "Will initiate shard sync after reaching threshold: " + leasesRecoveryAuditorInconsistencyConfidenceThreshold);
         } else {
             // If hole is not present, clear any previous hole tracking and return false.
             hashRangeHoleTracker.reset();
@@ -296,7 +296,7 @@ class PeriodicShardSyncManager {
         final KinesisClientLease maxHashKeyLease =
                 sortedLeasesWithHashKeyRanges.get(sortedLeasesWithHashKeyRanges.size() - 1);
         if (!minHashKeyLease.getHashKeyRange().startingHashKey().equals(MIN_HASH_KEY) ||
-                !maxHashKeyLease.getHashKeyRange().endingHashKey().equals(MAX_HASH_KEY)) {
+            !maxHashKeyLease.getHashKeyRange().endingHashKey().equals(MAX_HASH_KEY)) {
             LOG.error("Incomplete hash range found between " + minHashKeyLease + " and " + maxHashKeyLease);
             return Optional.of(new HashRangeHole(minHashKeyLease.getHashKeyRange(), maxHashKeyLease.getHashKeyRange()));
         }
