@@ -57,12 +57,12 @@ public class ShardSyncTask implements ITask {
      * @param latestShards latest snapshot of shards to reuse
      */
     public ShardSyncTask(IKinesisProxy kinesisProxy,
-                         ILeaseManager<KinesisClientLease> leaseManager,
-                         InitialPositionInStreamExtended initialPositionInStream,
-                         boolean cleanupLeasesUponShardCompletion,
-                         boolean ignoreUnexpectedChildShards,
-                         long shardSyncTaskIdleTimeMillis,
-                         ShardSyncer shardSyncer, List<Shard> latestShards) {
+                   ILeaseManager<KinesisClientLease> leaseManager,
+                   InitialPositionInStreamExtended initialPositionInStream,
+                   boolean cleanupLeasesUponShardCompletion,
+                   boolean ignoreUnexpectedChildShards,
+                   long shardSyncTaskIdleTimeMillis,
+                   ShardSyncer shardSyncer, List<Shard> latestShards) {
         this.latestShards = latestShards;
         this.kinesisProxy = kinesisProxy;
         this.leaseManager = leaseManager;

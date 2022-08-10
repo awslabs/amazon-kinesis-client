@@ -1225,7 +1225,7 @@ public class Worker implements Runnable {
      * @return Returns metrics factory based on the config.
      */
     public static IMetricsFactory getMetricsFactory(AmazonCloudWatch cloudWatchClient,
-                                                    KinesisClientLibConfiguration config) {
+           KinesisClientLibConfiguration config) {
         IMetricsFactory metricsFactory;
         if (config.getMetricsLevel() == MetricsLevel.NONE) {
             metricsFactory = new NullMetricsFactory();
@@ -1279,7 +1279,7 @@ public class Worker implements Runnable {
     /** A non-null PeriodicShardSyncManager can only provided from unit tests. Any application code will create the
      * PeriodicShardSyncManager for the first time here. */
     private IPeriodicShardSyncManager getOrCreatePeriodicShardSyncManager(IPeriodicShardSyncManager periodicShardSyncManager,
-                                                                                boolean isAuditorMode) {
+                                                                          boolean isAuditorMode) {
         if (periodicShardSyncManager != null) {
             return periodicShardSyncManager;
         }
