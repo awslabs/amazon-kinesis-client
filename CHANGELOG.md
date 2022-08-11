@@ -1,5 +1,8 @@
 # Changelog
 
+### Release 2.4.2 (August 10, 2022)
+* [#972](https://github.com/awslabs/amazon-kinesis-client/pull/972) Upgrade Lombok to version 1.18.24
+
 ### Latest Release 2.4.1 (March 24, 2022)
 [Milestone#68](https://github.com/awslabs/amazon-kinesis-client/milestone/68)
 * [#916](https://github.com/awslabs/amazon-kinesis-client/pull/916) Upgrade to rxjava3
