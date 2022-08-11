@@ -19,7 +19,7 @@ import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 /**
  * Used to capture stream configuration and pass it along.
  */
-class StreamConfig {
+public class StreamConfig {
 
     private final IKinesisProxy streamProxy;
     private final int maxRecords;
@@ -54,7 +54,7 @@ class StreamConfig {
     /**
      * @return the streamProxy
      */
-    IKinesisProxy getStreamProxy() {
+    public IKinesisProxy getStreamProxy() {
         return streamProxy;
     }
 
@@ -82,14 +82,14 @@ class StreamConfig {
     /**
      * @return the initialPositionInStream
      */
-    InitialPositionInStreamExtended getInitialPositionInStream() {
+    public InitialPositionInStreamExtended getInitialPositionInStream() {
         return initialPositionInStream;
     }
 
     /**
      * @return validateSequenceNumberBeforeCheckpointing
      */
-    boolean shouldValidateSequenceNumberBeforeCheckpointing() {
+    public boolean shouldValidateSequenceNumberBeforeCheckpointing() {
         return validateSequenceNumberBeforeCheckpointing;
     }
 }

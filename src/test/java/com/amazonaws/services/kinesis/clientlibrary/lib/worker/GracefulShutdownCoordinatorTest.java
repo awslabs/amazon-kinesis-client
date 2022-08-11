@@ -49,7 +49,7 @@ public class GracefulShutdownCoordinatorTest {
     @Mock
     private Callable<GracefulShutdownContext> contextCallable;
     @Mock
-    private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoConsumerMap;
+    private ConcurrentMap<ShardInfo, IShardConsumer> shardInfoConsumerMap;
 
     @Test
     public void testAllShutdownCompletedAlready() throws Exception {

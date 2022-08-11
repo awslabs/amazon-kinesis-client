@@ -51,7 +51,7 @@ public class SequenceNumberValidator {
      * @param validateWithGetIterator Whether to attempt to get an iterator for this shard id and the sequence numbers
      *        being validated
      */
-    SequenceNumberValidator(IKinesisProxy proxy, String shardId, boolean validateWithGetIterator) {
+    public SequenceNumberValidator(IKinesisProxy proxy, String shardId, boolean validateWithGetIterator) {
         this.proxy = proxy;
         this.shardId = shardId;
         this.validateWithGetIterator = validateWithGetIterator;

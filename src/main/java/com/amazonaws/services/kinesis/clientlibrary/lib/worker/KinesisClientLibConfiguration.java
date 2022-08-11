@@ -61,7 +61,7 @@ public class KinesisClientLibConfiguration {
     public static final int DEFAULT_MAX_RECORDS = 10000;
 
     /**
-     * The default value for how long the {@link ShardConsumer} should sleep if no records are returned from the call to
+     * The default value for how long the {@link KinesisShardConsumer} should sleep if no records are returned from the call to
      * {@link com.amazonaws.services.kinesis.AmazonKinesis#getRecords(com.amazonaws.services.kinesis.model.GetRecordsRequest)}.
      */
     public static final long DEFAULT_IDLETIME_BETWEEN_READS_MILLIS = 1000L;
@@ -91,7 +91,7 @@ public class KinesisClientLibConfiguration {
     public static final boolean DEFAULT_CLEANUP_LEASES_UPON_SHARDS_COMPLETION = true;
 
     /**
-     * Interval to run lease cleanup thread in {@link LeaseCleanupManager}.
+     * Interval to run lease cleanup thread in {@link com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager}.
      */
     private static final long DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(1).toMillis();
 
@@ -1030,7 +1030,7 @@ public class KinesisClientLibConfiguration {
      * Keeping it protected to forbid outside callers from depending on this internal object.
      * @return The initialPositionInStreamExtended object.
      */
-    protected InitialPositionInStreamExtended getInitialPositionInStreamExtended() {
+    public InitialPositionInStreamExtended getInitialPositionInStreamExtended() {
         return initialPositionInStreamExtended;
     }
 

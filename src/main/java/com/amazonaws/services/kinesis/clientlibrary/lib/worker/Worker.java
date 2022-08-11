@@ -137,7 +137,7 @@ public class Worker implements Runnable {
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
-    private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap = new ConcurrentHashMap<ShardInfo, ShardConsumer>();
+    private ConcurrentMap<ShardInfo, IShardConsumer> shardInfoShardConsumerMap = new ConcurrentHashMap<ShardInfo, IShardConsumer>();
     private final boolean cleanupLeasesUponShardCompletion;
 
     private final boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
@@ -159,6 +159,9 @@ public class Worker implements Runnable {
     private PeriodicShardSyncManager leaderElectedPeriodicShardSyncManager;
 
     private final LeaseCleanupManager leaseCleanupManager;
+
+    // Shard Consumer Factory
+    private IShardConsumerFactory shardConsumerFactory;
 
     /**
      * Constructor.
@@ -539,7 +542,7 @@ public class Worker implements Runnable {
                 leaseCoordinator, execService, metricsFactory, taskBackoffTimeMillis, failoverTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist, shardPrioritization, retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool, workerStateChangeListener, new KinesisShardSyncer(leaseCleanupValidator),
-                leaderDecider, periodicShardSyncManager);
+                leaderDecider, periodicShardSyncManager, null /*Ishardconsumer*/);
     }
 
     Worker(String applicationName, IRecordProcessorFactory recordProcessorFactory, KinesisClientLibConfiguration config,
@@ -550,7 +553,7 @@ public class Worker implements Runnable {
             boolean skipShardSyncAtWorkerInitializationIfLeasesExist, ShardPrioritization shardPrioritization,
             Optional<Integer> retryGetRecordsInSeconds, Optional<Integer> maxGetRecordsThreadPool,
             WorkerStateChangeListener workerStateChangeListener, ShardSyncer shardSyncer, LeaderDecider leaderDecider,
-            PeriodicShardSyncManager periodicShardSyncManager) {
+            PeriodicShardSyncManager periodicShardSyncManager, IShardConsumerFactory shardConsumerFactory) {
         this.applicationName = applicationName;
         this.recordProcessorFactory = recordProcessorFactory;
         this.config = config;
@@ -580,6 +583,7 @@ public class Worker implements Runnable {
                 Executors.newSingleThreadScheduledExecutor(), metricsFactory, cleanupLeasesUponShardCompletion,
                 config.leaseCleanupIntervalMillis(), config.completedLeaseCleanupThresholdMillis(),
                 config.garbageLeaseCleanupThresholdMillis(), config.getMaxRecords());
+        this.shardConsumerFactory = shardConsumerFactory;
     }
 
     /**
@@ -687,7 +691,7 @@ public class Worker implements Runnable {
             boolean foundCompletedShard = false;
             Set<ShardInfo> assignedShards = new HashSet<>();
             for (ShardInfo shardInfo : getShardInfoForAssignments()) {
-                ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
+                IShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo, recordProcessorFactory);
                 if (shardConsumer.isShutdown() && shardConsumer.getShutdownReason().equals(ShutdownReason.TERMINATE)) {
                     foundCompletedShard = true;
                 } else {
@@ -983,9 +987,9 @@ public class Worker implements Runnable {
                 ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(leaseCoordinator,
                         lease, notificationCompleteLatch, shutdownCompleteLatch);
                 ShardInfo shardInfo = KinesisClientLibLeaseCoordinator.convertLeaseToAssignment(lease);
-                ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
+                IShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
 
-                if (consumer == null || ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE.equals(consumer.getCurrentState())) {
+                if (consumer == null || KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE.equals(consumer.getCurrentState())) {
                     //
                     // CASE1: There is a race condition between retrieving the current assignments, and creating the
                     // notification. If the a lease is lost in between these two points, we explicitly decrement the
@@ -1007,7 +1011,7 @@ public class Worker implements Runnable {
         return shutdownComplete;
     }
 
-    ConcurrentMap<ShardInfo, ShardConsumer> getShardInfoShardConsumerMap() {
+    ConcurrentMap<ShardInfo, IShardConsumer> getShardInfoShardConsumerMap() {
         return shardInfoShardConsumerMap;
     }
 
@@ -1107,8 +1111,8 @@ public class Worker implements Runnable {
      *            RecordProcessor factory
      * @return ShardConsumer for the shard
      */
-    ShardConsumer createOrGetShardConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
-        ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
+    IShardConsumer createOrGetShardConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
+        IShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
         // Instantiate a new consumer if we don't have one, or the one we
         // had was from an earlier
         // lease instance (and was shutdown). Don't need to create another
@@ -1123,7 +1127,7 @@ public class Worker implements Runnable {
         return consumer;
     }
 
-    protected ShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
+    protected IShardConsumer buildConsumer(ShardInfo shardInfo, IRecordProcessorFactory processorFactory) {
         final IRecordProcessor recordProcessor = processorFactory.createProcessor();
         final RecordProcessorCheckpointer recordProcessorCheckpointer = new RecordProcessorCheckpointer(
                 shardInfo,
@@ -1134,7 +1138,12 @@ public class Worker implements Runnable {
                         streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
                 metricsFactory);
 
-        return new ShardConsumer(shardInfo,
+        if(shardConsumerFactory == null){
+
+            shardConsumerFactory = new KinesisShardConsumerFactory();
+        }
+
+        return shardConsumerFactory.createShardConsumer(shardInfo,
                 streamConfig,
                 checkpointTracker,
                 recordProcessor,
@@ -1146,7 +1155,6 @@ public class Worker implements Runnable {
                 metricsFactory,
                 taskBackoffTimeMillis,
                 skipShardSyncAtWorkerInitializationIfLeasesExist,
-                new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo),
                 retryGetRecordsInSeconds,
                 maxGetRecordsThreadPool,
                 config, shardSyncer, shardSyncStrategy,
@@ -1224,8 +1232,8 @@ public class Worker implements Runnable {
      *            KinesisClientLibConfiguration
      * @return Returns metrics factory based on the config.
      */
-    private static IMetricsFactory getMetricsFactory(AmazonCloudWatch cloudWatchClient,
-            KinesisClientLibConfiguration config) {
+    public static IMetricsFactory getMetricsFactory(AmazonCloudWatch cloudWatchClient,
+                     KinesisClientLibConfiguration config) {
         IMetricsFactory metricsFactory;
         if (config.getMetricsLevel() == MetricsLevel.NONE) {
             metricsFactory = new NullMetricsFactory();
@@ -1353,6 +1361,8 @@ public class Worker implements Runnable {
         @Setter @Accessors(fluent = true)
         private IKinesisProxy kinesisProxy;
         @Setter @Accessors(fluent = true)
+        private IShardConsumerFactory shardConsumerFactory;
+        @Setter @Accessors(fluent = true)
         private WorkerStateChangeListener workerStateChangeListener;
         @Setter @Accessors(fluent = true)
         private LeaseCleanupValidator leaseCleanupValidator;
@@ -1421,6 +1431,10 @@ public class Worker implements Runnable {
                 throw new IllegalArgumentException(
                         "Kinesis Client Library configuration needs to be provided to build Worker");
             }
+            if(shardConsumerFactory == null){
+                shardConsumerFactory = new KinesisShardConsumerFactory();
+            }
+
             if (recordProcessorFactory == null) {
                 throw new IllegalArgumentException("A Record Processor Factory needs to be provided to build Worker");
             }
@@ -1503,7 +1517,7 @@ public class Worker implements Runnable {
             }
 
             // We expect users to either inject both LeaseRenewer and the corresponding thread-pool, or neither of them (DEFAULT).
-           if (leaseRenewer == null) {
+            if (leaseRenewer == null) {
                 ExecutorService leaseRenewerThreadPool = LeaseCoordinator.getDefaultLeaseRenewalExecutorService(config.getMaxLeaseRenewalThreads());
                 leaseRenewer = new LeaseRenewer<>(leaseManager, config.getWorkerIdentifier(), config.getFailoverTimeMillis(), leaseRenewerThreadPool);
             }
@@ -1512,7 +1526,6 @@ public class Worker implements Runnable {
                 leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseManager,
                     Executors.newSingleThreadScheduledExecutor(), PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
             }
-
             return new Worker(config.getApplicationName(),
                     recordProcessorFactory,
                     config,
@@ -1546,7 +1559,8 @@ public class Worker implements Runnable {
                     workerStateChangeListener,
                     shardSyncer,
                     leaderDecider,
-                    null /* PeriodicShardSyncManager */);
+                    null /*PeriodicShardSyncManager*/,
+                    shardConsumerFactory);
         }
 
         <R, T extends AwsClientBuilder<T, R>> R createClient(final T builder,
