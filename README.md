@@ -50,7 +50,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.4.2</version>
+      <version>2.4.3</version>
   </dependency>
   ```
 
@@ -65,6 +65,9 @@ The recommended way to use the KCL for Java is to consume it from Maven.
   ```
 
 ## Release Notes
+
+### Release 2.4.3 (September 6, 2022)
+* [#983](https://github.com/awslabs/amazon-kinesis-client/pull/983)  Upgrade dependencies
 
 ### Release 2.4.2 (August 10, 2022)
 * [#972](https://github.com/awslabs/amazon-kinesis-client/pull/972) Upgrade Lombok to version 1.18.24
