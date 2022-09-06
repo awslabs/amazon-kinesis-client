@@ -22,7 +22,7 @@
   <parent>
     <groupId>software.amazon.kinesis</groupId>
     <artifactId>amazon-kinesis-client-pom</artifactId>
-    <version>2.4.2</version>
+    <version>2.4.3-SNAPSHOT</version>
   </parent>
 
   <artifactId>amazon-kinesis-client</artifactId>
@@ -50,8 +50,8 @@
     <sqlite4java.version>1.0.392</sqlite4java.version>
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
-    <slf4j.version>1.7.32</slf4j.version>
-    <gsr.version>1.1.9</gsr.version>
+    <slf4j.version>2.0.0</slf4j.version>
+    <gsr.version>1.1.13</gsr.version>
   </properties>
 
   <dependencies>
@@ -93,7 +93,7 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
-      <version>3.19.2</version>
+      <version>3.21.5</version>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>
