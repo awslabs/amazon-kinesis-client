@@ -1,7 +1,21 @@
 # Changelog
 
 ### Release 2.4.3 (September 6, 2022)
-* [#983](https://github.com/awslabs/amazon-kinesis-client/pull/983)  Upgrade dependencies
+* [#980](https://github.com/awslabs/amazon-kinesis-client/pull/980) logback-classic: 1.2.9 -> 1.4.0
+* [#983](https://github.com/awslabs/amazon-kinesis-client/pull/983)
+  * protobuf-java: 3.19.2 -> 3.21.5
+  * slf4j.version: 1.7.32 -> 2.0.0
+  * schema-registry-serde: 1.1.9 -> 1.1.13
+* [#984](https://github.com/awslabs/amazon-kinesis-client/pull/984) awssdk.version from 2.17.108 to 2.17.267
+* [#987](https://github.com/awslabs/amazon-kinesis-client/pull/987) guava: 31.0.1-jre -> 31.1-jre
+* [#988](https://github.com/awslabs/amazon-kinesis-client/pull/988) jcommander: 1.81 to 1.82
+* [#990](https://github.com/awslabs/amazon-kinesis-client/pull/990)  Upgrade dependencies
+  * aws-java-sdk.version: 1.12.130 -> 1.12.296
+  * lombok: 1.18.22 -> 1.18.24
+  * rxjava: 3.1.3 -> 3.1.5
+  * maven-resources-plugin: 2.6 -> 3.3.0
+  * logback-classic: 1.4.0 -> 1.3.0
+  * awssdk.version: 2.17.267 -> 2.17.268
 
 ### Release 2.4.2 (August 10, 2022)
 * [#972](https://github.com/awslabs/amazon-kinesis-client/pull/972) Upgrade Lombok to version 1.18.24
