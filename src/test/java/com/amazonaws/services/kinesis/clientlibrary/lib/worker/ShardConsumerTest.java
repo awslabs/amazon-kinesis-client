@@ -85,7 +85,7 @@ import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 
 /**
- * Unit tests of {@link ShardConsumer}.
+ * Unit tests of {@link KinesisShardConsumer}.
  */
 @RunWith(MockitoJUnitRunner.class)
 public class ShardConsumerTest {
@@ -160,8 +160,8 @@ public class ShardConsumerTest {
                         callProcessRecordsForEmptyRecordList,
                         skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
-        ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -175,19 +175,19 @@ public class ShardConsumerTest {
                         config,
                         shardSyncer,
                         shardSyncStrategy);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
     }
 
     /**
@@ -210,8 +210,8 @@ public class ShardConsumerTest {
                         callProcessRecordsForEmptyRecordList,
                         skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
-        ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -226,21 +226,21 @@ public class ShardConsumerTest {
                         shardSyncer,
                         shardSyncStrategy);
 
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
 
         doThrow(new RejectedExecutionException()).when(spyExecutorService).submit(any(InitializeTask.class));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
     }
 
     @Test
@@ -258,8 +258,8 @@ public class ShardConsumerTest {
                         callProcessRecordsForEmptyRecordList,
                         skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
-        ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -273,19 +273,19 @@ public class ShardConsumerTest {
                         config,
                         shardSyncer,
                         shardSyncStrategy);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard();
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard();
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard();
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
         consumer.consumeShard();
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
     }
 
 
@@ -300,8 +300,8 @@ public class ShardConsumerTest {
                         callProcessRecordsForEmptyRecordList,
                         skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
-        ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -324,10 +324,10 @@ public class ShardConsumerTest {
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(
                 new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));
 
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // submit BlockOnParentShardTask
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         verify(processor, times(0)).initialize(any(InitializationInput.class));
 
         // Throw Error when IRecordProcessor.initialize() is invoked.
@@ -335,7 +335,7 @@ public class ShardConsumerTest {
 
         consumer.consumeShard(); // submit InitializeTask
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         verify(processor, times(1)).initialize(argThat(
                 initializationInputMatcher(checkpointSequenceNumber, pendingCheckpointSequenceNumber)));
 
@@ -347,7 +347,7 @@ public class ShardConsumerTest {
             assertThat(e.getCause(), instanceOf(ExecutionException.class));
         }
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         verify(processor, times(1)).initialize(argThat(
                 initializationInputMatcher(checkpointSequenceNumber, pendingCheckpointSequenceNumber)));
 
@@ -355,7 +355,7 @@ public class ShardConsumerTest {
 
         consumer.consumeShard(); // submit InitializeTask again.
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         verify(processor, times(2)).initialize(argThat(
                 initializationInputMatcher(checkpointSequenceNumber, pendingCheckpointSequenceNumber)));
         verify(processor, times(2)).initialize(any(InitializationInput.class)); // no other calls with different args
@@ -363,11 +363,11 @@ public class ShardConsumerTest {
         // Checking the status of submitted InitializeTask from above should pass.
         consumer.consumeShard();
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.PROCESSING)));
     }
 
     /**
-     * Test method for {@link ShardConsumer#consumeShard()}
+     * Test method for {@link KinesisShardConsumer#consumeShard()}
      */
     @Test
     public final void testConsumeShard() throws Exception {
@@ -420,8 +420,8 @@ public class ShardConsumerTest {
                 any(IMetricsFactory.class), anyInt()))
                 .thenReturn(getRecordsCache);
 
-        ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -440,11 +440,11 @@ public class ShardConsumerTest {
                         shardSyncer,
                         shardSyncStrategy);
 
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
         Thread.sleep(50L);
         consumer.consumeShard(); // start initialization
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         processor.getInitializeLatch().await(5, TimeUnit.SECONDS);
         verify(getRecordsCache).start();
@@ -454,7 +454,7 @@ public class ShardConsumerTest {
             boolean newTaskSubmitted = consumer.consumeShard();
             if (newTaskSubmitted) {
                 LOG.debug("New processing task was submitted, call # " + i);
-                assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
+                assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.PROCESSING)));
                 // CHECKSTYLE:IGNORE ModifiedControlVariable FOR NEXT 1 LINES
                 i += maxRecords;
             }
@@ -469,21 +469,21 @@ public class ShardConsumerTest {
         assertThat(processor.getNotifyShutdownLatch().await(1, TimeUnit.SECONDS), is(true));
         Thread.sleep(50);
         assertThat(consumer.getShutdownReason(), equalTo(ShutdownReason.REQUESTED));
-        assertThat(consumer.getCurrentState(), equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_REQUESTED));
+        assertThat(consumer.getCurrentState(), equalTo(KinesisConsumerStates.ShardConsumerState.SHUTDOWN_REQUESTED));
         verify(shutdownNotification).shutdownNotificationComplete();
         assertThat(processor.isShutdownNotificationCalled(), equalTo(true));
         consumer.consumeShard();
         Thread.sleep(50);
-        assertThat(consumer.getCurrentState(), equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_REQUESTED));
+        assertThat(consumer.getCurrentState(), equalTo(KinesisConsumerStates.ShardConsumerState.SHUTDOWN_REQUESTED));
 
         consumer.beginShutdown();
         Thread.sleep(50L);
         assertThat(consumer.getShutdownReason(), equalTo(ShutdownReason.ZOMBIE));
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
         consumer.beginShutdown();
         consumer.consumeShard();
         verify(shutdownNotification, atLeastOnce()).shutdownComplete();
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
         assertThat(processor.getShutdownReason(), is(equalTo(ShutdownReason.ZOMBIE)));
 
         verify(getRecordsCache).shutdown();
@@ -524,8 +524,8 @@ public class ShardConsumerTest {
         when(recordProcessorCheckpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
         when(streamConfig.getStreamProxy()).thenReturn(streamProxy);
 
-        final ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        final KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -544,21 +544,21 @@ public class ShardConsumerTest {
                         shardSyncer,
                         shardSyncStrategy);
 
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         verify(parentLease, times(0)).getCheckpoint();
         consumer.consumeShard(); // check on parent shards
         Thread.sleep(parentShardPollIntervalMillis * 2);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         verify(parentLease, times(1)).getCheckpoint();
         consumer.notifyShutdownRequested(shutdownNotification);
         verify(shutdownNotification, times(0)).shutdownComplete();
         assertThat(consumer.getShutdownReason(), equalTo(ShutdownReason.REQUESTED));
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard();
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
         Thread.sleep(50L);
         consumer.beginShutdown();
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
         assertThat(consumer.isShutdown(), is(true));
         verify(shutdownNotification, times(1)).shutdownComplete();
         consumer.beginShutdown();
@@ -583,7 +583,7 @@ public class ShardConsumerTest {
     }
 
     /**
-     * Test method for {@link ShardConsumer#consumeShard()} that ensures a transient error thrown from the record
+     * Test method for {@link KinesisShardConsumer#consumeShard()} that ensures a transient error thrown from the record
      * processor's shutdown method with reason zombie will be retried.
      */
     @Test
@@ -646,8 +646,8 @@ public class ShardConsumerTest {
                 metricsFactory
         );
 
-        ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -667,11 +667,11 @@ public class ShardConsumerTest {
                         shardSyncStrategy);
 
         when(leaseCoordinator.updateLease(any(KinesisClientLease.class), any(UUID.class))).thenReturn(true);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
         Thread.sleep(50L);
         consumer.consumeShard(); // start initialization
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         processor.getInitializeLatch().await(5, TimeUnit.SECONDS);
         verify(getRecordsCache).start();
@@ -681,7 +681,7 @@ public class ShardConsumerTest {
             boolean newTaskSubmitted = consumer.consumeShard();
             if (newTaskSubmitted) {
                 LOG.debug("New processing task was submitted, call # " + i);
-                assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
+                assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.PROCESSING)));
                 // CHECKSTYLE:IGNORE ModifiedControlVariable FOR NEXT 1 LINES
                 i += maxRecords;
             }
@@ -709,12 +709,12 @@ public class ShardConsumerTest {
         // Wait for shutdown complete now that terminate shutdown is successful
         for (int i = 0; i < 100; i++) {
             consumer.consumeShard();
-            if (consumer.getCurrentState() == ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE) {
+            if (consumer.getCurrentState() == KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE) {
                 break;
             }
             Thread.sleep(50L);
         }
-        assertThat(consumer.getCurrentState(), equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE));
+        assertThat(consumer.getCurrentState(), equalTo(KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE));
 
         assertThat(processor.getShutdownReason(), is(equalTo(ShutdownReason.TERMINATE)));
 
@@ -732,7 +732,7 @@ public class ShardConsumerTest {
 
 
     /**
-     * Test method for {@link ShardConsumer#consumeShard()} that ensures the shardConsumer gets shutdown with shutdown
+     * Test method for {@link KinesisShardConsumer#consumeShard()} that ensures the shardConsumer gets shutdown with shutdown
      * reason TERMINATE when the shard end is reached.
      */
     @Test
@@ -795,8 +795,8 @@ public class ShardConsumerTest {
                 metricsFactory
         );
 
-        ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -818,11 +818,11 @@ public class ShardConsumerTest {
         when(leaseCoordinator.getCurrentlyHeldLease(shardInfo.getShardId())).thenReturn(currentLease);
         when(leaseCoordinator.updateLease(any(KinesisClientLease.class), any(UUID.class))).thenReturn(true);
 
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
         Thread.sleep(50L);
         consumer.consumeShard(); // start initialization
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         processor.getInitializeLatch().await(5, TimeUnit.SECONDS);
         verify(getRecordsCache).start();
@@ -832,7 +832,7 @@ public class ShardConsumerTest {
             boolean newTaskSubmitted = consumer.consumeShard();
             if (newTaskSubmitted) {
                 LOG.debug("New processing task was submitted, call # " + i);
-                assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
+                assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.PROCESSING)));
                 // CHECKSTYLE:IGNORE ModifiedControlVariable FOR NEXT 1 LINES
                 i += maxRecords;
             }
@@ -860,12 +860,12 @@ public class ShardConsumerTest {
         // Wait for shutdown complete now that terminate shutdown is successful
         for (int i = 0; i < 100; i++) {
             consumer.consumeShard();
-            if (consumer.getCurrentState() == ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE) {
+            if (consumer.getCurrentState() == KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE) {
                 break;
             }
             Thread.sleep(50L);
         }
-        assertThat(consumer.getCurrentState(), equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE));
+        assertThat(consumer.getCurrentState(), equalTo(KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE));
 
         assertThat(processor.getShutdownReason(), is(equalTo(ShutdownReason.TERMINATE)));
 
@@ -881,7 +881,7 @@ public class ShardConsumerTest {
     }
 
     /**
-     * Test method for {@link ShardConsumer#consumeShard()} that starts from initial position of type AT_TIMESTAMP.
+     * Test method for {@link KinesisShardConsumer#consumeShard()} that starts from initial position of type AT_TIMESTAMP.
      */
     @Test
     public final void testConsumeShardWithInitialPositionAtTimestamp() throws Exception {
@@ -938,8 +938,8 @@ public class ShardConsumerTest {
                 any(IMetricsFactory.class), anyInt()))
                 .thenReturn(getRecordsCache);
 
-        ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -958,11 +958,11 @@ public class ShardConsumerTest {
                         shardSyncer,
                         shardSyncStrategy);
 
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // check on parent shards
         Thread.sleep(50L);
         consumer.consumeShard(); // start initialization
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         consumer.consumeShard(); // initialize
         Thread.sleep(50L);
 
@@ -973,7 +973,7 @@ public class ShardConsumerTest {
             boolean newTaskSubmitted = consumer.consumeShard();
             if (newTaskSubmitted) {
                 LOG.debug("New processing task was submitted, call # " + i);
-                assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
+                assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.PROCESSING)));
                 // CHECKSTYLE:IGNORE ModifiedControlVariable FOR NEXT 1 LINES
                 i += maxRecords;
             }
@@ -985,9 +985,9 @@ public class ShardConsumerTest {
         assertThat(processor.getShutdownReason(), nullValue());
         consumer.beginShutdown();
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.SHUTTING_DOWN)));
         consumer.beginShutdown();
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE)));
         assertThat(processor.getShutdownReason(), is(equalTo(ShutdownReason.ZOMBIE)));
 
         executorService.shutdown();
@@ -1014,8 +1014,8 @@ public class ShardConsumerTest {
                         callProcessRecordsForEmptyRecordList,
                         skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
-        ShardConsumer consumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer consumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -1041,22 +1041,22 @@ public class ShardConsumerTest {
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(
                 new Checkpoint(checkpointSequenceNumber, pendingCheckpointSequenceNumber));
 
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         consumer.consumeShard(); // submit BlockOnParentShardTask
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS)));
         verify(processor, times(0)).initialize(any(InitializationInput.class));
 
         consumer.consumeShard(); // submit InitializeTask
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.INITIALIZING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.INITIALIZING)));
         verify(processor, times(1)).initialize(argThat(
                 initializationInputMatcher(checkpointSequenceNumber, pendingCheckpointSequenceNumber)));
         verify(processor, times(1)).initialize(any(InitializationInput.class)); // no other calls with different args
 
         consumer.consumeShard();
         Thread.sleep(50L);
-        assertThat(consumer.getCurrentState(), is(equalTo(ConsumerStates.ShardConsumerState.PROCESSING)));
+        assertThat(consumer.getCurrentState(), is(equalTo(KinesisConsumerStates.ShardConsumerState.PROCESSING)));
     }
 
     @Test
@@ -1069,8 +1069,8 @@ public class ShardConsumerTest {
                         callProcessRecordsForEmptyRecordList,
                         skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
-        ShardConsumer shardConsumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer shardConsumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -1101,8 +1101,8 @@ public class ShardConsumerTest {
                         callProcessRecordsForEmptyRecordList,
                         skipCheckpointValidationValue, INITIAL_POSITION_LATEST);
 
-        ShardConsumer shardConsumer =
-                new ShardConsumer(shardInfo,
+        KinesisShardConsumer shardConsumer =
+                new KinesisShardConsumer(shardInfo,
                         streamConfig,
                         checkpoint,
                         processor,
@@ -1144,7 +1144,7 @@ public class ShardConsumerTest {
                 skipCheckpointValidationValue,
                 INITIAL_POSITION_LATEST);
 
-        ShardConsumer shardConsumer = new ShardConsumer(
+        KinesisShardConsumer shardConsumer = new KinesisShardConsumer(
                 shardInfo,
                 streamConfig,
                 checkpoint,

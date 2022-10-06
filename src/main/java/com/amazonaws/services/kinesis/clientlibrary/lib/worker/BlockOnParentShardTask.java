@@ -30,7 +30,7 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
  * If we don't find a checkpoint for the parent shard(s), we assume they have been trimmed and directly
  * proceed with processing data from the shard.
  */
-class BlockOnParentShardTask implements ITask {
+public class BlockOnParentShardTask implements ITask {
 
     private static final Log LOG = LogFactory.getLog(BlockOnParentShardTask.class);
     private final ShardInfo shardInfo;
@@ -45,7 +45,7 @@ class BlockOnParentShardTask implements ITask {
      * @param leaseManager Used to fetch the lease and checkpoint info for parent shards
      * @param parentShardPollIntervalMillis Sleep time if the parent shard has not completed processing
      */
-    BlockOnParentShardTask(ShardInfo shardInfo,
+    public BlockOnParentShardTask(ShardInfo shardInfo,
             ILeaseManager<KinesisClientLease> leaseManager,
             long parentShardPollIntervalMillis) {
         this.shardInfo = shardInfo;

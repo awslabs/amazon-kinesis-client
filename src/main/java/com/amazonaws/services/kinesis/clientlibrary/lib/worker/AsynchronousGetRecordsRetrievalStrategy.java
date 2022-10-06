@@ -45,24 +45,24 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
     private static final int TIME_TO_KEEP_ALIVE = 5;
     private static final int CORE_THREAD_POOL_COUNT = 1;
 
-    private final KinesisDataFetcher dataFetcher;
+    private final IDataFetcher dataFetcher;
     private final ExecutorService executorService;
     private final int retryGetRecordsInSeconds;
     private final String shardId;
     final Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
 
-    public AsynchronousGetRecordsRetrievalStrategy(@NonNull final KinesisDataFetcher dataFetcher,
+    public AsynchronousGetRecordsRetrievalStrategy(@NonNull final IDataFetcher dataFetcher,
             final int retryGetRecordsInSeconds, final int maxGetRecordsThreadPool, String shardId) {
         this(dataFetcher, buildExector(maxGetRecordsThreadPool, shardId), retryGetRecordsInSeconds, shardId);
     }
 
-    public AsynchronousGetRecordsRetrievalStrategy(final KinesisDataFetcher dataFetcher,
+    public AsynchronousGetRecordsRetrievalStrategy(final IDataFetcher dataFetcher,
             final ExecutorService executorService, final int retryGetRecordsInSeconds, String shardId) {
         this(dataFetcher, executorService, retryGetRecordsInSeconds, () -> new ExecutorCompletionService<>(executorService),
                 shardId);
     }
 
-    AsynchronousGetRecordsRetrievalStrategy(KinesisDataFetcher dataFetcher, ExecutorService executorService,
+    AsynchronousGetRecordsRetrievalStrategy(IDataFetcher dataFetcher, ExecutorService executorService,
             int retryGetRecordsInSeconds, Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier,
             String shardId) {
         this.dataFetcher = dataFetcher;
@@ -148,7 +148,7 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
     }
 
     @Override
-    public KinesisDataFetcher getDataFetcher() {
+    public IDataFetcher getDataFetcher() {
         return dataFetcher;
     }
 }
