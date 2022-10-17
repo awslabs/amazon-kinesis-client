@@ -28,4 +28,22 @@ public class CommonCalculations {
     public static long getRenewerTakerIntervalMillis(long leaseDurationMillis, long epsilonMillis) {
         return leaseDurationMillis / 3 - epsilonMillis;
     }
+
+    /**
+     * Convenience method for calculating lease taker intervals in milliseconds.
+     *
+     * @param leaseTakerIntervalMillis Current value for interval (from default or overriden).
+     * @param leaseDurationMillis Duration of a lease
+     * @param epsilonMillis Allow for some variance when calculating lease expirations
+     * @return lease taker interval.
+     */
+    public static long getLeaseTakerIntervalMillis(
+      long leaseTakerIntervalMillis, long leaseDurationMillis, long epsilonMillis
+    ) {
+      if (leaseTakerIntervalMillis > 0) {
+        return leaseTakerIntervalMillis;
+      }
+
+      return (leaseDurationMillis + epsilonMillis) * 2;
+    }
 }

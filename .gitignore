@@ -2,4 +2,5 @@ target/
 AwsCredentials.properties
 .idea
 *.iml
-
+.sdkmanrc
+.vscode

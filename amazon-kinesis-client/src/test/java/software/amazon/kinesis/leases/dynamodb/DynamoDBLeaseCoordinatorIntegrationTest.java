@@ -20,9 +20,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -34,11 +32,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
-import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.kinesis.checkpoint.dynamodb.DynamoDBCheckpointer;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
@@ -48,21 +45,19 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @RunWith(MockitoJUnitRunner.class)
-public class DynamoDBLeaseCoordinatorIntegrationTest {
-    private static final int ATTEMPTS = 20;
+public class DynamoDBLeaseCoordinatorIntegrationTest extends LeaseIntegrationTest {
     private static final String OPERATION = "TestOperation";
 
-    private static final String TABLE_NAME = DynamoDBLeaseCoordinatorIntegrationTest.class.getSimpleName();
     private static final String WORKER_ID = UUID.randomUUID().toString();
     private static final long LEASE_DURATION_MILLIS = 5000L;
     private static final long EPSILON_MILLIS = 25L;
+    private static final long LEASE_TAKER_INTERVAL_MILLIS = -1L;
     private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
     private static final int MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
     private static final int MAX_LEASE_RENEWER_THREAD_COUNT = 20;
     private static final long INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
     private static final long INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
 
-    private static DynamoDBLeaseRefresher leaseRefresher;
     private static DynamoDBCheckpointer dynamoDBCheckpointer;
 
     private LeaseCoordinator coordinator;
@@ -71,34 +66,8 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
 
     @Before
     public void setup() throws ProvisionedThroughputException, DependencyException, InvalidStateException {
-        final boolean useConsistentReads = true;
-        if (leaseRefresher == null) {
-            DynamoDbAsyncClient dynamoDBClient = DynamoDbAsyncClient.builder()
-                    .credentialsProvider(DefaultCredentialsProvider.create()).build();
-            leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDBClient, new DynamoDBLeaseSerializer(),
-                    useConsistentReads, TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
-        }
-        leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
-
-        int retryLeft = ATTEMPTS;
-
-        while (!leaseRefresher.leaseTableExists()) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                // Sleep called.
-            }
-            retryLeft--;
-            if (retryLeft == 0) {
-                if (!leaseRefresher.leaseTableExists()) {
-                    fail("Failed to create table");
-                }
-            }
-        }
-
-        leaseRefresher.deleteAll();
-        coordinator = new DynamoDBLeaseCoordinator(leaseRefresher, WORKER_ID, LEASE_DURATION_MILLIS,
-                EPSILON_MILLIS, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
+        coordinator = new DynamoDBLeaseCoordinator(leaseRefresher, WORKER_ID, LEASE_DURATION_MILLIS, EPSILON_MILLIS,
+                LEASE_TAKER_INTERVAL_MILLIS, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
                 INITIAL_LEASE_TABLE_READ_CAPACITY, INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
         dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseRefresher);
         dynamoDBCheckpointer.operation(OPERATION);
