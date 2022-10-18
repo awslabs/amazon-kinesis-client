@@ -945,7 +945,8 @@ public class Scheduler implements Runnable {
                 hierarchicalShardSyncerProvider.apply(streamConfig),
                 metricsFactory,
                 leaseCleanupManager,
-                schemaRegistryDecoder
+                schemaRegistryDecoder,
+                leaseManagementConfig.evictLeaseOnShutdown()
             );
         return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(),
                 argument, lifecycleConfig.taskExecutionListener(), lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());

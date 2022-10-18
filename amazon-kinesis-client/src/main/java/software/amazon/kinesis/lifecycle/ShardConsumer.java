@@ -16,15 +16,12 @@ package software.amazon.kinesis.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
-
-import org.reactivestreams.Subscription;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -33,10 +30,18 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.services.kinesis.model.ChildShard;
+
+import org.reactivestreams.Subscription;
+
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
 import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
@@ -435,6 +440,21 @@ public class ShardConsumer {
             //
             if (shutdownReason == null || shutdownReason.canTransitionTo(reason)) {
                 shutdownReason = reason;
+            }
+
+            if (reason == ShutdownReason.REQUESTED && shardConsumerArgument.evictLeaseOnShutdown()) {
+              log.debug("{} : Shutdown({}): Evicting lease.", streamIdentifier, shardInfo.shardId());
+
+              LeaseCoordinator leaseCoordinator = shardConsumerArgument.leaseCoordinator();
+              LeaseRefresher leaseRefresher = leaseCoordinator.leaseRefresher();
+              Lease currentShardLease = leaseCoordinator.getCurrentlyHeldLease(ShardInfo.getLeaseKey(shardInfo));
+
+              try {
+                leaseRefresher.evictLease(currentShardLease);
+              } catch (DependencyException | InvalidStateException | ProvisionedThroughputException ex) {
+                // This is recoverable. This lease will expire and some other consumer will take it.
+                log.error("Could not evict lease on requested shutdown of {}", shardInfo.shardId(), ex);
+              }
             }
         }
     }

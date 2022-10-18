@@ -44,7 +44,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 public class Lease {
     /*
      * See javadoc for System.nanoTime - summary:
-     * 
+     *
      * Sometimes System.nanoTime's return values will wrap due to overflow. When they do, the difference between two
      * values will be very large. We will consider leases to be expired if they are more than a year old.
      */
@@ -111,7 +111,7 @@ public class Lease {
 
     /**
      * Copy constructor, used by clone().
-     * 
+     *
      * @param lease lease to copy
      */
     protected Lease(Lease lease) {
@@ -164,7 +164,7 @@ public class Lease {
     /**
      * Updates this Lease's mutable, application-specific fields based on the passed-in lease object. Does not update
      * fields that are internal to the leasing library (leaseKey, leaseOwner, leaseCounter).
-     * 
+     *
      * @param lease
      */
     public void update(final Lease lease) {
@@ -196,8 +196,15 @@ public class Lease {
     }
 
     /**
+     * @return true if this lease is unassigned (no assigned owner), false otherwise.
+     */
+    public boolean isUnassigned() {
+        return leaseOwner == null;
+    }
+
+    /**
      * Sets lastCounterIncrementNanos
-     * 
+     *
      * @param lastCounterIncrementNanos last renewal in nanoseconds since the epoch
      */
     public void lastCounterIncrementNanos(Long lastCounterIncrementNanos) {
@@ -206,7 +213,7 @@ public class Lease {
 
     /**
      * Sets concurrencyToken.
-     * 
+     *
      * @param concurrencyToken may not be null
      */
     public void concurrencyToken(@NonNull final UUID concurrencyToken) {
@@ -215,7 +222,7 @@ public class Lease {
 
     /**
      * Sets leaseKey. LeaseKey is immutable once set.
-     * 
+     *
      * @param leaseKey may not be null.
      */
     public void leaseKey(@NonNull final String leaseKey) {
@@ -227,7 +234,7 @@ public class Lease {
 
     /**
      * Sets leaseCounter.
-     * 
+     *
      * @param leaseCounter may not be null
      */
     public void leaseCounter(@NonNull final Long leaseCounter) {
@@ -303,7 +310,7 @@ public class Lease {
 
     /**
      * Sets leaseOwner.
-     * 
+     *
      * @param leaseOwner may be null.
      */
     public void leaseOwner(String leaseOwner) {
@@ -312,12 +319,10 @@ public class Lease {
 
     /**
      * Returns a deep copy of this object. Type-unsafe - there aren't good mechanisms for copy-constructing generics.
-     * 
+     *
      * @return A deep copy of this object.
      */
     public Lease copy() {
         return new Lease(this);
     }
-
-
 }

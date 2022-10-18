@@ -224,6 +224,18 @@ public class LeaseManagementConfig {
     private long listShardsCacheAllowedAgeInSeconds = 30;
     private int cacheMissWarningModulus = 250;
 
+    /**
+     * Interval at which the lease taker will execute.
+     * If unspecified, an interval will be calculated based on the lease duration.
+     */
+    private long leaseTakerIntervalMillis = -1L;
+
+    /**
+     * If leases should be evicted or not on shutdown requested.
+     * By default, leases are not evicted.
+     */
+    private boolean evictLeaseOnShutdown = false;
+
     private MetricsFactory metricsFactory = new NullMetricsFactory();
 
     @Deprecated
@@ -326,6 +338,7 @@ public class LeaseManagementConfig {
                     initialPositionInStream(),
                     failoverTimeMillis(),
                     epsilonMillis(),
+                    leaseTakerIntervalMillis,
                     maxLeasesForWorker(),
                     maxLeasesToStealAtOneTime(),
                     maxLeaseRenewalThreads(),
@@ -361,6 +374,7 @@ public class LeaseManagementConfig {
                     executorService(),
                     failoverTimeMillis(),
                     epsilonMillis(),
+                    leaseTakerIntervalMillis,
                     maxLeasesForWorker(),
                     maxLeasesToStealAtOneTime(),
                     maxLeaseRenewalThreads(),

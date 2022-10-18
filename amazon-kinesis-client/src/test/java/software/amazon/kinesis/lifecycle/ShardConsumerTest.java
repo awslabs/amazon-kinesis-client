@@ -53,6 +53,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
+import lombok.extern.slf4j.Slf4j;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -66,15 +70,15 @@ import org.mockito.runners.MockitoJUnitRunner;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerState;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
-import software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerState;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
@@ -136,6 +140,12 @@ public class ShardConsumerTest {
     private ConsumerState shutdownRequestedAwaitState;
     @Mock
     private TaskExecutionListener taskExecutionListener;
+    @Mock
+    private LeaseCoordinator leaseCoordinator;
+    @Mock
+    private LeaseRefresher leaseRefresher;
+    @Mock
+    private Lease lease;
 
     private ProcessRecordsInput processRecordsInput;
 
@@ -867,6 +877,186 @@ public class ShardConsumerTest {
         verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
         verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
         verifyNoMoreInteractions(taskExecutionListener);
+    }
+
+    @Test
+    public void testLeaseEvictedOnShutdownWhenEnabled() throws Exception {
+        CyclicBarrier taskBarrier = new CyclicBarrier(2);
+
+        TestPublisher cache = new TestPublisher();
+        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
+                shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener, 0);
+
+        mockSuccessfulInitialize(null);
+
+        mockSuccessfulProcessing(taskBarrier);
+
+        when(shardConsumerArgument.evictLeaseOnShutdown()).thenReturn(true);
+        when(shardConsumerArgument.leaseCoordinator()).thenReturn(leaseCoordinator);
+        when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
+        when(leaseCoordinator.getCurrentlyHeldLease(ShardInfo.getLeaseKey(shardInfo))).thenReturn(lease);
+
+        when(processingState.shutdownTransition(eq(ShutdownReason.REQUESTED))).thenReturn(shutdownRequestedState);
+        when(shutdownRequestedState.requiresDataAvailability()).thenReturn(false);
+        when(shutdownRequestedState.createTask(any(), any(), any())).thenReturn(shutdownRequestedTask);
+        when(shutdownRequestedState.taskType()).thenReturn(TaskType.SHUTDOWN_NOTIFICATION);
+        when(shutdownRequestedTask.call()).thenReturn(new TaskResult(null));
+
+        when(shutdownRequestedState.shutdownTransition(eq(ShutdownReason.REQUESTED)))
+                .thenReturn(shutdownRequestedAwaitState);
+        when(shutdownRequestedState.shutdownTransition(eq(ShutdownReason.LEASE_LOST))).thenReturn(shutdownState);
+        when(shutdownRequestedAwaitState.requiresDataAvailability()).thenReturn(false);
+        when(shutdownRequestedAwaitState.createTask(any(), any(), any())).thenReturn(null);
+        when(shutdownRequestedAwaitState.shutdownTransition(eq(ShutdownReason.REQUESTED)))
+                .thenReturn(shutdownRequestedState);
+        when(shutdownRequestedAwaitState.shutdownTransition(eq(ShutdownReason.LEASE_LOST))).thenReturn(shutdownState);
+        when(shutdownRequestedAwaitState.taskType()).thenReturn(TaskType.SHUTDOWN_COMPLETE);
+
+        mockSuccessfulShutdown(null);
+
+        boolean init = consumer.initializeComplete().get();
+        while (!init) {
+            init = consumer.initializeComplete().get();
+        }
+
+        consumer.subscribe();
+        cache.awaitInitialSetup();
+
+        cache.publish();
+        awaitAndResetBarrier(taskBarrier);
+        cache.awaitRequest();
+
+        cache.publish();
+        awaitAndResetBarrier(taskBarrier);
+        cache.awaitRequest();
+
+        consumer.gracefulShutdown(shutdownNotification);
+        boolean shutdownComplete = consumer.shutdownComplete().get();
+        assertThat(shutdownComplete, equalTo(false));
+        shutdownComplete = consumer.shutdownComplete().get();
+        assertThat(shutdownComplete, equalTo(false));
+
+        consumer.leaseLost();
+        shutdownComplete = consumer.shutdownComplete().get();
+        assertThat(shutdownComplete, equalTo(false));
+        shutdownComplete = consumer.shutdownComplete().get();
+        assertThat(shutdownComplete, equalTo(true));
+
+        verify(processingState, times(2)).createTask(any(), any(), any());
+        verify(shutdownRequestedState, never()).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
+        verify(shutdownRequestedState).createTask(any(), any(), any());
+        verify(shutdownRequestedState).shutdownTransition(eq(ShutdownReason.REQUESTED));
+        verify(shutdownRequestedAwaitState).createTask(any(), any(), any());
+        verify(shutdownRequestedAwaitState).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).beforeTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownRequestedTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownRequestedAwaitTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
+
+        initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        shutdownRequestedTaskInput = shutdownRequestedTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        // No task is created/run for this shutdownRequestedAwaitState, so there's no task outcome.
+
+        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownRequestedTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownRequestedAwaitTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
+        verifyNoMoreInteractions(taskExecutionListener);
+
+        verify(leaseRefresher).evictLease(lease);
+    }
+
+    @Test
+    public void testLeaseNotEvictedOnShutdownByDefault() throws Exception {
+        CyclicBarrier taskBarrier = new CyclicBarrier(2);
+
+        TestPublisher cache = new TestPublisher();
+        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
+                shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener, 0);
+
+        mockSuccessfulInitialize(null);
+
+        mockSuccessfulProcessing(taskBarrier);
+
+        when(shardConsumerArgument.evictLeaseOnShutdown()).thenReturn(false);
+
+        when(processingState.shutdownTransition(eq(ShutdownReason.REQUESTED))).thenReturn(shutdownRequestedState);
+        when(shutdownRequestedState.requiresDataAvailability()).thenReturn(false);
+        when(shutdownRequestedState.createTask(any(), any(), any())).thenReturn(shutdownRequestedTask);
+        when(shutdownRequestedState.taskType()).thenReturn(TaskType.SHUTDOWN_NOTIFICATION);
+        when(shutdownRequestedTask.call()).thenReturn(new TaskResult(null));
+
+        when(shutdownRequestedState.shutdownTransition(eq(ShutdownReason.REQUESTED)))
+                .thenReturn(shutdownRequestedAwaitState);
+        when(shutdownRequestedState.shutdownTransition(eq(ShutdownReason.LEASE_LOST))).thenReturn(shutdownState);
+        when(shutdownRequestedAwaitState.requiresDataAvailability()).thenReturn(false);
+        when(shutdownRequestedAwaitState.createTask(any(), any(), any())).thenReturn(null);
+        when(shutdownRequestedAwaitState.shutdownTransition(eq(ShutdownReason.REQUESTED)))
+                .thenReturn(shutdownRequestedState);
+        when(shutdownRequestedAwaitState.shutdownTransition(eq(ShutdownReason.LEASE_LOST))).thenReturn(shutdownState);
+        when(shutdownRequestedAwaitState.taskType()).thenReturn(TaskType.SHUTDOWN_COMPLETE);
+
+        mockSuccessfulShutdown(null);
+
+        boolean init = consumer.initializeComplete().get();
+        while (!init) {
+            init = consumer.initializeComplete().get();
+        }
+
+        consumer.subscribe();
+        cache.awaitInitialSetup();
+
+        cache.publish();
+        awaitAndResetBarrier(taskBarrier);
+        cache.awaitRequest();
+
+        cache.publish();
+        awaitAndResetBarrier(taskBarrier);
+        cache.awaitRequest();
+
+        consumer.gracefulShutdown(shutdownNotification);
+        boolean shutdownComplete = consumer.shutdownComplete().get();
+        assertThat(shutdownComplete, equalTo(false));
+        shutdownComplete = consumer.shutdownComplete().get();
+        assertThat(shutdownComplete, equalTo(false));
+
+        consumer.leaseLost();
+        shutdownComplete = consumer.shutdownComplete().get();
+        assertThat(shutdownComplete, equalTo(false));
+        shutdownComplete = consumer.shutdownComplete().get();
+        assertThat(shutdownComplete, equalTo(true));
+
+        verify(processingState, times(2)).createTask(any(), any(), any());
+        verify(shutdownRequestedState, never()).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
+        verify(shutdownRequestedState).createTask(any(), any(), any());
+        verify(shutdownRequestedState).shutdownTransition(eq(ShutdownReason.REQUESTED));
+        verify(shutdownRequestedAwaitState).createTask(any(), any(), any());
+        verify(shutdownRequestedAwaitState).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).beforeTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownRequestedTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownRequestedAwaitTaskInput);
+        verify(taskExecutionListener, times(1)).beforeTaskExecution(shutdownTaskInput);
+
+        initialTaskInput = initialTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        processTaskInput = processTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        shutdownRequestedTaskInput = shutdownRequestedTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
+        // No task is created/run for this shutdownRequestedAwaitState, so there's no task outcome.
+
+        verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
+        verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownRequestedTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownRequestedAwaitTaskInput);
+        verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownTaskInput);
+        verifyNoMoreInteractions(taskExecutionListener);
+
+        verifyZeroInteractions(leaseCoordinator);
+        verifyZeroInteractions(leaseRefresher);
     }
 
     private void mockSuccessfulShutdown(CyclicBarrier taskCallBarrier) {
