@@ -43,7 +43,7 @@ import java.util.Optional;
 @RunWith(MockitoJUnitRunner.class)
 public class FanOutConfigTest {
 
-    private static final String TEST_CONSUMER_ARN = "TestConsumerArn";
+    private static final String TEST_CONSUMER_ARN = "arn:aws:kinesis:us-east-2:123456789012:stream/mystream/consumer/TestConsumerArn:000";
     private static final String TEST_APPLICATION_NAME = "TestApplication";
     private static final String TEST_STREAM_NAME = "TestStream";
     private static final String TEST_CONSUMER_NAME = "TestConsumerName";
@@ -75,7 +75,6 @@ public class FanOutConfigTest {
                 .streamName(TEST_STREAM_NAME);
         RetrievalFactory retrievalFactory = config.retrievalFactory();
         ShardInfo shardInfo = mock(ShardInfo.class);
-//        doReturn(Optional.of(StreamIdentifier.singleStreamInstance(TEST_STREAM_NAME).serialize())).when(shardInfo).streamIdentifier();
         doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
         retrievalFactory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
         assertThat(retrievalFactory, not(nullValue()));

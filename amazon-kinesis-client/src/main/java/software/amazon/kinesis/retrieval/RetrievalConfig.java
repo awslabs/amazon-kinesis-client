@@ -32,6 +32,8 @@ import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
 import software.amazon.kinesis.retrieval.polling.PollingConfig;
 
+import static software.amazon.kinesis.common.StreamARNUtil.trySetEmptyStreamARN;
+
 /**
  * Used by the KCL to configure the retrieval of records from Kinesis.
  */
@@ -102,18 +104,17 @@ public class RetrievalConfig {
 
     private RetrievalFactory retrievalFactory;
 
-    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull String streamName,
+    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull String streamNameOrARN,
                            @NonNull String applicationName) {
         this.kinesisClient = kinesisAsyncClient;
-        this.appStreamTracker = Either
-                .right(new StreamConfig(StreamIdentifier.singleStreamInstance(streamName), initialPositionInStreamExtended));
+        this.appStreamTracker = Either.right(getInitialStreamConfig(streamNameOrARN, kinesisAsyncClient));
         this.applicationName = applicationName;
     }
 
     public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull MultiStreamTracker multiStreamTracker,
                            @NonNull String applicationName) {
         this.kinesisClient = kinesisAsyncClient;
-        this.appStreamTracker = Either.left(multiStreamTracker);
+        this.appStreamTracker = Either.left(getInitialMultiStreamTracker(multiStreamTracker, kinesisAsyncClient));
         this.applicationName = applicationName;
     }
 
@@ -157,6 +158,7 @@ public class RetrievalConfig {
                 streamConfig -> streamConfig.streamIdentifier() == null
                                 || streamConfig.streamIdentifier().streamName() == null);
         if(isInvalidFanoutConfig) {
+            // TODO: fix the error message
             throw new IllegalArgumentException(
                     "Invalid config: Either in multi-stream mode with streamName/consumerArn configured or in single-stream mode with no streamName configured");
         }
@@ -171,8 +173,22 @@ public class RetrievalConfig {
                         streamConfig.streamIdentifier() == null || streamConfig.streamIdentifier().streamName() == null);
 
         if (isInvalidPollingConfig) {
+            // TODO: fix the error message
             throw new IllegalArgumentException(
                     "Invalid config: Either in multi-stream mode with streamName configured or in single-stream mode with no streamName configured");
         }
     }
+
+    private StreamConfig getInitialStreamConfig(String streamNameOrARN, KinesisAsyncClient kinesisAsyncClient) {
+        StreamIdentifier streamIdentifier = StreamIdentifier.singleStreamInstance(streamNameOrARN);
+        trySetEmptyStreamARN(streamIdentifier, kinesisAsyncClient);
+        return new StreamConfig(streamIdentifier, initialPositionInStreamExtended);
+    }
+
+    private MultiStreamTracker getInitialMultiStreamTracker(MultiStreamTracker multiStreamTracker, KinesisAsyncClient kinesisAsyncClient) {
+        multiStreamTracker.streamConfigList()
+                .forEach(streamConfig -> trySetEmptyStreamARN(streamConfig.streamIdentifier(), kinesisAsyncClient));
+        return multiStreamTracker;
+    }
+
 }

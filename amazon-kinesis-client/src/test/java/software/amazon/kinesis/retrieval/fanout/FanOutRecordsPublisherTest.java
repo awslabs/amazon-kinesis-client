@@ -91,7 +91,7 @@ import static org.mockito.Mockito.verify;
 public class FanOutRecordsPublisherTest {
 
     private static final String SHARD_ID = "Shard-001";
-    private static final String CONSUMER_ARN = "arn:consumer";
+    private static final String CONSUMER_ARN = "arn:aws:kinesis:us-east-2:123456789012:stream/mystream/consumer/TestConsumerArn:000";
     private static final String CONTINUATION_SEQUENCE_NUMBER = "continuationSequenceNumber";
 
     @Mock

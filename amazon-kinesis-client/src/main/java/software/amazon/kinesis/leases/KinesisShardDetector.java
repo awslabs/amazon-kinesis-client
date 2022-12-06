@@ -198,7 +198,7 @@ public class KinesisShardDetector implements ShardDetector {
         } else {
             builder = builder.nextToken(nextToken);
         }
-
+        streamIdentifier.streamARN().ifPresent(builder::streamARN);
         final ListShardsRequest request = builder.build();
         log.info("Stream {}: listing shards with list shards request {}", streamIdentifier, request);
 
@@ -275,14 +275,14 @@ public class KinesisShardDetector implements ShardDetector {
 
     @Override
     public List<ChildShard> getChildShards(final String shardId) throws InterruptedException, ExecutionException, TimeoutException {
-        final GetShardIteratorRequest getShardIteratorRequest = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
+        final GetShardIteratorRequest.Builder requestBuilder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
                 .streamName(streamIdentifier.streamName())
                 .shardIteratorType(ShardIteratorType.LATEST)
-                .shardId(shardId)
-                .build();
+                .shardId(shardId);
+        streamIdentifier.streamARN().ifPresent(requestBuilder::streamARN);
 
         final GetShardIteratorResponse getShardIteratorResponse =
-                FutureUtils.resolveOrCancelFuture(kinesisClient.getShardIterator(getShardIteratorRequest), kinesisRequestTimeout);
+                FutureUtils.resolveOrCancelFuture(kinesisClient.getShardIterator(requestBuilder.build()), kinesisRequestTimeout);
 
         final GetRecordsRequest getRecordsRequest = KinesisRequestsBuilder.getRecordsRequestBuilder()
                 .shardIterator(getShardIteratorResponse.shardIterator())

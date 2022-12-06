@@ -19,30 +19,44 @@ import com.google.common.base.Joiner;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
 import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.utils.Validate;
 
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-@EqualsAndHashCode @Getter @Accessors(fluent = true)
+import static software.amazon.kinesis.common.StreamARNUtil.getOptionalStreamARN;
+import static software.amazon.kinesis.common.StreamARNUtil.getOptionalStreamARNFromDescribeStreamSummary;
+import static software.amazon.kinesis.common.StreamARNUtil.getStreamName;
+
+@Slf4j
+@EqualsAndHashCode
+@Getter
+@Accessors(fluent = true)
 public class StreamIdentifier {
     private final Optional<String> accountIdOptional;
     private final String streamName;
+    @Setter
+    private Optional<String> streamARN;
     private final Optional<Long> streamCreationEpochOptional;
 
     private static final String DELIMITER = ":";
     private static final Pattern PATTERN = Pattern.compile(".*" + ":" + ".*" + ":" + "[0-9]*");
 
-    private StreamIdentifier(@NonNull String accountId, @NonNull String streamName, @NonNull Long streamCreationEpoch) {
+    private StreamIdentifier(@NonNull String accountId, @NonNull String streamNameOrARN, @NonNull Long streamCreationEpoch) {
         this.accountIdOptional = Optional.of(accountId);
-        this.streamName = streamName;
+        this.streamName = getStreamName(streamNameOrARN);
+        this.streamARN = getOptionalStreamARN(streamNameOrARN);
         this.streamCreationEpochOptional = Optional.of(streamCreationEpoch);
     }
 
-    private StreamIdentifier(@NonNull String streamName) {
+    private StreamIdentifier(@NonNull String streamNameOrARN) {
         this.accountIdOptional = Optional.empty();
-        this.streamName = streamName;
+        this.streamName = getStreamName(streamNameOrARN);
+        this.streamARN = getOptionalStreamARN(streamNameOrARN);
         this.streamCreationEpochOptional = Optional.empty();
     }
 
@@ -74,6 +88,17 @@ public class StreamIdentifier {
         } else {
             throw new IllegalArgumentException("Unable to deserialize StreamIdentifier from " + streamIdentifierSer);
         }
+    }
+
+    /**
+     * Create a multi stream instance for StreamIdentifier from accountId, streamNameOrARN and creationEpoch
+     * The serialized stream identifier should be of the format account:stream:creationepoch
+     * @param accountId The account's 12-digit ID, which is hosting the stream
+     * @param  streamNameOrARN Although streamName and streamARN can both be supplied, streamARN is preferred
+     * @return creationEpoch The stream's creation time stamp
+     */
+    public static StreamIdentifier multiStreamInstance(String accountId, String streamNameOrARN, Long creationEpoch) {
+        return new StreamIdentifier(accountId, streamNameOrARN, creationEpoch);
     }
 
     /**

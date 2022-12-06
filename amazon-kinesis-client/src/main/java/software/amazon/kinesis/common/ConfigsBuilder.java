@@ -17,12 +17,11 @@ package software.amazon.kinesis.common;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.Setter;
 import lombok.ToString;
-import org.apache.commons.lang3.StringUtils;
-
-import lombok.NonNull;
 import lombok.experimental.Accessors;
+import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -32,9 +31,9 @@ import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.metrics.MetricsConfig;
+import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
-import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
 /**
@@ -115,8 +114,8 @@ public class ConfigsBuilder {
     }
 
     /**
-     * Constructor to initialize ConfigsBuilder with StreamName
-     * @param streamName
+     * Constructor to initialize ConfigsBuilder with StreamName (or StreamARN)
+     * @param streamNameOrARN
      * @param applicationName
      * @param kinesisClient
      * @param dynamoDBClient
@@ -124,11 +123,11 @@ public class ConfigsBuilder {
      * @param workerIdentifier
      * @param shardRecordProcessorFactory
      */
-    public ConfigsBuilder(@NonNull String streamName, @NonNull String applicationName,
+    public ConfigsBuilder(@NonNull String streamNameOrARN, @NonNull String applicationName,
             @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient,
             @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier,
             @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
-        this.appStreamTracker = Either.right(streamName);
+        this.appStreamTracker = Either.right(streamNameOrARN);
         this.applicationName = applicationName;
         this.kinesisClient = kinesisClient;
         this.dynamoDBClient = dynamoDBClient;
@@ -224,7 +223,7 @@ public class ConfigsBuilder {
         final RetrievalConfig retrievalConfig =
                 appStreamTracker.map(
                         multiStreamTracker -> new RetrievalConfig(kinesisClient(), multiStreamTracker, applicationName()),
-                        streamName ->  new RetrievalConfig(kinesisClient(), streamName, applicationName()));
+                        streamNameOrARN ->  new RetrievalConfig(kinesisClient(), streamNameOrARN, applicationName()));
         return retrievalConfig;
     }
 }

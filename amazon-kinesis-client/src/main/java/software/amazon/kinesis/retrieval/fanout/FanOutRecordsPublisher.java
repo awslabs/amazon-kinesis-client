@@ -27,14 +27,12 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
-import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -54,6 +52,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -61,6 +60,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDeliveryActionIfRequired;
+import static software.amazon.kinesis.common.StreamARNUtil.getOptionalStreamARNFromConsumerARN;
 import static software.amazon.kinesis.retrieval.DataRetrievalUtil.isValidResult;
 
 @Slf4j
@@ -75,6 +75,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private final KinesisAsyncClient kinesis;
     private final String shardId;
     private final String consumerArn;
+    private final Optional<String> streamARN;
     private final String streamAndShardId;
     private final Object lockObject = new Object();
 
@@ -97,6 +98,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         this.kinesis = kinesis;
         this.shardId = shardId;
         this.consumerArn = consumerArn;
+        this.streamARN = getOptionalStreamARNFromConsumerARN(consumerArn);
         this.streamAndShardId = shardId;
     }
 
@@ -104,6 +106,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         this.kinesis = kinesis;
         this.shardId = shardId;
         this.consumerArn = consumerArn;
+        this.streamARN = getOptionalStreamARNFromConsumerARN(consumerArn);
         this.streamAndShardId = streamIdentifierSer + ":" + shardId;
     }
 
@@ -292,6 +295,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             resetRecordsDeliveryStateOnSubscriptionOnInit();
             SubscribeToShardRequest.Builder builder = KinesisRequestsBuilder.subscribeToShardRequestBuilder()
                     .shardId(shardId).consumerARN(consumerArn);
+            streamARN.ifPresent(builder::streamARN);
+
             SubscribeToShardRequest request;
             if (isFirstConnection) {
                 request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStreamExtended).build();
@@ -304,8 +309,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             int subscribeInvocationId = subscribeToShardId.incrementAndGet();
             String instanceId = shardId + "-" + subscribeInvocationId;
             log.debug(
-                    "{}: [SubscriptionLifetime]: (FanOutRecordsPublisher#subscribeToShard) @ {} id: {} -- Starting subscribe to shard",
-                    streamAndShardId, connectionStart, instanceId);
+                    "{}: [SubscriptionLifetime]: (FanOutRecordsPublisher#subscribeToShard) @ {} id: {} -- Starting subscribe to shard with request {}",
+                    streamAndShardId, connectionStart, instanceId, request);
             flow = new RecordFlow(this, connectionStart, instanceId);
             kinesis.subscribeToShard(request, flow);
         }
