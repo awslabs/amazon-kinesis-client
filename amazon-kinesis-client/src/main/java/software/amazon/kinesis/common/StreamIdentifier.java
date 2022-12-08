@@ -102,12 +102,12 @@ public class StreamIdentifier {
     }
 
     /**
-     * Create a single stream instance for StreamIdentifier from stream name.
-     * @param streamName
+     * Create a single stream instance for StreamIdentifier from stream name or stream arn.
+     * @param streamNameOrARN
      * @return StreamIdentifier
      */
-    public static StreamIdentifier singleStreamInstance(String streamName) {
-        Validate.notEmpty(streamName, "StreamName should not be empty");
-        return new StreamIdentifier(streamName);
+    public static StreamIdentifier singleStreamInstance(String streamNameOrARN) {
+        Validate.notEmpty(streamNameOrARN, "StreamName should not be empty");
+        return new StreamIdentifier(streamNameOrARN);
     }
 }

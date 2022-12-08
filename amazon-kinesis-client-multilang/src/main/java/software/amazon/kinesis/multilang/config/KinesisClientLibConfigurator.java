@@ -25,10 +25,11 @@ import org.apache.commons.beanutils.ConvertUtilsBean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
+import software.amazon.kinesis.common.StreamARNUtil;
 
 /**
  * KinesisClientLibConfigurator constructs a KinesisClientLibConfiguration from java properties file. The following
- * three properties must be provided. 1) "applicationName" 2) "streamName" 3) "AWSCredentialsProvider"
+ * three properties must be provided. 1) "applicationName" 2) "streamName" or "streamARN" 3) "AWSCredentialsProvider"
  * KinesisClientLibConfigurator will help to automatically assign the value of "workerId" if this property is not
  * provided. In the specified properties file, any properties, which matches the variable name in
  * KinesisClientLibConfiguration and has a corresponding "with{variableName}" setter method, will be read in, and its
@@ -69,8 +70,18 @@ public class KinesisClientLibConfigurator {
         });
 
         Validate.notBlank(configuration.getApplicationName(), "Application name is required");
-        Validate.notBlank(configuration.getStreamName(), "Stream name is required");
+        Validate.isTrue(StringUtils.isNotBlank(configuration.getStreamName()) || StringUtils.isNotBlank(configuration.getStreamARN()),
+                "Either Stream name or stream arn needs to be provided");
         Validate.isTrue(configuration.getKinesisCredentialsProvider().isDirty(), "A basic set of AWS credentials must be provided");
+
+        // Extract streamName from streamARN
+        if (StringUtils.isBlank(configuration.getStreamName()) && StringUtils.isNotBlank(configuration.getStreamARN())) {
+            configuration.setStreamName(StreamARNUtil.getStreamName(configuration.getStreamARN()));
+        }
+
+        log.debug("StreamName is set to " + configuration.getStreamName());
+        log.debug("StreamARN is set to " + configuration.getStreamARN());
+
         return configuration;
     }
 

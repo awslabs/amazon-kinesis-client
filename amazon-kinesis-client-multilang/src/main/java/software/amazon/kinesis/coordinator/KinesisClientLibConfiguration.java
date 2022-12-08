@@ -210,6 +210,7 @@ public class KinesisClientLibConfiguration {
     private String applicationName;
     private String tableName;
     private String streamName;
+    private String streamARN;
     private String kinesisEndpoint;
     private String dynamoDBEndpoint;
     private InitialPositionInStream initialPositionInStream;

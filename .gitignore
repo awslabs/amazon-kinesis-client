@@ -1,5 +1,6 @@
 target/
 AwsCredentials.properties
 .idea
+.DS_Store
 *.iml
 

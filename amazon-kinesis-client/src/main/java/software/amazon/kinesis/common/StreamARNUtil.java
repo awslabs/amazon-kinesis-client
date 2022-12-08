@@ -14,9 +14,9 @@ import java.util.regex.Pattern;
 @Slf4j
 public class StreamARNUtil {
     public static Pattern STREAM_ARN_PATTERN = Pattern.compile(
-            "^arn:aws.*:kinesis:.*:\\d{12}:stream\\/(\\S+)$");
+            "arn:aws.*:kinesis:.*:\\d{12}:stream\\/(\\S+)");
     public static Pattern CONSUMER_ARN_PATTERN = Pattern.compile(
-            "^(arn:aws.*:kinesis:.*:\\d{12}:.*stream\\/[a-zA-Z0-9_.-]+)\\/consumer\\/[a-zA-Z0-9_.-]+:[0-9]+");
+            "(arn:aws.*:kinesis:.*:\\d{12}:.*stream\\/[a-zA-Z0-9_.-]+)\\/consumer\\/[a-zA-Z0-9_.-]+:[0-9]+");
 
     public static String getStreamName(String streamNameOrARN) {
         final Matcher matcher = STREAM_ARN_PATTERN.matcher(streamNameOrARN);
@@ -76,7 +76,7 @@ public class StreamARNUtil {
                     "Successfully set streamARN to " + streamIdentifier.streamARN().get() :
                     "Not able to set streamARN via DescribeStreamSummary call");
         } else {
-            log.debug("StreamARN " + optionalStreamARN.get() + " is passed during initialization.");
+            log.debug("StreamARN " + optionalStreamARN.get() + " is already passed during initialization.");
         }
     }
 }

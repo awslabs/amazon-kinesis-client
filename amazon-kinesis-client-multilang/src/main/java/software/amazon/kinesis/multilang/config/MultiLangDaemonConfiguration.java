@@ -23,12 +23,12 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
 import org.apache.commons.beanutils.BeanUtilsBean;
-import org.apache.commons.beanutils.ConvertUtils;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 import org.apache.commons.beanutils.Converter;
 import org.apache.commons.beanutils.converters.ArrayConverter;
@@ -73,6 +73,8 @@ public class MultiLangDaemonConfiguration {
     private String applicationName;
 
     private String streamName;
+
+    private String streamARN;
 
     @ConfigurationSettable(configurationClass = ConfigsBuilder.class)
     private String tableName;
@@ -371,7 +373,10 @@ public class MultiLangDaemonConfiguration {
         DynamoDbAsyncClient dynamoDbAsyncClient = dynamoDbClient.build(DynamoDbAsyncClient.class);
         CloudWatchAsyncClient cloudWatchAsyncClient = cloudWatchClient.build(CloudWatchAsyncClient.class);
 
-        ConfigsBuilder configsBuilder = new ConfigsBuilder(streamName, applicationName, kinesisAsyncClient,
+        // We've verified that streamName and StreamARN cannot both be missing
+        // Note that StreamARN takes precedence if both are present
+        String streamNameOrARN = Optional.ofNullable(streamARN).orElse(streamName);
+        ConfigsBuilder configsBuilder = new ConfigsBuilder(streamNameOrARN, applicationName, kinesisAsyncClient,
                 dynamoDbAsyncClient, cloudWatchAsyncClient, workerIdentifier, shardRecordProcessorFactory);
 
         Map<Class<?>, Object> configObjects = new HashMap<>();
