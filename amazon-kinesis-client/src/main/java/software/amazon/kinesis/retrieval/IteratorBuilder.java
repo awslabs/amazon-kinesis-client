@@ -42,10 +42,25 @@ public class IteratorBuilder {
     }
 
     public static GetShardIteratorRequest.Builder request(GetShardIteratorRequest.Builder builder,
-            String sequenceNumber, InitialPositionInStreamExtended initialPosition) {
+                                                          String sequenceNumber,
+                                                          InitialPositionInStreamExtended initialPosition) {
+        return getShardIteratorRequest(builder, sequenceNumber, initialPosition, ShardIteratorType.AT_SEQUENCE_NUMBER);
+
+    }
+
+    public static GetShardIteratorRequest.Builder reconnectRequest(GetShardIteratorRequest.Builder builder,
+                                                                   String sequenceNumber,
+                                                                   InitialPositionInStreamExtended initialPosition) {
+        return getShardIteratorRequest(builder, sequenceNumber, initialPosition, ShardIteratorType.AFTER_SEQUENCE_NUMBER);
+    }
+
+    private static GetShardIteratorRequest.Builder getShardIteratorRequest(GetShardIteratorRequest.Builder builder,
+                                                                           String sequenceNumber,
+                                                                           InitialPositionInStreamExtended initialPosition,
+                                                                           ShardIteratorType shardIteratorType) {
         return apply(builder, GetShardIteratorRequest.Builder::shardIteratorType, GetShardIteratorRequest.Builder::timestamp,
                 GetShardIteratorRequest.Builder::startingSequenceNumber, initialPosition, sequenceNumber,
-                ShardIteratorType.AT_SEQUENCE_NUMBER);
+                shardIteratorType);
     }
 
     private final static Map<String, ShardIteratorType> SHARD_ITERATOR_MAPPING;

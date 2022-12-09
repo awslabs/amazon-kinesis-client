@@ -502,6 +502,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                             calculateHighestSequenceNumber(processRecordsInput), getRecordsResult.nextShardIterator(),
                             PrefetchRecordsRetrieved.generateBatchUniqueIdentifier());
                     publisherSession.highestSequenceNumber(recordsRetrieved.lastBatchSequenceNumber);
+                    log.debug("Last sequence number retrieved for streamAndShardId {} is {}", streamAndShardId,
+                            recordsRetrieved.lastBatchSequenceNumber);
                     addArrivedRecordsInput(recordsRetrieved);
                     drainQueueForRequests();
                 } catch (PositionResetException pse) {

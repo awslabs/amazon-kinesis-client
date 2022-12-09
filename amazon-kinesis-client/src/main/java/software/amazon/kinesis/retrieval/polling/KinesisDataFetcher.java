@@ -223,6 +223,12 @@ public class KinesisDataFetcher implements DataFetcher {
     @Override
     public void advanceIteratorTo(final String sequenceNumber,
                                   final InitialPositionInStreamExtended initialPositionInStream) {
+        advanceIteratorTo(sequenceNumber, initialPositionInStream, false);
+    }
+
+    private void advanceIteratorTo(final String sequenceNumber,
+                                   final InitialPositionInStreamExtended initialPositionInStream,
+                                   boolean isIteratorRestart) {
         if (sequenceNumber == null) {
             throw new IllegalArgumentException("SequenceNumber should not be null: shardId " + shardId);
         }
@@ -231,8 +237,10 @@ public class KinesisDataFetcher implements DataFetcher {
 
         GetShardIteratorRequest.Builder builder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
                 .streamName(streamIdentifier.streamName()).shardId(shardId);
-        GetShardIteratorRequest request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStream)
-                .build();
+        GetShardIteratorRequest request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStream).build();
+        if (isIteratorRestart) {
+            request = IteratorBuilder.reconnectRequest(builder, sequenceNumber, initialPositionInStream).build();
+        }
 
         // TODO: Check if this metric is fine to be added
         final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, OPERATION);
@@ -270,8 +278,8 @@ public class KinesisDataFetcher implements DataFetcher {
     }
 
     /**
-     * Gets a new iterator from the last known sequence number i.e. the sequence number of the last record from the last
-     * records call.
+     * Gets a new next shard iterator from last known sequence number i.e. the sequence number of the last
+     * record from the last records call.
      */
     @Override
     public void restartIterator() {
@@ -279,7 +287,9 @@ public class KinesisDataFetcher implements DataFetcher {
             throw new IllegalStateException(
                     "Make sure to initialize the KinesisDataFetcher before restarting the iterator.");
         }
-        advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream);
+        log.debug("Getting a new next shard iterator for sequence number {} " +
+                "for streamAndShardId {}", lastKnownSequenceNumber, streamAndShardId);
+        advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream, true);
     }
 
     @Override
