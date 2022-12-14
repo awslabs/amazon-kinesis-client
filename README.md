@@ -34,7 +34,11 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.14.8 - Feb 24, 2021)
+### Latest Release (1.14.9 - Dec 14, 2022)
+* [#995](https://github.com/awslabs/amazon-kinesis-client/commit/372f98b21a91487e36612d528c56765a44b0aa86) Every other change for DynamoDBStreamsKinesis Adapter Compatibility
+* [#970](https://github.com/awslabs/amazon-kinesis-client/commit/251b331a2e0fd912b50f8b5a12d088bf0b3263b9) PeriodicShardSyncManager Changes Needed for DynamoDBStreamsKinesisAdapter
+
+### Release (1.14.8 - Feb 24, 2022)
 * [Bump log4j-core from 2.17.0 to 2.17.1](https://github.com/awslabs/amazon-kinesis-client/commit/94b138a9d9a502ee0f4f000bb0efd2766ebadc37)
 * [Bump protobuf-java from 3.19.1 to 3.19.4](https://github.com/awslabs/amazon-kinesis-client/commit/a809b12c43c57a3d6ad3827feb60e4322614259c)
 * [Bump maven-compiler-plugin from 3.8.1 to 3.10.0](https://github.com/awslabs/amazon-kinesis-client/commit/37b5d7b9a1ccad483469ef542a6a7237462b14f2)
