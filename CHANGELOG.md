@@ -1,5 +1,10 @@
 # Changelog
 
+### Release 2.4.4 (December 23, 2022)
+* [#1017](https://github.com/awslabs/amazon-kinesis-client/pull/1017) Upgrade aws sdk 
+  * aws-java-sdk.version from 1.12.296 -> 1.12.370
+  * awssdk.version from 2.17.268 -> 2.19.2
+
 ### Release 2.4.3 (September 6, 2022)
 * [#980](https://github.com/awslabs/amazon-kinesis-client/pull/980) logback-classic: 1.2.9 -> 1.4.0
 * [#983](https://github.com/awslabs/amazon-kinesis-client/pull/983)
