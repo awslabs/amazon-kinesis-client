@@ -237,9 +237,11 @@ public class KinesisDataFetcher implements DataFetcher {
 
         GetShardIteratorRequest.Builder builder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
                 .streamName(streamIdentifier.streamName()).shardId(shardId);
-        GetShardIteratorRequest request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStream).build();
+        GetShardIteratorRequest request;
         if (isIteratorRestart) {
             request = IteratorBuilder.reconnectRequest(builder, sequenceNumber, initialPositionInStream).build();
+        } else {
+            request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStream).build();
         }
 
         // TODO: Check if this metric is fine to be added
@@ -287,8 +289,8 @@ public class KinesisDataFetcher implements DataFetcher {
             throw new IllegalStateException(
                     "Make sure to initialize the KinesisDataFetcher before restarting the iterator.");
         }
-        log.debug("Getting a new next shard iterator for sequence number {} " +
-                "for streamAndShardId {}", lastKnownSequenceNumber, streamAndShardId);
+        log.debug("Restarting iterator for sequence number {} on shard id {}",
+                lastKnownSequenceNumber, streamAndShardId);
         advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream, true);
     }
 
