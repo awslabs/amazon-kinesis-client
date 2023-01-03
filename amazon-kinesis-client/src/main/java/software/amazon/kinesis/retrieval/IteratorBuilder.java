@@ -42,12 +42,12 @@ public class IteratorBuilder {
     }
 
     /**
-     * Creates a GetShardIteratorRequest builder that uses AT_SEQUENCE_NUMBER GetShardIterator.
+     * Creates a GetShardIteratorRequest builder that uses AT_SEQUENCE_NUMBER ShardIteratorType.
      *
      * @param builder         An initial GetShardIteratorRequest builder to be updated.
      * @param sequenceNumber  The sequence number to restart the request from.
      * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP.
-     * @return An updated GetShardIteratorRequest.Builder
+     * @return An updated GetShardIteratorRequest.Builder.
      */
     public static GetShardIteratorRequest.Builder request(GetShardIteratorRequest.Builder builder,
                                                           String sequenceNumber,
@@ -57,12 +57,12 @@ public class IteratorBuilder {
     }
 
     /**
-     * Creates a GetShardIteratorRequest builder that uses AFTER_SEQUENCE_NUMBER GetShardIterator.
+     * Creates a GetShardIteratorRequest builder that uses AFTER_SEQUENCE_NUMBER ShardIteratorType.
      *
      * @param builder         An initial GetShardIteratorRequest builder to be updated.
      * @param sequenceNumber  The sequence number to restart the request from.
      * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP.
-     * @return An updated GetShardIteratorRequest.Builder
+     * @return An updated GetShardIteratorRequest.Builder.
      */
     public static GetShardIteratorRequest.Builder reconnectRequest(GetShardIteratorRequest.Builder builder,
                                                                    String sequenceNumber,
