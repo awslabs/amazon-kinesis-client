@@ -435,6 +435,33 @@ public class KinesisDataFetcherTest {
         assertEquals(restartGetRecordsResponse, kinesisDataFetcher.getRecords().accept());
     }
 
+    @Test
+    public void testRestartIteratorUsesAfterSequenceNumberIteratorType() throws Exception {
+        final String iterator = "iterator";
+        final String sequenceNumber = "123";
+
+        final ArgumentCaptor<GetShardIteratorRequest> shardIteratorRequestCaptor =
+                ArgumentCaptor.forClass(GetShardIteratorRequest.class);
+
+        when(kinesisClient.getShardIterator(shardIteratorRequestCaptor.capture())).
+                thenReturn(makeGetShardIteratorResonse(iterator));
+
+        kinesisDataFetcher.initialize(sequenceNumber, INITIAL_POSITION_LATEST);
+        kinesisDataFetcher.restartIterator();
+        // The advanceIteratorTo call should not use AFTER_SEQUENCE_NUMBER iterator
+        // type unless called by restartIterator
+        kinesisDataFetcher.advanceIteratorTo(sequenceNumber, INITIAL_POSITION_LATEST);
+
+        final List<GetShardIteratorRequest> shardIteratorRequests = shardIteratorRequestCaptor.getAllValues();
+        assertEquals(3, shardIteratorRequests.size());
+        assertEquals(ShardIteratorType.AT_SEQUENCE_NUMBER.toString(),
+                shardIteratorRequests.get(0).shardIteratorTypeAsString());
+        assertEquals(ShardIteratorType.AFTER_SEQUENCE_NUMBER.toString(),
+                shardIteratorRequests.get(1).shardIteratorTypeAsString());
+        assertEquals(ShardIteratorType.AT_SEQUENCE_NUMBER.toString(),
+                shardIteratorRequests.get(2).shardIteratorTypeAsString());
+    }
+
     @Test(expected = IllegalStateException.class)
     public void testRestartIteratorNotInitialized() {
         kinesisDataFetcher.restartIterator();
