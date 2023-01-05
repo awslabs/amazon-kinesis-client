@@ -1,5 +1,8 @@
 # Changelog
 
+### Release 2.4.5 (January 04, 2023)
+* [#1014](https://github.com/awslabs/amazon-kinesis-client/pull/1014) Use AFTER_SEQUENCE_NUMBER iterator type for expired iterator request
+
 ### Release 2.4.4 (December 23, 2022)
 * [#1017](https://github.com/awslabs/amazon-kinesis-client/pull/1017) Upgrade aws sdk 
   * aws-java-sdk.version from 1.12.296 -> 1.12.370
