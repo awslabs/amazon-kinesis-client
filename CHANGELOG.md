@@ -1,5 +1,8 @@
 # Changelog
 
+### Release 2.4.6 (January 13, 2023)
+* [#1022](https://github.com/awslabs/amazon-kinesis-client/pull/1022) Clean up in-memory state of deleted kinesis stream in MultiStreamMode
+
 ### Release 2.4.5 (January 04, 2023)
 * [#1014](https://github.com/awslabs/amazon-kinesis-client/pull/1014) Use AFTER_SEQUENCE_NUMBER iterator type for expired iterator request
 

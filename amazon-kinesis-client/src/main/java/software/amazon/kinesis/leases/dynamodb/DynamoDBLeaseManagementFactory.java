@@ -29,6 +29,7 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.LeaseCleanupConfig;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.DeletedStreamListProvider;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.KinesisShardDetector;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
@@ -514,6 +515,29 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 new HierarchicalShardSyncer(isMultiStreamMode, streamConfig.streamIdentifier().toString()),
                 metricsFactory);
     }
+
+    /**
+     * Create ShardSyncTaskManager from the streamConfig passed
+     *
+     * @param metricsFactory - factory to get metrics object
+     * @param streamConfig - streamConfig for which ShardSyncTaskManager needs to be created
+     * @return ShardSyncTaskManager
+     */
+    @Override
+    public ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory, StreamConfig streamConfig,
+            DeletedStreamListProvider deletedStreamListProvider) {
+        return new ShardSyncTaskManager(this.createShardDetector(streamConfig),
+                this.createLeaseRefresher(),
+                streamConfig.initialPositionInStreamExtended(),
+                cleanupLeasesUponShardCompletion,
+                ignoreUnexpectedChildShards,
+                shardSyncIntervalMillis,
+                executorService,
+                new HierarchicalShardSyncer(isMultiStreamMode, streamConfig.streamIdentifier().toString(),
+                        deletedStreamListProvider),
+                metricsFactory);
+    }
+
 
     @Override
     public DynamoDBLeaseRefresher createLeaseRefresher() {

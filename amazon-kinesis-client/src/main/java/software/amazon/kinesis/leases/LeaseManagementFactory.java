@@ -16,6 +16,7 @@
 package software.amazon.kinesis.leases;
 
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.coordinator.DeletedStreamListProvider;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.metrics.MetricsFactory;
 
@@ -29,6 +30,11 @@ public interface LeaseManagementFactory {
 
     default ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory, StreamConfig streamConfig) {
         throw new UnsupportedOperationException();
+    }
+
+    default ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory, StreamConfig streamConfig,
+            DeletedStreamListProvider deletedStreamListProvider) {
+        throw new UnsupportedOperationException("createShardSyncTaskManager method not implemented");
     }
 
     DynamoDBLeaseRefresher createLeaseRefresher();
