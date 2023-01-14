@@ -17,6 +17,7 @@ package software.amazon.kinesis.leases;
 import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,6 +40,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
+import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.ShardFilter;
 import software.amazon.awssdk.services.kinesis.model.ShardFilterType;
@@ -47,6 +49,7 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.DeletedStreamListProvider;
 import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
@@ -56,6 +59,7 @@ import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import static java.util.Objects.nonNull;
 import static software.amazon.kinesis.common.HashKeyRangeForLease.fromHashKeyRange;
 
 /**
@@ -72,6 +76,8 @@ public class HierarchicalShardSyncer {
 
     private final String streamIdentifier;
 
+    private final DeletedStreamListProvider deletedStreamListProvider;
+
     private static final String MIN_HASH_KEY = BigInteger.ZERO.toString();
     private static final String MAX_HASH_KEY = new BigInteger("2").pow(128).subtract(BigInteger.ONE).toString();
     private static final int retriesForCompleteHashRange = 3;
@@ -79,13 +85,17 @@ public class HierarchicalShardSyncer {
     private static final long DELAY_BETWEEN_LIST_SHARDS_MILLIS = 1000;
 
     public HierarchicalShardSyncer() {
-        isMultiStreamMode = false;
-        streamIdentifier = "SingleStreamMode";
+        this(false, "SingleStreamMode");
     }
 
     public HierarchicalShardSyncer(final boolean isMultiStreamMode, final String streamIdentifier) {
+        this(isMultiStreamMode, streamIdentifier, null);
+    }
+
+    public HierarchicalShardSyncer(final boolean isMultiStreamMode, final String streamIdentifier, final DeletedStreamListProvider deletedStreamListProvider) {
         this.isMultiStreamMode = isMultiStreamMode;
         this.streamIdentifier = streamIdentifier;
+        this.deletedStreamListProvider = deletedStreamListProvider;
     }
 
     private static final BiFunction<Lease, MultiStreamArgs, String> shardIdFromLeaseDeducer =
@@ -279,8 +289,17 @@ public class HierarchicalShardSyncer {
                 + retriesForCompleteHashRange + " retries.");
     }
 
-    private static List<Shard> getShardList(@NonNull final ShardDetector shardDetector) throws KinesisClientLibIOException {
-        final Optional<List<Shard>> shards = Optional.of(shardDetector.listShards());
+    private List<Shard> getShardList(@NonNull final ShardDetector shardDetector) throws KinesisClientLibIOException {
+        // Fallback to existing behavior for backward compatibility
+        List<Shard> shardList =  Collections.emptyList();
+        try {
+            shardList = shardDetector.listShardsWithoutConsumingResourceNotFoundException();
+        } catch (ResourceNotFoundException e) {
+            if (nonNull(this.deletedStreamListProvider) && isMultiStreamMode) {
+                deletedStreamListProvider.add(StreamIdentifier.multiStreamInstance(streamIdentifier));
+            }
+        }
+        final Optional<List<Shard>> shards = Optional.of(shardList);
 
         return shards.orElseThrow(() -> new KinesisClientLibIOException("Stream " + shardDetector.streamIdentifier().streamName() +
                 " is not in ACTIVE OR UPDATING state - will retry getting the shard list."));
