@@ -26,6 +26,7 @@ import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.KinesisClientLibraryPackage;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.processor.MultiStreamTracker;
@@ -46,7 +47,7 @@ public class RetrievalConfig {
      */
     public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java";
 
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.4.5";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.4.6-SNAPSHOT";
 
     /**
      * Client used to make calls to Kinesis for records retrieval
