@@ -41,7 +41,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -54,7 +53,6 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
-import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -75,7 +73,6 @@ import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBMultiStreamLeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
-import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
@@ -121,6 +118,7 @@ public class Scheduler implements Runnable {
     private static final String ACTIVE_STREAMS_COUNT = "ActiveStreams.Count";
     private static final String PENDING_STREAMS_DELETION_COUNT = "StreamsPendingDeletion.Count";
     private static final String DELETED_STREAMS_COUNT = "DeletedStreams.Count";
+    private static final String NON_EXISTING_STREAM_DELETE_COUNT = "NonExistingStreamDelete.Count";
 
     private SchedulerLog slog = new SchedulerLog();
 
@@ -172,6 +170,8 @@ public class Scheduler implements Runnable {
     private final Map<StreamIdentifier, Instant> staleStreamDeletionMap = new HashMap<>();
     private final LeaseCleanupManager leaseCleanupManager;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
+
+    private final DeletedStreamListProvider deletedStreamListProvider;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -263,9 +263,10 @@ public class Scheduler implements Runnable {
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
         this.diagnosticEventFactory = diagnosticEventFactory;
         this.diagnosticEventHandler = new DiagnosticEventLogger();
+        this.deletedStreamListProvider = new DeletedStreamListProvider();
         this.shardSyncTaskManagerProvider = streamConfig -> this.leaseManagementConfig
                 .leaseManagementFactory(leaseSerializer, isMultiStreamMode)
-                .createShardSyncTaskManager(this.metricsFactory, streamConfig);
+                .createShardSyncTaskManager(this.metricsFactory, streamConfig, this.deletedStreamListProvider);
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
@@ -558,6 +559,19 @@ public class Scheduler implements Runnable {
                         .partitioningBy(streamIdentifier -> newStreamConfigMap.containsKey(streamIdentifier), Collectors.toSet()));
                 final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream().filter(streamIdentifier ->
                         Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis() >= waitPeriodToDeleteOldStreams.toMillis()).collect(Collectors.toSet());
+                // These are the streams which are deleted in Kinesis and we encounter resource not found during
+                // shardSyncTask. This is applicable in MultiStreamMode only, in case of SingleStreamMode, store will
+                // not have any data.
+                // Filter streams based on newStreamConfigMap so that we don't override input to KCL in any case.
+                final Set<StreamIdentifier> deletedStreamSet = this.deletedStreamListProvider
+                                                .purgeAllDeletedStream()
+                                                .stream()
+                                                .filter(streamIdentifier ->  !newStreamConfigMap.containsKey(streamIdentifier))
+                                                .collect(Collectors.toSet());
+                if (deletedStreamSet.size() > 0) {
+                    log.info("Stale streams to delete: {}", deletedStreamSet);
+                    staleStreamIdsToBeDeleted.addAll(deletedStreamSet);
+                }
                 final Set<StreamIdentifier> deletedStreamsLeases = deleteMultiStreamLeases(staleStreamIdsToBeDeleted);
                 streamsSynced.addAll(deletedStreamsLeases);
 
@@ -576,6 +590,8 @@ public class Scheduler implements Runnable {
 
                 MetricsUtil.addCount(metricsScope, ACTIVE_STREAMS_COUNT, newStreamConfigMap.size(), MetricsLevel.SUMMARY);
                 MetricsUtil.addCount(metricsScope, PENDING_STREAMS_DELETION_COUNT, staleStreamDeletionMap.size(),
+                        MetricsLevel.SUMMARY);
+                MetricsUtil.addCount(metricsScope, NON_EXISTING_STREAM_DELETE_COUNT, deletedStreamSet.size(),
                         MetricsLevel.SUMMARY);
                 MetricsUtil.addCount(metricsScope, DELETED_STREAMS_COUNT, deletedStreamsLeases.size(), MetricsLevel.SUMMARY);
             } finally {
@@ -614,6 +630,7 @@ public class Scheduler implements Runnable {
 
     private Set<StreamIdentifier> deleteMultiStreamLeases(Set<StreamIdentifier> streamIdentifiers)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+        log.info("Deleting streams: {}", streamIdentifiers);
         final Set<StreamIdentifier> streamsSynced = new HashSet<>();
         List<MultiStreamLease> leases = null;
         Map<String, List<MultiStreamLease>> streamIdToShardsMap = null;

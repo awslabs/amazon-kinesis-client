@@ -46,7 +46,7 @@ public class RetrievalConfig {
      */
     public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java";
 
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.4.5";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.4.6";
 
     /**
      * Client used to make calls to Kinesis for records retrieval

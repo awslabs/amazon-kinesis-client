@@ -80,6 +80,8 @@ public class KinesisShardDetector implements ShardDetector {
     @Getter(AccessLevel.PACKAGE)
     private AtomicInteger cacheMisses = new AtomicInteger(0);
 
+    private static final Boolean THROW_RESOURCE_NOT_FOUND_EXCEPTION = true;
+
     @Deprecated
     public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
             int maxListShardsRetryAttempts, long listShardsCacheAllowedAgeInSeconds, int maxCacheMissesBeforeReload,
@@ -161,13 +163,24 @@ public class KinesisShardDetector implements ShardDetector {
 
     @Override
     @Synchronized
+    public List<Shard> listShardsWithoutConsumingResourceNotFoundException() {
+        return listShardsWithFilterInternal(null, THROW_RESOURCE_NOT_FOUND_EXCEPTION);
+    }
+
+    @Override
+    @Synchronized
     public List<Shard> listShardsWithFilter(ShardFilter shardFilter) {
+        return listShardsWithFilterInternal(shardFilter, !THROW_RESOURCE_NOT_FOUND_EXCEPTION);
+    }
+
+    private List<Shard> listShardsWithFilterInternal(ShardFilter shardFilter,
+            boolean shouldPropagateResourceNotFoundException) {
         final List<Shard> shards = new ArrayList<>();
         ListShardsResponse result;
         String nextToken = null;
 
         do {
-            result = listShards(shardFilter, nextToken);
+            result = listShards(shardFilter, nextToken, shouldPropagateResourceNotFoundException);
 
             if (result == null) {
                 /*
@@ -185,7 +198,12 @@ public class KinesisShardDetector implements ShardDetector {
         return shards;
     }
 
-    private ListShardsResponse listShards(ShardFilter shardFilter, final String nextToken) {
+    /**
+     * @param shouldPropagateResourceNotFoundException : used to determine if ResourceNotFoundException should be
+     *      handled by method and return Empty list or propagate the exception.
+     */
+    private ListShardsResponse listShards(ShardFilter shardFilter, final String nextToken,
+            final boolean shouldPropagateResourceNotFoundException) {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
         exceptionManager.add(ResourceNotFoundException.class, t -> t);
         exceptionManager.add(LimitExceededException.class, t -> t);
@@ -233,9 +251,14 @@ public class KinesisShardDetector implements ShardDetector {
             } catch (ResourceNotFoundException e) {
                 log.warn("Got ResourceNotFoundException when fetching shard list for {}. Stream no longer exists.",
                         streamIdentifier.streamName());
-                return ListShardsResponse.builder().shards(Collections.emptyList())
-                        .nextToken(null)
-                        .build();
+                if (shouldPropagateResourceNotFoundException) {
+                    throw e;
+                }
+                return ListShardsResponse.builder()
+                                         .shards(Collections.emptyList())
+                                         .nextToken(null)
+                                         .build();
+
             } catch (TimeoutException te) {
                 throw new RuntimeException(te);
             }
