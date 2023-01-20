@@ -28,7 +28,7 @@ public class DeletedStreamListProvider {
 
     /**
      * Method returns and empties the current set of streams
-     * @return list of deleted Streams
+     * @return set of deleted Streams
      */
     public Set<StreamIdentifier> purgeAllDeletedStream() {
         final Set<StreamIdentifier> response = new HashSet<>(deletedStreams);

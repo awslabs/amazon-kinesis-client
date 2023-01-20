@@ -783,37 +783,73 @@ public class SchedulerTest {
         List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1,6);
         List<StreamConfig> streamConfigList2 = createDummyStreamConfigList(1,4);
         when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList1, streamConfigList2);
+
+        prepareForStaleDeletedStreamCleanupTests();
+
+        // when KCL starts it starts with tracking 5 stream
+        assertEquals(Sets.newHashSet(streamConfigList1), Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        assertEquals(0, scheduler.staleStreamDeletionMap().size());
+
+        // 2 Streams are no longer needed to be consumed
+        Set<StreamIdentifier> syncedStreams1 = scheduler.checkAndSyncStreamShardsAndLeases();
+        assertEquals(Sets.newHashSet(streamConfigList1), Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        assertEquals(createDummyStreamConfigList(4, 6).stream()
+                                                      .map(StreamConfig::streamIdentifier)
+                                                      .collect(Collectors.toSet()), scheduler.staleStreamDeletionMap()
+                                                                                             .keySet());
+        assertEquals(0, syncedStreams1.size());
+
+        StreamConfig deletedStreamConfig = createDummyStreamConfig(5);
+        // One stream is deleted from Kinesis side
+        scheduler.deletedStreamListProvider().add(deletedStreamConfig.streamIdentifier());
+
+        Set<StreamIdentifier> syncedStreams2 = scheduler.checkAndSyncStreamShardsAndLeases();
+
+        Set<StreamConfig> expectedCurrentStreamConfigs = Sets.newHashSet(streamConfigList1);
+        expectedCurrentStreamConfigs.remove(deletedStreamConfig);
+
+        //assert kinesis deleted stream is cleaned up from KCL in memory state.
+        assertEquals(expectedCurrentStreamConfigs, Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        assertEquals(Sets.newHashSet(createDummyStreamConfig(4).streamIdentifier()),
+                Sets.newHashSet(scheduler.staleStreamDeletionMap().keySet()));
+        assertEquals(1, syncedStreams2.size());
+        assertEquals(0, scheduler.deletedStreamListProvider().purgeAllDeletedStream().size());
+
+        verify(multiStreamTracker, times(3)).streamConfigList();
+
+    }
+
+    private void prepareForStaleDeletedStreamCleanupTests() {
+
         when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new AutoDetectionAndDeferredDeletionStrategy() {
             @Override public Duration waitPeriodToDeleteFormerStreams() {
                 return Duration.ofDays(1);
             }
         });
+
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
         scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig));
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
-
-        // when KCL starts it starts with tracking 5 stream
-        assertEquals(5, scheduler.currentStreamConfigMap().size());
-        assertEquals(0, scheduler.staleStreamDeletionMap().size());
-
-        // 2 Streams are no longer needed to be consumed
-        Set<StreamIdentifier> syncedStreams2 = scheduler.checkAndSyncStreamShardsAndLeases();
-        assertEquals(5, scheduler.currentStreamConfigMap().size());
-        assertEquals(2, scheduler.staleStreamDeletionMap().size());
-
-        // One the stream is deleted from Kinesis side
-        scheduler.deletedStreamListProvider().add(createDummyStreamConfig(5).streamIdentifier());
-
-        Set<StreamIdentifier> syncedStreams3 = scheduler.checkAndSyncStreamShardsAndLeases();
-        //assert kinesis deleted stream is cleaned up from KCL in memory state.
-        assertEquals(4, scheduler.currentStreamConfigMap().size());
-        assertEquals(1, scheduler.staleStreamDeletionMap().size());
-
-        verify(multiStreamTracker, times(3)).streamConfigList();
-
     }
+    // Tests validate that no cleanup of stream is done if its still tracked in multiStreamTracker
+    @Test
+    public void testKinesisStaleDeletedStreamNoCleanUpForTrackedStream()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1,6);
+        when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList1);
+        prepareForStaleDeletedStreamCleanupTests();
+
+        scheduler.deletedStreamListProvider().add(createDummyStreamConfig(3).streamIdentifier());
+
+        Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
+
+        assertEquals(0, syncedStreams.size());
+        assertEquals(0, scheduler.staleStreamDeletionMap().size());
+        assertEquals(Sets.newHashSet(streamConfigList1), Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+    }
+
     //Creates list of upperBound-lowerBound no of dummy StreamConfig
     private List<StreamConfig> createDummyStreamConfigList(int lowerBound, int upperBound) {
         return IntStream.range(lowerBound, upperBound).mapToObj(this::createDummyStreamConfig)

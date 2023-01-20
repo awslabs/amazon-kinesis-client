@@ -217,7 +217,6 @@ public class Scheduler implements Runnable {
                         @NonNull final ProcessorConfig processorConfig,
                         @NonNull final RetrievalConfig retrievalConfig,
                         @NonNull final DiagnosticEventFactory diagnosticEventFactory) {
-        log.info("Scheduler invoked for version 2.4.6, V1");
         this.checkpointConfig = checkpointConfig;
         this.coordinatorConfig = coordinatorConfig;
         this.leaseManagementConfig = leaseManagementConfig;
@@ -563,7 +562,12 @@ public class Scheduler implements Runnable {
                 // These are the streams which are deleted in Kinesis and we encounter resource not found during
                 // shardSyncTask. This is applicable in MultiStreamMode only, in case of SingleStreamMode, store will
                 // not have any data.
-                final Set<StreamIdentifier> deletedStreamSet = this.deletedStreamListProvider.purgeAllDeletedStream();
+                // Filter streams based on newStreamConfigMap so that we don't override input to KCL in any case.
+                final Set<StreamIdentifier> deletedStreamSet = this.deletedStreamListProvider
+                                                .purgeAllDeletedStream()
+                                                .stream()
+                                                .filter(streamIdentifier ->  !newStreamConfigMap.containsKey(streamIdentifier))
+                                                .collect(Collectors.toSet());
                 if (deletedStreamSet.size() > 0) {
                     log.info("Stale streams to delete: {}", deletedStreamSet);
                     staleStreamIdsToBeDeleted.addAll(deletedStreamSet);

@@ -505,15 +505,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      */
     @Override
     public ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory, StreamConfig streamConfig) {
-        return new ShardSyncTaskManager(this.createShardDetector(streamConfig),
-                this.createLeaseRefresher(),
-                streamConfig.initialPositionInStreamExtended(),
-                cleanupLeasesUponShardCompletion,
-                ignoreUnexpectedChildShards,
-                shardSyncIntervalMillis,
-                executorService,
-                new HierarchicalShardSyncer(isMultiStreamMode, streamConfig.streamIdentifier().toString()),
-                metricsFactory);
+        return createShardSyncTaskManager(metricsFactory, streamConfig, null);
     }
 
     /**
@@ -521,6 +513,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      *
      * @param metricsFactory - factory to get metrics object
      * @param streamConfig - streamConfig for which ShardSyncTaskManager needs to be created
+     * @param deletedStreamListProvider - store for capturing the streams which are deleted in kinesis
      * @return ShardSyncTaskManager
      */
     @Override
