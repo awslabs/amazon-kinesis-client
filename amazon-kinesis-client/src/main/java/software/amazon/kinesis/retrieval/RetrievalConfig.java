@@ -24,12 +24,14 @@ import lombok.ToString;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.utils.Either;
+import software.amazon.kinesis.common.DeprecationUtils;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.common.KinesisClientLibraryPackage;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.processor.MultiStreamTracker;
+import software.amazon.kinesis.processor.SingleStreamTracker;
+import software.amazon.kinesis.processor.StreamTracker;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
 import software.amazon.kinesis.retrieval.polling.PollingConfig;
 
@@ -67,8 +69,16 @@ public class RetrievalConfig {
 
     /**
      * AppStreamTracker either for multi stream tracking or single stream
+     *
+     * @deprecated Both single- and multi-stream support is now provided by {@link StreamTracker}.
+     * @see #streamTracker
      */
     private Either<MultiStreamTracker, StreamConfig> appStreamTracker;
+
+    /**
+     * Stream(s) to be consumed by this KCL application.
+     */
+    private StreamTracker streamTracker;
 
     /**
      * Backoff time between consecutive ListShards calls.
@@ -95,7 +105,12 @@ public class RetrievalConfig {
      * <p>
      * Default value: {@link InitialPositionInStream#LATEST}
      * </p>
+     *
+     * @deprecated Initial stream position is now handled by {@link StreamTracker}.
+     * @see StreamTracker#orphanedStreamInitialPositionInStream()
+     * @see StreamTracker#createConfig(StreamIdentifier)
      */
+    @Deprecated
     private InitialPositionInStreamExtended initialPositionInStreamExtended = InitialPositionInStreamExtended
             .newInitialPosition(InitialPositionInStream.LATEST);
 
@@ -105,27 +120,36 @@ public class RetrievalConfig {
 
     public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull String streamName,
                            @NonNull String applicationName) {
-        this.kinesisClient = kinesisAsyncClient;
-        this.appStreamTracker = Either
-                .right(new StreamConfig(StreamIdentifier.singleStreamInstance(streamName), initialPositionInStreamExtended));
-        this.applicationName = applicationName;
+        this(kinesisAsyncClient, new SingleStreamTracker(streamName), applicationName);
     }
 
-    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull MultiStreamTracker multiStreamTracker,
+    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull StreamTracker streamTracker,
                            @NonNull String applicationName) {
         this.kinesisClient = kinesisAsyncClient;
-        this.appStreamTracker = Either.left(multiStreamTracker);
+        this.streamTracker = streamTracker;
         this.applicationName = applicationName;
+        this.appStreamTracker = DeprecationUtils.convert(streamTracker,
+                singleStreamTracker -> singleStreamTracker.streamConfigList().get(0));
     }
 
+    /**
+     *
+     * @param initialPositionInStreamExtended
+     *
+     * @deprecated Initial stream position is now handled by {@link StreamTracker}.
+     * @see StreamTracker#orphanedStreamInitialPositionInStream()
+     * @see StreamTracker#createConfig(StreamIdentifier)
+     */
+    @Deprecated
     public RetrievalConfig initialPositionInStreamExtended(InitialPositionInStreamExtended initialPositionInStreamExtended) {
-        final StreamConfig[] streamConfig = new StreamConfig[1];
         this.appStreamTracker.apply(multiStreamTracker -> {
             throw new IllegalArgumentException(
                     "Cannot set initialPositionInStreamExtended when multiStreamTracker is set");
-        }, sc -> streamConfig[0] = sc);
-        this.appStreamTracker = Either
-                .right(new StreamConfig(streamConfig[0].streamIdentifier(), initialPositionInStreamExtended));
+        }, sc -> {
+            final StreamConfig updatedConfig = new StreamConfig(sc.streamIdentifier(), initialPositionInStreamExtended);
+            streamTracker = new SingleStreamTracker(sc.streamIdentifier(), updatedConfig);
+            appStreamTracker = Either.right(updatedConfig);
+        });
         return this;
     }
 

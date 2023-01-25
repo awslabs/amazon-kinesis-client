@@ -53,7 +53,6 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
@@ -88,10 +87,10 @@ import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
-import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.ShutdownNotificationAware;
+import software.amazon.kinesis.processor.StreamTracker;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
@@ -138,7 +137,6 @@ public class Scheduler implements Runnable {
     private final ExecutorService executorService;
     private final DiagnosticEventFactory diagnosticEventFactory;
     private final DiagnosticEventHandler diagnosticEventHandler;
-    // private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final LeaseCoordinator leaseCoordinator;
     private final Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider;
     private final Map<StreamConfig, ShardSyncTaskManager> streamToShardSyncTaskManagerMap = new HashMap<>();
@@ -152,10 +150,9 @@ public class Scheduler implements Runnable {
     private final long failoverTimeMillis;
     private final long taskBackoffTimeMillis;
     private final boolean isMultiStreamMode;
-    private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
-    private MultiStreamTracker multiStreamTracker;
-    private FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy;
-    private InitialPositionInStreamExtended orphanedStreamInitialPositionInStream;
+    private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap = new ConcurrentHashMap<>();
+    private final StreamTracker streamTracker;
+    private final FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy;
     private final long listShardsBackoffTimeMillis;
     private final int maxListShardsRetryAttempts;
     private final LeaseRefresher leaseRefresher;
@@ -222,23 +219,12 @@ public class Scheduler implements Runnable {
         this.retrievalConfig = retrievalConfig;
 
         this.applicationName = this.coordinatorConfig.applicationName();
-        this.isMultiStreamMode = this.retrievalConfig.appStreamTracker().map(
-                multiStreamTracker -> true, streamConfig -> false);
-        this.currentStreamConfigMap = this.retrievalConfig.appStreamTracker().map(
-                multiStreamTracker -> {
-                    this.multiStreamTracker = multiStreamTracker;
-                    this.formerStreamsLeasesDeletionStrategy = multiStreamTracker.formerStreamsLeasesDeletionStrategy();
-                    this.orphanedStreamInitialPositionInStream = multiStreamTracker.orphanedStreamInitialPositionInStream();
-                    return multiStreamTracker.streamConfigList().stream()
-                            .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc));
-                },
-                streamConfig -> {
-                    // use a concrete, non-singleton map to allow computeIfAbsent(...)
-                    // without forcing behavioral differences for multi-stream support
-                    final Map<StreamIdentifier, StreamConfig> map = new HashMap<>();
-                    map.put(streamConfig.streamIdentifier(), streamConfig);
-                    return map;
-                });
+        this.streamTracker = retrievalConfig.streamTracker();
+        this.isMultiStreamMode = streamTracker.isMultiStream();
+        this.formerStreamsLeasesDeletionStrategy = streamTracker.formerStreamsLeasesDeletionStrategy();
+        streamTracker.streamConfigList().forEach(
+                sc -> currentStreamConfigMap.put(sc.streamIdentifier(), sc));
+
         this.maxInitializationAttempts = this.coordinatorConfig.maxInitializationAttempts();
         this.metricsFactory = this.metricsConfig.metricsFactory();
         // Determine leaseSerializer based on availability of MultiStreamTracker.
@@ -464,12 +450,8 @@ public class Scheduler implements Runnable {
             final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, MULTI_STREAM_TRACKER);
 
             try {
-
-                final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = new HashMap<>();
-                final Duration waitPeriodToDeleteOldStreams = formerStreamsLeasesDeletionStrategy.waitPeriodToDeleteFormerStreams();
-                // Making an immutable copy
-                newStreamConfigMap.putAll(multiStreamTracker.streamConfigList().stream()
-                        .collect(Collectors.toMap(sc -> sc.streamIdentifier(), sc -> sc)));
+                final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = streamTracker.streamConfigList()
+                        .stream().collect(Collectors.toMap(StreamConfig::streamIdentifier, Function.identity()));
 
                 List<MultiStreamLease> leases;
 
@@ -549,6 +531,8 @@ public class Scheduler implements Runnable {
                     }
                 }
 
+                final Duration waitPeriodToDeleteOldStreams =
+                        formerStreamsLeasesDeletionStrategy.waitPeriodToDeleteFormerStreams();
                 // Now let's scan the streamIdentifiersForLeaseCleanup eligible for deferred deletion and delete them.
                 // StreamIdentifiers are eligible for deletion only when the deferment period has elapsed and
                 // the streamIdentifiersForLeaseCleanup are not present in the latest snapshot.
@@ -594,7 +578,7 @@ public class Scheduler implements Runnable {
                 .collect(Collectors.toSet());
         for (StreamIdentifier streamIdentifier : streamIdentifiers) {
             if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
-                currentStreamConfigMap.put(streamIdentifier, getOrphanedStreamConfig(streamIdentifier));
+                currentStreamConfigMap.put(streamIdentifier, streamTracker.createStreamConfig(streamIdentifier));
             }
         }
     }
@@ -650,17 +634,6 @@ public class Scheduler implements Runnable {
             }
         }
         return true;
-    }
-
-    /**
-     * Generates default StreamConfig for an "orphaned" stream that is in the lease table but not tracked.
-     *
-     * @param streamIdentifier stream for which an orphan config should be generated
-     */
-    private StreamConfig getOrphanedStreamConfig(StreamIdentifier streamIdentifier) {
-        final StreamConfig orphanConfig = new StreamConfig(streamIdentifier, orphanedStreamInitialPositionInStream);
-        log.info("Identified as orphan: {}", orphanConfig);
-        return orphanConfig;
     }
 
     /**
@@ -922,7 +895,10 @@ public class Scheduler implements Runnable {
         // Irrespective of single stream app or multi stream app, streamConfig should always be available.
         // If we have a shardInfo, that is not present in currentStreamConfigMap for whatever reason, then return default stream config
         // to gracefully complete the reading.
-        final StreamConfig streamConfig = currentStreamConfigMap.computeIfAbsent(streamIdentifier, this::getOrphanedStreamConfig);
+        StreamConfig streamConfig = currentStreamConfigMap.get(streamIdentifier);
+        if (streamConfig == null) {
+            streamConfig = streamTracker.createStreamConfig(streamIdentifier);
+        }
         Validate.notNull(streamConfig, "StreamConfig should not be null");
         RecordsPublisher cache = retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, streamConfig, metricsFactory);
         ShardConsumerArgument argument = new ShardConsumerArgument(shardInfo,
