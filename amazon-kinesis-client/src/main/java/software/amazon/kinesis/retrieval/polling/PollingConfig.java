@@ -18,7 +18,6 @@ package software.amazon.kinesis.retrieval.polling;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Function;
-import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
@@ -47,8 +46,6 @@ public class PollingConfig implements RetrievalSpecificConfig {
     Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider;
     /**
      * Name of the Kinesis stream.
-     *
-     * @return String
      */
     private String streamName;
 
@@ -63,8 +60,6 @@ public class PollingConfig implements RetrievalSpecificConfig {
 
     /**
      * Client used to access to Kinesis service.
-     *
-     * @return {@link KinesisAsyncClient}
      */
     @NonNull
     private final KinesisAsyncClient kinesisClient;

@@ -64,22 +64,16 @@ public class LeaseManagementConfig {
 
     /**
      * Name of the table to use in DynamoDB
-     *
-     * @return String
      */
     @NonNull
     private final String tableName;
     /**
      * Client to be used to access DynamoDB service.
-     *
-     * @return {@link DynamoDbAsyncClient}
      */
     @NonNull
     private final DynamoDbAsyncClient dynamoDBClient;
     /**
      * Client to be used to access Kinesis Data Streams service.
-     *
-     * @return {@link KinesisAsyncClient}
      */
     @NonNull
     private final KinesisAsyncClient kinesisClient;
@@ -90,8 +84,6 @@ public class LeaseManagementConfig {
     private String streamName;
     /**
      * Used to distinguish different workers/processes of a KCL application.
-     *
-     * @return String
      */
     @NonNull
     private final String workerIdentifier;

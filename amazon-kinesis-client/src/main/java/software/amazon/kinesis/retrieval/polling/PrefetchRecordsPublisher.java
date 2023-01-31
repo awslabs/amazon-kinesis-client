@@ -70,7 +70,7 @@ import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDelivery
  * i.e. the byte size of the records stored in the cache and maxRecordsCount i.e. the max number of records that should
  * be present in the cache across multiple GetRecordsResult object. If no data is available in the cache, the call from
  * the record processor is blocked till records are retrieved from Kinesis.
- *
+ * <br/><br/>
  * There are three threads namely publisher, demand-notifier and ack-notifier which will contend to drain the events
  * to the Subscriber (ShardConsumer in KCL).
  */
@@ -81,9 +81,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     // Since this package is being used by all KCL clients keeping the upper threshold of 60 seconds
     private static final long DEFAULT_AWAIT_TERMINATION_TIMEOUT_MILLIS = 60_000L;
 
-    private int maxPendingProcessRecordsInput;
-    private int maxByteSize;
-    private int maxRecordsCount;
+    private final int maxPendingProcessRecordsInput;
+    private final int maxByteSize;
+    private final int maxRecordsCount;
     private final int maxRecordsPerCall;
     private final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
     private final ExecutorService executorService;
@@ -447,7 +447,6 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     }
 
-
     private class DefaultGetRecordsCacheDaemon implements Runnable {
         volatile boolean isShutdown = false;
 
@@ -483,7 +482,6 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, operation);
             if (publisherSession.prefetchCounters().shouldGetNewRecords()) {
                 try {
-
                     sleepBeforeNextCall();
                     GetRecordsResponse getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
                     lastSuccessfulCall = Instant.now();

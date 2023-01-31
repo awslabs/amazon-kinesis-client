@@ -108,7 +108,7 @@ public class RetrievalConfig {
      *
      * @deprecated Initial stream position is now handled by {@link StreamTracker}.
      * @see StreamTracker#orphanedStreamInitialPositionInStream()
-     * @see StreamTracker#createConfig(StreamIdentifier)
+     * @see StreamTracker#createStreamConfig(StreamIdentifier)
      */
     @Deprecated
     private InitialPositionInStreamExtended initialPositionInStreamExtended = InitialPositionInStreamExtended
@@ -138,7 +138,7 @@ public class RetrievalConfig {
      *
      * @deprecated Initial stream position is now handled by {@link StreamTracker}.
      * @see StreamTracker#orphanedStreamInitialPositionInStream()
-     * @see StreamTracker#createConfig(StreamIdentifier)
+     * @see StreamTracker#createStreamConfig(StreamIdentifier)
      */
     @Deprecated
     public RetrievalConfig initialPositionInStreamExtended(InitialPositionInStreamExtended initialPositionInStreamExtended) {
