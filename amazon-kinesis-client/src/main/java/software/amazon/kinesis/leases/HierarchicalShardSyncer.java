@@ -109,7 +109,6 @@ public class HierarchicalShardSyncer {
      * @throws ProvisionedThroughputException
      * @throws KinesisClientLibIOException
      */
-    // CHECKSTYLE:OFF CyclomaticComplexity
     public synchronized boolean checkAndCreateLeaseForNewShards(@NonNull final ShardDetector shardDetector,
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
             final MetricsScope scope, final boolean ignoreUnexpectedChildShards, final boolean isLeaseTableEmpty)
@@ -195,38 +194,6 @@ public class HierarchicalShardSyncer {
                 .flatMap(entry -> shardIdToChildShardIdsMap.get(entry.getKey()).stream()).collect(Collectors.toSet());
     }
 
-    private synchronized void assertHashRangeOfClosedShardIsCovered(final Shard closedShard,
-            final Map<String, Shard> shardIdToShardMap, final Set<String> childShardIds)
-            throws KinesisClientLibIOException {
-        BigInteger minStartingHashKeyOfChildren = null;
-        BigInteger maxEndingHashKeyOfChildren = null;
-
-        final BigInteger startingHashKeyOfClosedShard = new BigInteger(closedShard.hashKeyRange().startingHashKey());
-        final BigInteger endingHashKeyOfClosedShard = new BigInteger(closedShard.hashKeyRange().endingHashKey());
-
-        for (String childShardId : childShardIds) {
-            final Shard childShard = shardIdToShardMap.get(childShardId);
-            final BigInteger startingHashKey = new BigInteger(childShard.hashKeyRange().startingHashKey());
-            if (minStartingHashKeyOfChildren == null || startingHashKey.compareTo(minStartingHashKeyOfChildren) < 0) {
-                minStartingHashKeyOfChildren = startingHashKey;
-            }
-
-            final BigInteger endingHashKey = new BigInteger(childShard.hashKeyRange().endingHashKey());
-            if (maxEndingHashKeyOfChildren == null || endingHashKey.compareTo(maxEndingHashKeyOfChildren) > 0) {
-                maxEndingHashKeyOfChildren = endingHashKey;
-            }
-        }
-        
-        if (minStartingHashKeyOfChildren == null || maxEndingHashKeyOfChildren == null
-                || minStartingHashKeyOfChildren.compareTo(startingHashKeyOfClosedShard) > 0
-                || maxEndingHashKeyOfChildren.compareTo(endingHashKeyOfClosedShard) < 0) {
-            throw new KinesisClientLibIOException(String.format(
-                    "Incomplete shard list: hash key range of shard %s is not covered by its child shards.",
-                    closedShard.shardId()));
-        }
-        
-    }
-    
     /**
      * Helper method to construct shardId->setOfChildShardIds map.
      * Note: This has package access for testing purposes only.
@@ -262,7 +229,6 @@ public class HierarchicalShardSyncer {
      * @return ShardFilter shard filter for the corresponding position in the stream.
      */
     private static ShardFilter getShardFilterFromInitialPosition(InitialPositionInStreamExtended initialPositionInStreamExtended) {
-
         ShardFilter.Builder builder = ShardFilter.builder();
 
         switch (initialPositionInStreamExtended.getInitialPositionInStream()) {
@@ -314,7 +280,6 @@ public class HierarchicalShardSyncer {
     }
 
     private static boolean isHashRangeOfShardsComplete(@NonNull List<Shard> shards) {
-
         if (shards.isEmpty()) {
             throw new IllegalStateException("No shards found when attempting to validate complete hash range.");
         }
@@ -413,7 +378,6 @@ public class HierarchicalShardSyncer {
      * @param memoizationContext Memoization of shards that have been evaluated as part of the evaluation
      * @return true if the shard is a descendant of any current shard (lease already exists)
      */
-    // CHECKSTYLE:OFF CyclomaticComplexity
     static boolean checkIfDescendantAndAddNewLeasesForAncestors(final String shardId,
             final InitialPositionInStreamExtended initialPosition, final Set<String> shardIdsOfCurrentLeases,
             final Map<String, Shard> shardIdToShardMapOfAllKinesisShards,
@@ -543,8 +507,6 @@ public class HierarchicalShardSyncer {
                 shardIdToShardMapOfAllKinesisShards, shardIdToLeaseMapOfNewShards, memoizationContext,
                 new MultiStreamArgs(false, null));
     }
-
-    // CHECKSTYLE:ON CyclomaticComplexity
 
     /**
      * Helper method to get parent shardIds of the current shard - includes the parent shardIds if:
@@ -750,7 +712,6 @@ public class HierarchicalShardSyncer {
             
             return result;
         }
-                
     }
 
     @Data
@@ -839,10 +800,9 @@ public class HierarchicalShardSyncer {
                 shardIdToNewLeaseMap.put(shardId, lease);
             }
 
-            return new ArrayList(shardIdToNewLeaseMap.values());
+            return new ArrayList<>(shardIdToNewLeaseMap.values());
         }
     }
-
 
     /**
      * Class to help create leases when the lease table is not initially empty.
@@ -973,8 +933,8 @@ public class HierarchicalShardSyncer {
      */
     @NoArgsConstructor
     static class MemoizationContext {
-        private Map<String, Boolean> isDescendantMap = new HashMap<>();
-        private Map<String, Boolean> shouldCreateLeaseMap = new HashMap<>();
+        private final Map<String, Boolean> isDescendantMap = new HashMap<>();
+        private final Map<String, Boolean> shouldCreateLeaseMap = new HashMap<>();
 
         Boolean isDescendant(String shardId) {
             return isDescendantMap.get(shardId);
