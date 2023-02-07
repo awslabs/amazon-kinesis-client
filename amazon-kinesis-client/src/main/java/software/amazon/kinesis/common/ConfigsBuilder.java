@@ -15,6 +15,8 @@
 
 package software.amazon.kinesis.common;
 
+import java.util.function.Function;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -35,6 +37,8 @@ import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.MultiStreamTracker;
+import software.amazon.kinesis.processor.SingleStreamTracker;
+import software.amazon.kinesis.processor.StreamTracker;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
 /**
@@ -46,8 +50,17 @@ public class ConfigsBuilder {
     /**
      * Either the name of the stream to consume records from
      * Or MultiStreamTracker for all the streams to consume records from
+     *
+     * @deprecated Both single- and multi-stream support is now provided by {@link StreamTracker}.
+     * @see #streamTracker
      */
+    @Deprecated
     private Either<MultiStreamTracker, String> appStreamTracker;
+
+    /**
+     * Stream(s) to be consumed by this KCL application.
+     */
+    private StreamTracker streamTracker;
 
     /**
      * Application name for the KCL Worker
@@ -115,7 +128,8 @@ public class ConfigsBuilder {
     }
 
     /**
-     * Constructor to initialize ConfigsBuilder with StreamName
+     * Constructor to initialize ConfigsBuilder for a single stream.
+     *
      * @param streamName
      * @param applicationName
      * @param kinesisClient
@@ -128,18 +142,19 @@ public class ConfigsBuilder {
             @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient,
             @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier,
             @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
-        this.appStreamTracker = Either.right(streamName);
-        this.applicationName = applicationName;
-        this.kinesisClient = kinesisClient;
-        this.dynamoDBClient = dynamoDBClient;
-        this.cloudWatchClient = cloudWatchClient;
-        this.workerIdentifier = workerIdentifier;
-        this.shardRecordProcessorFactory = shardRecordProcessorFactory;
+        this(new SingleStreamTracker(streamName),
+                applicationName,
+                kinesisClient,
+                dynamoDBClient,
+                cloudWatchClient,
+                workerIdentifier,
+                shardRecordProcessorFactory);
     }
 
     /**
-     * Constructor to initialize ConfigsBuilder with MultiStreamTracker
-     * @param multiStreamTracker
+     * Constructor to initialize ConfigsBuilder
+     *
+     * @param streamTracker tracker for single- or multi-stream processing
      * @param applicationName
      * @param kinesisClient
      * @param dynamoDBClient
@@ -147,17 +162,30 @@ public class ConfigsBuilder {
      * @param workerIdentifier
      * @param shardRecordProcessorFactory
      */
-    public ConfigsBuilder(@NonNull MultiStreamTracker multiStreamTracker, @NonNull String applicationName,
+    public ConfigsBuilder(@NonNull StreamTracker streamTracker, @NonNull String applicationName,
             @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient,
             @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier,
             @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
-        this.appStreamTracker = Either.left(multiStreamTracker);
         this.applicationName = applicationName;
         this.kinesisClient = kinesisClient;
         this.dynamoDBClient = dynamoDBClient;
         this.cloudWatchClient = cloudWatchClient;
         this.workerIdentifier = workerIdentifier;
         this.shardRecordProcessorFactory = shardRecordProcessorFactory;
+
+        // construct both streamTracker and appStreamTracker
+        streamTracker(streamTracker);
+    }
+
+    public void appStreamTracker(Either<MultiStreamTracker, String> appStreamTracker) {
+        this.appStreamTracker = appStreamTracker;
+        streamTracker = appStreamTracker.map(Function.identity(), SingleStreamTracker::new);
+    }
+
+    public void streamTracker(StreamTracker streamTracker) {
+        this.streamTracker = streamTracker;
+        this.appStreamTracker = DeprecationUtils.convert(streamTracker,
+                singleStreamTracker -> singleStreamTracker.streamConfigList().get(0).streamIdentifier().streamName());
     }
 
     /**
@@ -205,7 +233,6 @@ public class ConfigsBuilder {
         return new MetricsConfig(cloudWatchClient(), namespace());
     }
 
-
     /**
      * Creates a new instance of ProcessorConfig
      *
@@ -221,10 +248,6 @@ public class ConfigsBuilder {
      * @return RetrievalConfig
      */
     public RetrievalConfig retrievalConfig() {
-        final RetrievalConfig retrievalConfig =
-                appStreamTracker.map(
-                        multiStreamTracker -> new RetrievalConfig(kinesisClient(), multiStreamTracker, applicationName()),
-                        streamName ->  new RetrievalConfig(kinesisClient(), streamName, applicationName()));
-        return retrievalConfig;
+        return new RetrievalConfig(kinesisClient(), streamTracker(), applicationName());
     }
 }
