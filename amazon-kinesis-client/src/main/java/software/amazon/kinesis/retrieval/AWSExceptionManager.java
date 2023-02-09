@@ -26,7 +26,9 @@ import lombok.experimental.Accessors;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
 /**
- *
+ * Traverses a {@code Throwable} class inheritance in search of a mapping
+ * function which will convert that throwable into a {@code RuntimeException}.
+ * If no mapping function is found, the default function will be applied.
  */
 @KinesisClientInternalApi
 public class AWSExceptionManager {

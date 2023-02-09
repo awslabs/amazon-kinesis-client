@@ -64,6 +64,22 @@ import software.amazon.kinesis.retrieval.AWSExceptionManager;
 @KinesisClientInternalApi
 public class KinesisShardDetector implements ShardDetector {
 
+    /**
+     * Reusable {@link AWSExceptionManager}.
+     * <p>
+     * N.B. This instance is mutable, but thread-safe for <b>read-only</b> use.
+     * </p>
+     */
+    private static final AWSExceptionManager AWS_EXCEPTION_MANAGER;
+
+    static {
+        AWS_EXCEPTION_MANAGER = new AWSExceptionManager();
+        AWS_EXCEPTION_MANAGER.add(KinesisException.class, t -> t);
+        AWS_EXCEPTION_MANAGER.add(LimitExceededException.class, t -> t);
+        AWS_EXCEPTION_MANAGER.add(ResourceInUseException.class, t -> t);
+        AWS_EXCEPTION_MANAGER.add(ResourceNotFoundException.class, t -> t);
+    }
+
     @NonNull
     private final KinesisAsyncClient kinesisClient;
     @NonNull @Getter
@@ -78,7 +94,7 @@ public class KinesisShardDetector implements ShardDetector {
     private volatile Map<String, Shard> cachedShardMap = null;
     private volatile Instant lastCacheUpdateTime;
     @Getter(AccessLevel.PACKAGE)
-    private AtomicInteger cacheMisses = new AtomicInteger(0);
+    private final AtomicInteger cacheMisses = new AtomicInteger(0);
 
     @Deprecated
     public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
@@ -186,12 +202,6 @@ public class KinesisShardDetector implements ShardDetector {
     }
 
     private ListShardsResponse listShards(ShardFilter shardFilter, final String nextToken) {
-        final AWSExceptionManager exceptionManager = new AWSExceptionManager();
-        exceptionManager.add(ResourceNotFoundException.class, t -> t);
-        exceptionManager.add(LimitExceededException.class, t -> t);
-        exceptionManager.add(ResourceInUseException.class, t -> t);
-        exceptionManager.add(KinesisException.class, t -> t);
-
         ListShardsRequest.Builder builder = KinesisRequestsBuilder.listShardsRequestBuilder();
         if (StringUtils.isEmpty(nextToken)) {
             builder = builder.streamName(streamIdentifier.streamName()).shardFilter(shardFilter);
@@ -211,7 +221,7 @@ public class KinesisShardDetector implements ShardDetector {
                 try {
                     result = getListShardsResponse(request);
                 } catch (ExecutionException e) {
-                    throw exceptionManager.apply(e.getCause());
+                    throw AWS_EXCEPTION_MANAGER.apply(e.getCause());
                 } catch (InterruptedException e) {
                     // TODO: check if this is the correct behavior for Interrupted Exception
                     log.debug("Interrupted exception caught, shutdown initiated, returning null");
