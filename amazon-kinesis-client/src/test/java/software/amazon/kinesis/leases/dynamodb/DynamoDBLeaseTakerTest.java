@@ -111,7 +111,7 @@ public class DynamoDBLeaseTakerTest {
     }
 
     @Test
-    public void test_computeLeaseCounts_noExpiredLease() throws Exception {
+    public void test_computeActiveLeaseCountsByWorker_noAvailableLeases() throws Exception {
         final List<Lease> leases = new ImmutableList.Builder<Lease>()
                 .add(createLease(null, "1"))
                 .add(createLease("foo", "2"))
@@ -125,10 +125,9 @@ public class DynamoDBLeaseTakerTest {
         when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
         when(timeProvider.call()).thenReturn(1000L);
 
-        final Map<String, Integer> actualOutput = dynamoDBLeaseTaker.computeLeaseCounts(ImmutableList.of());
+        final Map<String, Integer> actualOutput = dynamoDBLeaseTaker.computeActiveLeaseCountsByWorker(ImmutableList.of());
 
         final Map<String, Integer> expectedOutput = new HashMap<>();
-        expectedOutput.put(null, 1);
         expectedOutput.put("foo", 1);
         expectedOutput.put("bar", 1);
         expectedOutput.put("baz", 1);
@@ -136,7 +135,7 @@ public class DynamoDBLeaseTakerTest {
     }
 
     @Test
-    public void test_computeLeaseCounts_withExpiredLease() throws Exception {
+    public void test_computeActiveLeaseCountsByWorker_withAvailableLeases() throws Exception {
         final List<Lease> leases = new ImmutableList.Builder<Lease>()
                 .add(createLease("foo", "2"))
                 .add(createLease("bar", "3"))
@@ -149,7 +148,7 @@ public class DynamoDBLeaseTakerTest {
         when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
         when(timeProvider.call()).thenReturn(1000L);
 
-        final Map<String, Integer> actualOutput = dynamoDBLeaseTaker.computeLeaseCounts(leases);
+        final Map<String, Integer> actualOutput = dynamoDBLeaseTaker.computeActiveLeaseCountsByWorker(leases);
 
         final Map<String, Integer> expectedOutput = new HashMap<>();
         expectedOutput.put("foo", 0);
