@@ -62,7 +62,7 @@ import static software.amazon.kinesis.common.HashKeyRangeForLease.fromHashKeyRan
  * Helper class to sync leases with shards of the Kinesis stream.
  * It will create new leases/activities when it discovers new Kinesis shards (bootstrap/resharding).
  * It deletes leases for shards that have been trimmed from Kinesis, or if we've completed processing it
- * and begun processing it's child shards.
+ * and begun processing its child shards.
  */
 @Slf4j
 @KinesisClientInternalApi
@@ -432,7 +432,7 @@ public class HierarchicalShardSyncer {
                         if (!shardIdsOfCurrentLeases.contains(parentShardId)) {
                             Lease lease = shardIdToLeaseMapOfNewShards.get(parentShardId);
 
-                            /**
+                            /*
                              * If the lease for the parent shard does not already exist, there are two cases in which we
                              * would want to create it:
                              * - If we have already marked the parentShardId for lease creation in a prior recursive
@@ -454,7 +454,7 @@ public class HierarchicalShardSyncer {
                                 }
                             }
 
-                            /**
+                            /*
                              * If the shard is a descendant and the specified initial position is AT_TIMESTAMP, then the
                              * checkpoint should be set to AT_TIMESTAMP, else to TRIM_HORIZON. For AT_TIMESTAMP, we will
                              * add a lease just like we do for TRIM_HORIZON. However we will only return back records

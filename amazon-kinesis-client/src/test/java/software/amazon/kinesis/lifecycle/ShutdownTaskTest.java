@@ -17,10 +17,8 @@ package software.amazon.kinesis.lifecycle;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -48,7 +46,6 @@ import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
-import software.amazon.kinesis.exceptions.internal.KinesisClientLibIOException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
@@ -265,7 +262,6 @@ public class ShutdownTaskTest {
 
         when(recordProcessorCheckpointer.lastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
         Lease heldLease = LeaseHelper.createLease("shardId-0", "leaseOwner", ImmutableList.of("parent1", "parent2"));
-        Lease parentLease = LeaseHelper.createLease("shardId-1", "leaseOwner", Collections.emptyList());
         when(leaseCoordinator.getCurrentlyHeldLease("shardId-0")).thenReturn(heldLease);
         when(leaseCoordinator.getCurrentlyHeldLease("shardId-1"))
                 .thenReturn(null, null, null, null, null, null, null, null, null, null, null);

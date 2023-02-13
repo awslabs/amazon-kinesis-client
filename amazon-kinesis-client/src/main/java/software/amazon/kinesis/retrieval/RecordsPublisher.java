@@ -21,14 +21,10 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-import java.util.Optional;
-
 /**
  * Provides a record publisher that will retrieve records from Kinesis for processing
  */
 public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
-
-
 
     /**
      * Initializes the publisher with where to start processing. If there is a stored sequence number the publisher will
@@ -46,7 +42,6 @@ public interface RecordsPublisher extends Publisher<RecordsRetrieved> {
      * @param recordsRetrieved the processRecordsInput to restart from
      */
     void restartFrom(RecordsRetrieved recordsRetrieved);
-
 
     /**
      * Shutdowns the publisher. Once this method returns the publisher should no longer provide any records.

@@ -76,7 +76,7 @@ class PeriodicShardSyncManager {
     @VisibleForTesting
     static final BigInteger MAX_HASH_KEY = new BigInteger("2").pow(128).subtract(BigInteger.ONE);
     static final String PERIODIC_SHARD_SYNC_MANAGER = "PeriodicShardSyncManager";
-    private Map<StreamIdentifier, HashRangeHoleTracker> hashRangeHoleTrackerMap = new HashMap<>();
+    private final Map<StreamIdentifier, HashRangeHoleTracker> hashRangeHoleTrackerMap = new HashMap<>();
 
     private final String workerId;
     private final LeaderDecider leaderDecider;
@@ -142,15 +142,12 @@ class PeriodicShardSyncManager {
     /**
      * Runs shardSync once
      * Does not schedule periodic shardSync
-     * @return the result of the task
      */
     public synchronized void syncShardsOnce() throws Exception {
         // TODO: Resume the shard sync from failed stream in the next attempt, to avoid syncing
         // TODO: for already synced streams
-        for(Map.Entry<StreamIdentifier, StreamConfig> streamConfigEntry : currentStreamConfigMap.entrySet()) {
-            final StreamIdentifier streamIdentifier = streamConfigEntry.getKey();
-            log.info("Syncing Kinesis shard info for " + streamIdentifier);
-            final StreamConfig streamConfig = streamConfigEntry.getValue();
+        for (StreamConfig streamConfig : currentStreamConfigMap.values()) {
+            log.info("Syncing Kinesis shard info for {}", streamConfig);
             final ShardSyncTaskManager shardSyncTaskManager = shardSyncTaskManagerProvider.apply(streamConfig);
             final TaskResult taskResult = shardSyncTaskManager.callShardSyncTask();
             if (taskResult.getException() != null) {
@@ -283,7 +280,6 @@ class PeriodicShardSyncManager {
                     "Detected same hole for " + hashRangeHoleTracker.getNumConsecutiveHoles()
                             + " times. Shard sync will be initiated when threshold reaches "
                             + leasesRecoveryAuditorInconsistencyConfidenceThreshold);
-
         } else {
             // If hole is not present, clear any previous tracking for this stream and return false;
             hashRangeHoleTrackerMap.remove(streamIdentifier);

@@ -16,7 +16,6 @@ package software.amazon.kinesis.lifecycle;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -33,7 +32,6 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -75,7 +73,7 @@ public class ShardConsumer {
     private volatile Instant taskDispatchedAt;
     private volatile boolean taskIsRunning = false;
 
-    /*
+    /**
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
      * much coordination/synchronization to handle concurrent reads/updates.
      */

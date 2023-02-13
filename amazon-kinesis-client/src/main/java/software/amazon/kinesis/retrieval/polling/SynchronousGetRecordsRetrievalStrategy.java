@@ -14,7 +14,6 @@
  */
 package software.amazon.kinesis.retrieval.polling;
 
-import java.util.Optional;
 import lombok.Data;
 import lombok.NonNull;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
