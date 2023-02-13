@@ -145,10 +145,18 @@ public class LeaseCleanupManager {
         return deletionQueue.size();
     }
 
+    /**
+     *
+     * @return true if the 'Completed Lease Stopwatch' has elapsed more time than the 'Completed Lease Cleanup Interval'
+     */
     private boolean timeToCheckForCompletedShard() {
         return completedLeaseStopwatch.elapsed(TimeUnit.MILLISECONDS) >= completedLeaseCleanupIntervalMillis;
     }
 
+    /**
+     *
+     * @return true if the 'Garbage Lease Stopwatch' has elapsed more time than the 'Garbage Lease Cleanup Interval'
+     */
     private boolean timeToCheckForGarbageShard() {
         return garbageLeaseStopwatch.elapsed(TimeUnit.MILLISECONDS) >= garbageLeaseCleanupIntervalMillis;
     }
@@ -230,6 +238,15 @@ public class LeaseCleanupManager {
         return true;
     }
 
+    /**
+     * Check if the all of the parent shards for a given lease have an ongoing lease. If any one parent still has a lease, return false. Otherwise return true
+     * @param lease
+     * @param shardInfo
+     * @return
+     * @throws DependencyException
+     * @throws ProvisionedThroughputException
+     * @throws InvalidStateException
+     */
     private boolean allParentShardLeasesDeleted(Lease lease, ShardInfo shardInfo) throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         for (String parentShard : lease.parentShardIds()) {
             final Lease parentLease = leaseCoordinator.leaseRefresher().getLease(ShardInfo.getLeaseKey(shardInfo, parentShard));

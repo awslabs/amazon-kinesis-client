@@ -202,6 +202,10 @@ class PeriodicShardSyncManager {
                             log.warn(
                                     "Failed to submit shard sync task for stream {}. This could be due to the previous pending shard sync task.",
                                     shardSyncTaskManager.shardDetector().streamIdentifier().streamName());
+                        } else {
+                            log.info("Submitted shard sync task for stream {} because of reason {}",
+                                    shardSyncTaskManager.shardDetector().streamIdentifier().streamName(),
+                                    shardSyncResponse.reasonForDecision());
                         }
                     } else {
                         log.info("Skipping shard sync for {} due to the reason - {}", streamConfigEntry.getKey(),
@@ -222,6 +226,14 @@ class PeriodicShardSyncManager {
         }
     }
 
+    /**
+     * Retrieve all the streams, along with their associated leases
+     * @param streamIdentifiersToFilter
+     * @return
+     * @throws DependencyException
+     * @throws ProvisionedThroughputException
+     * @throws InvalidStateException
+     */
     private Map<StreamIdentifier, List<Lease>> getStreamToLeasesMap(
             final Set<StreamIdentifier> streamIdentifiersToFilter)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
@@ -242,6 +254,13 @@ class PeriodicShardSyncManager {
         }
     }
 
+
+    /**
+     * Given a list of leases for a stream, determine if a shard sync is necessary.
+     * @param streamIdentifier
+     * @param leases
+     * @return
+     */
     @VisibleForTesting
     ShardSyncResponse checkForShardSync(StreamIdentifier streamIdentifier, List<Lease> leases) {
         if (CollectionUtils.isNullOrEmpty(leases)) {
@@ -272,12 +291,24 @@ class PeriodicShardSyncManager {
         }
     }
 
+    /**
+     * Object containing metadata about the state of a shard sync
+     */
     @Value
     @Accessors(fluent = true)
     @VisibleForTesting
     static class ShardSyncResponse {
+
+        /**
+         * Flag to determine if a shard sync is necessary or not
+         */
         private final boolean shouldDoShardSync;
+
         private final boolean isHoleDetected;
+
+        /**
+         * Reason behind the state of 'shouldDoShardSync' flag
+         */
         private final String reasonForDecision;
     }
 

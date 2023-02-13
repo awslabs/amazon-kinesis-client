@@ -259,6 +259,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             leasesToTake = leasesToTake.stream().map(lease -> {
                 if (lease.isMarkedForLeaseSteal()) {
                     try {
+                        log.debug("Updating stale lease {}.", lease.leaseKey());
                         return leaseRefresher.getLease(lease.leaseKey());
                     } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
                         log.warn("Failed to fetch latest state of the lease {} that needs to be stolen, "
@@ -408,7 +409,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                 target = 1;
             } else {
                 /*
-                 * numWorkers must be < numLeases.
+                 * if we have made it here, it means there are more leases than workers
                  *
                  * Our target for each worker is numLeases / numWorkers (+1 if numWorkers doesn't evenly divide numLeases)
                  */

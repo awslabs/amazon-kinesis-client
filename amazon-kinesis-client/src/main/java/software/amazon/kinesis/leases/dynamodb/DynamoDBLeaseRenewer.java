@@ -242,7 +242,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
 
     /**
      * Internal method to return a lease with a specific lease key only if we currently hold it.
-     * 
+     *
      * @param leaseKey key of lease to return
      * @param now current timestamp for old-ness checking
      * @return non-authoritative copy of the held lease, or null if we don't currently hold it
@@ -309,6 +309,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         long startTime = System.currentTimeMillis();
         boolean success = false;
         try {
+            log.info("Updating lease from {} to {}", authoritativeLease, lease);
             synchronized (authoritativeLease) {
                 authoritativeLease.update(lease);
                 boolean updatedLease = leaseRefresher.updateLease(authoritativeLease);
@@ -325,7 +326,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
                     /*
                      * Remove only if the value currently in the map is the same as the authoritative lease. We're
                      * guarding against a pause after the concurrency token check above. It plays out like so:
-                     * 
+                     *
                      * 1) Concurrency token check passes
                      * 2) Pause. Lose lease, re-acquire lease. This requires at least one lease counter update.
                      * 3) Unpause. leaseRefresher.updateLease fails conditional write due to counter updates, returns
@@ -333,7 +334,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
                      * 4) ownedLeases.remove(key, value) doesn't do anything because authoritativeLease does not
                      * .equals() the re-acquired version in the map on the basis of lease counter. This is what we want.
                      * If we just used ownedLease.remove(key), we would have pro-actively removed a lease incorrectly.
-                     * 
+                     *
                      * Note that there is a subtlety here - Lease.equals() deliberately does not check the concurrency
                      * token, but it does check the lease counter, so this scheme works.
                      */
