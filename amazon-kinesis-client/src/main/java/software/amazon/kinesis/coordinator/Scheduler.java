@@ -331,8 +331,7 @@ public class Scheduler implements Runnable {
 
             for (int i = 0; (!isDone) && (i < maxInitializationAttempts); i++) {
                 try {
-                    log.info("Initialization attempt {}", (i + 1));
-                    log.info("Initializing LeaseCoordinator");
+                    log.info("Initializing LeaseCoordinator attempt {}", (i + 1));
                     leaseCoordinator.initialize();
 
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {

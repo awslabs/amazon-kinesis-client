@@ -267,13 +267,14 @@ public class ShutdownTask implements ConsumerTask {
                 }
             }
         }
-        // Attempt create leases for child shards.
         for(ChildShard childShard : childShards) {
             final String leaseKey = ShardInfo.getLeaseKey(shardInfo, childShard.shardId());
             if(leaseCoordinator.leaseRefresher().getLease(leaseKey) == null) {
+                log.debug("{} - Shard {} - Attempting to create lease for child shard {}", shardDetector.streamIdentifier(), shardInfo.shardId(), leaseKey);
                 final Lease leaseToCreate = hierarchicalShardSyncer.createLeaseForChildShard(childShard, shardDetector.streamIdentifier());
                 leaseCoordinator.leaseRefresher().createLeaseIfNotExists(leaseToCreate);
-                log.info("Shard {}: Created child shard lease: {}", shardInfo.shardId(), leaseToCreate.leaseKey());
+
+                log.info("{} - Shard {}: Created child shard lease: {}", shardDetector.streamIdentifier(), shardInfo.shardId(), leaseToCreate);
             }
         }
     }

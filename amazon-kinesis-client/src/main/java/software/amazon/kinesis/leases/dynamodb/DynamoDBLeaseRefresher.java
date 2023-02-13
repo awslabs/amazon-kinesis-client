@@ -169,7 +169,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
                     .attributeDefinitions(serializer.getAttributeDefinitions())
                     .billingMode(billingMode).build();
-        }else{
+        } else {
             request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
                     .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput)
                     .build();
@@ -429,7 +429,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean createLeaseIfNotExists(@NonNull final Lease lease)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        log.debug("Creating lease {}", lease);
+        log.debug("Creating lease: {}", lease);
 
         PutItemRequest request = PutItemRequest.builder().tableName(table).item(serializer.toDynamoRecord(lease))
                 .expected(serializer.getDynamoNonexistantExpectation()).build();
@@ -452,6 +452,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("create", lease.leaseKey(), e);
         }
+        log.info("Created lease: {}",lease);
         return true;
     }
 
@@ -476,7 +477,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                     return null;
                 } else {
                     final Lease lease = serializer.fromDynamoRecord(dynamoRecord);
-                    log.debug("Got lease {}", lease);
+                    log.debug("Retrieved lease: {}", lease);
                     return lease;
                 }
             } catch (ExecutionException e) {
@@ -535,6 +536,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         }
 
         lease.leaseCounter(lease.leaseCounter() + 1);
+        log.debug("Renewed lease with key {}", lease.leaseKey());
         return true;
     }
 
@@ -582,6 +584,8 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             lease.ownerSwitchesSinceCheckpoint(lease.ownerSwitchesSinceCheckpoint() + 1);
         }
 
+        log.info("Transferred lease {} ownership from {} to {}", lease.leaseKey(), oldOwner, owner);
+
         return true;
     }
 
@@ -620,6 +624,8 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         lease.leaseOwner(null);
         lease.leaseCounter(lease.leaseCounter() + 1);
+
+        log.info("Evicted lease with leaseKey {}", lease.leaseKey());
         return true;
     }
 
@@ -648,6 +654,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             } catch (DynamoDbException | TimeoutException e) {
                 throw convertAndRethrowExceptions("deleteAll", lease.leaseKey(), e);
             }
+            log.debug("Deleted lease {} from table {}", lease.leaseKey(), table);
         }
     }
 
@@ -675,6 +682,8 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("delete", lease.leaseKey(), e);
         }
+
+        log.info("Deleted lease with leaseKey {}", lease.leaseKey());
     }
 
     /**
@@ -683,7 +692,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean updateLease(@NonNull final Lease lease)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        log.debug("Updating lease {}", lease);
+        log.debug("Updating lease: {}", lease);
 
         final AWSExceptionManager exceptionManager = createExceptionManager();
         exceptionManager.add(ConditionalCheckFailedException.class, t -> t);
@@ -711,6 +720,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         }
 
         lease.leaseCounter(lease.leaseCounter() + 1);
+        log.info("Updated lease {}.", lease.leaseKey());
         return true;
     }
 
@@ -738,6 +748,8 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("update", lease.leaseKey(), e);
         }
+
+        log.info("Updated lease without expectation {}.", lease);
     }
 
     /**
