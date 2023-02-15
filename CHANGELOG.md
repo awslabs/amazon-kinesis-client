@@ -1,4 +1,7 @@
 # Changelog
+### Latest Release (1.14.10 - Feb 15, 2023)
+* [Issue #1026](https://github.com/awslabs/amazon-kinesis-client/issues/1026) Dependencies with vulnerabilities in 1.x
+* [PR #1042](https://github.com/awslabs/amazon-kinesis-client/pull/1042) updated the dependency to fix vulnerability issue
 
 ### Latest Release (1.14.9 - Dec 14, 2022)
 * [#995](https://github.com/awslabs/amazon-kinesis-client/commit/372f98b21a91487e36612d528c56765a44b0aa86) Every other change for DynamoDBStreamsKinesis Adapter Compatibility
