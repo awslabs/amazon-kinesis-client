@@ -1,6 +1,11 @@
 # Changelog
+### Latest Release (1.14.10 - Feb 15, 2023)
+* Updated aws-java-sdk from 1.12.130 to 1.12.406 
+* Updated com.google.protobuf from 3.19.4 to 3.19.6
+  * [Issue #1026](https://github.com/awslabs/amazon-kinesis-client/issues/1026)
+  * [PR #1042](https://github.com/awslabs/amazon-kinesis-client/pull/1042)
 
-### Latest Release (1.14.9 - Dec 14, 2022)
+### Release (1.14.9 - Dec 14, 2022)
 * [#995](https://github.com/awslabs/amazon-kinesis-client/commit/372f98b21a91487e36612d528c56765a44b0aa86) Every other change for DynamoDBStreamsKinesis Adapter Compatibility
 * [#970](https://github.com/awslabs/amazon-kinesis-client/commit/251b331a2e0fd912b50f8b5a12d088bf0b3263b9) PeriodicShardSyncManager Changes Needed for DynamoDBStreamsKinesisAdapter
 
