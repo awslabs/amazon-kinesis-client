@@ -12,14 +12,13 @@ import software.amazon.kinesis.metrics.MetricsScope;
  * Helper class to sync leases with shards of the Kinesis stream.
  * It will create new leases/activities when it discovers new Kinesis shards (bootstrap/resharding).
  * It deletes leases for shards that have been trimmed from Kinesis, or if we've completed processing it
- * and begun processing it's child shards.
+ * and begun processing its child shards.
  *
  * <p>NOTE: This class is deprecated and will be removed in a future release.</p>
  */
 @Deprecated
 public class ShardSyncer {
     private static final HierarchicalShardSyncer HIERARCHICAL_SHARD_SYNCER = new HierarchicalShardSyncer();
-    private static final boolean garbageCollectLeases = true;
 
     /**
      * <p>NOTE: This method is deprecated and will be removed in a future release.</p>
