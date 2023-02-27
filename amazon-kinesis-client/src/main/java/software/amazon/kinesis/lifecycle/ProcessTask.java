@@ -113,7 +113,7 @@ public class ProcessTask implements ConsumerTask {
      */
     @Override
     public TaskResult call() {
-        /**
+        /*
          * NOTE: the difference between appScope and shardScope is, appScope doesn't have shardId as a dimension,
          * therefore all data added to appScope, although from different shard consumer, will be sent to the same metric,
          * which is the app-level MillsBehindLatest metric.
@@ -179,8 +179,6 @@ public class ProcessTask implements ConsumerTask {
             MetricsUtil.endScope(appScope);
         }
     }
-
-
 
     private List<KinesisClientRecord> deaggregateAnyKplRecords(List<KinesisClientRecord> records) {
         if (shard == null) {
