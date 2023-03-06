@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -317,7 +318,7 @@ public class SchedulerTest {
     }
 
     @Test
-    public final void testMultiStreamInitialization() throws ProvisionedThroughputException, DependencyException {
+    public final void testMultiStreamInitialization() {
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
         leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient,
@@ -325,9 +326,9 @@ public class SchedulerTest {
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
         scheduler.initialize();
-        shardDetectorMap.values().stream()
+        shardDetectorMap.values()
                 .forEach(shardDetector -> verify(shardDetector, times(1)).listShards());
-        shardSyncTaskManagerMap.values().stream()
+        shardSyncTaskManagerMap.values()
                 .forEach(shardSyncTM -> verify(shardSyncTM, times(1)).hierarchicalShardSyncer());
     }
 
@@ -343,16 +344,15 @@ public class SchedulerTest {
         // Note : As of today we retry for all streams in the next attempt. Hence the retry for each stream will vary.
         //        At the least we expect 2 retries for each stream. Since there are 4 streams, we expect at most
         //        the number of calls to be 5.
-        shardDetectorMap.values().stream()
-                .forEach(shardDetector -> verify(shardDetector, atLeast(2)).listShards());
-        shardDetectorMap.values().stream()
-                .forEach(shardDetector -> verify(shardDetector, atMost(5)).listShards());
-        shardSyncTaskManagerMap.values().stream()
-                .forEach(shardSyncTM -> verify(shardSyncTM, atLeast(2)).hierarchicalShardSyncer());
-        shardSyncTaskManagerMap.values().stream()
-                .forEach(shardSyncTM -> verify(shardSyncTM, atMost(5)).hierarchicalShardSyncer());
+        shardDetectorMap.values().forEach(shardDetector -> {
+            verify(shardDetector, atLeast(2)).listShards();
+            verify(shardDetector, atMost(5)).listShards();
+        });
+        shardSyncTaskManagerMap.values().forEach(shardSyncTM -> {
+            verify(shardSyncTM, atLeast(2)).hierarchicalShardSyncer();
+            verify(shardSyncTM, atMost(5)).hierarchicalShardSyncer();
+        });
     }
-
 
     @Test
     public final void testMultiStreamConsumersAreBuiltOncePerAccountStreamShard() throws KinesisClientLibException {
@@ -385,13 +385,12 @@ public class SchedulerTest {
         schedulerSpy.runProcessLoop();
         schedulerSpy.runProcessLoop();
 
-        initialShardInfo.stream().forEach(
+        initialShardInfo.forEach(
                 shardInfo -> verify(schedulerSpy).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), same(leaseCleanupManager)));
-        firstShardInfo.stream().forEach(
+        firstShardInfo.forEach(
                 shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager)));
-        secondShardInfo.stream().forEach(
+        secondShardInfo.forEach(
                 shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager)));
-
     }
 
     @Test
@@ -415,7 +414,7 @@ public class SchedulerTest {
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
         Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
         Assert.assertTrue("SyncedStreams should be empty", syncedStreams.isEmpty());
-        Assert.assertEquals(new HashSet(streamConfigList1), new HashSet(scheduler.currentStreamConfigMap().values()));
+        assertEquals(new HashSet<>(streamConfigList1), new HashSet<>(scheduler.currentStreamConfigMap().values()));
     }
 
     @Test
@@ -447,8 +446,7 @@ public class SchedulerTest {
     }
 
     @Test
-    public final void testMultiStreamSyncFromTableDefaultInitPos()
-            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+    public final void testMultiStreamSyncFromTableDefaultInitPos() {
         // Streams in lease table but not tracked by multiStreamTracker
         List<MultiStreamLease> leasesInTable = IntStream.range(1, 3).mapToObj(streamId -> new MultiStreamLease()
                 .streamIdentifier(
@@ -474,13 +472,12 @@ public class SchedulerTest {
                 metricsConfig, processorConfig, retrievalConfig);
         scheduler.syncStreamsFromLeaseTableOnAppInit(leasesInTable);
         Map<StreamIdentifier, StreamConfig> expectedConfigMap = expectedConfig.stream().collect(Collectors.toMap(
-                sc -> sc.streamIdentifier(), sc -> sc));
+                StreamConfig::streamIdentifier, Function.identity()));
         Assert.assertEquals(expectedConfigMap, scheduler.currentStreamConfigMap());
     }
 
     @Test
-    public final void testMultiStreamSyncFromTableCustomInitPos()
-            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+    public final void testMultiStreamSyncFromTableCustomInitPos() {
         Date testTimeStamp = new Date();
 
         // Streams in lease table but not tracked by multiStreamTracker
@@ -725,7 +722,8 @@ public class SchedulerTest {
         testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(true, false);
     }
 
-    private final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(boolean expectPendingStreamsForDeletion,
+    private void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(
+            boolean expectPendingStreamsForDeletion,
             boolean onlyStreamsNoLeasesDeletion)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
