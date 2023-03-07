@@ -855,22 +855,20 @@ public class HierarchicalShardSyncer {
          * * the parent shard has expired.
          * <p>
          * For example:
+         * <pre>
          * Shard structure (each level depicts a stream segment):
          * 0 1 2 3 4   5   - shards till epoch 102
          * \ / \ / |   |
          *  6   7  4   5   - shards from epoch 103 - 205
          *  \  /   |  / \
          *   8     4 9  10 - shards from epoch 206 (open - no ending sequenceNumber)
-         *
-         * Current leases: (4, 5, 7)
-         *
-         * If initial position is LATEST:
-         *   - New leases to create: (6)
-         * If initial position is TRIM_HORIZON:
-         *   - New leases to create: (0, 1)
-         * If initial position is AT_TIMESTAMP(epoch=200):
-         *   - New leases to create: (0, 1)
-         *
+         * </pre>
+         * Assuming current leases are (4, 5, 7), new leases to create for an initial position are:
+         * <ul>
+         *   <li>LATEST: (6)</li>
+         *   <li>TRIM_HORIZON: (0, 1)</li>
+         *   <li>AT_TIMESTAMP(epoch=200): (0, 1)</li>
+         * </ul>
          * <p>
          * The leases returned are sorted by the starting sequence number - following the same order
          * when persisting the leases in DynamoDB will ensure that we recover gracefully if we fail
