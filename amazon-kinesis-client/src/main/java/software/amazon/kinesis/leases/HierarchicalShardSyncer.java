@@ -134,9 +134,6 @@ public class HierarchicalShardSyncer {
             final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
             List<Shard> latestShards, final boolean ignoreUnexpectedChildShards, final MetricsScope scope, final boolean isLeaseTableEmpty)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException {
-
-        //TODO: Need to add multistream support for this https://sim.amazon.com/issues/KinesisLTR-191
-
         if (!CollectionUtils.isNullOrEmpty(latestShards)) {
             log.debug("{} - Num shards: {}", streamIdentifier, latestShards.size());
         } else {
@@ -176,8 +173,6 @@ public class HierarchicalShardSyncer {
             }
         }
         log.info("{} - Newly created leases {}: {}", streamIdentifier, createdLeases.size(), createdLeases);
-        final List<Lease> trackedLeases = new ArrayList<>(currentLeases);
-        trackedLeases.addAll(newLeasesToCreate);
         return true;
     }
 
