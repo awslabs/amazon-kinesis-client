@@ -117,8 +117,8 @@ public class LeaseCleanupManager {
     public void enqueueForDeletion(LeasePendingDeletion leasePendingDeletion) {
         final Lease lease = leasePendingDeletion.lease();
         if (lease == null) {
-            log.warn("Cannot enqueue lease {} for deferred deletion - instance doesn't hold the lease for that shard.",
-                    lease.leaseKey());
+            log.warn("Cannot enqueue {} for {} as instance doesn't hold the lease for that shard.",
+                    leasePendingDeletion.shardInfo(), leasePendingDeletion.streamIdentifier());
         } else {
             log.debug("Enqueuing lease {} for deferred deletion.", lease.leaseKey());
             if (!deletionQueue.add(leasePendingDeletion)) {
