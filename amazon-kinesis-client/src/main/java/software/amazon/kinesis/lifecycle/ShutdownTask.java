@@ -284,6 +284,7 @@ public class ShutdownTask implements ConsumerTask {
                         MetricsUtil.addSuccess(scope, "CreateLease_" + metricName, true, MetricsLevel.DETAILED);
                     }
                 }
+
                 log.info("{} - Shard {}: Created child shard lease: {}", shardDetector.streamIdentifier(), shardInfo.shardId(), leaseToCreate);
             }
         }
