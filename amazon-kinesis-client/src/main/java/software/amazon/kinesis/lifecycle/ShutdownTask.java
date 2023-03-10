@@ -181,7 +181,7 @@ public class ShutdownTask implements ConsumerTask {
                     + " : Lease not owned by the current worker. Leaving ShardEnd handling to new owner.");
         }
         if (!CollectionUtils.isNullOrEmpty(childShards)) {
-            createLeasesForChildShardsIfNotExist();
+            createLeasesForChildShardsIfNotExist(scope);
             updateLeaseWithChildShards(currentShardLease);
         }
         final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(streamIdentifier, currentShardLease,
@@ -239,7 +239,7 @@ public class ShutdownTask implements ConsumerTask {
         }
     }
 
-    private void createLeasesForChildShardsIfNotExist()
+    private void createLeasesForChildShardsIfNotExist(MetricsScope scope)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         // For child shard resulted from merge of two parent shards, verify if both the parents are either present or
         // not present in the lease table before creating the lease entry.
@@ -272,8 +272,18 @@ public class ShutdownTask implements ConsumerTask {
             if(leaseCoordinator.leaseRefresher().getLease(leaseKey) == null) {
                 log.debug("{} - Shard {} - Attempting to create lease for child shard {}", shardDetector.streamIdentifier(), shardInfo.shardId(), leaseKey);
                 final Lease leaseToCreate = hierarchicalShardSyncer.createLeaseForChildShard(childShard, shardDetector.streamIdentifier());
-                leaseCoordinator.leaseRefresher().createLeaseIfNotExists(leaseToCreate);
-
+                final long startTime = System.currentTimeMillis();
+                boolean success = false;
+                try {
+                    leaseCoordinator.leaseRefresher().createLeaseIfNotExists(leaseToCreate);
+                    success = true;
+                } finally {
+                    MetricsUtil.addSuccessAndLatency(scope, "CreateLease", success, startTime, MetricsLevel.DETAILED);
+                    if (leaseToCreate.checkpoint() != null) {
+                        final String metricName = leaseToCreate.checkpoint().isSentinelCheckpoint() ? leaseToCreate.checkpoint().sequenceNumber() : "SEQUENCE_NUMBER";
+                        MetricsUtil.addSuccess(scope, "CreateLease_" + metricName, true, MetricsLevel.DETAILED);
+                    }
+                }
                 log.info("{} - Shard {}: Created child shard lease: {}", shardDetector.streamIdentifier(), shardInfo.shardId(), leaseToCreate);
             }
         }
