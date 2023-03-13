@@ -243,28 +243,6 @@ public class ProcessTask implements ConsumerTask {
         return (!records.isEmpty()) || shouldCallProcessRecordsEvenForEmptyRecordList;
     }
 
-    /**
-     * Emits metrics, and sleeps if there are no records available
-     *
-     * @param startTimeMillis
-     *            the time when the task started
-     */
-    private void handleNoRecords(long startTimeMillis) {
-        log.debug("Kinesis didn't return any records for shard {}", shardInfoId);
-
-        long sleepTimeMillis = idleTimeInMilliseconds - (System.currentTimeMillis() - startTimeMillis);
-        if (sleepTimeMillis > 0) {
-            sleepTimeMillis = Math.max(sleepTimeMillis, idleTimeInMilliseconds);
-            try {
-                log.debug("Sleeping for {} ms since there were no new records in shard {}", sleepTimeMillis,
-                        shardInfoId);
-                Thread.sleep(sleepTimeMillis);
-            } catch (InterruptedException e) {
-                log.debug("ShardId {}: Sleep was interrupted", shardInfoId);
-            }
-        }
-    }
-
     @Override
     public TaskType taskType() {
         return taskType;
