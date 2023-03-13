@@ -39,7 +39,6 @@ import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrat
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -471,7 +470,7 @@ public class SchedulerTest {
                 .retrievalFactory(retrievalFactory);
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
-        scheduler.syncStreamsFromLeaseTableOnAppInit(leasesInTable);
+        scheduler.syncStreamsFromLeaseTable(leasesInTable);
         Map<StreamIdentifier, StreamConfig> expectedConfigMap = expectedConfig.stream().collect(Collectors.toMap(
                 StreamConfig::streamIdentifier, Function.identity()));
         Assert.assertEquals(expectedConfigMap, scheduler.currentStreamConfigMap());
@@ -507,7 +506,7 @@ public class SchedulerTest {
                 .retrievalFactory(retrievalFactory);
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
-        scheduler.syncStreamsFromLeaseTableOnAppInit(leasesInTable);
+        scheduler.syncStreamsFromLeaseTable(leasesInTable);
         Map<StreamIdentifier, StreamConfig> expectedConfigMap = expectedConfig.stream().collect(Collectors.toMap(
                 sc -> sc.streamIdentifier(), sc -> sc));
         Assert.assertEquals(expectedConfigMap, scheduler.currentStreamConfigMap());
@@ -972,6 +971,36 @@ public class SchedulerTest {
 
         verify(eventFactory, times(1)).rejectedTaskEvent(eq(executorStateEvent), any());
         verify(rejectedTaskEvent, times(1)).accept(any());
+    }
+
+    @Test
+    public void testUpdateStreamMapIfMissingLatestStream() throws Exception {
+        final List<StreamConfig> streamConfigList = createDummyStreamConfigList(1, 6);
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig));
+        when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList);
+        when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
+
+        scheduler.checkAndSyncStreamShardsAndLeases();
+        verify(scheduler).syncStreamsFromLeaseTable(any());
+    }
+
+    @Test
+    public void testNotUpdatingStreamMapAsItContainsAllStreams() throws Exception {
+        final List<StreamConfig> streamConfigList = createDummyStreamConfigList(1, 6);
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig));
+        when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList);
+        when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
+        // Populate currentStreamConfigMap to simulate that the leader has the latest streams.
+        streamConfigList.forEach(s -> scheduler.currentStreamConfigMap().put(s.streamIdentifier(), s));
+
+        scheduler.checkAndSyncStreamShardsAndLeases();
+        verify(scheduler, times(0)).syncStreamsFromLeaseTable(any());
     }
 
     /*private void runAndTestWorker(int numShards, int threadPoolSize) throws Exception {
