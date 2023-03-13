@@ -563,6 +563,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             if (timeSinceLastCall < idleMillisBetweenCalls) {
                 Thread.sleep(idleMillisBetweenCalls - timeSinceLastCall);
             }
+
+            // avoid immediate-retry storms
+            lastSuccessfulCall = null;
         }
     }
 
