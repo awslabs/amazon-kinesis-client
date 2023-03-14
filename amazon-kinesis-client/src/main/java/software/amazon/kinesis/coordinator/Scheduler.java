@@ -180,6 +180,9 @@ public class Scheduler implements Runnable {
     private final Object lock = new Object();
 
     private final Stopwatch streamSyncWatch = Stopwatch.createUnstarted();
+
+    private boolean leasesSyncedOnAppInit = false;
+    @Getter(AccessLevel.NONE)
     private boolean shouldSyncLeases = true;
 
     /**
@@ -457,11 +460,12 @@ public class Scheduler implements Runnable {
                 final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = streamTracker.streamConfigList()
                         .stream().collect(Collectors.toMap(StreamConfig::streamIdentifier, Function.identity()));
                 // This is done to ensure that we clean up the stale streams lingering in the lease table.
-                if (shouldSyncLeases && isMultiStreamMode) {
+                if (isMultiStreamMode && (shouldSyncLeases || leasesSyncedOnAppInit)) {
                     // Skip updating the stream map due to no new stream since last sync
                     if (newStreamConfigMap.keySet().stream().anyMatch(s -> !currentStreamConfigMap.containsKey(s))) {
-                        syncStreamsFromLeaseTable(fetchMultiStreamLeases());
+                        syncStreamsFromLeaseTableOnAppInit(fetchMultiStreamLeases());
                     }
+                    leasesSyncedOnAppInit = true;
                     shouldSyncLeases = false;
                 }
 
@@ -590,7 +594,7 @@ public class Scheduler implements Runnable {
     }
 
     @VisibleForTesting
-    void syncStreamsFromLeaseTable(List<MultiStreamLease> leases) {
+    void syncStreamsFromLeaseTableOnAppInit(List<MultiStreamLease> leases) {
         leases.stream()
                 .map(lease -> StreamIdentifier.multiStreamInstance(lease.streamIdentifier()))
                 .filter(streamIdentifier -> !currentStreamConfigMap.containsKey(streamIdentifier))
