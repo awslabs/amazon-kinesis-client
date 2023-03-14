@@ -160,16 +160,19 @@ public class HierarchicalShardSyncer {
         final Set<Lease> createdLeases = new HashSet<>();
 
         for (Lease lease : newLeasesToCreate) {
-            long startTime = System.currentTimeMillis();
+            final long startTime = System.currentTimeMillis();
             boolean success = false;
             try {
                 if(leaseRefresher.createLeaseIfNotExists(lease)) {
                     createdLeases.add(lease);
                 }
                 success = true;
-            }
-            finally {
+            } finally {
                 MetricsUtil.addSuccessAndLatency(scope, "CreateLease", success, startTime, MetricsLevel.DETAILED);
+                if (lease.checkpoint() != null) {
+                    final String metricName = lease.checkpoint().isSentinelCheckpoint() ? lease.checkpoint().sequenceNumber() : "SEQUENCE_NUMBER";
+                    MetricsUtil.addSuccess(scope, "CreateLease_" + metricName, true, MetricsLevel.DETAILED);
+                }
             }
         }
         log.info("{} - Newly created leases {}: {}", streamIdentifier, createdLeases.size(), createdLeases);
