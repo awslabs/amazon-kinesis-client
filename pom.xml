@@ -34,7 +34,7 @@
 
   <properties>
     <revision>2.4.6-SNAPSHOT</revision>
-    <awssdk.version>2.19.31</awssdk.version>
+    <awssdk.version>2.20.8</awssdk.version>
   </properties>
 
   <licenses>
