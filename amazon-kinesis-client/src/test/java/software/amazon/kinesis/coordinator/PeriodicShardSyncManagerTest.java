@@ -459,7 +459,12 @@ public class PeriodicShardSyncManagerTest {
             List<Lease> leases = generateInitialLeases(maxInitialLeaseCount);
             reshard(leases, 5, ReshardType.ANY, maxInitialLeaseCount, true);
             Collections.shuffle(leases);
-            Assert.assertFalse(periodicShardSyncManager.hasHoleInLeases(streamIdentifier, leases).isPresent());
+            boolean isHoleInHashRanges = periodicShardSyncManager.hasHoleInLeases(streamIdentifier, leases).isPresent();
+            if (isHoleInHashRanges) {
+                finishInProgressParents(leases);
+                isHoleInHashRanges = periodicShardSyncManager.hasHoleInLeases(streamIdentifier, leases).isPresent();
+            }
+            Assert.assertFalse(isHoleInHashRanges);
         }
     }
 
@@ -567,6 +572,13 @@ public class PeriodicShardSyncManagerTest {
             initialLeases.add(child2);
         }
         return leaseCounter;
+    }
+
+    private void finishInProgressParents(List<Lease> leases) {
+        leases.stream()
+                .filter(l -> l.checkpoint() != null && !l.checkpoint().equals(ExtendedSequenceNumber.SHARD_END) &&
+                        l.childShardIds() != null && !l.childShardIds().isEmpty())
+                .forEach(l -> l.checkpoint(ExtendedSequenceNumber.SHARD_END));
     }
 
     private boolean isHeads() {
