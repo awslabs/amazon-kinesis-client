@@ -966,7 +966,7 @@ public class SchedulerTest {
     }
 
     @Test
-    public void testNotUpdatingStreamMapAsItContainsAllStreams() throws Exception {
+    public void testNoDdbLookUpAsStreamMapContainsAllStreams() throws Exception {
         final List<StreamConfig> streamConfigList = createDummyStreamConfigList(1, 6);
         prepareMultiStreamScheduler(streamConfigList);
         // Populate currentStreamConfigMap to simulate that the leader has the latest streams.
@@ -975,13 +975,30 @@ public class SchedulerTest {
         verify(scheduler, never()).syncStreamsFromLeaseTableOnAppInit(any());
     }
 
+    @Test
+    public void testNoDdbLookUpForNewStreamAsLeaderFlippedTheShardSyncFlags() throws Exception {
+        prepareMultiStreamScheduler();
+        scheduler.checkAndSyncStreamShardsAndLeases();
+        verify(scheduler, never()).syncStreamsFromLeaseTableOnAppInit(any());
+
+        final List<StreamConfig> streamConfigList = createDummyStreamConfigList(1, 6);
+        when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList);
+        scheduler.checkAndSyncStreamShardsAndLeases();
+
+        // Since the sync path has been executed once before the DDB sync flags should be flipped
+        // to prevent doing DDB lookups in the subsequent runs.
+        verify(scheduler, never()).syncStreamsFromLeaseTableOnAppInit(any());
+        assertEquals(0, streamConfigList.stream()
+                .filter(s -> !scheduler.currentStreamConfigMap().containsKey(s.streamIdentifier())).count());
+    }
+
     @SafeVarargs
     private final void prepareMultiStreamScheduler(List<StreamConfig>... streamConfigs) {
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
         scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig));
-        if (streamConfigs.length > 0 ) {
+        if (streamConfigs.length > 0) {
             stubMultiStreamTracker(streamConfigs);
         }
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
@@ -990,7 +1007,8 @@ public class SchedulerTest {
     @SafeVarargs
     private final void prepareForStaleDeletedStreamCleanupTests(List<StreamConfig>... streamConfigs) {
         when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new AutoDetectionAndDeferredDeletionStrategy() {
-            @Override public Duration waitPeriodToDeleteFormerStreams() {
+            @Override
+            public Duration waitPeriodToDeleteFormerStreams() {
                 return Duration.ofDays(1);
             }
         });

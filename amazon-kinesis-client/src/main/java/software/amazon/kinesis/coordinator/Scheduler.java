@@ -460,7 +460,7 @@ public class Scheduler implements Runnable {
                 final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = streamTracker.streamConfigList()
                         .stream().collect(Collectors.toMap(StreamConfig::streamIdentifier, Function.identity()));
                 // This is done to ensure that we clean up the stale streams lingering in the lease table.
-                if (isMultiStreamMode && (shouldSyncLeases || leasesSyncedOnAppInit)) {
+                if (isMultiStreamMode && (shouldSyncLeases || !leasesSyncedOnAppInit)) {
                     // Skip updating the stream map due to no new stream since last sync
                     if (newStreamConfigMap.keySet().stream().anyMatch(s -> !currentStreamConfigMap.containsKey(s))) {
                         syncStreamsFromLeaseTableOnAppInit(fetchMultiStreamLeases());
