@@ -180,7 +180,10 @@ public class Scheduler implements Runnable {
     private final Object lock = new Object();
 
     private final Stopwatch streamSyncWatch = Stopwatch.createUnstarted();
+
     private boolean leasesSyncedOnAppInit = false;
+    @Getter(AccessLevel.NONE)
+    private boolean shouldSyncLeases = true;
 
     /**
      * Used to ensure that only one requestedShutdown is in progress at a time.
@@ -279,8 +282,6 @@ public class Scheduler implements Runnable {
                 PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
-//        this.retryGetRecordsInSeconds = this.retrievalConfig.retryGetRecordsInSeconds();
-//        this.maxGetRecordsThreadPool = this.retrievalConfig.maxGetRecordsThreadPool();
         this.listShardsBackoffTimeMillis = this.retrievalConfig.listShardsBackoffTimeInMillis();
         this.maxListShardsRetryAttempts = this.retrievalConfig.maxListShardsRetryAttempts();
         this.shardDetectorProvider = streamConfig -> createOrGetShardSyncTaskManager(streamConfig).shardDetector();
@@ -419,6 +420,8 @@ public class Scheduler implements Runnable {
             // check for new streams and sync with the scheduler state
             if (isLeader()) {
                 checkAndSyncStreamShardsAndLeases();
+            } else {
+                shouldSyncLeases = true;
             }
 
             logExecutorState();
@@ -426,7 +429,7 @@ public class Scheduler implements Runnable {
             Thread.sleep(shardConsumerDispatchPollIntervalMillis);
         } catch (Exception e) {
             log.error("Worker.run caught exception, sleeping for {} milli seconds!",
-                    String.valueOf(shardConsumerDispatchPollIntervalMillis), e);
+                    shardConsumerDispatchPollIntervalMillis, e);
             try {
                 Thread.sleep(shardConsumerDispatchPollIntervalMillis);
             } catch (InterruptedException ex) {
@@ -454,15 +457,18 @@ public class Scheduler implements Runnable {
             final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, MULTI_STREAM_TRACKER);
 
             try {
-                // This is done to ensure that we clean up the stale streams lingering in the lease table.
-                if (!leasesSyncedOnAppInit && isMultiStreamMode) {
-                    final List<MultiStreamLease> leases = fetchMultiStreamLeases();
-                    syncStreamsFromLeaseTableOnAppInit(leases);
-                    leasesSyncedOnAppInit = true;
-                }
-
                 final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = streamTracker.streamConfigList()
                         .stream().collect(Collectors.toMap(StreamConfig::streamIdentifier, Function.identity()));
+                // This is done to ensure that we clean up the stale streams lingering in the lease table.
+                if (isMultiStreamMode && (shouldSyncLeases || !leasesSyncedOnAppInit)) {
+                    // Skip updating the stream map due to no new stream since last sync
+                    if (newStreamConfigMap.keySet().stream().anyMatch(s -> !currentStreamConfigMap.containsKey(s))) {
+                        syncStreamsFromLeaseTableOnAppInit(fetchMultiStreamLeases());
+                    }
+                    leasesSyncedOnAppInit = true;
+                    shouldSyncLeases = false;
+                }
+
                 // For new streams discovered, do a shard sync and update the currentStreamConfigMap
                 for (StreamIdentifier streamIdentifier : newStreamConfigMap.keySet()) {
                     if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
@@ -581,12 +587,14 @@ public class Scheduler implements Runnable {
         return streamsSynced;
     }
 
-    @VisibleForTesting boolean shouldSyncStreamsNow() {
+    @VisibleForTesting
+    boolean shouldSyncStreamsNow() {
         return isMultiStreamMode &&
                 (streamSyncWatch.elapsed(TimeUnit.MILLISECONDS) > NEW_STREAM_CHECK_INTERVAL_MILLIS);
     }
 
-    @VisibleForTesting void syncStreamsFromLeaseTableOnAppInit(List<MultiStreamLease> leases) {
+    @VisibleForTesting
+    void syncStreamsFromLeaseTableOnAppInit(List<MultiStreamLease> leases) {
         leases.stream()
                 .map(lease -> StreamIdentifier.multiStreamInstance(lease.streamIdentifier()))
                 .filter(streamIdentifier -> !currentStreamConfigMap.containsKey(streamIdentifier))
