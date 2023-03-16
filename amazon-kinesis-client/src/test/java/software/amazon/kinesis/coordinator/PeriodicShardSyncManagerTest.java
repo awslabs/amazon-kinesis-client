@@ -58,6 +58,8 @@ import static software.amazon.kinesis.leases.LeaseManagementConfig.DEFAULT_CONSE
 
 public class PeriodicShardSyncManagerTest {
 
+    private static final int MAX_DEPTH_WITH_IN_PROGRESS_PARENTS = 1;
+
     private StreamIdentifier streamIdentifier;
     private PeriodicShardSyncManager periodicShardSyncManager;
     @Mock
@@ -446,7 +448,7 @@ public class PeriodicShardSyncManagerTest {
         for (int i = 0; i < 1000; i++) {
             int maxInitialLeaseCount = 100;
             List<Lease> leases = generateInitialLeases(maxInitialLeaseCount);
-            reshard(leases, 5, ReshardType.MERGE, maxInitialLeaseCount, true);
+            reshard(leases, MAX_DEPTH_WITH_IN_PROGRESS_PARENTS, ReshardType.MERGE, maxInitialLeaseCount, true);
             Collections.shuffle(leases);
             Assert.assertFalse(periodicShardSyncManager.hasHoleInLeases(streamIdentifier, leases).isPresent());
         }
@@ -457,7 +459,7 @@ public class PeriodicShardSyncManagerTest {
         for (int i = 0; i < 1000; i++) {
             int maxInitialLeaseCount = 100;
             List<Lease> leases = generateInitialLeases(maxInitialLeaseCount);
-            reshard(leases, 5, ReshardType.ANY, maxInitialLeaseCount, true);
+            reshard(leases, MAX_DEPTH_WITH_IN_PROGRESS_PARENTS, ReshardType.ANY, maxInitialLeaseCount, true);
             Collections.shuffle(leases);
             boolean isHoleInHashRanges = periodicShardSyncManager.hasHoleInLeases(streamIdentifier, leases).isPresent();
             if (isHoleInHashRanges) {
