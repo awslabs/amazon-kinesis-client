@@ -3,6 +3,39 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.4.7 (March 16, 2023)
+* [#1063](https://github.com/awslabs/amazon-kinesis-client/pull/1063) Allow leader to learn new leases upon re-election to avoid unnecessary shardSyncs
+* [#1060](https://github.com/awslabs/amazon-kinesis-client/pull/1060) Add new metric to be emitted on lease creation
+* [#1057](https://github.com/awslabs/amazon-kinesis-client/pull/1057) Added more logging in `Scheduler` w.r.t. `StreamConfig`s.
+* [#1059](https://github.com/awslabs/amazon-kinesis-client/pull/1059) DRY: simplification of `HierarchicalShardSyncerTest`.
+* [#1062](https://github.com/awslabs/amazon-kinesis-client/pull/1062) Fixed retry storm in `PrefetchRecordsPublisher`.
+* [#1061](https://github.com/awslabs/amazon-kinesis-client/pull/1061) Fixed NPE in `LeaseCleanupManager`.
+* [#1056](https://github.com/awslabs/amazon-kinesis-client/pull/1056) Clean up in-memory state of deleted kinesis stream in MultiStreamMode
+* [#1058](https://github.com/awslabs/amazon-kinesis-client/pull/1058) Documentation: added `<pre>` tags so fixed-format diagrams aren't garbled.
+* [#1053](https://github.com/awslabs/amazon-kinesis-client/pull/1053) Exposed convenience method of `ExtendedSequenceNumber#isSentinelCheckpoint()`
+* [#1043](https://github.com/awslabs/amazon-kinesis-client/pull/1043) Removed a `.swp` file, and updated `.gitignore`.
+* [#1047](https://github.com/awslabs/amazon-kinesis-client/pull/1047) Upgrade awssdk.version from 2.19.31 to 2.20.8
+* [#1046](https://github.com/awslabs/amazon-kinesis-client/pull/1046) Upgrade maven-javadoc-plugin from 3.3.1 to 3.5.0
+* [#1038](https://github.com/awslabs/amazon-kinesis-client/pull/1038) Upgrade gsr.version from 1.1.13 to 1.1.14
+* [#1037](https://github.com/awslabs/amazon-kinesis-client/pull/1037) Upgrade aws-java-sdk.version from 1.12.370 to 1.12.405
+
+### Release 2.4.6 (February 21, 2023)
+* [#1041](https://github.com/awslabs/amazon-kinesis-client/pull/1041) Minor optimizations (e.g., calculate-once, put instead of get+put)
+* [#1035](https://github.com/awslabs/amazon-kinesis-client/pull/1035) Release Note updates to avoid duplication and bitrot (e.g., 1.x release
+* [#935](https://github.com/awslabs/amazon-kinesis-client/pull/935) Pass isAtShardEnd correctly to processRecords call
+* [#1040](https://github.com/awslabs/amazon-kinesis-client/pull/1040) Increased logging verbosity around lease management
+* [#1024](https://github.com/awslabs/amazon-kinesis-client/pull/1024) Added logging w.r.t. StreamConfig handling.
+* [#1034](https://github.com/awslabs/amazon-kinesis-client/pull/1034) Optimization: 9~15% improvement in KinesisDataFetcher wall-time
+* [#1045](https://github.com/awslabs/amazon-kinesis-client/pull/1045) Fixed duplication of project version in children pom.xml
+* [#956](https://github.com/awslabs/amazon-kinesis-client/pull/956) Fixed warning message typos
+* [#795](https://github.com/awslabs/amazon-kinesis-client/pull/795) Fixed log message spacing
+* [#740](https://github.com/awslabs/amazon-kinesis-client/pull/740) Fixed typo in Comment
+* [#1028](https://github.com/awslabs/amazon-kinesis-client/pull/1028) Refactored MultiStreamTracker to provide and enhance OOP for both
+* [#1027](https://github.com/awslabs/amazon-kinesis-client/pull/1027) Removed CHECKSTYLE:OFF toggles which can invite/obscure sub-par code.
+* [#1032](https://github.com/awslabs/amazon-kinesis-client/pull/1032) Upgrade rxjava from 3.1.5 to 3.1.6
+* [#1030](https://github.com/awslabs/amazon-kinesis-client/pull/1030) Upgrade awssdk.version from 2.19.2 to 2.19.31
+* [#1029](https://github.com/awslabs/amazon-kinesis-client/pull/1029) Upgrade slf4j-api from 2.0.0 to 2.0.6
+* [#1015](https://github.com/awslabs/amazon-kinesis-client/pull/1015) Upgrade protobuf-java from 3.21.5 to 3.21.12
 
 ### Release 2.4.5 (January 04, 2023)
 * [#1014](https://github.com/awslabs/amazon-kinesis-client/pull/1014) Use AFTER_SEQUENCE_NUMBER iterator type for expired iterator request
