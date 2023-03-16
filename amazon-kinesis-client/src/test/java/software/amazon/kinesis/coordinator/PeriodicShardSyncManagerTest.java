@@ -459,7 +459,15 @@ public class PeriodicShardSyncManagerTest {
             List<Lease> leases = generateInitialLeases(maxInitialLeaseCount);
             reshard(leases, 5, ReshardType.ANY, maxInitialLeaseCount, true);
             Collections.shuffle(leases);
-            Assert.assertFalse(periodicShardSyncManager.hasHoleInLeases(streamIdentifier, leases).isPresent());
+            boolean isHoleInHashRanges = periodicShardSyncManager.hasHoleInLeases(streamIdentifier, leases).isPresent();
+            if (isHoleInHashRanges) {
+                // In-progress parents may result in a lease having the highest startingHashKey value while not having
+                // an endingHashKey value of MAX_HASH_KEY. This is detected as a "hole" in the hash key range,
+                // so mark the in-progress parents as finished (SHARD_END) and recheck for holes.
+                finishInProgressParents(leases);
+                isHoleInHashRanges = periodicShardSyncManager.hasHoleInLeases(streamIdentifier, leases).isPresent();
+            }
+            Assert.assertFalse(isHoleInHashRanges);
         }
     }
 
@@ -567,6 +575,13 @@ public class PeriodicShardSyncManagerTest {
             initialLeases.add(child2);
         }
         return leaseCounter;
+    }
+
+    private void finishInProgressParents(List<Lease> leases) {
+        leases.stream()
+                .filter(l -> l.checkpoint() != null && !l.checkpoint().equals(ExtendedSequenceNumber.SHARD_END) &&
+                        l.childShardIds() != null && !l.childShardIds().isEmpty())
+                .forEach(l -> l.checkpoint(ExtendedSequenceNumber.SHARD_END));
     }
 
     private boolean isHeads() {
