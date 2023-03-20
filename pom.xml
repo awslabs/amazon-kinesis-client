@@ -33,7 +33,7 @@
   </scm>
 
   <properties>
-    <revision>2.4.7</revision>
+    <revision>2.4.8-SNAPSHOT</revision>
     <awssdk.version>2.20.8</awssdk.version>
   </properties>
 
