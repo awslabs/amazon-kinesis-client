@@ -3,18 +3,22 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
-### Release 2.4.7 (March 20, 2023)
+### Release 2.4.8 (March 21, 2023)
+* [#1080](https://github.com/awslabs/amazon-kinesis-client/pull/1080) Added metric in `ShutdownTask` for scenario when parent leases are missing.
+* [#1077](https://github.com/awslabs/amazon-kinesis-client/pull/1077) Reverted changes to pom property
+* [#1069](https://github.com/awslabs/amazon-kinesis-client/pull/1069) Fixed flaky InitializationWaitsWhenLeaseTableIsEmpty test
+
+### Release 2.4.7 (March 17, 2023)
+* *NOTE*: Due to an issue during the release process, the 2.4.7 published artifacts are incomplete and non-viable. Please use 2.4.8 or later.
 * [#1063](https://github.com/awslabs/amazon-kinesis-client/pull/1063) Allow leader to learn new leases upon re-election to avoid unnecessary shardSyncs
 * [#1060](https://github.com/awslabs/amazon-kinesis-client/pull/1060) Add new metric to be emitted on lease creation
 * [#1057](https://github.com/awslabs/amazon-kinesis-client/pull/1057) Added more logging in `Scheduler` w.r.t. `StreamConfig`s.
 * [#1059](https://github.com/awslabs/amazon-kinesis-client/pull/1059) DRY: simplification of `HierarchicalShardSyncerTest`.
 * [#1062](https://github.com/awslabs/amazon-kinesis-client/pull/1062) Fixed retry storm in `PrefetchRecordsPublisher`.
 * [#1061](https://github.com/awslabs/amazon-kinesis-client/pull/1061) Fixed NPE in `LeaseCleanupManager`.
-* [#1069](https://github.com/awslabs/amazon-kinesis-client/pull/1069) Fixed flaky InitializationWaitsWhenLeaseTableIsEmpty test
 * [#1056](https://github.com/awslabs/amazon-kinesis-client/pull/1056) Clean up in-memory state of deleted kinesis stream in MultiStreamMode
 * [#1058](https://github.com/awslabs/amazon-kinesis-client/pull/1058) Documentation: added `<pre>` tags so fixed-format diagrams aren't garbled.
 * [#1053](https://github.com/awslabs/amazon-kinesis-client/pull/1053) Exposed convenience method of `ExtendedSequenceNumber#isSentinelCheckpoint()`
-* [#1077](https://github.com/awslabs/amazon-kinesis-client/pull/1077) Reverted changes to pom property
 * [#1043](https://github.com/awslabs/amazon-kinesis-client/pull/1043) Removed a `.swp` file, and updated `.gitignore`.
 * [#1047](https://github.com/awslabs/amazon-kinesis-client/pull/1047) Upgrade awssdk.version from 2.19.31 to 2.20.8
 * [#1046](https://github.com/awslabs/amazon-kinesis-client/pull/1046) Upgrade maven-javadoc-plugin from 3.3.1 to 3.5.0
