@@ -59,7 +59,13 @@ public class ShardConsumer {
     private final ShardConsumerArgument shardConsumerArgument;
     @NonNull
     private final Optional<Long> logWarningForTaskAfterMillis;
+
+    /**
+     * @deprecated unused; to be removed in a "major" version bump
+     */
+    @Deprecated
     private final Function<ConsumerTask, ConsumerTask> taskMetricsDecorator;
+
     private final int bufferSize;
     private final TaskExecutionListener taskExecutionListener;
     private final String streamIdentifier;
@@ -179,7 +185,6 @@ public class ShardConsumer {
                 }
                 stateChangeFuture = initializeComplete();
             }
-
         } catch (InterruptedException e) {
             //
             // Ignored should be handled by scheduler
@@ -199,7 +204,6 @@ public class ShardConsumer {
                 throw (Error) t;
             }
         }
-
     }
 
     @VisibleForTesting
