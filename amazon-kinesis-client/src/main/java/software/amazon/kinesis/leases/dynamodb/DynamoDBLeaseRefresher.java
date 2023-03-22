@@ -186,23 +186,13 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean createLeaseTableIfNotExists(@NonNull final Long readCapacity, @NonNull final Long writeCapacity)
             throws ProvisionedThroughputException, DependencyException {
-        ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
+        final CreateTableRequest.Builder builder = createTableRequestBuilder();
+        if(BillingMode.PROVISIONED.equals(billingMode)) {
+            ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
                 .writeCapacityUnits(writeCapacity).build();
-        final CreateTableRequest request;
-        if(BillingMode.PAY_PER_REQUEST.equals(billingMode)){
-            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                    .attributeDefinitions(serializer.getAttributeDefinitions())
-                    .billingMode(billingMode)
-                    .tags(tags)
-                    .build();
-        } else {
-            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                    .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput)
-                    .tags(tags)
-                    .build();
+            builder.provisionedThroughput(throughput);
         }
-
-        return createTableIfNotExists(request);
+        return createTableIfNotExists(builder.build());
     }
 
     /**
@@ -211,11 +201,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean createLeaseTableIfNotExists()
             throws ProvisionedThroughputException, DependencyException {
-        final CreateTableRequest request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                .attributeDefinitions(serializer.getAttributeDefinitions())
-                .billingMode(billingMode)
-                .tags(tags)
-                .build();
+        final CreateTableRequest request = createTableRequestBuilder().build();
 
         return createTableIfNotExists(request);
     }
@@ -815,6 +801,16 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             return new DependencyException(e);
         }
     }
+
+    private CreateTableRequest.Builder createTableRequestBuilder() {
+    final CreateTableRequest.Builder builder = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                    .attributeDefinitions(serializer.getAttributeDefinitions())
+                    .tags(tags);
+    if (BillingMode.PAY_PER_REQUEST.equals(billingMode)) {
+        builder.billingMode(billingMode);
+    }
+    return builder;
+}
 
     private AWSExceptionManager createExceptionManager() {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
