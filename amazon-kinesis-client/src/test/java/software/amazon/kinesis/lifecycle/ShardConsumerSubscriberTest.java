@@ -339,6 +339,7 @@ public class ShardConsumerSubscriberTest {
         // First try to start subscriptions.
         synchronized (processedNotifier) {
             subscriber.startSubscriptions();
+            processedNotifier.wait(10);
         }
 
         // Verifying that there are no interactions with shardConsumer mock indicating no records were sent back and
