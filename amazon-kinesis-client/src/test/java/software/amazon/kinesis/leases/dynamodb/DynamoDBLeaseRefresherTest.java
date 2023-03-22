@@ -324,7 +324,7 @@ public class DynamoDBLeaseRefresherTest {
                 tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED, tags);
 
         when(dynamoDbClient.describeTable(describeTableRequest)).thenReturn(mockDescribeTableFuture);
-        when(mockDescribeTableFuture.get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
+        when(mockDescribeTableFuture.get(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS))
                 .thenThrow(ResourceNotFoundException.builder().message("Table doesn't exist").build());
 
         final ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(10L)
@@ -337,7 +337,7 @@ public class DynamoDBLeaseRefresherTest {
                 .tags(tags)
                 .build();
         when(dynamoDbClient.createTable(createTableRequest)).thenReturn(mockCreateTableFuture);
-        when(mockCreateTableFuture.get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
+        when(mockCreateTableFuture.get(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS))
                 .thenReturn(null);
 
         final boolean result = leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
@@ -345,9 +345,9 @@ public class DynamoDBLeaseRefresherTest {
         verify(dynamoDbClient, times(1)).describeTable(describeTableRequest);
         verify(dynamoDbClient, times(1)).createTable(createTableRequest);
         verify(mockDescribeTableFuture, times(1))
-                .get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS));
+                .get(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         verify(mockCreateTableFuture, times(1))
-                .get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS));
+                .get(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         Assert.assertTrue(result);
     }
 
