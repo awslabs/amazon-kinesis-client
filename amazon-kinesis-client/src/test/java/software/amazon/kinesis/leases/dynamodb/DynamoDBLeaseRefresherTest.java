@@ -319,7 +319,7 @@ public class DynamoDBLeaseRefresherTest {
 
     @Test
     public void testCreateLeaseTableWithTagsIfNotExists() throws Exception {
-        tags = Arrays.asList(Tag.builder().key("foo").value("bar").build());
+        tags = Collections.singletonList(Tag.builder().key("foo").value("bar").build());
         leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
                 tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED, tags);
 
