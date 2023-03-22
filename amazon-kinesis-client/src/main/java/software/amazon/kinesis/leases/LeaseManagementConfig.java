@@ -194,6 +194,11 @@ public class LeaseManagementConfig {
 
     private BillingMode billingMode = BillingMode.PAY_PER_REQUEST;
 
+    /**
+     * The list of tags to be applied to the DynamoDB table created for lease management.
+     *
+     * <p>Default value: {@link DefaultSdkAutoConstructList}
+     */
     private Collection<Tag> tags = DefaultSdkAutoConstructList.getInstance();
 
     /**
