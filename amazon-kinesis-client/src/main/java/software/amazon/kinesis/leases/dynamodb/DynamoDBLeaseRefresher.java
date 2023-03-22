@@ -803,14 +803,14 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     }
 
     private CreateTableRequest.Builder createTableRequestBuilder() {
-    final CreateTableRequest.Builder builder = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                    .attributeDefinitions(serializer.getAttributeDefinitions())
-                    .tags(tags);
-    if (BillingMode.PAY_PER_REQUEST.equals(billingMode)) {
-        builder.billingMode(billingMode);
+        final CreateTableRequest.Builder builder = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                        .attributeDefinitions(serializer.getAttributeDefinitions())
+                        .tags(tags);
+        if (BillingMode.PAY_PER_REQUEST.equals(billingMode)) {
+            builder.billingMode(billingMode);
+        }
+        return builder;
     }
-    return builder;
-}
 
     private AWSExceptionManager createExceptionManager() {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
