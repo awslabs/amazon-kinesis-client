@@ -648,7 +648,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     @Override
     public DynamoDBLeaseRefresher createLeaseRefresher() {
         return new DynamoDBLeaseRefresher(tableName, dynamoDBClient, leaseSerializer, consistentReads,
-                tableCreatorCallback, dynamoDbRequestTimeout, billingMode);
+                tableCreatorCallback, dynamoDbRequestTimeout, billingMode, tags);
     }
 
     @Override
