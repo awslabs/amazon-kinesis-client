@@ -18,6 +18,7 @@ package software.amazon.kinesis.leases;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
@@ -28,8 +29,11 @@ import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
+
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.awssdk.services.dynamodb.model.Tag;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -191,6 +195,13 @@ public class LeaseManagementConfig {
     private BillingMode billingMode = BillingMode.PAY_PER_REQUEST;
 
     /**
+     * The list of tags to be applied to the DynamoDB table created for lease management.
+     *
+     * <p>Default value: {@link DefaultSdkAutoConstructList}
+     */
+    private Collection<Tag> tags = DefaultSdkAutoConstructList.getInstance();
+
+    /**
      * Frequency (in millis) of the auditor job to scan for partial leases in the lease table.
      * If the auditor detects any hole in the leases for a stream, then it would trigger shard sync based on
      * {@link #leasesRecoveryAuditorInconsistencyConfidenceThreshold}
@@ -333,7 +344,7 @@ public class LeaseManagementConfig {
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
                     hierarchicalShardSyncer(),
-                    tableCreatorCallback(), dynamoDbRequestTimeout(), billingMode());
+                    tableCreatorCallback(), dynamoDbRequestTimeout(), billingMode(), tags());
         }
         return leaseManagementFactory;
     }
@@ -371,6 +382,7 @@ public class LeaseManagementConfig {
                     tableCreatorCallback(),
                     dynamoDbRequestTimeout(),
                     billingMode(),
+                    tags(),
                     leaseSerializer,
                     customShardDetectorProvider(),
                     isMultiStreamingMode,

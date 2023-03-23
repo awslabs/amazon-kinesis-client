@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableMap;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -25,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
@@ -46,6 +48,7 @@ import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
+import software.amazon.awssdk.services.dynamodb.model.Tag;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -77,6 +80,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
     private final Duration dynamoDbRequestTimeout;
     private final BillingMode billingMode;
+    private final Collection<Tag> tags;
 
     private boolean newTableCreated = false;
 
@@ -143,10 +147,29 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      * @param dynamoDbRequestTimeout
      * @param billingMode
      */
+    @Deprecated
     public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
                                   final LeaseSerializer serializer, final boolean consistentReads,
                                   @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout,
                                   final BillingMode billingMode) {
+        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout, billingMode, DefaultSdkAutoConstructList.getInstance());
+    }
+
+    /**
+     * Constructor.
+     * @param table
+     * @param dynamoDBClient
+     * @param serializer
+     * @param consistentReads
+     * @param tableCreatorCallback
+     * @param dynamoDbRequestTimeout
+     * @param billingMode
+     * @param tags
+     */
+    public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
+                                  final LeaseSerializer serializer, final boolean consistentReads,
+                                  @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout,
+                                  final BillingMode billingMode, final Collection<Tag> tags) {
         this.table = table;
         this.dynamoDBClient = dynamoDBClient;
         this.serializer = serializer;
@@ -154,6 +177,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         this.tableCreatorCallback = tableCreatorCallback;
         this.dynamoDbRequestTimeout = dynamoDbRequestTimeout;
         this.billingMode = billingMode;
+        this.tags = tags;
     }
 
     /**
@@ -162,20 +186,13 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean createLeaseTableIfNotExists(@NonNull final Long readCapacity, @NonNull final Long writeCapacity)
             throws ProvisionedThroughputException, DependencyException {
-        ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
+        final CreateTableRequest.Builder builder = createTableRequestBuilder();
+        if(BillingMode.PROVISIONED.equals(billingMode)) {
+            ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
                 .writeCapacityUnits(writeCapacity).build();
-        final CreateTableRequest request;
-        if(BillingMode.PAY_PER_REQUEST.equals(billingMode)){
-            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                    .attributeDefinitions(serializer.getAttributeDefinitions())
-                    .billingMode(billingMode).build();
-        } else {
-            request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                    .attributeDefinitions(serializer.getAttributeDefinitions()).provisionedThroughput(throughput)
-                    .build();
+            builder.provisionedThroughput(throughput);
         }
-
-        return createTableIfNotExists(request);
+        return createTableIfNotExists(builder.build());
     }
 
     /**
@@ -184,9 +201,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     @Override
     public boolean createLeaseTableIfNotExists()
             throws ProvisionedThroughputException, DependencyException {
-        final CreateTableRequest request = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
-                .attributeDefinitions(serializer.getAttributeDefinitions())
-                .billingMode(billingMode).build();
+        final CreateTableRequest request = createTableRequestBuilder().build();
 
         return createTableIfNotExists(request);
     }
@@ -785,6 +800,16 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         } else {
             return new DependencyException(e);
         }
+    }
+
+    private CreateTableRequest.Builder createTableRequestBuilder() {
+        final CreateTableRequest.Builder builder = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
+                        .attributeDefinitions(serializer.getAttributeDefinitions())
+                        .tags(tags);
+        if (BillingMode.PAY_PER_REQUEST.equals(billingMode)) {
+            builder.billingMode(billingMode);
+        }
+        return builder;
     }
 
     private AWSExceptionManager createExceptionManager() {
