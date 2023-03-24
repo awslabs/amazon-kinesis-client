@@ -79,7 +79,7 @@ public class ShardConsumerSubscriberTest {
 
     private static final String TERMINAL_MARKER = "Terminal";
 
-    private static final long DEFAULT_NOTIFIER_TIMEOUT = 5000;
+    private static final long DEFAULT_NOTIFIER_TIMEOUT = 5000L;
 
     private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
 
@@ -763,7 +763,7 @@ public class ShardConsumerSubscriberTest {
     /**
      * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with the default
      * configuration of 0
-     *
+     * 
      * @throws Exception
      */
     @Test
@@ -792,7 +792,7 @@ public class ShardConsumerSubscriberTest {
     /**
      * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with 2 ReadTimeouts to
      * ignore
-     *
+     * 
      * @throws Exception
      */
     @Test
