@@ -58,6 +58,12 @@ public class SingleStreamTracker implements StreamTracker {
         this(streamIdentifier, new StreamConfig(streamIdentifier, initialPosition));
     }
 
+    public SingleStreamTracker(
+            String streamName,
+            @NonNull InitialPositionInStreamExtended initialPosition) {
+        this(StreamIdentifier.singleStreamInstance(streamName), initialPosition);
+    }
+
     public SingleStreamTracker(@NonNull StreamIdentifier streamIdentifier, @NonNull StreamConfig streamConfig) {
         this.streamIdentifier = streamIdentifier;
         this.streamConfigs = Collections.singletonList(streamConfig);
