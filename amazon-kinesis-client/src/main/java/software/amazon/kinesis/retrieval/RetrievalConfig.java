@@ -49,7 +49,7 @@ public class RetrievalConfig {
      */
     public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java";
 
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.4.9-SNAPSHOT";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.5.0-SNAPSHOT";
 
     /**
      * Client used to make calls to Kinesis for records retrieval
@@ -120,7 +120,9 @@ public class RetrievalConfig {
 
     public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull String streamName,
                            @NonNull String applicationName) {
-        this(kinesisAsyncClient, new SingleStreamTracker(streamName), applicationName);
+        this(kinesisAsyncClient,
+                new SingleStreamTracker(streamName, kinesisAsyncClient.serviceClientConfiguration().region()),
+                applicationName);
     }
 
     public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull StreamTracker streamTracker,

@@ -142,7 +142,7 @@ public class ConfigsBuilder {
             @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient,
             @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier,
             @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
-        this(new SingleStreamTracker(streamName),
+        this(new SingleStreamTracker(streamName, kinesisClient.serviceClientConfiguration().region()),
                 applicationName,
                 kinesisClient,
                 dynamoDBClient,

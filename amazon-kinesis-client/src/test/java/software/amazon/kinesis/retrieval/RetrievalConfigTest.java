@@ -11,7 +11,6 @@ import static software.amazon.kinesis.common.InitialPositionInStream.TRIM_HORIZO
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -19,17 +18,18 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
+import software.amazon.kinesis.utils.MockObjectHelper;
 
 public class RetrievalConfigTest {
 
     private static final String APPLICATION_NAME = RetrievalConfigTest.class.getSimpleName();
 
-    @Mock
     private KinesisAsyncClient mockKinesisClient;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
+        mockKinesisClient = MockObjectHelper.createKinesisClient(true);
     }
 
     @Test
