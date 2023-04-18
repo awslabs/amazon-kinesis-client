@@ -22,10 +22,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.mock;
 
-import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -34,6 +34,7 @@ import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
 
+@RunWith(MockitoJUnitRunner.class)
 public class ConfigsBuilderTest {
 
     @Mock
@@ -50,11 +51,6 @@ public class ConfigsBuilderTest {
 
     private static final String APPLICATION_NAME = ConfigsBuilderTest.class.getSimpleName();
     private static final String WORKER_IDENTIFIER = "worker-id";
-
-    @Before
-    public void setUp() {
-        MockitoAnnotations.initMocks(this);
-    }
 
     @Test
     public void testTrackerConstruction() {
@@ -77,6 +73,7 @@ public class ConfigsBuilderTest {
     }
 
     private ConfigsBuilder createConfig(String streamName) {
+        // intentional invocation of constructor where streamName is a String
         return new ConfigsBuilder(streamName, APPLICATION_NAME, mockKinesisClient, mockDynamoClient,
                 mockCloudWatchClient, WORKER_IDENTIFIER, mockShardProcessorFactory);
     }
