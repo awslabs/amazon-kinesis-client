@@ -143,4 +143,14 @@ public class PollingConfig implements RetrievalSpecificConfig {
         return new SynchronousBlockingRetrievalFactory(streamName(), kinesisClient(), recordsFetcherFactory,
                 maxRecords(), kinesisRequestTimeout, dataFetcherProvider);
     }
+
+    @Override
+    public void validateState(final boolean isMultiStream) {
+        if (isMultiStream) {
+            if (streamName() != null) {
+                throw new IllegalArgumentException(
+                        "PollingConfig must not have streamName configured in multi-stream mode");
+            }
+        }
+    }
 }
