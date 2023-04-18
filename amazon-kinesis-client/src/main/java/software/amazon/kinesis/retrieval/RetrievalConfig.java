@@ -135,6 +135,8 @@ public class RetrievalConfig {
     }
 
     /**
+     * Convenience method to reconfigure the embedded {@link StreamTracker},
+     * but only when <b>not</b> in multi-stream mode.
      *
      * @param initialPositionInStreamExtended
      *
@@ -144,62 +146,46 @@ public class RetrievalConfig {
      */
     @Deprecated
     public RetrievalConfig initialPositionInStreamExtended(InitialPositionInStreamExtended initialPositionInStreamExtended) {
-        this.appStreamTracker.apply(multiStreamTracker -> {
+        if (streamTracker().isMultiStream()) {
             throw new IllegalArgumentException(
                     "Cannot set initialPositionInStreamExtended when multiStreamTracker is set");
-        }, sc -> {
-            final StreamConfig updatedConfig = new StreamConfig(sc.streamIdentifier(), initialPositionInStreamExtended);
-            streamTracker = new SingleStreamTracker(sc.streamIdentifier(), updatedConfig);
-            appStreamTracker = Either.right(updatedConfig);
-        });
+        };
+
+        final StreamIdentifier streamIdentifier = getSingleStreamIdentifier();
+        final StreamConfig updatedConfig = new StreamConfig(streamIdentifier, initialPositionInStreamExtended);
+        streamTracker = new SingleStreamTracker(streamIdentifier, updatedConfig);
+        appStreamTracker = Either.right(updatedConfig);
         return this;
     }
 
     public RetrievalConfig retrievalSpecificConfig(RetrievalSpecificConfig retrievalSpecificConfig) {
+        retrievalSpecificConfig.validateState(streamTracker.isMultiStream());
         this.retrievalSpecificConfig = retrievalSpecificConfig;
-        validateFanoutConfig();
-        validatePollingConfig();
         return this;
     }
 
     public RetrievalFactory retrievalFactory() {
         if (retrievalFactory == null) {
             if (retrievalSpecificConfig == null) {
-                retrievalSpecificConfig = new FanOutConfig(kinesisClient())
+                final FanOutConfig fanOutConfig = new FanOutConfig(kinesisClient())
                         .applicationName(applicationName());
-                retrievalSpecificConfig = appStreamTracker.map(multiStreamTracker -> retrievalSpecificConfig,
-                        streamConfig -> ((FanOutConfig) retrievalSpecificConfig).streamName(streamConfig.streamIdentifier().streamName()));
+                if (!streamTracker.isMultiStream()) {
+                    final String streamName = getSingleStreamIdentifier().streamName();
+                    fanOutConfig.streamName(streamName);
+                }
+                retrievalSpecificConfig(fanOutConfig);
             }
             retrievalFactory = retrievalSpecificConfig.retrievalFactory();
         }
         return retrievalFactory;
     }
 
-    private void validateFanoutConfig() {
-        // If we are in multistream mode and if retrievalSpecificConfig is an instance of FanOutConfig and if consumerArn is set throw exception.
-        boolean isFanoutConfig = retrievalSpecificConfig instanceof FanOutConfig;
-        boolean isInvalidFanoutConfig = isFanoutConfig && appStreamTracker.map(
-                multiStreamTracker -> ((FanOutConfig) retrievalSpecificConfig).consumerArn() != null
-                                || ((FanOutConfig) retrievalSpecificConfig).streamName() != null,
-                streamConfig -> streamConfig.streamIdentifier() == null
-                                || streamConfig.streamIdentifier().streamName() == null);
-        if(isInvalidFanoutConfig) {
-            throw new IllegalArgumentException(
-                    "Invalid config: Either in multi-stream mode with streamName/consumerArn configured or in single-stream mode with no streamName configured");
-        }
+    /**
+     * Convenience method to return the {@link StreamIdentifier} from a
+     * single-stream tracker.
+     */
+    private StreamIdentifier getSingleStreamIdentifier() {
+        return streamTracker.streamConfigList().get(0).streamIdentifier();
     }
 
-    private void validatePollingConfig() {
-        boolean isPollingConfig = retrievalSpecificConfig instanceof PollingConfig;
-        boolean isInvalidPollingConfig = isPollingConfig && appStreamTracker.map(
-                multiStreamTracker ->
-                        ((PollingConfig) retrievalSpecificConfig).streamName() != null,
-                streamConfig ->
-                        streamConfig.streamIdentifier() == null || streamConfig.streamIdentifier().streamName() == null);
-
-        if (isInvalidPollingConfig) {
-            throw new IllegalArgumentException(
-                    "Invalid config: Either in multi-stream mode with streamName configured or in single-stream mode with no streamName configured");
-        }
-    }
 }
