@@ -21,6 +21,7 @@ import java.util.List;
 import lombok.EqualsAndHashCode;
 import lombok.NonNull;
 import lombok.ToString;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -46,6 +47,10 @@ public class SingleStreamTracker implements StreamTracker {
 
     public SingleStreamTracker(String streamName) {
         this(StreamIdentifier.singleStreamInstance(streamName));
+    }
+
+    public SingleStreamTracker(String streamName, Region region) {
+        this(StreamIdentifier.singleStreamInstance(streamName, region));
     }
 
     public SingleStreamTracker(StreamIdentifier streamIdentifier) {

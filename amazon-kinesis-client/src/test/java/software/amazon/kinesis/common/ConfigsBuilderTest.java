@@ -33,12 +33,12 @@ import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
+import software.amazon.kinesis.utils.MockObjectHelper;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ConfigsBuilderTest {
 
-    @Mock
-    private KinesisAsyncClient mockKinesisClient;
+    private final KinesisAsyncClient mockKinesisClient = MockObjectHelper.createKinesisClient();
 
     @Mock
     private DynamoDbAsyncClient mockDynamoClient;

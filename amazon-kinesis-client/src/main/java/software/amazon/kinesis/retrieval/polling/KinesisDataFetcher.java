@@ -238,12 +238,15 @@ public class KinesisDataFetcher implements DataFetcher {
 
         GetShardIteratorRequest.Builder builder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
                 .streamName(streamIdentifier.streamName()).shardId(shardId);
+        streamIdentifier.streamARNOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
+
         GetShardIteratorRequest request;
         if (isIteratorRestart) {
             request = IteratorBuilder.reconnectRequest(builder, sequenceNumber, initialPositionInStream).build();
         } else {
             request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStream).build();
         }
+        log.debug("[GetShardIterator] Request has parameters {}", request);
 
         // TODO: Check if this metric is fine to be added
         final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, OPERATION);
@@ -315,9 +318,11 @@ public class KinesisDataFetcher implements DataFetcher {
     }
 
     @Override
-    public GetRecordsRequest getGetRecordsRequest(String nextIterator)  {
-        return KinesisRequestsBuilder.getRecordsRequestBuilder().shardIterator(nextIterator)
-                .limit(maxRecords).build();
+    public GetRecordsRequest getGetRecordsRequest(String nextIterator) {
+        GetRecordsRequest.Builder builder = KinesisRequestsBuilder.getRecordsRequestBuilder()
+                .shardIterator(nextIterator).limit(maxRecords);
+        streamIdentifier.streamARNOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
+        return builder.build();
     }
 
     @Override
