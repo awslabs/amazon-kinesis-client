@@ -1,8 +1,6 @@
 package software.amazon.kinesis.retrieval;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import lombok.NonNull;
@@ -48,9 +46,8 @@ public final class KinesisClientFacade {
     public static DescribeStreamSummaryResponse describeStreamSummary(final String streamArn) {
         final DescribeStreamSummaryRequest request = KinesisRequestsBuilder
                 .describeStreamSummaryRequestBuilder().streamARN(streamArn).build();
-        final CompletableFuture<DescribeStreamSummaryResponse> future = kinesisClient.describeStreamSummary(request);
         final ServiceCallerSupplier<DescribeStreamSummaryResponse> dss =
-                () -> future.get(10, TimeUnit.SECONDS);
+                () -> kinesisClient.describeStreamSummary(request).get();
         return retryWhenThrottled(dss, 3, streamArn, "DescribeStreamSummary");
     }
 

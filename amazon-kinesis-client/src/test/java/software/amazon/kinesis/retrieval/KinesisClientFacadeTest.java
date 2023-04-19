@@ -1,11 +1,9 @@
 package software.amazon.kinesis.retrieval;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -21,6 +19,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
+import software.amazon.awssdk.services.kinesis.model.LimitExceededException;
 
 @RunWith(MockitoJUnitRunner.class)
 public class KinesisClientFacadeTest {
@@ -49,19 +48,19 @@ public class KinesisClientFacadeTest {
     public void testDescribeStreamSummaryRetries() throws Exception {
         final DescribeStreamSummaryResponse expectedResponse = DescribeStreamSummaryResponse.builder().build();
         final CompletableFuture<DescribeStreamSummaryResponse> mockFuture = mock(CompletableFuture.class);
-        final TimeoutException timeoutException = new TimeoutException();
+        final ExecutionException executionException = new ExecutionException(LimitExceededException.builder().build());
 
         when(mockKinesisClient.describeStreamSummary(any(DescribeStreamSummaryRequest.class)))
                 .thenReturn(mockFuture);
-        when(mockFuture.get(anyInt(), any(TimeUnit.class)))
-                .thenThrow(timeoutException)
-                .thenThrow(timeoutException)
+        when(mockFuture.get())
+                .thenThrow(executionException)
+                .thenThrow(executionException)
                 .thenReturn(expectedResponse);
 
         final DescribeStreamSummaryResponse actualResponse = describeStreamSummary("retry me plz");
         assertEquals(expectedResponse, actualResponse);
 
-        verify(mockKinesisClient).describeStreamSummary(any(DescribeStreamSummaryRequest.class));
-        verify(mockFuture, times(3)).get(anyInt(), any(TimeUnit.class));
+        verify(mockKinesisClient, times(3)).describeStreamSummary(any(DescribeStreamSummaryRequest.class));
+        verify(mockFuture, times(3)).get();
     }
 }
