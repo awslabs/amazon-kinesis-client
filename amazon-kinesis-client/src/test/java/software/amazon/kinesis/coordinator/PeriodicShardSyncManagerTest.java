@@ -73,7 +73,7 @@ public class PeriodicShardSyncManagerTest {
 
     @Before
     public void setup() {
-        streamIdentifier = StreamIdentifier.multiStreamInstance("123:stream:456");
+        streamIdentifier = StreamIdentifier.multiStreamInstance("123456789012:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager("worker", leaderDecider, leaseRefresher, currentStreamConfigMap,
                 shardSyncTaskManagerProvider, true, new NullMetricsFactory(), 2 * 60 * 1000, 3);
     }

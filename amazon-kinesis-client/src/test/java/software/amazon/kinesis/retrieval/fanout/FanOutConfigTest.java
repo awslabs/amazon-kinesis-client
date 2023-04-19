@@ -94,14 +94,14 @@ public class FanOutConfigTest {
     public void testRegisterNotCalledWhenConsumerArnSetInMultiStreamMode() throws Exception {
         when(streamConfig.consumerArn()).thenReturn("consumerArn");
 
-        getRecordsCache("account:stream:12345");
+        getRecordsCache("123456789012:stream:12345");
 
         verify(consumerRegistration, never()).getOrCreateStreamConsumerArn();
     }
 
     @Test
     public void testRegisterCalledWhenConsumerArnNotSetInMultiStreamMode() throws Exception {
-        getRecordsCache("account:stream:12345");
+        getRecordsCache("123456789012:stream:12345");
 
         verify(consumerRegistration).getOrCreateStreamConsumerArn();
     }

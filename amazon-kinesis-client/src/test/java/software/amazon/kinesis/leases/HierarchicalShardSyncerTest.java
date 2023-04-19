@@ -92,7 +92,7 @@ public class HierarchicalShardSyncerTest {
     private static final String LEASE_OWNER = "TestOwner";
     private static final MetricsScope SCOPE = new NullMetricsScope();
     private static final boolean MULTISTREAM_MODE_ON = true;
-    private static final String STREAM_IDENTIFIER = "acc:stream:1";
+    private static final String STREAM_IDENTIFIER = "123456789012:stream:1";
     private static final HierarchicalShardSyncer.MultiStreamArgs MULTI_STREAM_ARGS = new HierarchicalShardSyncer.MultiStreamArgs(
             MULTISTREAM_MODE_ON, StreamIdentifier.multiStreamInstance(STREAM_IDENTIFIER));
 

@@ -456,7 +456,7 @@ public class SchedulerTest {
                 .shardId("some_random_shard_id"))
                 .collect(Collectors.toCollection(LinkedList::new));
         // Include a stream that is already tracked by multiStreamTracker, just to make sure we will not touch this stream config later
-        leasesInTable.add(new MultiStreamLease().streamIdentifier("acc1:stream1:1").shardId("some_random_shard_id"));
+        leasesInTable.add(new MultiStreamLease().streamIdentifier("123456789012:stream1:1").shardId("some_random_shard_id"));
 
         // Expected StreamConfig after running syncStreamsFromLeaseTableOnAppInit
         // By default, Stream not present in multiStreamTracker will have initial position of LATEST
@@ -489,7 +489,7 @@ public class SchedulerTest {
                 .shardId("some_random_shard_id"))
                 .collect(Collectors.toCollection(LinkedList::new));
         // Include a stream that is already tracked by multiStreamTracker, just to make sure we will not touch this stream config later
-        leasesInTable.add(new MultiStreamLease().streamIdentifier("acc1:stream1:1").shardId("some_random_shard_id"));
+        leasesInTable.add(new MultiStreamLease().streamIdentifier("123456789012:stream1:1").shardId("some_random_shard_id"));
 
         // Expected StreamConfig after running syncStreamsFromLeaseTableOnAppInit
         // Stream not present in multiStreamTracker will have initial position specified by orphanedStreamInitialPositionInStream
@@ -1299,13 +1299,13 @@ public class SchedulerTest {
         @Override
         public List<StreamConfig> streamConfigList(){
             return new ArrayList<StreamConfig>() {{
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc1:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
+                add(new StreamConfig(StreamIdentifier.multiStreamInstance("123456789012:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
                         InitialPositionInStream.LATEST)));
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc1:stream2:2"), InitialPositionInStreamExtended.newInitialPosition(
+                add(new StreamConfig(StreamIdentifier.multiStreamInstance("123456789012:stream2:2"), InitialPositionInStreamExtended.newInitialPosition(
                         InitialPositionInStream.LATEST)));
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc2:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
+                add(new StreamConfig(StreamIdentifier.multiStreamInstance("210987654321:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
                         InitialPositionInStream.LATEST)));
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc2:stream2:3"), InitialPositionInStreamExtended.newInitialPosition(
+                add(new StreamConfig(StreamIdentifier.multiStreamInstance("210987654321:stream2:3"), InitialPositionInStreamExtended.newInitialPosition(
                         InitialPositionInStream.LATEST)));
             }};
         }

@@ -33,7 +33,6 @@ import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
-import software.amazon.kinesis.retrieval.polling.PollingConfig;
 
 /**
  * Used by the KCL to configure the retrieval of records from Kinesis.
@@ -132,6 +131,8 @@ public class RetrievalConfig {
         this.applicationName = applicationName;
         this.appStreamTracker = DeprecationUtils.convert(streamTracker,
                 singleStreamTracker -> singleStreamTracker.streamConfigList().get(0));
+
+        KinesisClientFacade.initialize(kinesisAsyncClient);
     }
 
     /**

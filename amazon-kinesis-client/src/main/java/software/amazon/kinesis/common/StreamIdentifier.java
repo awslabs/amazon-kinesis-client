@@ -15,46 +15,89 @@
 
 package software.amazon.kinesis.common;
 
-import com.google.common.base.Joiner;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.ToString;
+import lombok.NonNull;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
 import software.amazon.awssdk.utils.Validate;
+import software.amazon.kinesis.retrieval.KinesisClientFacade;
 
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Builder(access = AccessLevel.PRIVATE)
 @EqualsAndHashCode
 @Getter
-@ToString
 @Accessors(fluent = true)
 public class StreamIdentifier {
+
     @Builder.Default
     private final Optional<String> accountIdOptional = Optional.empty();
+    @NonNull
     private final String streamName;
     @Builder.Default
-    private final Optional<Long> streamCreationEpochOptional = Optional.empty();
+    private Optional<Long> streamCreationEpochOptional = Optional.empty();
     @Builder.Default
     private final Optional<Arn> streamARNOptional = Optional.empty();
 
-    private static final String DELIMITER = ":";
-    private static final Pattern PATTERN = Pattern.compile(".*" + ":" + ".*" + ":" + "[0-9]*" + ":?([a-z]{2}(-gov)?-[a-z]+-\\d{1})?");
+    /**
+     * Pattern for a serialized {@link StreamIdentifier}. The valid format is
+     * {@code <accountId>:<streamName>:<creationEpoch>[:<region>]} where
+     * {@code region} is the id representation of a {@link Region} and is
+     * optional.
+     */
+    private static final Pattern STREAM_IDENTIFIER_PATTERN = Pattern.compile(
+            // `?::` has two parts: `?:` starts a non-capturing group, and
+            // `:` is the first character in the group (i.e., ":<region>")
+            "(?<accountId>[0-9]+):(?<streamName>[^:]+):(?<creationEpoch>[0-9]+)(?::(?<region>[-a-z0-9]+))?");
+
+    /**
+     * Pattern for a stream ARN. The valid format is
+     * {@code arn:aws:kinesis:<region>:<accountId>:stream:<streamName>}
+     * where {@code region} is the id representation of a {@link Region}.
+     */
+    private static final Pattern STREAM_ARN_PATTERN = Pattern.compile(
+            "arn:aws:kinesis:(?<region>[-a-z0-9]+):(?<accountId>[0-9]{12}):stream/(?<streamName>.+)");
 
     /**
      * Serialize the current StreamIdentifier instance.
-     * TODO: Consider appending region info for cross-account consumer support
-     * @return
+     *
+     * @return a String of {@code account:stream:creationEpoch[:region]}
+     *      where {@code region} is the id representation of a {@link Region}
+     *      and is optional.
      */
     public String serialize() {
-        return accountIdOptional.isPresent() ?
-                Joiner.on(DELIMITER).join(accountIdOptional.get(), streamName, streamCreationEpochOptional.get()) :
-                streamName;
+        if (!accountIdOptional.isPresent()) {
+            return streamName;
+        }
+
+        if (!streamCreationEpochOptional.isPresent()) {
+            // FIXME bias-for-action hack to simplify back-porting into KCL 1.x and facilitate the
+            //      backwards-compatible requirement. There's a chicken-and-egg issue if DSS is
+            //      called as the application is being configured (and before the client is rigged).
+            //      Furthermore, if epoch isn't lazy-loaded here, the problem quickly spirals into
+            //      systemic issues of concurrency and consistency (e.g., PeriodicShardSyncManager,
+            //      Scheduler, DDB leases). We should look at leveraging dependency injection.
+            //      (NOTE: not to inject the Kinesis client here, but to ensure the client is
+            //      accessible elsewhere ASAP.)
+            final DescribeStreamSummaryResponse dss = KinesisClientFacade.describeStreamSummary(
+                    streamARNOptional().get().toString());
+            final long creationEpoch = dss.streamDescriptionSummary().streamCreationTimestamp().getEpochSecond();
+            streamCreationEpochOptional = Optional.of(creationEpoch);
+        }
+
+        final char delimiter = ':';
+        final StringBuilder sb = new StringBuilder(accountIdOptional.get()).append(delimiter)
+                .append(streamName).append(delimiter);
+        streamCreationEpochOptional.ifPresent(sb::append);
+        streamARNOptional.flatMap(Arn::region).ifPresent(region -> sb.append(delimiter).append(region));
+        return sb.toString();
     }
 
     @Override
@@ -64,61 +107,113 @@ public class StreamIdentifier {
 
     /**
      * Create a multi stream instance for StreamIdentifier from serialized stream identifier.
-     * See the format of a serialized stream identifier at {@link StreamIdentifier#multiStreamInstance(String, Region)}
-     * @param streamIdentifierSer
-     * @return StreamIdentifier
+     *
+     * @param serializationOrArn serialized {@link StreamIdentifier} or AWS ARN of a Kinesis stream
+     *
+     * @see #multiStreamInstance(String, Region)
+     * @see #serialize()
      */
-    public static StreamIdentifier multiStreamInstance(String streamIdentifierSer) {
-        return multiStreamInstance(streamIdentifierSer, null);
+    public static StreamIdentifier multiStreamInstance(String serializationOrArn) {
+        return multiStreamInstance(serializationOrArn, null);
     }
 
     /**
      * Create a multi stream instance for StreamIdentifier from serialized stream identifier.
-     * @param streamIdentifierSer The serialized stream identifier should be of the format
-     *                            account:stream:creationepoch[:region]
+     *
+     * @param serializationOrArn serialized {@link StreamIdentifier} or AWS ARN of a Kinesis stream
      * @param kinesisRegion This nullable region is used to construct the optional StreamARN
-     * @return StreamIdentifier
+     *
+     * @see #serialize()
      */
-    public static StreamIdentifier multiStreamInstance(String streamIdentifierSer, Region kinesisRegion) {
-        if (PATTERN.matcher(streamIdentifierSer).matches()) {
-            final String[] split = streamIdentifierSer.split(DELIMITER);
-            final String streamName = split[1];
-            final Optional<String> accountId = Optional.ofNullable(split[0]);
-            StreamIdentifierBuilder builder = StreamIdentifier.builder()
-                    .accountIdOptional(accountId)
-                    .streamName(streamName)
-                    .streamCreationEpochOptional(Optional.of(Long.parseLong(split[2])));
-            final Region region = (split.length == 4) ?
-                    Region.of(split[3]) :   // Use the region extracted from the serialized string, which matches the regex pattern
-                    kinesisRegion;          // Otherwise just use the provided region
-            final Optional<Arn> streamARN = StreamARNUtil.getStreamARN(streamName, region, accountId);
-            return builder.streamARNOptional(streamARN).build();
-        } else {
-            throw new IllegalArgumentException("Unable to deserialize StreamIdentifier from " + streamIdentifierSer);
+    public static StreamIdentifier multiStreamInstance(String serializationOrArn, Region kinesisRegion) {
+        final StreamIdentifier fromSerialization = fromSerialization(serializationOrArn, kinesisRegion);
+        if (fromSerialization != null) {
+            return fromSerialization;
         }
+        final StreamIdentifier fromArn = fromArn(serializationOrArn, kinesisRegion);
+        if (fromArn != null) {
+            return fromArn;
+        }
+
+        throw new IllegalArgumentException("Unable to deserialize StreamIdentifier from " + serializationOrArn);
     }
 
     /**
      * Create a single stream instance for StreamIdentifier from stream name.
-     * @param streamName
-     * @return StreamIdentifier
+     *
+     * @param streamNameOrArn stream name or AWS ARN of a Kinesis stream
      */
-    public static StreamIdentifier singleStreamInstance(String streamName) {
-        return singleStreamInstance(streamName, null);
+    public static StreamIdentifier singleStreamInstance(String streamNameOrArn) {
+        return singleStreamInstance(streamNameOrArn, null);
     }
 
     /**
      * Create a single stream instance for StreamIdentifier from the provided stream name and kinesisRegion.
      * This method also constructs the optional StreamARN based on the region info.
-     * @param streamName
-     * @param kinesisRegion
-     * @return StreamIdentifier
+     *
+     * @param streamNameOrArn stream name or AWS ARN of a Kinesis stream
+     * @param kinesisRegion (optional) region used to construct the ARN
      */
-    public static StreamIdentifier singleStreamInstance(String streamName, Region kinesisRegion) {
-        Validate.notEmpty(streamName, "StreamName should not be empty");
+    public static StreamIdentifier singleStreamInstance(String streamNameOrArn, Region kinesisRegion) {
+        Validate.notEmpty(streamNameOrArn, "StreamName should not be empty");
+
+        final StreamIdentifier fromArn = fromArn(streamNameOrArn, kinesisRegion);
+        if (fromArn != null) {
+            return fromArn;
+        }
+
         return StreamIdentifier.builder()
-                .streamName(streamName)
-                .streamARNOptional(StreamARNUtil.getStreamARN(streamName, kinesisRegion))
+                .streamName(streamNameOrArn)
+                .streamARNOptional(StreamARNUtil.getStreamARN(streamNameOrArn, kinesisRegion))
                 .build();
     }
+
+    /**
+     * Deserializes a StreamIdentifier from {@link #STREAM_IDENTIFIER_PATTERN}.
+     *
+     * @param input input string (e.g., ARN, serialized instance) to convert into an instance
+     * @param kinesisRegion (optional) region used to construct the ARN
+     * @return a StreamIdentifier instance if the pattern matched, otherwise null
+     */
+    private static StreamIdentifier fromSerialization(final String input, final Region kinesisRegion) {
+        final Matcher matcher = STREAM_IDENTIFIER_PATTERN.matcher(input);
+        return matcher.matches()
+                ? toStreamIdentifier(matcher, matcher.group("creationEpoch"), kinesisRegion) : null;
+    }
+
+    /**
+     * Constructs a StreamIdentifier from {@link #STREAM_ARN_PATTERN}.
+     *
+     * @param input input string (e.g., ARN, serialized instance) to convert into an instance
+     * @param kinesisRegion (optional) region used to construct the ARN
+     * @return a StreamIdentifier instance if the pattern matched, otherwise null
+     */
+    private static StreamIdentifier fromArn(final String input, final Region kinesisRegion) {
+        final Matcher matcher = STREAM_ARN_PATTERN.matcher(input);
+        return matcher.matches()
+                ? toStreamIdentifier(matcher, "", kinesisRegion) : null;
+    }
+
+    private static StreamIdentifier toStreamIdentifier(final Matcher matcher, final String matchedEpoch,
+            final Region kinesisRegion) {
+        final Optional<String> accountId = Optional.of(matcher.group("accountId"));
+        final String streamName = matcher.group("streamName");
+        final Optional<Long> creationEpoch = matchedEpoch.isEmpty() ? Optional.empty()
+                : Optional.of(Long.valueOf(matchedEpoch));
+        final String matchedRegion = matcher.group("region");
+        final Region region = (matchedRegion != null) ? Region.of(matchedRegion) : kinesisRegion;
+        final Optional<Arn> arn = StreamARNUtil.getStreamARN(streamName, region, accountId);
+
+        if (!creationEpoch.isPresent() && !arn.isPresent()) {
+            throw new IllegalArgumentException("Cannot create StreamIdentifier if missing both ARN and creation epoch");
+        }
+
+        return StreamIdentifier.builder()
+                .accountIdOptional(accountId)
+                .streamName(streamName)
+                .streamCreationEpochOptional(creationEpoch)
+                .streamARNOptional(arn)
+                .build();
+    }
+
 }
