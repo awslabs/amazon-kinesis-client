@@ -17,6 +17,7 @@ import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.StsClientBuilder;
+import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.lang.reflect.Field;
 import java.util.Optional;
@@ -60,7 +61,8 @@ public class StreamARNUtilTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        setUpSupplierCache();
+        spySupplierCache = spy(ORIGINAL_CACHE);
+        setUpSupplierCache(spySupplierCache);
 
         final Arn defaultArn = toArn(STS_RESPONSE_ARN_FORMAT, ACCOUNT_ID);
         doReturn(defaultArn).when(spySupplierCache).get();
@@ -84,12 +86,10 @@ public class StreamARNUtilTest {
      * one-and-done cache behavior, provide each test precise control over
      * return values, and enable the ability to verify interactions via Mockito.
      */
-    private void setUpSupplierCache() throws Exception {
-        spySupplierCache = spy(ORIGINAL_CACHE);
-
+    static void setUpSupplierCache(final SupplierCache<Arn> cache) throws Exception {
         final Field f = StreamARNUtil.class.getDeclaredField("CALLER_IDENTITY_ARN");
         f.setAccessible(true);
-        f.set(null, spySupplierCache);
+        f.set(null, cache);
         f.setAccessible(false);
     }
 
@@ -124,6 +124,24 @@ public class StreamARNUtilTest {
         verify(spySupplierCache, times(2)).get();
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void testStsResponseWithoutAccountId() {
+        setUpSts();
+
+        final Arn arnWithoutAccountId = toArn(STS_RESPONSE_ARN_FORMAT, "");
+        assertEquals(Optional.empty(), arnWithoutAccountId.accountId());
+
+        final GetCallerIdentityResponse identityResponse = GetCallerIdentityResponse.builder()
+                        .arn(arnWithoutAccountId.toString()).build();
+        when(mockStsClient.getCallerIdentity()).thenReturn(identityResponse);
+
+        try {
+            StreamARNUtil.getStreamARN(STREAM_NAME, Region.US_EAST_1);
+        } finally {
+            verify(mockStsClient).getCallerIdentity();
+        }
+    }
+
     @Test
     public void testGetStreamARNReturnsEmptyOnInvalidKinesisRegion() {
         // Optional.empty() is expected when kinesis region is not set correctly
@@ -143,24 +161,13 @@ public class StreamARNUtilTest {
         when(spySupplierCache.get()).thenReturn(cachedArn);
 
         final Optional<Arn> actualStreamARNOptional = StreamARNUtil.getStreamARN(STREAM_NAME, Region.US_EAST_1,
-                Optional.of(providedAccountId));
+                providedAccountId);
         final Arn expectedStreamARN = toArn(KINESIS_STREAM_ARN_FORMAT, providedAccountId, STREAM_NAME);
 
         verify(spySupplierCache).get();
         verifyZeroInteractions(mockStsClient);
         assertTrue(actualStreamARNOptional.isPresent());
         assertEquals(expectedStreamARN, actualStreamARNOptional.get());
-    }
-
-    @Test
-    public void testNoAccountId() {
-        final Arn arnWithoutAccountId = toArn(STS_RESPONSE_ARN_FORMAT, "");
-        when(spySupplierCache.get()).thenReturn(arnWithoutAccountId);
-        assertEquals(Optional.empty(), arnWithoutAccountId.accountId());
-
-        final Optional<Arn> actualArn = StreamARNUtil.getStreamARN(STREAM_NAME, Region.US_EAST_1);
-        assertTrue(actualArn.isPresent());
-        assertEquals(Optional.empty(), actualArn.get().accountId());
     }
 
     private static Optional<Arn> getStreamArn() {
