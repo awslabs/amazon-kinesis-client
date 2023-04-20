@@ -1,7 +1,7 @@
 package software.amazon.kinesis.common;
 
 import org.junit.Assert;
-import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -14,9 +14,7 @@ import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
+import static org.junit.Assert.assertNotEquals;
 import static org.mockito.Mockito.when;
 import static org.powermock.api.mockito.PowerMockito.mockStatic;
 import static org.powermock.api.mockito.PowerMockito.verifyStatic;
@@ -32,14 +30,9 @@ public class StreamIdentifierTest {
 
     private static final Arn DEFAULT_ARN = toArn(KINESIS_REGION);
 
-    @Before
-    public void setUp() {
-        mockStatic(StreamARNUtil.class);
-
-        when(getStreamARN(anyString(), any(Region.class))).thenReturn(Optional.empty());
-        when(getStreamARN(STREAM_NAME, KINESIS_REGION)).thenReturn(Optional.of(DEFAULT_ARN));
-        when(getStreamARN(STREAM_NAME, KINESIS_REGION, Optional.of(TEST_ACCOUNT_ID)))
-                .thenReturn(Optional.of(DEFAULT_ARN));
+    @BeforeClass
+    public static void setUpBeforeClass() throws Exception {
+        StreamARNUtilTest.setUpSupplierCache(new SupplierCache<>(() -> DEFAULT_ARN));
     }
 
     /**
@@ -47,16 +40,9 @@ public class StreamIdentifierTest {
      */
     @Test
     public void testMultiStreamDeserializationSuccess() {
-        for (final String pattern : Arrays.asList(
-                // arn examples
-                toArn(KINESIS_REGION).toString(),
-                // serialization examples
-                "123456789012:stream-name:123",
-                "123456789012:stream-name:123:" + Region.US_ISOB_EAST_1
-        )) {
-            final StreamIdentifier si = StreamIdentifier.multiStreamInstance(pattern);
-            assertNotNull(si);
-        }
+        final StreamIdentifier siSerialized = StreamIdentifier.multiStreamInstance(serialize());
+        assertEquals(Optional.of(EPOCH), siSerialized.streamCreationEpochOptional());
+        assertActualStreamIdentifierExpected(null, siSerialized);
     }
 
     /**
@@ -73,17 +59,12 @@ public class StreamIdentifierTest {
                 "arn:aws:kinesis:region:123456789012:stream/", // missing stream-name
                 // serialization examples
                 ":stream-name:123", // missing account id
-                "123456789012:stream-name", // missing delimiter before creation epoch
-                "accountId:stream-name:123", // non-numeric account id
 //                "123456789:stream-name:123", // account id not 12 digits
                 "123456789abc:stream-name:123", // 12char alphanumeric account id
                 "123456789012::123", // missing stream name
+                "123456789012:stream-name", // missing delimiter and creation epoch
                 "123456789012:stream-name:", // missing creation epoch
-                "123456789012:stream-name::", // missing creation epoch; ':' for optional region yet missing region
-                "123456789012:stream-name::us-east-1", // missing creation epoch
                 "123456789012:stream-name:abc", // non-numeric creation epoch
-                "123456789012:stream-name:abc:", // non-numeric creation epoch with ':' yet missing region
-                "123456789012:stream-name:123:", // ':' for optional region yet missing region
                 ""
         )) {
             try {
@@ -102,18 +83,22 @@ public class StreamIdentifierTest {
         final StreamIdentifier multi = StreamIdentifier.multiStreamInstance(arn.toString());
 
         assertEquals(single, multi);
-        assertEquals(Optional.of(TEST_ACCOUNT_ID), single.accountIdOptional());
-        assertEquals(STREAM_NAME, single.streamName());
-        assertEquals(Optional.of(arn), single.streamARNOptional());
+        assertEquals(Optional.empty(), single.streamCreationEpochOptional());
+        assertActualStreamIdentifierExpected(arn, single);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testInstanceWithoutEpochOrArn() {
-        when(getStreamARN(STREAM_NAME, KINESIS_REGION, Optional.of(TEST_ACCOUNT_ID)))
+        mockStatic(StreamARNUtil.class);
+        when(getStreamARN(STREAM_NAME, KINESIS_REGION, TEST_ACCOUNT_ID))
                 .thenReturn(Optional.empty());
 
-        final Arn arn = toArn(KINESIS_REGION);
-        StreamIdentifier.singleStreamInstance(arn.toString());
+        try {
+            StreamIdentifier.singleStreamInstance(DEFAULT_ARN.toString());
+        } finally {
+            verifyStatic(StreamARNUtil.class);
+            getStreamARN(STREAM_NAME, KINESIS_REGION, TEST_ACCOUNT_ID);
+        }
     }
 
     @Test
@@ -130,57 +115,52 @@ public class StreamIdentifierTest {
         StreamIdentifier actualStreamIdentifier = StreamIdentifier.singleStreamInstance(STREAM_NAME, KINESIS_REGION);
         assertFalse(actualStreamIdentifier.streamCreationEpochOptional().isPresent());
         assertFalse(actualStreamIdentifier.accountIdOptional().isPresent());
+        assertEquals(STREAM_NAME, actualStreamIdentifier.streamName());
         assertEquals(Optional.of(DEFAULT_ARN), actualStreamIdentifier.streamARNOptional());
     }
 
     @Test
     public void testMultiStreamInstanceWithIdentifierSerialization() {
-        StreamIdentifier actualStreamIdentifier = StreamIdentifier.multiStreamInstance(serialize(KINESIS_REGION));
-        assertActualStreamIdentifierExpected(actualStreamIdentifier);
+        StreamIdentifier actualStreamIdentifier = StreamIdentifier.multiStreamInstance(serialize());
+        assertActualStreamIdentifierExpected(null, actualStreamIdentifier);
+        assertEquals(Optional.of(EPOCH), actualStreamIdentifier.streamCreationEpochOptional());
     }
 
-    @Test
-    public void testMultiStreamInstanceWithRegionSerialized() {
-        Region serializedRegion = Region.US_GOV_EAST_1;
-        final Optional<Arn> arn = Optional.of(toArn(serializedRegion));
+    /**
+     * When KCL's Kinesis endpoint is a region, it lacks visibility to streams
+     * in other regions. Therefore, when the endpoint and ARN conflict, an
+     * Exception should be thrown.
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testConflictOnRegions() {
+        final Region arnRegion = Region.US_GOV_EAST_1;
+        assertNotEquals(arnRegion, KINESIS_REGION);
 
-        when(getStreamARN(STREAM_NAME, serializedRegion, Optional.of(TEST_ACCOUNT_ID))).thenReturn(arn);
-
-        final String expectedSerialization = serialize(serializedRegion);
-        StreamIdentifier actualStreamIdentifier = StreamIdentifier.multiStreamInstance(
-                expectedSerialization, KINESIS_REGION);
-        assertActualStreamIdentifierExpected(arn, actualStreamIdentifier);
-        assertEquals(expectedSerialization, actualStreamIdentifier.serialize());
-        verifyStatic(StreamARNUtil.class);
-        getStreamARN(STREAM_NAME, serializedRegion, Optional.of(TEST_ACCOUNT_ID));
+        StreamIdentifier.multiStreamInstance(toArn(arnRegion).toString(), KINESIS_REGION);
     }
 
     @Test
     public void testMultiStreamInstanceWithoutRegionSerialized() {
         StreamIdentifier actualStreamIdentifier = StreamIdentifier.multiStreamInstance(
-                serialize(null), KINESIS_REGION);
+                serialize(), KINESIS_REGION);
         assertActualStreamIdentifierExpected(actualStreamIdentifier);
     }
 
     private void assertActualStreamIdentifierExpected(StreamIdentifier actual) {
-        assertActualStreamIdentifierExpected(Optional.of(DEFAULT_ARN), actual);
+        assertActualStreamIdentifierExpected(DEFAULT_ARN, actual);
     }
 
-    private void assertActualStreamIdentifierExpected(Optional<Arn> expectedArn, StreamIdentifier actual) {
+    private void assertActualStreamIdentifierExpected(Arn expectedArn, StreamIdentifier actual) {
         assertEquals(STREAM_NAME, actual.streamName());
-        assertEquals(Optional.of(EPOCH), actual.streamCreationEpochOptional());
         assertEquals(Optional.of(TEST_ACCOUNT_ID), actual.accountIdOptional());
-        assertEquals(expectedArn, actual.streamARNOptional());
+        assertEquals(Optional.ofNullable(expectedArn), actual.streamARNOptional());
     }
 
     /**
      * Creates a pattern that matches {@link StreamIdentifier} serialization.
-     *
-     * @param region (optional) region to serialize
      */
-    private static String serialize(final Region region) {
-        return String.join(":", TEST_ACCOUNT_ID, STREAM_NAME, Long.toString(EPOCH)) +
-                ((region == null) ? "" : ':' + region.toString());
+    private static String serialize() {
+        return String.join(":", TEST_ACCOUNT_ID, STREAM_NAME, Long.toString(EPOCH));
     }
 
     private static Arn toArn(final Region region) {

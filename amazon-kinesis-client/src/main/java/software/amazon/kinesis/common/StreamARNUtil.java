@@ -2,7 +2,6 @@ package software.amazon.kinesis.common;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
@@ -26,7 +25,11 @@ public final class StreamARNUtil {
         try (final SdkHttpClient httpClient = UrlConnectionHttpClient.builder().build();
                 final StsClient stsClient = StsClient.builder().httpClient(httpClient).build()) {
             final GetCallerIdentityResponse response = stsClient.getCallerIdentity();
-            return Arn.fromString(response.arn());
+            final Arn arn = Arn.fromString(response.arn());
+
+            // guarantee the cached ARN will never have an empty accountId
+            arn.accountId().orElseThrow(() -> new IllegalStateException("AccountId is not present on " + arn));
+            return arn;
         } catch (AwsServiceException | SdkClientException e) {
             log.warn("Unable to get sts caller identity to build stream arn", e);
             return null;
@@ -34,17 +37,18 @@ public final class StreamARNUtil {
     });
 
     /**
-     * This static method attempts to retrieve the stream ARN using the stream name, region, and accountId returned by STS
+     * Retrieves the stream ARN using the stream name, region, and accountId returned by STS.
      * It is designed to fail gracefully, returning Optional.empty() if any errors occur.
      *
      * @param streamName stream name
-     * @param kinesisRegion kinesisRegion is a nullable parameter used to construct the stream arn
+     * @param kinesisRegion Kinesis client endpoint, and also where the stream(s) to be
+     *          processed are located. A null guarantees an empty ARN.
      */
     public static Optional<Arn> getStreamARN(String streamName, Region kinesisRegion) {
-        return getStreamARN(streamName, kinesisRegion, Optional.empty());
+        return getStreamARN(streamName, kinesisRegion, null);
     }
 
-    public static Optional<Arn> getStreamARN(String streamName, Region kinesisRegion, @NonNull Optional<String> accountId) {
+    public static Optional<Arn> getStreamARN(String streamName, Region kinesisRegion, String accountId) {
         if (kinesisRegion == null) {
             return Optional.empty();
         }
@@ -55,7 +59,7 @@ public final class StreamARNUtil {
         }
 
         // the provided accountId takes precedence
-        final String chosenAccountId = accountId.orElse(identityArn.accountId().orElse(""));
+        final String chosenAccountId = (accountId != null) ? accountId : identityArn.accountId().get();
         return Optional.of(Arn.builder()
                 .partition(identityArn.partition())
                 .service("kinesis")
