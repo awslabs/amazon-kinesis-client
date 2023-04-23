@@ -15,6 +15,8 @@
 
 package software.amazon.kinesis.processor;
 
+import java.util.Date;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -46,6 +48,22 @@ public class SingleStreamTrackerTest {
         final StreamTracker tracker = new SingleStreamTracker(
                 StreamIdentifier.singleStreamInstance(STREAM_NAME), expectedPosition);
         validate(tracker, expectedPosition);
+    }
+
+    @Test
+    public void testConsistencyOfInitialPositionInStream() {
+        for (final InitialPositionInStream position : InitialPositionInStream.values()) {
+            final InitialPositionInStreamExtended expectedPosition;
+            if (position == InitialPositionInStream.AT_TIMESTAMP) {
+                expectedPosition = InitialPositionInStreamExtended.newInitialPositionAtTimestamp(new Date());
+            } else {
+                expectedPosition = InitialPositionInStreamExtended.newInitialPosition(position);
+            }
+
+            final StreamTracker tracker = new SingleStreamTracker(STREAM_NAME, expectedPosition);
+
+            assertEquals(expectedPosition, tracker.orphanedStreamInitialPositionInStream());
+        }
     }
 
     private static void validate(StreamTracker tracker) {
