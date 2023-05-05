@@ -9,11 +9,9 @@ import lombok.RequiredArgsConstructor;
  * {@link Supplier#get()} is an expensive call that produces static results.
  */
 @RequiredArgsConstructor
-public class SupplierCache<T> {
+public class SupplierCache<T> extends SynchronizedCache<T> {
 
     private final Supplier<T> supplier;
-
-    private volatile T result;
 
     /**
      * Returns the cached result. If the cache is null, the supplier will be
@@ -22,15 +20,7 @@ public class SupplierCache<T> {
      * @return cached result which may be null
      */
     public T get() {
-        if (result == null) {
-            synchronized (this) {
-                // double-check lock
-                if (result == null) {
-                    result = supplier.get();
-                }
-            }
-        }
-        return result;
+        return get(supplier);
     }
 
 }
