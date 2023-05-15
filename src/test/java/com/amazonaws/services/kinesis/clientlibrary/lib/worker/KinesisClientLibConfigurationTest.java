@@ -27,6 +27,7 @@ import org.junit.Test;
 import org.mockito.Mockito;
 
 import com.amazonaws.ClientConfiguration;
+import com.amazonaws.arn.Arn;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.RegionUtils;
@@ -34,6 +35,7 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.SimpleRecordsFetcherFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
 
@@ -46,8 +48,16 @@ public class KinesisClientLibConfigurationTest {
     private static final long TEST_VALUE_LONG = 1000L;
     private static final int TEST_VALUE_INT = 1000;
     private static final int PARAMETER_COUNT = 6;
+    private static final String ACCOUNT_ID = "123456789012";
 
     private static final String TEST_STRING = "TestString";
+    private static final Arn TEST_ARN = Arn.builder()
+                                           .withPartition("aws")
+                                           .withService("kinesis")
+                                           .withRegion("us-east-1")
+                                           .withAccountId(ACCOUNT_ID)
+                                           .withResource("stream/" + TEST_STRING)
+                                           .build();
     private static final String ALTER_STRING = "AlterString";
 
     // We don't want any of these tests to run checkpoint validation
@@ -87,7 +97,45 @@ public class KinesisClientLibConfigurationTest {
                         TEST_VALUE_INT,
                         skipCheckpointValidationValue,
                         null,
-                        TEST_VALUE_LONG, BillingMode.PROVISIONED);
+                        TEST_VALUE_LONG,
+                        BillingMode.PROVISIONED,
+                        new SimpleRecordsFetcherFactory(),
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG);
+
+        // Test constructor with streamARN with all valid arguments.
+        config =
+                new KinesisClientLibConfiguration(TEST_STRING,
+                        TEST_ARN,
+                        TEST_STRING,
+                        TEST_STRING,
+                        InitialPositionInStream.LATEST,
+                        null,
+                        null,
+                        null,
+                        TEST_VALUE_LONG,
+                        TEST_STRING,
+                        TEST_VALUE_INT,
+                        TEST_VALUE_LONG,
+                        false,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        true,
+                        new ClientConfiguration(),
+                        new ClientConfiguration(),
+                        new ClientConfiguration(),
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_INT,
+                        skipCheckpointValidationValue,
+                        null,
+                        TEST_VALUE_LONG, BillingMode.PROVISIONED,
+                        new SimpleRecordsFetcherFactory(),
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG);
+        Assert.assertEquals(config.getStreamName(), TEST_STRING);
     }
 
     @Test

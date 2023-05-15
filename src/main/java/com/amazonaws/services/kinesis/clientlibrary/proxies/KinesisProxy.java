@@ -37,6 +37,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.amazonaws.arn.Arn;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.kinesis.AmazonKinesis;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
@@ -93,6 +94,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
     private AtomicInteger cacheMisses = new AtomicInteger(0);
 
     private final String streamName;
+    private Arn streamARN;
 
     private static final long DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS = 1000L;
     private static final int DEFAULT_DESCRIBE_STREAM_RETRY_TIMES = 50;
@@ -218,6 +220,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
                 config.getListShardsBackoffTimeInMillis(),
                 config.getMaxListShardsRetryAttempts());
         this.credentialsProvider = config.getKinesisCredentialsProvider();
+        this.streamARN = config.getStreamARN();
     }
 
     public KinesisProxy(final String streamName,
@@ -270,6 +273,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
         final DescribeStreamRequest describeStreamRequest = new DescribeStreamRequest();
         describeStreamRequest.setRequestCredentials(credentialsProvider.getCredentials());
         describeStreamRequest.setStreamName(streamName);
+        describeStreamRequest.setStreamARN(streamARN != null ? streamARN.toString() : null);
         describeStreamRequest.setExclusiveStartShardId(startShardId);
         DescribeStreamResult response = null;
 
@@ -314,6 +318,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
         request.setRequestCredentials(credentialsProvider.getCredentials());
         if (StringUtils.isEmpty(nextToken)) {
             request.setStreamName(streamName);
+            request.setStreamARN(streamARN != null ? streamARN.toString() : null);
             request.setShardFilter(shardFilter);
         } else {
             request.setNextToken(nextToken);
@@ -567,6 +572,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
         final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
         getShardIteratorRequest.setRequestCredentials(credentialsProvider.getCredentials());
         getShardIteratorRequest.setStreamName(streamName);
+        getShardIteratorRequest.setStreamARN(streamARN != null ? streamARN.toString() : null);
         getShardIteratorRequest.setShardId(shardId);
         getShardIteratorRequest.setShardIteratorType(iteratorType);
         getShardIteratorRequest.setStartingSequenceNumber(sequenceNumber);
@@ -583,6 +589,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
         final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
         getShardIteratorRequest.setRequestCredentials(credentialsProvider.getCredentials());
         getShardIteratorRequest.setStreamName(streamName);
+        getShardIteratorRequest.setStreamARN(streamARN != null ? streamARN.toString() : null);
         getShardIteratorRequest.setShardId(shardId);
         getShardIteratorRequest.setShardIteratorType(iteratorType);
         getShardIteratorRequest.setStartingSequenceNumber(null);
@@ -599,6 +606,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
         final GetShardIteratorRequest getShardIteratorRequest = new GetShardIteratorRequest();
         getShardIteratorRequest.setRequestCredentials(credentialsProvider.getCredentials());
         getShardIteratorRequest.setStreamName(streamName);
+        getShardIteratorRequest.setStreamARN(streamARN != null ? streamARN.toString() : null);
         getShardIteratorRequest.setShardId(shardId);
         getShardIteratorRequest.setShardIteratorType(ShardIteratorType.AT_TIMESTAMP);
         getShardIteratorRequest.setStartingSequenceNumber(null);
@@ -618,6 +626,7 @@ public class KinesisProxy implements IKinesisProxyExtended {
         final PutRecordRequest putRecordRequest = new PutRecordRequest();
         putRecordRequest.setRequestCredentials(credentialsProvider.getCredentials());
         putRecordRequest.setStreamName(streamName);
+        putRecordRequest.setStreamARN(streamARN != null ? streamARN.toString() : null);
         putRecordRequest.setSequenceNumberForOrdering(exclusiveMinimumSequenceNumber);
         putRecordRequest.setExplicitHashKey(explicitHashKey);
         putRecordRequest.setPartitionKey(partitionKey);
