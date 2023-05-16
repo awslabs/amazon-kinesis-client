@@ -224,7 +224,6 @@ public class KinesisShardDetector implements ShardDetector {
         if (StringUtils.isEmpty(nextToken)) {
             builder.streamName(streamIdentifier.streamName()).shardFilter(shardFilter);
             streamIdentifier.streamARNOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
-
         } else {
             builder.nextToken(nextToken);
         }

@@ -26,6 +26,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -33,12 +34,12 @@ import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
-import software.amazon.kinesis.utils.MockObjectHelper;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ConfigsBuilderTest {
 
-    private final KinesisAsyncClient mockKinesisClient = MockObjectHelper.createKinesisClient();
+    @Mock
+    private KinesisAsyncClient mockKinesisClient;
 
     @Mock
     private DynamoDbAsyncClient mockDynamoClient;
@@ -53,12 +54,27 @@ public class ConfigsBuilderTest {
     private static final String WORKER_IDENTIFIER = "worker-id";
 
     @Test
-    public void testTrackerConstruction() {
+    public void testTrackerConstructionByStreamName() {
         final String streamName = "single-stream";
         final ConfigsBuilder configByName = createConfig(streamName);
         final ConfigsBuilder configBySingleTracker = createConfig(new SingleStreamTracker(streamName));
 
-        for (final ConfigsBuilder cb : Arrays.asList(configByName, configBySingleTracker)) {
+        testTrackerConstruction(streamName, configBySingleTracker, configByName);
+    }
+
+    @Test
+    public void testTrackerConstructionByStreamARN() {
+        final Arn streamARN = Arn.fromString("arn:aws:kinesis:region:123456789012:stream/stream-name");
+        final ConfigsBuilder configByArn = createConfig(streamARN);
+        final ConfigsBuilder configBySingleTracker = createConfig(new SingleStreamTracker(streamARN));
+
+        final String streamName = streamARN.resource().resource();
+        testTrackerConstruction(streamName, configBySingleTracker, configByArn);
+    }
+
+    private void testTrackerConstruction(String streamName,
+                                         ConfigsBuilder expectedConfig, ConfigsBuilder actualConfig) {
+        for (final ConfigsBuilder cb : Arrays.asList(expectedConfig, actualConfig)) {
             assertEquals(Optional.empty(), cb.appStreamTracker().left());
             assertEquals(streamName, cb.appStreamTracker().right().get());
             assertEquals(streamName, cb.streamTracker().streamConfigList().get(0).streamIdentifier().streamName());
@@ -75,6 +91,12 @@ public class ConfigsBuilderTest {
     private ConfigsBuilder createConfig(String streamName) {
         // intentional invocation of constructor where streamName is a String
         return new ConfigsBuilder(streamName, APPLICATION_NAME, mockKinesisClient, mockDynamoClient,
+                mockCloudWatchClient, WORKER_IDENTIFIER, mockShardProcessorFactory);
+    }
+
+    private ConfigsBuilder createConfig(Arn streamARN) {
+        // intentional invocation of constructor where streamARN is an Arn
+        return new ConfigsBuilder(streamARN, APPLICATION_NAME, mockKinesisClient, mockDynamoClient,
                 mockCloudWatchClient, WORKER_IDENTIFIER, mockShardProcessorFactory);
     }
 

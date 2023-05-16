@@ -24,13 +24,13 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
-import software.amazon.kinesis.utils.MockObjectHelper;
 
 @RunWith(MockitoJUnitRunner.class)
 public class RetrievalConfigTest {
 
     private static final String APPLICATION_NAME = RetrievalConfigTest.class.getSimpleName();
 
+    @Mock
     private KinesisAsyncClient mockKinesisClient;
 
     @Mock
@@ -38,7 +38,6 @@ public class RetrievalConfigTest {
 
     @Before
     public void setUp() {
-        mockKinesisClient = MockObjectHelper.createKinesisClient(true);
         when(mockMultiStreamTracker.isMultiStream()).thenReturn(true);
     }
 
