@@ -101,7 +101,6 @@ public class StreamIdentifier {
                     .accountIdOptional(Optional.of(accountId))
                     .streamName(streamName)
                     .streamCreationEpochOptional(Optional.of(creationEpoch))
-                    .streamARNOptional(Optional.empty())
                     .build();
         }
 
