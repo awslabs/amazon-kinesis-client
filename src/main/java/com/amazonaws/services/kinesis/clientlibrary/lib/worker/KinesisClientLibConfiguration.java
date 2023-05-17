@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 import java.time.Duration;
 import java.util.Date;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.Set;
 
 import com.amazonaws.services.dynamodbv2.model.BillingMode;
@@ -233,6 +234,14 @@ public class KinesisClientLibConfiguration {
      * The number of times the {@link Worker} will try to initialize before giving up.
      */
     public static final int DEFAULT_MAX_INITIALIZATION_ATTEMPTS = 20;
+
+    /**
+     * Pattern for a stream ARN. The valid format is
+     * {@code arn:aws:kinesis:<region>:<accountId>:stream:<streamName>}
+     * where {@code region} is the id representation of a {@link Region}.
+     */
+    private static final Pattern STREAM_ARN_PATTERN = Pattern.compile(
+            "arn:aws:kinesis:(?<region>[-a-z0-9]+):(?<accountId>[0-9]{12}):stream/(?<streamName>.+)");
 
     @Getter
     private BillingMode billingMode;
@@ -806,6 +815,7 @@ public class KinesisClientLibConfiguration {
         checkIsValuePositive("TaskBackoffTimeMillis", taskBackoffTimeMillis);
         checkIsValuePositive("MetricsBufferTimeMills", metricsBufferTimeMillis);
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
+        checkIsValidStreamARN(streamARN);
         this.applicationName = applicationName;
         this.tableName = applicationName;
         this.streamName = streamARN.getResource().getResource();
@@ -858,6 +868,12 @@ public class KinesisClientLibConfiguration {
         if (value <= 0) {
             throw new IllegalArgumentException("Value of " + key
                     + " should be positive, but current value is " + value);
+        }
+    }
+
+    private void checkIsValidStreamARN(Arn streamARN) {
+        if (!STREAM_ARN_PATTERN.matcher(streamARN.toString()).matches()) {
+            throw new IllegalArgumentException("Invalid streamARN " + streamARN);
         }
     }
 
@@ -1211,6 +1227,7 @@ public class KinesisClientLibConfiguration {
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withStreamARN(Arn streamARN) {
+        checkIsValidStreamARN(streamARN);
         this.streamARN = streamARN;
         return this;
     }

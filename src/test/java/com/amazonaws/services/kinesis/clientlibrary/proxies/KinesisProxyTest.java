@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import lombok.Builder;
 import org.apache.commons.lang3.StringUtils;
 import org.hamcrest.Description;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
@@ -77,8 +78,6 @@ import com.amazonaws.services.kinesis.model.Shard;
 import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamDescription;
 import com.amazonaws.services.kinesis.model.StreamStatus;
-
-import lombok.AllArgsConstructor;
 
 @RunWith(MockitoJUnitRunner.class)
 public class KinesisProxyTest {
@@ -174,7 +173,8 @@ public class KinesisProxyTest {
         // Second call describeStream returning response with rest shards.
         DescribeStreamResult responseWithMoreData = createGetStreamInfoResponse(shards.subList(0, 2), true);
         DescribeStreamResult responseFinal = createGetStreamInfoResponse(shards.subList(2, shards.size()), false);
-        doReturn(responseWithMoreData).when(mockDDBStreamClient).describeStream(argThat(new IsRequestWithStartShardId(TEST_STRING, null, null)));
+        IsRequestWithStartShardId requestMatcher = IsRequestWithStartShardId.builder().streamName(TEST_STRING).build();
+        doReturn(responseWithMoreData).when(mockDDBStreamClient).describeStream(argThat(requestMatcher));
         doReturn(responseFinal).when(mockDDBStreamClient)
                 .describeStream(argThat(new OldIsRequestWithStartShardId(shards.get(1).getShardId())));
 
@@ -321,7 +321,8 @@ public class KinesisProxyTest {
     public void testGetShardListWithDDBChildClient() {
         DescribeStreamResult responseWithMoreData = createGetStreamInfoResponse(shards.subList(0, 2), true);
         DescribeStreamResult responseFinal = createGetStreamInfoResponse(shards.subList(2, shards.size()), false);
-        doReturn(responseWithMoreData).when(mockDDBChildClient).describeStream(argThat(new IsRequestWithStartShardId(TEST_STRING, null, null)));
+        IsRequestWithStartShardId requestMatcher = IsRequestWithStartShardId.builder().streamName(TEST_STRING).build();
+        doReturn(responseWithMoreData).when(mockDDBChildClient).describeStream(argThat(requestMatcher));
         doReturn(responseFinal).when(mockDDBChildClient)
                 .describeStream(argThat(new OldIsRequestWithStartShardId(shards.get(1).getShardId())));
 
@@ -510,14 +511,22 @@ public class KinesisProxyTest {
     }
 
     private IsRequestWithStartShardId describeWithoutShardId() {
-        return new IsRequestWithStartShardId(TEST_STRING, TEST_ARN, null);
+        return IsRequestWithStartShardId.builder()
+                                        .streamName(TEST_STRING)
+                                        .streamARN(TEST_ARN)
+                                        .build();
     }
 
     private IsRequestWithStartShardId describeWithShardId(String shardId) {
-        return new IsRequestWithStartShardId(TEST_STRING, TEST_ARN, shardId);
+        return IsRequestWithStartShardId.builder()
+                .streamName(TEST_STRING)
+                .streamARN(TEST_ARN)
+                .shardId(shardId)
+                .build();
+//        return new IsRequestWithStartShardId(TEST_STRING, TEST_ARN, shardId);
     }
 
-    @AllArgsConstructor
+    @Builder
     private static class IsRequestWithStartShardId extends TypeSafeDiagnosingMatcher<DescribeStreamRequest> {
 
         private final String streamName;
@@ -591,14 +600,21 @@ public class KinesisProxyTest {
     }
 
     private static ListShardsRequestMatcher initialListShardsRequestMatcher() {
-        return new ListShardsRequestMatcher(TEST_STRING, TEST_ARN, null, null);
+        return ListShardsRequestMatcher.builder()
+                .streamName(TEST_STRING)
+                .streamARN(TEST_ARN)
+                .build();
+//        return new ListShardsRequestMatcher(TEST_STRING, TEST_ARN, null, null);
     }
 
     private static ListShardsRequestMatcher listShardsNextToken(final String nextToken) {
-        return new ListShardsRequestMatcher(null, null, null, nextToken);
+        return ListShardsRequestMatcher.builder()
+                .nextToken(nextToken)
+                .build();
+//        return new ListShardsRequestMatcher(null, null, null, nextToken);
     }
 
-    @AllArgsConstructor
+    @Builder
     private static class ListShardsRequestMatcher extends TypeSafeDiagnosingMatcher<ListShardsRequest> {
         private final String streamName;
         private final Arn streamARN;
