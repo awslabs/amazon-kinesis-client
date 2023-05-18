@@ -126,7 +126,6 @@ public class KinesisProxyTest {
 
     private KinesisProxy proxy;
     private KinesisProxy ddbProxy;
-    private KinesisProxy ddbProxyWithStreamARN;
     private KinesisProxy ddbChildProxy;
 
     // Test shards for verifying.
