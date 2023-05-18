@@ -116,6 +116,10 @@ public class StreamIdentifier {
      *
      * @param streamArn an {@link Arn} of format {@link #STREAM_ARN_PATTERN}
      * @param creationEpoch creation epoch of the stream
+     *                      an incorrect creationEpoch may result in erroneous/deleterious behavior in lease management,
+     *                      such as when an epoch is reused for two editions of the same stream
+     *                      (e.g., create stream A at epoch t1, create StreamIdentifer(A, t1), delete A,
+     *                      create stream A at epoch t2, reuse old epoch to create StreamIdentifier(A, t1))
      * @return StreamIdentifier with {@link #accountIdOptional}, {@link #streamCreationEpochOptional},
      *         and {@link #streamArnOptional} present
      */

@@ -119,9 +119,9 @@ public class StreamIdentifierTest {
     @Test
     public void testSingleStreamInstanceWithName() {
         StreamIdentifier actualStreamIdentifier = StreamIdentifier.singleStreamInstance(STREAM_NAME);
-        assertEquals(Optional.empty(), actualStreamIdentifier.streamCreationEpochOptional().isPresent());
-        assertEquals(Optional.empty(), actualStreamIdentifier.accountIdOptional().isPresent());
-        assertEquals(Optional.empty(), actualStreamIdentifier.streamArnOptional().isPresent());
+        assertEquals(Optional.empty(), actualStreamIdentifier.streamCreationEpochOptional());
+        assertEquals(Optional.empty(), actualStreamIdentifier.accountIdOptional());
+        assertEquals(Optional.empty(), actualStreamIdentifier.streamArnOptional());
         assertEquals(STREAM_NAME, actualStreamIdentifier.streamName());
     }
 
