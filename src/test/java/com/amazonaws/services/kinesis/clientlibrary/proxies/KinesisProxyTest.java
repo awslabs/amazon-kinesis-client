@@ -141,7 +141,7 @@ public class KinesisProxyTest {
     public void setUpTest() {
         // Set up kinesis ddbProxy
         when(config.getStreamName()).thenReturn(TEST_STRING);
-        when(config.getStreamARN()).thenReturn(TEST_ARN);
+        when(config.getStreamArn()).thenReturn(TEST_ARN);
         when(config.getListShardsBackoffTimeInMillis()).thenReturn(LIST_SHARDS_BACKOFF_TIME);
         when(config.getMaxListShardsRetryAttempts()).thenReturn(LIST_SHARDS_RETRY_TIMES);
         when(config.getKinesisCredentialsProvider()).thenReturn(mockCredentialsProvider);
@@ -513,24 +513,23 @@ public class KinesisProxyTest {
     private IsRequestWithStartShardId describeWithoutShardId() {
         return IsRequestWithStartShardId.builder()
                                         .streamName(TEST_STRING)
-                                        .streamARN(TEST_ARN)
+                                        .streamArn(TEST_ARN)
                                         .build();
     }
 
     private IsRequestWithStartShardId describeWithShardId(String shardId) {
         return IsRequestWithStartShardId.builder()
                 .streamName(TEST_STRING)
-                .streamARN(TEST_ARN)
+                .streamArn(TEST_ARN)
                 .shardId(shardId)
                 .build();
-//        return new IsRequestWithStartShardId(TEST_STRING, TEST_ARN, shardId);
     }
 
     @Builder
     private static class IsRequestWithStartShardId extends TypeSafeDiagnosingMatcher<DescribeStreamRequest> {
 
         private final String streamName;
-        private final Arn streamARN;
+        private final Arn streamArn;
         private final String shardId;
 
         @Override
@@ -547,14 +546,14 @@ public class KinesisProxyTest {
                 return false;
             }
 
-            if (streamARN == null) {
+            if (streamArn == null) {
                 if (item.getStreamARN() != null) {
-                    mismatchDescription.appendText("Expected streamARN of null, but was ")
+                    mismatchDescription.appendText("Expected streamArn of null, but was ")
                                        .appendValue(item.getStreamARN());
                     return false;
                 }
-            } else if (!streamARN.equals(Arn.fromString(item.getStreamARN()))) {
-                mismatchDescription.appendValue(streamARN).appendText(" doesn't match expected ")
+            } else if (!streamArn.equals(Arn.fromString(item.getStreamARN()))) {
+                mismatchDescription.appendValue(streamArn).appendText(" doesn't match expected ")
                                    .appendValue(item.getStreamARN());
                 return false;
             }
@@ -602,22 +601,20 @@ public class KinesisProxyTest {
     private static ListShardsRequestMatcher initialListShardsRequestMatcher() {
         return ListShardsRequestMatcher.builder()
                 .streamName(TEST_STRING)
-                .streamARN(TEST_ARN)
+                .streamArn(TEST_ARN)
                 .build();
-//        return new ListShardsRequestMatcher(TEST_STRING, TEST_ARN, null, null);
     }
 
     private static ListShardsRequestMatcher listShardsNextToken(final String nextToken) {
         return ListShardsRequestMatcher.builder()
                 .nextToken(nextToken)
                 .build();
-//        return new ListShardsRequestMatcher(null, null, null, nextToken);
     }
 
     @Builder
     private static class ListShardsRequestMatcher extends TypeSafeDiagnosingMatcher<ListShardsRequest> {
         private final String streamName;
-        private final Arn streamARN;
+        private final Arn streamArn;
         private final String shardId;
         private final String nextToken;
 
@@ -638,16 +635,16 @@ public class KinesisProxyTest {
                 }
             }
 
-            if (streamARN == null) {
+            if (streamArn == null) {
                 if (StringUtils.isNotEmpty(listShardsRequest.getStreamARN())) {
-                    description.appendText("Expected streamARN to be null, but was ")
+                    description.appendText("Expected streamArn to be null, but was ")
                                .appendValue(listShardsRequest.getStreamARN());
                     return false;
                 }
             } else {
-                if (!streamARN.equals(Arn.fromString(listShardsRequest.getStreamARN()))) {
-                    description.appendText("Expected streamARN: ").appendValue(streamARN)
-                               .appendText(" doesn't match actual streamARN: ")
+                if (!streamArn.equals(Arn.fromString(listShardsRequest.getStreamARN()))) {
+                    description.appendText("Expected streamArn: ").appendValue(streamArn)
+                               .appendText(" doesn't match actual streamArn: ")
                                .appendValue(listShardsRequest.getStreamARN());
                     return false;
                 }

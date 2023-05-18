@@ -104,7 +104,7 @@ public class KinesisClientLibConfigurationTest {
                         TEST_VALUE_LONG,
                         TEST_VALUE_LONG);
 
-        // Test constructor with streamARN with all valid arguments.
+        // Test constructor with streamArn with all valid arguments.
         config =
                 new KinesisClientLibConfiguration(TEST_STRING,
                         TEST_ARN,

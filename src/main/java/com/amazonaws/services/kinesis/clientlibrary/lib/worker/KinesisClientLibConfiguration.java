@@ -248,7 +248,7 @@ public class KinesisClientLibConfiguration {
     private String applicationName;
     private String tableName;
     private String streamName;
-    private Arn streamARN;
+    private Arn streamArn;
     private String kinesisEndpoint;
     private String dynamoDBEndpoint;
     private InitialPositionInStream initialPositionInStream;
@@ -736,7 +736,7 @@ public class KinesisClientLibConfiguration {
      * @param applicationName Name of the Kinesis application
      *        By default the application name is included in the user agent string used to make AWS requests. This
      *        can assist with troubleshooting (e.g. distinguish requests made by separate applications).
-     * @param streamARN Kinesis stream ARN
+     * @param streamArn Kinesis stream ARN
      * @param kinesisEndpoint Kinesis endpoint
      * @param dynamoDBEndpoint DynamoDB endpoint
      * @param initialPositionInStream One of LATEST or TRIM_HORIZON. The KinesisClientLibrary will start fetching
@@ -776,7 +776,7 @@ public class KinesisClientLibConfiguration {
      *        (leases for shards which no longer exist in the stream) that need to be cleaned up.
      */
     public KinesisClientLibConfiguration(String applicationName,
-            Arn streamARN,
+            Arn streamArn,
             String kinesisEndpoint,
             String dynamoDBEndpoint,
             InitialPositionInStream initialPositionInStream,
@@ -815,11 +815,11 @@ public class KinesisClientLibConfiguration {
         checkIsValuePositive("TaskBackoffTimeMillis", taskBackoffTimeMillis);
         checkIsValuePositive("MetricsBufferTimeMills", metricsBufferTimeMillis);
         checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
-        checkIsValidStreamARN(streamARN);
+        checkIsValidStreamArn(streamArn);
         this.applicationName = applicationName;
         this.tableName = applicationName;
-        this.streamName = streamARN.getResource().getResource();
-        this.streamARN = streamARN;
+        this.streamName = streamArn.getResource().getResource();
+        this.streamArn = streamArn;
         this.kinesisEndpoint = kinesisEndpoint;
         this.dynamoDBEndpoint = dynamoDBEndpoint;
         this.initialPositionInStream = initialPositionInStream;
@@ -871,9 +871,9 @@ public class KinesisClientLibConfiguration {
         }
     }
 
-    private void checkIsValidStreamARN(Arn streamARN) {
-        if (!STREAM_ARN_PATTERN.matcher(streamARN.toString()).matches()) {
-            throw new IllegalArgumentException("Invalid streamARN " + streamARN);
+    private void checkIsValidStreamArn(Arn streamArn) {
+        if (!STREAM_ARN_PATTERN.matcher(streamArn.toString()).matches()) {
+            throw new IllegalArgumentException("Invalid streamArn " + streamArn);
         }
     }
 
@@ -986,8 +986,8 @@ public class KinesisClientLibConfiguration {
     /**
      * @return stream ARN
      */
-    public Arn getStreamARN() {
-        return streamARN;
+    public Arn getStreamArn() {
+        return streamArn;
     }
 
     /**
@@ -1223,12 +1223,12 @@ public class KinesisClientLibConfiguration {
     }
 
     /**
-     * @param streamARN Kinesis stream ARN
+     * @param streamArn Kinesis stream ARN
      * @return KinesisClientLibConfiguration
      */
-    public KinesisClientLibConfiguration withStreamARN(Arn streamARN) {
-        checkIsValidStreamARN(streamARN);
-        this.streamARN = streamARN;
+    public KinesisClientLibConfiguration withStreamArn(Arn streamArn) {
+        checkIsValidStreamArn(streamArn);
+        this.streamArn = streamArn;
         return this;
     }
 
