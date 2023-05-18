@@ -58,7 +58,7 @@ public class StreamIdentifier {
      * where {@code region} is the id representation of a {@link Region}.
      */
     private static final Pattern STREAM_ARN_PATTERN = Pattern.compile(
-            "arn:aws:kinesis:(?<region>[-a-z0-9]+):(?<accountId>[0-9]{12}):stream/(?<streamName>.+)");
+            "arn:aws[^:]*:kinesis:(?<region>[-a-z0-9]+):(?<accountId>[0-9]{12}):stream/(?<streamName>.+)");
 
     /**
      * Serialize the current StreamIdentifier instance.
