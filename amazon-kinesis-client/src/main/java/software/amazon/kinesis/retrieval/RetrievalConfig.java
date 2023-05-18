@@ -22,6 +22,7 @@ import lombok.NonNull;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.common.DeprecationUtils;
@@ -120,6 +121,11 @@ public class RetrievalConfig {
     public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull String streamName,
                            @NonNull String applicationName) {
         this(kinesisAsyncClient, new SingleStreamTracker(streamName), applicationName);
+    }
+
+    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull Arn streamArn,
+                           @NonNull String applicationName) {
+        this(kinesisAsyncClient, new SingleStreamTracker(streamArn), applicationName);
     }
 
     public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull StreamTracker streamTracker,

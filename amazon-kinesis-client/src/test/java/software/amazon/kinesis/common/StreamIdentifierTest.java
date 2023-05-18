@@ -9,13 +9,14 @@ import java.util.Arrays;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 public class StreamIdentifierTest {
     private static final String STREAM_NAME = "stream-name";
+    private static final String PARTITION = "aws";
+    private static final String SERVICE = "kinesis";
     private static final Region KINESIS_REGION = Region.US_WEST_1;
     private static final String TEST_ACCOUNT_ID = "123456789012";
+    private static final String RESOURCE = "stream/" + STREAM_NAME;
     private static final long EPOCH = 1680616058L;
     private static final Arn DEFAULT_ARN = Arn.builder()
             .partition("aws").service("kinesis")
@@ -46,12 +47,13 @@ public class StreamIdentifierTest {
                 "123456789012::123", // missing stream name
                 "123456789012:stream-name", // missing delimiter and creation epoch
                 "123456789012:stream-name:", // missing creation epoch
+                "123456789012:stream-name:-123", // negative creation epoch
                 "123456789012:stream-name:abc", // non-numeric creation epoch
                 ""
         )) {
             try {
                 StreamIdentifier.multiStreamInstance(pattern);
-                Assert.fail(pattern + " should not have created a StreamIdentifier");
+                Assert.fail("Serialization " + pattern + " should not have created a StreamIdentifier");
             } catch (final IllegalArgumentException iae) {
                 // expected; ignore
             }
@@ -59,20 +61,37 @@ public class StreamIdentifierTest {
     }
 
     /**
-     * Test patterns that <b>should not</b> match a valid streamARN regex.
+     * Test Arns that <b>should not</b> match a valid AWS Kinesis stream Arn.
      */
     @Test
-    public void testMultiStreamArnFail() {
-        for (final String pattern : Arrays.asList(
-                "arn:aws:kinesis::123456789012:stream/stream-name", // missing region
-                "arn:aws:kinesis:region::stream/stream-name", // missing account id
-                "arn:aws:kinesis:region:123456789:stream/stream-name", // account id not 12 digits
-                "arn:aws:kinesis:region:123456789abc:stream/stream-name", // 12char alphanumeric account id
-                "arn:aws:kinesis:region:123456789012:stream/" // missing stream-name
+    public void testMultiStreamByArnWithInvalidStreamArnFail() {
+        final String region = KINESIS_REGION.id();
+        for (final Arn invalidStreamArn : Arrays.asList(
+                streamArn("abc", SERVICE,  region, TEST_ACCOUNT_ID, RESOURCE), // invalid partition
+                streamArn(PARTITION, "dynamodb",  region, TEST_ACCOUNT_ID, RESOURCE), // incorrect service
+                streamArn(PARTITION, SERVICE,  null, TEST_ACCOUNT_ID, RESOURCE), // missing region
+                streamArn(PARTITION, SERVICE,  region, null, RESOURCE), // missing account id
+                streamArn(PARTITION, SERVICE,  region, "123456789", RESOURCE), // account id not 12 digits
+                streamArn(PARTITION, SERVICE,  region, "123456789abc", RESOURCE), // 12char alphanumeric account id
+                streamArn(PARTITION, SERVICE,  region, TEST_ACCOUNT_ID, "table/name"), // incorrect resource type
+                Arn.fromString("arn:aws:dynamodb:us-east-2:123456789012:table/myDynamoDBTable") // valid Arn for incorrect resource
         )) {
             try {
-                StreamIdentifier.multiStreamInstance(Arn.fromString(pattern), EPOCH);
-                Assert.fail(pattern + " should not have created a StreamIdentifier");
+                StreamIdentifier.multiStreamInstance(invalidStreamArn, EPOCH);
+                Assert.fail("Arn " + invalidStreamArn + " should not have created a StreamIdentifier");
+            } catch (final IllegalArgumentException iae) {
+                // expected; ignore
+            }
+        }
+    }
+
+    @Test
+    public void testMultiStreamByArnWithInvalidCreationEpochFail() {
+        final Arn streamArn = streamArn(PARTITION, SERVICE,  KINESIS_REGION.id(), TEST_ACCOUNT_ID, RESOURCE);
+        for (final long invalidCreationEpoch : Arrays.asList(-123, 0)) {
+            try {
+                StreamIdentifier.multiStreamInstance(streamArn, invalidCreationEpoch);
+                Assert.fail("Creation epoch" + invalidCreationEpoch + " should not have created a StreamIdentifier");
             } catch (final IllegalArgumentException iae) {
                 // expected; ignore
             }
@@ -83,11 +102,8 @@ public class StreamIdentifierTest {
     public void testSingleStreamInstanceFromArn() {
         final StreamIdentifier actualStreamIdentifier = StreamIdentifier.singleStreamInstance(DEFAULT_ARN);
 
-        assertTrue(actualStreamIdentifier.streamARNOptional().isPresent());
-        assertTrue(actualStreamIdentifier.accountIdOptional().isPresent());
-        assertFalse(actualStreamIdentifier.streamCreationEpochOptional().isPresent());
-
         assertActualStreamIdentifierExpected(DEFAULT_ARN, actualStreamIdentifier);
+        assertEquals(Optional.empty(), actualStreamIdentifier.streamCreationEpochOptional());
         assertEquals(actualStreamIdentifier.streamName(), actualStreamIdentifier.serialize());
     }
 
@@ -95,20 +111,17 @@ public class StreamIdentifierTest {
     public void testMultiStreamInstanceFromArn() {
         final StreamIdentifier actualStreamIdentifier = StreamIdentifier.multiStreamInstance(DEFAULT_ARN, EPOCH);
 
-        assertTrue(actualStreamIdentifier.streamARNOptional().isPresent());
-        assertTrue(actualStreamIdentifier.accountIdOptional().isPresent());
-        assertTrue(actualStreamIdentifier.streamCreationEpochOptional().isPresent());
-
         assertActualStreamIdentifierExpected(DEFAULT_ARN, actualStreamIdentifier);
+        assertEquals(Optional.of(EPOCH), actualStreamIdentifier.streamCreationEpochOptional());
         assertEquals(serialize(), actualStreamIdentifier.serialize());
     }
 
     @Test
     public void testSingleStreamInstanceWithName() {
         StreamIdentifier actualStreamIdentifier = StreamIdentifier.singleStreamInstance(STREAM_NAME);
-        assertFalse(actualStreamIdentifier.streamCreationEpochOptional().isPresent());
-        assertFalse(actualStreamIdentifier.accountIdOptional().isPresent());
-        assertFalse(actualStreamIdentifier.streamARNOptional().isPresent());
+        assertEquals(Optional.empty(), actualStreamIdentifier.streamCreationEpochOptional().isPresent());
+        assertEquals(Optional.empty(), actualStreamIdentifier.accountIdOptional().isPresent());
+        assertEquals(Optional.empty(), actualStreamIdentifier.streamArnOptional().isPresent());
         assertEquals(STREAM_NAME, actualStreamIdentifier.streamName());
     }
 
@@ -122,7 +135,7 @@ public class StreamIdentifierTest {
     private void assertActualStreamIdentifierExpected(Arn expectedArn, StreamIdentifier actual) {
         assertEquals(STREAM_NAME, actual.streamName());
         assertEquals(Optional.of(TEST_ACCOUNT_ID), actual.accountIdOptional());
-        assertEquals(Optional.ofNullable(expectedArn), actual.streamARNOptional());
+        assertEquals(Optional.ofNullable(expectedArn), actual.streamArnOptional());
     }
 
     /**
@@ -130,6 +143,16 @@ public class StreamIdentifierTest {
      */
     private static String serialize() {
         return String.join(":", TEST_ACCOUNT_ID, STREAM_NAME, Long.toString(EPOCH));
+    }
+
+    private static Arn streamArn(String partition, String service, String region, String account, String resource) {
+        return Arn.builder()
+                .partition(partition)
+                .service(service)
+                .region(region)
+                .accountId(account)
+                .resource(resource)
+                .build();
     }
 
 }

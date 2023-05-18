@@ -155,7 +155,7 @@ public class ConfigsBuilder {
     /**
      * Constructor to initialize ConfigsBuilder for a single stream identified by {@link Arn}.
      *
-     * @param streamARN
+     * @param streamArn
      * @param applicationName
      * @param kinesisClient
      * @param dynamoDBClient
@@ -163,11 +163,11 @@ public class ConfigsBuilder {
      * @param workerIdentifier
      * @param shardRecordProcessorFactory
      */
-    public ConfigsBuilder(@NonNull Arn streamARN, @NonNull String applicationName,
+    public ConfigsBuilder(@NonNull Arn streamArn, @NonNull String applicationName,
                           @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient,
                           @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier,
                           @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
-        this(new SingleStreamTracker(streamARN),
+        this(new SingleStreamTracker(streamArn),
                 applicationName,
                 kinesisClient,
                 dynamoDBClient,

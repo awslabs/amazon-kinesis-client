@@ -238,7 +238,7 @@ public class KinesisDataFetcher implements DataFetcher {
 
         GetShardIteratorRequest.Builder builder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
                 .streamName(streamIdentifier.streamName()).shardId(shardId);
-        streamIdentifier.streamARNOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
+        streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
 
         GetShardIteratorRequest request;
         if (isIteratorRestart) {
@@ -321,7 +321,7 @@ public class KinesisDataFetcher implements DataFetcher {
     public GetRecordsRequest getGetRecordsRequest(String nextIterator) {
         GetRecordsRequest.Builder builder = KinesisRequestsBuilder.getRecordsRequestBuilder()
                 .shardIterator(nextIterator).limit(maxRecords);
-        streamIdentifier.streamARNOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
+        streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
         return builder.build();
     }
 

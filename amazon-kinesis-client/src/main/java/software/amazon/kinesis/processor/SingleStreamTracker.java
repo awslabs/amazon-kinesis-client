@@ -49,8 +49,8 @@ public class SingleStreamTracker implements StreamTracker {
         this(StreamIdentifier.singleStreamInstance(streamName));
     }
 
-    public SingleStreamTracker(Arn streamARN) {
-        this(StreamIdentifier.singleStreamInstance(streamARN));
+    public SingleStreamTracker(Arn streamArn) {
+        this(StreamIdentifier.singleStreamInstance(streamArn));
     }
 
     public SingleStreamTracker(StreamIdentifier streamIdentifier) {

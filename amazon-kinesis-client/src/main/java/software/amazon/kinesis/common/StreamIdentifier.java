@@ -43,7 +43,7 @@ public class StreamIdentifier {
     private final Optional<Long> streamCreationEpochOptional = Optional.empty();
     @Builder.Default
     @EqualsAndHashCode.Exclude
-    private final Optional<Arn> streamARNOptional = Optional.empty();
+    private final Optional<Arn> streamArnOptional = Optional.empty();
 
     /**
      * Pattern for a serialized {@link StreamIdentifier}. The valid format is
@@ -53,7 +53,7 @@ public class StreamIdentifier {
             "(?<accountId>[0-9]+):(?<streamName>[^:]+):(?<creationEpoch>[0-9]+)");
 
     /**
-     * Pattern for a stream ARN. The valid format is
+     * Pattern for a stream Arn. The valid format is
      * {@code arn:aws:kinesis:<region>:<accountId>:stream:<streamName>}
      * where {@code region} is the id representation of a {@link Region}.
      */
@@ -63,10 +63,12 @@ public class StreamIdentifier {
     /**
      * Serialize the current StreamIdentifier instance.
      *
-     * @return a String of {@code account:stream:creationEpoch}.
+     * @return a String of {@code account:stream:creationEpoch} in multi-stream mode
+     *         or {@link #streamName} in single-stream mode.
      */
     public String serialize() {
         if (!streamCreationEpochOptional.isPresent()) {
+            // creation epoch is expected to be empty in single-stream mode
             return streamName;
         }
 
@@ -87,8 +89,8 @@ public class StreamIdentifier {
      * Create a multi stream instance for StreamIdentifier from serialized stream identifier
      * of format {@link #STREAM_IDENTIFIER_PATTERN}
      *
-     * @param streamIdentifierSer
-     * @return StreamIdentifier
+     * @param streamIdentifierSer a String of {@code account:stream:creationEpoch}
+     * @return StreamIdentifier with {@link #accountIdOptional} and {@link #streamCreationEpochOptional} present
      */
     public static StreamIdentifier multiStreamInstance(String streamIdentifierSer) {
         final Matcher matcher = STREAM_IDENTIFIER_PATTERN.matcher(streamIdentifierSer);
@@ -96,6 +98,8 @@ public class StreamIdentifier {
             final String accountId = matcher.group("accountId");
             final String streamName = matcher.group("streamName");
             final Long creationEpoch = Long.valueOf(matcher.group("creationEpoch"));
+
+            validateCreationEpoch(creationEpoch);
 
             return StreamIdentifier.builder()
                     .accountIdOptional(Optional.of(accountId))
@@ -108,29 +112,29 @@ public class StreamIdentifier {
     }
 
     /**
-     * Create a multi stream instance for StreamIdentifier from stream {@link Arn}
-     * of format {@link #STREAM_ARN_PATTERN} and creation epoch.
+     * Create a multi stream instance for StreamIdentifier from stream {@link Arn}.
      *
-     * @param streamARN
-     * @param creationEpoch
-     * @return StreamIdentifier
+     * @param streamArn an {@link Arn} of format {@link #STREAM_ARN_PATTERN}
+     * @param creationEpoch creation epoch of the stream
+     * @return StreamIdentifier with {@link #accountIdOptional}, {@link #streamCreationEpochOptional},
+     *         and {@link #streamArnOptional} present
      */
-    public static StreamIdentifier multiStreamInstance(Arn streamARN, Long creationEpoch) {
-        validateARN(streamARN);
+    public static StreamIdentifier multiStreamInstance(Arn streamArn, long creationEpoch) {
+        validateArn(streamArn);
+        validateCreationEpoch(creationEpoch);
 
         return StreamIdentifier.builder()
-                .accountIdOptional(streamARN.accountId())
-                .streamName(streamARN.resource().resource())
+                .accountIdOptional(streamArn.accountId())
+                .streamName(streamArn.resource().resource())
                 .streamCreationEpochOptional(Optional.of(creationEpoch))
-                .streamARNOptional(Optional.of(streamARN))
+                .streamArnOptional(Optional.of(streamArn))
                 .build();
     }
 
     /**
      * Create a single stream instance for StreamIdentifier from stream name.
      *
-     * @param streamName
-     * @return StreamIdentifier
+     * @param streamName stream name of a Kinesis stream
      */
     public static StreamIdentifier singleStreamInstance(String streamName) {
         Validate.notEmpty(streamName, "StreamName should not be empty");
@@ -141,24 +145,31 @@ public class StreamIdentifier {
     }
 
     /**
-     * Create a single stream instance for StreamIdentifier from stream {@link Arn}.
+     * Create a single stream instance for StreamIdentifier from AWS Kinesis stream {@link Arn}.
      *
-     * @param streamARN
-     * @return StreamIdentifier
+     * @param streamArn AWS Arn of a Kinesis stream
+     * @return StreamIdentifier with {@link #accountIdOptional} and {@link #streamArnOptional} present
      */
-    public static StreamIdentifier singleStreamInstance(Arn streamARN) {
-        validateARN(streamARN);
+    public static StreamIdentifier singleStreamInstance(Arn streamArn) {
+        validateArn(streamArn);
 
         return StreamIdentifier.builder()
-                .accountIdOptional(streamARN.accountId())
-                .streamName(streamARN.resource().resource())
-                .streamARNOptional(Optional.of(streamARN))
+                .accountIdOptional(streamArn.accountId())
+                .streamName(streamArn.resource().resource())
+                .streamArnOptional(Optional.of(streamArn))
                 .build();
     }
 
-    private static void validateARN(Arn streamARN) {
-        if (!STREAM_ARN_PATTERN.matcher(streamARN.toString()).matches()) {
-            throw new IllegalArgumentException("Unable to create a StreamIdentifier from " + streamARN);
+    private static void validateArn(Arn streamArn) {
+        if (!STREAM_ARN_PATTERN.matcher(streamArn.toString()).matches() || !streamArn.region().isPresent()) {
+            throw new IllegalArgumentException("Unable to create a StreamIdentifier from " + streamArn);
+        }
+    }
+
+    private static void validateCreationEpoch(long creationEpoch) {
+        if (creationEpoch <= 0) {
+            throw new IllegalArgumentException(
+                    "Unable to create a StreamIdentifier from invalid creationEpoch " + creationEpoch);
         }
     }
 
