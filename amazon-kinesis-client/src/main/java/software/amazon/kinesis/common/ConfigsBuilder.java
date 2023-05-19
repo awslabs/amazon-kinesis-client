@@ -25,6 +25,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import lombok.NonNull;
 import lombok.experimental.Accessors;
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -128,7 +129,7 @@ public class ConfigsBuilder {
     }
 
     /**
-     * Constructor to initialize ConfigsBuilder for a single stream.
+     * Constructor to initialize ConfigsBuilder for a single stream identified by name.
      *
      * @param streamName
      * @param applicationName
@@ -142,7 +143,31 @@ public class ConfigsBuilder {
             @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient,
             @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier,
             @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
-        this(new SingleStreamTracker(streamName, kinesisClient.serviceClientConfiguration().region()),
+        this(new SingleStreamTracker(streamName),
+                applicationName,
+                kinesisClient,
+                dynamoDBClient,
+                cloudWatchClient,
+                workerIdentifier,
+                shardRecordProcessorFactory);
+    }
+
+    /**
+     * Constructor to initialize ConfigsBuilder for a single stream identified by {@link Arn}.
+     *
+     * @param streamArn
+     * @param applicationName
+     * @param kinesisClient
+     * @param dynamoDBClient
+     * @param cloudWatchClient
+     * @param workerIdentifier
+     * @param shardRecordProcessorFactory
+     */
+    public ConfigsBuilder(@NonNull Arn streamArn, @NonNull String applicationName,
+                          @NonNull KinesisAsyncClient kinesisClient, @NonNull DynamoDbAsyncClient dynamoDBClient,
+                          @NonNull CloudWatchAsyncClient cloudWatchClient, @NonNull String workerIdentifier,
+                          @NonNull ShardRecordProcessorFactory shardRecordProcessorFactory) {
+        this(new SingleStreamTracker(streamArn),
                 applicationName,
                 kinesisClient,
                 dynamoDBClient,

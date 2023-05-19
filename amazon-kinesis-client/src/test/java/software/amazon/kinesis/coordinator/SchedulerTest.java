@@ -112,7 +112,6 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.utils.MockObjectHelper;
 
 /**
  *
@@ -138,6 +137,7 @@ public class SchedulerTest {
     private ProcessorConfig processorConfig;
     private RetrievalConfig retrievalConfig;
 
+    @Mock
     private KinesisAsyncClient kinesisClient;
     @Mock
     private DynamoDbAsyncClient dynamoDBClient;
@@ -180,7 +180,6 @@ public class SchedulerTest {
         lifecycleConfig = new LifecycleConfig();
         metricsConfig = new MetricsConfig(cloudWatchClient, namespace);
         processorConfig = new ProcessorConfig(shardRecordProcessorFactory);
-        kinesisClient = MockObjectHelper.createKinesisClient();
         retrievalConfig = new RetrievalConfig(kinesisClient, streamName, applicationName)
                 .retrievalFactory(retrievalFactory);
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);

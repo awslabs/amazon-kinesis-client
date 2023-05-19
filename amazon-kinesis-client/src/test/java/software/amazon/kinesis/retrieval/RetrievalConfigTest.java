@@ -18,19 +18,21 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.awssdk.arns.Arn;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
-import software.amazon.kinesis.utils.MockObjectHelper;
 
 @RunWith(MockitoJUnitRunner.class)
 public class RetrievalConfigTest {
 
     private static final String APPLICATION_NAME = RetrievalConfigTest.class.getSimpleName();
 
+    @Mock
     private KinesisAsyncClient mockKinesisClient;
 
     @Mock
@@ -38,24 +40,28 @@ public class RetrievalConfigTest {
 
     @Before
     public void setUp() {
-        mockKinesisClient = MockObjectHelper.createKinesisClient(true);
         when(mockMultiStreamTracker.isMultiStream()).thenReturn(true);
     }
 
     @Test
-    public void testTrackerConstruction() {
+    public void testSingleStreamTrackerConstruction() {
         final String streamName = "single-stream";
-        final RetrievalConfig configByName = createConfig(streamName);
-        final SingleStreamTracker singleTracker = new SingleStreamTracker(streamName);
-        final RetrievalConfig configBySingleTracker = createConfig(singleTracker);
+        final Arn streamArn = createArn(streamName);
 
-        for (final RetrievalConfig rc : Arrays.asList(configByName, configBySingleTracker)) {
+        for (final RetrievalConfig rc : Arrays.asList(
+                createConfig(streamName),
+                createConfig(new SingleStreamTracker(streamName)),
+                createConfig(streamArn),
+                createConfig(new SingleStreamTracker(streamArn)))) {
             assertEquals(Optional.empty(), rc.appStreamTracker().left());
-            assertEquals(singleTracker, rc.streamTracker());
+            assertEquals(streamName, rc.streamTracker().streamConfigList().get(0).streamIdentifier().streamName());
             assertEquals(1, rc.streamTracker().streamConfigList().size());
             assertFalse(rc.streamTracker().isMultiStream());
         }
+    }
 
+    @Test
+    public void testMultiStreamTrackerConstruction() {
         final StreamTracker mockMultiStreamTracker = mock(MultiStreamTracker.class);
         final RetrievalConfig configByMultiTracker = createConfig(mockMultiStreamTracker);
         assertEquals(Optional.empty(), configByMultiTracker.appStreamTracker().right());
@@ -110,8 +116,22 @@ public class RetrievalConfigTest {
         return new RetrievalConfig(mockKinesisClient, streamName, APPLICATION_NAME);
     }
 
+    private RetrievalConfig createConfig(Arn streamArn) {
+        return new RetrievalConfig(mockKinesisClient, streamArn, APPLICATION_NAME);
+    }
+
     private RetrievalConfig createConfig(StreamTracker streamTracker) {
         return new RetrievalConfig(mockKinesisClient, streamTracker, APPLICATION_NAME);
+    }
+
+    private static Arn createArn(String streamName) {
+        return Arn.builder()
+                .partition("aws")
+                .service("kinesis")
+                .region(Region.US_EAST_1.id())
+                .accountId("123456789012")
+                .resource("stream/" + streamName)
+                .build();
     }
 
 }

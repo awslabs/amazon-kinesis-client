@@ -223,8 +223,7 @@ public class KinesisShardDetector implements ShardDetector {
         ListShardsRequest.Builder builder = KinesisRequestsBuilder.listShardsRequestBuilder();
         if (StringUtils.isEmpty(nextToken)) {
             builder.streamName(streamIdentifier.streamName()).shardFilter(shardFilter);
-            streamIdentifier.streamARNOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
-
+            streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
         } else {
             builder.nextToken(nextToken);
         }
@@ -313,7 +312,7 @@ public class KinesisShardDetector implements ShardDetector {
                 .streamName(streamIdentifier.streamName())
                 .shardIteratorType(ShardIteratorType.LATEST)
                 .shardId(shardId);
-        streamIdentifier.streamARNOptional().ifPresent(arn -> requestBuilder.streamARN(arn.toString()));
+        streamIdentifier.streamArnOptional().ifPresent(arn -> requestBuilder.streamARN(arn.toString()));
         final GetShardIteratorRequest getShardIteratorRequest = requestBuilder.build();
 
         final GetShardIteratorResponse getShardIteratorResponse =
