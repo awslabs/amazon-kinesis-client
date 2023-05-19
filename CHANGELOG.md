@@ -3,6 +3,19 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.5.0 (May 19, 2023)
+* **[#1109](https://github.com/awslabs/amazon-kinesis-client/pull/1109) Add support for stream ARNs**
+* **[#1065](https://github.com/awslabs/amazon-kinesis-client/pull/1065) Allow tags to be added when lease table is created**
+* [#1094](https://github.com/awslabs/amazon-kinesis-client/pull/1094) Code cleanup to introduce better testing
+* [#1088](https://github.com/awslabs/amazon-kinesis-client/pull/1088) Minimize race in PSSM to optimize shard sync calls 
+* [#1086](https://github.com/awslabs/amazon-kinesis-client/pull/1086) Add additional SingleStreamTracker constructor with stream position parameter
+* [#1084](https://github.com/awslabs/amazon-kinesis-client/pull/1084) More consistent testing behavior with restartAfterRequestTimerExpires
+* [#1066](https://github.com/awslabs/amazon-kinesis-client/pull/1066) More consistent testing behavior with HashRangesAreAlwaysComplete
+* [#1072](https://github.com/awslabs/amazon-kinesis-client/pull/1072) Upgrade nexus-staging-maven-plugin from 1.6.8 to 1.6.13
+* [#1073](https://github.com/awslabs/amazon-kinesis-client/pull/1073) Upgrade slf4j-api from 2.0.6 to 2.0.7
+* [#1090](https://github.com/awslabs/amazon-kinesis-client/pull/1090) Upgrade awssdk.version from 2.20.8 to 2.20.43
+* [#1071](https://github.com/awslabs/amazon-kinesis-client/pull/1071) Upgrade maven-compiler-plugin from 3.8.1 to 3.11.0
+
 ### Release 2.4.8 (March 21, 2023)
 * [#1080](https://github.com/awslabs/amazon-kinesis-client/pull/1080) Added metric in `ShutdownTask` for scenario when parent leases are missing.
 * [#1077](https://github.com/awslabs/amazon-kinesis-client/pull/1077) Reverted changes to pom property
