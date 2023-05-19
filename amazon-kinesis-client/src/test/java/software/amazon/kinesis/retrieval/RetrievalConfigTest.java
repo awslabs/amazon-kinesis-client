@@ -46,7 +46,7 @@ public class RetrievalConfigTest {
     @Test
     public void testSingleStreamTrackerConstruction() {
         final String streamName = "single-stream";
-        final Arn streamArn = streamArn(streamName);
+        final Arn streamArn = createArn(streamName);
 
         for (final RetrievalConfig rc : Arrays.asList(
                 createConfig(streamName),
@@ -124,7 +124,7 @@ public class RetrievalConfigTest {
         return new RetrievalConfig(mockKinesisClient, streamTracker, APPLICATION_NAME);
     }
 
-    private static Arn streamArn(String streamName) {
+    private static Arn createArn(String streamName) {
         return Arn.builder()
                 .partition("aws")
                 .service("kinesis")

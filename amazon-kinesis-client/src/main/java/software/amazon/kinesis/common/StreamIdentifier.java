@@ -53,7 +53,7 @@ public class StreamIdentifier {
             "(?<accountId>[0-9]+):(?<streamName>[^:]+):(?<creationEpoch>[0-9]+)");
 
     /**
-     * Pattern for a stream Arn. The valid format is
+     * Pattern for a stream ARN. The valid format is
      * {@code arn:aws:kinesis:<region>:<accountId>:stream:<streamName>}
      * where {@code region} is the id representation of a {@link Region}.
      */
@@ -115,11 +115,14 @@ public class StreamIdentifier {
      * Create a multi stream instance for StreamIdentifier from stream {@link Arn}.
      *
      * @param streamArn an {@link Arn} of format {@link #STREAM_ARN_PATTERN}
-     * @param creationEpoch creation epoch of the stream
-     *                      an incorrect creationEpoch may result in erroneous/deleterious behavior in lease management,
-     *                      such as when an epoch is reused for two editions of the same stream
-     *                      (e.g., create stream A at epoch t1, create StreamIdentifer(A, t1), delete A,
-     *                      create stream A at epoch t2, reuse old epoch to create StreamIdentifier(A, t1))
+     * @param creationEpoch Creation epoch of the stream. This value will
+     *         reflect in the lease key and is assumed to be correct. (KCL could
+     *         verify, but that creates issues for both bootstrapping and, with large
+     *         KCL applications, API throttling against DescribeStreamSummary.)
+     *         If this epoch is reused for two identically-named streams in the same
+     *         account -- such as deleting and recreating a stream -- then KCL will
+     *         <b>be unable to differentiate leases between the old and new stream</b>
+     *         since the lease keys collide on this creation epoch.
      * @return StreamIdentifier with {@link #accountIdOptional}, {@link #streamCreationEpochOptional},
      *         and {@link #streamArnOptional} present
      */
@@ -151,7 +154,7 @@ public class StreamIdentifier {
     /**
      * Create a single stream instance for StreamIdentifier from AWS Kinesis stream {@link Arn}.
      *
-     * @param streamArn AWS Arn of a Kinesis stream
+     * @param streamArn AWS ARN of a Kinesis stream
      * @return StreamIdentifier with {@link #accountIdOptional} and {@link #streamArnOptional} present
      */
     public static StreamIdentifier singleStreamInstance(Arn streamArn) {
@@ -173,7 +176,7 @@ public class StreamIdentifier {
     private static void validateCreationEpoch(long creationEpoch) {
         if (creationEpoch <= 0) {
             throw new IllegalArgumentException(
-                    "Unable to create a StreamIdentifier from invalid creationEpoch " + creationEpoch);
+                    "Creation epoch must be > 0; received " + creationEpoch);
         }
     }
 

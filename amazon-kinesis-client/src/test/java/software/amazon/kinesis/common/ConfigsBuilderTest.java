@@ -57,7 +57,7 @@ public class ConfigsBuilderTest {
     @Test
     public void testSingleStreamTrackerConstruction() {
         final String streamName = "single-stream";
-        final Arn streamArn = streamArn(streamName);
+        final Arn streamArn = createArn(streamName);
 
         for (final ConfigsBuilder cb : Arrays.asList(
                 createConfig(streamName),
@@ -97,7 +97,7 @@ public class ConfigsBuilderTest {
                 mockCloudWatchClient, WORKER_IDENTIFIER, mockShardProcessorFactory);
     }
 
-    private static Arn streamArn(String streamName) {
+    private static Arn createArn(String streamName) {
         return Arn.builder()
                 .partition("aws")
                 .service("kinesis")

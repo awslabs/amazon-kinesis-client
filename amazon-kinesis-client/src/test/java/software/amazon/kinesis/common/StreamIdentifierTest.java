@@ -18,12 +18,7 @@ public class StreamIdentifierTest {
     private static final String TEST_ACCOUNT_ID = "123456789012";
     private static final String RESOURCE = "stream/" + STREAM_NAME;
     private static final long EPOCH = 1680616058L;
-    private static final Arn DEFAULT_ARN = Arn.builder()
-            .partition("aws").service("kinesis")
-            .accountId(TEST_ACCOUNT_ID)
-            .resource("stream/" + STREAM_NAME)
-            .region(KINESIS_REGION.toString())
-            .build();
+    private static final Arn DEFAULT_ARN = createArn();
 
     /**
      * Test patterns that should match a serialization regex.
@@ -61,20 +56,19 @@ public class StreamIdentifierTest {
     }
 
     /**
-     * Test Arns that <b>should not</b> match a valid AWS Kinesis stream Arn.
+     * Test ARNs that <b>should not</b> match a valid AWS Kinesis stream ARN.
      */
     @Test
     public void testMultiStreamByArnWithInvalidStreamArnFail() {
-        final String region = KINESIS_REGION.id();
         for (final Arn invalidStreamArn : Arrays.asList(
-                streamArn("abc", SERVICE,  region, TEST_ACCOUNT_ID, RESOURCE), // invalid partition
-                streamArn(PARTITION, "dynamodb",  region, TEST_ACCOUNT_ID, RESOURCE), // incorrect service
-                streamArn(PARTITION, SERVICE,  null, TEST_ACCOUNT_ID, RESOURCE), // missing region
-                streamArn(PARTITION, SERVICE,  region, null, RESOURCE), // missing account id
-                streamArn(PARTITION, SERVICE,  region, "123456789", RESOURCE), // account id not 12 digits
-                streamArn(PARTITION, SERVICE,  region, "123456789abc", RESOURCE), // 12char alphanumeric account id
-                streamArn(PARTITION, SERVICE,  region, TEST_ACCOUNT_ID, "table/name"), // incorrect resource type
-                Arn.fromString("arn:aws:dynamodb:us-east-2:123456789012:table/myDynamoDBTable") // valid Arn for incorrect resource
+                createArn("abc", SERVICE,  KINESIS_REGION, TEST_ACCOUNT_ID, RESOURCE), // invalid partition
+                createArn(PARTITION, "dynamodb",  KINESIS_REGION, TEST_ACCOUNT_ID, RESOURCE), // incorrect service
+                createArn(PARTITION, SERVICE,  null, TEST_ACCOUNT_ID, RESOURCE), // missing region
+                createArn(PARTITION, SERVICE,  KINESIS_REGION, null, RESOURCE), // missing account id
+                createArn(PARTITION, SERVICE,  KINESIS_REGION, "123456789", RESOURCE), // account id not 12 digits
+                createArn(PARTITION, SERVICE,  KINESIS_REGION, "123456789abc", RESOURCE), // 12char alphanumeric account id
+                createArn(PARTITION, SERVICE,  KINESIS_REGION, TEST_ACCOUNT_ID, "table/name"), // incorrect resource type
+                Arn.fromString("arn:aws:dynamodb:us-east-2:123456789012:table/myDynamoDBTable") // valid ARN for incorrect resource
         )) {
             try {
                 StreamIdentifier.multiStreamInstance(invalidStreamArn, EPOCH);
@@ -85,17 +79,14 @@ public class StreamIdentifierTest {
         }
     }
 
-    @Test
-    public void testMultiStreamByArnWithInvalidCreationEpochFail() {
-        final Arn streamArn = streamArn(PARTITION, SERVICE,  KINESIS_REGION.id(), TEST_ACCOUNT_ID, RESOURCE);
-        for (final long invalidCreationEpoch : Arrays.asList(-123, 0)) {
-            try {
-                StreamIdentifier.multiStreamInstance(streamArn, invalidCreationEpoch);
-                Assert.fail("Creation epoch" + invalidCreationEpoch + " should not have created a StreamIdentifier");
-            } catch (final IllegalArgumentException iae) {
-                // expected; ignore
-            }
-        }
+    @Test(expected = IllegalArgumentException.class)
+    public void testNegativeCreationEpoch() {
+        StreamIdentifier.multiStreamInstance(DEFAULT_ARN, -123);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testZeroCreationEpoch() {
+        StreamIdentifier.multiStreamInstance(DEFAULT_ARN, 0);
     }
 
     @Test
@@ -145,11 +136,15 @@ public class StreamIdentifierTest {
         return String.join(":", TEST_ACCOUNT_ID, STREAM_NAME, Long.toString(EPOCH));
     }
 
-    private static Arn streamArn(String partition, String service, String region, String account, String resource) {
+    private static Arn createArn() {
+        return createArn(PARTITION, SERVICE, KINESIS_REGION, TEST_ACCOUNT_ID, RESOURCE);
+    }
+
+    private static Arn createArn(String partition, String service, Region region, String account, String resource) {
         return Arn.builder()
                 .partition(partition)
                 .service(service)
-                .region(region)
+                .region(region != null ? region.id() : null)
                 .accountId(account)
                 .resource(resource)
                 .build();
