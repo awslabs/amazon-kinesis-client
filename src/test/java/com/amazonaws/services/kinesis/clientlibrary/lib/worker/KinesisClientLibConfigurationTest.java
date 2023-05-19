@@ -20,7 +20,9 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 
 import com.amazonaws.services.dynamodbv2.model.BillingMode;
 import org.junit.Test;
@@ -417,5 +419,53 @@ public class KinesisClientLibConfigurationTest {
         assertFalse(config.shouldIgnoreUnexpectedChildShards());
         config = config.withIgnoreUnexpectedChildShards(true);
         assertTrue(config.shouldIgnoreUnexpectedChildShards());
+    }
+
+    @Test
+    public void testWithValidStreamArnsSucceed() {
+        List<String> validArnList = Arrays.asList(
+                "arn:aws:kinesis:us-east-1:123456789012:stream/stream-name",
+                "arn:aws-china:kinesis:us-east-2:123456789012:stream/stream-name",
+                "arn:aws-us-gov:kinesis:us-east-2:123456789012:stream/stream-name",
+                "arn:aws:kinesis:us-east-1:111111111111:stream/123somename123"
+        );
+
+        KinesisClientLibConfiguration config =
+                new KinesisClientLibConfiguration("TestApplication", "TestStream", null, "TestWorker");
+
+        for (final String arn : validArnList) {
+            try {
+                config.withStreamArn(Arn.fromString(arn));
+            } catch (IllegalArgumentException e) {
+                fail("Arn " + arn + " should not have thrown an IllegalArgumentException");
+            }
+        }
+    }
+
+    @Test
+    public void testWithInvalidStreamArnsThrowsException() {
+        List<String> invalidArnList = Arrays.asList(
+                "arn:abc:dynamnodb:us-east-1:123456789012:stream/stream-name", //invalid partition
+                "arn:aws:dynamnodb:us-east-1:123456789012:stream/stream-name", //incorrect service
+                "arn:aws:kinesis::123456789012:stream/stream-name", // missing region
+                "arn:aws:kinesis:us-east-1::stream/stream-name", // missing account id
+                "arn:aws:kinesis:us-east-1:123456789:stream/stream-name", // account id not 12 digits
+                "arn:aws:kinesis:us-east-1:123456789abc:stream/stream-name", // 12char alphanumeric account id
+                "arn:aws:kinesis:us-east-1:123456789012:stream/", // missing stream-name
+                "arn:aws:kinesis:us-east-1:123456789012:table/table-name", // incorrect resource type
+                "arn:aws:dynamodb:us-east-1:123456789012:table/myDynamoDBTable" // valid arn but not a stream
+        );
+
+        KinesisClientLibConfiguration config =
+                new KinesisClientLibConfiguration("TestApplication", "TestStream", null, "TestWorker");
+
+        for (final String arn : invalidArnList) {
+            try {
+                config.withStreamArn(Arn.fromString(arn));
+                fail("Arn " + arn + " should have thrown an IllegalArgumentException");
+            } catch (IllegalArgumentException e) {
+                // expected
+            }
+        }
     }
 }
