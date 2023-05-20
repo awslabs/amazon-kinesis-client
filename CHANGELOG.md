@@ -7,7 +7,7 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 * **[#1109](https://github.com/awslabs/amazon-kinesis-client/pull/1109) Add support for stream ARNs**
 * **[#1065](https://github.com/awslabs/amazon-kinesis-client/pull/1065) Allow tags to be added when lease table is created**
 * [#1094](https://github.com/awslabs/amazon-kinesis-client/pull/1094) Code cleanup to introduce better testing
-* [#1088](https://github.com/awslabs/amazon-kinesis-client/pull/1088) Minimize race in PSSM to optimize shard sync calls 
+* [#1088](https://github.com/awslabs/amazon-kinesis-client/pull/1088) Minimize race in PSSM to optimize shard sync calls
 * [#1086](https://github.com/awslabs/amazon-kinesis-client/pull/1086) Add additional SingleStreamTracker constructor with stream position parameter
 * [#1084](https://github.com/awslabs/amazon-kinesis-client/pull/1084) More consistent testing behavior with restartAfterRequestTimerExpires
 * [#1066](https://github.com/awslabs/amazon-kinesis-client/pull/1066) More consistent testing behavior with HashRangesAreAlwaysComplete
