@@ -805,73 +805,27 @@ public class KinesisClientLibConfiguration {
             long leaseCleanupIntervalMillis,
             long completedLeaseCleanupThresholdMillis,
             long garbageLeaseCleanupThresholdMillis) {
-
-        // Check following values are greater than zero
-        checkIsValuePositive("FailoverTimeMillis", failoverTimeMillis);
-        checkIsValuePositive("IdleTimeBetweenReadsInMillis", idleTimeBetweenReadsInMillis);
-        checkIsValuePositive("ParentShardPollIntervalMillis", parentShardPollIntervalMillis);
-        checkIsValuePositive("ShardSyncIntervalMillis", shardSyncIntervalMillis);
-        checkIsValuePositive("MaxRecords", (long) maxRecords);
-        checkIsValuePositive("TaskBackoffTimeMillis", taskBackoffTimeMillis);
-        checkIsValuePositive("MetricsBufferTimeMills", metricsBufferTimeMillis);
-        checkIsValuePositive("MetricsMaxQueueSize", (long) metricsMaxQueueSize);
+        // Call above constructor with empty streamName temporarily until streamArn is validated
+        this(applicationName, "", kinesisEndpoint, dynamoDBEndpoint, initialPositionInStream, kinesisCredentialsProvider,
+                dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, failoverTimeMillis, workerId, maxRecords, idleTimeBetweenReadsInMillis,
+                callProcessRecordsEvenForEmptyRecordList, parentShardPollIntervalMillis, shardSyncIntervalMillis, cleanupTerminatedShardsBeforeExpiry,
+                kinesisClientConfig, dynamoDBClientConfig, cloudWatchClientConfig, taskBackoffTimeMillis, metricsBufferTimeMillis,
+                metricsMaxQueueSize, validateSequenceNumberBeforeCheckpointing, regionName, shutdownGraceMillis, billingMode,
+                recordsFetcherFactory, leaseCleanupIntervalMillis, completedLeaseCleanupThresholdMillis, garbageLeaseCleanupThresholdMillis);
         checkIsValidStreamArn(streamArn);
-        this.applicationName = applicationName;
-        this.tableName = applicationName;
         this.streamName = streamArn.getResource().getResource();
         this.streamArn = streamArn;
-        this.kinesisEndpoint = kinesisEndpoint;
-        this.dynamoDBEndpoint = dynamoDBEndpoint;
-        this.initialPositionInStream = initialPositionInStream;
-        this.kinesisCredentialsProvider = kinesisCredentialsProvider;
-        this.dynamoDBCredentialsProvider = dynamoDBCredentialsProvider;
-        this.cloudWatchCredentialsProvider = cloudWatchCredentialsProvider;
-        this.failoverTimeMillis = failoverTimeMillis;
-        this.maxRecords = maxRecords;
-        this.idleTimeBetweenReadsInMillis = idleTimeBetweenReadsInMillis;
-        this.callProcessRecordsEvenForEmptyRecordList = callProcessRecordsEvenForEmptyRecordList;
-        this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
-        this.shardSyncIntervalMillis = shardSyncIntervalMillis;
-        this.cleanupLeasesUponShardCompletion = cleanupTerminatedShardsBeforeExpiry;
-        this.workerIdentifier = workerId;
-        this.kinesisClientConfig = checkAndAppendKinesisClientLibUserAgent(kinesisClientConfig);
-        this.dynamoDBClientConfig = checkAndAppendKinesisClientLibUserAgent(dynamoDBClientConfig);
-        this.cloudWatchClientConfig = checkAndAppendKinesisClientLibUserAgent(cloudWatchClientConfig);
-        this.taskBackoffTimeMillis = taskBackoffTimeMillis;
-        this.metricsBufferTimeMillis = metricsBufferTimeMillis;
-        this.metricsMaxQueueSize = metricsMaxQueueSize;
-        this.metricsLevel = DEFAULT_METRICS_LEVEL;
-        this.metricsEnabledDimensions = DEFAULT_METRICS_ENABLED_DIMENSIONS;
-        this.validateSequenceNumberBeforeCheckpointing = validateSequenceNumberBeforeCheckpointing;
-        this.regionName = regionName;
-        this.maxLeasesForWorker = DEFAULT_MAX_LEASES_FOR_WORKER;
-        this.maxLeasesToStealAtOneTime = DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME;
-        this.initialLeaseTableReadCapacity = DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY;
-        this.initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
-        this.initialPositionInStreamExtended = InitialPositionInStreamExtended.newInitialPosition(
-                initialPositionInStream);
-        this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
-        this.shardSyncStrategyType = DEFAULT_SHARD_SYNC_STRATEGY_TYPE;
-        this.leasesRecoveryAuditorExecutionFrequencyMillis = LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS;
-        this.leasesRecoveryAuditorInconsistencyConfidenceThreshold = LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD;
-        this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
-        this.recordsFetcherFactory = recordsFetcherFactory;
-        this.leaseCleanupIntervalMillis = leaseCleanupIntervalMillis;
-        this.completedLeaseCleanupThresholdMillis = completedLeaseCleanupThresholdMillis;
-        this.garbageLeaseCleanupThresholdMillis = garbageLeaseCleanupThresholdMillis;
-        this.shutdownGraceMillis = shutdownGraceMillis;
-        this.billingMode = billingMode;
     }
 
     // Check if value is positive, otherwise throw an exception
-    private void checkIsValuePositive(String key, long value) {
+    private static void checkIsValuePositive(String key, long value) {
         if (value <= 0) {
             throw new IllegalArgumentException("Value of " + key
                     + " should be positive, but current value is " + value);
         }
     }
 
-    private void checkIsValidStreamArn(Arn streamArn) {
+    private static void checkIsValidStreamArn(Arn streamArn) {
         if (!STREAM_ARN_PATTERN.matcher(streamArn.toString()).matches()) {
             throw new IllegalArgumentException("Invalid streamArn " + streamArn);
         }
