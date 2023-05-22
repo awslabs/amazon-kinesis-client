@@ -805,15 +805,13 @@ public class KinesisClientLibConfiguration {
             long leaseCleanupIntervalMillis,
             long completedLeaseCleanupThresholdMillis,
             long garbageLeaseCleanupThresholdMillis) {
-        // Call above constructor with empty streamName temporarily until streamArn is validated
-        this(applicationName, "", kinesisEndpoint, dynamoDBEndpoint, initialPositionInStream, kinesisCredentialsProvider,
+        this(applicationName, streamArn.getResource().getResource(), kinesisEndpoint, dynamoDBEndpoint, initialPositionInStream, kinesisCredentialsProvider,
                 dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, failoverTimeMillis, workerId, maxRecords, idleTimeBetweenReadsInMillis,
                 callProcessRecordsEvenForEmptyRecordList, parentShardPollIntervalMillis, shardSyncIntervalMillis, cleanupTerminatedShardsBeforeExpiry,
                 kinesisClientConfig, dynamoDBClientConfig, cloudWatchClientConfig, taskBackoffTimeMillis, metricsBufferTimeMillis,
                 metricsMaxQueueSize, validateSequenceNumberBeforeCheckpointing, regionName, shutdownGraceMillis, billingMode,
                 recordsFetcherFactory, leaseCleanupIntervalMillis, completedLeaseCleanupThresholdMillis, garbageLeaseCleanupThresholdMillis);
         checkIsValidStreamArn(streamArn);
-        this.streamName = streamArn.getResource().getResource();
         this.streamArn = streamArn;
     }
 
