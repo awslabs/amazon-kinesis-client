@@ -60,6 +60,13 @@ public class KinesisClientLibConfigurationTest {
                                            .withAccountId(ACCOUNT_ID)
                                            .withResource("stream/" + TEST_STRING)
                                            .build();
+    private static final Arn INVALID_TEST_ARN = Arn.builder()
+                                                   .withPartition("aws")
+                                                   .withService("dunamodb")
+                                                   .withRegion("us-east-1")
+                                                   .withAccountId(ACCOUNT_ID)
+                                                   .withResource("stream/" + TEST_STRING)
+                                                   .build();
     private static final String ALTER_STRING = "AlterString";
 
     // We don't want any of these tests to run checkpoint validation
@@ -217,6 +224,41 @@ public class KinesisClientLibConfigurationTest {
                 System.out.println(e.getMessage());
             }
             intValues[i] = TEST_VALUE_INT;
+        }
+        // Test constructor with invalid streamArn
+        try {
+            config =
+                    new KinesisClientLibConfiguration(TEST_STRING,
+                            INVALID_TEST_ARN,
+                            TEST_STRING,
+                            TEST_STRING,
+                            InitialPositionInStream.LATEST,
+                            null,
+                            null,
+                            null,
+                            TEST_VALUE_LONG,
+                            TEST_STRING,
+                            TEST_VALUE_INT,
+                            TEST_VALUE_LONG,
+                            false,
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_LONG,
+                            true,
+                            new ClientConfiguration(),
+                            new ClientConfiguration(),
+                            new ClientConfiguration(),
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_INT,
+                            skipCheckpointValidationValue,
+                            null,
+                            TEST_VALUE_LONG, BillingMode.PROVISIONED,
+                            new SimpleRecordsFetcherFactory(),
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_LONG);
+        } catch(IllegalArgumentException e) {
+            System.out.println(e.getMessage());
         }
         Assert.assertTrue("KCLConfiguration should return null when using negative arguments", config == null);
     }
