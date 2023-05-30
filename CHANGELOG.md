@@ -3,6 +3,9 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.5.99 (May 30, 2023)
+* [#1115](https://github.com/awslabs/amazon-kinesis-client/pull/1115) Update KCL version to 2.5.1-SNAPSHOT
+
 ### Release 2.5.0 (May 19, 2023)
 * **[#1109](https://github.com/awslabs/amazon-kinesis-client/pull/1109) Add support for stream ARNs**
 * **[#1065](https://github.com/awslabs/amazon-kinesis-client/pull/1065) Allow tags to be added when lease table is created**
