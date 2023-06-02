@@ -29,7 +29,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -48,10 +48,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import lombok.Builder;
-import org.apache.commons.lang3.StringUtils;
-import org.hamcrest.Description;
-import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -61,6 +57,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.arn.Arn;
+import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient;
 import com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClientChild;
@@ -112,6 +109,8 @@ public class KinesisProxyTest {
     @Mock
     private AWSCredentialsProvider mockCredentialsProvider;
     @Mock
+    private AWSCredentials mockAWSCredentials;
+    @Mock
     private GetShardIteratorResult shardIteratorResult;
     @Mock
     private DescribeStreamResult describeStreamResult;
@@ -145,6 +144,8 @@ public class KinesisProxyTest {
         when(config.getMaxListShardsRetryAttempts()).thenReturn(LIST_SHARDS_RETRY_TIMES);
         when(config.getKinesisCredentialsProvider()).thenReturn(mockCredentialsProvider);
 
+        when(mockCredentialsProvider.getCredentials()).thenReturn(mockAWSCredentials);
+
         proxy = new KinesisProxy(config, mockClient);
         ddbProxy = new KinesisProxy(TEST_STRING, mockCredentialsProvider, mockDDBStreamClient,
                 DESCRIBE_STREAM_BACKOFF_TIME, DESCRIBE_STREAM_RETRY_TIMES, LIST_SHARDS_BACKOFF_TIME,
@@ -172,8 +173,8 @@ public class KinesisProxyTest {
         // Second call describeStream returning response with rest shards.
         DescribeStreamResult responseWithMoreData = createGetStreamInfoResponse(shards.subList(0, 2), true);
         DescribeStreamResult responseFinal = createGetStreamInfoResponse(shards.subList(2, shards.size()), false);
-        IsRequestWithStartShardId requestMatcher = IsRequestWithStartShardId.builder().streamName(TEST_STRING).build();
-        doReturn(responseWithMoreData).when(mockDDBStreamClient).describeStream(argThat(requestMatcher));
+        DescribeStreamRequest request = buildDescribeStreamRequest(null, TEST_STRING, null);
+        doReturn(responseWithMoreData).when(mockDDBStreamClient).describeStream(eq(request));
         doReturn(responseFinal).when(mockDDBStreamClient)
                 .describeStream(argThat(new OldIsRequestWithStartShardId(shards.get(1).getShardId())));
 
@@ -265,8 +266,8 @@ public class KinesisProxyTest {
     public void testListShardsWithMoreDataAvailable() {
         ListShardsResult responseWithMoreData = new ListShardsResult().withShards(shards.subList(0, 2)).withNextToken(NEXT_TOKEN);
         ListShardsResult responseFinal = new ListShardsResult().withShards(shards.subList(2, shards.size())).withNextToken(null);
-        when(mockClient.listShards(argThat(initialListShardsRequestMatcher()))).thenReturn(responseWithMoreData);
-        when(mockClient.listShards(argThat(listShardsNextToken(NEXT_TOKEN)))).thenReturn(responseFinal);
+        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenReturn(responseWithMoreData);
+        when(mockClient.listShards(eq(buildListShardsRequest(NEXT_TOKEN)))).thenReturn(responseFinal);
 
         Set<String> resultShardIdSets = proxy.getAllShardIds();
         assertEquals(shardIdSet, resultShardIdSets);
@@ -275,7 +276,7 @@ public class KinesisProxyTest {
     @Test
     public void testListShardsWithLimiteExceededException() {
         ListShardsResult result = new ListShardsResult().withShards(shards);
-        when(mockClient.listShards(argThat(initialListShardsRequestMatcher()))).thenThrow(LimitExceededException.class).thenReturn(result);
+        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenThrow(LimitExceededException.class).thenReturn(result);
 
         Set <String> resultShardIdSet = proxy.getAllShardIds();
         assertEquals(shardIdSet, resultShardIdSet);
@@ -295,24 +296,24 @@ public class KinesisProxyTest {
     public void testListShardsThrottledOnce() {
         List<Shard> expected = Collections.singletonList(shard);
         ListShardsResult result = new ListShardsResult().withShards(expected);
-        when(mockClient.listShards(argThat(initialListShardsRequestMatcher()))).thenThrow(LimitExceededException.class)
+        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenThrow(LimitExceededException.class)
                 .thenReturn(result);
 
         List<Shard> actualShards = proxy.getShardList();
 
         assertEquals(expected, actualShards);
-        verify(mockClient, times(2)).listShards(argThat(initialListShardsRequestMatcher()));
+        verify(mockClient, times(2)).listShards(eq(buildInitialListShardRequest()));
     }
 
     @Test(expected = LimitExceededException.class)
     public void testListShardsThrottledAll() {
-        when(mockClient.listShards(argThat(initialListShardsRequestMatcher()))).thenThrow(LimitExceededException.class);
+        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenThrow(LimitExceededException.class);
         proxy.getShardList();
     }
 
     @Test
     public void testStreamNotInCorrectStatus() {
-        when(mockClient.listShards(argThat(initialListShardsRequestMatcher()))).thenThrow(ResourceInUseException.class);
+        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenThrow(ResourceInUseException.class);
         assertNull(proxy.getShardList());
     }
 
@@ -320,8 +321,8 @@ public class KinesisProxyTest {
     public void testGetShardListWithDDBChildClient() {
         DescribeStreamResult responseWithMoreData = createGetStreamInfoResponse(shards.subList(0, 2), true);
         DescribeStreamResult responseFinal = createGetStreamInfoResponse(shards.subList(2, shards.size()), false);
-        IsRequestWithStartShardId requestMatcher = IsRequestWithStartShardId.builder().streamName(TEST_STRING).build();
-        doReturn(responseWithMoreData).when(mockDDBChildClient).describeStream(argThat(requestMatcher));
+        DescribeStreamRequest request = buildDescribeStreamRequest(null, TEST_STRING, null);
+        doReturn(responseWithMoreData).when(mockDDBChildClient).describeStream(eq(request));
         doReturn(responseFinal).when(mockDDBChildClient)
                 .describeStream(argThat(new OldIsRequestWithStartShardId(shards.get(1).getShardId())));
 
@@ -509,76 +510,15 @@ public class KinesisProxyTest {
         return response;
     }
 
-    private IsRequestWithStartShardId describeWithoutShardId() {
-        return IsRequestWithStartShardId.builder()
-                                        .streamName(TEST_STRING)
-                                        .streamArn(TEST_ARN)
-                                        .build();
+    private DescribeStreamRequest buildDescribeStreamRequest(Arn streamArn, String streamName, String shardId) {
+        DescribeStreamRequest request = new DescribeStreamRequest()
+                .withStreamARN(streamArn != null ? streamArn.toString() : null)
+                .withStreamName(streamName);
+        request.setRequestCredentials(mockAWSCredentials);
+        return request;
     }
 
-    private IsRequestWithStartShardId describeWithShardId(String shardId) {
-        return IsRequestWithStartShardId.builder()
-                .streamName(TEST_STRING)
-                .streamArn(TEST_ARN)
-                .shardId(shardId)
-                .build();
-    }
-
-    @Builder
-    private static class IsRequestWithStartShardId extends TypeSafeDiagnosingMatcher<DescribeStreamRequest> {
-
-        private final String streamName;
-        private final Arn streamArn;
-        private final String shardId;
-
-        @Override
-        protected boolean matchesSafely(DescribeStreamRequest item, Description mismatchDescription) {
-            if (streamName == null) {
-                if (item.getStreamName() != null) {
-                    mismatchDescription.appendText("Expected streamName of null, but was ")
-                                       .appendValue(item.getStreamName());
-                    return false;
-                }
-            } else if (!streamName.equals(item.getStreamName())) {
-                mismatchDescription.appendValue(streamName).appendText(" doesn't match expected ")
-                                   .appendValue(item.getStreamName());
-                return false;
-            }
-
-            if (streamArn == null) {
-                if (item.getStreamARN() != null) {
-                    mismatchDescription.appendText("Expected streamArn of null, but was ")
-                                       .appendValue(item.getStreamARN());
-                    return false;
-                }
-            } else if (!streamArn.equals(Arn.fromString(item.getStreamARN()))) {
-                mismatchDescription.appendValue(streamArn).appendText(" doesn't match expected ")
-                                   .appendValue(item.getStreamARN());
-                return false;
-            }
-
-            if (shardId == null) {
-                if (item.getExclusiveStartShardId() != null) {
-                    mismatchDescription.appendText("Expected starting shard id of null, but was ")
-                            .appendValue(item.getExclusiveStartShardId());
-                    return false;
-                }
-            } else if (!shardId.equals(item.getExclusiveStartShardId())) {
-                mismatchDescription.appendValue(shardId).appendText(" doesn't match expected ")
-                        .appendValue(item.getExclusiveStartShardId());
-                return false;
-            }
-
-            return true;
-        }
-
-        @Override
-        public void describeTo(Description description) {
-            description.appendText("A DescribeStreamRequest with a starting shard if of ").appendValue(shardId);
-        }
-    }
     // Matcher for testing describe stream request with specific start shard ID.
-
     private static class OldIsRequestWithStartShardId extends ArgumentMatcher<DescribeStreamRequest> {
         private final String shardId;
 
@@ -597,94 +537,19 @@ public class KinesisProxyTest {
         }
     }
 
-    private static ListShardsRequestMatcher initialListShardsRequestMatcher() {
-        return ListShardsRequestMatcher.builder()
-                .streamName(TEST_STRING)
-                .streamArn(TEST_ARN)
-                .build();
+    private ListShardsRequest buildInitialListShardRequest() {
+        ListShardsRequest request = new ListShardsRequest()
+                .withStreamARN(TEST_ARN.toString())
+                .withStreamName(TEST_STRING);
+        request.setRequestCredentials(mockAWSCredentials);
+        return request;
     }
 
-    private static ListShardsRequestMatcher listShardsNextToken(final String nextToken) {
-        return ListShardsRequestMatcher.builder()
-                .nextToken(nextToken)
-                .build();
-    }
-
-    @Builder
-    private static class ListShardsRequestMatcher extends TypeSafeDiagnosingMatcher<ListShardsRequest> {
-        private final String streamName;
-        private final Arn streamArn;
-        private final String shardId;
-        private final String nextToken;
-
-        @Override
-        protected boolean matchesSafely(final ListShardsRequest listShardsRequest, final Description description) {
-            if (streamName == null) {
-                if (StringUtils.isNotEmpty(listShardsRequest.getStreamName())) {
-                    description.appendText("Expected streamName to be null, but was ")
-                               .appendValue(listShardsRequest.getStreamName());
-                    return false;
-                }
-            } else {
-                if (!streamName.equals(listShardsRequest.getStreamName())) {
-                    description.appendText("Expected streamName: ").appendValue(streamName)
-                               .appendText(" doesn't match actual streamName: ")
-                               .appendValue(listShardsRequest.getStreamName());
-                    return false;
-                }
-            }
-
-            if (streamArn == null) {
-                if (StringUtils.isNotEmpty(listShardsRequest.getStreamARN())) {
-                    description.appendText("Expected streamArn to be null, but was ")
-                               .appendValue(listShardsRequest.getStreamARN());
-                    return false;
-                }
-            } else {
-                if (!streamArn.equals(Arn.fromString(listShardsRequest.getStreamARN()))) {
-                    description.appendText("Expected streamArn: ").appendValue(streamArn)
-                               .appendText(" doesn't match actual streamArn: ")
-                               .appendValue(listShardsRequest.getStreamARN());
-                    return false;
-                }
-            }
-
-            if (shardId == null) {
-                if (StringUtils.isNotEmpty(listShardsRequest.getExclusiveStartShardId())) {
-                    description.appendText("Expected ExclusiveStartShardId to be null, but was ")
-                            .appendValue(listShardsRequest.getExclusiveStartShardId());
-                    return false;
-                }
-            } else {
-                if (!shardId.equals(listShardsRequest.getExclusiveStartShardId())) {
-                    description.appendText("Expected shardId: ").appendValue(shardId)
-                            .appendText(" doesn't match actual shardId: ")
-                            .appendValue(listShardsRequest.getExclusiveStartShardId());
-                    return false;
-                }
-            }
-
-            if (StringUtils.isNotEmpty(listShardsRequest.getNextToken())) {
-                if (StringUtils.isNotEmpty(listShardsRequest.getStreamName()) || StringUtils.isNotEmpty(listShardsRequest.getExclusiveStartShardId())) {
-                    return false;
-                }
-
-                if (!listShardsRequest.getNextToken().equals(nextToken)) {
-                    description.appendText("Found nextToken: ").appendValue(listShardsRequest.getNextToken())
-                            .appendText(" when it was supposed to be null.");
-                    return false;
-                }
-            } else {
-                return nextToken == null;
-            }
-            return true;
-        }
-
-        @Override
-        public void describeTo(final Description description) {
-            description.appendText("A ListShardsRequest with a shardId: ").appendValue(shardId)
-                    .appendText(" and empty nextToken");
-        }
+    private ListShardsRequest buildListShardsRequest(String nextToken) {
+        ListShardsRequest request = new ListShardsRequest()
+                .withNextToken(nextToken);
+        request.setRequestCredentials(mockAWSCredentials);
+        return request;
     }
 
 }
