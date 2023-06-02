@@ -510,7 +510,7 @@ public class KinesisProxyTest {
         return response;
     }
 
-    private DescribeStreamRequest buildDescribeStreamRequest(Arn streamArn, String streamName, String shardId) {
+    private DescribeStreamRequest buildDescribeStreamRequest(Arn streamArn, String streamName) {
         DescribeStreamRequest request = new DescribeStreamRequest()
                 .withStreamARN(streamArn != null ? streamArn.toString() : null)
                 .withStreamName(streamName);
