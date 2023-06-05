@@ -173,7 +173,7 @@ public class KinesisProxyTest {
         // Second call describeStream returning response with rest shards.
         DescribeStreamResult responseWithMoreData = createGetStreamInfoResponse(shards.subList(0, 2), true);
         DescribeStreamResult responseFinal = createGetStreamInfoResponse(shards.subList(2, shards.size()), false);
-        DescribeStreamRequest request = buildDescribeStreamRequest(null, TEST_STRING, null);
+        DescribeStreamRequest request = buildDescribeStreamRequest(null, TEST_STRING);
         doReturn(responseWithMoreData).when(mockDDBStreamClient).describeStream(eq(request));
         doReturn(responseFinal).when(mockDDBStreamClient)
                 .describeStream(argThat(new OldIsRequestWithStartShardId(shards.get(1).getShardId())));
@@ -266,7 +266,7 @@ public class KinesisProxyTest {
     public void testListShardsWithMoreDataAvailable() {
         ListShardsResult responseWithMoreData = new ListShardsResult().withShards(shards.subList(0, 2)).withNextToken(NEXT_TOKEN);
         ListShardsResult responseFinal = new ListShardsResult().withShards(shards.subList(2, shards.size())).withNextToken(null);
-        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenReturn(responseWithMoreData);
+        when(mockClient.listShards(eq(buildInitialListShardsRequest()))).thenReturn(responseWithMoreData);
         when(mockClient.listShards(eq(buildListShardsRequest(NEXT_TOKEN)))).thenReturn(responseFinal);
 
         Set<String> resultShardIdSets = proxy.getAllShardIds();
@@ -276,7 +276,7 @@ public class KinesisProxyTest {
     @Test
     public void testListShardsWithLimiteExceededException() {
         ListShardsResult result = new ListShardsResult().withShards(shards);
-        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenThrow(LimitExceededException.class).thenReturn(result);
+        when(mockClient.listShards(eq(buildInitialListShardsRequest()))).thenThrow(LimitExceededException.class).thenReturn(result);
 
         Set <String> resultShardIdSet = proxy.getAllShardIds();
         assertEquals(shardIdSet, resultShardIdSet);
@@ -296,24 +296,24 @@ public class KinesisProxyTest {
     public void testListShardsThrottledOnce() {
         List<Shard> expected = Collections.singletonList(shard);
         ListShardsResult result = new ListShardsResult().withShards(expected);
-        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenThrow(LimitExceededException.class)
-                .thenReturn(result);
+        when(mockClient.listShards(eq(buildInitialListShardsRequest()))).thenThrow(LimitExceededException.class)
+                                                                        .thenReturn(result);
 
         List<Shard> actualShards = proxy.getShardList();
 
         assertEquals(expected, actualShards);
-        verify(mockClient, times(2)).listShards(eq(buildInitialListShardRequest()));
+        verify(mockClient, times(2)).listShards(eq(buildInitialListShardsRequest()));
     }
 
     @Test(expected = LimitExceededException.class)
     public void testListShardsThrottledAll() {
-        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenThrow(LimitExceededException.class);
+        when(mockClient.listShards(eq(buildInitialListShardsRequest()))).thenThrow(LimitExceededException.class);
         proxy.getShardList();
     }
 
     @Test
     public void testStreamNotInCorrectStatus() {
-        when(mockClient.listShards(eq(buildInitialListShardRequest()))).thenThrow(ResourceInUseException.class);
+        when(mockClient.listShards(eq(buildInitialListShardsRequest()))).thenThrow(ResourceInUseException.class);
         assertNull(proxy.getShardList());
     }
 
@@ -321,7 +321,7 @@ public class KinesisProxyTest {
     public void testGetShardListWithDDBChildClient() {
         DescribeStreamResult responseWithMoreData = createGetStreamInfoResponse(shards.subList(0, 2), true);
         DescribeStreamResult responseFinal = createGetStreamInfoResponse(shards.subList(2, shards.size()), false);
-        DescribeStreamRequest request = buildDescribeStreamRequest(null, TEST_STRING, null);
+        DescribeStreamRequest request = buildDescribeStreamRequest(null, TEST_STRING);
         doReturn(responseWithMoreData).when(mockDDBChildClient).describeStream(eq(request));
         doReturn(responseFinal).when(mockDDBChildClient)
                 .describeStream(argThat(new OldIsRequestWithStartShardId(shards.get(1).getShardId())));
@@ -537,7 +537,7 @@ public class KinesisProxyTest {
         }
     }
 
-    private ListShardsRequest buildInitialListShardRequest() {
+    private ListShardsRequest buildInitialListShardsRequest() {
         ListShardsRequest request = new ListShardsRequest()
                 .withStreamARN(TEST_ARN.toString())
                 .withStreamName(TEST_STRING);
