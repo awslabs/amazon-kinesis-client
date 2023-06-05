@@ -509,13 +509,6 @@ public class KinesisProxyTest {
         return response;
     }
 
-    private IsRequestWithStartShardId describeWithoutShardId() {
-        return IsRequestWithStartShardId.builder()
-                                        .streamName(TEST_STRING)
-                                        .streamArn(TEST_ARN)
-                                        .build();
-    }
-
     private IsRequestWithStartShardId describeWithShardId(String shardId) {
         return IsRequestWithStartShardId.builder()
                 .streamName(TEST_STRING)
@@ -533,43 +526,44 @@ public class KinesisProxyTest {
 
         @Override
         protected boolean matchesSafely(DescribeStreamRequest item, Description mismatchDescription) {
+            boolean matches = true;
             if (streamName == null) {
                 if (item.getStreamName() != null) {
                     mismatchDescription.appendText("Expected streamName of null, but was ")
                                        .appendValue(item.getStreamName());
-                    return false;
+                    matches = false;
                 }
             } else if (!streamName.equals(item.getStreamName())) {
                 mismatchDescription.appendValue(streamName).appendText(" doesn't match expected ")
                                    .appendValue(item.getStreamName());
-                return false;
+                matches = false;
             }
 
             if (streamArn == null) {
                 if (item.getStreamARN() != null) {
                     mismatchDescription.appendText("Expected streamArn of null, but was ")
                                        .appendValue(item.getStreamARN());
-                    return false;
+                    matches = false;
                 }
             } else if (!streamArn.equals(Arn.fromString(item.getStreamARN()))) {
                 mismatchDescription.appendValue(streamArn).appendText(" doesn't match expected ")
                                    .appendValue(item.getStreamARN());
-                return false;
+                matches = false;
             }
 
             if (shardId == null) {
                 if (item.getExclusiveStartShardId() != null) {
                     mismatchDescription.appendText("Expected starting shard id of null, but was ")
                             .appendValue(item.getExclusiveStartShardId());
-                    return false;
+                    matches = false;
                 }
             } else if (!shardId.equals(item.getExclusiveStartShardId())) {
                 mismatchDescription.appendValue(shardId).appendText(" doesn't match expected ")
                         .appendValue(item.getExclusiveStartShardId());
-                return false;
+                matches = false;
             }
 
-            return true;
+            return matches;
         }
 
         @Override
@@ -619,18 +613,19 @@ public class KinesisProxyTest {
 
         @Override
         protected boolean matchesSafely(final ListShardsRequest listShardsRequest, final Description description) {
+            boolean matches = true;
             if (streamName == null) {
                 if (StringUtils.isNotEmpty(listShardsRequest.getStreamName())) {
                     description.appendText("Expected streamName to be null, but was ")
                                .appendValue(listShardsRequest.getStreamName());
-                    return false;
+                    matches = false;
                 }
             } else {
                 if (!streamName.equals(listShardsRequest.getStreamName())) {
                     description.appendText("Expected streamName: ").appendValue(streamName)
                                .appendText(" doesn't match actual streamName: ")
                                .appendValue(listShardsRequest.getStreamName());
-                    return false;
+                    matches = false;
                 }
             }
 
@@ -638,14 +633,14 @@ public class KinesisProxyTest {
                 if (StringUtils.isNotEmpty(listShardsRequest.getStreamARN())) {
                     description.appendText("Expected streamArn to be null, but was ")
                                .appendValue(listShardsRequest.getStreamARN());
-                    return false;
+                    matches = false;
                 }
             } else {
                 if (!streamArn.equals(Arn.fromString(listShardsRequest.getStreamARN()))) {
                     description.appendText("Expected streamArn: ").appendValue(streamArn)
                                .appendText(" doesn't match actual streamArn: ")
                                .appendValue(listShardsRequest.getStreamARN());
-                    return false;
+                    matches = false;
                 }
             }
 
@@ -653,31 +648,31 @@ public class KinesisProxyTest {
                 if (StringUtils.isNotEmpty(listShardsRequest.getExclusiveStartShardId())) {
                     description.appendText("Expected ExclusiveStartShardId to be null, but was ")
                             .appendValue(listShardsRequest.getExclusiveStartShardId());
-                    return false;
+                    matches = false;
                 }
             } else {
                 if (!shardId.equals(listShardsRequest.getExclusiveStartShardId())) {
                     description.appendText("Expected shardId: ").appendValue(shardId)
                             .appendText(" doesn't match actual shardId: ")
                             .appendValue(listShardsRequest.getExclusiveStartShardId());
-                    return false;
+                    matches = false;
                 }
             }
 
             if (StringUtils.isNotEmpty(listShardsRequest.getNextToken())) {
                 if (StringUtils.isNotEmpty(listShardsRequest.getStreamName()) || StringUtils.isNotEmpty(listShardsRequest.getExclusiveStartShardId())) {
-                    return false;
+                    matches = false;
                 }
 
                 if (!listShardsRequest.getNextToken().equals(nextToken)) {
                     description.appendText("Found nextToken: ").appendValue(listShardsRequest.getNextToken())
                             .appendText(" when it was supposed to be null.");
-                    return false;
+                    matches = false;
                 }
             } else {
                 return nextToken == null;
             }
-            return true;
+            return matches;
         }
 
         @Override

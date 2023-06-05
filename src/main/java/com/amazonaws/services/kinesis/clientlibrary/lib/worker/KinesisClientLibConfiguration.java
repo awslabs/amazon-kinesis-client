@@ -248,6 +248,11 @@ public class KinesisClientLibConfiguration {
     private String applicationName;
     private String tableName;
     private String streamName;
+
+    /**
+     * @return stream ARN
+     */
+    @Getter
     private Arn streamArn;
     private String kinesisEndpoint;
     private String dynamoDBEndpoint;
@@ -933,13 +938,6 @@ public class KinesisClientLibConfiguration {
      */
     public String getStreamName() {
         return streamName;
-    }
-
-    /**
-     * @return stream ARN
-     */
-    public Arn getStreamArn() {
-        return streamArn;
     }
 
     /**
