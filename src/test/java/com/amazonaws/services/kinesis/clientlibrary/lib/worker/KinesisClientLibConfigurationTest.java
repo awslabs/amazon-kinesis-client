@@ -397,7 +397,7 @@ public class KinesisClientLibConfigurationTest {
     @Test
     public void testWithInvalidStreamArnsThrowsException() {
         List<String> invalidArnList = Arrays.asList(
-                "arn:abc:dynamnodb:us-east-1:123456789012:stream/stream-name", //invalid partition
+                "arn:abc:kinesis:us-east-1:123456789012:stream/stream-name", //invalid partition
                 "arn:aws:dynamnodb:us-east-1:123456789012:stream/stream-name", // Kinesis ARN, but with a non-Kinesis service
                 "arn:aws:kinesis::123456789012:stream/stream-name", // missing region
                 "arn:aws:kinesis:us-east-1::stream/stream-name", // missing account id
