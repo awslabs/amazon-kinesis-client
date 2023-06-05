@@ -37,6 +37,7 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.kinesis.AmazonKinesisClient;
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorFactory;
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.SimpleRecordsFetcherFactory;
 import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 import com.google.common.collect.ImmutableSet;
 
@@ -59,12 +60,9 @@ public class KinesisClientLibConfigurationTest {
                                            .withAccountId(ACCOUNT_ID)
                                            .withResource("stream/" + TEST_STRING)
                                            .build();
-
-    // Invalid steamARN due to invalid service. This is a sample used for testing.
-    // See testWithInvalidStreamArnsThrowsException for more examples
     private static final Arn INVALID_TEST_ARN = Arn.builder()
                                                    .withPartition("aws")
-                                                   .withService("dynamodb")
+                                                   .withService("dunamodb")
                                                    .withRegion("us-east-1")
                                                    .withAccountId(ACCOUNT_ID)
                                                    .withResource("stream/" + TEST_STRING)
@@ -83,10 +81,69 @@ public class KinesisClientLibConfigurationTest {
                 new KinesisClientLibConfiguration(TEST_STRING, TEST_STRING, null, TEST_STRING);
 
         // Test constructor with all valid arguments.
-        config = buildKinesisClientLibConfiguration(TEST_STRING);
+        config =
+                new KinesisClientLibConfiguration(TEST_STRING,
+                        TEST_STRING,
+                        TEST_STRING,
+                        TEST_STRING,
+                        InitialPositionInStream.LATEST,
+                        null,
+                        null,
+                        null,
+                        TEST_VALUE_LONG,
+                        TEST_STRING,
+                        TEST_VALUE_INT,
+                        TEST_VALUE_LONG,
+                        false,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        true,
+                        new ClientConfiguration(),
+                        new ClientConfiguration(),
+                        new ClientConfiguration(),
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_INT,
+                        skipCheckpointValidationValue,
+                        null,
+                        TEST_VALUE_LONG,
+                        BillingMode.PROVISIONED,
+                        new SimpleRecordsFetcherFactory(),
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG);
 
         // Test constructor with streamArn with all valid arguments.
-        config = buildKinesisClientLibConfiguration(TEST_ARN);
+        config =
+                new KinesisClientLibConfiguration(TEST_STRING,
+                        TEST_ARN,
+                        TEST_STRING,
+                        TEST_STRING,
+                        InitialPositionInStream.LATEST,
+                        null,
+                        null,
+                        null,
+                        TEST_VALUE_LONG,
+                        TEST_STRING,
+                        TEST_VALUE_INT,
+                        TEST_VALUE_LONG,
+                        false,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        true,
+                        new ClientConfiguration(),
+                        new ClientConfiguration(),
+                        new ClientConfiguration(),
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_INT,
+                        skipCheckpointValidationValue,
+                        null,
+                        TEST_VALUE_LONG, BillingMode.PROVISIONED,
+                        new SimpleRecordsFetcherFactory(),
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG,
+                        TEST_VALUE_LONG);
         Assert.assertEquals(config.getStreamName(), TEST_STRING);
     }
 
@@ -170,7 +227,36 @@ public class KinesisClientLibConfigurationTest {
         }
         // Test constructor with invalid streamArn
         try {
-            config = buildKinesisClientLibConfiguration(INVALID_TEST_ARN);
+            config =
+                    new KinesisClientLibConfiguration(TEST_STRING,
+                            INVALID_TEST_ARN,
+                            TEST_STRING,
+                            TEST_STRING,
+                            InitialPositionInStream.LATEST,
+                            null,
+                            null,
+                            null,
+                            TEST_VALUE_LONG,
+                            TEST_STRING,
+                            TEST_VALUE_INT,
+                            TEST_VALUE_LONG,
+                            false,
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_LONG,
+                            true,
+                            new ClientConfiguration(),
+                            new ClientConfiguration(),
+                            new ClientConfiguration(),
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_INT,
+                            skipCheckpointValidationValue,
+                            null,
+                            TEST_VALUE_LONG, BillingMode.PROVISIONED,
+                            new SimpleRecordsFetcherFactory(),
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_LONG,
+                            TEST_VALUE_LONG);
         } catch(IllegalArgumentException e) {
             System.out.println(e.getMessage());
         }
@@ -380,28 +466,34 @@ public class KinesisClientLibConfigurationTest {
     @Test
     public void testWithValidStreamArnsSucceed() {
         List<String> validArnList = Arrays.asList(
-                "arn:aws:kinesis:us-east-1:123456789012:stream/123stream-name123",
+                "arn:aws:kinesis:us-east-1:123456789012:stream/stream-name",
                 "arn:aws-china:kinesis:us-east-2:123456789012:stream/stream-name",
-                "arn:aws-us-gov:kinesis:us-east-2:123456789012:stream/stream-name"
+                "arn:aws-us-gov:kinesis:us-east-2:123456789012:stream/stream-name",
+                "arn:aws:kinesis:us-east-1:111111111111:stream/123somename123"
         );
 
         KinesisClientLibConfiguration config =
                 new KinesisClientLibConfiguration("TestApplication", "TestStream", null, "TestWorker");
 
         for (final String arn : validArnList) {
-            config.withStreamArn(Arn.fromString(arn));
+            try {
+                config.withStreamArn(Arn.fromString(arn));
+            } catch (IllegalArgumentException e) {
+                fail("Arn " + arn + " should not have thrown an IllegalArgumentException");
+            }
         }
     }
 
     @Test
     public void testWithInvalidStreamArnsThrowsException() {
         List<String> invalidArnList = Arrays.asList(
-                "arn:abc:kinesis:us-east-1:123456789012:stream/stream-name", //invalid partition
-                "arn:aws:dynamnodb:us-east-1:123456789012:stream/stream-name", // Kinesis ARN, but with a non-Kinesis service
+                "arn:abc:dynamnodb:us-east-1:123456789012:stream/stream-name", //invalid partition
+                "arn:aws:dynamnodb:us-east-1:123456789012:stream/stream-name", //incorrect service
                 "arn:aws:kinesis::123456789012:stream/stream-name", // missing region
                 "arn:aws:kinesis:us-east-1::stream/stream-name", // missing account id
                 "arn:aws:kinesis:us-east-1:123456789:stream/stream-name", // account id not 12 digits
                 "arn:aws:kinesis:us-east-1:123456789abc:stream/stream-name", // 12char alphanumeric account id
+                "arn:aws:kinesis:us-east-1:123456789012:stream/", // missing stream-name
                 "arn:aws:kinesis:us-east-1:123456789012:table/table-name", // incorrect resource type
                 "arn:aws:dynamodb:us-east-1:123456789012:table/myDynamoDBTable" // valid arn but not a stream
         );
@@ -409,78 +501,13 @@ public class KinesisClientLibConfigurationTest {
         KinesisClientLibConfiguration config =
                 new KinesisClientLibConfiguration("TestApplication", "TestStream", null, "TestWorker");
 
-        for (final String arnString : invalidArnList) {
-            Arn arn = Arn.fromString(arnString);
+        for (final String arn : invalidArnList) {
             try {
-                config.withStreamArn(arn);
+                config.withStreamArn(Arn.fromString(arn));
                 fail("Arn " + arn + " should have thrown an IllegalArgumentException");
             } catch (IllegalArgumentException e) {
                 // expected
             }
         }
-    }
-
-    private KinesisClientLibConfiguration buildKinesisClientLibConfiguration(Arn streamArn) {
-        return new KinesisClientLibConfiguration(TEST_STRING,
-                streamArn,
-                TEST_STRING,
-                TEST_STRING,
-                InitialPositionInStream.LATEST,
-                null,
-                null,
-                null,
-                TEST_VALUE_LONG,
-                TEST_STRING,
-                TEST_VALUE_INT,
-                TEST_VALUE_LONG,
-                false,
-                TEST_VALUE_LONG,
-                TEST_VALUE_LONG,
-                true,
-                new ClientConfiguration(),
-                new ClientConfiguration(),
-                new ClientConfiguration(),
-                TEST_VALUE_LONG,
-                TEST_VALUE_LONG,
-                TEST_VALUE_INT,
-                skipCheckpointValidationValue,
-                null,
-                TEST_VALUE_LONG, BillingMode.PROVISIONED,
-                new SimpleRecordsFetcherFactory(),
-                TEST_VALUE_LONG,
-                TEST_VALUE_LONG,
-                TEST_VALUE_LONG);
-    }
-
-    private KinesisClientLibConfiguration buildKinesisClientLibConfiguration(String streamName) {
-        return new KinesisClientLibConfiguration(TEST_STRING,
-                streamName,
-                TEST_STRING,
-                TEST_STRING,
-                InitialPositionInStream.LATEST,
-                null,
-                null,
-                null,
-                TEST_VALUE_LONG,
-                TEST_STRING,
-                TEST_VALUE_INT,
-                TEST_VALUE_LONG,
-                false,
-                TEST_VALUE_LONG,
-                TEST_VALUE_LONG,
-                true,
-                new ClientConfiguration(),
-                new ClientConfiguration(),
-                new ClientConfiguration(),
-                TEST_VALUE_LONG,
-                TEST_VALUE_LONG,
-                TEST_VALUE_INT,
-                skipCheckpointValidationValue,
-                null,
-                TEST_VALUE_LONG, BillingMode.PROVISIONED,
-                new SimpleRecordsFetcherFactory(),
-                TEST_VALUE_LONG,
-                TEST_VALUE_LONG,
-                TEST_VALUE_LONG);
     }
 }
