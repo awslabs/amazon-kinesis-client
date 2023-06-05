@@ -237,7 +237,7 @@ public class KinesisClientLibConfiguration {
 
     /**
      * Pattern for a stream ARN. The valid format is
-     * {@code arn:aws:kinesis:<region>:<accountId>:stream:<streamName>}
+     * {@code arn:aws:kinesis:<region>:<accountId>:stream/<streamName>}
      * where {@code region} is the id representation of a {@link Region}.
      */
     private static final Pattern STREAM_ARN_PATTERN = Pattern.compile(
