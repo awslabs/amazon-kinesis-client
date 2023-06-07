@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import lombok.Builder;
 import org.apache.commons.lang3.StringUtils;
 import org.hamcrest.Description;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
@@ -59,6 +60,7 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.arn.Arn;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient;
 import com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClientChild;
@@ -77,11 +79,17 @@ import com.amazonaws.services.kinesis.model.ShardIteratorType;
 import com.amazonaws.services.kinesis.model.StreamDescription;
 import com.amazonaws.services.kinesis.model.StreamStatus;
 
-import lombok.AllArgsConstructor;
-
 @RunWith(MockitoJUnitRunner.class)
 public class KinesisProxyTest {
     private static final String TEST_STRING = "TestString";
+    private static final String ACCOUNT_ID = "123456789012";
+    private static final Arn TEST_ARN = Arn.builder()
+                                           .withPartition("aws")
+                                           .withService("kinesis")
+                                           .withRegion("us-east-1")
+                                           .withAccountId(ACCOUNT_ID)
+                                           .withResource("stream/" + TEST_STRING)
+                                           .build();
     private static final long DESCRIBE_STREAM_BACKOFF_TIME = 10L;
     private static final long LIST_SHARDS_BACKOFF_TIME = 10L;
     private static final int DESCRIBE_STREAM_RETRY_TIMES = 3;
@@ -132,6 +140,7 @@ public class KinesisProxyTest {
     public void setUpTest() {
         // Set up kinesis ddbProxy
         when(config.getStreamName()).thenReturn(TEST_STRING);
+        when(config.getStreamArn()).thenReturn(TEST_ARN);
         when(config.getListShardsBackoffTimeInMillis()).thenReturn(LIST_SHARDS_BACKOFF_TIME);
         when(config.getMaxListShardsRetryAttempts()).thenReturn(LIST_SHARDS_RETRY_TIMES);
         when(config.getKinesisCredentialsProvider()).thenReturn(mockCredentialsProvider);
@@ -163,7 +172,8 @@ public class KinesisProxyTest {
         // Second call describeStream returning response with rest shards.
         DescribeStreamResult responseWithMoreData = createGetStreamInfoResponse(shards.subList(0, 2), true);
         DescribeStreamResult responseFinal = createGetStreamInfoResponse(shards.subList(2, shards.size()), false);
-        doReturn(responseWithMoreData).when(mockDDBStreamClient).describeStream(argThat(new IsRequestWithStartShardId(null)));
+        IsRequestWithStartShardId requestMatcher = IsRequestWithStartShardId.builder().streamName(TEST_STRING).build();
+        doReturn(responseWithMoreData).when(mockDDBStreamClient).describeStream(argThat(requestMatcher));
         doReturn(responseFinal).when(mockDDBStreamClient)
                 .describeStream(argThat(new OldIsRequestWithStartShardId(shards.get(1).getShardId())));
 
@@ -310,7 +320,8 @@ public class KinesisProxyTest {
     public void testGetShardListWithDDBChildClient() {
         DescribeStreamResult responseWithMoreData = createGetStreamInfoResponse(shards.subList(0, 2), true);
         DescribeStreamResult responseFinal = createGetStreamInfoResponse(shards.subList(2, shards.size()), false);
-        doReturn(responseWithMoreData).when(mockDDBChildClient).describeStream(argThat(new IsRequestWithStartShardId(null)));
+        IsRequestWithStartShardId requestMatcher = IsRequestWithStartShardId.builder().streamName(TEST_STRING).build();
+        doReturn(responseWithMoreData).when(mockDDBChildClient).describeStream(argThat(requestMatcher));
         doReturn(responseFinal).when(mockDDBChildClient)
                 .describeStream(argThat(new OldIsRequestWithStartShardId(shards.get(1).getShardId())));
 
@@ -498,37 +509,61 @@ public class KinesisProxyTest {
         return response;
     }
 
-    private IsRequestWithStartShardId describeWithoutShardId() {
-        return describeWithShardId(null);
-    }
-
     private IsRequestWithStartShardId describeWithShardId(String shardId) {
-        return new IsRequestWithStartShardId(shardId);
+        return IsRequestWithStartShardId.builder()
+                .streamName(TEST_STRING)
+                .streamArn(TEST_ARN)
+                .shardId(shardId)
+                .build();
     }
 
+    @Builder
     private static class IsRequestWithStartShardId extends TypeSafeDiagnosingMatcher<DescribeStreamRequest> {
 
+        private final String streamName;
+        private final Arn streamArn;
         private final String shardId;
-
-        public IsRequestWithStartShardId(String shardId) {
-            this.shardId = shardId;
-        }
 
         @Override
         protected boolean matchesSafely(DescribeStreamRequest item, Description mismatchDescription) {
+            boolean matches = true;
+            if (streamName == null) {
+                if (item.getStreamName() != null) {
+                    mismatchDescription.appendText("Expected streamName of null, but was ")
+                                       .appendValue(item.getStreamName());
+                    matches = false;
+                }
+            } else if (!streamName.equals(item.getStreamName())) {
+                mismatchDescription.appendValue(streamName).appendText(" doesn't match expected ")
+                                   .appendValue(item.getStreamName());
+                matches = false;
+            }
+
+            if (streamArn == null) {
+                if (item.getStreamARN() != null) {
+                    mismatchDescription.appendText("Expected streamArn of null, but was ")
+                                       .appendValue(item.getStreamARN());
+                    matches = false;
+                }
+            } else if (!streamArn.equals(Arn.fromString(item.getStreamARN()))) {
+                mismatchDescription.appendValue(streamArn).appendText(" doesn't match expected ")
+                                   .appendValue(item.getStreamARN());
+                matches = false;
+            }
+
             if (shardId == null) {
                 if (item.getExclusiveStartShardId() != null) {
                     mismatchDescription.appendText("Expected starting shard id of null, but was ")
                             .appendValue(item.getExclusiveStartShardId());
-                    return false;
+                    matches = false;
                 }
             } else if (!shardId.equals(item.getExclusiveStartShardId())) {
                 mismatchDescription.appendValue(shardId).appendText(" doesn't match expected ")
                         .appendValue(item.getExclusiveStartShardId());
-                return false;
+                matches = false;
             }
 
-            return true;
+            return matches;
         }
 
         @Override
@@ -557,49 +592,87 @@ public class KinesisProxyTest {
     }
 
     private static ListShardsRequestMatcher initialListShardsRequestMatcher() {
-        return new ListShardsRequestMatcher(null, null);
+        return ListShardsRequestMatcher.builder()
+                .streamName(TEST_STRING)
+                .streamArn(TEST_ARN)
+                .build();
     }
 
     private static ListShardsRequestMatcher listShardsNextToken(final String nextToken) {
-        return new ListShardsRequestMatcher(null, nextToken);
+        return ListShardsRequestMatcher.builder()
+                .nextToken(nextToken)
+                .build();
     }
 
-    @AllArgsConstructor
+    @Builder
     private static class ListShardsRequestMatcher extends TypeSafeDiagnosingMatcher<ListShardsRequest> {
+        private final String streamName;
+        private final Arn streamArn;
         private final String shardId;
         private final String nextToken;
 
         @Override
         protected boolean matchesSafely(final ListShardsRequest listShardsRequest, final Description description) {
+            boolean matches = true;
+            if (streamName == null) {
+                if (StringUtils.isNotEmpty(listShardsRequest.getStreamName())) {
+                    description.appendText("Expected streamName to be null, but was ")
+                               .appendValue(listShardsRequest.getStreamName());
+                    matches = false;
+                }
+            } else {
+                if (!streamName.equals(listShardsRequest.getStreamName())) {
+                    description.appendText("Expected streamName: ").appendValue(streamName)
+                               .appendText(" doesn't match actual streamName: ")
+                               .appendValue(listShardsRequest.getStreamName());
+                    matches = false;
+                }
+            }
+
+            if (streamArn == null) {
+                if (StringUtils.isNotEmpty(listShardsRequest.getStreamARN())) {
+                    description.appendText("Expected streamArn to be null, but was ")
+                               .appendValue(listShardsRequest.getStreamARN());
+                    matches = false;
+                }
+            } else {
+                if (!streamArn.equals(Arn.fromString(listShardsRequest.getStreamARN()))) {
+                    description.appendText("Expected streamArn: ").appendValue(streamArn)
+                               .appendText(" doesn't match actual streamArn: ")
+                               .appendValue(listShardsRequest.getStreamARN());
+                    matches = false;
+                }
+            }
+
             if (shardId == null) {
                 if (StringUtils.isNotEmpty(listShardsRequest.getExclusiveStartShardId())) {
                     description.appendText("Expected ExclusiveStartShardId to be null, but was ")
                             .appendValue(listShardsRequest.getExclusiveStartShardId());
-                    return false;
+                    matches = false;
                 }
             } else {
                 if (!shardId.equals(listShardsRequest.getExclusiveStartShardId())) {
                     description.appendText("Expected shardId: ").appendValue(shardId)
                             .appendText(" doesn't match actual shardId: ")
                             .appendValue(listShardsRequest.getExclusiveStartShardId());
-                    return false;
+                    matches = false;
                 }
             }
 
             if (StringUtils.isNotEmpty(listShardsRequest.getNextToken())) {
                 if (StringUtils.isNotEmpty(listShardsRequest.getStreamName()) || StringUtils.isNotEmpty(listShardsRequest.getExclusiveStartShardId())) {
-                    return false;
+                    matches = false;
                 }
 
                 if (!listShardsRequest.getNextToken().equals(nextToken)) {
                     description.appendText("Found nextToken: ").appendValue(listShardsRequest.getNextToken())
                             .appendText(" when it was supposed to be null.");
-                    return false;
+                    matches = false;
                 }
             } else {
                 return nextToken == null;
             }
-            return true;
+            return matches;
         }
 
         @Override
