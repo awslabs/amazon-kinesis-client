@@ -94,6 +94,11 @@ public class KinesisProxy implements IKinesisProxyExtended {
     private AtomicInteger cacheMisses = new AtomicInteger(0);
 
     private final String streamName;
+
+    /**
+     * Stored as a string instead of an ARN to reduce repetitive null checks when passing in the stream ARN to
+     * the client requests, which accepts a String stream ARN parameter.
+     */
     private String streamArn;
 
     private static final long DEFAULT_DESCRIBE_STREAM_BACKOFF_MILLIS = 1000L;

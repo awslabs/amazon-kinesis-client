@@ -250,7 +250,7 @@ public class KinesisClientLibConfiguration {
     private String streamName;
 
     /**
-     * @return stream ARN
+     * Kinesis stream ARN
      */
     @Getter
     private Arn streamArn;

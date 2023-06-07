@@ -61,8 +61,10 @@ public class KinesisClientLibConfigurationTest {
                                            .withResource("stream/" + TEST_STRING)
                                            .build();
 
-    // Invalid steamARN due to invalid service. This is a sample used for testing.
-    // See testWithInvalidStreamArnsThrowsException for more examples
+    /**
+     * Invalid steamARN due to invalid service. This is a sample used for testing.
+     * @see KinesisClientLibConfigurationTest#testWithInvalidStreamArnsThrowsException() for more examples
+     */
     private static final Arn INVALID_TEST_ARN = Arn.builder()
                                                    .withPartition("aws")
                                                    .withService("dynamodb")
