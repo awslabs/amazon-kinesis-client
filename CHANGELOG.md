@@ -1,5 +1,5 @@
 # Changelog
-### Latest Release (1.15.0 - Jun 7, 2023)
+### Latest Release (1.15.0 - Jun 8, 2023)
 * **[#1108](https://github.com/awslabs/amazon-kinesis-client/pull/1108) Add support for Stream ARNs**
 * [#1111](https://github.com/awslabs/amazon-kinesis-client/pull/1111) More consistent testing behavior with HashRangesAreAlwaysComplete
 * [#1054](https://github.com/awslabs/amazon-kinesis-client/pull/1054) Upgrade log4j-core from 2.17.1 to 2.20.0
