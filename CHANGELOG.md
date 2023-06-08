@@ -1,5 +1,14 @@
 # Changelog
-### Latest Release (1.14.10 - Feb 15, 2023)
+### Latest Release (1.15.0 - Jun 8, 2023)
+* **[#1108](https://github.com/awslabs/amazon-kinesis-client/pull/1108) Add support for Stream ARNs**
+* [#1111](https://github.com/awslabs/amazon-kinesis-client/pull/1111) More consistent testing behavior with HashRangesAreAlwaysComplete
+* [#1054](https://github.com/awslabs/amazon-kinesis-client/pull/1054) Upgrade log4j-core from 2.17.1 to 2.20.0
+* [#1103](https://github.com/awslabs/amazon-kinesis-client/pull/1103) Upgrade jackson-core from 2.13.0 to 2.15.0
+* [#943](https://github.com/awslabs/amazon-kinesis-client/pull/943) Upgrade nexus-staging-maven-plugin from 1.6.8 to 1.6.13
+* [#1044](https://github.com/awslabs/amazon-kinesis-client/pull/1044) Upgrade aws-java-sdk.version from 1.12.406 to 1.12.408
+* [#1055](https://github.com/awslabs/amazon-kinesis-client/pull/1055) Upgrade maven-compiler-plugin from 3.10.0 to 3.11.0
+
+### Release (1.14.10 - Feb 15, 2023)
 * Updated aws-java-sdk from 1.12.130 to 1.12.406 
 * Updated com.google.protobuf from 3.19.4 to 3.19.6
   * [Issue #1026](https://github.com/awslabs/amazon-kinesis-client/issues/1026)
