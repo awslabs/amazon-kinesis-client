@@ -306,12 +306,33 @@ public class KinesisClientLibConfiguratorTest {
     }
 
     @Test
-    public void testWithMissingStreamName() {
+    public void testWithMissingStreamNameAndMissingStreamArn() {
         thrown.expect(NullPointerException.class);
-        thrown.expectMessage("Stream name is required");
+        thrown.expectMessage("Stream name or Stream Arn is required. (Stream Arn takes precedence if both are passed in)");
 
-        String test = StringUtils.join(new String[] { "applicationName = b",
-                "AWSCredentialsProvider = " + credentialName1, "workerId = 123", "failoverTimeMillis = 100" }, '\n');
+        String test = StringUtils.join(new String[] {
+                "applicationName = b",
+                "AWSCredentialsProvider = " + credentialName1,
+                "workerId = 123",
+                "failoverTimeMillis = 100" },
+                '\n');
+        InputStream input = new ByteArrayInputStream(test.getBytes());
+
+        configurator.getConfiguration(input);
+    }
+    @Test
+    public void testWithEmptyStreamNameAndMissingStreamArn() {
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("Stream name or Stream Arn is required. (Stream Arn takes precedence if both are passed in)");
+
+        String test = StringUtils.join(new String[] {
+                        "applicationName = b",
+                        "AWSCredentialsProvider = " + credentialName1,
+                        "workerId = 123",
+                        "failoverTimeMillis = 100",
+                        "streamName = ",
+                        "streamArn = "},
+                '\n');
         InputStream input = new ByteArrayInputStream(test.getBytes());
 
         configurator.getConfiguration(input);

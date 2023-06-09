@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 
+import com.amazonaws.arn.Arn;
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 
@@ -62,14 +63,27 @@ public class KinesisClientLibConfigurator {
     public MultiLangDaemonConfiguration getConfiguration(Properties properties) {
         properties.entrySet().forEach(e -> {
             try {
-                utilsBean.setProperty(configuration, (String) e.getKey(), e.getValue());
+                Object value = e.getValue();
+                if(value instanceof String){
+                    value = ((String) value).trim();
+                }
+                utilsBean.setProperty(configuration, (String) e.getKey(), value);
             } catch (IllegalAccessException | InvocationTargetException ex) {
                 throw new RuntimeException(ex);
             }
         });
 
         Validate.notBlank(configuration.getApplicationName(), "Application name is required");
-        Validate.notBlank(configuration.getStreamName(), "Stream name is required");
+        try {
+            Arn streamArnObj = Arn.fromString(configuration.getStreamArn());
+            String streamNameFromArn = streamArnObj.getResource().getResource();
+            Validate.notBlank(streamNameFromArn, "");
+
+            //Stream Arn takes precedence. Override existing configuration with the stream name found in the Arn
+            configuration.setStreamName(streamNameFromArn);
+        }catch (Exception e) {
+            Validate.notBlank(configuration.getStreamName(), "Stream name or Stream Arn is required. (Stream Arn takes precedence if both are passed in)");
+        }
         Validate.isTrue(configuration.getKinesisCredentialsProvider().isDirty(), "A basic set of AWS credentials must be provided");
         return configuration;
     }

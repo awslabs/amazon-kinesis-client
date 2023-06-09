@@ -73,6 +73,8 @@ public class MultiLangDaemonConfiguration {
     private String applicationName;
 
     private String streamName;
+    private String streamArn;
+
 
     @ConfigurationSettable(configurationClass = ConfigsBuilder.class)
     private String tableName;

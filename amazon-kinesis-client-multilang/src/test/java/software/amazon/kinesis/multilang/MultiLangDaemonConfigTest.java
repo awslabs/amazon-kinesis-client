@@ -14,17 +14,13 @@
  */
 package software.amazon.kinesis.multilang;
 
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.Properties;
 
-import org.apache.commons.beanutils.BeanUtilsBean;
-import org.apache.commons.beanutils.ConvertUtilsBean;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -35,11 +31,19 @@ import junit.framework.Assert;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.kinesis.multilang.config.KinesisClientLibConfigurator;
-import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MultiLangDaemonConfigTest {
     private static String FILENAME = "some.properties";
+    private static String TestExe = "TestExe.exe";
+    private static String TestApplicationName = "TestApp";
+    private static String TestStreamName = "fakeStream";
+
+    private static String TestStreamNameInArn = "FAKE_STREAM_NAME";
+    private static String TestStreamArn = "arn:aws:kinesis:us-east-1:ACCOUNT_ID:stream/FAKE_STREAM_NAME";
+
+    @Mock
+    ClassLoader classLoader;
 
     @Mock
     private AwsCredentialsProvider credentialsProvider;
@@ -48,39 +52,125 @@ public class MultiLangDaemonConfigTest {
     @Mock
     private KinesisClientLibConfigurator configurator;
 
-    @Before
-    public void setup() {
-        ConvertUtilsBean convertUtilsBean = new ConvertUtilsBean();
-        BeanUtilsBean utilsBean = new BeanUtilsBean(convertUtilsBean);
-        MultiLangDaemonConfiguration multiLangDaemonConfiguration = new MultiLangDaemonConfiguration(utilsBean,
-                convertUtilsBean);
-        multiLangDaemonConfiguration.setApplicationName("cool-app");
-        multiLangDaemonConfiguration.setStreamName("cool-stream");
-        multiLangDaemonConfiguration.setWorkerIdentifier("cool-worker");
-        when(credentialsProvider.resolveCredentials()).thenReturn(creds);
-        when(creds.accessKeyId()).thenReturn("cool-user");
-        when(configurator.getConfiguration(any(Properties.class))).thenReturn(multiLangDaemonConfiguration);
-    }
+    public void setup(String streamName, String streamArn) {
 
-    @Test
-    public void constructorTest() throws IOException {
-        String PROPERTIES = "executableName = randomEXE \n" + "applicationName = testApp \n"
-                + "streamName = fakeStream \n" + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
-                + "processingLanguage = malbolge";
-        ClassLoader classLoader = Mockito.mock(ClassLoader.class);
+        String PROPERTIES = String.format("executableName = %s \n"
+                + "applicationName = %s \n"
+                + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
+                + "processingLanguage = malbolge\n",
+                TestExe,
+                TestApplicationName);
+
+        if(streamName != null){
+            PROPERTIES += String.format("streamName = %s \n", streamName);
+        }
+        if(streamArn != null){
+            PROPERTIES += String.format("streamArn = %s \n", streamArn);
+        }
+        classLoader = Mockito.mock(ClassLoader.class);
 
         Mockito.doReturn(new ByteArrayInputStream(PROPERTIES.getBytes())).when(classLoader)
                 .getResourceAsStream(FILENAME);
 
-        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
+        when(credentialsProvider.resolveCredentials()).thenReturn(creds);
+        when(creds.accessKeyId()).thenReturn("cool-user");
+        configurator = new KinesisClientLibConfigurator();
 
-        assertNotNull(deamonConfig.getExecutorService());
-        assertNotNull(deamonConfig.getMultiLangDaemonConfiguration());
-        assertNotNull(deamonConfig.getRecordProcessorFactory());
     }
 
     @Test
-    public void propertyValidation() {
+    public void testConstructorFailsBecauseStreamNameAndArnAreEmpty() throws IOException {
+        setup("", "");
+
+        assertThrows(Exception.class, () -> new MultiLangDaemonConfig(FILENAME, classLoader, configurator));
+    }
+
+    @Test
+    public void testConstructorFailsBecauseStreamNameAndArnAreNull() {
+        setup(null, null);
+
+        assertThrows(Exception.class, () -> new MultiLangDaemonConfig(FILENAME, classLoader, configurator));
+    }
+
+    @Test
+    public void testConstructorFailsBecauseStreamNameIsNullAndArnIsEmpty() {
+        setup(null, "");
+
+        assertThrows(Exception.class, () -> new MultiLangDaemonConfig(FILENAME, classLoader, configurator));
+    }
+
+    @Test
+    public void testConstructorFailsBecauseStreamNameIsEmptyAndArnIsNull() {
+        setup("", null);
+
+        assertThrows(Exception.class, () -> new MultiLangDaemonConfig(FILENAME, classLoader, configurator));
+    }
+
+    @Test
+    public void testConstructorUsingStreamName() throws IOException {
+        setup(TestStreamName, null);
+
+        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
+
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName);
+    }
+
+    @Test
+    public void testConstructorUsingStreamNameAndStreamArnIsEmpty() throws IOException {
+        setup(TestStreamName, "");
+
+        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
+
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName);
+    }
+
+    @Test
+    public void testConstructorUsingStreamArn() throws IOException {
+        setup(null, TestStreamArn);
+
+        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
+
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn);
+    }
+
+    @Test
+    public void testConstructorUsingStreamNameAsEmptyAndStreamArn() throws IOException {
+        setup("", TestStreamArn);
+
+        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
+
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn);
+    }
+
+    @Test
+    public void testConstructorUsingStreamArnOverStreamName() throws IOException {
+        setup(TestStreamName, TestStreamArn);
+
+        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
+
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn);
+    }
+
+    /**
+     * Verify the daemonConfig properties are what we expect them to be.
+     * @param deamonConfig
+     * @param expectedStreamName
+     */
+    private void AssertConfigurationsMatch(MultiLangDaemonConfig deamonConfig,
+                                           String expectedExe,
+                                           String expectedApplicationName,
+                                           String expectedStreamName){
+        assertNotNull(deamonConfig.getExecutorService());
+        assertNotNull(deamonConfig.getMultiLangDaemonConfiguration());
+        assertNotNull(deamonConfig.getRecordProcessorFactory());
+
+        assertEquals(expectedExe, deamonConfig.getRecordProcessorFactory().getCommandArray()[0]);
+        assertEquals(expectedApplicationName, deamonConfig.getMultiLangDaemonConfiguration().getApplicationName());
+        assertEquals(expectedStreamName, deamonConfig.getMultiLangDaemonConfiguration().getStreamName());
+    }
+
+    @Test
+    public void testPropertyValidation() {
         String PROPERTIES_NO_EXECUTABLE_NAME = "applicationName = testApp \n" + "streamName = fakeStream \n"
                 + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n" + "processingLanguage = malbolge";
         ClassLoader classLoader = Mockito.mock(ClassLoader.class);
