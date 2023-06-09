@@ -26,7 +26,6 @@ import software.amazon.kinesis.common.ConfigsBuilder;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
-import software.amazon.kinesis.utils.OdinCredentialsHelper;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -66,18 +65,6 @@ public interface KCLAppConfig {
 
     // "default" profile, should match with profiles listed in "cat ~/.aws/config"
     String getProfile();
-
-    default String odinMaterialName() {
-        return null;
-    }
-
-    default AWSCredentialsProvider getSyncAwsCredentials() throws IOException {
-        return OdinCredentialsHelper.getSyncAwsCredentialsFromMaterialSet( odinMaterialName() );
-    }
-
-    default AwsCredentialsProvider getAsyncAwsCredentials() throws IOException {
-        return OdinCredentialsHelper.getAsyncAwsCredentialsFromMaterialSet( odinMaterialName() );
-    }
 
     // '-1' means round robin across 0, 5_000, 15_000, 30_000 milliseconds delay.
     // The delay period is picked according to current time, so expected to be unpredictable across different KCL runs.
@@ -136,9 +123,7 @@ public interface KCLAppConfig {
         kinesisAsyncClientBuilder.httpClient( sdkAsyncHttpClient );
 
 
-        if ( getAsyncAwsCredentials() != null ) {
-            kinesisAsyncClientBuilder.credentialsProvider( getAsyncAwsCredentials() );
-        } else if ( getProfile() != null ) {
+        if ( getProfile() != null ) {
             kinesisAsyncClientBuilder.credentialsProvider( ProfileCredentialsProvider.builder().profileName( getProfile() ).build() );
         } else {
             kinesisAsyncClientBuilder.credentialsProvider( DefaultCredentialsProvider.create() );
@@ -150,9 +135,7 @@ public interface KCLAppConfig {
     default DynamoDbAsyncClient buildAsyncDynamoDbClient() throws IOException {
         final DynamoDbAsyncClientBuilder builder = DynamoDbAsyncClient.builder().region( getRegion() );
 
-        if ( getAsyncAwsCredentials() != null ) {
-            builder.credentialsProvider( getAsyncAwsCredentials() );
-        } else if ( getProfile() != null ) {
+        if ( getProfile() != null ) {
             builder.credentialsProvider( ProfileCredentialsProvider.builder().profileName( getProfile() ).build() );
         } else {
             builder.credentialsProvider( DefaultCredentialsProvider.create() );
@@ -164,9 +147,7 @@ public interface KCLAppConfig {
     default CloudWatchAsyncClient buildAsyncCloudWatchClient() throws IOException {
         final CloudWatchAsyncClientBuilder builder = CloudWatchAsyncClient.builder().region( getRegion() );
 
-        if ( getAsyncAwsCredentials() != null ) {
-            builder.credentialsProvider( getAsyncAwsCredentials() );
-        } else if ( getProfile() != null ) {
+        if ( getProfile() != null ) {
             builder.credentialsProvider( ProfileCredentialsProvider.builder().profileName( getProfile() ).build() );
         } else {
             builder.credentialsProvider( DefaultCredentialsProvider.create() );
