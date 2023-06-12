@@ -40,7 +40,10 @@ public class MultiLangDaemonConfigTest {
     private static String TestStreamName = "fakeStream";
 
     private static String TestStreamNameInArn = "FAKE_STREAM_NAME";
-    private static String TestStreamArn = "arn:aws:kinesis:us-east-1:ACCOUNT_ID:stream/FAKE_STREAM_NAME";
+    private static String TestRegion = "us-east-1";
+
+    private static String TestRegionInArn = "us-east-2";
+    private static String TestStreamArn = "arn:aws:kinesis:us-east-2:ACCOUNT_ID:stream/FAKE_STREAM_NAME";
 
     @Mock
     ClassLoader classLoader;
@@ -57,9 +60,11 @@ public class MultiLangDaemonConfigTest {
         String PROPERTIES = String.format("executableName = %s \n"
                 + "applicationName = %s \n"
                 + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
-                + "processingLanguage = malbolge\n",
+                + "processingLanguage = malbolge\n"
+                + "regionName = %s \n",
                 TestExe,
-                TestApplicationName);
+                TestApplicationName,
+                TestRegion);
 
         if(streamName != null){
             PROPERTIES += String.format("streamName = %s \n", streamName);
@@ -112,7 +117,7 @@ public class MultiLangDaemonConfigTest {
 
         MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
 
-        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName);
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName, TestRegion);
     }
 
     @Test
@@ -121,7 +126,7 @@ public class MultiLangDaemonConfigTest {
 
         MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
 
-        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName);
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName, TestRegion);
     }
 
     @Test
@@ -130,7 +135,7 @@ public class MultiLangDaemonConfigTest {
 
         MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
 
-        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn);
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn, TestRegionInArn);
     }
 
     @Test
@@ -139,16 +144,16 @@ public class MultiLangDaemonConfigTest {
 
         MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
 
-        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn);
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn, TestRegionInArn);
     }
 
     @Test
-    public void testConstructorUsingStreamNameOverStreamArn() throws IOException {
+    public void testConstructorUsingStreamArnOverStreamName() throws IOException {
         setup(TestStreamName, TestStreamArn);
 
         MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
 
-        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName);
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn, TestRegionInArn);
     }
 
     /**
@@ -159,7 +164,8 @@ public class MultiLangDaemonConfigTest {
     private void AssertConfigurationsMatch(MultiLangDaemonConfig deamonConfig,
                                            String expectedExe,
                                            String expectedApplicationName,
-                                           String expectedStreamName){
+                                           String expectedStreamName,
+                                           String expectedRegionName){
         assertNotNull(deamonConfig.getExecutorService());
         assertNotNull(deamonConfig.getMultiLangDaemonConfiguration());
         assertNotNull(deamonConfig.getRecordProcessorFactory());
@@ -167,6 +173,9 @@ public class MultiLangDaemonConfigTest {
         assertEquals(expectedExe, deamonConfig.getRecordProcessorFactory().getCommandArray()[0]);
         assertEquals(expectedApplicationName, deamonConfig.getMultiLangDaemonConfiguration().getApplicationName());
         assertEquals(expectedStreamName, deamonConfig.getMultiLangDaemonConfiguration().getStreamName());
+        assertEquals(expectedRegionName, deamonConfig.getMultiLangDaemonConfiguration().getDynamoDbClient().get("region").toString());
+        assertEquals(expectedRegionName, deamonConfig.getMultiLangDaemonConfiguration().getCloudWatchClient().get("region").toString());
+        assertEquals(expectedRegionName, deamonConfig.getMultiLangDaemonConfiguration().getKinesisClient().get("region").toString());
     }
 
     @Test

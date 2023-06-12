@@ -26,6 +26,7 @@ import org.apache.commons.beanutils.ConvertUtilsBean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
+import software.amazon.awssdk.regions.Region;
 
 /**
  * KinesisClientLibConfigurator constructs a KinesisClientLibConfiguration from java properties file. The following
@@ -76,12 +77,19 @@ public class KinesisClientLibConfigurator {
         Validate.notBlank(configuration.getApplicationName(), "Application name is required");
 
         try {
-            Validate.notBlank(configuration.getStreamName(), "");
-        }catch (Exception e) {
-            Validate.notBlank(configuration.getStreamArn(), "Stream name or Stream Arn is required. (Stream Name takes precedence if both are passed in)");
+            Validate.notBlank(configuration.getStreamArn(), "");
             Arn streamArnObj = Arn.fromString(configuration.getStreamArn());
+
+            //Parse out the stream Name from the Arn (and/or override existing value for Stream Name)
             String streamNameFromArn = streamArnObj.getResource().getResource();
             configuration.setStreamName(streamNameFromArn);
+
+            //Parse out the region from the Arn and set (and/or override existing value for region)
+            String regionName = streamArnObj.getRegion();
+            Region regionObj = Region.of(regionName);
+            configuration.setRegionName(regionObj);
+        }catch (Exception e) {
+            Validate.notBlank(configuration.getStreamName(), "Stream name or Stream Arn is required. (Stream Arn takes precedence if both are passed in)");
 
         }
         Validate.isTrue(configuration.getKinesisCredentialsProvider().isDirty(), "A basic set of AWS credentials must be provided");
