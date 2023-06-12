@@ -143,12 +143,12 @@ public class MultiLangDaemonConfigTest {
     }
 
     @Test
-    public void testConstructorUsingStreamArnOverStreamName() throws IOException {
+    public void testConstructorUsingStreamNameOverStreamArn() throws IOException {
         setup(TestStreamName, TestStreamArn);
 
         MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
 
-        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn);
+        AssertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName);
     }
 
     /**

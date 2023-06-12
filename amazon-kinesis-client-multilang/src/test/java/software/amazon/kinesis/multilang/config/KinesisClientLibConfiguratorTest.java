@@ -308,7 +308,7 @@ public class KinesisClientLibConfiguratorTest {
     @Test
     public void testWithMissingStreamNameAndMissingStreamArn() {
         thrown.expect(NullPointerException.class);
-        thrown.expectMessage("Stream name or Stream Arn is required. (Stream Arn takes precedence if both are passed in)");
+        thrown.expectMessage("Stream name or Stream Arn is required. (Stream Name takes precedence if both are passed in)");
 
         String test = StringUtils.join(new String[] {
                 "applicationName = b",
@@ -323,7 +323,7 @@ public class KinesisClientLibConfiguratorTest {
     @Test
     public void testWithEmptyStreamNameAndMissingStreamArn() {
         thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("Stream name or Stream Arn is required. (Stream Arn takes precedence if both are passed in)");
+        thrown.expectMessage("Stream name or Stream Arn is required. (Stream Name takes precedence if both are passed in)");
 
         String test = StringUtils.join(new String[] {
                         "applicationName = b",
