@@ -37,14 +37,14 @@ public class MultiLangDaemonConfigTest {
     private static String FILENAME = "some.properties";
     private static String TestExe = "TestExe.exe";
     private static String TestApplicationName = "TestApp";
-    private static String TestStreamName = "fakeStream";
-
+    private static String TestStreamName =ßß "fakeStream";
     private static String TestStreamNameInArn = "FAKE_STREAM_NAME";
     private static String TestRegion = "us-east-1";
-
     private static String TestRegionInArn = "us-east-2";
-    private static String TestStreamArn = "arn:aws:kinesis:us-east-2:ACCOUNT_ID:stream/FAKE_STREAM_NAME";
 
+    private static String getTestStreamArn(){
+        return String.format("arn:aws:kinesis:%s:ACCOUNT_ID:stream/%s", TestRegionInArn, TestStreamNameInArn);
+    }
     @Mock
     ClassLoader classLoader;
 
@@ -131,7 +131,7 @@ public class MultiLangDaemonConfigTest {
 
     @Test
     public void testConstructorUsingStreamArn() throws IOException {
-        setup(null, TestStreamArn);
+        setup(null, getTestStreamArn());
 
         MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
 
@@ -140,7 +140,7 @@ public class MultiLangDaemonConfigTest {
 
     @Test
     public void testConstructorUsingStreamNameAsEmptyAndStreamArn() throws IOException {
-        setup("", TestStreamArn);
+        setup("", getTestStreamArn());
 
         MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
 
@@ -149,7 +149,7 @@ public class MultiLangDaemonConfigTest {
 
     @Test
     public void testConstructorUsingStreamArnOverStreamName() throws IOException {
-        setup(TestStreamName, TestStreamArn);
+        setup(TestStreamName, getTestStreamArn());
 
         MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
 
