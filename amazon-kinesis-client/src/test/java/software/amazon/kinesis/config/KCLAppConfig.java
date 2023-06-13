@@ -1,13 +1,11 @@
 package software.amazon.kinesis.config;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
-import software.amazon.kinesis.utils.RecordValidatorQueue;
-import software.amazon.kinesis.integration_tests.TestRecordProcessorFactoryV2;
-import software.amazon.kinesis.utils.KCLVersion;
-import lombok.Builder;
-import lombok.Data;
-import software.amazon.awssdk.arns.Arn;
+import lombok.Value;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.kinesis.utils.RecordValidatorQueue;
+import software.amazon.kinesis.utils.TestRecordProcessorFactory;
+import lombok.Builder;
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.http.Protocol;
@@ -45,34 +43,17 @@ public interface KCLAppConfig {
 
     String getApplicationName();
 
-    default KCLVersion getKCLVersion() {
-        return KCLVersion.KCL2X;
-    }
-
-    default boolean canaryMonitorEnabled() {
-        return false;
-    }
-
     String getEndpoint();
 
     Region getRegion();
 
-    boolean isProd();
 
-    default boolean durabilityCheck() {
-        return true;
-    }
-
-    // "default" profile, should match with profiles listed in "cat ~/.aws/config"
+    /**
+     * "default" profile, should match with profiles listed in "cat ~/.aws/config"
+     */
     String getProfile();
 
-    // '-1' means round robin across 0, 5_000, 15_000, 30_000 milliseconds delay.
-    // The delay period is picked according to current time, so expected to be unpredictable across different KCL runs.
-    // '0' means PassThroughRecordProcessor
-    // Any other constant will delay according to the specified value.
-    long getProcessingDelayMillis();
-
-    InitialPositionInStream getKclInitialPosition();
+    InitialPositionInStream getInitialPosition();
 
     Protocol getConsumerProtocol();
 
@@ -82,76 +63,66 @@ public interface KCLAppConfig {
 
     ReshardConfig getReshardConfig();
 
-    default MultiStreamRotatorConfig getMultiStreamRotatorConfig() {
-        throw new UnsupportedOperationException();
-    }
-
     default KinesisAsyncClient buildConsumerClient() throws URISyntaxException, IOException {
-        return buildAsyncKinesisClient( getConsumerProtocol() );
+        return buildAsyncKinesisClient(getConsumerProtocol());
     }
 
     default KinesisAsyncClient buildProducerClient() throws URISyntaxException, IOException {
-        return buildAsyncKinesisClient( getProducerProtocol() );
+        return buildAsyncKinesisClient(getProducerProtocol());
     }
 
-    default KinesisAsyncClient buildAsyncKinesisClient( Protocol protocol ) throws URISyntaxException, IOException {
-        return buildAsyncKinesisClient( Optional.ofNullable( protocol ) );
+    default KinesisAsyncClient buildAsyncKinesisClient(Protocol protocol) throws URISyntaxException, IOException {
+        return buildAsyncKinesisClient(Optional.ofNullable(protocol));
     }
 
-    default KinesisAsyncClient buildAsyncKinesisClient( Optional< Protocol > protocol ) throws URISyntaxException, IOException {
+    default KinesisAsyncClient buildAsyncKinesisClient(Optional<Protocol> protocol) throws URISyntaxException, IOException {
 
-        // Setup H2 client config.
+        /**
+         * Setup H2 client config.
+         */
         final NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder()
-                .maxConcurrency( Integer.MAX_VALUE );
+                .maxConcurrency(Integer.MAX_VALUE);
 
-        if ( protocol.isPresent() ) {
-            builder.protocol( protocol.get() );
+        /**
+         * If not present, defaults to HTTP1_1
+         */
+        if (protocol.isPresent()) {
+            builder.protocol(protocol.get());
         }
 
         final SdkAsyncHttpClient sdkAsyncHttpClient =
-                builder.buildWithDefaults( AttributeMap.builder().put( SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, true ).build() );
+                builder.buildWithDefaults(AttributeMap.builder().put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, true).build());
 
-        // Setup client builder by default values
-        final KinesisAsyncClientBuilder kinesisAsyncClientBuilder = KinesisAsyncClient.builder().region( getRegion() );
+        /**
+         * Setup client builder by default values
+         */
+        final KinesisAsyncClientBuilder kinesisAsyncClientBuilder = KinesisAsyncClient.builder().region(getRegion());
 
-        // Override endpoint if not one of the Prod stacks.
-//        if (!isProd()) {
-//            kinesisAsyncClientBuilder
-//                    .endpointOverride(new URI(getEndpoint()));
-//        }
+        kinesisAsyncClientBuilder.httpClient(sdkAsyncHttpClient);
 
-        kinesisAsyncClientBuilder.httpClient( sdkAsyncHttpClient );
-
-
-        if ( getProfile() != null ) {
-            kinesisAsyncClientBuilder.credentialsProvider( ProfileCredentialsProvider.builder().profileName( getProfile() ).build() );
-        } else {
-            kinesisAsyncClientBuilder.credentialsProvider( DefaultCredentialsProvider.create() );
-        }
+        AwsCredentialsProvider credentialsProvider = (getProfile() != null) ?
+                ProfileCredentialsProvider.builder().profileName(getProfile()).build() : DefaultCredentialsProvider.create();
+        kinesisAsyncClientBuilder.credentialsProvider( credentialsProvider );
 
         return kinesisAsyncClientBuilder.build();
     }
 
     default DynamoDbAsyncClient buildAsyncDynamoDbClient() throws IOException {
-        final DynamoDbAsyncClientBuilder builder = DynamoDbAsyncClient.builder().region( getRegion() );
+        final DynamoDbAsyncClientBuilder builder = DynamoDbAsyncClient.builder().region(getRegion());
 
-        if ( getProfile() != null ) {
-            builder.credentialsProvider( ProfileCredentialsProvider.builder().profileName( getProfile() ).build() );
-        } else {
-            builder.credentialsProvider( DefaultCredentialsProvider.create() );
-        }
+        AwsCredentialsProvider credentialsProvider = (getProfile() != null) ?
+                ProfileCredentialsProvider.builder().profileName(getProfile()).build() : DefaultCredentialsProvider.create();
+        builder.credentialsProvider(credentialsProvider);
 
         return builder.build();
     }
 
     default CloudWatchAsyncClient buildAsyncCloudWatchClient() throws IOException {
-        final CloudWatchAsyncClientBuilder builder = CloudWatchAsyncClient.builder().region( getRegion() );
+        final CloudWatchAsyncClientBuilder builder = CloudWatchAsyncClient.builder().region(getRegion());
 
-        if ( getProfile() != null ) {
-            builder.credentialsProvider( ProfileCredentialsProvider.builder().profileName( getProfile() ).build() );
-        } else {
-            builder.credentialsProvider( DefaultCredentialsProvider.create() );
-        }
+        AwsCredentialsProvider credentialsProvider = (getProfile() != null) ?
+                ProfileCredentialsProvider.builder().profileName(getProfile()).build() : DefaultCredentialsProvider.create();
+        builder.credentialsProvider(credentialsProvider);
 
         return builder.build();
     }
@@ -165,31 +136,30 @@ public interface KCLAppConfig {
     }
 
     default ShardRecordProcessorFactory getShardRecordProcessorFactory() {
-        if (getKCLVersion() == KCLVersion.KCL2X) {
-            return new TestRecordProcessorFactoryV2( getRecordValidator() );
-        } else {
-            return null;
-        }
+        return new TestRecordProcessorFactory(getRecordValidator());
     }
 
     default ConfigsBuilder getConfigsBuilder() throws IOException, URISyntaxException {
-        return getConfigsBuilder( "" );
+        return getConfigsBuilder("");
     }
 
-    default ConfigsBuilder getConfigsBuilder( String workerIdSuffix ) throws IOException, URISyntaxException {
+    default ConfigsBuilder getConfigsBuilder(String workerIdSuffix) throws IOException, URISyntaxException {
         final String workerId = getWorkerId() + workerIdSuffix;
-        if ( getStreamArn() == null ) {
-            return new ConfigsBuilder( getStreamName(), getApplicationName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
-                    buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory() );
+        if (getStreamArn() == null) {
+            return new ConfigsBuilder(getStreamName(), getApplicationName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
+                    buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
         } else {
-            return new ConfigsBuilder( Arn.fromString( getStreamArn() ), getApplicationName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
-                    buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory() );
+            return new ConfigsBuilder(Arn.fromString(getStreamArn()), getApplicationName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
+                    buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
         }
     }
 
     RetrievalConfig getRetrievalConfig() throws IOException, URISyntaxException;
 
-    @Data
+    /**
+     * Configure ingress load (batch size, record size, and calling interval)
+     */
+    @Value
     @Builder
     class ProducerConfig {
         private boolean isBatchPut;
@@ -198,20 +168,22 @@ public interface KCLAppConfig {
         private long callPeriodMills;
     }
 
-    @Data
+    /**
+     * Description of the method of resharding for a test case
+     * <p>
+     * reshardingFactorCycle: lists the scales by which the number of shards in a stream will be updated
+     * in sequence. e.g {2.0, 0.5} means that the number of shards will first be doubled, then halved
+     * <p>
+     * numReshardCycles: the number of resharding cycles that will be executed in a test]
+     * <p>
+     * reshardFrequencyMillis: the period of time between reshard cycles (in milliseconds)
+     */
+    @Value
     @Builder
     class ReshardConfig {
-        private Double[] reshardingFactorCycle;
+        private double[] reshardingFactorCycle;
         private int numReshardCycles;
         private long reshardFrequencyMillis;
-    }
-
-    @Data
-    @Builder
-    class MultiStreamRotatorConfig {
-        private int totalStreams;
-        private int maxStreamsToProcess;
-        private long streamsRotationMillis;
     }
 
 }

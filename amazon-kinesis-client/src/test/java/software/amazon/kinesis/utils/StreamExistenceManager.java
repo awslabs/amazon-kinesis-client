@@ -1,8 +1,7 @@
-package software.amazon.kinesis.integration_tests;
+package software.amazon.kinesis.utils;
 
-import lombok.Data;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.http.Protocol;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
@@ -19,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 
 import static java.lang.Thread.sleep;
 
-@Data
+@Value
 @Slf4j
 public class StreamExistenceManager {
     private final KinesisAsyncClient client;
@@ -27,11 +26,7 @@ public class StreamExistenceManager {
 
     public StreamExistenceManager(KCLAppConfig config) throws URISyntaxException, IOException {
         this.testConfig = config;
-        this.client = config.buildAsyncKinesisClient(Protocol.HTTP1_1);
-    }
-
-    public static StreamExistenceManager newManager(KCLAppConfig config) throws URISyntaxException, IOException {
-        return new StreamExistenceManager(config);
+        this.client = config.buildAsyncKinesisClient(config.getConsumerProtocol());
     }
 
     private boolean isStreamActive(String streamName) {
@@ -50,8 +45,7 @@ public class StreamExistenceManager {
         } catch (ExecutionException e) {
             if (e.getCause() instanceof ResourceNotFoundException) {
                 return false;
-            }
-            else {
+            } else {
                 throw new RuntimeException(e);
             }
         } catch (Exception e) {
@@ -95,7 +89,7 @@ public class StreamExistenceManager {
         if (!isStreamActive(streamName)) {
             createStream(streamName, testConfig.getShardCount());
         }
-        log.info("Using stream " + streamName + " in endpoint " + testConfig.getEndpoint() + " with region " + testConfig.getRegion());
+        log.info("Using stream {} in endpoint {} with region {}", streamName, testConfig.getEndpoint(), testConfig.getRegion());
     }
 
 }

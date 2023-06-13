@@ -34,7 +34,13 @@ Please open an issue if you have any questions.
 After you've downloaded the code from GitHub, you can build it using Maven. To disable GPG signing in the build, use
  this command: `mvn clean install -Dgpg.skip=true`. Note: This command runs Integration tests, which in turn creates AWS
   resources (which requires manual cleanup). Integration tests require valid AWS credentials need to be discovered at
-   runtime. To skip running integration tests, add ` -DskipITs` option to the build command.  
+   runtime. To skip running integration tests, add ` -DskipITs` option to the build command.
+
+## Running Integration Tests
+
+To run integration tests to test any changes to KCL, you can use this command: `mvn -Dit.test=*IntegrationTest verify`. 
+This will look for default AWS credentials in your local `.aws/credentials`. If you want to override these
+credentials, you can provide the name of an IAM user as a string using this command: `mvn -Dit.test=*IntegrationTest -Dcredentials="<IAM_USER>" verify`.
 
 ## Integration with the Kinesis Producer Library
 For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesis-guide-kpl]**, the KCL integrates without additional effort. When the KCL retrieves an aggregated Amazon Kinesis record consisting of multiple KPL user records, it will automatically invoke the KPL to extract the individual user records before returning them to the user.
