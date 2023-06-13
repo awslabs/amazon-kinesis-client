@@ -14,8 +14,9 @@
  */
 package software.amazon.kinesis.multilang;
 
-import static org.junit.Assert.*;
-import static org.mockito.Matchers.any;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
@@ -37,7 +38,7 @@ public class MultiLangDaemonConfigTest {
     private static String FILENAME = "some.properties";
     private static String TestExe = "TestExe.exe";
     private static String TestApplicationName = "TestApp";
-    private static String TestStreamName =ßß "fakeStream";
+    private static String TestStreamName = "fakeStream";
     private static String TestStreamNameInArn = "FAKE_STREAM_NAME";
     private static String TestRegion = "us-east-1";
     private static String TestRegionInArn = "us-east-2";
