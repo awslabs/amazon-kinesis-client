@@ -140,11 +140,8 @@ public interface KCLAppConfig {
     }
 
     default ConfigsBuilder getConfigsBuilder() throws IOException, URISyntaxException {
-        return getConfigsBuilder("");
-    }
-
-    default ConfigsBuilder getConfigsBuilder(String workerIdSuffix) throws IOException, URISyntaxException {
-        final String workerId = getWorkerId() + workerIdSuffix;
+//        return getConfigsBuilder("");
+        final String workerId = getWorkerId();
         if (getStreamArn() == null) {
             return new ConfigsBuilder(getStreamName(), getApplicationName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
                     buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
@@ -153,6 +150,17 @@ public interface KCLAppConfig {
                     buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
         }
     }
+
+//    default ConfigsBuilder getConfigsBuilder(String workerIdSuffix) throws IOException, URISyntaxException {
+//        final String workerId = getWorkerId() + workerIdSuffix;
+//        if (getStreamArn() == null) {
+//            return new ConfigsBuilder(getStreamName(), getApplicationName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
+//                    buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
+//        } else {
+//            return new ConfigsBuilder(Arn.fromString(getStreamArn()), getApplicationName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
+//                    buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
+//        }
+//    }
 
     RetrievalConfig getRetrievalConfig() throws IOException, URISyntaxException;
 

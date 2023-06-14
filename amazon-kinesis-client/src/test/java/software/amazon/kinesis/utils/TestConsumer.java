@@ -124,7 +124,7 @@ public class TestConsumer {
          * Stops sending dummy data.
          */
         log.info("Cancelling producer and shutting down executor.");
-        producerFuture.cancel(true);
+        producerFuture.cancel(false);
         producerExecutor.shutdownNow();
 
         /**
