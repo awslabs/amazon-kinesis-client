@@ -28,7 +28,6 @@ import java.util.UUID;
 import java.util.function.Function;
 
 import org.apache.commons.beanutils.BeanUtilsBean;
-import org.apache.commons.beanutils.ConvertUtils;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 import org.apache.commons.beanutils.Converter;
 import org.apache.commons.beanutils.converters.ArrayConverter;
@@ -73,6 +72,8 @@ public class MultiLangDaemonConfiguration {
     private String applicationName;
 
     private String streamName;
+    private String streamArn;
+
 
     @ConfigurationSettable(configurationClass = ConfigsBuilder.class)
     private String tableName;
@@ -300,7 +301,7 @@ public class MultiLangDaemonConfiguration {
     }
 
     private void updateCredentials(BuilderDynaBean toUpdate, AwsCredentialsProvider primary,
-            AwsCredentialsProvider secondary) {
+                                   AwsCredentialsProvider secondary) {
 
         if (toUpdate.hasValue("credentialsProvider")) {
             return;

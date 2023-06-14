@@ -19,12 +19,14 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 
+import com.amazonaws.arn.Arn;
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
+import software.amazon.awssdk.regions.Region;
 
 /**
  * KinesisClientLibConfigurator constructs a KinesisClientLibConfiguration from java properties file. The following
@@ -55,7 +57,7 @@ public class KinesisClientLibConfigurator {
      * Program will fail immediately, if customer provide: 1) invalid variable value. Program will log it as warning and
      * continue, if customer provide: 1) variable with unsupported variable type. 2) a variable with name which does not
      * match any of the variables in KinesisClientLibConfigration.
-     * 
+     *
      * @param properties a Properties object containing the configuration information
      * @return KinesisClientLibConfiguration
      */
@@ -69,7 +71,30 @@ public class KinesisClientLibConfigurator {
         });
 
         Validate.notBlank(configuration.getApplicationName(), "Application name is required");
-        Validate.notBlank(configuration.getStreamName(), "Stream name is required");
+
+        if (configuration.getStreamArn() != null && !configuration.getStreamArn().trim().isEmpty()) {
+            Arn streamArnObj = Arn.fromString(configuration.getStreamArn());
+            if(!streamArnObj.getResource().getResourceType().equalsIgnoreCase("stream")){
+                throw new IllegalArgumentException(String.format("StreamArn has unsupported resource type of '%s'. Expected: stream",
+                        streamArnObj.getResource().getResourceType()));
+            }
+            if(!streamArnObj.getService().equalsIgnoreCase("kinesis")){
+                throw new IllegalArgumentException(String.format("StreamArn has unsupported service type of '%s'. Expected: kinesis",
+                        streamArnObj.getResource().getResourceType()));
+            }
+            //Parse out the stream Name from the Arn (and/or override existing value for Stream Name)
+            String streamNameFromArn = streamArnObj.getResource().getResource();
+            configuration.setStreamName(streamNameFromArn);
+
+            //Parse out the region from the Arn and set (and/or override existing value for region)
+            Region regionObj = Region.of(streamArnObj.getRegion());
+            if(Region.regions().stream().filter(x -> x.id().equalsIgnoreCase(regionObj.id())).count() == 0){
+                throw new IllegalArgumentException(String.format("%s is not a valid region", regionObj.id()));
+            }
+            configuration.setRegionName(regionObj);
+        } else {
+            Validate.notBlank(configuration.getStreamName(), "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+        }
         Validate.isTrue(configuration.getKinesisCredentialsProvider().isDirty(), "A basic set of AWS credentials must be provided");
         return configuration;
     }
