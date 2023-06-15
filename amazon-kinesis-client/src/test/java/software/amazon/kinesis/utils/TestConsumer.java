@@ -125,7 +125,7 @@ public class TestConsumer {
          */
         log.info("Cancelling producer and shutting down executor.");
         producerFuture.cancel(false);
-        producerExecutor.shutdownNow();
+        producerExecutor.shutdown();
 
         /**
          * Wait a few seconds for the last few records to be processed
