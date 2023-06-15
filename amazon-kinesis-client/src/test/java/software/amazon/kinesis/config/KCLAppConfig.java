@@ -5,7 +5,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.utils.RecordValidatorQueue;
 import software.amazon.kinesis.utils.ReshardOptions;
-import software.amazon.kinesis.utils.TestRecordProcessorFactory;
+import software.amazon.kinesis.application.TestRecordProcessorFactory;
 import lombok.Builder;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
@@ -24,6 +24,7 @@ import software.amazon.kinesis.common.ConfigsBuilder;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
+import software.amazon.kinesis.utils.ReshardOptions;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -159,7 +160,7 @@ public abstract class KCLAppConfig {
      */
     @Value
     @Builder
-    static class ProducerConfig {
+    public static class ProducerConfig {
         private boolean isBatchPut;
         private int batchSize;
         private int recordSizeKB;
@@ -171,7 +172,7 @@ public abstract class KCLAppConfig {
      */
     @Value
     @Builder
-    static class ReshardConfig {
+    public static class ReshardConfig {
         /**
          * reshardingFactorCycle: lists the order or reshards that will be done during one reshard cycle
          * e.g {SPLIT, MERGE} means that the number of shards will first be doubled, then halved

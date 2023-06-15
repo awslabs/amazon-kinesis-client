@@ -5,7 +5,7 @@ import software.amazon.kinesis.config.KCLAppConfig;
 import software.amazon.kinesis.config.ReleaseCanaryPollingH2TestConfig;
 import software.amazon.kinesis.config.ReleaseCanaryPollingH1TestConfig;
 import software.amazon.kinesis.config.ReleaseCanaryStreamingTestConfig;
-import software.amazon.kinesis.utils.TestConsumer;
+import software.amazon.kinesis.application.TestConsumer;
 
 public class BasicStreamConsumerIntegrationTest {
 

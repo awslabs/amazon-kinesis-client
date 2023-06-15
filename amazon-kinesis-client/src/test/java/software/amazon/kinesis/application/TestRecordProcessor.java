@@ -1,4 +1,4 @@
-package software.amazon.kinesis.utils;
+package software.amazon.kinesis.application;
 
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -11,6 +11,7 @@ import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.utils.RecordValidatorQueue;
 
 import java.nio.ByteBuffer;
 
