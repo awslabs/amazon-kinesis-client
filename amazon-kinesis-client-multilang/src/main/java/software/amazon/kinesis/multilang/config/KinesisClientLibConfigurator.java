@@ -88,7 +88,7 @@ public class KinesisClientLibConfigurator {
             //Parse out the region from the Arn and set (and/or override existing value for region)
             Region regionObj = Region.of(streamArnObj.region().get());
             if(Region.regions().stream().filter(x -> x.id().equalsIgnoreCase(regionObj.id())).count() == 0){
-                throw new IllegalArgumentException(String.format("%s is not a valid region", regionObj.id()));
+                throw new IllegalArgumentException(String.format("StreamArn has unsupported region of '%s'.", regionObj.id()));
             }
             configuration.setRegionName(regionObj);
         } else {

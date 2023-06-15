@@ -98,7 +98,7 @@ public class MultiLangDaemonConfigTest {
     @Test
     public void testConstructorFailsBecauseStreamArnHasInvalidRegion() throws Exception {
         setup("", "arn:aws:kinesis:us-east-1000:ACCOUNT_ID:stream/streamName");
-        assertConstructorThrowsException(IllegalArgumentException.class, "us-east-1000 is not a valid region");
+        assertConstructorThrowsException(IllegalArgumentException.class, "StreamArn has unsupported region of 'us-east-1000'.");
     }
 
     @Test
