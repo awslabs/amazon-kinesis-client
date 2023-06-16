@@ -10,7 +10,7 @@ public class RecordValidatorQueueTest {
     private static final String SHARD_ID = "ABC";
 
     @Test
-    public void validationFailedRecordOutOfOrderTest() {
+    public void testValidationFailedRecordOutOfOrder() {
         recordValidator.add(SHARD_ID, "0");
         recordValidator.add(SHARD_ID, "1");
         recordValidator.add(SHARD_ID, "3");
@@ -21,7 +21,7 @@ public class RecordValidatorQueueTest {
     }
 
     @Test
-    public void validationFailedMissingRecordTest() {
+    public void testValidationFailedMissingRecord() {
         recordValidator.add(SHARD_ID, "0");
         recordValidator.add(SHARD_ID, "1");
         recordValidator.add(SHARD_ID, "2");
@@ -32,7 +32,7 @@ public class RecordValidatorQueueTest {
     }
 
     @Test
-    public void validRecordsTest() {
+    public void testValidRecords() {
         recordValidator.add(SHARD_ID, "0");
         recordValidator.add(SHARD_ID, "1");
         recordValidator.add(SHARD_ID, "2");

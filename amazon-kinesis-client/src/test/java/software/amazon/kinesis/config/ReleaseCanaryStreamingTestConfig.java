@@ -5,15 +5,10 @@ import software.amazon.awssdk.http.Protocol;
 /**
  * Config for a streaming consumer with HTTP protocol of HTTP2
  */
-public class ReleaseCanaryStreamingTestConfig extends BasicReleaseCanaryConfig {
+public class ReleaseCanaryStreamingTestConfig extends KCLAppConfig {
     @Override
     public String getStreamName() {
         return "KCLReleaseCanary2XStreamingTestStream";
-    }
-
-    @Override
-    public String getApplicationName() {
-        return "KCLReleaseCanary2XStreamingTestApplication";
     }
 
     @Override

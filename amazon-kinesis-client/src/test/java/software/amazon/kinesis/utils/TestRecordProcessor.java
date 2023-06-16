@@ -1,7 +1,6 @@
 package software.amazon.kinesis.utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import software.amazon.kinesis.exceptions.InvalidStateException;
 import software.amazon.kinesis.exceptions.ShutdownException;
@@ -14,11 +13,10 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 import java.nio.ByteBuffer;
 
+@Slf4j
 public class TestRecordProcessor implements ShardRecordProcessor {
 
     private static final String SHARD_ID_MDC_KEY = "ShardId";
-
-    private static final Logger log = LoggerFactory.getLogger(TestRecordProcessor.class);
 
     private String shardId;
 

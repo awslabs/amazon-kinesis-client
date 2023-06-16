@@ -27,9 +27,8 @@ public class RecordValidatorQueue {
     }
 
     public RecordValidationStatus validateRecords(int trueTotalShardCount) {
-        /**
-         * Validate that each List in the HashMap has data records in increasing order
-         */
+
+        // Validate that each List in the HashMap has data records in increasing order
         boolean incOrder = true;
         for (Map.Entry<String, List<String>> entry : dict.entrySet()) {
             List<String> recordsPerShard = entry.getValue();
@@ -49,16 +48,12 @@ public class RecordValidatorQueue {
             }
         }
 
-        /**
-         * If this is true, then there was some record that was processed out of order
-         */
+        // If this is true, then there was some record that was processed out of order
         if (!incOrder) {
             return RecordValidationStatus.OUT_OF_ORDER;
         }
 
-        /**
-         * Validate that no records are missing over all shards
-         */
+        // Validate that no records are missing over all shards
         int totalShardCount = 0;
         for (Map.Entry<String, List<String>> entry : dict.entrySet()) {
             List<String> recordsPerShard = entry.getValue();
@@ -66,17 +61,13 @@ public class RecordValidatorQueue {
             totalShardCount += noDupRecords.size();
         }
 
-        /**
-         * If this is true, then there was some record that was missed during processing.
-         */
+        // If this is true, then there was some record that was missed during processing.
         if (totalShardCount != trueTotalShardCount) {
             log.error("Failed to get correct number of records processed. Should be {} but was {}", trueTotalShardCount, totalShardCount);
             return RecordValidationStatus.MISSING_RECORD;
         }
 
-        /**
-         * Record validation succeeded.
-         */
+        // Record validation succeeded.
         return RecordValidationStatus.NO_ERROR;
     }
 

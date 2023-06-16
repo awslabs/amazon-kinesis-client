@@ -4,6 +4,7 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
+import software.amazon.awssdk.services.kinesis.model.DeleteStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
@@ -80,6 +81,35 @@ public class StreamExistenceManager {
                     log.error("Failed to sleep");
                 }
                 log.info("Stream {} is not active yet, exception: ", streamName, e);
+            }
+        }
+    }
+
+    public void deleteStream(String streamName) {
+        DeleteStreamRequest request = DeleteStreamRequest.builder().streamName(streamName).enforceConsumerDeletion(true).build();
+        try{
+            client.deleteStream(request).get(30, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to delete stream with name " + streamName, e);
+        }
+
+        int i = 0;
+        while (true) {
+            i++;
+            if (i > 100) {
+                throw new RuntimeException("Failed stream deletion");
+            }
+            try {
+                boolean isActive = isStreamActive(streamName);
+                if (!isActive) {
+                    log.info("Succesfully deleted the stream " + streamName);
+                    return;
+                }
+            } catch (Exception e) {
+                try {
+                    sleep(10_000); // 10 secs backoff.
+                } catch (InterruptedException e1) {}
+                log.info("Stream {} is not deleted yet, exception: ", streamName, e);
             }
         }
     }

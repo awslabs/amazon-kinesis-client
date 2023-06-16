@@ -7,10 +7,12 @@ import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.DeleteTableRequest;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.PutRecordRequest;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.common.ConfigsBuilder;
+import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.KinesisClientUtil;
 import software.amazon.kinesis.config.KCLAppConfig;
@@ -24,6 +26,7 @@ import software.amazon.kinesis.retrieval.RetrievalConfig;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -32,6 +35,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 @Slf4j
 public class TestConsumer {
@@ -58,23 +62,17 @@ public class TestConsumer {
 
     public void run() throws Exception {
 
-        /**
-         * Check if stream is created. If not, create it
-         */
+        // Check if stream is created. If not, create it
         StreamExistenceManager streamExistenceManager = new StreamExistenceManager(this.consumerConfig);
         streamExistenceManager.checkStreamAndCreateIfNecessary(this.streamName);
 
-        /**
-         * Send dummy data to stream
-         */
+        // Send dummy data to stream
         ScheduledExecutorService producerExecutor = Executors.newSingleThreadScheduledExecutor();
-        ScheduledFuture<?> producerFuture = producerExecutor.scheduleAtFixedRate(this::publishRecord, 10, 1, TimeUnit.SECONDS);
+        ScheduledFuture<?> producerFuture = producerExecutor.scheduleAtFixedRate(this::publishRecord, 60, 1, TimeUnit.SECONDS);
 
         RecordValidatorQueue recordValidator = new RecordValidatorQueue();
 
-        /**
-         * Setup configuration of KCL (including DynamoDB and CloudWatch)
-         */
+        // Setup configuration of KCL (including DynamoDB and CloudWatch)
         DynamoDbAsyncClient dynamoClient = DynamoDbAsyncClient.builder().region(region).build();
         CloudWatchAsyncClient cloudWatchClient = CloudWatchAsyncClient.builder().region(region).build();
         ConfigsBuilder configsBuilder = new ConfigsBuilder(streamName, streamName, kinesisClient, dynamoClient, cloudWatchClient, UUID.randomUUID().toString(), new TestRecordProcessorFactory(recordValidator));
@@ -90,9 +88,7 @@ public class TestConsumer {
         processorConfig = configsBuilder.processorConfig();
         metricsConfig = configsBuilder.metricsConfig();
 
-        /**
-         * Create Scheduler
-         */
+        // Create Scheduler
         Scheduler scheduler = new Scheduler(
                 checkpointConfig,
                 coordinatorConfig,
@@ -103,63 +99,57 @@ public class TestConsumer {
                 retrievalConfig
         );
 
-        /**
-         * Start record processing of dummy data
-         */
-        Thread schedulerThread = new Thread(scheduler);
-        schedulerThread.setDaemon(true);
-        schedulerThread.start();
-
-
-        /**
-         * Sleep for two minutes to allow the producer/consumer to run and then end the test case.
-         */
         try {
-            Thread.sleep(TimeUnit.SECONDS.toMillis(60 * 2));
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            // Start record processing of dummy data
+            Thread schedulerThread = new Thread(scheduler);
+            schedulerThread.setDaemon(true);
+            schedulerThread.start();
+
+            // Sleep for two minutes to allow the producer/consumer to run and then end the test case.
+            Thread.sleep(TimeUnit.SECONDS.toMillis(60 * 3));
+
+            // Stops sending dummy data.
+            log.info("Cancelling producer and shutting down executor.");
+            producerFuture.cancel(false);
+            producerExecutor.shutdown();
+
+            // Wait a few seconds for the last few records to be processed
+            Thread.sleep(TimeUnit.SECONDS.toMillis(10));
+
+            // Finishes processing current batch of data already received from Kinesis before shutting down.
+            Future<Boolean> gracefulShutdownFuture = scheduler.startGracefulShutdown();
+            log.info("Waiting up to 20 seconds for shutdown to complete.");
+            try {
+                gracefulShutdownFuture.get(20, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                log.info("Interrupted while waiting for graceful shutdown. Continuing.");
+            } catch (ExecutionException e) {
+                throw new ExecutionException("Exception while executing graceful shutdown. {}", e);
+            } catch (TimeoutException e) {
+                throw new TimeoutException("Timeout while waiting for shutdown.  Scheduler may not have exited. {}" + e);
+            }
+            log.info("Completed, shutting down now.");
+
+            // Validate processed data
+            log.info("The number of expected records is: {}", successfulPutRecords);
+            RecordValidationStatus errorVal = recordValidator.validateRecords(successfulPutRecords);
+            if (errorVal == RecordValidationStatus.OUT_OF_ORDER) {
+                throw new RuntimeException("There was an error validating the records that were processed. The records were out of order");
+            } else if (errorVal == RecordValidationStatus.MISSING_RECORD) {
+                throw new RuntimeException("There was an error validating the records that were processed. Some records were missing.");
+            }
+            log.info("--------------Completed validation of processed records.--------------");
+
+            // Clean up resources created
+            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
+            deleteResources(streamExistenceManager, dynamoClient);
+
+        } catch (Exception e) {
+            // Test Failed. Clean up resources and then throw exception.
+            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
+            deleteResources(streamExistenceManager, dynamoClient);
+            throw e;
         }
-
-        /**
-         * Stops sending dummy data.
-         */
-        log.info("Cancelling producer and shutting down executor.");
-        producerFuture.cancel(false);
-        producerExecutor.shutdown();
-
-        /**
-         * Wait a few seconds for the last few records to be processed
-         */
-        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
-        /**
-         * Stops consuming data. Finishes processing the current batch of data already received from Kinesis
-         * before shutting down.
-         */
-        Future<Boolean> gracefulShutdownFuture = scheduler.startGracefulShutdown();
-        log.info("Waiting up to 20 seconds for shutdown to complete.");
-        try {
-            gracefulShutdownFuture.get(20, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            log.info("Interrupted while waiting for graceful shutdown. Continuing.");
-        } catch (ExecutionException e) {
-            log.error("Exception while executing graceful shutdown.", e);
-        } catch (TimeoutException e) {
-            log.error("Timeout while waiting for shutdown.  Scheduler may not have exited.");
-        }
-        log.info("Completed, shutting down now.");
-
-        /**
-         * Validate processed data
-         */
-        log.info("The number of expected records is: {}", successfulPutRecords);
-        RecordValidationStatus errorVal = recordValidator.validateRecords(successfulPutRecords);
-        if (errorVal == RecordValidationStatus.OUT_OF_ORDER) {
-            throw new RuntimeException("There was an error validating the records that were processed. The records were out of order");
-        } else if (errorVal == RecordValidationStatus.MISSING_RECORD) {
-            throw new RuntimeException("There was an error validating the records that were processed. Some records were missing.");
-        }
-        log.info("--------------Completed validation of processed records.--------------");
     }
 
     public void publishRecord() {
@@ -172,9 +162,7 @@ public class TestConsumer {
                     .build();
             kinesisClient.putRecord(request).get();
 
-            /**
-             * Increment the payload counter if the putRecord call was successful
-             */
+            // Increment the payload counter if the putRecord call was successful
             payloadCounter = payloadCounter.add(new BigInteger("1"));
             successfulPutRecords += 1;
             log.info("---------Record published, successfulPutRecords is now: {}", successfulPutRecords);
@@ -198,5 +186,23 @@ public class TestConsumer {
             throw new RuntimeException("Error converting object to bytes: ", e);
         }
         return ByteBuffer.wrap(returnData);
+    }
+
+    private void deleteResources(StreamExistenceManager streamExistenceManager, DynamoDbAsyncClient dynamoDBClient) throws Exception {
+        log.info("-------------Start deleting test resources.----------------");
+        streamExistenceManager.deleteStream(this.streamName);
+        deleteLeaseTable(dynamoDBClient, consumerConfig.getStreamName());
+    }
+
+    private void deleteLeaseTable(DynamoDbAsyncClient dynamoClient, String tableName) throws Exception {
+        DeleteTableRequest request = DeleteTableRequest.builder().tableName(tableName).build();
+        try {
+            FutureUtils.resolveOrCancelFuture(dynamoClient.deleteTable(request), Duration.ofSeconds(60));
+        } catch (ExecutionException e) {
+            throw new Exception("Could not delete lease table: {}", e);
+        } catch (InterruptedException e) {
+            throw new Exception("Deleting lease table interrupted: {}", e);
+        }
+
     }
 }

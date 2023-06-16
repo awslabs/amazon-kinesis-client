@@ -2,14 +2,15 @@ package software.amazon.kinesis.config;
 
 import lombok.Value;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.utils.RecordValidatorQueue;
+import software.amazon.kinesis.utils.ReshardOptions;
 import software.amazon.kinesis.utils.TestRecordProcessorFactory;
 import lombok.Builder;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.http.Protocol;
-import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.regions.Region;
@@ -31,133 +32,156 @@ import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.Optional;
 
-public interface KCLAppConfig {
+/**
+ * Default configuration for a producer or consumer used in integration tests.
+ * Producer: puts records of size 60 KB at an interval of 100 ms
+ * Consumer: streaming configuration (vs polling) that starts processing records put on the shard 5 minutes before
+ *  the start of the test
+ */
+public abstract class KCLAppConfig {
 
-    String getStreamName();
+    /**
+     * Name used for test stream and DDB table
+     */
+    public abstract String getStreamName();
 
-    default String getStreamArn() {
+    public String getStreamArn() {
         return null;
     }
 
-    int getShardCount();
+    public int getShardCount() { return 4; }
 
-    String getApplicationName();
+    public String getEndpoint() { return ""; }
 
-    String getEndpoint();
-
-    Region getRegion();
-
+    public Region getRegion() { return Region.US_WEST_2; }
 
     /**
      * "default" profile, should match with profiles listed in "cat ~/.aws/config"
      */
-    String getProfile();
+    public String getProfile() {
+        String iamUser = System.getProperty("credentials");
+        return iamUser;
+    }
 
-    InitialPositionInStream getInitialPosition();
+    public InitialPositionInStream getInitialPosition() {
+        return InitialPositionInStream.TRIM_HORIZON;
+    }
 
-    Protocol getConsumerProtocol();
+    public Protocol getConsumerProtocol() {
+        return Protocol.HTTP1_1;
+    }
 
-    Protocol getProducerProtocol();
+    public Protocol getProducerProtocol() {
+        return Protocol.HTTP1_1;
+    }
 
-    ProducerConfig getProducerConfig();
+    public ProducerConfig getProducerConfig() {
+        return ProducerConfig.builder()
+                .isBatchPut(false)
+                .batchSize(1)
+                .recordSizeKB(60)
+                .callPeriodMills(100)
+                .build();
+    }
 
-    ReshardConfig getReshardConfig();
+    public ReshardConfig getReshardConfig() {
+        return null;
+    }
 
-    default KinesisAsyncClient buildConsumerClient() throws URISyntaxException, IOException {
+    public KinesisAsyncClient buildConsumerClient() throws URISyntaxException, IOException {
         return buildAsyncKinesisClient(getConsumerProtocol());
     }
 
-    default KinesisAsyncClient buildProducerClient() throws URISyntaxException, IOException {
+    public KinesisAsyncClient buildProducerClient() throws URISyntaxException, IOException {
         return buildAsyncKinesisClient(getProducerProtocol());
     }
 
-    default KinesisAsyncClient buildAsyncKinesisClient(Protocol protocol) throws URISyntaxException, IOException {
+    public KinesisAsyncClient buildAsyncKinesisClient(Protocol protocol) throws URISyntaxException, IOException {
         return buildAsyncKinesisClient(Optional.ofNullable(protocol));
     }
 
-    default KinesisAsyncClient buildAsyncKinesisClient(Optional<Protocol> protocol) throws URISyntaxException, IOException {
+    private AwsCredentialsProvider getCredentialsProvider() {
+        return (getProfile() != null) ?
+                ProfileCredentialsProvider.builder().profileName(getProfile()).build() : DefaultCredentialsProvider.create();
+    }
 
-        /**
-         * Setup H2 client config.
-         */
+    public KinesisAsyncClient buildAsyncKinesisClient(Optional<Protocol> protocol) throws URISyntaxException, IOException {
+
+        // Setup H2 client config.
         final NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder()
                 .maxConcurrency(Integer.MAX_VALUE);
 
-        /**
-         * If not present, defaults to HTTP1_1
-         */
+        // If not present, defaults to HTTP1_1
         if (protocol.isPresent()) {
             builder.protocol(protocol.get());
         }
 
         final SdkAsyncHttpClient sdkAsyncHttpClient =
-                builder.buildWithDefaults(AttributeMap.builder().put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, true).build());
+                builder.buildWithDefaults(AttributeMap.builder().build());
 
-        /**
-         * Setup client builder by default values
-         */
+        // Setup client builder by default values
         final KinesisAsyncClientBuilder kinesisAsyncClientBuilder = KinesisAsyncClient.builder().region(getRegion());
 
         kinesisAsyncClientBuilder.httpClient(sdkAsyncHttpClient);
 
-        AwsCredentialsProvider credentialsProvider = (getProfile() != null) ?
-                ProfileCredentialsProvider.builder().profileName(getProfile()).build() : DefaultCredentialsProvider.create();
-        kinesisAsyncClientBuilder.credentialsProvider( credentialsProvider );
+        kinesisAsyncClientBuilder.credentialsProvider(getCredentialsProvider());
 
         return kinesisAsyncClientBuilder.build();
     }
 
-    default DynamoDbAsyncClient buildAsyncDynamoDbClient() throws IOException {
+    public DynamoDbAsyncClient buildAsyncDynamoDbClient() throws IOException {
         final DynamoDbAsyncClientBuilder builder = DynamoDbAsyncClient.builder().region(getRegion());
 
-        AwsCredentialsProvider credentialsProvider = (getProfile() != null) ?
-                ProfileCredentialsProvider.builder().profileName(getProfile()).build() : DefaultCredentialsProvider.create();
-        builder.credentialsProvider(credentialsProvider);
-
+        builder.credentialsProvider(getCredentialsProvider());
         return builder.build();
     }
 
-    default CloudWatchAsyncClient buildAsyncCloudWatchClient() throws IOException {
+    public CloudWatchAsyncClient buildAsyncCloudWatchClient() throws IOException {
         final CloudWatchAsyncClientBuilder builder = CloudWatchAsyncClient.builder().region(getRegion());
 
-        AwsCredentialsProvider credentialsProvider = (getProfile() != null) ?
-                ProfileCredentialsProvider.builder().profileName(getProfile()).build() : DefaultCredentialsProvider.create();
-        builder.credentialsProvider(credentialsProvider);
-
+        builder.credentialsProvider(getCredentialsProvider());
         return builder.build();
     }
 
-    default String getWorkerId() throws UnknownHostException {
+    public String getWorkerId() throws UnknownHostException {
         return Inet4Address.getLocalHost().getHostName();
     }
 
-    default RecordValidatorQueue getRecordValidator() {
+    public RecordValidatorQueue getRecordValidator() {
         return new RecordValidatorQueue();
     }
 
-    default ShardRecordProcessorFactory getShardRecordProcessorFactory() {
+    public ShardRecordProcessorFactory getShardRecordProcessorFactory() {
         return new TestRecordProcessorFactory(getRecordValidator());
     }
 
-    default ConfigsBuilder getConfigsBuilder() throws IOException, URISyntaxException {
+    public ConfigsBuilder getConfigsBuilder() throws IOException, URISyntaxException {
         final String workerId = getWorkerId();
         if (getStreamArn() == null) {
-            return new ConfigsBuilder(getStreamName(), getApplicationName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
+            return new ConfigsBuilder(getStreamName(), getStreamName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
                     buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
         } else {
-            return new ConfigsBuilder(Arn.fromString(getStreamArn()), getApplicationName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
+            return new ConfigsBuilder(Arn.fromString(getStreamArn()), getStreamName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
                     buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
         }
     }
 
-    RetrievalConfig getRetrievalConfig() throws IOException, URISyntaxException;
+    public RetrievalConfig getRetrievalConfig() throws IOException, URISyntaxException {
+        InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
+                .newInitialPosition(getInitialPosition());
+
+        // Default is a streaming consumer
+        RetrievalConfig config = getConfigsBuilder().retrievalConfig();
+        config.initialPositionInStreamExtended(initialPosition);
+        return config;
+    }
 
     /**
      * Configure ingress load (batch size, record size, and calling interval)
      */
     @Value
     @Builder
-    class ProducerConfig {
+    static class ProducerConfig {
         private boolean isBatchPut;
         private int batchSize;
         private int recordSizeKB;
@@ -166,19 +190,24 @@ public interface KCLAppConfig {
 
     /**
      * Description of the method of resharding for a test case
-     * <p>
-     * reshardingFactorCycle: lists the scales by which the number of shards in a stream will be updated
-     * in sequence. e.g {2.0, 0.5} means that the number of shards will first be doubled, then halved
-     * <p>
-     * numReshardCycles: the number of resharding cycles that will be executed in a test]
-     * <p>
-     * reshardFrequencyMillis: the period of time between reshard cycles (in milliseconds)
      */
     @Value
     @Builder
-    class ReshardConfig {
-        private double[] reshardingFactorCycle;
+    static class ReshardConfig {
+        /**
+         * reshardingFactorCycle: lists the order or reshards that will be done during one reshard cycle
+         * e.g {SPLIT, MERGE} means that the number of shards will first be doubled, then halved
+         */
+        private ReshardOptions[] reshardingFactorCycle;
+
+        /**
+         * numReshardCycles: the number of resharding cycles that will be executed in a test
+         */
         private int numReshardCycles;
+
+        /**
+         * reshardFrequencyMillis: the period of time between reshard cycles (in milliseconds)
+         */
         private long reshardFrequencyMillis;
     }
 
