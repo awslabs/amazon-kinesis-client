@@ -35,13 +35,12 @@ import java.util.Optional;
 /**
  * Default configuration for a producer or consumer used in integration tests.
  * Producer: puts records of size 60 KB at an interval of 100 ms
- * Consumer: streaming configuration (vs polling) that starts processing records put on the shard 5 minutes before
- *  the start of the test
+ * Consumer: streaming configuration (vs polling) that starts processing records at shard horizon
  */
 public abstract class KCLAppConfig {
 
     /**
-     * Name used for test stream and DDB table
+     * Name used for test stream and lease tracker table
      */
     public abstract String getStreamName();
 
