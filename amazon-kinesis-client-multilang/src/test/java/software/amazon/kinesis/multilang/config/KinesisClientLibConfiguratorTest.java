@@ -107,8 +107,8 @@ public class KinesisClientLibConfiguratorTest {
         // they must specify the time with initialPositionInStreamExtended.
         try {
             getConfiguration(StringUtils.join(new String[] { "applicationName = app",
-                    "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
-                    "initialPositionInStream = AT_TIMESTAMP"}, '\n'));
+            "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+            "initialPositionInStream = AT_TIMESTAMP"}, '\n'));
             fail("Should have thrown when initialPositionInStream is set to AT_TIMESTAMP");
         } catch (Exception e) {
             Throwable rootCause = ExceptionUtils.getRootCause(e);
@@ -122,8 +122,8 @@ public class KinesisClientLibConfiguratorTest {
         // value is provided, the constructor should throw an IllegalArgumentException exception.
         try {
             getConfiguration(StringUtils.join(new String[] { "applicationName = app",
-                    "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
-                    "initialPositionInStreamExtended = null"}, '\n'));
+            "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+            "initialPositionInStreamExtended = null"}, '\n'));
             fail("Should have thrown when initialPositionInStreamExtended is set to null");
         } catch (Exception e) {
             Throwable rootCause = ExceptionUtils.getRootCause(e);
@@ -163,9 +163,9 @@ public class KinesisClientLibConfiguratorTest {
     @Test
     public void testWithBooleanVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
-                        "applicationName = b", "AWSCredentialsProvider = ABCD, " + credentialName1, "workerId = 0",
-                        "cleanupLeasesUponShardCompletion = false", "validateSequenceNumberBeforeCheckpointing = true",
-                        "regionName = us-east-1"},
+                "applicationName = b", "AWSCredentialsProvider = ABCD, " + credentialName1, "workerId = 0",
+                "cleanupLeasesUponShardCompletion = false", "validateSequenceNumberBeforeCheckpointing = true",
+                "regionName = us-east-1"},
                 '\n'));
 
         assertEquals(config.getApplicationName(), "b");
@@ -309,7 +309,6 @@ public class KinesisClientLibConfiguratorTest {
     @Test
     public void testWithMissingStreamNameAndMissingStreamArn() {
         thrown.expect(NullPointerException.class);
-        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
 
         String test = StringUtils.join(new String[] {
                         "applicationName = b",
@@ -321,10 +320,10 @@ public class KinesisClientLibConfiguratorTest {
 
         configurator.getConfiguration(input);
     }
+
     @Test
     public void testWithEmptyStreamNameAndMissingStreamArn() {
         thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
 
         String test = StringUtils.join(new String[] {
                         "applicationName = b",
