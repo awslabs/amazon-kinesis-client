@@ -11,8 +11,8 @@ name: Java CI with Maven
 on:
   push:
     branches:
-      - "master"
-      - "v1.x"
+      - "GithubActions"
+      - "1XTests"
   pull_request:
     branches:
       - "master"
