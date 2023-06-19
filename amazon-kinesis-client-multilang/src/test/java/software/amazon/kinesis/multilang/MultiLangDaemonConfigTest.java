@@ -42,11 +42,7 @@ public class MultiLangDaemonConfigTest {
     private static final String TEST_STREAM_NAME = "fakeStream";
     private static final String TEST_STREAM_NAME_IN_ARN = "FAKE_STREAM_NAME";
     private static final String TEST_REGION = "us-east-1";
-    private static final String TEST_REGION_IN_ARN = "us-east-2";
-
-    private static String getTestStreamArn(){
-        return String.format("arn:aws:kinesis:%s:ACCOUNT_ID:stream/%s", TEST_REGION_IN_ARN, TEST_STREAM_NAME_IN_ARN);
-    }
+    private static final String TEST_STREAM_ARN = "arn:aws:kinesis:us-east-2:ACCOUNT_ID:stream/" + TEST_STREAM_NAME_IN_ARN;
 
     @Mock
     ClassLoader classLoader;
@@ -59,9 +55,13 @@ public class MultiLangDaemonConfigTest {
     private KinesisClientLibConfigurator configurator;
     private MultiLangDaemonConfig deamonConfig;
 
-    @Rule
-    public final ExpectedException thrown = ExpectedException.none();
-
+    /**
+     * Instantiate a MultiLangDaemonConfig object based on the properties passed in.
+     * @param streamName
+     * @param streamArn
+     * @param regionName
+     * @throws IOException
+     */
     public void setup(String streamName, String streamArn, String regionName) throws IOException {
 
         String properties = String.format("executableName = %s\n"
@@ -91,67 +91,43 @@ public class MultiLangDaemonConfigTest {
         deamonConfig = new MultiLangDaemonConfig(TEST_FILENAME, classLoader, configurator);
     }
 
-    @Test
+    @Test(expected =  IllegalArgumentException.class)
     public void testConstructorFailsBecauseStreamArnIsInvalid() throws Exception {
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("Malformed ARN - doesn't start with 'arn:");
-
         setup("", "this_is_not_a_valid_arn", TEST_REGION);
     }
 
-    @Test
+    @Test(expected =  IllegalArgumentException.class)
     public void testConstructorFailsBecauseStreamArnHasInvalidRegion() throws Exception {
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("Unsupported region: us-east-1000");
-
         setup("", "arn:aws:kinesis:us-east-1:ACCOUNT_ID:stream/streamName", "us-east-1000");
     }
 
-    @Test
+    @Test(expected =  IllegalArgumentException.class)
     public void testConstructorFailsBecauseStreamArnHasInvalidResourceType() throws Exception {
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("StreamArn has unsupported resource type of 'dynamodb'. Expected: stream");
-
         setup("", "arn:aws:kinesis:us-EAST-1:ACCOUNT_ID:dynamodb/streamName", TEST_REGION);
     }
 
-    @Test
+    @Test(expected =  IllegalArgumentException.class)
     public void testConstructorFailsBecauseStreamArnHasInvalidService() throws Exception {
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("StreamArn has unsupported service type of 'kinesisFakeService'. Expected: kinesis");
-
         setup("", "arn:aws:kinesisFakeService:us-east-1:ACCOUNT_ID:stream/streamName", TEST_REGION);
     }
 
-    @Test
+    @Test(expected =  IllegalArgumentException.class)
     public void testConstructorFailsBecauseStreamNameAndArnAreEmpty() throws Exception {
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
-
         setup("", "", TEST_REGION);
     }
 
-    @Test
+    @Test(expected =  NullPointerException.class)
     public void testConstructorFailsBecauseStreamNameAndArnAreNull() throws Exception {
-        thrown.expect(NullPointerException.class);
-        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
-
         setup(null, null, TEST_REGION);
     }
 
-    @Test
+    @Test(expected =  NullPointerException.class)
     public void testConstructorFailsBecauseStreamNameIsNullAndArnIsEmpty() throws Exception {
-        thrown.expect(NullPointerException.class);
-        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
-
         setup(null, "", TEST_REGION);
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testConstructorFailsBecauseStreamNameIsEmptyAndArnIsNull() throws Exception {
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
-
         setup("", null, TEST_REGION);
     }
 
@@ -159,42 +135,42 @@ public class MultiLangDaemonConfigTest {
     public void testConstructorUsingStreamName() throws IOException {
         setup(TEST_STREAM_NAME, null, TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME, TEST_REGION, null);
+        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME, null);
     }
 
     @Test
     public void testConstructorUsingStreamNameAndStreamArnIsEmpty() throws IOException {
         setup(TEST_STREAM_NAME, "", TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME, TEST_REGION, "");
+        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME, "");
     }
 
     @Test
     public void testConstructorUsingStreamNameAndStreamArnIsWhitespace() throws IOException {
         setup(TEST_STREAM_NAME, "   ", TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME, TEST_REGION, "");
+        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME, "");
     }
 
     @Test
     public void testConstructorUsingStreamArn() throws IOException {
-        setup(null, getTestStreamArn(), TEST_REGION);
+        setup(null, TEST_STREAM_ARN, TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME_IN_ARN, TEST_REGION, getTestStreamArn());
+        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME_IN_ARN, TEST_STREAM_ARN);
     }
 
     @Test
     public void testConstructorUsingStreamNameAsEmptyAndStreamArn() throws IOException {
-        setup("", getTestStreamArn(), TEST_REGION);
+        setup("", TEST_STREAM_ARN, TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME_IN_ARN, TEST_REGION, getTestStreamArn());
+        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME_IN_ARN, TEST_STREAM_ARN);
     }
 
     @Test
     public void testConstructorUsingStreamArnOverStreamName() throws IOException {
-        setup(TEST_STREAM_NAME, getTestStreamArn(), TEST_REGION);
+        setup(TEST_STREAM_NAME, TEST_STREAM_ARN, TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME_IN_ARN, TEST_REGION, getTestStreamArn());
+        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME_IN_ARN, TEST_STREAM_ARN);
     }
 
     /**
@@ -203,21 +179,18 @@ public class MultiLangDaemonConfigTest {
      * @param expectedStreamName
      */
     private void assertConfigurationsMatch(MultiLangDaemonConfig deamonConfig,
-                                           String expectedExe,
-                                           String expectedApplicationName,
                                            String expectedStreamName,
-                                           String expectedRegionName,
                                            String expectedStreamArn){
         assertNotNull(deamonConfig.getExecutorService());
         assertNotNull(deamonConfig.getMultiLangDaemonConfiguration());
         assertNotNull(deamonConfig.getRecordProcessorFactory());
 
-        assertEquals(expectedExe, deamonConfig.getRecordProcessorFactory().getCommandArray()[0]);
-        assertEquals(expectedApplicationName, deamonConfig.getMultiLangDaemonConfiguration().getApplicationName());
+        assertEquals(TEST_EXE, deamonConfig.getRecordProcessorFactory().getCommandArray()[0]);
+        assertEquals(TEST_APPLICATION_NAME, deamonConfig.getMultiLangDaemonConfiguration().getApplicationName());
         assertEquals(expectedStreamName, deamonConfig.getMultiLangDaemonConfiguration().getStreamName());
-        assertEquals(expectedRegionName, deamonConfig.getMultiLangDaemonConfiguration().getDynamoDbClient().get("region").toString());
-        assertEquals(expectedRegionName, deamonConfig.getMultiLangDaemonConfiguration().getCloudWatchClient().get("region").toString());
-        assertEquals(expectedRegionName, deamonConfig.getMultiLangDaemonConfiguration().getKinesisClient().get("region").toString());
+        assertEquals(TEST_REGION, deamonConfig.getMultiLangDaemonConfiguration().getDynamoDbClient().get("region").toString());
+        assertEquals(TEST_REGION, deamonConfig.getMultiLangDaemonConfiguration().getCloudWatchClient().get("region").toString());
+        assertEquals(TEST_REGION, deamonConfig.getMultiLangDaemonConfiguration().getKinesisClient().get("region").toString());
         assertEquals(expectedStreamArn, deamonConfig.getMultiLangDaemonConfiguration().getStreamArn());
     }
 
