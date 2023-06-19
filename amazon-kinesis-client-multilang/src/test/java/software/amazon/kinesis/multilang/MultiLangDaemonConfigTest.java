@@ -42,7 +42,7 @@ public class MultiLangDaemonConfigTest {
     private static final String TEST_STREAM_NAME = "fakeStream";
     private static final String TEST_STREAM_NAME_IN_ARN = "FAKE_STREAM_NAME";
     private static final String TEST_REGION = "us-east-1";
-    private static final String TEST_STREAM_ARN = "arn:aws:kinesis:us-east-2:ACCOUNT_ID:stream/" + TEST_STREAM_NAME_IN_ARN;
+    private static final String TEST_STREAM_ARN = "arn:aws:kinesis:us-east-2:012345678987:stream/" + TEST_STREAM_NAME_IN_ARN;
 
     @Mock
     ClassLoader classLoader;
@@ -97,18 +97,13 @@ public class MultiLangDaemonConfigTest {
     }
 
     @Test(expected =  IllegalArgumentException.class)
-    public void testConstructorFailsBecauseStreamArnHasInvalidRegion() throws Exception {
-        setup("", "arn:aws:kinesis:us-east-1:ACCOUNT_ID:stream/streamName", "us-east-1000");
+    public void testConstructorFailsBecauseStreamArnIsInvalid2() throws Exception {
+        setup("", "arn:aws:kinesis:us-east-2:ACCOUNT_ID:BadFormatting:stream/" + TEST_STREAM_NAME_IN_ARN, TEST_REGION);
     }
 
     @Test(expected =  IllegalArgumentException.class)
-    public void testConstructorFailsBecauseStreamArnHasInvalidResourceType() throws Exception {
-        setup("", "arn:aws:kinesis:us-EAST-1:ACCOUNT_ID:dynamodb/streamName", TEST_REGION);
-    }
-
-    @Test(expected =  IllegalArgumentException.class)
-    public void testConstructorFailsBecauseStreamArnHasInvalidService() throws Exception {
-        setup("", "arn:aws:kinesisFakeService:us-east-1:ACCOUNT_ID:stream/streamName", TEST_REGION);
+    public void testConstructorFailsBecauseInvalidRegion() throws Exception {
+        setup("", TEST_STREAM_ARN, "us-east-1000");
     }
 
     @Test(expected =  IllegalArgumentException.class)

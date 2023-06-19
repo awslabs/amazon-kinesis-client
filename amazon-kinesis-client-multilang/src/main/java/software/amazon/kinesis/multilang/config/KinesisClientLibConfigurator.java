@@ -26,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.kinesis.common.StreamIdentifier;
 
 /**
  * KinesisClientLibConfigurator constructs a KinesisClientLibConfiguration from java properties file. The following
@@ -73,17 +74,7 @@ public class KinesisClientLibConfigurator {
 
         if (configuration.getStreamArn() != null && !configuration.getStreamArn().trim().isEmpty()) {
             final Arn streamArnObj = Arn.fromString(configuration.getStreamArn());
-
-            final String resourceType = streamArnObj.resource().resourceType().get();
-            if (!"stream".equalsIgnoreCase(resourceType)) {
-                throw new IllegalArgumentException(String.format("StreamArn has unsupported resource type of '%s'. Expected: stream",
-                        resourceType));
-            }
-            final String arnService = streamArnObj.service();
-            if (!"kinesis".equalsIgnoreCase(arnService)) {
-                throw new IllegalArgumentException(String.format("StreamArn has unsupported service type of '%s'. Expected: kinesis",
-                        arnService));
-            }
+            StreamIdentifier.validateArn(streamArnObj);
             //Parse out the stream Name from the Arn (and/or override existing value for Stream Name)
             final String streamNameFromArn = streamArnObj.resource().resource();
             configuration.setStreamName(streamNameFromArn);
