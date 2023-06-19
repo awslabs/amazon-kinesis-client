@@ -94,11 +94,8 @@ public class KinesisClientLibConfigurator {
         Validate.isTrue(configuration.getKinesisCredentialsProvider().isDirty(), "A basic set of AWS credentials must be provided");
 
         //Verify Region is real
-        if(configuration.getKinesisClient().get("region") == null){
-            throw new NullPointerException("regionName must be passed in");
-        }
-        final String regionCode = configuration.getKinesisClient().get("region").toString();
-        if (Region.regions().stream().filter(x -> x.id().equalsIgnoreCase(regionCode)).count() == 0) {
+        final String regionCode = String.valueOf(configuration.getKinesisClient().get("region"));
+        if (regionCode == null || Region.regions().stream().filter(x -> x.id().equalsIgnoreCase(regionCode)).count() == 0) {
             throw new IllegalArgumentException(String.format("Unsupported region: %s", regionCode));
         }
         return configuration;
