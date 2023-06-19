@@ -43,10 +43,12 @@ public class StreamExistenceManager {
                 throw new RuntimeException("Stream is not active, instead in status: " + response.streamDescriptionSummary().streamStatus());
             }
             return true;
-        } catch (ResourceNotFoundException e) {
-            return false;
         } catch (ExecutionException e) {
-            throw new RuntimeException(e);
+            if (e.getCause() instanceof ResourceNotFoundException) {
+                return false;
+            } else {
+                throw new RuntimeException(e);
+            }
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
