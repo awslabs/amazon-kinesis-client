@@ -5,6 +5,7 @@ import org.slf4j.MDC;
 import software.amazon.kinesis.exceptions.InvalidStateException;
 import software.amazon.kinesis.exceptions.ShutdownException;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
+import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
@@ -13,6 +14,9 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Implement initialization and deletion of shards and shard record processing
+ */
 @Slf4j
 public class TestRecordProcessor implements ShardRecordProcessor {
 
@@ -39,7 +43,7 @@ public class TestRecordProcessor implements ShardRecordProcessor {
 
 
     @Override
-    public void processRecords(software.amazon.kinesis.lifecycle.events.ProcessRecordsInput processRecordsInput) {
+    public void processRecords(ProcessRecordsInput processRecordsInput) {
         MDC.put(SHARD_ID_MDC_KEY, shardId);
         try {
             log.info("Processing {} record(s)", processRecordsInput.records().size());

@@ -189,9 +189,11 @@ public class TestConsumer {
     }
 
     private void deleteResources(StreamExistenceManager streamExistenceManager, DynamoDbAsyncClient dynamoDBClient) throws Exception {
-        log.info("-------------Start deleting test resources.----------------");
+        log.info("-------------Start deleting stream.----------------");
         streamExistenceManager.deleteStream(this.streamName);
+        log.info("-------------Start deleting lease table.----------------");
         deleteLeaseTable(dynamoDBClient, consumerConfig.getStreamName());
+        log.info("-------------Finished deleting resources.----------------");
     }
 
     private void deleteLeaseTable(DynamoDbAsyncClient dynamoClient, String tableName) throws Exception {
