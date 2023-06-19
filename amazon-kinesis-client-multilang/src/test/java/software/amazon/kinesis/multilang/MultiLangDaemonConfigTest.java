@@ -123,42 +123,42 @@ public class MultiLangDaemonConfigTest {
     public void testConstructorUsingStreamName() throws IOException {
         setup(TEST_STREAM_NAME, null, TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME, null);
+        assertConfigurationsMatch(TEST_STREAM_NAME, null);
     }
 
     @Test
     public void testConstructorUsingStreamNameAndStreamArnIsEmpty() throws IOException {
         setup(TEST_STREAM_NAME, "", TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME, "");
+        assertConfigurationsMatch(TEST_STREAM_NAME, "");
     }
 
     @Test
     public void testConstructorUsingStreamNameAndStreamArnIsWhitespace() throws IOException {
         setup(TEST_STREAM_NAME, "   ", TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME, "");
+        assertConfigurationsMatch(TEST_STREAM_NAME, "");
     }
 
     @Test
     public void testConstructorUsingStreamArn() throws IOException {
         setup(null, TEST_STREAM_ARN, TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME_IN_ARN, TEST_STREAM_ARN);
+        assertConfigurationsMatch(TEST_STREAM_NAME_IN_ARN, TEST_STREAM_ARN);
     }
 
     @Test
     public void testConstructorUsingStreamNameAsEmptyAndStreamArn() throws IOException {
         setup("", TEST_STREAM_ARN, TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME_IN_ARN, TEST_STREAM_ARN);
+        assertConfigurationsMatch(TEST_STREAM_NAME_IN_ARN, TEST_STREAM_ARN);
     }
 
     @Test
     public void testConstructorUsingStreamArnOverStreamName() throws IOException {
         setup(TEST_STREAM_NAME, TEST_STREAM_ARN, TEST_REGION);
 
-        assertConfigurationsMatch(deamonConfig, TEST_STREAM_NAME_IN_ARN, TEST_STREAM_ARN);
+        assertConfigurationsMatch(TEST_STREAM_NAME_IN_ARN, TEST_STREAM_ARN);
     }
 
     /**
@@ -166,8 +166,7 @@ public class MultiLangDaemonConfigTest {
      * @param deamonConfig
      * @param expectedStreamName
      */
-    private void assertConfigurationsMatch(MultiLangDaemonConfig deamonConfig,
-                                           String expectedStreamName,
+    private void assertConfigurationsMatch(String expectedStreamName,
                                            String expectedStreamArn){
         assertNotNull(deamonConfig.getExecutorService());
         assertNotNull(deamonConfig.getMultiLangDaemonConfiguration());
