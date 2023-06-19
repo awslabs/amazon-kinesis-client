@@ -164,8 +164,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithBooleanVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
                 "applicationName = b", "AWSCredentialsProvider = ABCD, " + credentialName1, "workerId = 0",
-                "cleanupLeasesUponShardCompletion = false", "validateSequenceNumberBeforeCheckpointing = true",
-                "regionName = us-east-1"},
+                "cleanupLeasesUponShardCompletion = false", "validateSequenceNumberBeforeCheckpointing = true" },
                 '\n'));
 
         assertEquals(config.getApplicationName(), "b");
