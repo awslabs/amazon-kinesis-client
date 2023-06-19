@@ -32,15 +32,12 @@ import org.mockito.Mockito;
 
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
-import software.amazon.kinesis.multilang.MessageWriter;
-import software.amazon.kinesis.multilang.messages.LeaseLostMessage;
 import software.amazon.kinesis.multilang.messages.Message;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 import static org.mockito.Mockito.verify;

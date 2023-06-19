@@ -27,8 +27,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
-import software.amazon.kinesis.multilang.DrainChildSTDERRTask;
-import software.amazon.kinesis.multilang.LineReaderTask;
 
 public class ReadSTDERRTaskTest {
 
