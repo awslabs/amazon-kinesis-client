@@ -69,7 +69,7 @@ public class KinesisClientLibConfiguratorTest {
     @Test
     public void testWithBasicSetup() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
-                "applicationName = b", "AWSCredentialsProvider = " + credentialName1, "workerId = 123" }, '\n'));
+                "applicationName = b", "AWSCredentialsProvider = " + credentialName1, "workerId = 123", "regionName = us-east-1" }, '\n'));
         assertEquals(config.getApplicationName(), "b");
         assertEquals(config.getStreamName(), "a");
         assertEquals(config.getWorkerIdentifier(), "123");
@@ -81,7 +81,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithLongVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "applicationName = app",
                 "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
-                "workerId = 123", "failoverTimeMillis = 100", "shardSyncIntervalMillis = 500" }, '\n'));
+                "workerId = 123", "failoverTimeMillis = 100", "shardSyncIntervalMillis = 500", "regionName = us-east-1" }, '\n'));
 
         assertEquals(config.getApplicationName(), "app");
         assertEquals(config.getStreamName(), "123");
@@ -95,7 +95,7 @@ public class KinesisClientLibConfiguratorTest {
         long epochTimeInSeconds = 1617406032;
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "applicationName = app",
                 "streamName = 123", "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
-                "initialPositionInStreamExtended = " + epochTimeInSeconds}, '\n'));
+                "initialPositionInStreamExtended = " + epochTimeInSeconds, "regionName = us-east-1"}, '\n'));
 
         assertEquals(config.getInitialPositionInStreamExtended().getTimestamp(), new Date(epochTimeInSeconds * 1000L));
         assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.AT_TIMESTAMP);
@@ -135,7 +135,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithUnsupportedClientConfigurationVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(
                 new String[] { "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2, "workerId = id",
-                        "kinesisClientConfig = {}", "streamName = stream", "applicationName = b" },
+                        "kinesisClientConfig = {}", "streamName = stream", "applicationName = b", "regionName = us-east-1" },
                 '\n'));
 
         assertEquals(config.getApplicationName(), "b");
@@ -149,7 +149,7 @@ public class KinesisClientLibConfiguratorTest {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = kinesis",
                 "AWSCredentialsProvider = " + credentialName2 + ", " + credentialName1, "workerId = w123",
                 "maxRecords = 10", "metricsMaxQueueSize = 20", "applicationName = kinesis",
-                "retryGetRecordsInSeconds = 2", "maxGetRecordsThreadPool = 1" }, '\n'));
+                "retryGetRecordsInSeconds = 2", "maxGetRecordsThreadPool = 1", "regionName = us-east-1" }, '\n'));
 
         assertEquals(config.getApplicationName(), "kinesis");
         assertEquals(config.getStreamName(), "kinesis");
@@ -164,7 +164,8 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithBooleanVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
                         "applicationName = b", "AWSCredentialsProvider = ABCD, " + credentialName1, "workerId = 0",
-                        "cleanupLeasesUponShardCompletion = false", "validateSequenceNumberBeforeCheckpointing = true" },
+                        "cleanupLeasesUponShardCompletion = false", "validateSequenceNumberBeforeCheckpointing = true",
+                        "regionName = us-east-1"},
                 '\n'));
 
         assertEquals(config.getApplicationName(), "b");
@@ -178,7 +179,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithStringVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
                 "applicationName = b", "AWSCredentialsProvider = ABCD," + credentialName1, "workerId = 1",
-                "kinesisEndpoint = https://kinesis", "metricsLevel = SUMMARY" }, '\n'));
+                "kinesisEndpoint = https://kinesis", "metricsLevel = SUMMARY", "regionName = us-east-1" }, '\n'));
 
         assertEquals(config.getWorkerIdentifier(), "1");
         assertEquals(config.getKinesisClient().get("endpointOverride"), URI.create("https://kinesis"));
@@ -189,7 +190,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithSetVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
                 "applicationName = b", "AWSCredentialsProvider = ABCD," + credentialName1, "workerId = 1",
-                "metricsEnabledDimensions = ShardId, WorkerIdentifier" }, '\n'));
+                "metricsEnabledDimensions = ShardId, WorkerIdentifier", "regionName = us-east-1" }, '\n'));
 
         Set<String> expectedMetricsEnabledDimensions = ImmutableSet.<String> builder()
                 .add("ShardId", "WorkerIdentifier").build();
@@ -200,7 +201,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithInitialPositionInStreamTrimHorizon() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
                 "applicationName = b", "AWSCredentialsProvider = ABCD," + credentialName1, "workerId = 123",
-                "initialPositionInStream = TriM_Horizon" }, '\n'));
+                "initialPositionInStream = TriM_Horizon", "regionName = us-east-1" }, '\n'));
 
         assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.TRIM_HORIZON);
     }
@@ -209,7 +210,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithInitialPositionInStreamLatest() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
                 "applicationName = b", "AWSCredentialsProvider = ABCD," + credentialName1, "workerId = 123",
-                "initialPositionInStream = LateSt" }, '\n'));
+                "initialPositionInStream = LateSt", "regionName = us-east-1" }, '\n'));
 
         assertEquals(config.getInitialPositionInStream(), InitialPositionInStream.LATEST);
     }
@@ -218,7 +219,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testSkippingNonKCLVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
                 "applicationName = b", "AWSCredentialsProvider = ABCD," + credentialName1, "workerId = 123",
-                "initialPositionInStream = TriM_Horizon", "abc = 1" }, '\n'));
+                "initialPositionInStream = TriM_Horizon", "abc = 1", "regionName = us-east-1" }, '\n'));
 
         assertEquals(config.getApplicationName(), "b");
         assertEquals(config.getStreamName(), "a");
@@ -230,7 +231,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testEmptyOptionalVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(new String[] { "streamName = a",
                 "applicationName = b", "AWSCredentialsProvider = ABCD," + credentialName1, "workerId = 123",
-                "initialPositionInStream = TriM_Horizon", "maxGetRecordsThreadPool = 1" }, '\n'));
+                "initialPositionInStream = TriM_Horizon", "maxGetRecordsThreadPool = 1", "regionName = us-east-1" }, '\n'));
         assertThat(config.getMaxGetRecordsThreadPool(), equalTo(1));
         assertThat(config.getRetryGetRecordsInSeconds(), nullValue());
     }
@@ -240,7 +241,7 @@ public class KinesisClientLibConfiguratorTest {
         String test = StringUtils.join(new String[] { "streamName = a", "applicationName = b",
                 "AWSCredentialsProvider = ABCD," + credentialName1, "workerId = 123",
                 "initialPositionInStream = TriM_Horizon", "maxGetRecordsThreadPool = 0",
-                "retryGetRecordsInSeconds = 0" }, '\n');
+                "retryGetRecordsInSeconds = 0", "regionName = us-east-1" }, '\n');
         InputStream input = new ByteArrayInputStream(test.getBytes());
 
         try {
@@ -254,7 +255,7 @@ public class KinesisClientLibConfiguratorTest {
     @Test
     public void testWithInvalidIntValue() {
         String test = StringUtils.join(new String[] { "streamName = a", "applicationName = b",
-                "AWSCredentialsProvider = " + credentialName1, "workerId = 123", "failoverTimeMillis = 100nf" }, '\n');
+                "AWSCredentialsProvider = " + credentialName1, "workerId = 123", "failoverTimeMillis = 100nf", "regionName = us-east-1" }, '\n');
         InputStream input = new ByteArrayInputStream(test.getBytes());
 
         try {
@@ -267,7 +268,7 @@ public class KinesisClientLibConfiguratorTest {
     @Test
     public void testWithNegativeIntValue() {
         String test = StringUtils.join(new String[] { "streamName = a", "applicationName = b",
-                "AWSCredentialsProvider = " + credentialName1, "workerId = 123", "failoverTimeMillis = -12" }, '\n');
+                "AWSCredentialsProvider = " + credentialName1, "workerId = 123", "failoverTimeMillis = -12", "regionName = us-east-1" }, '\n');
         InputStream input = new ByteArrayInputStream(test.getBytes());
 
         // separate input stream with getConfiguration to explicitly catch exception from the getConfiguration statement
@@ -295,7 +296,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithMissingWorkerId() {
         String test = StringUtils.join(
                 new String[] { "streamName = a", "applicationName = b", "AWSCredentialsProvider = " + credentialName1,
-                        "failoverTimeMillis = 100", "shardSyncIntervalMillis = 500" },
+                        "failoverTimeMillis = 100", "shardSyncIntervalMillis = 500", "regionName = us-east-1" },
                 '\n');
         InputStream input = new ByteArrayInputStream(test.getBytes());
         MultiLangDaemonConfiguration config = configurator.getConfiguration(input);
@@ -374,7 +375,7 @@ public class KinesisClientLibConfiguratorTest {
                 "AWSCredentialsProvider = " + credentialNameKinesis,
                 "AWSCredentialsProviderDynamoDB = " + credentialNameDynamoDB,
                 "AWSCredentialsProviderCloudWatch = " + credentialNameCloudWatch, "failoverTimeMillis = 100",
-                "shardSyncIntervalMillis = 500" }, '\n');
+                "shardSyncIntervalMillis = 500", "regionName = us-east-1" }, '\n');
         InputStream input = new ByteArrayInputStream(test.getBytes());
 
         // separate input stream with getConfiguration to explicitly catch exception from the getConfiguration statement
@@ -403,7 +404,7 @@ public class KinesisClientLibConfiguratorTest {
                 "AWSCredentialsProvider = " + credentialNameKinesis,
                 "AWSCredentialsProviderDynamoDB = " + credentialName2,
                 "AWSCredentialsProviderCloudWatch = " + credentialName2, "failoverTimeMillis = 100",
-                "shardSyncIntervalMillis = 500" }, '\n');
+                "shardSyncIntervalMillis = 500", "regionName = us-east-1" }, '\n');
         InputStream input = new ByteArrayInputStream(test.getBytes());
 
         // separate input stream with getConfiguration to explicitly catch exception from the getConfiguration statement

@@ -36,16 +36,16 @@ import software.amazon.kinesis.multilang.config.KinesisClientLibConfigurator;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MultiLangDaemonConfigTest {
-    private static String FILENAME = "some.properties";
-    private static String TestExe = "TestExe.exe";
-    private static String TestApplicationName = "TestApp";
-    private static String TestStreamName = "fakeStream";
-    private static String TestStreamNameInArn = "FAKE_STREAM_NAME";
-    private static String TestRegion = "us-east-1";
-    private static String TestRegionInArn = "us-east-2";
+    private static final String TEST_FILENAME = "some.properties";
+    private static final String TEST_EXE = "TestExe.exe";
+    private static final String TEST_APPLICATION_NAME = "TestApp";
+    private static final String TEST_STREAM_NAME = "fakeStream";
+    private static final String TEST_STREAM_NAME_IN_ARN = "FAKE_STREAM_NAME";
+    private static final String TEST_REGION = "us-east-1";
+    private static final String TEST_REGION_IN_ARN = "us-east-2";
 
     private static String getTestStreamArn(){
-        return String.format("arn:aws:kinesis:%s:ACCOUNT_ID:stream/%s", TestRegionInArn, TestStreamNameInArn);
+        return String.format("arn:aws:kinesis:%s:ACCOUNT_ID:stream/%s", TEST_REGION_IN_ARN, TEST_STREAM_NAME_IN_ARN);
     }
 
     @Mock
@@ -55,140 +55,146 @@ public class MultiLangDaemonConfigTest {
     private AwsCredentialsProvider credentialsProvider;
     @Mock
     private AwsCredentials creds;
-    @Mock
+
     private KinesisClientLibConfigurator configurator;
+    private MultiLangDaemonConfig deamonConfig;
 
     @Rule
     public final ExpectedException thrown = ExpectedException.none();
 
-    public void setup(String streamName, String streamArn) {
+    public void setup(String streamName, String streamArn, String regionName) throws IOException {
 
-        String PROPERTIES = String.format("executableName = %s\n"
+        String properties = String.format("executableName = %s\n"
                         + "applicationName = %s\n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
                         + "processingLanguage = malbolge\n"
                         + "regionName = %s\n",
-                TestExe,
-                TestApplicationName,
-                TestRegion);
+                TEST_EXE,
+                TEST_APPLICATION_NAME,
+                regionName);
 
-        if(streamName != null){
-            PROPERTIES += String.format("streamName = %s\n", streamName);
+        if (streamName != null) {
+            properties += String.format("streamName = %s\n", streamName);
         }
-        if(streamArn != null){
-            PROPERTIES += String.format("streamArn = %s\n", streamArn);
+        if (streamArn != null) {
+            properties += String.format("streamArn = %s\n", streamArn);
         }
         classLoader = Mockito.mock(ClassLoader.class);
 
-        Mockito.doReturn(new ByteArrayInputStream(PROPERTIES.getBytes())).when(classLoader)
-                .getResourceAsStream(FILENAME);
+        Mockito.doReturn(new ByteArrayInputStream(properties.getBytes())).when(classLoader)
+                .getResourceAsStream(TEST_FILENAME);
 
         when(credentialsProvider.resolveCredentials()).thenReturn(creds);
         when(creds.accessKeyId()).thenReturn("cool-user");
         configurator = new KinesisClientLibConfigurator();
 
+        deamonConfig = new MultiLangDaemonConfig(TEST_FILENAME, classLoader, configurator);
     }
 
     @Test
     public void testConstructorFailsBecauseStreamArnIsInvalid() throws Exception {
-        setup("", "this_is_not_a_valid_arn");
-        assertConstructorThrowsException(IllegalArgumentException.class, "Malformed ARN - doesn't start with 'arn:");
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("Malformed ARN - doesn't start with 'arn:");
+
+        setup("", "this_is_not_a_valid_arn", TEST_REGION);
     }
 
     @Test
     public void testConstructorFailsBecauseStreamArnHasInvalidRegion() throws Exception {
-        setup("", "arn:aws:kinesis:us-east-1000:ACCOUNT_ID:stream/streamName");
-        assertConstructorThrowsException(IllegalArgumentException.class, "StreamArn has unsupported region of 'us-east-1000'.");
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("Unsupported region: us-east-1000");
+
+        setup("", "arn:aws:kinesis:us-east-1:ACCOUNT_ID:stream/streamName", "us-east-1000");
     }
 
     @Test
     public void testConstructorFailsBecauseStreamArnHasInvalidResourceType() throws Exception {
-        setup("", "arn:aws:kinesis:us-EAST-1:ACCOUNT_ID:dynamodb/streamName");
-        assertConstructorThrowsException(IllegalArgumentException.class, "StreamArn has unsupported resource type of 'dynamodb'. Expected: stream");
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("StreamArn has unsupported resource type of 'dynamodb'. Expected: stream");
+
+        setup("", "arn:aws:kinesis:us-EAST-1:ACCOUNT_ID:dynamodb/streamName", TEST_REGION);
     }
 
     @Test
     public void testConstructorFailsBecauseStreamArnHasInvalidService() throws Exception {
-        setup("", "arn:aws:kinesisFakeService:us-east-1:ACCOUNT_ID:stream/streamName");
-        assertConstructorThrowsException(IllegalArgumentException.class, "StreamArn has unsupported service type of 'kinesisFakeService'. Expected: kinesis");
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("StreamArn has unsupported service type of 'kinesisFakeService'. Expected: kinesis");
+
+        setup("", "arn:aws:kinesisFakeService:us-east-1:ACCOUNT_ID:stream/streamName", TEST_REGION);
     }
 
     @Test
     public void testConstructorFailsBecauseStreamNameAndArnAreEmpty() throws Exception {
-        setup("", "");
-        assertConstructorThrowsException(IllegalArgumentException.class, "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+
+        setup("", "", TEST_REGION);
     }
 
     @Test
     public void testConstructorFailsBecauseStreamNameAndArnAreNull() throws Exception {
-        setup(null, null);
-        assertConstructorThrowsException(NullPointerException.class, "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+        thrown.expect(NullPointerException.class);
+        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+
+        setup(null, null, TEST_REGION);
     }
 
     @Test
     public void testConstructorFailsBecauseStreamNameIsNullAndArnIsEmpty() throws Exception {
-        setup(null, "");
-        assertConstructorThrowsException(NullPointerException.class, "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+        thrown.expect(NullPointerException.class);
+        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+
+        setup(null, "", TEST_REGION);
     }
 
     @Test
     public void testConstructorFailsBecauseStreamNameIsEmptyAndArnIsNull() throws Exception {
-        setup("", null);
-        assertConstructorThrowsException(IllegalArgumentException.class, "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+
+        setup("", null, TEST_REGION);
     }
 
     @Test
     public void testConstructorUsingStreamName() throws IOException {
-        setup(TestStreamName, null);
+        setup(TEST_STREAM_NAME, null, TEST_REGION);
 
-        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
-
-        assertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName, TestRegion, null);
+        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME, TEST_REGION, null);
     }
 
     @Test
     public void testConstructorUsingStreamNameAndStreamArnIsEmpty() throws IOException {
-        setup(TestStreamName, "");
+        setup(TEST_STREAM_NAME, "", TEST_REGION);
 
-        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
-
-        assertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName, TestRegion, "");
+        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME, TEST_REGION, "");
     }
 
     @Test
     public void testConstructorUsingStreamNameAndStreamArnIsWhitespace() throws IOException {
-        setup(TestStreamName, "   ");
+        setup(TEST_STREAM_NAME, "   ", TEST_REGION);
 
-        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
-
-        assertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamName, TestRegion, "");
+        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME, TEST_REGION, "");
     }
 
     @Test
     public void testConstructorUsingStreamArn() throws IOException {
-        setup(null, getTestStreamArn());
+        setup(null, getTestStreamArn(), TEST_REGION);
 
-        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
-
-        assertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn, TestRegionInArn, getTestStreamArn());
+        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME_IN_ARN, TEST_REGION, getTestStreamArn());
     }
 
     @Test
     public void testConstructorUsingStreamNameAsEmptyAndStreamArn() throws IOException {
-        setup("", getTestStreamArn());
+        setup("", getTestStreamArn(), TEST_REGION);
 
-        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
-
-        assertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn, TestRegionInArn, getTestStreamArn());
+        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME_IN_ARN, TEST_REGION, getTestStreamArn());
     }
 
     @Test
     public void testConstructorUsingStreamArnOverStreamName() throws IOException {
-        setup(TestStreamName, getTestStreamArn());
+        setup(TEST_STREAM_NAME, getTestStreamArn(), TEST_REGION);
 
-        MultiLangDaemonConfig deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
-
-        assertConfigurationsMatch(deamonConfig, TestExe, TestApplicationName, TestStreamNameInArn, TestRegionInArn, getTestStreamArn());
+        assertConfigurationsMatch(deamonConfig, TEST_EXE, TEST_APPLICATION_NAME, TEST_STREAM_NAME_IN_ARN, TEST_REGION, getTestStreamArn());
     }
 
     /**
@@ -215,16 +221,6 @@ public class MultiLangDaemonConfigTest {
         assertEquals(expectedStreamArn, deamonConfig.getMultiLangDaemonConfiguration().getStreamArn());
     }
 
-    private void assertConstructorThrowsException(Class<? extends Exception> exceptionClass, String exceptionMessage) throws Exception{
-
-        thrown.expect(exceptionClass);
-        if(exceptionMessage != null) {
-            thrown.expectMessage(exceptionMessage);
-        }
-
-        new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
-    }
-
     @Test
     public void testPropertyValidation() {
         String PROPERTIES_NO_EXECUTABLE_NAME = "applicationName = testApp \n" + "streamName = fakeStream \n"
@@ -232,11 +228,11 @@ public class MultiLangDaemonConfigTest {
         ClassLoader classLoader = Mockito.mock(ClassLoader.class);
 
         Mockito.doReturn(new ByteArrayInputStream(PROPERTIES_NO_EXECUTABLE_NAME.getBytes())).when(classLoader)
-                .getResourceAsStream(FILENAME);
+                .getResourceAsStream(TEST_FILENAME);
 
         MultiLangDaemonConfig config;
         try {
-            config = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
+            config = new MultiLangDaemonConfig(TEST_FILENAME, classLoader, configurator);
             Assert.fail("Construction of the config should have failed due to property validation failing.");
         } catch (IllegalArgumentException e) {
             // Good

@@ -72,29 +72,35 @@ public class KinesisClientLibConfigurator {
         Validate.notBlank(configuration.getApplicationName(), "Application name is required");
 
         if (configuration.getStreamArn() != null && !configuration.getStreamArn().trim().isEmpty()) {
-            Arn streamArnObj = Arn.fromString(configuration.getStreamArn());
-            if(!streamArnObj.resource().resourceType().get().equalsIgnoreCase("stream")){
+            final Arn streamArnObj = Arn.fromString(configuration.getStreamArn());
+
+            final String resourceType = streamArnObj.resource().resourceType().get();
+            if (!"stream".equalsIgnoreCase(resourceType)) {
                 throw new IllegalArgumentException(String.format("StreamArn has unsupported resource type of '%s'. Expected: stream",
-                        streamArnObj.resource().resourceType().get()));
+                        resourceType));
             }
-            if(!streamArnObj.service().equalsIgnoreCase("kinesis")){
+            final String arnService = streamArnObj.service();
+            if (!"kinesis".equalsIgnoreCase(arnService)) {
                 throw new IllegalArgumentException(String.format("StreamArn has unsupported service type of '%s'. Expected: kinesis",
-                        streamArnObj.service()));
+                        arnService));
             }
             //Parse out the stream Name from the Arn (and/or override existing value for Stream Name)
-            String streamNameFromArn = streamArnObj.resource().resource();
+            final String streamNameFromArn = streamArnObj.resource().resource();
             configuration.setStreamName(streamNameFromArn);
 
-            //Parse out the region from the Arn and set (and/or override existing value for region)
-            Region regionObj = Region.of(streamArnObj.region().get());
-            if(Region.regions().stream().filter(x -> x.id().equalsIgnoreCase(regionObj.id())).count() == 0){
-                throw new IllegalArgumentException(String.format("StreamArn has unsupported region of '%s'.", regionObj.id()));
-            }
-            configuration.setRegionName(regionObj);
         } else {
             Validate.notBlank(configuration.getStreamName(), "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
         }
         Validate.isTrue(configuration.getKinesisCredentialsProvider().isDirty(), "A basic set of AWS credentials must be provided");
+
+        //Verify Region is real
+        if(configuration.getKinesisClient().get("region") == null){
+            throw new NullPointerException("regionName must be passed in");
+        }
+        final String regionCode = configuration.getKinesisClient().get("region").toString();
+        if (Region.regions().stream().filter(x -> x.id().equalsIgnoreCase(regionCode)).count() == 0) {
+            throw new IllegalArgumentException(String.format("Unsupported region: %s", regionCode));
+        }
         return configuration;
     }
 
