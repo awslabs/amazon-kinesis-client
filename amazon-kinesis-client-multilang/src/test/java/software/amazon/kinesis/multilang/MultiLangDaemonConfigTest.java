@@ -102,11 +102,6 @@ public class MultiLangDaemonConfigTest {
     }
 
     @Test(expected =  IllegalArgumentException.class)
-    public void testConstructorFailsBecauseInvalidRegion() throws Exception {
-        setup("", TEST_STREAM_ARN, "us-east-1000");
-    }
-
-    @Test(expected =  IllegalArgumentException.class)
     public void testConstructorFailsBecauseStreamNameAndArnAreEmpty() throws Exception {
         setup("", "", TEST_REGION);
     }
