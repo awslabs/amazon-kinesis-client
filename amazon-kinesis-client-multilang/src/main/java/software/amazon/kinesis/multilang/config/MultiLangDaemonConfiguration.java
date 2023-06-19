@@ -301,7 +301,7 @@ public class MultiLangDaemonConfiguration {
     }
 
     private void updateCredentials(BuilderDynaBean toUpdate, AwsCredentialsProvider primary,
-                                   AwsCredentialsProvider secondary) {
+            AwsCredentialsProvider secondary) {
 
         if (toUpdate.hasValue("credentialsProvider")) {
             return;
