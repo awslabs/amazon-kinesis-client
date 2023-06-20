@@ -209,10 +209,8 @@ public class TestConsumer {
     private void validateRecordProcessor() throws Exception {
         log.info("The number of expected records is: {}", successfulPutRecords);
         final RecordValidationStatus errorVal = consumerConfig.getRecordValidator().validateRecords(successfulPutRecords);
-        if (errorVal == RecordValidationStatus.OUT_OF_ORDER) {
-            throw new RuntimeException("There was an error validating the records that were processed. The records were out of order");
-        } else if (errorVal == RecordValidationStatus.MISSING_RECORD) {
-            throw new RuntimeException("There was an error validating the records that were processed. Some records were missing.");
+        if (errorVal != RecordValidationStatus.NO_ERROR) {
+            throw new RuntimeException("There was an error validating the records that were processed: " + errorVal.toString());
         }
         log.info("--------------Completed validation of processed records.--------------");
     }
