@@ -49,16 +49,17 @@ public class LeaseTableManager {
             if (i > 100) {
                 throw new RuntimeException("Failed lease table deletion");
             }
-            try {
-                if (!listAllLeaseTables().contains(tableName)) {
-                    log.info("Succesfully deleted the lease table {}", tableName);
-                    return;
-                }
-            } catch (Exception e) {
+
+            List<String> leaseTableNames = listAllLeaseTables();
+            log.info("All lease tables name: {}. Looking for: {}", leaseTableNames, tableName);
+            if (!listAllLeaseTables().contains(tableName)) {
+                log.info("Succesfully deleted the lease table {}", tableName);
+                return;
+            } else {
                 try {
                     Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-                } catch (InterruptedException e1) { }
-                log.info("Lease table {} is not deleted yet, exception: ", tableName, e);
+                } catch (InterruptedException e1) {}
+                log.info("Lease table {} is not deleted yet, exception: ", tableName);
             }
         }
     }
