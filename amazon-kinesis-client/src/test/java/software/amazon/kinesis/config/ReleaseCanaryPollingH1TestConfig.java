@@ -7,14 +7,18 @@ import software.amazon.kinesis.retrieval.polling.PollingConfig;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.util.UUID;
 
 /**
  * Config for a polling consumer with HTTP protocol of HTTP1
  */
 public class ReleaseCanaryPollingH1TestConfig extends KCLAppConfig {
+
+    private final UUID uniqueId = UUID.randomUUID();
+
     @Override
     public String getStreamName() {
-        return "KCLReleaseCanary2XPollingH1TestStream";
+        return "KCLReleaseCanary2XPollingH1TestStream_" + uniqueId;
     }
 
     @Override
@@ -25,12 +29,12 @@ public class ReleaseCanaryPollingH1TestConfig extends KCLAppConfig {
     @Override
     public RetrievalConfig getRetrievalConfig() throws IOException, URISyntaxException {
 
-        InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
+        final InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
                 .newInitialPosition(getInitialPosition());
 
-        RetrievalConfig config = getConfigsBuilder().retrievalConfig();
+        final RetrievalConfig config = getConfigsBuilder().retrievalConfig();
         config.initialPositionInStreamExtended(initialPosition);
-        config.retrievalSpecificConfig(new PollingConfig(getStreamName(), buildConsumerClient()));
+        config.retrievalSpecificConfig(new PollingConfig(getStreamName(), config.kinesisClient()));
 
         return config;
     }

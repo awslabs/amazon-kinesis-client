@@ -208,8 +208,8 @@
               <value>${sqlite4java.libpath}</value>
             </property>
             <property>
-              <name>credentials</name>
-              <value>${credentials}</value>
+              <name>awsProfile</name>
+              <value>${awsProfile}</value>
             </property>
           </systemProperties>
         </configuration>

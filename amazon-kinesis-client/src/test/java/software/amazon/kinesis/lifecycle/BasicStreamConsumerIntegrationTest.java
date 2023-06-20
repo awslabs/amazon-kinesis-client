@@ -2,29 +2,29 @@ package software.amazon.kinesis.lifecycle;
 
 import org.junit.Test;
 import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.ReleaseCanaryPollingH1TestConfig;
 import software.amazon.kinesis.config.ReleaseCanaryPollingH2TestConfig;
+import software.amazon.kinesis.config.ReleaseCanaryPollingH1TestConfig;
 import software.amazon.kinesis.config.ReleaseCanaryStreamingTestConfig;
 import software.amazon.kinesis.utils.TestConsumer;
 
-public class BasicStreamingPollingIntegrationTest {
+public class BasicStreamConsumerIntegrationTest {
 
     @Test
-    public void KCLReleaseCanaryPollingH2Test() throws Exception {
+    public void kclReleaseCanaryPollingH2Test() throws Exception {
         KCLAppConfig consumerConfig = new ReleaseCanaryPollingH2TestConfig();
         TestConsumer consumer = new TestConsumer(consumerConfig);
         consumer.run();
     }
 
     @Test
-    public void KCLReleaseCanaryPollingH1Test() throws Exception {
+    public void kclReleaseCanaryPollingH1Test() throws Exception {
         KCLAppConfig consumerConfig = new ReleaseCanaryPollingH1TestConfig();
         TestConsumer consumer = new TestConsumer(consumerConfig);
         consumer.run();
     }
 
     @Test
-    public void KCLReleaseCanaryStreamingTest() throws Exception {
+    public void kclReleaseCanaryStreamingTest() throws Exception {
         KCLAppConfig consumerConfig = new ReleaseCanaryStreamingTestConfig();
         TestConsumer consumer = new TestConsumer(consumerConfig);
         consumer.run();

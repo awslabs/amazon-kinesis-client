@@ -7,7 +7,6 @@ import software.amazon.kinesis.utils.RecordValidatorQueue;
 import software.amazon.kinesis.utils.ReshardOptions;
 import software.amazon.kinesis.utils.TestRecordProcessorFactory;
 import lombok.Builder;
-import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.http.Protocol;
@@ -39,27 +38,27 @@ import java.util.Optional;
  */
 public abstract class KCLAppConfig {
 
+    private KinesisAsyncClient kinesisAsyncClient;
+    private DynamoDbAsyncClient dynamoDbAsyncClient;
+    private CloudWatchAsyncClient cloudWatchAsyncClient;
+    private RecordValidatorQueue recordValidator;
+
     /**
      * Name used for test stream and lease tracker table
      */
     public abstract String getStreamName();
 
-    public String getStreamArn() {
-        return null;
-    }
-
     public int getShardCount() { return 4; }
-
-    public String getEndpoint() { return ""; }
 
     public Region getRegion() { return Region.US_WEST_2; }
 
     /**
      * "default" profile, should match with profiles listed in "cat ~/.aws/config"
      */
-    public String getProfile() {
-        String iamUser = System.getProperty("credentials");
-        return iamUser;
+    private AwsCredentialsProvider getCredentialsProvider() {
+        final String awsProfile = System.getProperty("credentials");
+        return (awsProfile != null) ?
+                ProfileCredentialsProvider.builder().profileName(awsProfile).build() : DefaultCredentialsProvider.create();
     }
 
     public InitialPositionInStream getInitialPosition() {
@@ -87,24 +86,14 @@ public abstract class KCLAppConfig {
         return null;
     }
 
-    public KinesisAsyncClient buildConsumerClient() throws URISyntaxException, IOException {
-        return buildAsyncKinesisClient(getConsumerProtocol());
+    public final KinesisAsyncClient buildAsyncKinesisClient(Protocol protocol) throws URISyntaxException, IOException {
+        if (kinesisAsyncClient == null) {
+            this.kinesisAsyncClient = buildAsyncKinesisClient(Optional.ofNullable(protocol));
+        }
+        return this.kinesisAsyncClient;
     }
 
-    public KinesisAsyncClient buildProducerClient() throws URISyntaxException, IOException {
-        return buildAsyncKinesisClient(getProducerProtocol());
-    }
-
-    public KinesisAsyncClient buildAsyncKinesisClient(Protocol protocol) throws URISyntaxException, IOException {
-        return buildAsyncKinesisClient(Optional.ofNullable(protocol));
-    }
-
-    private AwsCredentialsProvider getCredentialsProvider() {
-        return (getProfile() != null) ?
-                ProfileCredentialsProvider.builder().profileName(getProfile()).build() : DefaultCredentialsProvider.create();
-    }
-
-    public KinesisAsyncClient buildAsyncKinesisClient(Optional<Protocol> protocol) throws URISyntaxException, IOException {
+    public final KinesisAsyncClient buildAsyncKinesisClient(Optional<Protocol> protocol) throws URISyntaxException, IOException {
 
         // Setup H2 client config.
         final NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder()
@@ -128,26 +117,33 @@ public abstract class KCLAppConfig {
         return kinesisAsyncClientBuilder.build();
     }
 
-    public DynamoDbAsyncClient buildAsyncDynamoDbClient() throws IOException {
-        final DynamoDbAsyncClientBuilder builder = DynamoDbAsyncClient.builder().region(getRegion());
-
-        builder.credentialsProvider(getCredentialsProvider());
-        return builder.build();
+    public final DynamoDbAsyncClient buildAsyncDynamoDbClient() throws IOException {
+        if (this.dynamoDbAsyncClient == null) {
+            final DynamoDbAsyncClientBuilder builder = DynamoDbAsyncClient.builder().region(getRegion());
+            builder.credentialsProvider(getCredentialsProvider());
+            this.dynamoDbAsyncClient = builder.build();
+        }
+        return this.dynamoDbAsyncClient;
     }
 
-    public CloudWatchAsyncClient buildAsyncCloudWatchClient() throws IOException {
-        final CloudWatchAsyncClientBuilder builder = CloudWatchAsyncClient.builder().region(getRegion());
-
-        builder.credentialsProvider(getCredentialsProvider());
-        return builder.build();
+    public final CloudWatchAsyncClient buildAsyncCloudWatchClient() throws IOException {
+        if (this.cloudWatchAsyncClient == null) {
+            final CloudWatchAsyncClientBuilder builder = CloudWatchAsyncClient.builder().region(getRegion());
+            builder.credentialsProvider(getCredentialsProvider());
+            this.cloudWatchAsyncClient = builder.build();
+        }
+        return this.cloudWatchAsyncClient;
     }
 
     public String getWorkerId() throws UnknownHostException {
         return Inet4Address.getLocalHost().getHostName();
     }
 
-    public RecordValidatorQueue getRecordValidator() {
-        return new RecordValidatorQueue();
+    public final RecordValidatorQueue getRecordValidator() {
+        if (recordValidator == null) {
+            this.recordValidator = new RecordValidatorQueue();
+        }
+        return this.recordValidator;
     }
 
     public ShardRecordProcessorFactory getShardRecordProcessorFactory() {
@@ -156,21 +152,16 @@ public abstract class KCLAppConfig {
 
     public ConfigsBuilder getConfigsBuilder() throws IOException, URISyntaxException {
         final String workerId = getWorkerId();
-        if (getStreamArn() == null) {
-            return new ConfigsBuilder(getStreamName(), getStreamName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
-                    buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
-        } else {
-            return new ConfigsBuilder(Arn.fromString(getStreamArn()), getStreamName(), buildConsumerClient(), buildAsyncDynamoDbClient(),
-                    buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
-        }
+        return new ConfigsBuilder(getStreamName(), getStreamName(), buildAsyncKinesisClient(getConsumerProtocol()), buildAsyncDynamoDbClient(),
+                buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
     }
 
     public RetrievalConfig getRetrievalConfig() throws IOException, URISyntaxException {
-        InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
+        final InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
                 .newInitialPosition(getInitialPosition());
 
         // Default is a streaming consumer
-        RetrievalConfig config = getConfigsBuilder().retrievalConfig();
+        final RetrievalConfig config = getConfigsBuilder().retrievalConfig();
         config.initialPositionInStreamExtended(initialPosition);
         return config;
     }
