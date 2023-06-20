@@ -3,19 +3,25 @@ package software.amazon.kinesis.utils;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.DeleteTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
 import software.amazon.awssdk.services.dynamodb.model.ListTablesRequest;
 import software.amazon.awssdk.services.dynamodb.model.ListTablesResponse;
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 import software.amazon.kinesis.common.FutureUtils;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-public class LeaseTableManager {
+public class LeaseTableManager extends AWSResourceManager {
 
     private final DynamoDbAsyncClient dynamoClient;
 
@@ -23,53 +29,46 @@ public class LeaseTableManager {
         this.dynamoClient = dynamoClient;
     }
 
-    private List<String> listAllLeaseTables() throws Exception {
-        final ListTablesRequest request = ListTablesRequest.builder().build();
-        final ListTablesResponse response;
-        try {
-            response = FutureUtils.resolveOrCancelFuture(dynamoClient.listTables(request), Duration.ofSeconds(60));
-        } catch (ExecutionException | InterruptedException e) {
-            throw new Exception("Error listing all lease tables");
-        }
-        return response.tableNames();
-    }
+    public boolean _isResourceActive(String tableName) {
+        final DescribeTableRequest request = DescribeTableRequest.builder().tableName(tableName).build();
+        final CompletableFuture<DescribeTableResponse> describeTableResponseCompletableFuture = dynamoClient.describeTable(request);
 
-    public void deleteLeaseTable(String tableName) throws Exception {
-        final DeleteTableRequest request = DeleteTableRequest.builder().tableName(tableName).build();
         try {
-            FutureUtils.resolveOrCancelFuture(dynamoClient.deleteTable(request), Duration.ofSeconds(60));
-        } catch (ExecutionException | InterruptedException e) {
-            throw new Exception("Could not delete lease table: {}", e);
-        }
-
-        // Wait till table is deleted to return
-        int i = 0;
-        while (true) {
-            i++;
-            if (i > 100) {
-                throw new RuntimeException("Failed lease table deletion");
+            final DescribeTableResponse response = describeTableResponseCompletableFuture.get(30, TimeUnit.SECONDS);
+            boolean isActive = response.table().tableStatus().equals(TableStatus.ACTIVE);
+            if (!isActive) {
+                throw new RuntimeException("Table is not active, instead in status: " + response.table().tableStatus());
             }
-
-            List<String> leaseTableNames = listAllLeaseTables();
-            log.info("All lease tables name: {}. Looking for: {}", leaseTableNames, tableName);
-            if (!listAllLeaseTables().contains(tableName)) {
-                log.info("Succesfully deleted the lease table {}", tableName);
-                return;
+            return true;
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof ResourceNotFoundException) {
+                return false;
             } else {
-                try {
-                    Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-                } catch (InterruptedException e1) {}
-                log.info("Lease table {} is not deleted yet, exception: ", tableName);
+                throw new RuntimeException(e);
             }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
-    public void deleteAllLeaseTables() throws Exception {
+    public void _deleteResource(String tableName) throws Exception {
+        final DeleteTableRequest request = DeleteTableRequest.builder().tableName(tableName).build();
+        FutureUtils.resolveOrCancelFuture(dynamoClient.deleteTable(request), Duration.ofSeconds(60));
+    }
 
-        final List<String> tableNames = listAllLeaseTables();
-        for (String tableName : tableNames) {
-            deleteLeaseTable(tableName);
+    public List<String> _getAllResourceNames() throws Exception {
+        List<String> tableNames = new ArrayList<>();
+        final ListTablesRequest request = ListTablesRequest.builder().build();
+        ListTablesResponse response = null;
+        while(response == null || response.lastEvaluatedTableName() != null) {
+            try {
+                response = FutureUtils.resolveOrCancelFuture(dynamoClient.listTables(request), Duration.ofSeconds(60));
+            } catch (ExecutionException | InterruptedException e) {
+                throw new Exception("Error listing all lease tables");
+            }
+            tableNames.addAll(response.tableNames());
         }
+        return tableNames;
     }
 
 }

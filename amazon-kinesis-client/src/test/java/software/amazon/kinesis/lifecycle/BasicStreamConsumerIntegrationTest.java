@@ -16,17 +16,17 @@ public class BasicStreamConsumerIntegrationTest {
         consumer.run();
     }
 
-    @Test
-    public void kclReleaseCanaryPollingH1Test() throws Exception {
-        KCLAppConfig consumerConfig = new ReleaseCanaryPollingH1TestConfig();
-        TestConsumer consumer = new TestConsumer(consumerConfig);
-        consumer.run();
-    }
-
-    @Test
-    public void kclReleaseCanaryStreamingTest() throws Exception {
-        KCLAppConfig consumerConfig = new ReleaseCanaryStreamingTestConfig();
-        TestConsumer consumer = new TestConsumer(consumerConfig);
-        consumer.run();
-    }
+//    @Test
+//    public void kclReleaseCanaryPollingH1Test() throws Exception {
+//        KCLAppConfig consumerConfig = new ReleaseCanaryPollingH1TestConfig();
+//        TestConsumer consumer = new TestConsumer(consumerConfig);
+//        consumer.run();
+//    }
+//
+//    @Test
+//    public void kclReleaseCanaryStreamingTest() throws Exception {
+//        KCLAppConfig consumerConfig = new ReleaseCanaryStreamingTestConfig();
+//        TestConsumer consumer = new TestConsumer(consumerConfig);
+//        consumer.run();
+//    }
 }

@@ -33,24 +33,14 @@ public class RecordValidatorQueue {
         for (Map.Entry<String, List<String>> entry : dict.entrySet()) {
             List<String> recordsPerShard = entry.getValue();
             int prevVal = -1;
-            boolean shardIncOrder = true;
             for (String record : recordsPerShard) {
                 int nextVal = Integer.parseInt(record);
                 if (prevVal > nextVal) {
                     log.error("The records are not in increasing order. Saw record data {} before {}.", prevVal, nextVal);
-                    shardIncOrder = false;
+                    return RecordValidationStatus.OUT_OF_ORDER;
                 }
                 prevVal = nextVal;
             }
-            if (!shardIncOrder) {
-                incOrder = false;
-                break;
-            }
-        }
-
-        // If this is true, then there was some record that was processed out of order
-        if (!incOrder) {
-            return RecordValidationStatus.OUT_OF_ORDER;
         }
 
         // Validate that no records are missing over all shards

@@ -46,6 +46,8 @@ public class TestConsumer {
     private Scheduler scheduler;
     private ScheduledExecutorService producerExecutor;
     private ScheduledFuture<?> producerFuture;
+    private ScheduledExecutorService consumerExecutor;
+    private ScheduledFuture<?> consumerFuture;
     private DynamoDbAsyncClient dynamoClient;
     public int successfulPutRecords = 0;
     public BigInteger payloadCounter = new BigInteger("0");
@@ -54,7 +56,7 @@ public class TestConsumer {
         this.consumerConfig = consumerConfig;
         this.region = consumerConfig.getRegion();
         this.streamName = consumerConfig.getStreamName();
-        this.kinesisClient = consumerConfig.buildAsyncKinesisClient(consumerConfig.getConsumerProtocol());
+        this.kinesisClient = consumerConfig.buildAsyncKinesisClient();
         this.dynamoClient = consumerConfig.buildAsyncDynamoDbClient();
     }
 
@@ -64,14 +66,13 @@ public class TestConsumer {
         final LeaseTableManager leaseTableManager = new LeaseTableManager(this.dynamoClient);
 
         // Clean up any old streams or lease tables left in test environment
-        cleanTestEnvironment(streamExistenceManager, leaseTableManager);
-        Thread.sleep(TimeUnit.SECONDS.toMillis(30));
+        cleanTestResources(streamExistenceManager, leaseTableManager);
 
         // Check if stream is created. If not, create it
         streamExistenceManager.checkStreamAndCreateIfNecessary(this.streamName);
 
         startProducer();
-        setUpTestResources();
+        setUpConsumerResources();
 
         try {
             startConsumer();
@@ -98,20 +99,19 @@ public class TestConsumer {
         } catch (Exception e) {
             // Test Failed. Clean up resources and then throw exception.
             log.info("----------Test Failed: Cleaning up resources------------");
-            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
             deleteResources(streamExistenceManager, leaseTableManager);
             throw e;
         }
     }
 
-    private void cleanTestEnvironment(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager) throws Exception {
+    private void cleanTestResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager) throws Exception {
         log.info("----------Before starting, Cleaning test environment----------");
         log.info("----------Deleting all lease tables in account----------");
-        leaseTableManager.deleteAllLeaseTables();
+        leaseTableManager.deleteAllResource();
         log.info("----------Finished deleting all lease tables-------------");
 
         log.info("----------Deleting all streams in account----------");
-        streamExistenceManager.deleteAllStreams();
+        streamExistenceManager.deleteAllResource();
         log.info("----------Finished deleting all streams-------------");
     }
 
@@ -121,7 +121,7 @@ public class TestConsumer {
         this.producerFuture = producerExecutor.scheduleAtFixedRate(this::publishRecord, 60, 1, TimeUnit.SECONDS);
     }
 
-    private void setUpTestResources() throws Exception {
+    private void setUpConsumerResources() throws Exception {
         // Setup configuration of KCL (including DynamoDB and CloudWatch)
         final ConfigsBuilder configsBuilder = consumerConfig.getConfigsBuilder();
 
@@ -149,9 +149,8 @@ public class TestConsumer {
 
     private void startConsumer() {
         // Start record processing of dummy data
-        final Thread schedulerThread = new Thread(scheduler);
-        schedulerThread.setDaemon(true);
-        schedulerThread.start();
+        this.consumerExecutor = Executors.newSingleThreadScheduledExecutor();
+        this.consumerFuture = consumerExecutor.schedule(scheduler, 0, TimeUnit.SECONDS);
     }
 
     public void publishRecord() {
@@ -220,9 +219,9 @@ public class TestConsumer {
 
     private void deleteResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager) throws Exception {
         log.info("-------------Start deleting stream.----------------");
-        streamExistenceManager.deleteStream(this.streamName);
+        streamExistenceManager.deleteResource(this.streamName);
         log.info("-------------Start deleting lease table.----------------");
-        leaseTableManager.deleteLeaseTable(this.consumerConfig.getStreamName());
+        leaseTableManager.deleteResource(this.consumerConfig.getStreamName());
         log.info("-------------Finished deleting resources.----------------");
     }
 

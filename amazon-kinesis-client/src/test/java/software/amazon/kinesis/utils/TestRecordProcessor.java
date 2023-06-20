@@ -24,7 +24,7 @@ public class TestRecordProcessor implements ShardRecordProcessor {
 
     private String shardId;
 
-    RecordValidatorQueue recordValidator;
+    private final RecordValidatorQueue recordValidator;
 
     public TestRecordProcessor(RecordValidatorQueue recordValidator) {
         this.recordValidator = recordValidator;
@@ -48,8 +48,8 @@ public class TestRecordProcessor implements ShardRecordProcessor {
         try {
             log.info("Processing {} record(s)", processRecordsInput.records().size());
 
-            for (KinesisClientRecord r : processRecordsInput.records()) {
-                String data = new String(asByteArray(r.data()));
+            for (KinesisClientRecord kinesisRecord : processRecordsInput.records()) {
+                final String data = new String(asByteArray(kinesisRecord.data()));
                 log.info("Processing record pk: {}", data);
                 recordValidator.add(shardId, data);
             }

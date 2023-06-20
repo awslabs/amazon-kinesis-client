@@ -11,10 +11,13 @@ import software.amazon.awssdk.services.kinesis.model.ListStreamsRequest;
 import software.amazon.awssdk.services.kinesis.model.ListStreamsResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.StreamStatus;
+import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.config.KCLAppConfig;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -22,17 +25,16 @@ import java.util.concurrent.TimeUnit;
 
 @Value
 @Slf4j
-public class StreamExistenceManager {
+public class StreamExistenceManager extends AWSResourceManager {
     private final KinesisAsyncClient client;
     private final KCLAppConfig testConfig;
 
     public StreamExistenceManager(KCLAppConfig config) throws URISyntaxException, IOException {
         this.testConfig = config;
-        this.client = config.buildAsyncKinesisClient(config.getConsumerProtocol());
+        this.client = config.buildAsyncKinesisClient();
     }
 
-    private boolean isStreamActive(String streamName) {
-
+    public boolean _isResourceActive(String streamName) {
         final DescribeStreamSummaryRequest request = DescribeStreamSummaryRequest.builder().streamName(streamName).build();
         final CompletableFuture<DescribeStreamSummaryResponse> describeStreamSummaryResponseCompletableFuture = client.describeStreamSummary(request);
 
@@ -54,6 +56,34 @@ public class StreamExistenceManager {
         }
     }
 
+    public void _deleteResource(String streamName) throws Exception {
+        final DeleteStreamRequest request = DeleteStreamRequest.builder().streamName(streamName).enforceConsumerDeletion(true).build();
+        client.deleteStream(request).get(30, TimeUnit.SECONDS);
+    }
+
+    public List<String> _getAllResourceNames() throws Exception {
+        List<String> streamNames = new ArrayList<>();
+        final ListStreamsRequest request = ListStreamsRequest.builder().build();
+        ListStreamsResponse response = null;
+        while(response == null || response.hasMoreStreams()) {
+            try {
+                response = FutureUtils.resolveOrCancelFuture(client.listStreams(request), Duration.ofSeconds(60));
+            } catch (Exception e) {
+                throw new Exception("Error listing all lease tables");
+            }
+            streamNames.addAll(response.streamNames());
+        }
+        return streamNames;
+    }
+
+    public void checkStreamAndCreateIfNecessary(String streamName) {
+
+        if (!_isResourceActive(streamName)) {
+            createStream(streamName, testConfig.getShardCount());
+        }
+        log.info("Using stream {} with region {}", streamName, testConfig.getRegion());
+    }
+
     private void createStream(String streamName, int shardCount) {
         final CreateStreamRequest request = CreateStreamRequest.builder().streamName(streamName).shardCount(shardCount).build();
         try {
@@ -69,7 +99,7 @@ public class StreamExistenceManager {
                 throw new RuntimeException("Failed stream creation, did not transition into active");
             }
             try {
-                boolean isActive = isStreamActive(streamName);
+                boolean isActive = _isResourceActive(streamName);
                 if (isActive) {
                     log.info("Succesfully created the stream {}", streamName);
                     return;
@@ -82,61 +112,6 @@ public class StreamExistenceManager {
                 }
                 log.info("Stream {} is not active yet, exception: ", streamName, e);
             }
-        }
-    }
-
-    public void deleteStream(String streamName) {
-        final DeleteStreamRequest request = DeleteStreamRequest.builder().streamName(streamName).enforceConsumerDeletion(true).build();
-        try {
-            client.deleteStream(request).get(30, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to delete stream with name " + streamName, e);
-        }
-
-        int i = 0;
-        while (true) {
-            i++;
-            if (i > 100) {
-                throw new RuntimeException("Failed stream deletion");
-            }
-            try {
-                boolean isActive = isStreamActive(streamName);
-                if (!isActive) {
-                    log.info("Succesfully deleted the stream {}", streamName);
-                    return;
-                }
-            } catch (Exception e) {
-                try {
-                    Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-                } catch (InterruptedException e1) { }
-                log.info("Stream {} is not deleted yet, exception: ", streamName, e);
-            }
-        }
-    }
-
-    public void checkStreamAndCreateIfNecessary(String streamName) {
-
-        if (!isStreamActive(streamName)) {
-            createStream(streamName, testConfig.getShardCount());
-        }
-        log.info("Using stream {} with region {}", streamName, testConfig.getRegion());
-    }
-
-    private List<String> getAllStreamNames() {
-        final ListStreamsRequest request = ListStreamsRequest.builder().build();
-        ListStreamsResponse response;
-        try {
-            response = client.listStreams(request).get(30, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to list all streams", e);
-        }
-        return response.streamNames();
-    }
-
-    public void deleteAllStreams() {
-        final List<String> streamNames = getAllStreamNames();
-        for (String streamName : streamNames) {
-            deleteStream(streamName);
         }
     }
 

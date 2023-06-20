@@ -65,13 +65,7 @@ public abstract class KCLAppConfig {
         return InitialPositionInStream.TRIM_HORIZON;
     }
 
-    public Protocol getConsumerProtocol() {
-        return Protocol.HTTP1_1;
-    }
-
-    public Protocol getProducerProtocol() {
-        return Protocol.HTTP1_1;
-    }
+    public abstract Protocol getKinesisClientProtocol();
 
     public ProducerConfig getProducerConfig() {
         return ProducerConfig.builder()
@@ -86,35 +80,29 @@ public abstract class KCLAppConfig {
         return null;
     }
 
-    public final KinesisAsyncClient buildAsyncKinesisClient(Protocol protocol) throws URISyntaxException, IOException {
+    public final KinesisAsyncClient buildAsyncKinesisClient() throws URISyntaxException, IOException {
+
         if (kinesisAsyncClient == null) {
-            this.kinesisAsyncClient = buildAsyncKinesisClient(Optional.ofNullable(protocol));
+            // Setup H2 client config.
+            final NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder()
+                    .maxConcurrency(Integer.MAX_VALUE);
+
+            builder.protocol(getKinesisClientProtocol());
+
+            final SdkAsyncHttpClient sdkAsyncHttpClient =
+                    builder.buildWithDefaults(AttributeMap.builder().build());
+
+            // Setup client builder by default values
+            final KinesisAsyncClientBuilder kinesisAsyncClientBuilder = KinesisAsyncClient.builder().region(getRegion());
+
+            kinesisAsyncClientBuilder.httpClient(sdkAsyncHttpClient);
+
+            kinesisAsyncClientBuilder.credentialsProvider(getCredentialsProvider());
+
+            this.kinesisAsyncClient = kinesisAsyncClientBuilder.build();
         }
+
         return this.kinesisAsyncClient;
-    }
-
-    public final KinesisAsyncClient buildAsyncKinesisClient(Optional<Protocol> protocol) throws URISyntaxException, IOException {
-
-        // Setup H2 client config.
-        final NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder()
-                .maxConcurrency(Integer.MAX_VALUE);
-
-        // If not present, defaults to HTTP1_1
-        if (protocol.isPresent()) {
-            builder.protocol(protocol.get());
-        }
-
-        final SdkAsyncHttpClient sdkAsyncHttpClient =
-                builder.buildWithDefaults(AttributeMap.builder().build());
-
-        // Setup client builder by default values
-        final KinesisAsyncClientBuilder kinesisAsyncClientBuilder = KinesisAsyncClient.builder().region(getRegion());
-
-        kinesisAsyncClientBuilder.httpClient(sdkAsyncHttpClient);
-
-        kinesisAsyncClientBuilder.credentialsProvider(getCredentialsProvider());
-
-        return kinesisAsyncClientBuilder.build();
     }
 
     public final DynamoDbAsyncClient buildAsyncDynamoDbClient() throws IOException {
@@ -135,7 +123,7 @@ public abstract class KCLAppConfig {
         return this.cloudWatchAsyncClient;
     }
 
-    public String getWorkerId() throws UnknownHostException {
+    public final String getWorkerId() throws UnknownHostException {
         return Inet4Address.getLocalHost().getHostName();
     }
 
@@ -150,9 +138,9 @@ public abstract class KCLAppConfig {
         return new TestRecordProcessorFactory(getRecordValidator());
     }
 
-    public ConfigsBuilder getConfigsBuilder() throws IOException, URISyntaxException {
+    public final ConfigsBuilder getConfigsBuilder() throws IOException, URISyntaxException {
         final String workerId = getWorkerId();
-        return new ConfigsBuilder(getStreamName(), getStreamName(), buildAsyncKinesisClient(getConsumerProtocol()), buildAsyncDynamoDbClient(),
+        return new ConfigsBuilder(getStreamName(), getStreamName(), buildAsyncKinesisClient(), buildAsyncDynamoDbClient(),
                 buildAsyncCloudWatchClient(), workerId, getShardRecordProcessorFactory());
     }
 

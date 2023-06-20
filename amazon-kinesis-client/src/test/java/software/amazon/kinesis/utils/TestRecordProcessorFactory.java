@@ -5,7 +5,7 @@ import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 
 public class TestRecordProcessorFactory implements ShardRecordProcessorFactory {
 
-    RecordValidatorQueue recordValidator;
+    private final RecordValidatorQueue recordValidator;
 
     public TestRecordProcessorFactory(RecordValidatorQueue recordValidator) {
         this.recordValidator = recordValidator;

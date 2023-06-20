@@ -21,7 +21,7 @@ public class ReleaseCanaryPollingH2TestConfig extends KCLAppConfig {
     }
 
     @Override
-    public Protocol getConsumerProtocol() {
+    public Protocol getKinesisClientProtocol() {
         return Protocol.HTTP2;
     }
 

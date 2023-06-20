@@ -5,7 +5,7 @@ import org.junit.Test;
 
 public class RecordValidatorQueueTest {
 
-    private RecordValidatorQueue recordValidator = new RecordValidatorQueue();
+    private final RecordValidatorQueue recordValidator = new RecordValidatorQueue();
 
     private static final String SHARD_ID = "ABC";
 

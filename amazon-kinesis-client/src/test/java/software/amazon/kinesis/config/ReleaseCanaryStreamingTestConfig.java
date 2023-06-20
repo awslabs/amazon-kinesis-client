@@ -16,7 +16,7 @@ public class ReleaseCanaryStreamingTestConfig extends KCLAppConfig {
     }
 
     @Override
-    public Protocol getConsumerProtocol() {
+    public Protocol getKinesisClientProtocol() {
         return Protocol.HTTP2;
     }
 
