@@ -1,22 +1,40 @@
 package software.amazon.kinesis.utils;
 
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.dynamodb.model.ListTablesRequest;
+import software.amazon.awssdk.services.dynamodb.model.ListTablesResponse;
+import software.amazon.kinesis.common.FutureUtils;
+
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
+@NoArgsConstructor
 public abstract class AWSResourceManager {
 
-    public AWSResourceManager() {}
-
+    /**
+     * Make delete resource API call for specific resource type
+     */
     public abstract void _deleteResource(String resourceName) throws Exception;
+
+    /**
+     * Check if resource with given name is in active state
+     */
     public abstract boolean _isResourceActive(String name);
+
+    /**
+     * Get a list of all the names of resources of a specified type
+     * @return
+     * @throws Exception
+     */
     public abstract List<String> _getAllResourceNames() throws Exception;
 
     /**
-     * Deletes resource with specified resource name
-     * @param resourceName
-     * @throws Exception
+     * Delete resource with specified resource name
      */
     public void deleteResource(String resourceName) throws Exception {
 
@@ -51,9 +69,9 @@ public abstract class AWSResourceManager {
      * Delete all instances of a particular resource type
      */
     public void deleteAllResource() throws Exception {
-        final List<String> streamNames = _getAllResourceNames();
-        for (String streamName : streamNames) {
-            deleteResource(streamName);
+        final List<String> resourceNames = _getAllResourceNames();
+        for (String resourceName : resourceNames) {
+            deleteResource(resourceName);
         }
     }
 }

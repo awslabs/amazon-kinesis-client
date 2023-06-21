@@ -2,6 +2,7 @@ package software.amazon.kinesis.utils;
 
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.dynamodb.model.ListTablesRequest;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.DeleteStreamRequest;
@@ -63,15 +64,24 @@ public class StreamExistenceManager extends AWSResourceManager {
 
     public List<String> _getAllResourceNames() throws Exception {
         List<String> streamNames = new ArrayList<>();
-        final ListStreamsRequest request = ListStreamsRequest.builder().build();
+        ListStreamsRequest request = ListStreamsRequest.builder().build();
         ListStreamsResponse response = null;
+        String startStreamName = null;
+
+        // Continue while paginated call is still returning stream names
         while(response == null || response.hasMoreStreams()) {
+            if (startStreamName != null) {
+                request = ListStreamsRequest.builder().exclusiveStartStreamName(startStreamName).build();
+            }
             try {
                 response = FutureUtils.resolveOrCancelFuture(client.listStreams(request), Duration.ofSeconds(60));
             } catch (Exception e) {
                 throw new Exception("Error listing all lease tables");
             }
+            // Add all stream names to list
             streamNames.addAll(response.streamNames());
+            // Set startTableName for next call to be the last table name evaluated in current call
+            startStreamName = response.nextToken();
         }
         return streamNames;
     }

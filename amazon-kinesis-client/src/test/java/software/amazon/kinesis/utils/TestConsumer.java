@@ -49,6 +49,7 @@ public class TestConsumer {
     private ScheduledExecutorService consumerExecutor;
     private ScheduledFuture<?> consumerFuture;
     private DynamoDbAsyncClient dynamoClient;
+    private final ObjectMapper mapper = new ObjectMapper();
     public int successfulPutRecords = 0;
     public BigInteger payloadCounter = new BigInteger("0");
 
@@ -77,7 +78,7 @@ public class TestConsumer {
         try {
             startConsumer();
 
-            // Sleep for two minutes to allow the producer/consumer to run and then end the test case.
+            // Sleep for three minutes to allow the producer/consumer to run and then end the test case.
             Thread.sleep(TimeUnit.SECONDS.toMillis(60 * 3));
 
             // Stops sending dummy data.
@@ -92,15 +93,14 @@ public class TestConsumer {
             // Validate processed data
             validateRecordProcessor();
 
-            // Clean up resources created
-            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
-            deleteResources(streamExistenceManager, leaseTableManager);
-
         } catch (Exception e) {
             // Test Failed. Clean up resources and then throw exception.
             log.info("----------Test Failed: Cleaning up resources------------");
-            deleteResources(streamExistenceManager, leaseTableManager);
             throw e;
+        } finally {
+            // Clean up resources created
+            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
+            deleteResources(streamExistenceManager, leaseTableManager);
         }
     }
 
@@ -168,20 +168,18 @@ public class TestConsumer {
             successfulPutRecords += 1;
             log.info("---------Record published, successfulPutRecords is now: {}", successfulPutRecords);
         } catch (InterruptedException e) {
-            log.info("Interrupted, assuming shutdown.");
+            log.info("Interrupted, assuming shutdown. ", e);
         } catch (ExecutionException | RuntimeException e) {
-            log.error("Error during publish records");
+            log.error("Error during publish records", e);
         }
     }
 
     private ByteBuffer wrapWithCounter(int payloadSize, BigInteger payloadCounter) throws RuntimeException {
         final byte[] returnData;
         log.info("--------------Putting record with data: {}", payloadCounter);
-        ObjectMapper mapper = new ObjectMapper();
         try {
             returnData = mapper.writeValueAsBytes(payloadCounter);
         } catch (Exception e) {
-            log.error("Error creating payload data for {}", payloadCounter.toString());
             throw new RuntimeException("Error converting object to bytes: ", e);
         }
         return ByteBuffer.wrap(returnData);
@@ -201,7 +199,7 @@ public class TestConsumer {
         } catch (InterruptedException e) {
             log.info("Interrupted while waiting for graceful shutdown. Continuing.");
         } catch (ExecutionException | TimeoutException e) {
-            throw new Exception("Exception while executing graceful shutdown. {}", e);
+            throw e;
         }
         log.info("Completed, shutting down now.");
     }

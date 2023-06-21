@@ -26,10 +26,9 @@ public class RecordValidatorQueue {
         values.add(data);
     }
 
-    public RecordValidationStatus validateRecords(int expectedShardCount) {
+    public RecordValidationStatus validateRecords(int expectedRecordCount) {
 
         // Validate that each List in the HashMap has data records in increasing order
-        boolean incOrder = true;
         for (Map.Entry<String, List<String>> entry : dict.entrySet()) {
             List<String> recordsPerShard = entry.getValue();
             int prevVal = -1;
@@ -44,16 +43,16 @@ public class RecordValidatorQueue {
         }
 
         // Validate that no records are missing over all shards
-        int actualShardCount = 0;
+        int actualRecordCount = 0;
         for (Map.Entry<String, List<String>> entry : dict.entrySet()) {
             List<String> recordsPerShard = entry.getValue();
             Set<String> noDupRecords = new HashSet<String>(recordsPerShard);
-            actualShardCount += noDupRecords.size();
+            actualRecordCount += noDupRecords.size();
         }
 
         // If this is true, then there was some record that was missed during processing.
-        if (actualShardCount != expectedShardCount) {
-            log.error("Failed to get correct number of records processed. Should be {} but was {}", expectedShardCount, actualShardCount);
+        if (actualRecordCount != expectedRecordCount) {
+            log.error("Failed to get correct number of records processed. Should be {} but was {}", expectedRecordCount, actualRecordCount);
             return RecordValidationStatus.MISSING_RECORD;
         }
 

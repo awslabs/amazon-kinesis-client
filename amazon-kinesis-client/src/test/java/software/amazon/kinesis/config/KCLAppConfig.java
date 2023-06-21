@@ -56,7 +56,7 @@ public abstract class KCLAppConfig {
      * "default" profile, should match with profiles listed in "cat ~/.aws/config"
      */
     private AwsCredentialsProvider getCredentialsProvider() {
-        final String awsProfile = System.getProperty("credentials");
+        final String awsProfile = System.getProperty("awsProfile");
         return (awsProfile != null) ?
                 ProfileCredentialsProvider.builder().profileName(awsProfile).build() : DefaultCredentialsProvider.create();
     }
