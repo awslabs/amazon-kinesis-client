@@ -27,7 +27,7 @@ public class LeaseTableManager extends AWSResourceManager {
 
     private final DynamoDbAsyncClient dynamoClient;
 
-    public boolean _isResourceActive(String tableName) {
+    public boolean isResourceActive(String tableName) {
         final DescribeTableRequest request = DescribeTableRequest.builder().tableName(tableName).build();
         final CompletableFuture<DescribeTableResponse> describeTableResponseCompletableFuture = dynamoClient.describeTable(request);
 
@@ -49,12 +49,12 @@ public class LeaseTableManager extends AWSResourceManager {
         }
     }
 
-    public void _deleteResource(String tableName) throws Exception {
+    public void deleteResourceCall(String tableName) throws Exception {
         final DeleteTableRequest request = DeleteTableRequest.builder().tableName(tableName).build();
         FutureUtils.resolveOrCancelFuture(dynamoClient.deleteTable(request), Duration.ofSeconds(60));
     }
 
-    public List<String> _getAllResourceNames() throws Exception {
+    public List<String> getAllResourceNames() throws Exception {
         ListTablesRequest listTableRequest = ListTablesRequest.builder().build();
         List<String> allTableNames = new ArrayList<>();
         ListTablesResponse result = null;

@@ -19,19 +19,19 @@ public abstract class AWSResourceManager {
     /**
      * Make delete resource API call for specific resource type
      */
-    public abstract void _deleteResource(String resourceName) throws Exception;
+    public abstract void deleteResourceCall(String resourceName) throws Exception;
 
     /**
      * Check if resource with given name is in active state
      */
-    public abstract boolean _isResourceActive(String name);
+    public abstract boolean isResourceActive(String name);
 
     /**
      * Get a list of all the names of resources of a specified type
      * @return
      * @throws Exception
      */
-    public abstract List<String> _getAllResourceNames() throws Exception;
+    public abstract List<String> getAllResourceNames() throws Exception;
 
     /**
      * Delete resource with specified resource name
@@ -39,7 +39,7 @@ public abstract class AWSResourceManager {
     public void deleteResource(String resourceName) throws Exception {
 
         try {
-            _deleteResource(resourceName);
+            deleteResourceCall(resourceName);
         } catch (Exception e) {
             throw new Exception("Could not delete resource: {}", e);
         }
@@ -52,7 +52,7 @@ public abstract class AWSResourceManager {
                 throw new RuntimeException("Failed resource deletion");
             }
             try {
-                if (!_isResourceActive(resourceName)) {
+                if (!isResourceActive(resourceName)) {
                     log.info("Successfully deleted the resource {}", resourceName);
                     return;
                 }
@@ -69,7 +69,7 @@ public abstract class AWSResourceManager {
      * Delete all instances of a particular resource type
      */
     public void deleteAllResource() throws Exception {
-        final List<String> resourceNames = _getAllResourceNames();
+        final List<String> resourceNames = getAllResourceNames();
         for (String resourceName : resourceNames) {
             deleteResource(resourceName);
         }

@@ -36,7 +36,7 @@ public class StreamExistenceManager extends AWSResourceManager {
         this.client = config.buildAsyncKinesisClient();
     }
 
-    public boolean _isResourceActive(String streamName) {
+    public boolean isResourceActive(String streamName) {
         final DescribeStreamSummaryRequest request = DescribeStreamSummaryRequest.builder().streamName(streamName).build();
         final CompletableFuture<DescribeStreamSummaryResponse> describeStreamSummaryResponseCompletableFuture = client.describeStreamSummary(request);
 
@@ -58,12 +58,12 @@ public class StreamExistenceManager extends AWSResourceManager {
         }
     }
 
-    public void _deleteResource(String streamName) throws Exception {
+    public void deleteResourceCall(String streamName) throws Exception {
         final DeleteStreamRequest request = DeleteStreamRequest.builder().streamName(streamName).enforceConsumerDeletion(true).build();
         client.deleteStream(request).get(30, TimeUnit.SECONDS);
     }
 
-    public List<String> _getAllResourceNames() throws Exception {
+    public List<String> getAllResourceNames() throws Exception {
         ListStreamsRequest listStreamRequest = ListStreamsRequest.builder().build();
         List<String> allStreamNames = new ArrayList<>();
         ListStreamsResponse result = null;
@@ -77,7 +77,7 @@ public class StreamExistenceManager extends AWSResourceManager {
 
     public void checkStreamAndCreateIfNecessary(String streamName) {
 
-        if (!_isResourceActive(streamName)) {
+        if (!isResourceActive(streamName)) {
             createStream(streamName, testConfig.getShardCount());
         }
         log.info("Using stream {} with region {}", streamName, testConfig.getRegion());
@@ -98,7 +98,7 @@ public class StreamExistenceManager extends AWSResourceManager {
                 throw new RuntimeException("Failed stream creation, did not transition into active");
             }
             try {
-                boolean isActive = _isResourceActive(streamName);
+                boolean isActive = isResourceActive(streamName);
                 if (isActive) {
                     log.info("Succesfully created the stream {}", streamName);
                     return;
