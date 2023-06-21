@@ -99,7 +99,6 @@ public class TestConsumer {
             throw e;
         } finally {
             // Clean up resources created
-            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
             deleteResources(streamExistenceManager, leaseTableManager);
         }
     }

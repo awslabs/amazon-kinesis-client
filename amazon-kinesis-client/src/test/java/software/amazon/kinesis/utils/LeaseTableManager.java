@@ -55,27 +55,14 @@ public class LeaseTableManager extends AWSResourceManager {
     }
 
     public List<String> _getAllResourceNames() throws Exception {
-        List<String> tableNames = new ArrayList<>();
-        ListTablesRequest request = ListTablesRequest.builder().build();
-        ListTablesResponse response = null;
-        String startTableName = null;
-
-        // Continue while paginated call is still returning table names
-        while(response == null || response.lastEvaluatedTableName() != null) {
-            if (startTableName != null) {
-                request = ListTablesRequest.builder().exclusiveStartTableName(startTableName).build();
-            }
-            try {
-                response = FutureUtils.resolveOrCancelFuture(dynamoClient.listTables(request), Duration.ofSeconds(60));
-            } catch (ExecutionException | InterruptedException e) {
-                throw new Exception("Error listing all lease tables");
-            }
-            // Add all table names to list
-            tableNames.addAll(response.tableNames());
-            // Set startTableName for next call to be the last table name evaluated in current call
-            startTableName = response.lastEvaluatedTableName();
-        }
-        return tableNames;
+        ListTablesRequest listTableRequest = ListTablesRequest.builder().build();
+        List<String> allTableNames = new ArrayList<>();
+        ListTablesResponse result = null;
+        do {
+            result = FutureUtils.resolveOrCancelFuture(dynamoClient.listTables(listTableRequest), Duration.ofSeconds(60));
+            allTableNames.addAll(result.tableNames());
+            listTableRequest = ListTablesRequest.builder().exclusiveStartTableName(result.lastEvaluatedTableName()).build();
+        } while (result.lastEvaluatedTableName() != null);
+        return allTableNames;
     }
-
 }
