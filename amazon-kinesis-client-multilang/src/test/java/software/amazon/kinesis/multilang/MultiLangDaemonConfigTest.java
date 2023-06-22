@@ -59,7 +59,6 @@ public class MultiLangDaemonConfigTest {
      * Instantiate a MultiLangDaemonConfig object
      * @param streamName
      * @param streamArn
-     * @param region
      * @throws IOException
      */
     public void setup(String streamName, String streamArn) throws IOException {
@@ -71,7 +70,7 @@ public class MultiLangDaemonConfigTest {
                         + "regionName = %s\n",
                 EXE,
                 APPLICATION_NAME,
-                REGION.toString());
+                "us-east-1");
 
         if (streamName != null) {
             properties += String.format("streamName = %s\n", streamName);
