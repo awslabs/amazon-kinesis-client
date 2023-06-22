@@ -79,9 +79,9 @@ public class KinesisClientLibConfigurator {
             final String streamNameFromArn = streamArnObj.resource().resource();
             configuration.setStreamName(streamNameFromArn);
 
-        } else {
-            Validate.notBlank(configuration.getStreamName(), "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
         }
+
+        Validate.notBlank(configuration.getStreamName(), "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
         Validate.isTrue(configuration.getKinesisCredentialsProvider().isDirty(), "A basic set of AWS credentials must be provided");
 
         return configuration;

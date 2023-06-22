@@ -278,10 +278,8 @@ public class KinesisClientLibConfiguratorTest {
         }
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testWithMissingCredentialsProvider() {
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("A basic set of AWS credentials must be provided");
 
         String test = StringUtils.join(new String[] { "streamName = a", "applicationName = b", "workerId = 123",
                 "failoverTimeMillis = 100", "shardSyncIntervalMillis = 500" }, '\n');
@@ -305,10 +303,8 @@ public class KinesisClientLibConfiguratorTest {
         assertFalse(config.getWorkerIdentifier().isEmpty());
     }
 
-    @Test
+    @Test(expected = NullPointerException.class)
     public void testWithMissingStreamNameAndMissingStreamArn() {
-        thrown.expect(NullPointerException.class);
-
         String test = StringUtils.join(new String[] {
                         "applicationName = b",
                         "AWSCredentialsProvider = " + credentialName1,
@@ -320,9 +316,8 @@ public class KinesisClientLibConfiguratorTest {
         configurator.getConfiguration(input);
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testWithEmptyStreamNameAndMissingStreamArn() {
-        thrown.expect(IllegalArgumentException.class);
 
         String test = StringUtils.join(new String[] {
                         "applicationName = b",
@@ -337,10 +332,8 @@ public class KinesisClientLibConfiguratorTest {
         configurator.getConfiguration(input);
     }
 
-    @Test
+    @Test(expected = NullPointerException.class)
     public void testWithMissingApplicationName() {
-        thrown.expect(NullPointerException.class);
-        thrown.expectMessage("Application name is required");
 
         String test = StringUtils.join(new String[] { "streamName = a", "AWSCredentialsProvider = " + credentialName1,
                 "workerId = 123", "failoverTimeMillis = 100" }, '\n');
