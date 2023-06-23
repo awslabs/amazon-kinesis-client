@@ -283,7 +283,7 @@ public class ShutdownTask implements ConsumerTask {
             }
         }
 
-        for(ChildShard childShard : childShards) {
+        for (ChildShard childShard : childShards) {
             final String leaseKey = ShardInfo.getLeaseKey(shardInfo, childShard.shardId());
             if (leaseRefresher.getLease(leaseKey) == null) {
                 log.debug("{} - Shard {} - Attempting to create lease for child shard {}", shardDetector.streamIdentifier(), shardInfo.shardId(), leaseKey);

@@ -327,7 +327,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         }
         resetLock.writeLock().lock();
         try {
-            publisherSession.reset((PrefetchRecordsRetrieved)recordsRetrieved);
+            publisherSession.reset((PrefetchRecordsRetrieved) recordsRetrieved);
             wasReset = true;
         } finally {
             resetLock.writeLock().unlock();
@@ -555,7 +555,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 return;
             }
             // Add a sleep if lastSuccessfulCall is still null but this is not the first try to avoid retry storm
-            if(lastSuccessfulCall == null) {
+            if (lastSuccessfulCall == null) {
                 Thread.sleep(idleMillisBetweenCalls);
                 return;
             }

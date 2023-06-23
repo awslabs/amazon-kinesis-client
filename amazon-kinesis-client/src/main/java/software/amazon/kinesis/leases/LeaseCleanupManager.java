@@ -179,7 +179,7 @@ public class LeaseCleanupManager {
         try {
             if (cleanupLeasesUponShardCompletion && timeToCheckForCompletedShard) {
                 final Lease leaseFromDDB = leaseCoordinator.leaseRefresher().getLease(lease.leaseKey());
-                if(leaseFromDDB != null) {
+                if (leaseFromDDB != null) {
                     Set<String> childShardKeys = leaseFromDDB.childShardIds();
                     if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
                         try {

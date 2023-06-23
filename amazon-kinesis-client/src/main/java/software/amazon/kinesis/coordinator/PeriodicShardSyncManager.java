@@ -348,7 +348,7 @@ class PeriodicShardSyncManager {
                             ((MultiStreamLease) lease).shardId() :
                             lease.leaseKey();
                     final Shard shard = kinesisShards.get(shardId);
-                    if(shard == null) {
+                    if (shard == null) {
                         return lease;
                     }
                     lease.hashKeyRange(fromHashKeyRange(shard.hashKeyRange()));
@@ -372,7 +372,7 @@ class PeriodicShardSyncManager {
             List<Lease> leasesWithHashKeyRanges) {
         // Sort the hash ranges by starting hash key.
         List<Lease> sortedLeasesWithHashKeyRanges = sortLeasesByHashRange(leasesWithHashKeyRanges);
-        if(sortedLeasesWithHashKeyRanges.isEmpty()) {
+        if (sortedLeasesWithHashKeyRanges.isEmpty()) {
             log.error("No leases with valid hashranges found for stream {}", streamIdentifier);
             return Optional.of(new HashRangeHole());
         }
@@ -417,8 +417,9 @@ class PeriodicShardSyncManager {
 
     @VisibleForTesting
     static List<Lease> sortLeasesByHashRange(List<Lease> leasesWithHashKeyRanges) {
-        if (leasesWithHashKeyRanges.size() == 0 || leasesWithHashKeyRanges.size() == 1)
+        if (leasesWithHashKeyRanges.size() == 0 || leasesWithHashKeyRanges.size() == 1) {
             return leasesWithHashKeyRanges;
+        }
         Collections.sort(leasesWithHashKeyRanges, new HashKeyRangeComparator());
         return leasesWithHashKeyRanges;
     }

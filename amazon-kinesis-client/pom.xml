@@ -207,6 +207,10 @@
               <name>sqlite4java.library.path</name>
               <value>${sqlite4java.libpath}</value>
             </property>
+            <property>
+              <name>awsProfile</name>
+              <value>${awsProfile}</value>
+            </property>
           </systemProperties>
         </configuration>
       </plugin>

@@ -145,7 +145,9 @@ public class KinesisDataFetcher implements DataFetcher {
         }
     }
 
+    // CHECKSTYLE.OFF: MemberName
     final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
+    // CHECKSTYLE.ON: MemberName
         @Override
         public GetRecordsResponse getResult() {
             return GetRecordsResponse.builder()

@@ -137,7 +137,7 @@ public class PollingConfig implements RetrievalSpecificConfig {
     @Override
     public RetrievalFactory retrievalFactory() {
         // Prioritize the PollingConfig specified value if its updated.
-        if(usePollingConfigIdleTimeValue) {
+        if (usePollingConfigIdleTimeValue) {
             recordsFetcherFactory.idleMillisBetweenCalls(idleTimeBetweenReadsInMillis);
         }
         return new SynchronousBlockingRetrievalFactory(streamName(), kinesisClient(), recordsFetcherFactory,
