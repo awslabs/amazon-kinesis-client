@@ -187,7 +187,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     public boolean createLeaseTableIfNotExists(@NonNull final Long readCapacity, @NonNull final Long writeCapacity)
             throws ProvisionedThroughputException, DependencyException {
         final CreateTableRequest.Builder builder = createTableRequestBuilder();
-        if(BillingMode.PROVISIONED.equals(billingMode)) {
+        if (BillingMode.PROVISIONED.equals(billingMode)) {
             ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(readCapacity)
                 .writeCapacityUnits(writeCapacity).build();
             builder.provisionedThroughput(throughput);
@@ -467,7 +467,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         } catch (DynamoDbException | TimeoutException e) {
             throw convertAndRethrowExceptions("create", lease.leaseKey(), e);
         }
-        log.info("Created lease: {}",lease);
+        log.info("Created lease: {}", lease);
         return true;
     }
 

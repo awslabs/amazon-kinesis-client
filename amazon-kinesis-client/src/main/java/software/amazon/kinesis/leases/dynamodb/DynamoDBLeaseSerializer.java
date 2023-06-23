@@ -89,7 +89,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
             result.put(PENDING_CHECKPOINT_STATE_KEY, DynamoUtils.createAttributeValue(lease.checkpoint().subSequenceNumber()));
         }
 
-        if(lease.hashKeyRangeForLease() != null) {
+        if (lease.hashKeyRangeForLease() != null) {
             result.put(STARTING_HASH_KEY, DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedStartingHashKey()));
             result.put(ENDING_HASH_KEY, DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedEndingHashKey()));
         }
@@ -274,7 +274,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
             result.put(CHILD_SHARD_IDS_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.childShardIds())));
         }
 
-        if(lease.hashKeyRangeForLease() != null) {
+        if (lease.hashKeyRangeForLease() != null) {
             result.put(STARTING_HASH_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedStartingHashKey())));
             result.put(ENDING_HASH_KEY, putUpdate(DynamoUtils.createAttributeValue(lease.hashKeyRangeForLease().serializedEndingHashKey())));
         }

@@ -212,8 +212,10 @@ public class ProcessTask implements ConsumerTask {
         log.debug("Calling application processRecords() with {} records from {}", records.size(),
                 shardInfoId);
 
-        final ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder().records(records).cacheExitTime(input.cacheExitTime()).cacheEntryTime(input.cacheEntryTime())
-                .isAtShardEnd(input.isAtShardEnd()).checkpointer(recordProcessorCheckpointer).millisBehindLatest(input.millisBehindLatest()).build();
+        final ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder().records(records)
+                .cacheExitTime(input.cacheExitTime()).cacheEntryTime(input.cacheEntryTime())
+                .isAtShardEnd(input.isAtShardEnd()).checkpointer(recordProcessorCheckpointer)
+                .millisBehindLatest(input.millisBehindLatest()).build();
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
         shardInfo.streamIdentifierSerOpt()

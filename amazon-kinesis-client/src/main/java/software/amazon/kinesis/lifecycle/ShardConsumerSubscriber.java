@@ -61,7 +61,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     @Deprecated
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
                             ShardConsumer shardConsumer) {
-        this(recordsPublisher,executorService,bufferSize,shardConsumer, LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
+        this(recordsPublisher, executorService, bufferSize, shardConsumer, LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
     }
 
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
@@ -73,7 +73,6 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
         this.shardInfoId = ShardInfo.getLeaseKey(shardConsumer.shardInfo());
     }
-
 
     void startSubscriptions() {
         synchronized (lockObject) {

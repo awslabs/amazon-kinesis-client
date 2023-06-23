@@ -37,7 +37,7 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 @Slf4j
 @KinesisClientInternalApi
 public class ShardSyncTask implements ConsumerTask {
-    private final String SHARD_SYNC_TASK_OPERATION = "ShardSyncTask";
+    private static final String SHARD_SYNC_TASK_OPERATION = "ShardSyncTask";
 
     @NonNull
     private final ShardDetector shardDetector;

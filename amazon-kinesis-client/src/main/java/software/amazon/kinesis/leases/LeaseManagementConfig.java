@@ -310,7 +310,7 @@ public class LeaseManagementConfig {
     private LeaseManagementFactory leaseManagementFactory;
 
     public HierarchicalShardSyncer hierarchicalShardSyncer() {
-        if(hierarchicalShardSyncer == null) {
+        if (hierarchicalShardSyncer == null) {
             hierarchicalShardSyncer = new HierarchicalShardSyncer();
         }
         return hierarchicalShardSyncer;
@@ -356,7 +356,7 @@ public class LeaseManagementConfig {
      * @return LeaseManagementFactory
      */
     public LeaseManagementFactory leaseManagementFactory(final LeaseSerializer leaseSerializer, boolean isMultiStreamingMode) {
-        if(leaseManagementFactory == null) {
+        if (leaseManagementFactory == null) {
             leaseManagementFactory = new DynamoDBLeaseManagementFactory(kinesisClient(),
                     dynamoDBClient(),
                     tableName(),

@@ -20,9 +20,7 @@ import java.util.Objects;
 import software.amazon.awssdk.services.cloudwatch.model.Dimension;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 
-
-
-/*
+/**
  * A representation of a key of a MetricDatum. This class is useful when wanting to compare 
  * whether 2 keys have the same MetricDatum. This feature will be used in MetricAccumulatingQueue
  * where we aggregate metrics across multiple MetricScopes.
@@ -48,12 +46,15 @@ public class CloudWatchMetricKey {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
-        if (obj == null)
+        }
+        if (obj == null) {
             return false;
-        if (getClass() != obj.getClass())
+        }
+        if (getClass() != obj.getClass()) {
             return false;
+        }
         CloudWatchMetricKey other = (CloudWatchMetricKey) obj;
         return Objects.equals(other.dimensions, dimensions) && Objects.equals(other.metricName, metricName);
     }
