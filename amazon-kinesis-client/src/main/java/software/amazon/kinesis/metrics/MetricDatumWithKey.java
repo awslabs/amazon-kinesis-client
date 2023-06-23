@@ -36,7 +36,6 @@ import java.util.Objects;
  * 
  *        MetricDatumWithKey<SampleMetricKey> sampleDatumWithKey = new MetricDatumWithKey<SampleMetricKey>(new
  *        SampleMetricKey(System.currentTimeMillis()), datum)
- *        
  */
 @AllArgsConstructor
 @Setter
@@ -59,12 +58,15 @@ public class MetricDatumWithKey<KeyType> {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
-        if (obj == null)
+        }
+        if (obj == null) {
             return false;
-        if (getClass() != obj.getClass())
+        }
+        if (getClass() != obj.getClass()) {
             return false;
+        }
         MetricDatumWithKey<?> other = (MetricDatumWithKey<?>) obj;
         return Objects.equals(other.key, key) && Objects.equals(other.datum, datum);
     }

@@ -54,7 +54,7 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
             final StreamConfig streamConfig,
             final MetricsFactory metricsFactory) {
         final Optional<String> streamIdentifierStr = shardInfo.streamIdentifierSerOpt();
-        if(streamIdentifierStr.isPresent()) {
+        if (streamIdentifierStr.isPresent()) {
             final StreamIdentifier streamIdentifier = StreamIdentifier.multiStreamInstance(streamIdentifierStr.get());
             return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
                     getOrCreateConsumerArn(streamIdentifier, streamConfig.consumerArn()),

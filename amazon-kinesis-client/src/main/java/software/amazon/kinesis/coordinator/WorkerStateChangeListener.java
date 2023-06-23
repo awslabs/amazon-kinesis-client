@@ -19,16 +19,16 @@ package software.amazon.kinesis.coordinator;
  */
 @FunctionalInterface
 public interface WorkerStateChangeListener {
-	enum WorkerState {
-		CREATED,
-		INITIALIZING,
-		STARTED,
-		SHUT_DOWN_STARTED,
-		SHUT_DOWN
-	}
+    enum WorkerState {
+        CREATED,
+        INITIALIZING,
+        STARTED,
+        SHUT_DOWN_STARTED,
+        SHUT_DOWN
+    }
 
-	void onWorkerStateChange(WorkerState newState);
+    void onWorkerStateChange(WorkerState newState);
 
-	default void onAllInitializationAttemptsFailed(Throwable e) {
-	}
+    default void onAllInitializationAttemptsFailed(Throwable e) {
+    }
 }
