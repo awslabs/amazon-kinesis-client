@@ -130,7 +130,9 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 Duration timeSinceLastResponse = Duration.between(lastRequestTime, now);
                 if (timeSinceLastResponse.toMillis() > maxTimeBetweenRequests) {
                     log.error(
+                            // CHECKSTYLE.OFF: LineLength
                             "{}: Last request was dispatched at {}, but no response as of {} ({}).  Cancelling subscription, and restarting. Last successful request details -- {}",
+                            // CHECKSTYLE.ON: LineLength
                             shardInfoId, lastRequestTime, now, timeSinceLastResponse, recordsPublisher.getLastSuccessfulRequestDetails());
                     cancel();
 

@@ -369,7 +369,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             } else {
                 if (triggeringFlow != null) {
                     log.debug(
+                            // CHECKSTYLE.OFF: LineLength
                             "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- {} -> triggeringFlow wasn't the active flow.  Didn't dispatch error",
+                            // CHECKSTYLE.ON: LineLength
                             streamAndShardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId,
                             category.throwableTypeString);
                     triggeringFlow.cancel();
@@ -605,7 +607,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     synchronized (lockObject) {
                         if (subscriber != s) {
                             log.warn(
+                                    // CHECKSTYLE.OFF: LineLength
                                     "{}: (FanOutRecordsPublisher/Subscription#request) - Rejected an attempt to request({}), because subscribers don't match. Last successful request details -- {}",
+                                    // CHECKSTYLE.ON: LineLength
                                     streamAndShardId, n, lastSuccessfulRequestDetails);
                             return;
                         }
@@ -632,13 +636,17 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     synchronized (lockObject) {
                         if (subscriber != s) {
                             log.warn(
+                                    // CHECKSTYLE.OFF: LineLength
                                     "{}: (FanOutRecordsPublisher/Subscription#cancel) - Rejected attempt to cancel subscription, because subscribers don't match. Last successful request details -- {}",
+                                    // CHECKSTYLE.ON: LineLength
                                     streamAndShardId, lastSuccessfulRequestDetails);
                             return;
                         }
                         if (!hasValidSubscriber()) {
                             log.warn(
+                                    // CHECKSTYLE.OFF: LineLength
                                     "{}: (FanOutRecordsPublisher/Subscription#cancel) - Cancelled called even with an invalid subscriber. Last successful request details -- {}",
+                                    // CHECKSTYLE.ON: LineLength
                                     streamAndShardId, lastSuccessfulRequestDetails);
                         }
                         subscriber = null;
@@ -808,7 +816,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     isErrorDispatched = true;
                 } else {
                     log.debug(
+                            // CHECKSTYLE.OFF: LineLength
                             "{}: [SubscriptionLifetime]: (RecordFlow#exceptionOccurred) @ {} id: {} -- An error has previously been dispatched, not dispatching this error {}: {}",
+                            // CHECKSTYLE.OFF: LineLength
                             parent.streamAndShardId, connectionStartedAt, subscribeToShardId, throwable.getClass().getName(),
                             throwable.getMessage());
                 }
@@ -839,7 +849,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         .add(new RecordsRetrievedContext(Either.right(subscriptionShutdownEvent), this, Instant.now()));
             } catch (Exception e) {
                 log.warn(
+                        // CHECKSTYLE.OFF: LineLength
                         "{}: Unable to enqueue the {} shutdown event due to capacity restrictions in delivery queue with remaining capacity {}. Ignoring. Last successful request details -- {}",
+                        // CHECKSTYLE.ON: LineLength
                         parent.streamAndShardId, subscriptionShutdownEvent.getEventIdentifier(), parent.recordsDeliveryQueue.remainingCapacity(),
                         parent.lastSuccessfulRequestDetails, subscriptionShutdownEvent.getShutdownEventThrowableOptional());
             }
@@ -863,7 +875,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 }
                 if (this.isDisposed) {
                     log.warn(
+                            // CHECKSTYLE.OFF: LineLength
                             "{}: [SubscriptionLifetime]: (RecordFlow#complete) @ {} id: {} -- This flow has been disposed not dispatching completion. Last successful request details -- {}",
+                            // CHECKSTYLE.ON: LineLength
                             parent.streamAndShardId, connectionStartedAt, subscribeToShardId, parent.lastSuccessfulRequestDetails);
                     return;
                 }
