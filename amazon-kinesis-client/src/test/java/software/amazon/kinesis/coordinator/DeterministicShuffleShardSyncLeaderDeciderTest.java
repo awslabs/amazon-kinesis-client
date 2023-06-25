@@ -105,7 +105,7 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     @Test
     public void testElectedLeadersAsPerExpectedShufflingOrder()
             throws Exception {
-        List<Lease> leases = getLeases(5, false /*emptyLeaseOwner */,false /* duplicateLeaseOwner */, true /* activeLeases */);
+        List<Lease> leases = getLeases(5, false /*emptyLeaseOwner */, false /* duplicateLeaseOwner */, true /* activeLeases */);
         when(leaseRefresher.listLeases()).thenReturn(leases);
         Set<String> expectedLeaders = getExpectedLeaders(leases);
         for (String leader : expectedLeaders) {

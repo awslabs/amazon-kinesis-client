@@ -327,7 +327,7 @@ public class PrefetchRecordsPublisherTest {
         //        TODO: fix this verification
         //        verify(getRecordsRetrievalStrategy, times(callRate)).getRecords(MAX_RECORDS_PER_CALL);
         //        assertEquals(spyQueue.size(), callRate);
-        assertTrue("Call Rate is "+callRate,callRate < MAX_SIZE);
+        assertTrue("Call Rate is " + callRate, callRate < MAX_SIZE);
     }
 
     @Test
@@ -422,8 +422,10 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testRetryableRetrievalExceptionContinues() {
-        GetRecordsResponse response = GetRecordsResponse.builder().millisBehindLatest(100L).records(Collections.emptyList()).nextShardIterator(NEXT_SHARD_ITERATOR).build();
-        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenThrow(new RetryableRetrievalException("Timeout", new TimeoutException("Timeout"))).thenReturn(response);
+        GetRecordsResponse response = GetRecordsResponse.builder().millisBehindLatest(100L)
+                .records(Collections.emptyList()).nextShardIterator(NEXT_SHARD_ITERATOR).build();
+        when(getRecordsRetrievalStrategy.getRecords(anyInt()))
+                .thenThrow(new RetryableRetrievalException("Timeout", new TimeoutException("Timeout"))).thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -638,7 +640,7 @@ public class PrefetchRecordsPublisherTest {
 
         verify(getRecordsRetrievalStrategy, atLeast(2)).getRecords(anyInt());
 
-        while(getRecordsCache.getPublisherSession().prefetchRecordsQueue().remainingCapacity() > 0) {
+        while (getRecordsCache.getPublisherSession().prefetchRecordsQueue().remainingCapacity() > 0) {
             Thread.yield();
         }
 
@@ -697,7 +699,7 @@ public class PrefetchRecordsPublisherTest {
 
         public void resetIteratorTo(String nextIterator) {
             Iterator<GetRecordsResponse> newIterator = responses.iterator();
-            while(newIterator.hasNext()) {
+            while (newIterator.hasNext()) {
                 GetRecordsResponse current = newIterator.next();
                 if (StringUtils.equals(nextIterator, current.nextShardIterator())) {
                     if (!newIterator.hasNext()) {
@@ -725,7 +727,7 @@ public class PrefetchRecordsPublisherTest {
 
         private static final int LOSS_EVERY_NTH_RECORD = 50;
         private static int recordCounter = 0;
-        private static final ScheduledExecutorService consumerHealthChecker = Executors.newScheduledThreadPool(1);
+        private static final ScheduledExecutorService CONSUMER_HEALTH_CHECKER = Executors.newScheduledThreadPool(1);
 
         public LossyNotificationSubscriber(Subscriber<RecordsRetrieved> delegate, RecordsPublisher recordsPublisher) {
             super(delegate, recordsPublisher);
@@ -738,7 +740,7 @@ public class PrefetchRecordsPublisherTest {
                 getDelegateSubscriber().onNext(recordsRetrieved);
             } else {
                 log.info("Record Loss Triggered");
-                consumerHealthChecker.schedule(() ->  {
+                CONSUMER_HEALTH_CHECKER.schedule(() ->  {
                     getRecordsPublisher().restartFrom(recordsRetrieved);
                     Flowable.fromPublisher(getRecordsPublisher()).subscribeOn(Schedulers.computation())
                             .observeOn(Schedulers.computation(), true, 8).subscribe(this);

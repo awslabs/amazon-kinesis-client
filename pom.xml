@@ -81,6 +81,7 @@
           <configLocation>checkstyle/checkstyle.xml</configLocation>
           <consoleOutput>true</consoleOutput>
           <failOnViolation>true</failOnViolation>
+          <includeTestSourceDirectory>true</includeTestSourceDirectory>
           <suppressionsLocation>checkstyle/checkstyle-suppressions.xml</suppressionsLocation>
         </configuration>
         <executions>

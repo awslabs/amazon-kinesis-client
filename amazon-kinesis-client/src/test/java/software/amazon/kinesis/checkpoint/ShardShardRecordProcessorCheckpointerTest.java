@@ -91,11 +91,11 @@ public class ShardShardRecordProcessorCheckpointerTest {
      */    
     @Test
     public final void testCheckpointRecord() throws Exception {
-    	ShardRecordProcessorCheckpointer processingCheckpointer =
+        ShardRecordProcessorCheckpointer processingCheckpointer =
                 new ShardRecordProcessorCheckpointer(shardInfo, checkpoint);
-    	processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
-    	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5025");
-    	Record record = makeRecord("5025");
+        processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
+        ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5025");
+        Record record = makeRecord("5025");
         processingCheckpointer.largestPermittedCheckpointValue(extendedSequenceNumber);
         processingCheckpointer.checkpoint(record);
         assertThat(checkpoint.getCheckpoint(shardId), equalTo(extendedSequenceNumber));
@@ -107,13 +107,13 @@ public class ShardShardRecordProcessorCheckpointerTest {
      */
     @Test
     public final void testCheckpointSubRecord() throws Exception {
-    	ShardRecordProcessorCheckpointer processingCheckpointer =
+        ShardRecordProcessorCheckpointer processingCheckpointer =
                 new ShardRecordProcessorCheckpointer(shardInfo, checkpoint);
-    	processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
-    	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5030");
-    	Record record = makeRecord("5030");
+        processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
+        ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5030");
+        Record record = makeRecord("5030");
         //UserRecord subRecord = new UserRecord(record);
-    	processingCheckpointer.largestPermittedCheckpointValue(extendedSequenceNumber);
+        processingCheckpointer.largestPermittedCheckpointValue(extendedSequenceNumber);
         processingCheckpointer.checkpoint(record);
         assertThat(checkpoint.getCheckpoint(shardId), equalTo(extendedSequenceNumber));
     }
@@ -124,11 +124,11 @@ public class ShardShardRecordProcessorCheckpointerTest {
      */
     @Test
     public final void testCheckpointSequenceNumber() throws Exception {
-    	ShardRecordProcessorCheckpointer processingCheckpointer =
+        ShardRecordProcessorCheckpointer processingCheckpointer =
                 new ShardRecordProcessorCheckpointer(shardInfo, checkpoint);
-    	processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
-    	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5035");
-    	processingCheckpointer.largestPermittedCheckpointValue(extendedSequenceNumber);
+        processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
+        ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5035");
+        processingCheckpointer.largestPermittedCheckpointValue(extendedSequenceNumber);
         processingCheckpointer.checkpoint("5035");
         assertThat(checkpoint.getCheckpoint(shardId), equalTo(extendedSequenceNumber));
     }
@@ -139,11 +139,11 @@ public class ShardShardRecordProcessorCheckpointerTest {
      */
     @Test
     public final void testCheckpointExtendedSequenceNumber() throws Exception {
-    	ShardRecordProcessorCheckpointer processingCheckpointer =
+        ShardRecordProcessorCheckpointer processingCheckpointer =
                 new ShardRecordProcessorCheckpointer(shardInfo, checkpoint);
-    	processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
-    	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5040");
-    	processingCheckpointer.largestPermittedCheckpointValue(extendedSequenceNumber);
+        processingCheckpointer.setInitialCheckpointValue(startingExtendedSequenceNumber);
+        ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber("5040");
+        processingCheckpointer.largestPermittedCheckpointValue(extendedSequenceNumber);
         processingCheckpointer.checkpoint("5040", 0);
         assertThat(checkpoint.getCheckpoint(shardId), equalTo(extendedSequenceNumber));
     }

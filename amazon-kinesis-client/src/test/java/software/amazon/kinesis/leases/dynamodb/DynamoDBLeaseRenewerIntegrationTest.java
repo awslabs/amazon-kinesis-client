@@ -36,7 +36,7 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
-    private final String TEST_METRIC = "TestOperation";
+    private static final String TEST_METRIC = "TestOperation";
 
     // This test case's leases last 2 seconds
     private static final long LEASE_DURATION_MILLIS = 2000L;

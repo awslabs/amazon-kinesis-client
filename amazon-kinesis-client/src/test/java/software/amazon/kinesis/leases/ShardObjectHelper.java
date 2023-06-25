@@ -56,7 +56,6 @@ public class ShardObjectHelper {
     private ShardObjectHelper() {
     }
 
-
     /** Helper method to create a new shard object.
      * @param shardId
      * @param parentShardId
@@ -84,7 +83,9 @@ public class ShardObjectHelper {
                                  String adjacentParentShardId,
                                  SequenceNumberRange sequenceNumberRange,
                                  HashKeyRange hashKeyRange) {
-        return Shard.builder().shardId(shardId).parentShardId(parentShardId).adjacentParentShardId(adjacentParentShardId).sequenceNumberRange(sequenceNumberRange).hashKeyRange(hashKeyRange).build();
+        return Shard.builder().shardId(shardId).parentShardId(parentShardId)
+                .adjacentParentShardId(adjacentParentShardId).sequenceNumberRange(sequenceNumberRange)
+                .hashKeyRange(hashKeyRange).build();
     }
 
     /** Helper method.
@@ -115,6 +116,5 @@ public class ShardObjectHelper {
         }
         return parentShardIds;
     }
-
 
 }
