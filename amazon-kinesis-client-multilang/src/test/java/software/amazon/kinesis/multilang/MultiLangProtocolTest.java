@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -61,10 +60,8 @@ import software.amazon.kinesis.multilang.messages.ShardEndedMessage;
 import software.amazon.kinesis.multilang.messages.StatusMessage;
 import com.google.common.util.concurrent.SettableFuture;
 
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 

@@ -167,12 +167,22 @@ public class StreamIdentifier {
                 .build();
     }
 
-    private static void validateArn(Arn streamArn) {
+    /**
+     * Verify the streamArn follows the appropriate formatting.
+     * Throw an exception if it does not.
+     * @param streamArn
+     */
+    public static void validateArn(Arn streamArn) {
         if (!STREAM_ARN_PATTERN.matcher(streamArn.toString()).matches() || !streamArn.region().isPresent()) {
-            throw new IllegalArgumentException("Unable to create a StreamIdentifier from " + streamArn);
+            throw new IllegalArgumentException("Invalid streamArn " + streamArn);
         }
     }
 
+    /**
+     * Verify creationEpoch is greater than 0.
+     * Throw an exception if it is not.
+     * @param creationEpoch
+     */
     private static void validateCreationEpoch(long creationEpoch) {
         if (creationEpoch <= 0) {
             throw new IllegalArgumentException(

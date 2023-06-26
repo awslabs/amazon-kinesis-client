@@ -28,7 +28,6 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-import software.amazon.kinesis.multilang.MessageReader;
 import software.amazon.kinesis.multilang.messages.Message;
 import software.amazon.kinesis.multilang.messages.StatusMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
