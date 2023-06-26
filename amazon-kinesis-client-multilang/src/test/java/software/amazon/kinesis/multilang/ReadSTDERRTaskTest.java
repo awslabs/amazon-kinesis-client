@@ -30,7 +30,7 @@ import org.mockito.Mockito;
 
 public class ReadSTDERRTaskTest {
 
-    private static final String shardId = "shard-123";
+    private static final String SHARD_ID = "shard-123";
     private BufferedReader mockBufferReader;
 
     @Before
@@ -43,7 +43,7 @@ public class ReadSTDERRTaskTest {
 
         String errorMessages = "OMG\nThis is test message\n blah blah blah \n";
         InputStream stream = new ByteArrayInputStream(errorMessages.getBytes());
-        LineReaderTask<Boolean> reader = new DrainChildSTDERRTask().initialize(stream, shardId, "");
+        LineReaderTask<Boolean> reader = new DrainChildSTDERRTask().initialize(stream, SHARD_ID, "");
         Assert.assertNotNull(reader);
     }
 
@@ -52,7 +52,7 @@ public class ReadSTDERRTaskTest {
         String errorMessages = "OMG\nThis is test message\n blah blah blah \n";
         BufferedReader bufferReader =
                 new BufferedReader(new InputStreamReader(new ByteArrayInputStream(errorMessages.getBytes())));
-        LineReaderTask<Boolean> errorReader = new DrainChildSTDERRTask().initialize(bufferReader, shardId, "");
+        LineReaderTask<Boolean> errorReader = new DrainChildSTDERRTask().initialize(bufferReader, SHARD_ID, "");
         Assert.assertNotNull(errorReader);
 
         Boolean result = errorReader.call();
@@ -65,7 +65,7 @@ public class ReadSTDERRTaskTest {
         } catch (IOException e) {
             Assert.fail("Not supposed to get an exception when we're just building our mock.");
         }
-        LineReaderTask<Boolean> errorReader = new DrainChildSTDERRTask().initialize(mockBufferReader, shardId, "");
+        LineReaderTask<Boolean> errorReader = new DrainChildSTDERRTask().initialize(mockBufferReader, SHARD_ID, "");
         Assert.assertNotNull(errorReader);
         Future<Boolean> result = Executors.newCachedThreadPool().submit(errorReader);
         Boolean finishedCleanly = null;

@@ -210,7 +210,7 @@ public class PeriodicShardSyncManagerTest {
         }}.stream().map(hashKeyRangeForLease -> {
             MultiStreamLease lease = new MultiStreamLease();
             lease.hashKeyRange(hashKeyRangeForLease);
-            if(lease.hashKeyRangeForLease().startingHashKey().toString().equals("4")) {
+            if (lease.hashKeyRangeForLease().startingHashKey().toString().equals("4")) {
                 lease.checkpoint(ExtendedSequenceNumber.SHARD_END);
             } else {
                 lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
@@ -342,7 +342,7 @@ public class PeriodicShardSyncManagerTest {
             lease.leaseKey(MultiStreamLease.getLeaseKey(streamIdentifier.serialize(), "shard-"+(++leaseCounter[0])));
             lease.shardId("shard-"+(leaseCounter[0]));
             // Setting the hashrange only for last two leases
-            if(leaseCounter[0] >= 3) {
+            if (leaseCounter[0] >= 3) {
                 lease.hashKeyRange(hashKeyRangeForLease);
             }
             lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
@@ -355,7 +355,7 @@ public class PeriodicShardSyncManagerTest {
         Assert.assertFalse(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
 
         // Assert that all the leases now has hashRanges set.
-        for(Lease lease : multiStreamLeases) {
+        for (Lease lease : multiStreamLeases) {
             Assert.assertNotNull(lease.hashKeyRangeForLease());
         }
     }
@@ -390,7 +390,7 @@ public class PeriodicShardSyncManagerTest {
             lease.leaseKey(MultiStreamLease.getLeaseKey(streamIdentifier.serialize(), "shard-"+(++leaseCounter[0])));
             lease.shardId("shard-"+(leaseCounter[0]));
             // Setting the hashrange only for last two leases
-            if(leaseCounter[0] >= 3) {
+            if (leaseCounter[0] >= 3) {
                 lease.hashKeyRange(hashKeyRangeForLease);
             }
             lease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
@@ -403,14 +403,14 @@ public class PeriodicShardSyncManagerTest {
         Assert.assertTrue(periodicShardSyncManager.checkForShardSync(streamIdentifier, multiStreamLeases).shouldDoShardSync());
 
         // Assert that all the leases now has hashRanges set.
-        for(Lease lease : multiStreamLeases) {
+        for (Lease lease : multiStreamLeases) {
             Assert.assertNotNull(lease.hashKeyRangeForLease());
         }
     }
 
     @Test
     public void testFor1000DifferentValidSplitHierarchyTreeTheHashRangesAreAlwaysComplete() {
-        for(int i=0; i < 1000; i++) {
+        for (int i=0; i < 1000; i++) {
             int maxInitialLeaseCount = 100;
             List<Lease> leases = generateInitialLeases(maxInitialLeaseCount);
             reshard(leases, 5, ReshardType.SPLIT, maxInitialLeaseCount, false);
@@ -514,7 +514,7 @@ public class PeriodicShardSyncManagerTest {
         for (int i = 0; i < leasesToMerge; i += 2) {
             Lease parent1 = leasesEligibleForMerge.get(i);
             Lease parent2 = leasesEligibleForMerge.get(i + 1);
-            if(parent2.hashKeyRangeForLease().startingHashKey().subtract(parent1.hashKeyRangeForLease().endingHashKey()).equals(BigInteger.ONE))
+            if (parent2.hashKeyRangeForLease().startingHashKey().subtract(parent1.hashKeyRangeForLease().endingHashKey()).equals(BigInteger.ONE))
             {
                 parent1.checkpoint(ExtendedSequenceNumber.SHARD_END);
                 if (!shouldKeepSomeParentsInProgress || (shouldKeepSomeParentsInProgress && isOneFromDiceRoll())) {

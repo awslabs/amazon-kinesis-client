@@ -1592,7 +1592,7 @@ public class HierarchicalShardSyncerTest {
         assertExpectedLeasesAreCreated(SHARD_GRAPH_A, shardIdsOfCurrentLeases, INITIAL_POSITION_TRIM_HORIZON);
     }
 
-    /**
+    /*
      * <pre>
      * Shard structure (x-axis is epochs):
      * 0  3   6   9
@@ -1869,7 +1869,7 @@ public class HierarchicalShardSyncerTest {
         assertExpectedLeasesAreCreated(SHARD_GRAPH_A, shardIdsOfCurrentLeases, INITIAL_POSITION_AT_TIMESTAMP);
     }
 
-    /**
+    /*
      * <pre>
      * Shard structure (x-axis is epochs):
      * 0  3   6   9
@@ -2325,12 +2325,16 @@ public class HierarchicalShardSyncerTest {
     @Test
     public void testEmptyLeaseTablePopulatesLeasesWithCompleteHashRangeAfterTwoRetries() throws Exception {
         final List<Shard> shardsWithIncompleteHashRange = Arrays.asList(
-                ShardObjectHelper.newShard("shardId-0", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "69")),
-                ShardObjectHelper.newShard("shardId-1", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("71", ShardObjectHelper.MAX_HASH_KEY))
+                ShardObjectHelper.newShard("shardId-0", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "69")),
+                ShardObjectHelper.newShard("shardId-1", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange("71", ShardObjectHelper.MAX_HASH_KEY))
         );
         final List<Shard> shardsWithCompleteHashRange = Arrays.asList(
-                ShardObjectHelper.newShard("shardId-2", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "420")),
-                ShardObjectHelper.newShard("shardId-3", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("421", ShardObjectHelper.MAX_HASH_KEY))
+                ShardObjectHelper.newShard("shardId-2", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "420")),
+                ShardObjectHelper.newShard("shardId-3", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange("421", ShardObjectHelper.MAX_HASH_KEY))
         );
 
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
@@ -2352,8 +2356,10 @@ public class HierarchicalShardSyncerTest {
     @Test
     public void testEmptyLeaseTablePopulatesLeasesWithCompleteHashRange() throws Exception {
         final List<Shard> shardsWithCompleteHashRange = Arrays.asList(
-                ShardObjectHelper.newShard("shardId-2", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "420")),
-                ShardObjectHelper.newShard("shardId-3", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("421", ShardObjectHelper.MAX_HASH_KEY))
+                ShardObjectHelper.newShard("shardId-2", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, "420")),
+                ShardObjectHelper.newShard("shardId-3", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange("421", ShardObjectHelper.MAX_HASH_KEY))
         );
 
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);

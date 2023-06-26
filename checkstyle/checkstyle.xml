@@ -27,7 +27,10 @@
         <module name="InvalidJavadocPosition"/>
         <module name="LocalVariableName"/>
         <module name="MemberName"/>
-        <module name="MethodName"/>
+        <module name="MethodName">
+            <!-- Method names must start with a lowercase letter. -->
+            <property name="format" value="^[a-z]\w*$"/>
+        </module>
         <module name="NeedBraces"/>
         <module name="OneStatementPerLine"/>
         <module name="OneTopLevelClass"/>

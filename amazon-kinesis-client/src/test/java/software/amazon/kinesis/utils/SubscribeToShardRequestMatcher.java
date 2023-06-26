@@ -12,7 +12,7 @@ public class SubscribeToShardRequestMatcher extends ArgumentMatcher<SubscribeToS
     }
 
     public boolean matches(Object rightObject) {
-        SubscribeToShardRequest right = (SubscribeToShardRequest)rightObject;
+        SubscribeToShardRequest right = (SubscribeToShardRequest) rightObject;
         return left.shardId().equals(right.shardId()) &&
                 left.consumerARN().equals(right.consumerARN()) &&
                 left.startingPosition().equals(right.startingPosition());

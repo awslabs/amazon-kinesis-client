@@ -331,7 +331,7 @@ public class KinesisDataFetcherTest {
 
     private CompletableFuture<GetRecordsResponse> makeGetRecordsResponse(String nextIterator, List<Record> records) {
         List<ChildShard> childShards = new ArrayList<>();
-        if(nextIterator == null) {
+        if (nextIterator == null) {
             childShards = createChildShards();
         }
         return CompletableFuture.completedFuture(GetRecordsResponse.builder().nextShardIterator(nextIterator)

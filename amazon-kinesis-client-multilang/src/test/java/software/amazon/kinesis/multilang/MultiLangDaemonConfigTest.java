@@ -164,7 +164,7 @@ public class MultiLangDaemonConfigTest {
 
     /**
      * Verify the daemonConfig properties are what we expect them to be.
-     * @param deamonConfig
+     *
      * @param expectedStreamName
      */
     private void assertConfigurationsMatch(String expectedStreamName, String expectedStreamArn) {
@@ -184,16 +184,15 @@ public class MultiLangDaemonConfigTest {
 
     @Test
     public void testPropertyValidation() {
-        String PROPERTIES_NO_EXECUTABLE_NAME = "applicationName = testApp \n" + "streamName = fakeStream \n"
+        String propertiesNoExecutableName = "applicationName = testApp \n" + "streamName = fakeStream \n"
                 + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n" + "processingLanguage = malbolge";
         ClassLoader classLoader = Mockito.mock(ClassLoader.class);
 
-        Mockito.doReturn(new ByteArrayInputStream(PROPERTIES_NO_EXECUTABLE_NAME.getBytes())).when(classLoader)
+        Mockito.doReturn(new ByteArrayInputStream(propertiesNoExecutableName.getBytes())).when(classLoader)
                 .getResourceAsStream(FILENAME);
 
-        MultiLangDaemonConfig config;
         try {
-            config = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
+            new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
             Assert.fail("Construction of the config should have failed due to property validation failing.");
         } catch (IllegalArgumentException e) {
             // Good

@@ -47,8 +47,8 @@ public class MetricAccumulatingQueueTest {
      */
     @Test
     public void testAccumulation() {
-        Collection<Dimension> dimensionsA = Collections.singleton(dim("name","a"));
-        Collection<Dimension> dimensionsB = Collections.singleton(dim("name","b"));
+        Collection<Dimension> dimensionsA = Collections.singleton(dim("name", "a"));
+        Collection<Dimension> dimensionsB = Collections.singleton(dim("name", "b"));
         String keyA = "a";
         String keyB = "b";
 
