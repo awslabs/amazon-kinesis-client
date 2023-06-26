@@ -17,7 +17,6 @@ package software.amazon.kinesis.metrics;
 import org.junit.Test;
 
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
-import software.amazon.kinesis.metrics.EndingMetricsScope;
 
 public class EndingMetricsScopeTest {
 

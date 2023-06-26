@@ -152,7 +152,7 @@ public class RetrievalConfig {
         if (streamTracker().isMultiStream()) {
             throw new IllegalArgumentException(
                     "Cannot set initialPositionInStreamExtended when multiStreamTracker is set");
-        };
+        }
 
         final StreamIdentifier streamIdentifier = getSingleStreamIdentifier();
         final StreamConfig updatedConfig = new StreamConfig(streamIdentifier, initialPositionInStreamExtended);

@@ -49,7 +49,7 @@ public class MessageTest {
                 new ProcessRecordsMessage(),
                 new ShutdownRequestedMessage(),
                 new LeaseLostMessage(),
-                new ShardEndedMessage()
+                new ShardEndedMessage(),
         };
 
 //        TODO: fix this

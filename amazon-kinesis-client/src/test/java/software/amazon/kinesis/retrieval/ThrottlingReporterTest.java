@@ -24,7 +24,6 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.slf4j.Logger;
-import software.amazon.kinesis.retrieval.ThrottlingReporter;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ThrottlingReporterTest {
@@ -40,7 +39,6 @@ public class ThrottlingReporterTest {
         reporter.throttled();
         verify(throttleLog).warn(anyString());
         verify(throttleLog, never()).error(anyString());
-
     }
 
     @Test
@@ -63,7 +61,6 @@ public class ThrottlingReporterTest {
         reporter.throttled();
         verify(throttleLog, times(2)).warn(anyString());
         verify(throttleLog, times(3)).error(anyString());
-
     }
 
     private class LogTestingThrottingReporter extends ThrottlingReporter {

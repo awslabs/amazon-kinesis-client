@@ -23,8 +23,13 @@
 
     <module name="TreeWalker">
         <module name="AvoidStarImport"/>
+        <module name="ArrayTrailingComma"/>
         <module name="ConstantName"/>
+        <module name="CovariantEquals"/>
+        <module name="EmptyStatement"/>
+        <module name="EqualsHashCode"/>
         <module name="InvalidJavadocPosition"/>
+        <module name="LocalFinalVariableName"/>
         <module name="LocalVariableName"/>
         <module name="MemberName"/>
         <module name="MethodName">
@@ -36,7 +41,9 @@
         <module name="OneTopLevelClass"/>
         <module name="OuterTypeFilename"/>
         <module name="ParameterName"/>
+        <module name="RedundantImport"/>
         <module name="UnusedImports"/>
+        <module name="UpperEll"/>
         <module name="WhitespaceAfter"/>
     </module>
 
