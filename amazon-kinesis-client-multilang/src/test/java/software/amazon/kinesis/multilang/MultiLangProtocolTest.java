@@ -103,7 +103,7 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void initializeTest() throws InterruptedException, ExecutionException {
+    public void testInitialize() {
         when(messageWriter
                 .writeInitializeMessage(argThat(Matchers.withInit(InitializationInput.builder()
                         .shardId(shardId).build())))).thenReturn(buildFuture(true));
@@ -113,7 +113,7 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void processRecordsTest() throws InterruptedException, ExecutionException {
+    public void testProcessRecords() {
         when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(
                 new StatusMessage("processRecords"), Message.class));
@@ -128,7 +128,6 @@ public class MultiLangProtocolTest {
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(new StatusMessage(LeaseLostMessage.ACTION), Message.class));
 
         assertThat(protocol.leaseLost(LeaseLostInput.builder().build()), equalTo(true));
-
     }
 
     @Test
@@ -174,7 +173,7 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void processRecordsWithCheckpointsTest() throws InterruptedException, ExecutionException,
+    public void testProcessRecordsWithCheckpoints() throws
         KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
 
         when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
@@ -203,7 +202,7 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void processRecordsWithABadCheckpointTest() throws InterruptedException, ExecutionException {
+    public void testProcessRecordsWithABadCheckpoint() {
         when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
         when(messageWriter.writeCheckpointMessageWithError(anyString(), anyLong(), any(Throwable.class))).thenReturn(buildFuture(false));
         when(messageReader.getNextMessageFromSTDOUT()).thenAnswer(buildMessageAnswers(new ArrayList<Message>() {

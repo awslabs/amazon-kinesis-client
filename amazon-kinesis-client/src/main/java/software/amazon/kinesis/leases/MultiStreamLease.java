@@ -23,8 +23,6 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
 
-import java.util.Objects;
-
 import static com.google.common.base.Verify.verifyNotNull;
 
 @Setter

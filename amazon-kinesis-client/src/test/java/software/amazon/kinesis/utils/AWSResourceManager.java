@@ -2,14 +2,8 @@ package software.amazon.kinesis.utils;
 
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.services.dynamodb.model.ListTablesRequest;
-import software.amazon.awssdk.services.dynamodb.model.ListTablesResponse;
-import software.amazon.kinesis.common.FutureUtils;
 
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -28,7 +22,7 @@ public abstract class AWSResourceManager {
 
     /**
      * Get a list of all the names of resources of a specified type
-     * @return
+     *
      * @throws Exception
      */
     public abstract List<String> getAllResourceNames() throws Exception;

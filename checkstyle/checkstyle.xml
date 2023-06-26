@@ -36,6 +36,7 @@
         <module name="OneTopLevelClass"/>
         <module name="OuterTypeFilename"/>
         <module name="ParameterName"/>
+        <module name="UnusedImports"/>
         <module name="WhitespaceAfter"/>
     </module>
 

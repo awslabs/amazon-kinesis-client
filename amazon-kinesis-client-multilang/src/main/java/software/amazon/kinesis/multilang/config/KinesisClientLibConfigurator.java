@@ -25,7 +25,6 @@ import org.apache.commons.beanutils.ConvertUtilsBean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.arns.Arn;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.kinesis.common.StreamIdentifier;
 
 /**
@@ -41,7 +40,6 @@ public class KinesisClientLibConfigurator {
     private final ConvertUtilsBean convertUtilsBean;
     private final BeanUtilsBean utilsBean;
     private final MultiLangDaemonConfiguration configuration;
-
 
     /**
      * Constructor.
@@ -78,7 +76,6 @@ public class KinesisClientLibConfigurator {
             //Parse out the stream Name from the Arn (and/or override existing value for Stream Name)
             final String streamNameFromArn = streamArnObj.resource().resource();
             configuration.setStreamName(streamNameFromArn);
-
         }
 
         Validate.notBlank(configuration.getStreamName(), "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
@@ -108,6 +105,5 @@ public class KinesisClientLibConfigurator {
         }
         return getConfiguration(properties);
     }
-
 
 }

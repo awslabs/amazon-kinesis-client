@@ -14,8 +14,6 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import java.util.concurrent.ThreadPoolExecutor;
-
 /**
  * Unit tests of Worker.
  */

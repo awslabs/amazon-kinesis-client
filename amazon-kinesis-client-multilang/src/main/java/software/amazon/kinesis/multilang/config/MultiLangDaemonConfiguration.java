@@ -158,7 +158,6 @@ public class MultiLangDaemonConfiguration {
         metricsEnabledDimensions = new HashSet<>(Arrays.asList(dimensions));
     }
 
-
     private RetrievalMode retrievalMode = RetrievalMode.DEFAULT;
 
     private final FanoutConfigBean fanoutConfig = new FanoutConfigBean();
@@ -169,7 +168,6 @@ public class MultiLangDaemonConfiguration {
 
     private long shutdownGraceMillis;
     private Integer timeoutInSeconds;
-
 
     private final BuilderDynaBean kinesisCredentialsProvider;
 
