@@ -22,7 +22,6 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -43,7 +42,7 @@ public class BlockOnParentShardTaskTest {
     private final String shardId = "shardId-97";
     private final String streamId = "123:stream:146";
     private final String concurrencyToken = "testToken";
-    private final List<String> emptyParentShardIds = new ArrayList<String>();
+    private final List<String> emptyParentShardIds = new ArrayList<>();
     private ShardInfo shardInfo;
 
     @Before
@@ -77,7 +76,6 @@ public class BlockOnParentShardTaskTest {
     @Test
     public final void testCallShouldNotThrowBlockedOnParentWhenParentsHaveFinished()
         throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-
         ShardInfo shardInfo = null;
         BlockOnParentShardTask task = null;
         String parent1ShardId = "shardId-1";
@@ -118,7 +116,6 @@ public class BlockOnParentShardTaskTest {
     @Test
     public final void testCallShouldNotThrowBlockedOnParentWhenParentsHaveFinishedMultiStream()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-
         ShardInfo shardInfo = null;
         BlockOnParentShardTask task = null;
         String parent1LeaseKey = streamId + ":" + "shardId-1";
@@ -162,7 +159,6 @@ public class BlockOnParentShardTaskTest {
     @Test
     public final void testCallWhenParentsHaveNotFinished()
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-
         ShardInfo shardInfo = null;
         BlockOnParentShardTask task = null;
         String parent1ShardId = "shardId-1";

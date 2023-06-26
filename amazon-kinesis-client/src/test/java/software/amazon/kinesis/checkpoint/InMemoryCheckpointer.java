@@ -17,7 +17,6 @@ package software.amazon.kinesis.checkpoint;
 import java.util.HashMap;
 import java.util.Map;
 
-import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 

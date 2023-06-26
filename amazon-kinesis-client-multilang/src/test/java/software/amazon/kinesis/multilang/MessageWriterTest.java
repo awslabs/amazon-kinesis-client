@@ -51,8 +51,6 @@ public class MessageWriterTest {
     @Rule
     public final ExpectedException thrown = ExpectedException.none();
 
-    // ExecutorService executor;
-
     @Before
     public void setup() {
         stream = Mockito.mock(OutputStream.class);

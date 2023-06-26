@@ -15,16 +15,8 @@
 package software.amazon.kinesis.leases;
 
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Rule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
-import org.mockito.Mock;
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
-import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
-import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
-import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 
 @Slf4j
 public class LeaseIntegrationBillingModePayPerRequestTest extends LeaseIntegrationTest {
