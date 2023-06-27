@@ -3,6 +3,17 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.5.1 (June 27, 2023)
+* [#1143](https://github.com/awslabs/amazon-kinesis-client/pull/1143) Upgrade MultiLangDaemon to support StreamARN
+* [#1145](https://github.com/awslabs/amazon-kinesis-client/pull/1145) Introduced GitHub actions to trigger Maven builds during merge/pull requests
+* [#1136](https://github.com/awslabs/amazon-kinesis-client/pull/1136) Added testing architecture and KCL 2.x basic polling/streaming tests
+* [#1153](https://github.com/awslabs/amazon-kinesis-client/pull/1153) Checkstyle: added `UnusedImports` check.
+* [#1150](https://github.com/awslabs/amazon-kinesis-client/pull/1150) Enabled Checkstyle validation of test resources.
+* [#1149](https://github.com/awslabs/amazon-kinesis-client/pull/1149) Bound Checkstyle to `validate` goal for automated enforcement.
+* [#1148](https://github.com/awslabs/amazon-kinesis-client/pull/1148) Code cleanup to faciliate Checkstyle enforcement.
+* [#1142](https://github.com/awslabs/amazon-kinesis-client/pull/1142) Upgrade Google Guava dependency version from 31.1-jre to 32.0.0-jre
+* [#1115](https://github.com/awslabs/amazon-kinesis-client/pull/1115) Update KCL version from 2.5.0 to 2.5.1-SNAPSHOT
+
 ### Release 2.5.0 (May 19, 2023)
 * **[#1109](https://github.com/awslabs/amazon-kinesis-client/pull/1109) Add support for stream ARNs**
 * **[#1065](https://github.com/awslabs/amazon-kinesis-client/pull/1065) Allow tags to be added when lease table is created**
