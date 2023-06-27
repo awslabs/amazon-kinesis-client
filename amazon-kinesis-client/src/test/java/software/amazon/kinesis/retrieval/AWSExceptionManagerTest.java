@@ -27,31 +27,28 @@ import static org.junit.Assert.assertThat;
 @Slf4j
 public class AWSExceptionManagerTest {
 
+    private static final String EXPECTED_HANDLING_MARKER = AWSExceptionManagerTest.class.getSimpleName();
+
+    private final AWSExceptionManager manager = new AWSExceptionManager();
+
     @Test
     public void testSpecificException() {
-        AWSExceptionManager manager = new AWSExceptionManager();
-        final String EXPECTED_HANDLING_MARKER = "Handled-TestException";
-
         manager.add(TestException.class, t -> {
             log.info("Handling test exception: {} -> {}", t.getMessage(), t.getAdditionalMessage());
             return new RuntimeException(EXPECTED_HANDLING_MARKER, t);
         });
 
-        TestException te = new TestException("Main Mesage", "Sub Message");
-
+        TestException te = new TestException("Main Message", "Sub Message");
 
         RuntimeException converted = manager.apply(te);
 
         assertThat(converted, isA(RuntimeException.class));
         assertThat(converted.getMessage(), equalTo(EXPECTED_HANDLING_MARKER));
         assertThat(converted.getCause(), equalTo(te));
-
     }
 
     @Test
     public void testParentException() {
-        AWSExceptionManager manager = new AWSExceptionManager();
-        final String EXPECTED_HANDLING_MARKER = "Handled-IllegalStateException";
         manager.add(IllegalArgumentException.class, i -> new RuntimeException("IllegalArgument", i));
         manager.add(Exception.class, i -> new RuntimeException("RawException", i));
         manager.add(IllegalStateException.class, i -> new RuntimeException(EXPECTED_HANDLING_MARKER, i));
@@ -66,8 +63,7 @@ public class AWSExceptionManagerTest {
 
     @Test
     public void testDefaultHandler() {
-        final String EXPECTED_HANDLING_MARKER = "Handled-Default";
-        AWSExceptionManager manager = new AWSExceptionManager().defaultFunction(i -> new RuntimeException(EXPECTED_HANDLING_MARKER, i));
+        manager.defaultFunction(i -> new RuntimeException(EXPECTED_HANDLING_MARKER, i));
 
         manager.add(IllegalArgumentException.class, i -> new RuntimeException("IllegalArgument", i));
         manager.add(Exception.class, i -> new RuntimeException("RawException", i));
@@ -83,8 +79,6 @@ public class AWSExceptionManagerTest {
 
     @Test
     public void testIdHandler() {
-        AWSExceptionManager manager = new AWSExceptionManager();
-
         manager.add(IllegalArgumentException.class, i -> new RuntimeException("IllegalArgument", i));
         manager.add(Exception.class, i -> new RuntimeException("RawException", i));
         manager.add(IllegalStateException.class, i -> i);
