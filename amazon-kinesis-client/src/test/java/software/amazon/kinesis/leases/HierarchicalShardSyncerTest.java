@@ -2257,10 +2257,12 @@ public class HierarchicalShardSyncerTest {
         testEmptyLeaseTableBootstrapUsesListShardsWithFilter(INITIAL_POSITION_AT_TIMESTAMP, shardFilter);
     }
 
-    public void testEmptyLeaseTableBootstrapUsesListShardsWithFilter(InitialPositionInStreamExtended initialPosition, ShardFilter shardFilter) throws Exception {
+    public void testEmptyLeaseTableBootstrapUsesListShardsWithFilter(InitialPositionInStreamExtended initialPosition,
+            ShardFilter shardFilter) throws Exception {
         final String shardId0 = "shardId-0";
         final List<Shard> shards = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null,
-                ShardObjectHelper.newSequenceNumberRange("1", null), ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, ShardObjectHelper.MAX_HASH_KEY)));
+                ShardObjectHelper.newSequenceNumberRange("1", null),
+                ShardObjectHelper.newHashKeyRange(ShardObjectHelper.MIN_HASH_KEY, ShardObjectHelper.MAX_HASH_KEY)));
 
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
         when(shardDetector.listShardsWithFilter(shardFilter)).thenReturn(shards);
@@ -2278,8 +2280,10 @@ public class HierarchicalShardSyncerTest {
         final String shardId0 = "shardId-0";
         final String shardId1 = "shardId-1";
 
-        final List<Shard> shardsWithLeases = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null, ShardObjectHelper.newSequenceNumberRange("1", "2")));
-        final List<Shard> shardsWithoutLeases = Arrays.asList(ShardObjectHelper.newShard(shardId1, null, null, ShardObjectHelper.newSequenceNumberRange("3", "4")));
+        final List<Shard> shardsWithLeases = Arrays.asList(ShardObjectHelper.newShard(shardId0, null, null,
+                ShardObjectHelper.newSequenceNumberRange("1", "2")));
+        final List<Shard> shardsWithoutLeases = Arrays.asList(ShardObjectHelper.newShard(shardId1, null, null,
+                ShardObjectHelper.newSequenceNumberRange("3", "4")));
 
         final List<Lease> currentLeases = createLeasesFromShards(shardsWithLeases, ExtendedSequenceNumber.LATEST, "foo");
 
@@ -2301,8 +2305,10 @@ public class HierarchicalShardSyncerTest {
     @Test(expected = KinesisClientLibIOException.class)
     public void testEmptyLeaseTableThrowsExceptionWhenHashRangeIsStillIncompleteAfterRetries() throws Exception {
         final List<Shard> shardsWithIncompleteHashRange = Arrays.asList(
-                ShardObjectHelper.newShard("shardId-0", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("0", "1")),
-                ShardObjectHelper.newShard("shardId-1", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"), ShardObjectHelper.newHashKeyRange("2", "3"))
+                ShardObjectHelper.newShard("shardId-0", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange("0", "1")),
+                ShardObjectHelper.newShard("shardId-1", null, null, ShardObjectHelper.newSequenceNumberRange("1", "2"),
+                        ShardObjectHelper.newHashKeyRange("2", "3"))
         );
 
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);

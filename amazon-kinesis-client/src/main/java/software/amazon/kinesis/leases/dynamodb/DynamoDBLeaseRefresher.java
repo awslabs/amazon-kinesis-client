@@ -152,7 +152,8 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                                   final LeaseSerializer serializer, final boolean consistentReads,
                                   @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout,
                                   final BillingMode billingMode) {
-        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout, billingMode, DefaultSdkAutoConstructList.getInstance());
+        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout,
+                billingMode, DefaultSdkAutoConstructList.getInstance());
     }
 
     /**

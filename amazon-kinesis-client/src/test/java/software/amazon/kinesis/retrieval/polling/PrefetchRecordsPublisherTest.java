@@ -133,7 +133,8 @@ public class PrefetchRecordsPublisherTest {
         getRecordsCache = createPrefetchRecordsPublisher(0L);
         spyQueue = spy(getRecordsCache.getPublisherSession().prefetchRecordsQueue());
         records = spy(new ArrayList<>());
-        getRecordsResponse = GetRecordsResponse.builder().records(records).nextShardIterator(NEXT_SHARD_ITERATOR).childShards(new ArrayList<>()).build();
+        getRecordsResponse = GetRecordsResponse.builder().records(records).nextShardIterator(NEXT_SHARD_ITERATOR)
+                .childShards(Collections.emptyList()).build();
 
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(getRecordsResponse);
     }

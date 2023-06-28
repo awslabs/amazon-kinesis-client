@@ -162,7 +162,8 @@ public class PrefetchRecordsPublisherIntegrationTest {
     @Test
     public void testDifferentShardCaches() {
         final ExecutorService executorService2 = spy(Executors.newFixedThreadPool(1));
-        final KinesisDataFetcher kinesisDataFetcher = spy(new KinesisDataFetcher(kinesisClient, streamName, shardId, MAX_RECORDS_PER_CALL, NULL_METRICS_FACTORY));
+        final KinesisDataFetcher kinesisDataFetcher = spy(new KinesisDataFetcher(kinesisClient, streamName, shardId,
+                MAX_RECORDS_PER_CALL, NULL_METRICS_FACTORY));
         final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy2 =
                 spy(new AsynchronousGetRecordsRetrievalStrategy(kinesisDataFetcher, 5 , 5, shardId));
         final PrefetchRecordsPublisher recordsPublisher2 = new PrefetchRecordsPublisher(

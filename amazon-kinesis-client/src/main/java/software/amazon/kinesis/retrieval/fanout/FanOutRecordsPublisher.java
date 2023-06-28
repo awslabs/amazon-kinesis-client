@@ -230,8 +230,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 subscriber.onNext(recordsRetrieved);
             }
         } catch (IllegalStateException e) {
-
+            // CHECKSTYLE.OFF: LineLength
             log.warn("{}: Unable to enqueue the payload due to capacity restrictions in delivery queue with remaining capacity {}. Last successful request details -- {}",
+                    // CHECKSTYLE.ON: LineLength
                     streamAndShardId, recordsDeliveryQueue.remainingCapacity(), lastSuccessfulRequestDetails);
             throw e;
         } catch (Throwable t) {
@@ -382,7 +383,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         // Clear any lingering records in the queue.
         if (!recordsDeliveryQueue.isEmpty()) {
             log.warn("{}: Found non-empty queue while starting subscription. This indicates unsuccessful clean up of "
-                    + "previous subscription - {}. Last successful request details -- {}", streamAndShardId, subscribeToShardId, lastSuccessfulRequestDetails);
+                    + "previous subscription - {}. Last successful request details -- {}",
+                    streamAndShardId, subscribeToShardId, lastSuccessfulRequestDetails);
             recordsDeliveryQueue.clear();
         }
     }
@@ -402,7 +404,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             // The ack received for this onNext event will be ignored by the publisher as the global flow object should
             // be either null or renewed when the ack's flow identifier is evaluated.
             FanoutRecordsRetrieved response = new FanoutRecordsRetrieved(
-                    ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true).childShards(Collections.emptyList()).build(), null,
+                    ProcessRecordsInput.builder().records(Collections.emptyList()).isAtShardEnd(true)
+                            .childShards(Collections.emptyList()).build(), null,
                     triggeringFlow != null ? triggeringFlow.getSubscribeToShardId() : shardId + "-no-flow-found");
             subscriber.onNext(response);
             subscriber.onComplete();
@@ -515,7 +518,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
     private void updateAvailableQueueSpaceAndRequestUpstream(RecordFlow triggeringFlow) {
         if (availableQueueSpace <= 0) {
             log.debug(
+                    // CHECKSTYLE.OFF: LineLength
                     "{}: [SubscriptionLifetime] (FanOutRecordsPublisher#recordsReceived) @ {} id: {} -- Attempted to decrement availableQueueSpace to below 0",
+                    // CHECKSTYLE.ON: LineLength
                     streamAndShardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId);
         } else {
             availableQueueSpace--;
@@ -544,7 +549,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
             if (!isActiveFlow(triggeringFlow)) {
                 log.debug(
+                        // CHECKSTYLE.OFF: LineLength
                         "{}: [SubscriptionLifetime]: (FanOutRecordsPublisher#onComplete) @ {} id: {} -- Received spurious onComplete from unexpected flow. Ignoring.",
+                        // CHECKSTYLE.ON: LineLength
                         streamAndShardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId);
                 return;
             }
@@ -801,7 +808,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         throwable.getMessage());
                 if (this.isDisposed) {
                     log.debug(
+                            // CHECKSTYLE.OFF: LineLength
                             "{}: [SubscriptionLifetime]: (RecordFlow#exceptionOccurred) @ {} id: {} -- This flow has been disposed, not dispatching error. {}: {}",
+                            // CHECKSTYLE.ON: LineLength
                             parent.streamAndShardId, connectionStartedAt, subscribeToShardId, throwable.getClass().getName(),
                             throwable.getMessage());
                     this.isErrorDispatched = true;
@@ -891,7 +900,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         subscription.cancel();
                     } catch (Throwable t) {
                         log.error(
+                                // CHECKSTYLE.OFF: LineLength
                                 "{}: [SubscriptionLifetime]: (RecordFlow#complete) @ {} id: {} -- Exception while trying to cancel failed subscription: {}",
+                                // CHECKSTYLE.ON: LineLength
                                 parent.streamAndShardId, connectionStartedAt, subscribeToShardId, t.getMessage(), t);
                     }
                 }
@@ -953,12 +964,16 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 if (flow.shouldSubscriptionCancel()) {
                     if (flow.isCancelled) {
                         log.debug(
+                                // CHECKSTYLE.OFF: LineLength
                                 "{}: [SubscriptionLifetime]: (RecordSubscription#onSubscribe) @ {} id: {} -- Subscription was cancelled before onSubscribe",
+                                // CHECKSTYLE.ON: LineLength
                                 parent.streamAndShardId, connectionStartedAt, subscribeToShardId);
                     }
                     if (flow.isDisposed) {
                         log.debug(
+                                // CHECKSTYLE.OFF: LineLength
                                 "{}: [SubscriptionLifetime]: (RecordSubscription#onSubscribe) @ {} id: {} -- RecordFlow has been disposed cancelling subscribe",
+                                // CHECKSTYLE.ON: LineLength
                                 parent.streamAndShardId, connectionStartedAt, subscribeToShardId);
                     }
                     log.debug(

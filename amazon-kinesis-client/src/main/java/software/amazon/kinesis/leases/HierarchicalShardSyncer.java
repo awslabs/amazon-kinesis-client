@@ -92,7 +92,8 @@ public class HierarchicalShardSyncer {
         this(isMultiStreamMode, streamIdentifier, null);
     }
 
-    public HierarchicalShardSyncer(final boolean isMultiStreamMode, final String streamIdentifier, final DeletedStreamListProvider deletedStreamListProvider) {
+    public HierarchicalShardSyncer(final boolean isMultiStreamMode, final String streamIdentifier,
+            final DeletedStreamListProvider deletedStreamListProvider) {
         this.isMultiStreamMode = isMultiStreamMode;
         this.streamIdentifier = streamIdentifier;
         this.deletedStreamListProvider = deletedStreamListProvider;
@@ -191,7 +192,9 @@ public class HierarchicalShardSyncer {
         if (!CollectionUtils.isNullOrEmpty(inconsistentShardIds)) {
             final String ids = StringUtils.join(inconsistentShardIds, ' ');
             throw new KinesisClientLibIOException(String.format(
+                    // CHECKSTYLE.OFF: LineLength
                     "%d open child shards (%s) are inconsistent. This can happen due to a race condition between describeStream and a reshard operation.",
+                    // CHECKSTYLE.ON: LineLength
                     inconsistentShardIds.size(), ids));
         }
     }
@@ -564,7 +567,8 @@ public class HierarchicalShardSyncer {
         return parentShardIds;
     }
 
-    public synchronized Lease createLeaseForChildShard(final ChildShard childShard, final StreamIdentifier streamIdentifier) throws InvalidStateException {
+    public synchronized Lease createLeaseForChildShard(final ChildShard childShard,
+            final StreamIdentifier streamIdentifier) throws InvalidStateException {
         final MultiStreamArgs multiStreamArgs = new MultiStreamArgs(isMultiStreamMode, streamIdentifier);
 
         return multiStreamArgs.isMultiStreamMode() ? newKCLMultiStreamLeaseForChildShard(childShard, streamIdentifier)
@@ -583,7 +587,8 @@ public class HierarchicalShardSyncer {
         if (!CollectionUtils.isNullOrEmpty(childShard.parentShards())) {
             newLease.parentShardIds(childShard.parentShards());
         } else {
-            throw new InvalidStateException("Unable to populate new lease for child shard " + childShard.shardId() + "because parent shards cannot be found.");
+            throw new InvalidStateException("Unable to populate new lease for child shard " + childShard.shardId()
+                    + " because parent shards cannot be found.");
         }
         newLease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
         newLease.ownerSwitchesSinceCheckpoint(0L);
@@ -591,13 +596,15 @@ public class HierarchicalShardSyncer {
         return newLease;
     }
 
-    private static Lease newKCLMultiStreamLeaseForChildShard(final ChildShard childShard, final StreamIdentifier streamIdentifier) throws InvalidStateException {
+    private static Lease newKCLMultiStreamLeaseForChildShard(final ChildShard childShard,
+            final StreamIdentifier streamIdentifier) throws InvalidStateException {
         MultiStreamLease newLease = new MultiStreamLease();
         newLease.leaseKey(MultiStreamLease.getLeaseKey(streamIdentifier.serialize(), childShard.shardId()));
         if (!CollectionUtils.isNullOrEmpty(childShard.parentShards())) {
             newLease.parentShardIds(childShard.parentShards());
         } else {
-            throw new InvalidStateException("Unable to populate new lease for child shard " + childShard.shardId() + "because parent shards cannot be found.");
+            throw new InvalidStateException("Unable to populate new lease for child shard " + childShard.shardId()
+                    + " because parent shards cannot be found.");
         }
         newLease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
         newLease.ownerSwitchesSinceCheckpoint(0L);
@@ -612,7 +619,6 @@ public class HierarchicalShardSyncer {
      * Note: Package level access only for testing purposes
      *
      * @param shard
-     * @return
      */
     private static Lease newKCLLease(final Shard shard) {
         Lease newLease = new Lease();

@@ -141,7 +141,8 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
                 .withLease("5", "foo")
                 .build();
 
-        // In the current DynamoDBLeaseTaker implementation getAllLeases() gets leases from an internal cache that is built during takeLeases() operation
+        // In the current DynamoDBLeaseTaker implementation getAllLeases() gets leases from an internal cache that is
+        // built during takeLeases() operation
         assertThat(taker.allLeases().size(), equalTo(0));
 
         taker.takeLeases();
