@@ -1,9 +1,7 @@
 package software.amazon.kinesis.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
 import software.amazon.awssdk.core.SdkBytes;
@@ -34,9 +32,7 @@ import software.amazon.kinesis.utils.StreamExistenceManager;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -59,7 +55,7 @@ public class TestConsumer {
     private LifecycleConfig lifecycleConfig;
     private ProcessorConfig processorConfig;
     private Scheduler scheduler;
-    private ScheduledExecutorService producerExecutor;
+    private static final ScheduledExecutorService PRODUCER_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> producerFuture;
     private ScheduledExecutorService consumerExecutor;
     private ScheduledFuture<?> consumerFuture;
@@ -93,12 +89,9 @@ public class TestConsumer {
         try {
             startConsumer();
 
-            // Sleep for three minutes to allow the producer/consumer to run and then end the test case.
-            if (consumerConfig.getReshardConfig() == null) {
-                Thread.sleep(TimeUnit.SECONDS.toMillis(60 * 3));
-            } else {
-                Thread.sleep(TimeUnit.SECONDS.toMillis(60 * 8));
-            }
+            // Sleep to allow the producer/consumer to run and then end the test case. If non-reshard sleep 3 minutes, else sleep 4 minutes per scale.
+            final int sleepMinutes = (consumerConfig.getReshardFactorList() == null) ? 3 : (4 * consumerConfig.getReshardFactorList().size());
+            Thread.sleep(TimeUnit.MINUTES.toMillis(sleepMinutes));
 
             // Stops sending dummy data.
             stopProducer();
@@ -134,27 +127,18 @@ public class TestConsumer {
     }
 
     private void startProducer() {
-        producerExecutor = Executors.newSingleThreadScheduledExecutor();
-        producerFuture = producerExecutor.scheduleAtFixedRate(this::publishRecord, 10, 1, TimeUnit.SECONDS);
+        producerFuture = PRODUCER_EXECUTOR.scheduleAtFixedRate(this::publishRecord, 10, 1, TimeUnit.SECONDS);
 
         // Reshard logic if required for the test
-        if (consumerConfig.getReshardConfig() != null) {
-            log.info("------------------------- Reshard Config found -----------------------------");
-            final Queue<ReshardOptions> reshardQueue = new LinkedList<>(Arrays.asList(consumerConfig.getReshardConfig().getReshardingFactorCycle()));
-            int totalRotations = reshardQueue.size() * (consumerConfig.getReshardConfig().getNumReshardCycles() - 1);
+        if (consumerConfig.getReshardFactorList() != null) {
+            log.info("----Reshard Config found: {}", consumerConfig.getReshardFactorList());
 
-            final StreamScaler s = new StreamScaler(kinesisClient, consumerConfig.getStreamName(), reshardQueue, totalRotations, consumerConfig);
+            final StreamScaler s = new StreamScaler(kinesisClient, consumerConfig.getStreamName(), consumerConfig.getReshardFactorList(), consumerConfig);
 
-            Runnable task1 = () -> {
-                log.info("----------------------Starting new reshard------------------------------");
-                s.run();
-            };
-
-            // Split shard
-            producerExecutor.schedule(task1, 2, TimeUnit.MINUTES);
-
-            // Merge shard
-            producerExecutor.schedule(task1, 6, TimeUnit.MINUTES);
+            // Schedule the stream scales 4 minutes apart with 2 minute starting delay
+            for (int i = 0; i < consumerConfig.getReshardFactorList().size(); i++) {
+                PRODUCER_EXECUTOR.schedule(s, (4 * i) + 2, TimeUnit.MINUTES);
+            }
         }
     }
 
@@ -192,8 +176,12 @@ public class TestConsumer {
 
     public void stopProducer() {
         log.info("Cancelling producer and shutting down executor.");
-        producerFuture.cancel(false);
-        producerExecutor.shutdown();
+        if (producerFuture != null) {
+            producerFuture.cancel(false);
+        }
+        if (PRODUCER_EXECUTOR != null) {
+            PRODUCER_EXECUTOR.shutdown();
+        }
     }
 
     public void publishRecord() {
@@ -219,7 +207,7 @@ public class TestConsumer {
 
     private ByteBuffer wrapWithCounter(int payloadSize, BigInteger payloadCounter) throws RuntimeException {
         final byte[] returnData;
-        log.info("--------------Putting record with data: {}", payloadCounter);
+        log.info("---------Putting record with data: {}", payloadCounter);
         try {
             returnData = mapper.writeValueAsBytes(payloadCounter);
         } catch (Exception e) {
@@ -247,63 +235,60 @@ public class TestConsumer {
         if (errorVal != RecordValidationStatus.NO_ERROR) {
             throw new RuntimeException("There was an error validating the records that were processed: " + errorVal.toString());
         }
-        log.info("--------------Completed validation of processed records.--------------");
+        log.info("---------Completed validation of processed records.---------");
     }
 
     private void deleteResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager) throws Exception {
-        log.info("-------------Start deleting stream.----------------");
+        log.info("-------------Start deleting stream.---------");
         streamExistenceManager.deleteResource(this.streamName);
-        log.info("-------------Start deleting lease table.----------------");
+        log.info("---------Start deleting lease table.---------");
         leaseTableManager.deleteResource(this.consumerConfig.getStreamName());
-        log.info("-------------Finished deleting resources.----------------");
+        log.info("---------Finished deleting resources.---------");
     }
 
     @Data
-    @ToString
-    @AllArgsConstructor
-    public static class StreamScaler implements Runnable {
+    private static class StreamScaler implements Runnable {
         private final KinesisAsyncClient client;
         private final String streamName;
-        private final Queue<ReshardOptions> scalingFactor;
-        private int totalRotations;
-        private KCLAppConfig testConfig;
+        private final List<ReshardOptions> scalingFactors;
+        private final KCLAppConfig consumerConfig;
+        private int scalingFactorIdx = 0;
+        private DescribeStreamSummaryRequest describeStreamSummaryRequest;
+
+        private synchronized void scaleStream() throws InterruptedException, ExecutionException {
+            final DescribeStreamSummaryResponse response = client.describeStreamSummary(describeStreamSummaryRequest).get();
+
+            final int openShardCount = response.streamDescriptionSummary().openShardCount();
+            final int targetShardCount = scalingFactors.get(scalingFactorIdx).calculateShardCount(openShardCount);
+
+            log.info("Scaling stream {} from {} shards to {} shards w/ scaling factor {}",
+                    streamName, openShardCount, targetShardCount, scalingFactors.get(scalingFactorIdx));
+
+            final UpdateShardCountRequest updateShardCountRequest = UpdateShardCountRequest.builder()
+                    .streamName(streamName).targetShardCount(targetShardCount).scalingType(ScalingType.UNIFORM_SCALING).build();
+            final UpdateShardCountResponse shardCountResponse = client.updateShardCount(updateShardCountRequest).get();
+            log.info("Executed shard scaling request. Response Details : {}", shardCountResponse.toString());
+
+            scalingFactorIdx++;
+        }
 
         @Override
         public void run() {
+            if (scalingFactors.size() == 0 || scalingFactorIdx >= scalingFactors.size()) {
+                log.info("No scaling factor found in list");
+                return;
+            }
+            log.info("Starting stream scaling with params : {}", this);
+
+            if (describeStreamSummaryRequest == null) {
+                describeStreamSummaryRequest = DescribeStreamSummaryRequest.builder().streamName(streamName).build();
+            }
             try {
-                log.info("----------------------------Starting stream scale----------------------");
-                if (!scalingFactor.isEmpty()) {
-                    log.info("Starting stream scaling with params : {}", this);
-                    final DescribeStreamSummaryRequest describeStreamSummaryRequest = DescribeStreamSummaryRequest.builder().streamName(streamName).build();
-                    final DescribeStreamSummaryResponse response = client.describeStreamSummary(describeStreamSummaryRequest).get();
-
-                    int openShardCount = response.streamDescriptionSummary().openShardCount();
-                    int targetShardCount;
-                    if (scalingFactor.peek() == ReshardOptions.SPLIT) {
-                        // Split case: double the number of shards
-                        targetShardCount = (int) (openShardCount * 2.0);
-                    } else {
-                        // Merge case: half the number of shards
-                        targetShardCount = (int) (openShardCount * 0.5);
-                    }
-                    log.info("Scaling stream {} from {} shards to {} shards w/ scaling factor {}", streamName, openShardCount, targetShardCount, scalingFactor.peek());
-
-                    final UpdateShardCountRequest updateShardCountRequest = UpdateShardCountRequest.builder().streamName(streamName).targetShardCount(targetShardCount).scalingType(ScalingType.UNIFORM_SCALING).build();
-                    final UpdateShardCountResponse shardCountResponse = client.updateShardCount(updateShardCountRequest).get();
-                    log.info("Executed shard scaling request. Response Details : {}", shardCountResponse.toString());
-
-                    if (--totalRotations >= 0) {
-                        scalingFactor.offer(scalingFactor.poll());
-                    } else {
-                        scalingFactor.remove();
-                    }
-                } else {
-                    log.info("No scaling factor found in queue");
-                }
-            } catch (Exception e) {
+                scaleStream();
+            } catch (InterruptedException | ExecutionException e) {
                 log.error("Caught error while scaling shards for stream", e);
             } finally {
-                log.info("Reshard Queue State : {}", scalingFactor);
+                log.info("Reshard List State : {}", scalingFactors);
             }
         }
     }

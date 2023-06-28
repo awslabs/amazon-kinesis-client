@@ -3,6 +3,8 @@ package software.amazon.kinesis.config;
 import software.amazon.awssdk.http.Protocol;
 import software.amazon.kinesis.utils.ReshardOptions;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 import static software.amazon.kinesis.utils.ReshardOptions.MERGE;
@@ -25,12 +27,8 @@ public class ReleaseCanaryStreamingReshardingTestConfig extends KCLAppConfig {
     }
 
     @Override
-    public ReshardConfig getReshardConfig() {
-        return ReshardConfig.builder()
-                .reshardFrequencyMillis(3 * 60 * 1000)
-                .reshardingFactorCycle(new ReshardOptions[]{SPLIT, MERGE})
-                .numReshardCycles(1)
-                .build();
+    public List<ReshardOptions> getReshardFactorList() {
+        return Arrays.asList(SPLIT, MERGE);
     }
 
 }

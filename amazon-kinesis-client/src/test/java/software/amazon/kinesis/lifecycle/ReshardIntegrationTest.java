@@ -7,7 +7,7 @@ import software.amazon.kinesis.application.TestConsumer;
 
 public class ReshardIntegrationTest {
     @Test
-    public void ReleaseCanaryStreamingReshardingTest() throws Exception {
+    public void kclReleaseCanaryStreamingReshardingTest() throws Exception {
         KCLAppConfig consumerConfig = new ReleaseCanaryStreamingReshardingTestConfig();
         TestConsumer consumer = new TestConsumer(consumerConfig);
         consumer.run();

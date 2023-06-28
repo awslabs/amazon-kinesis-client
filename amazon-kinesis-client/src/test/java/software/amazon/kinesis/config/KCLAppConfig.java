@@ -24,12 +24,12 @@ import software.amazon.kinesis.common.ConfigsBuilder;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
-import software.amazon.kinesis.utils.ReshardOptions;
 
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.util.List;
 
 /**
  * Default configuration for a producer or consumer used in integration tests.
@@ -76,7 +76,7 @@ public abstract class KCLAppConfig {
                 .build();
     }
 
-    public ReshardConfig getReshardConfig() {
+    public List<ReshardOptions> getReshardFactorList() {
         return null;
     }
 
@@ -163,29 +163,6 @@ public abstract class KCLAppConfig {
         private int batchSize;
         private int recordSizeKB;
         private long callPeriodMills;
-    }
-
-    /**
-     * Description of the method of resharding for a test case
-     */
-    @Value
-    @Builder
-    public static class ReshardConfig {
-        /**
-         * reshardingFactorCycle: lists the order or reshards that will be done during one reshard cycle
-         * e.g {SPLIT, MERGE} means that the number of shards will first be doubled, then halved
-         */
-        private ReshardOptions[] reshardingFactorCycle;
-
-        /**
-         * numReshardCycles: the number of resharding cycles that will be executed in a test
-         */
-        private int numReshardCycles;
-
-        /**
-         * reshardFrequencyMillis: the period of time between reshard cycles (in milliseconds)
-         */
-        private long reshardFrequencyMillis;
     }
 
 }
