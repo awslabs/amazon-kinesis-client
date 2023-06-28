@@ -144,7 +144,8 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
      * {@inheritDoc}
      */
     @Override
-    public PreparedCheckpointer prepareCheckpoint(byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+    public PreparedCheckpointer prepareCheckpoint(byte[] applicationState)
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
         return prepareCheckpoint(largestPermittedCheckpointValue.sequenceNumber(), applicationState);
     }
 
@@ -152,7 +153,8 @@ public class ShardRecordProcessorCheckpointer implements RecordProcessorCheckpoi
      * {@inheritDoc}
      */
     @Override
-    public PreparedCheckpointer prepareCheckpoint(Record record, byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+    public PreparedCheckpointer prepareCheckpoint(Record record, byte[] applicationState)
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
         //
         // TODO: UserRecord Deprecation
         //

@@ -86,7 +86,7 @@ public class DynamoDBLeaseRenewerTest {
          */
         Lease lease1 = newLease("1");
         Lease lease2 = newLease("2");
-        leasesToRenew = Arrays.asList(lease1,lease2);
+        leasesToRenew = Arrays.asList(lease1, lease2);
         renewer.addLeasesToRenew(leasesToRenew);
 
         doReturn(true).when(leaseRefresher).renewLease(lease1);

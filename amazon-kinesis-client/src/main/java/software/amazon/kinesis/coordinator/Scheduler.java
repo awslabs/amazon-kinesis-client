@@ -544,7 +544,8 @@ public class Scheduler implements Runnable {
                 final Map<Boolean, Set<StreamIdentifier>> staleStreamIdDeletionDecisionMap = staleStreamDeletionMap.keySet().stream().collect(Collectors
                         .partitioningBy(newStreamConfigMap::containsKey, Collectors.toSet()));
                 final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream().filter(streamIdentifier ->
-                        Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis() >= waitPeriodToDeleteOldStreams.toMillis()).collect(Collectors.toSet());
+                        Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis() >= waitPeriodToDeleteOldStreams.toMillis())
+                        .collect(Collectors.toSet());
                 // These are the streams which are deleted in Kinesis and we encounter resource not found during
                 // shardSyncTask. This is applicable in MultiStreamMode only, in case of SingleStreamMode, store will
                 // not have any data.
@@ -611,7 +612,7 @@ public class Scheduler implements Runnable {
     }
 
     private void removeStreamsFromStaleStreamsList(Set<StreamIdentifier> streamIdentifiers) {
-        for(StreamIdentifier streamIdentifier : streamIdentifiers) {
+        for (StreamIdentifier streamIdentifier : streamIdentifiers) {
             staleStreamDeletionMap.remove(streamIdentifier);
         }
     }

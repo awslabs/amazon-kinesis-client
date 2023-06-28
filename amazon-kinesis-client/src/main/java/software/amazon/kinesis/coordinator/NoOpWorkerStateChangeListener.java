@@ -16,15 +16,15 @@ package software.amazon.kinesis.coordinator;
 
 public class NoOpWorkerStateChangeListener implements WorkerStateChangeListener {
 
-	/**
-	 * Empty constructor for NoOp Worker State Change Listener
-	 */
-	public NoOpWorkerStateChangeListener() {
+    /**
+     * Empty constructor for NoOp Worker State Change Listener
+     */
+    public NoOpWorkerStateChangeListener() {
 
-	}
+    }
 
-	@Override
-	public void onWorkerStateChange(WorkerState newState) {
+    @Override
+    public void onWorkerStateChange(WorkerState newState) {
 
-	}
+    }
 }

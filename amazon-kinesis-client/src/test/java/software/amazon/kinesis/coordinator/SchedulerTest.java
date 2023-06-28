@@ -35,7 +35,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.atMost;
-import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.*;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -104,6 +103,9 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.AutoDetectionAndDeferredDeletionStrategy;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.NoLeaseDeletionStrategy;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.ProvidedStreamsDeferredDeletionStrategy;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
@@ -727,8 +729,8 @@ public class SchedulerTest {
             boolean expectPendingStreamsForDeletion,
             boolean onlyStreamsNoLeasesDeletion)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
-        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1,5);
-        List<StreamConfig> streamConfigList2 = createDummyStreamConfigList(3,7);
+        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1, 5);
+        List<StreamConfig> streamConfigList2 = createDummyStreamConfigList(3, 7);
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
         when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList1, streamConfigList2);
@@ -742,7 +744,7 @@ public class SchedulerTest {
                         Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)))
                 .collect(Collectors.toCollection(HashSet::new));
 
-        if(onlyStreamsNoLeasesDeletion) {
+        if (onlyStreamsNoLeasesDeletion) {
             expectedSyncedStreams = IntStream.concat(IntStream.range(1, 3), IntStream.range(5, 7))
                     .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
                             Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)))
@@ -756,7 +758,7 @@ public class SchedulerTest {
 
         Assert.assertEquals(expectedSyncedStreams, syncedStreams);
         List<StreamConfig> expectedCurrentStreamConfigs;
-        if(onlyStreamsNoLeasesDeletion) {
+        if (onlyStreamsNoLeasesDeletion) {
             expectedCurrentStreamConfigs = IntStream.range(3, 7).mapToObj(streamId -> new StreamConfig(
                     StreamIdentifier.multiStreamInstance(
                             Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
@@ -778,8 +780,8 @@ public class SchedulerTest {
 
     @Test
     public void testKinesisStaleDeletedStreamCleanup() throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1,6);
-        List<StreamConfig> streamConfigList2 = createDummyStreamConfigList(1,4);
+        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1, 6);
+        List<StreamConfig> streamConfigList2 = createDummyStreamConfigList(1, 4);
 
         prepareForStaleDeletedStreamCleanupTests(streamConfigList1, streamConfigList2);
 
@@ -820,7 +822,7 @@ public class SchedulerTest {
     @Test
     public void testKinesisStaleDeletedStreamNoCleanUpForTrackedStream()
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1,6);
+        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1, 6);
         prepareForStaleDeletedStreamCleanupTests(streamConfigList1);
 
         scheduler.deletedStreamListProvider().add(createDummyStreamConfig(3).streamIdentifier());
@@ -1243,7 +1245,7 @@ public class SchedulerTest {
         @Override
         public ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory,
                 StreamConfig streamConfig, DeletedStreamListProvider deletedStreamListProvider) {
-            if(shouldReturnDefaultShardSyncTaskmanager) {
+            if (shouldReturnDefaultShardSyncTaskmanager) {
                 return shardSyncTaskManager;
             }
             final ShardSyncTaskManager shardSyncTaskManager = mock(ShardSyncTaskManager.class);
@@ -1255,7 +1257,7 @@ public class SchedulerTest {
             when(shardSyncTaskManager.hierarchicalShardSyncer()).thenReturn(hierarchicalShardSyncer);
             when(shardDetector.streamIdentifier()).thenReturn(streamConfig.streamIdentifier());
             when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
-            if(shardSyncFirstAttemptFailure) {
+            if (shardSyncFirstAttemptFailure) {
                 when(shardDetector.listShards())
                         .thenThrow(new RuntimeException("Service Exception"))
                         .thenReturn(Collections.EMPTY_LIST);

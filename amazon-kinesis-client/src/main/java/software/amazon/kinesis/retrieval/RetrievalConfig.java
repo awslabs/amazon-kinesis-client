@@ -49,7 +49,7 @@ public class RetrievalConfig {
      */
     public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java";
 
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.5.1-SNAPSHOT";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.5.1";
 
     /**
      * Client used to make calls to Kinesis for records retrieval
@@ -152,7 +152,7 @@ public class RetrievalConfig {
         if (streamTracker().isMultiStream()) {
             throw new IllegalArgumentException(
                     "Cannot set initialPositionInStreamExtended when multiStreamTracker is set");
-        };
+        }
 
         final StreamIdentifier streamIdentifier = getSingleStreamIdentifier();
         final StreamConfig updatedConfig = new StreamConfig(streamIdentifier, initialPositionInStreamExtended);

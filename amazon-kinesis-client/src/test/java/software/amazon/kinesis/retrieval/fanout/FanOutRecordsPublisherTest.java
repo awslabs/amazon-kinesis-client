@@ -8,7 +8,6 @@ import io.reactivex.rxjava3.schedulers.Schedulers;
 import io.reactivex.rxjava3.subscribers.SafeSubscriber;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -54,7 +53,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -77,7 +75,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.argThat;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
@@ -172,11 +169,10 @@ public class FanOutRecordsPublisherTest {
                 assertThat(clientRecordsList.get(i), matchers.get(i));
             }
         });
-
     }
 
     @Test
-    public void InvalidEventTest() throws Exception {
+    public void testInvalidEvent() {
         FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
@@ -239,7 +235,6 @@ public class FanOutRecordsPublisherTest {
                 assertThat(clientRecordsList.get(i), matchers.get(i));
             }
         });
-
     }
 
     @Test
@@ -317,11 +312,10 @@ public class FanOutRecordsPublisherTest {
         });
 
         assertThat(source.getCurrentSequenceNumber(), equalTo("3000"));
-
     }
 
     @Test
-    public void testIfEventsAreNotDeliveredToShardConsumerWhenPreviousEventDeliveryTaskGetsRejected() throws Exception {
+    public void testIfEventsAreNotDeliveredToShardConsumerWhenPreviousEventDeliveryTaskGetsRejected() {
         FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
@@ -395,7 +389,6 @@ public class FanOutRecordsPublisherTest {
         });
 
         assertThat(source.getCurrentSequenceNumber(), equalTo("1000"));
-
     }
 
     @Test
@@ -443,10 +436,11 @@ public class FanOutRecordsPublisherTest {
 
                     @Override public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
-                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        assertEquals("" + ++lastSeenSeqNum,
+                                ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
-                        if(receivedInput.size() == totalServicePublisherEvents) {
+                        if (receivedInput.size() == totalServicePublisherEvents) {
                             servicePublisherTaskCompletionLatch.countDown();
                         }
                     }
@@ -488,12 +482,10 @@ public class FanOutRecordsPublisherTest {
         });
 
         assertThat(source.getCurrentSequenceNumber(), equalTo(totalServicePublisherEvents + ""));
-
     }
 
     @Test
     public void testIfStreamOfEventsAndOnCompleteAreDeliveredInOrderWithBackpressureAdheringServicePublisher() throws Exception {
-
         CountDownLatch onS2SCallLatch = new CountDownLatch(2);
 
         doAnswer(new Answer() {
@@ -549,10 +541,11 @@ public class FanOutRecordsPublisherTest {
 
                     @Override public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
-                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        assertEquals("" + ++lastSeenSeqNum,
+                                ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
-                        if(receivedInput.size() == triggerCompleteAtNthEvent) {
+                        if (receivedInput.size() == triggerCompleteAtNthEvent) {
                             servicePublisherTaskCompletionLatch.countDown();
                         }
                     }
@@ -599,7 +592,6 @@ public class FanOutRecordsPublisherTest {
         // Let's wait for sometime to allow the publisher to re-subscribe
         onS2SCallLatch.await(5000, TimeUnit.MILLISECONDS);
         verify(kinesisClient, times(2)).subscribeToShard(any(SubscribeToShardRequest.class), flowCaptor.capture());
-
     }
 
     @Test
@@ -681,7 +673,7 @@ public class FanOutRecordsPublisherTest {
                         receivedInput.add(input.processRecordsInput());
                         subscription.request(1);
                         servicePublisher.request(1);
-                        if(receivedInput.size() == triggerCompleteAtNthEvent) {
+                        if (receivedInput.size() == triggerCompleteAtNthEvent) {
                             servicePublisherTaskCompletionLatch.countDown();
                         }
                     }
@@ -728,7 +720,6 @@ public class FanOutRecordsPublisherTest {
         // With shard end event, onComplete must be propagated to the subscriber.
         onCompleteLatch.await(5000, TimeUnit.MILLISECONDS);
         assertTrue("OnComplete should be triggered", isOnCompleteTriggered[0]);
-
     }
 
     @Test
@@ -783,10 +774,11 @@ public class FanOutRecordsPublisherTest {
 
                     @Override public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
-                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        assertEquals("" + ++lastSeenSeqNum,
+                                ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
-                        if(receivedInput.size() == triggerErrorAtNthEvent) {
+                        if (receivedInput.size() == triggerErrorAtNthEvent) {
                             servicePublisherTaskCompletionLatch.countDown();
                         }
                     }
@@ -831,7 +823,6 @@ public class FanOutRecordsPublisherTest {
         assertThat(source.getCurrentSequenceNumber(), equalTo(triggerErrorAtNthEvent + ""));
         onErrorReceiveLatch.await(5000, TimeUnit.MILLISECONDS);
         assertTrue("OnError should have been thrown", isOnErrorThrown[0]);
-
     }
 
     @Test
@@ -879,10 +870,11 @@ public class FanOutRecordsPublisherTest {
 
                     @Override public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
-                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        assertEquals("" + ++lastSeenSeqNum,
+                                ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
-                        if(receivedInput.size() == totalServicePublisherEvents) {
+                        if (receivedInput.size() == totalServicePublisherEvents) {
                             servicePublisherTaskCompletionLatch.countDown();
                         }
                     }
@@ -924,7 +916,6 @@ public class FanOutRecordsPublisherTest {
         });
 
         assertThat(source.getCurrentSequenceNumber(), equalTo(totalServicePublisherEvents + ""));
-
     }
 
     @Test
@@ -973,7 +964,8 @@ public class FanOutRecordsPublisherTest {
 
                     @Override public void onNext(RecordsRetrieved input) {
                         receivedInput.add(input.processRecordsInput());
-                        assertEquals("" + ++lastSeenSeqNum, ((FanOutRecordsPublisher.FanoutRecordsRetrieved)input).continuationSequenceNumber());
+                        assertEquals("" + ++lastSeenSeqNum,
+                                ((FanOutRecordsPublisher.FanoutRecordsRetrieved) input).continuationSequenceNumber());
                         subscription.request(1);
                         servicePublisher.request(1);
                     }
@@ -1126,7 +1118,6 @@ public class FanOutRecordsPublisherTest {
                 assertThat(clientRecordsList.get(i), matchers.get(i));
             }
         });
-
     }
 
     @Test
@@ -1242,7 +1233,6 @@ public class FanOutRecordsPublisherTest {
 
         verifyRecords(nonFailingSubscriber.received.get(0).records(), matchers);
         verifyRecords(nonFailingSubscriber.received.get(1).records(), nextMatchers);
-
     }
 
     @Test
@@ -1328,7 +1318,7 @@ public class FanOutRecordsPublisherTest {
                 fanOutRecordsPublisher
                         .evictAckedEventAndScheduleNextEvent(() -> recordsRetrieved.batchUniqueIdentifier());
                 // Send stale event periodically
-                if(totalRecordsRetrieved[0] % 10 == 0) {
+                if (totalRecordsRetrieved[0] % 10 == 0) {
                     fanOutRecordsPublisher.evictAckedEventAndScheduleNextEvent(
                             () -> new BatchUniqueIdentifier("some_uuid_str", "some_old_flow"));
                 }
@@ -1368,7 +1358,7 @@ public class FanOutRecordsPublisherTest {
         int count = 0;
         // Now that we allowed upto 10 elements queued up, send a pair of good and stale ack to verify records
         // delivered as expected.
-        while(count++ < 10 && (batchUniqueIdentifierQueued = ackQueue.take()) != null) {
+        while (count++ < 10 && (batchUniqueIdentifierQueued = ackQueue.take()) != null) {
             final BatchUniqueIdentifier batchUniqueIdentifierFinal = batchUniqueIdentifierQueued;
             fanOutRecordsPublisher
                     .evictAckedEventAndScheduleNextEvent(() -> batchUniqueIdentifierFinal);
@@ -1403,7 +1393,7 @@ public class FanOutRecordsPublisherTest {
         int count = 0;
         // Now that we allowed upto 10 elements queued up, send a pair of good and stale ack to verify records
         // delivered as expected.
-        while(count++ < 2 && (batchUniqueIdentifierQueued = ackQueue.poll(1000, TimeUnit.MILLISECONDS)) != null) {
+        while (count++ < 2 && (batchUniqueIdentifierQueued = ackQueue.poll(1000, TimeUnit.MILLISECONDS)) != null) {
             final BatchUniqueIdentifier batchUniqueIdentifierFinal = batchUniqueIdentifierQueued;
             fanOutRecordsPublisher.evictAckedEventAndScheduleNextEvent(
                     () -> new BatchUniqueIdentifier("some_uuid_str", batchUniqueIdentifierFinal.getFlowIdentifier()));
@@ -1457,11 +1447,11 @@ public class FanOutRecordsPublisherTest {
 
         flowCaptor.getValue().exceptionOccurred(exception);
 
-        Optional<OnErrorEvent> onErrorEvent = subscriber.events.stream().filter(e -> e instanceof OnErrorEvent).map(e -> (OnErrorEvent)e).findFirst();
+        Optional<OnErrorEvent> onErrorEvent = subscriber.events.stream().filter(e -> e instanceof OnErrorEvent)
+                .map(e -> (OnErrorEvent) e).findFirst();
 
         assertThat(onErrorEvent, equalTo(Optional.of(new OnErrorEvent(exception))));
         assertThat(acquireTimeoutLogged.get(), equalTo(true));
-
     }
 
     private void verifyRecords(List<KinesisClientRecord> clientRecordsList, List<KinesisClientRecordMatcher> matchers) {
@@ -1587,8 +1577,8 @@ public class FanOutRecordsPublisherTest {
         public void run() {
             for (int i = 1; i <= numOfTimes; ) {
                 demandNotifier.acquireUninterruptibly();
-                if(i == sendCompletionAt) {
-                    if(shardEndAction != null) {
+                if (i == sendCompletionAt) {
+                    if (shardEndAction != null) {
                         shardEndAction.accept(i++);
                     } else {
                         action.accept(i++);
@@ -1596,7 +1586,7 @@ public class FanOutRecordsPublisherTest {
                     completeAction.run();
                     break;
                 }
-                if(i == sendErrorAt) {
+                if (i == sendErrorAt) {
                     action.accept(i++);
                     errorAction.run();
                     break;

@@ -26,7 +26,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -158,7 +157,6 @@ public class DynamoDBLeaseRefresherTest {
 
         verify(mockScanFuture, times(2)).get(anyLong(), any(TimeUnit.class));
         verify(dynamoDbClient, times(2)).scan(any(ScanRequest.class));
-
     }
 
     @Test

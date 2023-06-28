@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -61,10 +60,8 @@ import software.amazon.kinesis.multilang.messages.ShardEndedMessage;
 import software.amazon.kinesis.multilang.messages.StatusMessage;
 import com.google.common.util.concurrent.SettableFuture;
 
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
@@ -106,7 +103,7 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void initializeTest() throws InterruptedException, ExecutionException {
+    public void testInitialize() {
         when(messageWriter
                 .writeInitializeMessage(argThat(Matchers.withInit(InitializationInput.builder()
                         .shardId(shardId).build())))).thenReturn(buildFuture(true));
@@ -116,7 +113,7 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void processRecordsTest() throws InterruptedException, ExecutionException {
+    public void testProcessRecords() {
         when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(
                 new StatusMessage("processRecords"), Message.class));
@@ -131,7 +128,6 @@ public class MultiLangProtocolTest {
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(new StatusMessage(LeaseLostMessage.ACTION), Message.class));
 
         assertThat(protocol.leaseLost(LeaseLostInput.builder().build()), equalTo(true));
-
     }
 
     @Test
@@ -177,7 +173,7 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void processRecordsWithCheckpointsTest() throws InterruptedException, ExecutionException,
+    public void testProcessRecordsWithCheckpoints() throws
         KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
 
         when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
@@ -206,7 +202,7 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void processRecordsWithABadCheckpointTest() throws InterruptedException, ExecutionException {
+    public void testProcessRecordsWithABadCheckpoint() {
         when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
         when(messageWriter.writeCheckpointMessageWithError(anyString(), anyLong(), any(Throwable.class))).thenReturn(buildFuture(false));
         when(messageReader.getNextMessageFromSTDOUT()).thenAnswer(buildMessageAnswers(new ArrayList<Message>() {

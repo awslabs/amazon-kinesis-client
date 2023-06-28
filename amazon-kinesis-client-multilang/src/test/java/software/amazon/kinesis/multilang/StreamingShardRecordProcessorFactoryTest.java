@@ -14,12 +14,9 @@
  */
 package software.amazon.kinesis.multilang;
 
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
 import org.junit.Assert;
 import org.junit.Test;
 
-import software.amazon.kinesis.multilang.MultiLangRecordProcessorFactory;
-import software.amazon.kinesis.multilang.MultiLangShardRecordProcessor;
 import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import org.junit.runner.RunWith;

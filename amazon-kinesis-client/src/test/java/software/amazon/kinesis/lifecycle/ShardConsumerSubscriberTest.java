@@ -35,7 +35,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -173,7 +172,6 @@ public class ShardConsumerSubscriberTest {
         assertThat(subscriber.getAndResetDispatchFailure(), nullValue());
 
         verify(shardConsumer, times(20)).handleInput(argThat(eqProcessRecordsInput(processRecordsInput)), any(Subscription.class));
-
     }
 
     @Test
@@ -293,12 +291,10 @@ public class ShardConsumerSubscriberTest {
         assertThat(received.size(), equalTo(recordsPublisher.responses.size()));
         Stream.iterate(0, i -> i + 1).limit(received.size()).forEach(i -> assertThat(received.get(i),
                 eqProcessRecordsInput(recordsPublisher.responses.get(i).recordsRetrieved.processRecordsInput())));
-
     }
 
     @Test
     public void restartAfterRequestTimerExpiresWhenNotGettingRecordsAfterInitialization() throws Exception {
-
         executorService = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
                 .setNameFormat("test-" + testName.getMethodName() + "-%04d").setDaemon(true).build());
 
@@ -347,12 +343,10 @@ public class ShardConsumerSubscriberTest {
         assertThat(received.size(), equalTo(recordsPublisher.responses.size()));
         Stream.iterate(0, i -> i + 1).limit(received.size()).forEach(i -> assertThat(received.get(i),
                 eqProcessRecordsInput(recordsPublisher.responses.get(i).recordsRetrieved.processRecordsInput())));
-
     }
 
     @Test
     public void restartAfterRequestTimerExpiresWhenInitialTaskExecutionIsRejected() throws Exception {
-
         executorService = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder()
                 .setNameFormat("test-" + testName.getMethodName() + "-%04d").setDaemon(true).build());
 
@@ -405,7 +399,6 @@ public class ShardConsumerSubscriberTest {
         assertThat(received.size(), equalTo(recordsPublisher.responses.size()));
         Stream.iterate(0, i -> i + 1).limit(received.size()).forEach(i -> assertThat(received.get(i),
                 eqProcessRecordsInput(recordsPublisher.responses.get(i).recordsRetrieved.processRecordsInput())));
-
     }
 
     private Object directlyExecuteRunnable(InvocationOnMock invocation) {
@@ -623,8 +616,6 @@ public class ShardConsumerSubscriberTest {
 
     /**
      * Test to validate the warning message from ShardConsumer is not suppressed with the default configuration of 0
-     * 
-     * @throws Exception
      */
     @Test
     public void noLoggingSuppressionNeededOnHappyPathTest() {
@@ -648,8 +639,6 @@ public class ShardConsumerSubscriberTest {
 
     /**
      * Test to validate the warning message from ShardConsumer is not suppressed with the default configuration of 0
-     * 
-     * @throws Exception
      */
     @Test
     public void loggingNotSuppressedAfterTimeoutTest() {
@@ -677,8 +666,6 @@ public class ShardConsumerSubscriberTest {
     /**
      * Test to validate the warning message from ShardConsumer is successfully supressed if we only have intermittant
      * readTimeouts.
-     * 
-     * @throws Exception
      */
     @Test
     public void loggingSuppressedAfterIntermittentTimeoutTest() {
@@ -705,8 +692,6 @@ public class ShardConsumerSubscriberTest {
     /**
      * Test to validate the warning message from ShardConsumer is successfully logged if multiple sequential timeouts
      * occur.
-     * 
-     * @throws Exception
      */
     @Test
     public void loggingPartiallySuppressedAfterMultipleTimeoutTest() {
@@ -733,8 +718,6 @@ public class ShardConsumerSubscriberTest {
 
     /**
      * Test to validate the warning message from ShardConsumer is successfully logged if sequential timeouts occur.
-     * 
-     * @throws Exception
      */
     @Test
     public void loggingPartiallySuppressedAfterConsecutiveTimeoutTest() {
@@ -763,8 +746,6 @@ public class ShardConsumerSubscriberTest {
     /**
      * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with the default
      * configuration of 0
-     * 
-     * @throws Exception
      */
     @Test
     public void loggingNotSuppressedOnNonReadTimeoutExceptionNotIgnoringReadTimeoutsExceptionTest() {
@@ -792,12 +773,9 @@ public class ShardConsumerSubscriberTest {
     /**
      * Test to validate the non-timeout warning message from ShardConsumer is not suppressed with 2 ReadTimeouts to
      * ignore
-     * 
-     * @throws Exception
      */
     @Test
     public void loggingNotSuppressedOnNonReadTimeoutExceptionIgnoringReadTimeoutsTest() {
-
         // We're not throwing a ReadTimeout, so no suppression is expected.
         // The test expects a non-ReadTimeout exception to be thrown on requests 3 and 5, and we expect logs on
         // each Non-ReadTimeout Exception, no matter what the number of ReadTimeoutsToIgnore we pass in,

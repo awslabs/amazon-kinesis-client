@@ -27,14 +27,12 @@ import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.async.SdkPublisher;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEvent;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardEventStream;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponse;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardResponseHandler;
-import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -117,7 +115,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             this.currentSequenceNumber = extendedSequenceNumber.sequenceNumber();
             this.isFirstConnection = true;
         }
-
     }
 
     @Override
@@ -192,7 +189,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             // Take action based on the time spent by the event in queue.
             takeDelayedDeliveryActionIfRequired(streamAndShardId, recordsRetrievedContext.getEnqueueTimestamp(), log);
             // Update current sequence number for the successfully delivered event.
-            currentSequenceNumber = ((FanoutRecordsRetrieved)recordsRetrieved).continuationSequenceNumber();
+            currentSequenceNumber = ((FanoutRecordsRetrieved) recordsRetrieved).continuationSequenceNumber();
             // Update the triggering flow for post scheduling upstream request.
             flowToBeReturned = recordsRetrievedContext.getRecordFlow();
             // Try scheduling the next event in the queue or execute the subscription shutdown action.
@@ -206,7 +203,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             if (flow != null && recordsDeliveryAck.batchUniqueIdentifier().getFlowIdentifier()
                     .equals(flow.getSubscribeToShardId())) {
                 log.error(
-                        "{}: Received unexpected ack for the active subscription {}. Throwing.  ", streamAndShardId, recordsDeliveryAck.batchUniqueIdentifier().getFlowIdentifier());
+                        "{}: Received unexpected ack for the active subscription {}. Throwing.",
+                        streamAndShardId, recordsDeliveryAck.batchUniqueIdentifier().getFlowIdentifier());
                 throw new IllegalStateException("Unexpected ack for the active subscription");
             }
             // Otherwise publisher received a stale ack.
@@ -275,7 +273,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         SubscriptionShutdownEvent(Runnable subscriptionShutdownAction, String eventIdentifier) {
             this(subscriptionShutdownAction, eventIdentifier, null);
         }
-
     }
 
     private boolean hasValidSubscriber() {
@@ -315,7 +312,7 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
         synchronized (lockObject) {
 
             if (!hasValidSubscriber()) {
-                if(hasValidFlow()) {
+                if (hasValidFlow()) {
                     log.warn(
                             "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- Subscriber is null." +
                                     " Last successful request details -- {}", streamAndShardId, flow.connectionStartedAt,
@@ -335,7 +332,8 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 if (flow != null) {
                     String logMessage = String.format(
                             "%s: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ %s id: %s -- %s." +
-                                    " Last successful request details -- %s", streamAndShardId, flow.connectionStartedAt, flow.subscribeToShardId, category.throwableTypeString, lastSuccessfulRequestDetails);
+                                    " Last successful request details -- %s", streamAndShardId, flow.connectionStartedAt,
+                            flow.subscribeToShardId, category.throwableTypeString, lastSuccessfulRequestDetails);
                     switch (category.throwableType) {
                     case READ_TIMEOUT:
                         log.debug(logMessage, propagationThrowable);
@@ -367,7 +365,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
             } else {
                 if (triggeringFlow != null) {
                     log.debug(
+                            // CHECKSTYLE.OFF: LineLength
                             "{}: [SubscriptionLifetime] - (FanOutRecordsPublisher#errorOccurred) @ {} id: {} -- {} -> triggeringFlow wasn't the active flow.  Didn't dispatch error",
+                            // CHECKSTYLE.ON: LineLength
                             streamAndShardId, triggeringFlow.connectionStartedAt, triggeringFlow.subscribeToShardId,
                             category.throwableTypeString);
                     triggeringFlow.cancel();
@@ -603,7 +603,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     synchronized (lockObject) {
                         if (subscriber != s) {
                             log.warn(
+                                    // CHECKSTYLE.OFF: LineLength
                                     "{}: (FanOutRecordsPublisher/Subscription#request) - Rejected an attempt to request({}), because subscribers don't match. Last successful request details -- {}",
+                                    // CHECKSTYLE.ON: LineLength
                                     streamAndShardId, n, lastSuccessfulRequestDetails);
                             return;
                         }
@@ -630,13 +632,17 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     synchronized (lockObject) {
                         if (subscriber != s) {
                             log.warn(
+                                    // CHECKSTYLE.OFF: LineLength
                                     "{}: (FanOutRecordsPublisher/Subscription#cancel) - Rejected attempt to cancel subscription, because subscribers don't match. Last successful request details -- {}",
+                                    // CHECKSTYLE.ON: LineLength
                                     streamAndShardId, lastSuccessfulRequestDetails);
                             return;
                         }
                         if (!hasValidSubscriber()) {
                             log.warn(
+                                    // CHECKSTYLE.OFF: LineLength
                                     "{}: (FanOutRecordsPublisher/Subscription#cancel) - Cancelled called even with an invalid subscriber. Last successful request details -- {}",
+                                    // CHECKSTYLE.ON: LineLength
                                     streamAndShardId, lastSuccessfulRequestDetails);
                         }
                         subscriber = null;
@@ -778,7 +784,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     executeExceptionOccurred(throwable);
                 } else {
                     final SubscriptionShutdownEvent subscriptionShutdownEvent = new SubscriptionShutdownEvent(
-                            () -> {parent.recordsDeliveryQueue.poll(); executeExceptionOccurred(throwable);}, "onError", throwable);
+                            () -> {
+                                parent.recordsDeliveryQueue.poll();
+                                executeExceptionOccurred(throwable);
+                                },
+                            "onError", throwable);
                     tryEnqueueSubscriptionShutdownEvent(subscriptionShutdownEvent);
                 }
             }
@@ -786,7 +796,6 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
 
         private void executeExceptionOccurred(Throwable throwable) {
             synchronized (parent.lockObject) {
-
                 log.debug("{}: [SubscriptionLifetime]: (RecordFlow#exceptionOccurred) @ {} id: {} -- {}: {}",
                         parent.streamAndShardId, connectionStartedAt, subscribeToShardId, throwable.getClass().getName(),
                         throwable.getMessage());
@@ -803,7 +812,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     isErrorDispatched = true;
                 } else {
                     log.debug(
+                            // CHECKSTYLE.OFF: LineLength
                             "{}: [SubscriptionLifetime]: (RecordFlow#exceptionOccurred) @ {} id: {} -- An error has previously been dispatched, not dispatching this error {}: {}",
+                            // CHECKSTYLE.OFF: LineLength
                             parent.streamAndShardId, connectionStartedAt, subscribeToShardId, throwable.getClass().getName(),
                             throwable.getMessage());
                 }
@@ -817,7 +828,11 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                     executeComplete();
                 } else {
                     final SubscriptionShutdownEvent subscriptionShutdownEvent = new SubscriptionShutdownEvent(
-                            () -> {parent.recordsDeliveryQueue.poll(); executeComplete();}, "onComplete");
+                            () -> {
+                                parent.recordsDeliveryQueue.poll();
+                                executeComplete();
+                                },
+                            "onComplete");
                     tryEnqueueSubscriptionShutdownEvent(subscriptionShutdownEvent);
                 }
             }
@@ -830,7 +845,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                         .add(new RecordsRetrievedContext(Either.right(subscriptionShutdownEvent), this, Instant.now()));
             } catch (Exception e) {
                 log.warn(
+                        // CHECKSTYLE.OFF: LineLength
                         "{}: Unable to enqueue the {} shutdown event due to capacity restrictions in delivery queue with remaining capacity {}. Ignoring. Last successful request details -- {}",
+                        // CHECKSTYLE.ON: LineLength
                         parent.streamAndShardId, subscriptionShutdownEvent.getEventIdentifier(), parent.recordsDeliveryQueue.remainingCapacity(),
                         parent.lastSuccessfulRequestDetails, subscriptionShutdownEvent.getShutdownEventThrowableOptional());
             }
@@ -854,7 +871,9 @@ public class FanOutRecordsPublisher implements RecordsPublisher {
                 }
                 if (this.isDisposed) {
                     log.warn(
+                            // CHECKSTYLE.OFF: LineLength
                             "{}: [SubscriptionLifetime]: (RecordFlow#complete) @ {} id: {} -- This flow has been disposed not dispatching completion. Last successful request details -- {}",
+                            // CHECKSTYLE.ON: LineLength
                             parent.streamAndShardId, connectionStartedAt, subscribeToShardId, parent.lastSuccessfulRequestDetails);
                     return;
                 }

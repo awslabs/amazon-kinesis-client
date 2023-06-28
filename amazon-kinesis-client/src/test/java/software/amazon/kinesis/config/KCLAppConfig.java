@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
-import java.util.Optional;
 
 /**
  * Default configuration for a producer or consumer used in integration tests.
@@ -82,7 +81,6 @@ public abstract class KCLAppConfig {
     }
 
     public final KinesisAsyncClient buildAsyncKinesisClient() throws URISyntaxException, IOException {
-
         if (kinesisAsyncClient == null) {
             // Setup H2 client config.
             final NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder()
