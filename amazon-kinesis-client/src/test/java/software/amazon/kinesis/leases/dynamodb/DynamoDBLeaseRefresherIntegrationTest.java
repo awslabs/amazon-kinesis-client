@@ -17,6 +17,7 @@ package software.amazon.kinesis.leases.dynamodb;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Assert;
 import org.junit.Before;
@@ -34,7 +35,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
@@ -299,17 +299,12 @@ public class DynamoDBLeaseRefresherIntegrationTest extends LeaseIntegrationTest 
 
     @Test
     public void testWaitUntilLeaseTableExists() throws LeasingException {
-        DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher("nagl_ShardProgress", ddbClient,
-                new DynamoDBLeaseSerializer(), true, tableCreatorCallback) {
-            @Override
-            long sleep(long timeToSleepMillis) {
-                fail("Should not sleep");
-                return 0L;
-            }
+        final UUID uniqueId = UUID.randomUUID();
+        DynamoDBLeaseRefresher refresher = new DynamoDBLeaseRefresher("tableEventuallyExists_" + uniqueId, ddbClient,
+                new DynamoDBLeaseSerializer(), true, tableCreatorCallback);
 
-        };
-
-        assertTrue(refresher.waitUntilLeaseTableExists(1, 1));
+        refresher.createLeaseTableIfNotExists();
+        assertTrue(refresher.waitUntilLeaseTableExists(1, 20));
     }
 
     @Test
