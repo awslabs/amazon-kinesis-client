@@ -65,7 +65,10 @@ public abstract class AWSResourceManager {
     public void deleteAllResource() throws Exception {
         final List<String> resourceNames = getAllResourceNames();
         for (String resourceName : resourceNames) {
-            deleteResource(resourceName);
+            // Delete all resources that have prefix "KCLRelease"
+            if (resourceName.startsWith("KCLRelease")) {
+                deleteResource(resourceName);
+            }
         }
     }
 }
