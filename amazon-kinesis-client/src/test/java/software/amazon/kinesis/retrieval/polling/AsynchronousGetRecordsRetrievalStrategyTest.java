@@ -126,7 +126,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testStrategyIsShutdown() throws Exception {
+    public void testStrategyIsShutdown() {
         AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
                 executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
@@ -141,7 +141,8 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
                 executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
         when(executorService.isShutdown()).thenReturn(false);
-        when(completionService.submit(any())).thenReturn(blockedFuture).thenThrow(new RejectedExecutionException("Rejected!")).thenReturn(successfulFuture);
+        when(completionService.submit(any())).thenReturn(blockedFuture)
+                .thenThrow(new RejectedExecutionException("Rejected!")).thenReturn(successfulFuture);
         when(completionService.poll(anyLong(), any())).thenReturn(null).thenReturn(null).thenReturn(successfulFuture);
         when(successfulFuture.get()).thenReturn(dataFetcherResult);
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
@@ -155,7 +156,6 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         verify(completionService, times(3)).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
         verify(successfulFuture).cancel(eq(true));
         verify(blockedFuture).cancel(eq(true));
-
 
         assertThat(actualResult, equalTo(expectedResponses));
     }

@@ -180,7 +180,8 @@ public class ShutdownTask implements ConsumerTask {
         // Create new lease for the child shards if they don't exist.
         // We have one valid scenario that shutdown task got created with SHARD_END reason and an empty list of childShards.
         // This would happen when KinesisDataFetcher(for polling mode) or FanOutRecordsPublisher(for StoS mode) catches ResourceNotFound exception.
-        // In this case, KinesisDataFetcher and FanOutRecordsPublisher will send out SHARD_END signal to trigger a shutdown task with empty list of childShards.
+        // In this case, KinesisDataFetcher and FanOutRecordsPublisher will send out SHARD_END signal to trigger a
+        // shutdown task with empty list of childShards.
         // This scenario could happen when customer deletes the stream while leaving the KCL application running.
         if (currentShardLease == null) {
             throw new InvalidStateException(leaseKey
@@ -286,7 +287,8 @@ public class ShutdownTask implements ConsumerTask {
         for (ChildShard childShard : childShards) {
             final String leaseKey = ShardInfo.getLeaseKey(shardInfo, childShard.shardId());
             if (leaseRefresher.getLease(leaseKey) == null) {
-                log.debug("{} - Shard {} - Attempting to create lease for child shard {}", shardDetector.streamIdentifier(), shardInfo.shardId(), leaseKey);
+                log.debug("{} - Shard {} - Attempting to create lease for child shard {}",
+                        shardDetector.streamIdentifier(), shardInfo.shardId(), leaseKey);
                 final Lease leaseToCreate = hierarchicalShardSyncer.createLeaseForChildShard(childShard, shardDetector.streamIdentifier());
                 final long startTime = System.currentTimeMillis();
                 boolean success = false;
@@ -296,7 +298,8 @@ public class ShutdownTask implements ConsumerTask {
                 } finally {
                     MetricsUtil.addSuccessAndLatency(scope, "CreateLease", success, startTime, MetricsLevel.DETAILED);
                     if (leaseToCreate.checkpoint() != null) {
-                        final String metricName = leaseToCreate.checkpoint().isSentinelCheckpoint() ? leaseToCreate.checkpoint().sequenceNumber() : "SEQUENCE_NUMBER";
+                        final String metricName = leaseToCreate.checkpoint().isSentinelCheckpoint() ?
+                                leaseToCreate.checkpoint().sequenceNumber() : "SEQUENCE_NUMBER";
                         MetricsUtil.addSuccess(scope, "CreateLease_" + metricName, true, MetricsLevel.DETAILED);
                     }
                 }

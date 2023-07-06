@@ -10,7 +10,7 @@
 
     <module name="LineLength">
         <property name="fileExtensions" value="java"/>
-        <property name="max" value="170"/>
+        <property name="max" value="150"/>
         <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
     </module>
 
@@ -22,8 +22,8 @@
     </module>
 
     <module name="TreeWalker">
-        <module name="AvoidStarImport"/>
         <module name="ArrayTrailingComma"/>
+        <module name="AvoidStarImport"/>
         <module name="ConstantName"/>
         <module name="CovariantEquals"/>
         <module name="EmptyStatement"/>

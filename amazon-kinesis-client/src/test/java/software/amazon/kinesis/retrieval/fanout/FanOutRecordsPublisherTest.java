@@ -103,7 +103,7 @@ public class FanOutRecordsPublisherTest {
     private SubscribeToShardEvent batchEvent;
 
     @Test
-    public void simpleTest() throws Exception {
+    public void testSimple() {
         FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
@@ -218,8 +218,10 @@ public class FanOutRecordsPublisherTest {
         List<KinesisClientRecordMatcher> matchers = records.stream().map(KinesisClientRecordMatcher::new)
                                                            .collect(Collectors.toList());
 
-        batchEvent = SubscribeToShardEvent.builder().millisBehindLatest(100L).records(records).continuationSequenceNumber(CONTINUATION_SEQUENCE_NUMBER).build();
-        SubscribeToShardEvent invalidEvent = SubscribeToShardEvent.builder().millisBehindLatest(100L).records(records).childShards(Collections.emptyList()).build();
+        batchEvent = SubscribeToShardEvent.builder().millisBehindLatest(100L).records(records)
+                .continuationSequenceNumber(CONTINUATION_SEQUENCE_NUMBER).build();
+        SubscribeToShardEvent invalidEvent = SubscribeToShardEvent.builder().millisBehindLatest(100L)
+                .records(records).childShards(Collections.emptyList()).build();
 
         captor.getValue().onNext(batchEvent);
         captor.getValue().onNext(invalidEvent);
@@ -238,7 +240,7 @@ public class FanOutRecordsPublisherTest {
     }
 
     @Test
-    public void testIfAllEventsReceivedWhenNoTasksRejectedByExecutor() throws Exception {
+    public void testIfAllEventsReceivedWhenNoTasksRejectedByExecutor() {
         FanOutRecordsPublisher source = new FanOutRecordsPublisher(kinesisClient, SHARD_ID, CONSUMER_ARN);
 
         ArgumentCaptor<FanOutRecordsPublisher.RecordSubscription> captor = ArgumentCaptor
@@ -414,7 +416,8 @@ public class FanOutRecordsPublisherTest {
         int totalServicePublisherEvents = 1000;
         int initialDemand = 0;
         BackpressureAdheringServicePublisher servicePublisher =
-                new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch, initialDemand);
+                new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents,
+                        servicePublisherTaskCompletionLatch, initialDemand);
 
         doNothing().when(publisher).subscribe(captor.capture());
 
@@ -848,7 +851,8 @@ public class FanOutRecordsPublisherTest {
         int totalServicePublisherEvents = 1000;
         int initialDemand = 9;
         BackpressureAdheringServicePublisher servicePublisher =
-                new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch, initialDemand);
+                new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents,
+                        servicePublisherTaskCompletionLatch, initialDemand);
 
         doNothing().when(publisher).subscribe(captor.capture());
 
@@ -941,7 +945,8 @@ public class FanOutRecordsPublisherTest {
         int totalServicePublisherEvents = 1000;
         int initialDemand = 11;
         BackpressureAdheringServicePublisher servicePublisher =
-                new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents, servicePublisherTaskCompletionLatch, initialDemand);
+                new BackpressureAdheringServicePublisher(servicePublisherAction, totalServicePublisherEvents,
+                        servicePublisherTaskCompletionLatch, initialDemand);
 
         doNothing().when(publisher).subscribe(captor.capture());
 

@@ -36,8 +36,8 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
     private static final String TEST_ACCESS_KEY_ID = "123";
     private static final String TEST_SECRET_KEY = "456";
 
-    private String credentialName1 = "software.amazon.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$AlwaysSucceedCredentialsProvider";
-    private String credentialName2 = "software.amazon.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$ConstructorCredentialsProvider";
+    private final String credentialName1 = AlwaysSucceedCredentialsProvider.class.getName();
+    private final String credentialName2 = ConstructorCredentialsProvider.class.getName();
     private AWSCredentialsProviderPropertyValueDecoder decoder = new AWSCredentialsProviderPropertyValueDecoder();
 
     @ToString

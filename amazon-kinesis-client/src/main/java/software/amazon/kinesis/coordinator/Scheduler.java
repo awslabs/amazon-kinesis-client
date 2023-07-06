@@ -97,6 +97,7 @@ import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
 import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType;
+import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION;
 
 /**
  *
@@ -489,7 +490,7 @@ public class Scheduler implements Runnable {
                     }
                 };
 
-                if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION) {
+                if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION) {
                     // Now, we are identifying the stale/old streams and enqueuing it for deferred deletion.
                     // It is assumed that all the workers will always have the latest and consistent snapshot of streams
                     // from the multiStreamTracker.
@@ -521,7 +522,8 @@ public class Scheduler implements Runnable {
                         if (!newStreamConfigMap.containsKey(streamIdentifier)) {
                             if (SHOULD_DO_LEASE_SYNC_FOR_OLD_STREAMS) {
                                 log.info(
-                                        "Found old/deleted stream : {}. Triggering shard sync. Removing from tracked active streams.", streamIdentifier);
+                                        "Found old/deleted stream : {}. Triggering shard sync. Removing from tracked active streams.",
+                                        streamIdentifier);
                                 ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(
                                         currentStreamConfigMap.get(streamIdentifier));
                                 shardSyncTaskManager.submitShardSyncTask();
@@ -541,10 +543,13 @@ public class Scheduler implements Runnable {
                 // Now let's scan the streamIdentifiersForLeaseCleanup eligible for deferred deletion and delete them.
                 // StreamIdentifiers are eligible for deletion only when the deferment period has elapsed and
                 // the streamIdentifiersForLeaseCleanup are not present in the latest snapshot.
-                final Map<Boolean, Set<StreamIdentifier>> staleStreamIdDeletionDecisionMap = staleStreamDeletionMap.keySet().stream().collect(Collectors
-                        .partitioningBy(newStreamConfigMap::containsKey, Collectors.toSet()));
-                final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream().filter(streamIdentifier ->
-                        Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis() >= waitPeriodToDeleteOldStreams.toMillis())
+                final Map<Boolean, Set<StreamIdentifier>> staleStreamIdDeletionDecisionMap =
+                        staleStreamDeletionMap.keySet().stream().collect(
+                                Collectors.partitioningBy(newStreamConfigMap::containsKey, Collectors.toSet()));
+                final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false)
+                        .stream().filter(streamIdentifier ->
+                                Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now())
+                                        .toMillis() >= waitPeriodToDeleteOldStreams.toMillis())
                         .collect(Collectors.toSet());
                 // These are the streams which are deleted in Kinesis and we encounter resource not found during
                 // shardSyncTask. This is applicable in MultiStreamMode only, in case of SingleStreamMode, store will
