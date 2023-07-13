@@ -3,6 +3,14 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.5.2 (2023-07-13)
+* [#1164](https://github.com/awslabs/amazon-kinesis-client/pull/1164) Bumped KCL Version from 2.5.1 to 2.5.2-SNAPSHOT 
+* [#1162](https://github.com/awslabs/amazon-kinesis-client/pull/1162) Only deleting resource created by ITs 
+* [#1158](https://github.com/awslabs/amazon-kinesis-client/pull/1158) Checkstyle: tightened `LineLength` restriction from 170 to 150. 
+* [#1159](https://github.com/awslabs/amazon-kinesis-client/pull/1159) Bug fix in lease refresher integration test with occasional failures 
+* [#1151](https://github.com/awslabs/amazon-kinesis-client/pull/1151) Modified `dependabot.yml` to set the correct `v[1|2].x` label. 
+* [#1157](https://github.com/awslabs/amazon-kinesis-client/pull/1157) Fix NPE on graceful shutdown before DDB `LeaseCoordinator` starts. 
+
 ### Release 2.5.1 (June 27, 2023)
 * [#1143](https://github.com/awslabs/amazon-kinesis-client/pull/1143) Upgrade MultiLangDaemon to support StreamARN
 * [#1145](https://github.com/awslabs/amazon-kinesis-client/pull/1145) Introduced GitHub actions to trigger Maven builds during merge/pull requests
