@@ -151,7 +151,9 @@ public class TestConsumer {
         checkpointConfig = configsBuilder.checkpointConfig();
         coordinatorConfig = configsBuilder.coordinatorConfig();
         leaseManagementConfig = configsBuilder.leaseManagementConfig()
-                .initialPositionInStream(InitialPositionInStreamExtended.newInitialPosition(consumerConfig.getInitialPosition()))
+                .initialPositionInStream(
+                    InitialPositionInStreamExtended.newInitialPosition(consumerConfig.getInitialPosition())
+                )
                 .initialLeaseTableReadCapacity(50).initialLeaseTableWriteCapacity(50);
         lifecycleConfig = configsBuilder.lifecycleConfig();
         processorConfig = configsBuilder.processorConfig();
