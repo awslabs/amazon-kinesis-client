@@ -62,7 +62,6 @@ public class MultiLangDaemonConfigTest {
      * @throws IOException
      */
     public void setup(String streamName, String streamArn) throws IOException {
-
         String properties = String.format("executableName = %s\n"
                         + "applicationName = %s\n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
