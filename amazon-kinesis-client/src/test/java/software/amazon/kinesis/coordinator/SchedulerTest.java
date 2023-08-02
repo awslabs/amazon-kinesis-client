@@ -38,6 +38,7 @@ import static org.mockito.internal.verification.VerificationModeFactory.atMost;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -176,7 +177,8 @@ public class SchedulerTest {
         shardRecordProcessorFactory = new TestShardRecordProcessorFactory();
 
         checkpointConfig = new CheckpointConfig().checkpointFactory(new TestKinesisCheckpointFactory());
-        coordinatorConfig = new CoordinatorConfig(applicationName).parentShardPollIntervalMillis(100L).workerStateChangeListener(workerStateChangeListener);
+        coordinatorConfig = new CoordinatorConfig(applicationName).parentShardPollIntervalMillis(100L)
+                .workerStateChangeListener(workerStateChangeListener);
         leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, streamName,
                 workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, false));
         lifecycleConfig = new LifecycleConfig();
@@ -188,7 +190,8 @@ public class SchedulerTest {
         when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
         when(shardSyncTaskManager.hierarchicalShardSyncer()).thenReturn(new HierarchicalShardSyncer());
         when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
-        when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(StreamConfig.class), any(MetricsFactory.class))).thenReturn(recordsPublisher);
+        when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(StreamConfig.class),
+                any(MetricsFactory.class))).thenReturn(recordsPublisher);
         when(shardDetector.streamIdentifier()).thenReturn(mock(StreamIdentifier.class));
 
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
@@ -645,7 +648,8 @@ public class SchedulerTest {
         testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(true, null);
     }
 
-    private final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(boolean expectSyncedStreams, Set<StreamConfig> currentStreamConfigMapOverride)
+    private void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(boolean expectSyncedStreams,
+            Set<StreamConfig> currentStreamConfigMapOverride)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
                 StreamIdentifier.multiStreamInstance(
@@ -1294,21 +1298,20 @@ public class SchedulerTest {
         }
     }
 
-    // TODO: Upgrade to mockito >= 2.7.13, and use Spy on MultiStreamTracker to directly access the default methods without implementing TestMultiStreamTracker class
+    // TODO: Upgrade to mockito >= 2.7.13, and use Spy on MultiStreamTracker to directly access the default methods
+    //  without implementing TestMultiStreamTracker class
     @NoArgsConstructor
     private class TestMultiStreamTracker implements MultiStreamTracker {
         @Override
-        public List<StreamConfig> streamConfigList(){
-            return new ArrayList<StreamConfig>() {{
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("123456789012:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
-                        InitialPositionInStream.LATEST)));
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("123456789012:stream2:2"), InitialPositionInStreamExtended.newInitialPosition(
-                        InitialPositionInStream.LATEST)));
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("210987654321:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
-                        InitialPositionInStream.LATEST)));
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("210987654321:stream2:3"), InitialPositionInStreamExtended.newInitialPosition(
-                        InitialPositionInStream.LATEST)));
-            }};
+        public List<StreamConfig> streamConfigList() {
+            final InitialPositionInStreamExtended latest =
+                    InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
+
+            return Arrays.asList(
+                    new StreamConfig(StreamIdentifier.multiStreamInstance("123456789012:stream1:1"), latest),
+                    new StreamConfig(StreamIdentifier.multiStreamInstance("123456789012:stream2:2"), latest),
+                    new StreamConfig(StreamIdentifier.multiStreamInstance("210987654321:stream1:1"), latest),
+                    new StreamConfig(StreamIdentifier.multiStreamInstance("210987654321:stream2:3"), latest));
         }
 
         @Override

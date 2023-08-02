@@ -101,7 +101,6 @@ public class ProcessTaskTest {
     @Mock
     private GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer;
 
-
     private static final byte[] TEST_DATA = new byte[] { 1, 2, 3, 4 };
 
     private final String shardId = "shard-test";
@@ -116,7 +115,6 @@ public class ProcessTaskTest {
 
     private ProcessTask processTask;
 
-
     @Before
     public void setUpProcessTask() {
         when(checkpointer.checkpointer()).thenReturn(mock(Checkpointer.class));
@@ -130,7 +128,8 @@ public class ProcessTaskTest {
     }
 
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, GlueSchemaRegistryDeserializer deserializer) {
-        return makeProcessTask(processRecordsInput, new AggregatorUtil(), skipShardSyncAtWorkerInitializationIfLeasesExist, new SchemaRegistryDecoder(deserializer));
+        return makeProcessTask(processRecordsInput, new AggregatorUtil(), skipShardSyncAtWorkerInitializationIfLeasesExist,
+                new SchemaRegistryDecoder(deserializer));
     }
 
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil,
@@ -149,11 +148,8 @@ public class ProcessTaskTest {
         );
     }
 
-
-
     @Test
     public void testProcessTaskWithShardEndReached() {
-
         processTask = makeProcessTask(processRecordsInput);
         when(processRecordsInput.isAtShardEnd()).thenReturn(true);
 
@@ -429,7 +425,8 @@ public class ProcessTaskTest {
 
         when(processRecordsInput.records()).thenReturn(rawRecords);
         ProcessTask processTask = makeProcessTask(processRecordsInput, aggregatorUtil, false);
-        ShardRecordProcessorOutcome outcome = testWithRecords(processTask, new ExtendedSequenceNumber(sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
+        ShardRecordProcessorOutcome outcome = testWithRecords(processTask,
+                new ExtendedSequenceNumber(sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
                 new ExtendedSequenceNumber(sequenceNumber.toString(), 0L));
 
         assertThat(outcome.processRecordsCall.records(), equalTo(expectedRecords));
@@ -645,12 +642,12 @@ public class ProcessTaskTest {
     }
 
     private ShardRecordProcessorOutcome testWithRecords(List<KinesisClientRecord> records,
-                                                        ExtendedSequenceNumber lastCheckpointValue, ExtendedSequenceNumber largestPermittedCheckpointValue) {
+            ExtendedSequenceNumber lastCheckpointValue, ExtendedSequenceNumber largestPermittedCheckpointValue) {
         return testWithRecords(records, lastCheckpointValue, largestPermittedCheckpointValue, new AggregatorUtil());
     }
 
     private ShardRecordProcessorOutcome testWithRecords(List<KinesisClientRecord> records, ExtendedSequenceNumber lastCheckpointValue,
-                                                        ExtendedSequenceNumber largestPermittedCheckpointValue, AggregatorUtil aggregatorUtil) {
+            ExtendedSequenceNumber largestPermittedCheckpointValue, AggregatorUtil aggregatorUtil) {
         when(processRecordsInput.records()).thenReturn(records);
         return testWithRecords(
                 makeProcessTask(processRecordsInput, aggregatorUtil, skipShardSyncAtWorkerInitializationIfLeasesExist),
@@ -658,7 +655,7 @@ public class ProcessTaskTest {
     }
 
     private ShardRecordProcessorOutcome testWithRecords(ProcessTask processTask, ExtendedSequenceNumber lastCheckpointValue,
-                                                        ExtendedSequenceNumber largestPermittedCheckpointValue) {
+            ExtendedSequenceNumber largestPermittedCheckpointValue) {
         when(checkpointer.lastCheckpointValue()).thenReturn(lastCheckpointValue);
         when(checkpointer.largestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
         processTask.call();
