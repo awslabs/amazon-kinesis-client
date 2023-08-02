@@ -89,7 +89,8 @@ public class TestConsumer {
         try {
             startConsumer();
 
-            // Sleep to allow the producer/consumer to run and then end the test case. If non-reshard sleep 3 minutes, else sleep 4 minutes per scale.
+            // Sleep to allow the producer/consumer to run and then end the test case.
+            // If non-reshard sleep 3 minutes, else sleep 4 minutes per scale.
             final int sleepMinutes = (consumerConfig.getReshardFactorList() == null) ? 3 : (4 * consumerConfig.getReshardFactorList().size());
             Thread.sleep(TimeUnit.MINUTES.toMillis(sleepMinutes));
 
@@ -134,7 +135,12 @@ public class TestConsumer {
         if (consumerConfig.getReshardFactorList() != null) {
             log.info("----Reshard Config found: {}", consumerConfig.getReshardFactorList());
 
-            final StreamScaler s = new StreamScaler(kinesisClient, consumerConfig.getStreamName(), consumerConfig.getReshardFactorList(), consumerConfig);
+            final StreamScaler s = new StreamScaler(
+                    kinesisClient,
+                    consumerConfig.getStreamName(),
+                    consumerConfig.getReshardFactorList(),
+                    consumerConfig
+            );
 
             // Schedule the stream scales 4 minutes apart with 2 minute starting delay
             for (int i = 0; i < consumerConfig.getReshardFactorList().size(); i++) {
