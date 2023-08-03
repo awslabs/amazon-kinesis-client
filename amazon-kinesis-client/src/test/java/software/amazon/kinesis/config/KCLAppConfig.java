@@ -5,7 +5,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.utils.RecordValidatorQueue;
 import software.amazon.kinesis.utils.ReshardOptions;
-import software.amazon.kinesis.utils.TestRecordProcessorFactory;
+import software.amazon.kinesis.application.TestRecordProcessorFactory;
 import lombok.Builder;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.util.List;
 
 /**
  * Default configuration for a producer or consumer used in integration tests.
@@ -75,7 +76,7 @@ public abstract class KCLAppConfig {
                 .build();
     }
 
-    public ReshardConfig getReshardConfig() {
+    public List<ReshardOptions> getReshardFactorList() {
         return null;
     }
 
@@ -157,34 +158,11 @@ public abstract class KCLAppConfig {
      */
     @Value
     @Builder
-    static class ProducerConfig {
+    public static class ProducerConfig {
         private boolean isBatchPut;
         private int batchSize;
         private int recordSizeKB;
         private long callPeriodMills;
-    }
-
-    /**
-     * Description of the method of resharding for a test case
-     */
-    @Value
-    @Builder
-    static class ReshardConfig {
-        /**
-         * reshardingFactorCycle: lists the order or reshards that will be done during one reshard cycle
-         * e.g {SPLIT, MERGE} means that the number of shards will first be doubled, then halved
-         */
-        private ReshardOptions[] reshardingFactorCycle;
-
-        /**
-         * numReshardCycles: the number of resharding cycles that will be executed in a test
-         */
-        private int numReshardCycles;
-
-        /**
-         * reshardFrequencyMillis: the period of time between reshard cycles (in milliseconds)
-         */
-        private long reshardFrequencyMillis;
     }
 
 }

@@ -52,6 +52,7 @@
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
     <slf4j.version>2.0.7</slf4j.version>
     <gsr.version>1.1.14</gsr.version>
+    <skipITs>true</skipITs>
   </properties>
 
   <dependencies>
@@ -199,6 +200,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>2.22.2</version>
         <configuration>
+          <skipITs>${skipITs}</skipITs>
           <excludes>
             <exclude>**/*IntegrationTest.java</exclude>
           </excludes>

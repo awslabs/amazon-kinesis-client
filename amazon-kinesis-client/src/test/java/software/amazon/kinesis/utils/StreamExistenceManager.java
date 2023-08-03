@@ -111,5 +111,4 @@ public class StreamExistenceManager extends AWSResourceManager {
             }
         }
     }
-
 }

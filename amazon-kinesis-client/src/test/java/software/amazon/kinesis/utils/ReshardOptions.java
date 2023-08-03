@@ -6,6 +6,16 @@ package software.amazon.kinesis.utils;
  * Merge halves the number of shards.
  */
 public enum ReshardOptions {
-    SPLIT,
-    MERGE
+    SPLIT {
+        public int calculateShardCount(int currentShards) {
+            return (int) (2.0 * currentShards);
+        }
+    },
+    MERGE {
+        public int calculateShardCount(int currentShards) {
+            return (int) (0.5 * currentShards);
+        }
+    };
+
+    public abstract int calculateShardCount(int currentShards);
 }
