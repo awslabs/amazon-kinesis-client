@@ -183,7 +183,7 @@ public class TestConsumer {
         this.consumerFuture = consumerExecutor.schedule(scheduler, 0, TimeUnit.SECONDS);
     }
 
-    public void stopProducer() {
+    private void stopProducer() {
         log.info("Cancelling producer and shutting down executor.");
         if (producerFuture != null) {
             producerFuture.cancel(false);
