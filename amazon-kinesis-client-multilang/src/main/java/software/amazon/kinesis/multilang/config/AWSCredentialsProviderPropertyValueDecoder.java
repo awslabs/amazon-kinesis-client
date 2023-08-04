@@ -14,7 +14,7 @@
  */
 package software.amazon.kinesis.multilang.config;
 
-import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -84,41 +84,35 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                 }
                 clazz = (Class<? extends AWSCredentialsProvider>) c;
             } catch (ClassNotFoundException cnfe) {
+                // Providers are a product of prefixed Strings to cover multiple
+                // namespaces (e.g., "Foo" -> { "some.auth.Foo", "kcl.auth.Foo" }).
+                // It's expected that many class names will not resolve.
                 continue;
             }
+            log.info("Attempting to construct {}", clazz);
 
             AWSCredentialsProvider provider = null;
             if (nameAndArgs.length > 1) {
                 final String[] varargs = Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length);
 
                 // attempt to invoke an explicit N-arg constructor of FooClass(String, String, ...)
-                try {
+                provider = constructProvider(providerName, () -> {
                     Class<?>[] argTypes = new Class<?>[nameAndArgs.length - 1];
                     Arrays.fill(argTypes, String.class);
-                    Constructor<? extends AWSCredentialsProvider> c = clazz.getConstructor(argTypes);
-                    provider = c.newInstance(varargs);
-                } catch (Exception e) {
-                    log.debug("Can't find any credentials provider matching {}.", providerName);
-                }
+                    return clazz.getConstructor(argTypes).newInstance(varargs);
+                });
 
                 if (provider == null) {
                     // attempt to invoke a public varargs/array constructor of FooClass(String[])
-                    try {
-                        Constructor<? extends AWSCredentialsProvider> c = clazz.getConstructor(String[].class);
-                        provider = c.newInstance((Object) varargs);
-                    } catch (Exception e) {
-                        log.debug("Can't find any credentials provider matching {}.", providerName);
-                    }
+                    provider = constructProvider(providerName, () ->
+                        clazz.getConstructor(String[].class).newInstance((Object) varargs)
+                    );
                 }
             }
 
             if (provider == null) {
                 // regardless of parameters, fallback to invoke a public no-arg constructor
-                try {
-                    provider = clazz.newInstance();
-                } catch (Exception e) {
-                    log.debug("Can't find any credentials provider matching {}.", providerName);
-                }
+                provider = constructProvider(providerName, clazz::newInstance);
             }
 
             if (provider != null) {
@@ -156,6 +150,34 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                 // (e.g., com.amazonaws.auth.ClasspathFileCredentialsProvider, org.mycompany.FooProvider)
                 ""
         ).map(prefix -> prefix + provider).collect(Collectors.toList());
+    }
+
+    @FunctionalInterface
+    private interface CredentialsProviderConstructor<T extends AWSCredentialsProvider> {
+        T construct() throws IllegalAccessException, InstantiationException,
+                InvocationTargetException, NoSuchMethodException;
+    }
+
+    /**
+     * Attempts to construct an {@link AWSCredentialsProvider}.
+     *
+     * @param providerName Raw, unmodified provider name. Should there be an
+     *      Exeception during construction, this parameter will be logged.
+     * @param constructor supplier-like function that will perform the construction
+     * @return the constructed provider, if successful; otherwise, null
+     *
+     * @param <T> type of the CredentialsProvider to construct
+     */
+    private static <T extends AWSCredentialsProvider> T constructProvider(
+            final String providerName, final CredentialsProviderConstructor<T> constructor) {
+        try {
+            return constructor.construct();
+        } catch (NoSuchMethodException ignored) {
+            // ignore
+        } catch (IllegalAccessException | InstantiationException | InvocationTargetException | RuntimeException e) {
+            log.warn("Failed to construct {}", providerName, e);
+        }
+        return null;
     }
 
 }

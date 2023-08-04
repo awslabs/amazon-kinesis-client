@@ -14,10 +14,13 @@
  */
 package software.amazon.kinesis.multilang;
 
+import com.amazonaws.regions.Regions;
+
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static software.amazon.kinesis.multilang.NestedPropertyKey.ENDPOINT;
+import static software.amazon.kinesis.multilang.NestedPropertyKey.ENDPOINT_REGION;
 import static software.amazon.kinesis.multilang.NestedPropertyKey.EXTERNAL_ID;
 import static software.amazon.kinesis.multilang.NestedPropertyKey.parse;
 
@@ -42,7 +45,7 @@ public class NestedPropertyKeyTest {
 
     @Test
     public void testEndpoint() {
-        final String expectedEndpoint = "https://sts.us-east-1.amazon.com";
+        final String expectedEndpoint = "https://sts.us-east-1.amazonaws.com";
         final String expectedRegion = "us-east-1";
         final String param = createKey(ENDPOINT, expectedEndpoint + "^" + expectedRegion);
 
@@ -55,6 +58,24 @@ public class NestedPropertyKeyTest {
         parse(mockProcessor, createKey(ENDPOINT, "value-sans-caret-delimiter"));
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidEndpointDoubleCaret() {
+        parse(mockProcessor, createKey(ENDPOINT, "https://sts.us-east-1.amazonaws.com^us-east-1^borkbork"));
+    }
+
+    @Test
+    public void testEndpointRegion() {
+        final Regions expectedRegion = Regions.GovCloud;
+
+        parse(mockProcessor, createKey(ENDPOINT_REGION, expectedRegion.getName()));
+        verify(mockProcessor).acceptEndpointRegion(expectedRegion);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidEndpointRegion() {
+        parse(mockProcessor, createKey(ENDPOINT_REGION, "snuffleupagus"));
+    }
+
     /**
      * Test that the literal nested key (i.e., {@code key=} in {@code some_val|key=nested_val})
      * does not change. Any change to an existing literal key is not backwards-compatible.
@@ -64,9 +85,10 @@ public class NestedPropertyKeyTest {
         // Adding a new enum will deliberately cause this assert to fail, and
         // therefore raise awareness for this explicit test. Add-and-remove may
         // keep the number unchanged yet will also break (by removing an enum).
-        assertEquals(2, NestedPropertyKey.values().length);
+        assertEquals(3, NestedPropertyKey.values().length);
 
         assertEquals("endpoint", ENDPOINT.getNestedKey());
+        assertEquals("endpointRegion", ENDPOINT_REGION.getNestedKey());
         assertEquals("externalId", EXTERNAL_ID.getNestedKey());
     }
 

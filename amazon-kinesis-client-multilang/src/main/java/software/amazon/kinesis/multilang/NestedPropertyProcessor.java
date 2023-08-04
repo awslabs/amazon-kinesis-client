@@ -14,10 +14,35 @@
  */
 package software.amazon.kinesis.multilang;
 
+import com.amazonaws.regions.Regions;
+
 /**
  * Defines methods to process {@link NestedPropertyKey}s.
  */
 public interface NestedPropertyProcessor {
+
+    /**
+     * Set the service endpoint where requests are sent.
+     *
+     * @param serviceEndpoint the service endpoint either with or without the protocol
+     *      (e.g., https://sns.us-west-1.amazonaws.com, sns.us-west-1.amazonaws.com)
+     * @param signingRegion the region to use for SigV4 signing of requests (e.g. us-west-1)
+     *
+     * @see #acceptEndpointRegion(Regions)
+     * @see <a href="https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/client/builder/AwsClientBuilder.EndpointConfiguration.html">
+     *     AwsClientBuilder.EndpointConfiguration</a>
+     */
+    void acceptEndpoint(String serviceEndpoint, String signingRegion);
+
+    /**
+     * Set the service endpoint where requests are sent.
+     *
+     * @param region Region to be used by the client. This will be used to determine both the service endpoint
+     *      (e.g., https://sns.us-west-1.amazonaws.com) and signing region (e.g., us-west-1) for requests.
+     *
+     * @see #acceptEndpoint(String, String)
+     */
+    void acceptEndpointRegion(Regions region);
 
     /**
      * Set the external id, an optional field to designate who can assume an IAM role.
@@ -25,17 +50,5 @@ public interface NestedPropertyProcessor {
      * @param externalId external id used in the service call used to retrieve session credentials
      */
     void acceptExternalId(String externalId);
-
-    /**
-     * Set the service endpoint where requests are sent.
-     *
-     * @param serviceEndpoint the service endpoint either with or without the protocol
-     *      (e.g. https://sns.us-west-1.amazonaws.com or sns.us-west-1.amazonaws.com)
-     * @param signingRegion the region to use for SigV4 signing of requests (e.g. us-west-1)
-     *
-     * @see <a href="https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/client/builder/AwsClientBuilder.EndpointConfiguration.html">
-     *     AwsClientBuilder.EndpointConfiguration</a>
-     */
-    void acceptEndpoint(String serviceEndpoint, String signingRegion);
 
 }

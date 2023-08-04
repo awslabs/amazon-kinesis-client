@@ -17,6 +17,7 @@ package software.amazon.kinesis.multilang;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.amazonaws.regions.Regions;
 import com.google.common.base.CaseFormat;
 
 import lombok.AccessLevel;
@@ -47,6 +48,9 @@ public enum NestedPropertyKey {
      *     SIGNING_REGION ::= AWS_REGION
      * </pre>
      *
+     * It would be redundant to provide both this and {@link #ENDPOINT_REGION}.
+     *
+     * @see #ENDPOINT_REGION
      * @see <a href="https://docs.aws.amazon.com/general/latest/gr/rande.html">AWS Service endpoints</a>
      * @see <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-regions">Available Regions</a>
      */
@@ -57,6 +61,21 @@ public enum NestedPropertyKey {
                 throw new IllegalArgumentException("Invalid " + name() + ": " + endpoint);
             }
             processor.acceptEndpoint(tokens[0], tokens[1]);
+        }
+    },
+
+    /**
+     * Specify the region where service requests will be submitted. This
+     * region will determine both the service endpoint and signing region.
+     * <br/><br/>
+     * It would be redundant to provide both this and {@link #ENDPOINT}.
+     *
+     * @see #ENDPOINT
+     * @see <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-regions">Available Regions</a>
+     */
+    ENDPOINT_REGION {
+        void visit(final NestedPropertyProcessor processor, final String region) {
+            processor.acceptEndpointRegion(Regions.fromName(region));
         }
     },
 

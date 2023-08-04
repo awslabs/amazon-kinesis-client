@@ -65,19 +65,25 @@ public class KclSTSAssumeRoleSessionCredentialsProvider
     }
 
     @Override
-    public void acceptExternalId(final String externalId) {
-        builder.withExternalId(externalId);
+    public void acceptEndpoint(final String serviceEndpoint, final String signingRegion) {
+        final EndpointConfiguration endpoint = new EndpointConfiguration(serviceEndpoint, signingRegion);
+        final AWSSecurityTokenService stsClient = AWSSecurityTokenServiceClient.builder()
+                .withEndpointConfiguration(endpoint)
+                .build();
+        builder.withStsClient(stsClient);
     }
 
     @Override
-    public void acceptEndpoint(final String serviceEndpoint, final String signingRegion) {
-        final EndpointConfiguration endpoint = new EndpointConfiguration(serviceEndpoint, signingRegion);
-        final AWSSecurityTokenService stsClient =
-                AWSSecurityTokenServiceClient.builder()
-                        .withEndpointConfiguration(endpoint)
-                        .withRegion(Regions.fromName(signingRegion))
-                        .build();
+    public void acceptEndpointRegion(final Regions region) {
+        final AWSSecurityTokenService stsClient = AWSSecurityTokenServiceClient.builder()
+                .withRegion(region)
+                .build();
         builder.withStsClient(stsClient);
+    }
+
+    @Override
+    public void acceptExternalId(final String externalId) {
+        builder.withExternalId(externalId);
     }
 
 }

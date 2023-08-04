@@ -22,11 +22,32 @@ import org.junit.Test;
 
 public class KclSTSAssumeRoleSessionCredentialsProviderTest {
 
+    private static final String ARN = "arn";
+    private static final String SESSION_NAME = "sessionName";
+
+    /**
+     * Test that the constructor doesn't throw an out-of-bounds exception if
+     * there are no parameters beyond the required ARN and session name.
+     */
+    @Test
+    public void testConstructorWithoutOptionalParams() {
+        new KclSTSAssumeRoleSessionCredentialsProvider(new String[] { ARN, SESSION_NAME });
+    }
+
+    @Test
+    public void testAcceptEndpoint() {
+        // discovered exception during e2e testing; therefore, this test is
+        // to simply verify the constructed STS client doesn't go *boom*
+        final KclSTSAssumeRoleSessionCredentialsProvider provider =
+                new KclSTSAssumeRoleSessionCredentialsProvider(ARN, SESSION_NAME);
+        provider.acceptEndpoint("endpoint", "us-east-1");
+    }
+
     @Test
     public void testVarArgs() {
         for (final String[] varargs : Arrays.asList(
-                new String[] { "arn", "session", "externalId=eid", "foo"},
-                new String[] { "arn", "session", "foo", "externalId=eid"}
+                new String[] { ARN, SESSION_NAME, "externalId=eid", "foo"},
+                new String[] { ARN, SESSION_NAME, "foo", "externalId=eid"}
         )) {
             final VarArgsSpy provider = new VarArgsSpy(varargs);
             assertEquals("eid", provider.externalId);

@@ -36,7 +36,7 @@ import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MultiLangDaemonConfigTest {
-    private static final String FILENAME = "some.properties";
+    private static final String FILENAME = "multilang.properties";
     private static final String EXE = "TestExe.exe";
     private static final String APPLICATION_NAME = MultiLangDaemonConfigTest.class.getSimpleName();
     private static final String STREAM_NAME = "fakeStream";
@@ -52,7 +52,7 @@ public class MultiLangDaemonConfigTest {
     @Mock
     private AwsCredentials creds;
 
-    private KinesisClientLibConfigurator configurator;
+    private final KinesisClientLibConfigurator configurator = new KinesisClientLibConfigurator();
     private MultiLangDaemonConfig deamonConfig;
 
     /**
@@ -84,8 +84,6 @@ public class MultiLangDaemonConfigTest {
 
         when(credentialsProvider.resolveCredentials()).thenReturn(creds);
         when(creds.accessKeyId()).thenReturn("cool-user");
-        configurator = new KinesisClientLibConfigurator();
-
         deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
     }
 
@@ -198,6 +196,11 @@ public class MultiLangDaemonConfigTest {
         } catch (IOException e) {
             Assert.fail();
         }
+    }
+
+    @Test
+    public void testActualPropertiesFile() throws Exception {
+        new MultiLangDaemonConfig(FILENAME);
     }
 
 }
