@@ -36,7 +36,7 @@ import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MultiLangDaemonConfigTest {
-    private static final String FILENAME = "some.properties";
+    private static final String FILENAME = "multilang.properties";
     private static final String EXE = "TestExe.exe";
     private static final String APPLICATION_NAME = MultiLangDaemonConfigTest.class.getSimpleName();
     private static final String STREAM_NAME = "fakeStream";
@@ -52,7 +52,7 @@ public class MultiLangDaemonConfigTest {
     @Mock
     private AwsCredentials creds;
 
-    private KinesisClientLibConfigurator configurator;
+    private final KinesisClientLibConfigurator configurator = new KinesisClientLibConfigurator();
     private MultiLangDaemonConfig deamonConfig;
 
     /**
@@ -62,7 +62,6 @@ public class MultiLangDaemonConfigTest {
      * @throws IOException
      */
     public void setup(String streamName, String streamArn) throws IOException {
-
         String properties = String.format("executableName = %s\n"
                         + "applicationName = %s\n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
@@ -85,8 +84,6 @@ public class MultiLangDaemonConfigTest {
 
         when(credentialsProvider.resolveCredentials()).thenReturn(creds);
         when(creds.accessKeyId()).thenReturn("cool-user");
-        configurator = new KinesisClientLibConfigurator();
-
         deamonConfig = new MultiLangDaemonConfig(FILENAME, classLoader, configurator);
     }
 
@@ -199,6 +196,16 @@ public class MultiLangDaemonConfigTest {
         } catch (IOException e) {
             Assert.fail();
         }
+    }
+
+    /**
+     * Test the loading of a "real" properties file. This test should catch
+     * any issues which might arise if there is a discrepancy between reality
+     * and mocking.
+     */
+    @Test
+    public void testActualPropertiesFile() throws Exception {
+        new MultiLangDaemonConfig(FILENAME);
     }
 
 }

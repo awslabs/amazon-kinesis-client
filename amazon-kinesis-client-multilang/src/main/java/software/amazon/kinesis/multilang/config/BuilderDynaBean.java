@@ -57,10 +57,10 @@ public class BuilderDynaBean implements DynaBean {
     }
 
     public BuilderDynaBean(Class<?> destinedClass, ConvertUtilsBean convertUtilsBean,
-            Function<String, ?> emtpyPropertyHandler, List<String> classPrefixSearchList) {
+            Function<String, ?> emptyPropertyHandler, List<String> classPrefixSearchList) {
         this.convertUtilsBean = convertUtilsBean;
         this.classPrefixSearchList = classPrefixSearchList;
-        this.emptyPropertyHandler = emtpyPropertyHandler;
+        this.emptyPropertyHandler = emptyPropertyHandler;
         initialize(destinedClass);
     }
 

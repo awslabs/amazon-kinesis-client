@@ -62,6 +62,7 @@ public class KinesisClientLibConfigurator {
     public MultiLangDaemonConfiguration getConfiguration(Properties properties) {
         properties.entrySet().forEach(e -> {
             try {
+                log.info("Processing (key={}, value={})", e.getKey(), e.getValue());
                 utilsBean.setProperty(configuration, (String) e.getKey(), e.getValue());
             } catch (IllegalAccessException | InvocationTargetException ex) {
                 throw new RuntimeException(ex);
