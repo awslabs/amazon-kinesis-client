@@ -198,6 +198,11 @@ public class MultiLangDaemonConfigTest {
         }
     }
 
+    /**
+     * Test the loading of a "real" properties file. This test should catch
+     * any issues which might arise if there is a discrepancy between reality
+     * and mocking.
+     */
     @Test
     public void testActualPropertiesFile() throws Exception {
         new MultiLangDaemonConfig(FILENAME);
