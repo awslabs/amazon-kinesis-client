@@ -141,7 +141,8 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
-    public List<Lease> listLeasesForStream(StreamIdentifier streamIdentifier) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public List<Lease> listLeasesForStream(StreamIdentifier streamIdentifier)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         throwExceptions("listLeasesForStream", ExceptionThrowingLeaseRefresherMethods.LISTLEASESFORSTREAM);
 
         return leaseRefresher.listLeasesForStream(streamIdentifier);

@@ -23,7 +23,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collections;
@@ -46,9 +45,7 @@ import org.mockito.stubbing.Answer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import software.amazon.awssdk.services.kinesis.model.Record;
-import software.amazon.kinesis.exceptions.InvalidStateException;
 import software.amazon.kinesis.exceptions.KinesisClientLibDependencyException;
-import software.amazon.kinesis.exceptions.ShutdownException;
 import software.amazon.kinesis.exceptions.ThrottlingException;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
@@ -67,7 +64,7 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
 @RunWith(MockitoJUnitRunner.class)
 public class StreamingShardRecordProcessorTest {
 
-    private static final String shardId = "shard-123";
+    private static final String SHARD_ID = "shard-123";
 
     private int systemExitCount = 0;
 
@@ -79,77 +76,73 @@ public class StreamingShardRecordProcessorTest {
     private RecordProcessorCheckpointer unimplementedCheckpointer = new RecordProcessorCheckpointer() {
 
         @Override
-        public void checkpoint() throws KinesisClientLibDependencyException, InvalidStateException,
-            ThrottlingException, ShutdownException {
+        public void checkpoint() throws KinesisClientLibDependencyException, ThrottlingException {
             throw new UnsupportedOperationException();
         }
 
         @Override
         public void checkpoint(String sequenceNumber) throws KinesisClientLibDependencyException,
-            InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
+                ThrottlingException, IllegalArgumentException {
             throw new UnsupportedOperationException();
         }
 
         @Override
         public void checkpoint(Record record)
-                throws KinesisClientLibDependencyException,
-                InvalidStateException, ThrottlingException, ShutdownException {
+                throws KinesisClientLibDependencyException, ThrottlingException {
             throw new UnsupportedOperationException();
         }
 
         @Override
         public void checkpoint(String sequenceNumber, long subSequenceNumber)
-                throws KinesisClientLibDependencyException,
-                InvalidStateException, ThrottlingException, ShutdownException,
-                IllegalArgumentException {
+                throws KinesisClientLibDependencyException, ThrottlingException, IllegalArgumentException {
             throw new UnsupportedOperationException();
         }
 
         @Override
         public PreparedCheckpointer prepareCheckpoint()
-                throws KinesisClientLibDependencyException,
-                InvalidStateException, ThrottlingException, ShutdownException {
+                throws KinesisClientLibDependencyException, ThrottlingException {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public PreparedCheckpointer prepareCheckpoint(byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+        public PreparedCheckpointer prepareCheckpoint(byte[] applicationState)
+                throws KinesisClientLibDependencyException, ThrottlingException {
             throw new UnsupportedOperationException();
         }
 
         @Override
         public PreparedCheckpointer prepareCheckpoint(Record record)
-                throws KinesisClientLibDependencyException,
-                InvalidStateException, ThrottlingException, ShutdownException {
+                throws KinesisClientLibDependencyException, ThrottlingException {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public PreparedCheckpointer prepareCheckpoint(Record record, byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+        public PreparedCheckpointer prepareCheckpoint(Record record, byte[] applicationState)
+                throws KinesisClientLibDependencyException, ThrottlingException {
             throw new UnsupportedOperationException();
         }
 
         @Override
         public PreparedCheckpointer prepareCheckpoint(String sequenceNumber)
-                throws KinesisClientLibDependencyException,
-                InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
+                throws KinesisClientLibDependencyException, ThrottlingException, IllegalArgumentException {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
+        public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, byte[] applicationState)
+                throws KinesisClientLibDependencyException, ThrottlingException, IllegalArgumentException {
             return null;
         }
 
         @Override
         public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber)
-                throws KinesisClientLibDependencyException,
-                InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
+                throws KinesisClientLibDependencyException, ThrottlingException, IllegalArgumentException {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber, byte[] applicationState) throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException, IllegalArgumentException {
+        public PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber, byte[] applicationState)
+                throws KinesisClientLibDependencyException, ThrottlingException, IllegalArgumentException {
             throw new UnsupportedOperationException();
         }
 
@@ -171,7 +164,7 @@ public class StreamingShardRecordProcessorTest {
     private MultiLangDaemonConfiguration configuration;
 
     @Before
-    public void prepare() throws IOException, InterruptedException, ExecutionException {
+    public void prepare() throws InterruptedException, ExecutionException {
         // Fake command
         systemExitCount = 0;
 
@@ -230,7 +223,7 @@ public class StreamingShardRecordProcessorTest {
 
         List<KinesisClientRecord> testRecords = Collections.emptyList();
 
-        recordProcessor.initialize(InitializationInput.builder().shardId(shardId).build());
+        recordProcessor.initialize(InitializationInput.builder().shardId(SHARD_ID).build());
         recordProcessor.processRecords(ProcessRecordsInput.builder().records(testRecords)
                 .checkpointer(unimplementedCheckpointer).build());
         recordProcessor.processRecords(ProcessRecordsInput.builder().records(testRecords)
@@ -240,7 +233,6 @@ public class StreamingShardRecordProcessorTest {
 
     @Test
     public void processorPhasesTest() throws InterruptedException, ExecutionException {
-
         Answer<StatusMessage> answer = new Answer<StatusMessage>() {
 
             StatusMessage[] answers = new StatusMessage[] { new StatusMessage(InitializeMessage.ACTION),
@@ -263,7 +255,7 @@ public class StreamingShardRecordProcessorTest {
 
         verify(messageWriter)
                 .writeInitializeMessage(argThat(Matchers.withInit(
-                        InitializationInput.builder().shardId(shardId).build())));
+                        InitializationInput.builder().shardId(SHARD_ID).build())));
         verify(messageWriter, times(2)).writeProcessRecordsMessage(any(ProcessRecordsInput.class));
         verify(messageWriter).writeLeaseLossMessage(any(LeaseLostInput.class));
     }
@@ -295,7 +287,7 @@ public class StreamingShardRecordProcessorTest {
         phases(answer);
 
         verify(messageWriter).writeInitializeMessage(argThat(Matchers.withInit(InitializationInput.builder()
-                .shardId(shardId).build())));
+                .shardId(SHARD_ID).build())));
         verify(messageWriter, times(2)).writeProcessRecordsMessage(any(ProcessRecordsInput.class));
         verify(messageWriter, never()).writeLeaseLossMessage(any(LeaseLostInput.class));
         Assert.assertEquals(1, systemExitCount);

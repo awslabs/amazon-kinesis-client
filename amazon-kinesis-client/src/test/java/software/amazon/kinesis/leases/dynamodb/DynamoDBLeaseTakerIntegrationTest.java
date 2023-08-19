@@ -15,9 +15,7 @@
 package software.amazon.kinesis.leases.dynamodb;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -158,7 +156,8 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
                 .withLease("5", "foo")
                 .build();
 
-        // In the current DynamoDBLeaseTaker implementation getAllLeases() gets leases from an internal cache that is built during takeLeases() operation
+        // In the current DynamoDBLeaseTaker implementation getAllLeases() gets leases from an internal cache that is
+        // built during takeLeases() operation
         assertThat(taker.allLeases().size(), equalTo(0));
 
         taker.takeLeases();
@@ -167,7 +166,6 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
         assertThat(allLeases.size(), equalTo(addedLeases.size()));
         assertThat(addedLeases.values().containsAll(allLeases), equalTo(true));
     }
-
 
     /**
      * Sets the leaseDurationMillis to 0, ensuring a get request to update the existing lease after computing

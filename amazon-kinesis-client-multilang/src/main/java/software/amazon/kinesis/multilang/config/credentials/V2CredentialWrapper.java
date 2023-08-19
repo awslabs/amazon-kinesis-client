@@ -32,7 +32,8 @@ public class V2CredentialWrapper implements AwsCredentialsProvider {
     public AwsCredentials resolveCredentials() {
         AWSCredentials current = oldCredentialsProvider.getCredentials();
         if (current instanceof AWSSessionCredentials) {
-            return AwsSessionCredentials.create(current.getAWSAccessKeyId(), current.getAWSSecretKey(), ((AWSSessionCredentials) current).getSessionToken());
+            return AwsSessionCredentials.create(current.getAWSAccessKeyId(), current.getAWSSecretKey(),
+                    ((AWSSessionCredentials) current).getSessionToken());
         }
         return new AwsCredentials() {
             @Override

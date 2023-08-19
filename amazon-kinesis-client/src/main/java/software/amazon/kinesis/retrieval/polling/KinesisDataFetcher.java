@@ -28,14 +28,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorResponse;
 import software.amazon.awssdk.services.kinesis.model.KinesisException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
-import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -48,7 +46,6 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.DataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
-import software.amazon.kinesis.retrieval.DataRetrievalUtil;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisDataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
@@ -65,6 +62,14 @@ public class KinesisDataFetcher implements DataFetcher {
 
     private static final String METRICS_PREFIX = "KinesisDataFetcher";
     private static final String OPERATION = "ProcessTask";
+
+    /**
+     * Reusable {@link AWSExceptionManager}.
+     * <p>
+     * N.B. This instance is mutable, but thread-safe for <b>read-only</b> use.
+     * </p>
+     */
+    private static final AWSExceptionManager AWS_EXCEPTION_MANAGER = createExceptionManager();
 
     @NonNull
     private final KinesisAsyncClient kinesisClient;
@@ -91,8 +96,6 @@ public class KinesisDataFetcher implements DataFetcher {
 
     /**
      * Note: This method has package level access for testing purposes.
-     *
-     * @return nextIterator
      */
     @Getter(AccessLevel.PACKAGE)
     private String nextIterator;
@@ -142,7 +145,9 @@ public class KinesisDataFetcher implements DataFetcher {
         }
     }
 
+    // CHECKSTYLE.OFF: MemberName
     final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
+    // CHECKSTYLE.ON: MemberName
         @Override
         public GetRecordsResponse getResult() {
             return GetRecordsResponse.builder()
@@ -223,16 +228,27 @@ public class KinesisDataFetcher implements DataFetcher {
     @Override
     public void advanceIteratorTo(final String sequenceNumber,
                                   final InitialPositionInStreamExtended initialPositionInStream) {
+        advanceIteratorTo(sequenceNumber, initialPositionInStream, false);
+    }
+
+    private void advanceIteratorTo(final String sequenceNumber,
+                                   final InitialPositionInStreamExtended initialPositionInStream,
+                                   boolean isIteratorRestart) {
         if (sequenceNumber == null) {
             throw new IllegalArgumentException("SequenceNumber should not be null: shardId " + shardId);
         }
 
-        final AWSExceptionManager exceptionManager = createExceptionManager();
-
         GetShardIteratorRequest.Builder builder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
                 .streamName(streamIdentifier.streamName()).shardId(shardId);
-        GetShardIteratorRequest request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStream)
-                .build();
+        streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
+
+        GetShardIteratorRequest request;
+        if (isIteratorRestart) {
+            request = IteratorBuilder.reconnectRequest(builder, sequenceNumber, initialPositionInStream).build();
+        } else {
+            request = IteratorBuilder.request(builder, sequenceNumber, initialPositionInStream).build();
+        }
+        log.debug("[GetShardIterator] Request has parameters {}", request);
 
         // TODO: Check if this metric is fine to be added
         final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, OPERATION);
@@ -246,7 +262,7 @@ public class KinesisDataFetcher implements DataFetcher {
                 nextIterator = getNextIterator(request);
                 success = true;
             } catch (ExecutionException e) {
-                throw exceptionManager.apply(e.getCause());
+                throw AWS_EXCEPTION_MANAGER.apply(e.getCause());
             } catch (InterruptedException e) {
                 // TODO: Check behavior
                 throw new RuntimeException(e);
@@ -270,8 +286,8 @@ public class KinesisDataFetcher implements DataFetcher {
     }
 
     /**
-     * Gets a new iterator from the last known sequence number i.e. the sequence number of the last record from the last
-     * records call.
+     * Gets a new next shard iterator from last known sequence number i.e. the sequence number of the last
+     * record from the last records call.
      */
     @Override
     public void restartIterator() {
@@ -279,7 +295,9 @@ public class KinesisDataFetcher implements DataFetcher {
             throw new IllegalStateException(
                     "Make sure to initialize the KinesisDataFetcher before restarting the iterator.");
         }
-        advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream);
+        log.debug("Restarting iterator for sequence number {} on shard id {}",
+                lastKnownSequenceNumber, streamAndShardId);
+        advanceIteratorTo(lastKnownSequenceNumber, initialPositionInStream, true);
     }
 
     @Override
@@ -302,9 +320,11 @@ public class KinesisDataFetcher implements DataFetcher {
     }
 
     @Override
-    public GetRecordsRequest getGetRecordsRequest(String nextIterator)  {
-        return KinesisRequestsBuilder.getRecordsRequestBuilder().shardIterator(nextIterator)
-                .limit(maxRecords).build();
+    public GetRecordsRequest getGetRecordsRequest(String nextIterator) {
+        GetRecordsRequest.Builder builder = KinesisRequestsBuilder.getRecordsRequestBuilder()
+                .shardIterator(nextIterator).limit(maxRecords);
+        streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
+        return builder.build();
     }
 
     @Override
@@ -316,7 +336,6 @@ public class KinesisDataFetcher implements DataFetcher {
 
     @Override
     public GetRecordsResponse getRecords(@NonNull final String nextIterator) {
-        final AWSExceptionManager exceptionManager = createExceptionManager();
         GetRecordsRequest request = getGetRecordsRequest(nextIterator);
 
         final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, OPERATION);
@@ -329,7 +348,7 @@ public class KinesisDataFetcher implements DataFetcher {
             success = true;
             return response;
         } catch (ExecutionException e) {
-            throw exceptionManager.apply(e.getCause());
+            throw AWS_EXCEPTION_MANAGER.apply(e.getCause());
         } catch (InterruptedException e) {
             // TODO: Check behavior
             log.debug("{} : Interrupt called on method, shutdown initiated", streamAndShardId);
@@ -343,7 +362,7 @@ public class KinesisDataFetcher implements DataFetcher {
         }
     }
 
-    private AWSExceptionManager createExceptionManager() {
+    private static AWSExceptionManager createExceptionManager() {
         final AWSExceptionManager exceptionManager = new AWSExceptionManager();
         exceptionManager.add(ResourceNotFoundException.class, t -> t);
         exceptionManager.add(KinesisException.class, t -> t);

@@ -30,9 +30,6 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
-
-import org.reactivestreams.Subscription;
-
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.Lease;
@@ -66,7 +63,13 @@ public class ShardConsumer {
     private final ShardConsumerArgument shardConsumerArgument;
     @NonNull
     private final Optional<Long> logWarningForTaskAfterMillis;
+
+    /**
+     * @deprecated unused; to be removed in a "major" version bump
+     */
+    @Deprecated
     private final Function<ConsumerTask, ConsumerTask> taskMetricsDecorator;
+
     private final int bufferSize;
     private final TaskExecutionListener taskExecutionListener;
     private final String streamIdentifier;
@@ -80,7 +83,7 @@ public class ShardConsumer {
     private volatile Instant taskDispatchedAt;
     private volatile boolean taskIsRunning = false;
 
-    /*
+    /**
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
      * much coordination/synchronization to handle concurrent reads/updates.
      */
@@ -186,7 +189,6 @@ public class ShardConsumer {
                 }
                 stateChangeFuture = initializeComplete();
             }
-
         } catch (InterruptedException e) {
             //
             // Ignored should be handled by scheduler
@@ -206,7 +208,6 @@ public class ShardConsumer {
                 throw (Error) t;
             }
         }
-
     }
 
     @VisibleForTesting

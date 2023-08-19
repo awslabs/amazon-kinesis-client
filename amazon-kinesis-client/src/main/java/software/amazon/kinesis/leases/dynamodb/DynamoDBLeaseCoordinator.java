@@ -332,8 +332,9 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
     @Override
     public void stopLeaseTaker() {
-        takerFuture.cancel(false);
-
+        if (takerFuture != null) {
+            takerFuture.cancel(false);
+        }
     }
 
     @Override

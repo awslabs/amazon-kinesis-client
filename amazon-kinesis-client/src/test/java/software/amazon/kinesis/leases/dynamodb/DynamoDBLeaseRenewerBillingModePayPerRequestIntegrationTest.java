@@ -37,7 +37,7 @@ import static org.junit.Assert.assertThat;
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseRenewerBillingModePayPerRequestIntegrationTest extends
         LeaseIntegrationBillingModePayPerRequestTest {
-    private final String TEST_METRIC = "TestOperation";
+    private static final String TEST_METRIC = "TestOperation";
 
     // This test case's leases last 2 seconds
     private static final long LEASE_DURATION_MILLIS = 2000L;

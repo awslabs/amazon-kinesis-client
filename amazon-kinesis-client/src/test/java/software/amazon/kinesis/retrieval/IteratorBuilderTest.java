@@ -63,6 +63,12 @@ public class IteratorBuilderTest {
     }
 
     @Test
+    public void getShardIteratorReconnectTest() {
+        sequenceNumber(this::gsiBase, this::verifyGsiBase, IteratorBuilder::reconnectRequest, WrappedRequest::wrapped,
+                ShardIteratorType.AFTER_SEQUENCE_NUMBER);
+    }
+
+    @Test
     public void subscribeTimestampTest() {
         timeStampTest(this::stsBase, this::verifyStsBase, IteratorBuilder::request, WrappedRequest::wrapped);
     }

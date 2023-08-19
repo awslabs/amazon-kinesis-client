@@ -103,7 +103,8 @@ public class DynamoDBCheckpointer implements Checkpointer {
     }
 
     @Override
-    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken, byte[] pendingCheckpointState) throws KinesisClientLibException {
+    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken,
+            byte[] pendingCheckpointState) throws KinesisClientLibException {
         try {
             boolean wasSuccessful =
                     prepareCheckpoint(leaseKey, pendingCheckpoint, UUID.fromString(concurrencyToken), pendingCheckpointState);

@@ -61,7 +61,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     @Deprecated
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
                             ShardConsumer shardConsumer) {
-        this(recordsPublisher,executorService,bufferSize,shardConsumer, LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
+        this(recordsPublisher, executorService, bufferSize, shardConsumer, LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
     }
 
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
@@ -73,7 +73,6 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
         this.shardInfoId = ShardInfo.getLeaseKey(shardConsumer.shardInfo());
     }
-
 
     void startSubscriptions() {
         synchronized (lockObject) {
@@ -131,7 +130,9 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 Duration timeSinceLastResponse = Duration.between(lastRequestTime, now);
                 if (timeSinceLastResponse.toMillis() > maxTimeBetweenRequests) {
                     log.error(
+                            // CHECKSTYLE.OFF: LineLength
                             "{}: Last request was dispatched at {}, but no response as of {} ({}).  Cancelling subscription, and restarting. Last successful request details -- {}",
+                            // CHECKSTYLE.ON: LineLength
                             shardInfoId, lastRequestTime, now, timeSinceLastResponse, recordsPublisher.getLastSuccessfulRequestDetails());
                     cancel();
 
@@ -200,11 +201,11 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
 
     protected void logOnErrorReadTimeoutWarning(Throwable t) {
         log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will"
-                + " recreate the subscription as neccessary to continue processing. If you "
-                + "are seeing this warning frequently consider increasing the SDK timeouts "
-                + "by providing an OverrideConfiguration to the kinesis client. Alternatively you"
-                + "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
-                + "intermittent ReadTimeout warnings. Last successful request details -- {}",
+                + " recreate the subscription as necessary to continue processing. If you"
+                + " are seeing this warning frequently consider increasing the SDK timeouts"
+                + " by providing an OverrideConfiguration to the kinesis client. Alternatively you"
+                + " can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
+                + " intermittent ReadTimeout warnings. Last successful request details -- {}",
                 shardInfoId, recordsPublisher.getLastSuccessfulRequestDetails(), t);
     }
 

@@ -20,7 +20,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import lombok.Getter;
 import org.apache.commons.beanutils.ConvertUtilsBean;
@@ -58,10 +57,10 @@ public class BuilderDynaBean implements DynaBean {
     }
 
     public BuilderDynaBean(Class<?> destinedClass, ConvertUtilsBean convertUtilsBean,
-            Function<String, ?> emtpyPropertyHandler, List<String> classPrefixSearchList) {
+            Function<String, ?> emptyPropertyHandler, List<String> classPrefixSearchList) {
         this.convertUtilsBean = convertUtilsBean;
         this.classPrefixSearchList = classPrefixSearchList;
-        this.emptyPropertyHandler = emtpyPropertyHandler;
+        this.emptyPropertyHandler = emptyPropertyHandler;
         initialize(destinedClass);
     }
 
@@ -150,7 +149,6 @@ public class BuilderDynaBean implements DynaBean {
         } else {
             return expected.cast(dynaBeanCreateSupport.build());
         }
-
     }
 
     private void validateResolvedEmptyHandler() {

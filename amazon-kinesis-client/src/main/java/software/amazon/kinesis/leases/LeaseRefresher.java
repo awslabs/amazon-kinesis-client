@@ -210,8 +210,6 @@ public interface LeaseRefresher {
      * Update application-specific fields of the given lease in DynamoDB. Does not update fields managed by the leasing
      * library such as leaseCounter, leaseOwner, or leaseKey.
      *
-     * @return true if update succeeded, false otherwise
-     *
      * @throws InvalidStateException if lease table does not exist
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way

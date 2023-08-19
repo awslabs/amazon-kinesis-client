@@ -4,3 +4,5 @@ AwsCredentials.properties
 *.iml
 .sdkmanrc
 .vscode
+*.swp
+.DS_Store

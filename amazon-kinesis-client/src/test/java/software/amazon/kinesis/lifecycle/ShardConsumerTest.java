@@ -15,13 +15,15 @@
 
 package software.amazon.kinesis.lifecycle;
 
-import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
@@ -177,7 +179,7 @@ public class ShardConsumerTest {
     @After
     public void after() {
         List<Runnable> remainder = executorService.shutdownNow();
-        assertThat(remainder.isEmpty(), equalTo(true));
+        assertTrue(remainder.isEmpty());
     }
 
     private class TestPublisher implements RecordsPublisher {
@@ -277,8 +279,7 @@ public class ShardConsumerTest {
         mockSuccessfulShutdown(null);
 
         TestPublisher cache = new TestPublisher();
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(cache);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -331,8 +332,7 @@ public class ShardConsumerTest {
         mockSuccessfulShutdown(null);
 
         TestPublisher cache = new TestPublisher();
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(cache);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -351,7 +351,7 @@ public class ShardConsumerTest {
         // This will block if a lock is held on ShardConsumer#this
         //
         consumer.executeLifecycle();
-        assertThat(consumer.isShutdown(), equalTo(false));
+        assertFalse(consumer.isShutdown());
 
         log.debug("Release processing task interlock");
         awaitAndResetBarrier(processingTaskInterlock);
@@ -380,7 +380,6 @@ public class ShardConsumerTest {
 
     @Test
     public void testDataArrivesAfterProcessing2() throws Exception {
-
         CyclicBarrier taskCallBarrier = new CyclicBarrier(2);
 
         mockSuccessfulInitialize(null);
@@ -390,8 +389,7 @@ public class ShardConsumerTest {
         mockSuccessfulShutdown(null);
 
         TestPublisher cache = new TestPublisher();
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, Function.identity(), 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(cache);
 
         boolean initComplete = false;
         while (!initComplete) {
@@ -445,13 +443,10 @@ public class ShardConsumerTest {
         verifyNoMoreInteractions(taskExecutionListener);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     @Ignore
     public final void testInitializationStateUponFailure() throws Exception {
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, Function.identity(), 1,
-                taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(recordsPublisher);
 
         when(initialState.createTask(eq(shardConsumerArgument), eq(consumer), any())).thenReturn(initializeTask);
         when(initializeTask.call()).thenReturn(new TaskResult(new Exception("Bad")));
@@ -478,17 +473,14 @@ public class ShardConsumerTest {
     /**
      * Test method to verify consumer undergoes the transition WAITING_ON_PARENT_SHARDS -> INITIALIZING -> PROCESSING
      */
-    @SuppressWarnings("unchecked")
     @Test
-    public final void testSuccessfulConsumerStateTransition() throws Exception {
+    public final void testSuccessfulConsumerStateTransition() {
         ExecutorService directExecutorService = spy(executorService);
 
-        doAnswer(invocation -> directlyExecuteRunnable(invocation))
+        doAnswer(this::directlyExecuteRunnable)
                 .when(directExecutorService).execute(any());
 
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, directExecutorService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, blockedOnParentsState,
-                t -> t, 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(directExecutorService, blockedOnParentsState);
 
         mockSuccessfulUnblockOnParents();
         mockSuccessfulInitializeWithFailureTransition();
@@ -512,20 +504,17 @@ public class ShardConsumerTest {
      * Test method to verify consumer does not transition to PROCESSING from WAITING_ON_PARENT_SHARDS when
      * INITIALIZING tasks gets rejected.
      */
-    @SuppressWarnings("unchecked")
     @Test
     public final void testConsumerNotTransitionsToProcessingWhenInitializationFails() {
         ExecutorService failingService = spy(executorService);
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, blockedOnParentsState,
-                t -> t, 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(failingService, blockedOnParentsState);
 
         mockSuccessfulUnblockOnParents();
         mockSuccessfulInitializeWithFailureTransition();
         mockSuccessfulProcessing(null);
 
         // Failing the initialization task and all other attempts after that.
-        doAnswer(invocation -> directlyExecuteRunnable(invocation))
+        doAnswer(this::directlyExecuteRunnable)
                 .doThrow(new RejectedExecutionException())
                 .when(failingService).execute(any());
 
@@ -547,24 +536,21 @@ public class ShardConsumerTest {
      * Test method to verify consumer transition to PROCESSING from WAITING_ON_PARENT_SHARDS with
      * intermittent INITIALIZING task rejections.
      */
-    @SuppressWarnings("unchecked")
     @Test
     public final void testConsumerTransitionsToProcessingWithIntermittentInitializationFailures() {
         ExecutorService failingService = spy(executorService);
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, blockedOnParentsState,
-                t -> t, 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(failingService, blockedOnParentsState);
 
         mockSuccessfulUnblockOnParents();
         mockSuccessfulInitializeWithFailureTransition();
         mockSuccessfulProcessing(null);
 
         // Failing the initialization task and few other attempts after that.
-        doAnswer(invocation -> directlyExecuteRunnable(invocation))
+        doAnswer(this::directlyExecuteRunnable)
                 .doThrow(new RejectedExecutionException())
                 .doThrow(new RejectedExecutionException())
                 .doThrow(new RejectedExecutionException())
-                .doAnswer(invocation -> directlyExecuteRunnable(invocation))
+                .doAnswer(this::directlyExecuteRunnable)
                 .when(failingService).execute(any());
 
         int arbitraryExecutionCount = 6;
@@ -584,13 +570,10 @@ public class ShardConsumerTest {
     /**
      * Test method to verify consumer does not transition to INITIALIZING when WAITING_ON_PARENT_SHARDS task rejected.
      */
-    @SuppressWarnings("unchecked")
     @Test
     public final void testConsumerNotTransitionsToInitializingWhenWaitingOnParentsFails() {
         ExecutorService failingService = spy(executorService);
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, blockedOnParentsState,
-                t -> t, 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(failingService, blockedOnParentsState);
 
         mockSuccessfulUnblockOnParentsWithFailureTransition();
         mockSuccessfulInitializeWithFailureTransition();
@@ -616,13 +599,10 @@ public class ShardConsumerTest {
     /**
      * Test method to verify consumer stays in INITIALIZING state when InitializationTask fails.
      */
-    @SuppressWarnings("unchecked")
     @Test(expected = RejectedExecutionException.class)
     public final void testInitializationStateUponSubmissionFailure() throws Exception {
-
         ExecutorService failingService = mock(ExecutorService.class);
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, failingService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(failingService, initialState);
 
         doThrow(new RejectedExecutionException()).when(failingService).execute(any());
 
@@ -635,8 +615,7 @@ public class ShardConsumerTest {
 
     @Test
     public void testErrorThrowableInInitialization() throws Exception {
-        ShardConsumer consumer = new ShardConsumer(recordsPublisher, executorService, shardInfo,
-                logWarningForTaskAfterMillis, shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(recordsPublisher);
 
         when(initialState.createTask(any(), any(), any())).thenReturn(initializeTask);
         when(initialState.taskType()).thenReturn(TaskType.INITIALIZE);
@@ -655,12 +634,10 @@ public class ShardConsumerTest {
 
     @Test
     public void testRequestedShutdownWhileQuiet() throws Exception {
-
         CyclicBarrier taskBarrier = new CyclicBarrier(2);
 
         TestPublisher cache = new TestPublisher();
-        ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, logWarningForTaskAfterMillis,
-                shardConsumerArgument, initialState, t -> t, 1, taskExecutionListener, 0);
+        final ShardConsumer consumer = createShardConsumer(cache);
 
         mockSuccessfulInitialize(null);
 
@@ -702,15 +679,15 @@ public class ShardConsumerTest {
 
         consumer.gracefulShutdown(shutdownNotification);
         boolean shutdownComplete = consumer.shutdownComplete().get();
-        assertThat(shutdownComplete, equalTo(false));
+        assertFalse(shutdownComplete);
         shutdownComplete = consumer.shutdownComplete().get();
-        assertThat(shutdownComplete, equalTo(false));
+        assertFalse(shutdownComplete);
 
         consumer.leaseLost();
         shutdownComplete = consumer.shutdownComplete().get();
-        assertThat(shutdownComplete, equalTo(false));
+        assertFalse(shutdownComplete);
         shutdownComplete = consumer.shutdownComplete().get();
-        assertThat(shutdownComplete, equalTo(true));
+        assertTrue(shutdownComplete);
 
         verify(processingState, times(2)).createTask(any(), any(), any());
         verify(shutdownRequestedState, never()).shutdownTransition(eq(ShutdownReason.LEASE_LOST));
@@ -786,7 +763,6 @@ public class ShardConsumerTest {
 
     @Test
     public void testLongRunningTasks() throws Exception {
-
         TestPublisher cache = new TestPublisher();
 
         ShardConsumer consumer = new ShardConsumer(cache, executorService, shardInfo, Optional.of(1L),
@@ -802,19 +778,19 @@ public class ShardConsumerTest {
         CompletableFuture<Boolean> initSuccess = consumer.initializeComplete();
 
         awaitAndResetBarrier(taskArriveBarrier);
-        assertThat(consumer.taskRunningTime(), notNullValue());
+        assertNotNull(consumer.taskRunningTime());
         consumer.healthCheck();
         awaitAndResetBarrier(taskDepartBarrier);
 
-        assertThat(initSuccess.get(), equalTo(false));
+        assertFalse(initSuccess.get());
         verify(initializeTask).call();
 
         initSuccess = consumer.initializeComplete();
         verify(initializeTask).call();
-        assertThat(initSuccess.get(), equalTo(true));
+        assertTrue(initSuccess.get());
         consumer.healthCheck();
 
-        assertThat(consumer.taskRunningTime(), nullValue());
+        assertNull(consumer.taskRunningTime());
 
         consumer.subscribe();
         cache.awaitInitialSetup();
@@ -823,14 +799,14 @@ public class ShardConsumerTest {
 
         awaitAndResetBarrier(taskArriveBarrier);
         Instant previousTaskStartTime = consumer.taskDispatchedAt();
-        assertThat(consumer.taskRunningTime(), notNullValue());
+        assertNotNull(consumer.taskRunningTime());
         consumer.healthCheck();
         awaitAndResetBarrier(taskDepartBarrier);
 
         consumer.healthCheck();
 
         cache.requestBarrier.await();
-        assertThat(consumer.taskRunningTime(), nullValue());
+        assertNull(consumer.taskRunningTime());
         cache.requestBarrier.reset();
 
         // Sleep for 10 millis before processing next task. If we don't; then the following
@@ -841,28 +817,28 @@ public class ShardConsumerTest {
 
         awaitAndResetBarrier(taskArriveBarrier);
         Instant currentTaskStartTime = consumer.taskDispatchedAt();
-        assertThat(currentTaskStartTime, not(equalTo(previousTaskStartTime)));
+        assertNotEquals(currentTaskStartTime, previousTaskStartTime);
         awaitAndResetBarrier(taskDepartBarrier);
 
         cache.requestBarrier.await();
-        assertThat(consumer.taskRunningTime(), nullValue());
+        assertNull(consumer.taskRunningTime());
         cache.requestBarrier.reset();
 
         consumer.leaseLost();
 
-        assertThat(consumer.isShutdownRequested(), equalTo(true));
+        assertTrue(consumer.isShutdownRequested());
         CompletableFuture<Boolean> shutdownComplete = consumer.shutdownComplete();
 
         awaitAndResetBarrier(taskArriveBarrier);
-        assertThat(consumer.taskRunningTime(), notNullValue());
+        assertNotNull(consumer.taskRunningTime());
         awaitAndResetBarrier(taskDepartBarrier);
 
-        assertThat(shutdownComplete.get(), equalTo(false));
+        assertFalse(shutdownComplete.get());
 
         shutdownComplete = consumer.shutdownComplete();
-        assertThat(shutdownComplete.get(), equalTo(true));
+        assertTrue(shutdownComplete.get());
 
-        assertThat(consumer.taskRunningTime(), nullValue());
+        assertNull(consumer.taskRunningTime());
         consumer.healthCheck();
 
         verify(taskExecutionListener, times(1)).beforeTaskExecution(initialTaskInput);
@@ -1108,7 +1084,6 @@ public class ShardConsumerTest {
     }
 
     private void mockSuccessfulInitialize(CyclicBarrier taskCallBarrier, CyclicBarrier taskInterlockBarrier) {
-
         when(initialState.createTask(eq(shardConsumerArgument), any(), any())).thenReturn(initializeTask);
         when(initialState.taskType()).thenReturn(TaskType.INITIALIZE);
         when(initializeTask.taskType()).thenReturn(TaskType.INITIALIZE);
@@ -1156,6 +1131,20 @@ public class ShardConsumerTest {
         Runnable runnable = (Runnable) args[0];
         runnable.run();
         return null;
+    }
+
+    private ShardConsumer createShardConsumer(final RecordsPublisher publisher) {
+        return createShardConsumer(publisher, executorService, initialState);
+    }
+
+    private ShardConsumer createShardConsumer(final ExecutorService executorService, final ConsumerState state) {
+        return createShardConsumer(recordsPublisher, executorService, state);
+    }
+
+    private ShardConsumer createShardConsumer(final RecordsPublisher publisher,
+            final ExecutorService executorService, final ConsumerState state) {
+        return new ShardConsumer(publisher, executorService, shardInfo, logWarningForTaskAfterMillis,
+                shardConsumerArgument, state, Function.identity(), 1, taskExecutionListener, 0);
     }
 
 }

@@ -18,7 +18,6 @@ package software.amazon.kinesis.retrieval.polling;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Function;
-import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
@@ -47,8 +46,6 @@ public class PollingConfig implements RetrievalSpecificConfig {
     Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider;
     /**
      * Name of the Kinesis stream.
-     *
-     * @return String
      */
     private String streamName;
 
@@ -63,8 +60,6 @@ public class PollingConfig implements RetrievalSpecificConfig {
 
     /**
      * Client used to access to Kinesis service.
-     *
-     * @return {@link KinesisAsyncClient}
      */
     @NonNull
     private final KinesisAsyncClient kinesisClient;
@@ -142,10 +137,20 @@ public class PollingConfig implements RetrievalSpecificConfig {
     @Override
     public RetrievalFactory retrievalFactory() {
         // Prioritize the PollingConfig specified value if its updated.
-        if(usePollingConfigIdleTimeValue) {
+        if (usePollingConfigIdleTimeValue) {
             recordsFetcherFactory.idleMillisBetweenCalls(idleTimeBetweenReadsInMillis);
         }
         return new SynchronousBlockingRetrievalFactory(streamName(), kinesisClient(), recordsFetcherFactory,
                 maxRecords(), kinesisRequestTimeout, dataFetcherProvider);
+    }
+
+    @Override
+    public void validateState(final boolean isMultiStream) {
+        if (isMultiStream) {
+            if (streamName() != null) {
+                throw new IllegalArgumentException(
+                        "PollingConfig must not have streamName configured in multi-stream mode");
+            }
+        }
     }
 }

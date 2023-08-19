@@ -42,7 +42,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @EqualsAndHashCode(exclude = {"concurrencyToken", "lastCounterIncrementNanos", "childShardIds", "pendingCheckpointState", "isMarkedForLeaseSteal"})
 @ToString
 public class Lease {
-    /*
+    /**
      * See javadoc for System.nanoTime - summary:
      *
      * Sometimes System.nanoTime's return values will wrap due to overflow. When they do, the difference between two
@@ -51,62 +51,57 @@ public class Lease {
     private static final long MAX_ABS_AGE_NANOS = TimeUnit.DAYS.toNanos(365);
 
     /**
-     * @return leaseKey - identifies the unit of work associated with this lease.
+     * Identifies the unit of work associated with this lease.
      */
     private String leaseKey;
     /**
-     * @return current owner of the lease, may be null.
+     * Current owner of the lease, may be null.
      */
     private String leaseOwner;
     /**
-     * @return leaseCounter is incremented periodically by the holder of the lease. Used for optimistic locking.
+     * LeaseCounter is incremented periodically by the holder of the lease. Used for optimistic locking.
      */
     private Long leaseCounter = 0L;
 
-    /*
+    /**
      * This field is used to prevent updates to leases that we have lost and re-acquired. It is deliberately not
      * persisted in DynamoDB and excluded from hashCode and equals.
      */
     private UUID concurrencyToken;
 
-    /*
+    /**
      * This field is used by LeaseRenewer and LeaseTaker to track the last time a lease counter was incremented. It is
      * deliberately not persisted in DynamoDB and excluded from hashCode and equals.
      */
     private Long lastCounterIncrementNanos;
     /**
-     * @return most recently application-supplied checkpoint value. During fail over, the new worker will pick up after
+     * Most recently application-supplied checkpoint value. During fail over, the new worker will pick up after
      *         the old worker's last checkpoint.
      */
     private ExtendedSequenceNumber checkpoint;
     /**
-     * @return pending checkpoint, possibly null.
+     * Pending checkpoint, possibly null.
      */
     private ExtendedSequenceNumber pendingCheckpoint;
 
     /**
-     * Last pending application state. Deliberately excluded from hashCode and equals.
-     *
-     * @return pending checkpoint state, possibly null.
+     * Last pending checkpoint state, possibly null. Deliberately excluded from hashCode and equals.
      */
     private byte[] pendingCheckpointState;
-
 
     /**
      * Denotes whether the lease is marked for stealing. Deliberately excluded from hashCode and equals and
      * not persisted in DynamoDB.
-     *
-     * @return flag for denoting lease is marked for stealing.
      */
     @Setter
     private boolean isMarkedForLeaseSteal;
 
     /**
-     * @return count of distinct lease holders between checkpoints.
+     * Count of distinct lease holders between checkpoints.
      */
     private Long ownerSwitchesSinceCheckpoint = 0L;
-    private Set<String> parentShardIds = new HashSet<>();
-    private Set<String> childShardIds = new HashSet<>();
+    private final Set<String> parentShardIds = new HashSet<>();
+    private final Set<String> childShardIds = new HashSet<>();
     private HashKeyRangeForLease hashKeyRangeForLease;
 
     /**

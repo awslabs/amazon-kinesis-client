@@ -205,7 +205,8 @@ public class ShardSyncTaskManager {
 
     private void handlePendingShardSyncs(Throwable exception, TaskResult taskResult) {
         if (exception != null || taskResult.getException() != null) {
-            log.error("Caught exception running {} task: ", currentTask.taskType(), exception != null ? exception : taskResult.getException());
+            log.error("Caught exception running {} task: {}", currentTask.taskType(),
+                    exception != null ? exception : taskResult.getException());
         }
         // Acquire lock here. If shardSyncRequestPending is false in this completionStage and
         // submitShardSyncTask is invoked, before completion stage exits (future completes)

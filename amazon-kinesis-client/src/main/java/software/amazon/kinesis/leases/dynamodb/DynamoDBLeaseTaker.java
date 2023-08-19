@@ -73,7 +73,6 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     private long veryOldLeaseDurationNanosMultiplier = 3;
     private long lastScanTimeNanos = 0L;
 
-
     public DynamoDBLeaseTaker(LeaseRefresher leaseRefresher, String workerIdentifier, long leaseDurationMillis,
             final MetricsFactory metricsFactory) {
         this.leaseRefresher = leaseRefresher;
@@ -184,7 +183,6 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                 MetricsUtil.addSuccessAndLatency(scope, "ListLeases", success, startTime, MetricsLevel.DETAILED);
             }
 
-
             if (lastException != null) {
                 log.error("Worker {} could not scan leases table, aborting TAKE_LEASES_DIMENSION. Exception caught by"
                         + " last retry:", workerIdentifier, lastException);
@@ -259,6 +257,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             leasesToTake = leasesToTake.stream().map(lease -> {
                 if (lease.isMarkedForLeaseSteal()) {
                     try {
+                        log.debug("Updating stale lease {}.", lease.leaseKey());
                         return leaseRefresher.getLease(lease.leaseKey());
                     } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
                         log.warn("Failed to fetch latest state of the lease {} that needs to be stolen, "
@@ -318,8 +317,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         for (Lease lease : freshList) {
             String leaseKey = lease.leaseKey();
 
-            Lease oldLease = allLeases.get(leaseKey);
-            allLeases.put(leaseKey, lease);
+            final Lease oldLease = allLeases.put(leaseKey, lease);
             notUpdated.remove(leaseKey);
 
             if (oldLease != null) {
@@ -392,7 +390,6 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         Set<Lease> leasesToTake = new HashSet<>();
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, TAKE_LEASES_DIMENSION);
         MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
-        List<Lease> veryOldLeases = new ArrayList<>();
 
         final int numAvailableLeases = availableLeases.size();
         int numLeases = 0;
@@ -410,14 +407,13 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                 return leasesToTake;
             }
 
-
             int target;
             if (numWorkers >= numLeases) {
                 // If we have n leases and n or more workers, each worker can have up to 1 lease, including myself.
                 target = 1;
             } else {
                 /*
-                 * numWorkers must be < numLeases.
+                 * if we have made it here, it means there are more leases than workers
                  *
                  * Our target for each worker is numLeases / numWorkers (+1 if numWorkers doesn't evenly divide numLeases)
                  */
@@ -443,9 +439,9 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             // If there are leases that have been expired for an extended period of
             // time, take them with priority, disregarding the target (computed
             // later) but obeying the maximum limit per worker.
-            veryOldLeases = allLeases.values().stream()
-                    .filter(lease -> System.nanoTime() - lease.lastCounterIncrementNanos()
-                            > veryOldLeaseDurationNanosMultiplier * leaseDurationNanos)
+            final long nanoThreshold = System.nanoTime() - (veryOldLeaseDurationNanosMultiplier * leaseDurationNanos);
+            final List<Lease> veryOldLeases = allLeases.values().stream()
+                    .filter(lease -> nanoThreshold > lease.lastCounterIncrementNanos())
                     .collect(Collectors.toList());
 
             if (!veryOldLeases.isEmpty()) {
@@ -489,7 +485,6 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                         workerIdentifier, numLeases, numAvailableLeases, numWorkers, target, myCount,
                         leasesToTake.size());
             }
-
         } finally {
             scope.addData("AvailableLeases", availableLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
             scope.addData("LeaseSpillover", leaseSpillover, StandardUnit.COUNT, MetricsLevel.SUMMARY);
