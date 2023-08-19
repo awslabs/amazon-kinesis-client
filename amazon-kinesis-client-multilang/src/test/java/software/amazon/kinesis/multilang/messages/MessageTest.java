@@ -26,13 +26,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.ShutdownReason;
-import software.amazon.kinesis.multilang.messages.CheckpointMessage;
-import software.amazon.kinesis.multilang.messages.InitializeMessage;
-import software.amazon.kinesis.multilang.messages.Message;
-import software.amazon.kinesis.multilang.messages.ProcessRecordsMessage;
-import software.amazon.kinesis.multilang.messages.ShutdownMessage;
-import software.amazon.kinesis.multilang.messages.ShutdownRequestedMessage;
-import software.amazon.kinesis.multilang.messages.StatusMessage;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 public class MessageTest {
@@ -56,7 +49,7 @@ public class MessageTest {
                 new ProcessRecordsMessage(),
                 new ShutdownRequestedMessage(),
                 new LeaseLostMessage(),
-                new ShardEndedMessage()
+                new ShardEndedMessage(),
         };
 
 //        TODO: fix this

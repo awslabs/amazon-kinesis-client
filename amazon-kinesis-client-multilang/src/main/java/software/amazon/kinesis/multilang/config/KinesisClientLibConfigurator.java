@@ -23,8 +23,9 @@ import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
+import software.amazon.awssdk.arns.Arn;
+import software.amazon.kinesis.common.StreamIdentifier;
 
 /**
  * KinesisClientLibConfigurator constructs a KinesisClientLibConfiguration from java properties file. The following
@@ -40,7 +41,6 @@ public class KinesisClientLibConfigurator {
     private final BeanUtilsBean utilsBean;
     private final MultiLangDaemonConfiguration configuration;
 
-
     /**
      * Constructor.
      */
@@ -55,13 +55,14 @@ public class KinesisClientLibConfigurator {
      * Program will fail immediately, if customer provide: 1) invalid variable value. Program will log it as warning and
      * continue, if customer provide: 1) variable with unsupported variable type. 2) a variable with name which does not
      * match any of the variables in KinesisClientLibConfigration.
-     * 
+     *
      * @param properties a Properties object containing the configuration information
      * @return KinesisClientLibConfiguration
      */
     public MultiLangDaemonConfiguration getConfiguration(Properties properties) {
         properties.entrySet().forEach(e -> {
             try {
+                log.info("Processing (key={}, value={})", e.getKey(), e.getValue());
                 utilsBean.setProperty(configuration, (String) e.getKey(), e.getValue());
             } catch (IllegalAccessException | InvocationTargetException ex) {
                 throw new RuntimeException(ex);
@@ -69,8 +70,18 @@ public class KinesisClientLibConfigurator {
         });
 
         Validate.notBlank(configuration.getApplicationName(), "Application name is required");
-        Validate.notBlank(configuration.getStreamName(), "Stream name is required");
+
+        if (configuration.getStreamArn() != null && !configuration.getStreamArn().trim().isEmpty()) {
+            final Arn streamArnObj = Arn.fromString(configuration.getStreamArn());
+            StreamIdentifier.validateArn(streamArnObj);
+            //Parse out the stream Name from the Arn (and/or override existing value for Stream Name)
+            final String streamNameFromArn = streamArnObj.resource().resource();
+            configuration.setStreamName(streamNameFromArn);
+        }
+
+        Validate.notBlank(configuration.getStreamName(), "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
         Validate.isTrue(configuration.getKinesisCredentialsProvider().isDirty(), "A basic set of AWS credentials must be provided");
+
         return configuration;
     }
 
@@ -95,6 +106,5 @@ public class KinesisClientLibConfigurator {
         }
         return getConfiguration(properties);
     }
-
 
 }

@@ -80,8 +80,19 @@ public class FanOutConfig implements RetrievalSpecificConfig {
      */
     private long retryBackoffMillis = 1000;
 
-    @Override public RetrievalFactory retrievalFactory() {
+    @Override
+    public RetrievalFactory retrievalFactory() {
         return new FanOutRetrievalFactory(kinesisClient, streamName, consumerArn, this::getOrCreateConsumerArn);
+    }
+
+    @Override
+    public void validateState(final boolean isMultiStream) {
+        if (isMultiStream) {
+            if ((streamName() != null) || (consumerArn() != null)) {
+                throw new IllegalArgumentException(
+                        "FanOutConfig must not have streamName/consumerArn configured in multi-stream mode");
+            }
+        }
     }
 
     private String getOrCreateConsumerArn(String streamName) {

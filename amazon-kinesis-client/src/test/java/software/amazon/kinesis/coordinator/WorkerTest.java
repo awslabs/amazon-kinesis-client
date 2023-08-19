@@ -14,8 +14,6 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import java.util.concurrent.ThreadPoolExecutor;
-
 /**
  * Unit tests of Worker.
  */
@@ -118,8 +116,7 @@ public class WorkerTest {
 
     private static final IRecordProcessorFactory SAMPLE_RECORD_PROCESSOR_FACTORY_V2 = SAMPLE_RECORD_PROCESSOR_FACTORY;
 
-
-    *//**
+    *//*
      * Test method for {@link Worker#getApplicationName()}.
      *//*
     @Test
@@ -346,7 +343,7 @@ public class WorkerTest {
         Assert.assertTrue(count > 0);
     }
 
-    *//**
+    *//*
      * Runs worker with threadPoolSize == numShards
      * Test method for {@link Worker#run()}.
      *//*
@@ -357,7 +354,7 @@ public class WorkerTest {
         runAndTestWorker(numShards, threadPoolSize);
     }
 
-    *//**
+    *//*
      * Runs worker with threadPoolSize < numShards
      * Test method for {@link Worker#run()}.
      *//*
@@ -368,7 +365,7 @@ public class WorkerTest {
         runAndTestWorker(numShards, threadPoolSize);
     }
 
-    *//**
+    *//*
      * Runs worker with threadPoolSize > numShards
      * Test method for {@link Worker#run()}.
      *//*
@@ -379,7 +376,7 @@ public class WorkerTest {
         runAndTestWorker(numShards, threadPoolSize);
     }
 
-    *//**
+    *//*
      * Runs worker with threadPoolSize < numShards
      * Test method for {@link Worker#run()}.
      *//*
@@ -395,7 +392,7 @@ public class WorkerTest {
         runAndTestWorker(shardList, threadPoolSize, initialLeases, callProcessRecordsForEmptyRecordList, numberOfRecordsPerShard, config);
     }
 
-    *//**
+    *//*
      * Runs worker with threadPoolSize < numShards
      * Test method for {@link Worker#run()}.
      *//*
@@ -557,7 +554,7 @@ public class WorkerTest {
         verify(v2RecordProcessor, times(1)).shutdown(any(ShutdownInput.class));
     }
 
-    *//**
+    *//*
      * This test is testing the {@link Worker}'s shutdown behavior and by extension the behavior of
      * {@link ThreadPoolExecutor#shutdownNow()}. It depends on the thread pool sending an interrupt to the pool threads.
      * This behavior makes the test a bit racy, since we need to ensure a specific order of events.
@@ -1734,7 +1731,8 @@ public class WorkerTest {
             return new ReflectionFieldMatcher<>(itemClass, fieldName, fieldMatcher);
         }
     }
-    *//**
+
+    *//*
      * Returns executor service that will be owned by the worker. This is useful to test the scenario
      * where worker shuts down the executor service also during shutdown flow.
      *
@@ -1756,9 +1754,6 @@ public class WorkerTest {
         return shards;
     }
 
-    *//**
-     * @return
-     *//*
     private List<Shard> createShardListWithOneSplit() {
         List<Shard> shards = new ArrayList<Shard>();
         SequenceNumberRange range0 = ShardObjectHelper.newSequenceNumberRange("39428", "987324");

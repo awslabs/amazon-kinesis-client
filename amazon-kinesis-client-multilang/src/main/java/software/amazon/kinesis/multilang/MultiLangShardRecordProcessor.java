@@ -32,7 +32,6 @@ import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 
-
 /**
  * A record processor that manages creating a child process that implements the multi language protocol and connecting
  * that child process's input and outputs to a {@link MultiLangProtocol} object and calling the appropriate methods on
@@ -50,20 +49,20 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
 
     private Future<?> stderrReadTask;
 
-    private MessageWriter messageWriter;
-    private MessageReader messageReader;
-    private DrainChildSTDERRTask readSTDERRTask;
+    private final MessageWriter messageWriter;
+    private final MessageReader messageReader;
+    private final DrainChildSTDERRTask readSTDERRTask;
 
-    private ProcessBuilder processBuilder;
+    private final ProcessBuilder processBuilder;
     private Process process;
-    private ExecutorService executorService;
+    private final ExecutorService executorService;
     private ProcessState state;
 
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
 
     private MultiLangProtocol protocol;
 
-    private MultiLangDaemonConfiguration configuration;
+    private final MultiLangDaemonConfiguration configuration;
 
     @Override
     public void initialize(InitializationInput initializationInput) {
@@ -213,7 +212,6 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
         this.readSTDERRTask = readSTDERRTask;
         this.configuration = configuration;
 
-
         this.state = ProcessState.ACTIVE;
     }
 
@@ -303,8 +301,6 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
 
     /**
      * We provide a package level method for unit testing this call to exit.
-     * 
-     * @param val exit value
      */
     void exit() {
         System.exit(EXIT_VALUE);

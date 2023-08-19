@@ -23,10 +23,11 @@ import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 
 import java.math.BigInteger;
 
-@Value @Accessors(fluent = true)
 /**
  * Lease POJO to hold the starting hashkey range and ending hashkey range of kinesis shards.
  */
+@Accessors(fluent = true)
+@Value
 public class HashKeyRangeForLease {
 
     private final BigInteger startingHashKey;

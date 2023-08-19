@@ -117,8 +117,8 @@ public class LeaseCleanupManager {
     public void enqueueForDeletion(LeasePendingDeletion leasePendingDeletion) {
         final Lease lease = leasePendingDeletion.lease();
         if (lease == null) {
-            log.warn("Cannot enqueue lease {} for deferred deletion - instance doesn't hold the lease for that shard.",
-                    lease.leaseKey());
+            log.warn("Cannot enqueue {} for {} as instance doesn't hold the lease for that shard.",
+                    leasePendingDeletion.shardInfo(), leasePendingDeletion.streamIdentifier());
         } else {
             log.debug("Enqueuing lease {} for deferred deletion.", lease.leaseKey());
             if (!deletionQueue.add(leasePendingDeletion)) {
@@ -145,10 +145,18 @@ public class LeaseCleanupManager {
         return deletionQueue.size();
     }
 
+    /**
+     *
+     * @return true if the 'Completed Lease Stopwatch' has elapsed more time than the 'Completed Lease Cleanup Interval'
+     */
     private boolean timeToCheckForCompletedShard() {
         return completedLeaseStopwatch.elapsed(TimeUnit.MILLISECONDS) >= completedLeaseCleanupIntervalMillis;
     }
 
+    /**
+     *
+     * @return true if the 'Garbage Lease Stopwatch' has elapsed more time than the 'Garbage Lease Cleanup Interval'
+     */
     private boolean timeToCheckForGarbageShard() {
         return garbageLeaseStopwatch.elapsed(TimeUnit.MILLISECONDS) >= garbageLeaseCleanupIntervalMillis;
     }
@@ -171,7 +179,7 @@ public class LeaseCleanupManager {
         try {
             if (cleanupLeasesUponShardCompletion && timeToCheckForCompletedShard) {
                 final Lease leaseFromDDB = leaseCoordinator.leaseRefresher().getLease(lease.leaseKey());
-                if(leaseFromDDB != null) {
+                if (leaseFromDDB != null) {
                     Set<String> childShardKeys = leaseFromDDB.childShardIds();
                     if (CollectionUtils.isNullOrEmpty(childShardKeys)) {
                         try {
@@ -200,7 +208,8 @@ public class LeaseCleanupManager {
                         log.warn("Unable to cleanup lease for shard {} in {}", shardInfo.shardId(), streamIdentifier.streamName(), e);
                     }
                 } else {
-                    log.info("Lease not present in lease table while cleaning the shard {} of {}", shardInfo.shardId(), streamIdentifier.streamName());
+                    log.info("Lease not present in lease table while cleaning the shard {} of {}",
+                            shardInfo.shardId(), streamIdentifier.streamName());
                     cleanedUpCompletedLease = true;
                 }
             }
@@ -224,13 +233,26 @@ public class LeaseCleanupManager {
 
     // A lease that ended with SHARD_END from ResourceNotFoundException is safe to delete if it no longer exists in the
     // stream (known explicitly from ResourceNotFound being thrown when processing this shard),
-    private boolean cleanupLeaseForGarbageShard(Lease lease, Throwable e) throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+    private boolean cleanupLeaseForGarbageShard(Lease lease, Throwable e)
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         log.warn("Deleting lease {} as it is not present in the stream.", lease, e);
         leaseCoordinator.leaseRefresher().deleteLease(lease);
         return true;
     }
 
-    private boolean allParentShardLeasesDeleted(Lease lease, ShardInfo shardInfo) throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+    /**
+     * Check if the all of the parent shards for a given lease have an ongoing lease. If any one parent still has a
+     * lease, return false. Otherwise return true
+     *
+     * @param lease
+     * @param shardInfo
+     * @return
+     * @throws DependencyException
+     * @throws ProvisionedThroughputException
+     * @throws InvalidStateException
+     */
+    private boolean allParentShardLeasesDeleted(Lease lease, ShardInfo shardInfo)
+            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         for (String parentShard : lease.parentShardIds()) {
             final Lease parentLease = leaseCoordinator.leaseRefresher().getLease(ShardInfo.getLeaseKey(shardInfo, parentShard));
 

@@ -64,6 +64,22 @@ import software.amazon.kinesis.retrieval.AWSExceptionManager;
 @KinesisClientInternalApi
 public class KinesisShardDetector implements ShardDetector {
 
+    /**
+     * Reusable {@link AWSExceptionManager}.
+     * <p>
+     * N.B. This instance is mutable, but thread-safe for <b>read-only</b> use.
+     * </p>
+     */
+    private static final AWSExceptionManager AWS_EXCEPTION_MANAGER;
+
+    static {
+        AWS_EXCEPTION_MANAGER = new AWSExceptionManager();
+        AWS_EXCEPTION_MANAGER.add(KinesisException.class, t -> t);
+        AWS_EXCEPTION_MANAGER.add(LimitExceededException.class, t -> t);
+        AWS_EXCEPTION_MANAGER.add(ResourceInUseException.class, t -> t);
+        AWS_EXCEPTION_MANAGER.add(ResourceNotFoundException.class, t -> t);
+    }
+
     @NonNull
     private final KinesisAsyncClient kinesisClient;
     @NonNull @Getter
@@ -78,7 +94,9 @@ public class KinesisShardDetector implements ShardDetector {
     private volatile Map<String, Shard> cachedShardMap = null;
     private volatile Instant lastCacheUpdateTime;
     @Getter(AccessLevel.PACKAGE)
-    private AtomicInteger cacheMisses = new AtomicInteger(0);
+    private final AtomicInteger cacheMisses = new AtomicInteger(0);
+
+    private static final Boolean THROW_RESOURCE_NOT_FOUND_EXCEPTION = true;
 
     @Deprecated
     public KinesisShardDetector(KinesisAsyncClient kinesisClient, String streamName, long listShardsBackoffTimeInMillis,
@@ -161,13 +179,24 @@ public class KinesisShardDetector implements ShardDetector {
 
     @Override
     @Synchronized
+    public List<Shard> listShardsWithoutConsumingResourceNotFoundException() {
+        return listShardsWithFilterInternal(null, THROW_RESOURCE_NOT_FOUND_EXCEPTION);
+    }
+
+    @Override
+    @Synchronized
     public List<Shard> listShardsWithFilter(ShardFilter shardFilter) {
+        return listShardsWithFilterInternal(shardFilter, !THROW_RESOURCE_NOT_FOUND_EXCEPTION);
+    }
+
+    private List<Shard> listShardsWithFilterInternal(ShardFilter shardFilter,
+            boolean shouldPropagateResourceNotFoundException) {
         final List<Shard> shards = new ArrayList<>();
         ListShardsResponse result;
         String nextToken = null;
 
         do {
-            result = listShards(shardFilter, nextToken);
+            result = listShards(shardFilter, nextToken, shouldPropagateResourceNotFoundException);
 
             if (result == null) {
                 /*
@@ -185,20 +214,19 @@ public class KinesisShardDetector implements ShardDetector {
         return shards;
     }
 
-    private ListShardsResponse listShards(ShardFilter shardFilter, final String nextToken) {
-        final AWSExceptionManager exceptionManager = new AWSExceptionManager();
-        exceptionManager.add(ResourceNotFoundException.class, t -> t);
-        exceptionManager.add(LimitExceededException.class, t -> t);
-        exceptionManager.add(ResourceInUseException.class, t -> t);
-        exceptionManager.add(KinesisException.class, t -> t);
-
+    /**
+     * @param shouldPropagateResourceNotFoundException : used to determine if ResourceNotFoundException should be
+     *      handled by method and return Empty list or propagate the exception.
+     */
+    private ListShardsResponse listShards(ShardFilter shardFilter, final String nextToken,
+            final boolean shouldPropagateResourceNotFoundException) {
         ListShardsRequest.Builder builder = KinesisRequestsBuilder.listShardsRequestBuilder();
         if (StringUtils.isEmpty(nextToken)) {
-            builder = builder.streamName(streamIdentifier.streamName()).shardFilter(shardFilter);
+            builder.streamName(streamIdentifier.streamName()).shardFilter(shardFilter);
+            streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
         } else {
-            builder = builder.nextToken(nextToken);
+            builder.nextToken(nextToken);
         }
-
         final ListShardsRequest request = builder.build();
         log.info("Stream {}: listing shards with list shards request {}", streamIdentifier, request);
 
@@ -211,7 +239,7 @@ public class KinesisShardDetector implements ShardDetector {
                 try {
                     result = getListShardsResponse(request);
                 } catch (ExecutionException e) {
-                    throw exceptionManager.apply(e.getCause());
+                    throw AWS_EXCEPTION_MANAGER.apply(e.getCause());
                 } catch (InterruptedException e) {
                     // TODO: check if this is the correct behavior for Interrupted Exception
                     log.debug("Interrupted exception caught, shutdown initiated, returning null");
@@ -233,9 +261,14 @@ public class KinesisShardDetector implements ShardDetector {
             } catch (ResourceNotFoundException e) {
                 log.warn("Got ResourceNotFoundException when fetching shard list for {}. Stream no longer exists.",
                         streamIdentifier.streamName());
-                return ListShardsResponse.builder().shards(Collections.emptyList())
-                        .nextToken(null)
-                        .build();
+                if (shouldPropagateResourceNotFoundException) {
+                    throw e;
+                }
+                return ListShardsResponse.builder()
+                                         .shards(Collections.emptyList())
+                                         .nextToken(null)
+                                         .build();
+
             } catch (TimeoutException te) {
                 throw new RuntimeException(te);
             }
@@ -275,11 +308,12 @@ public class KinesisShardDetector implements ShardDetector {
 
     @Override
     public List<ChildShard> getChildShards(final String shardId) throws InterruptedException, ExecutionException, TimeoutException {
-        final GetShardIteratorRequest getShardIteratorRequest = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
+        final GetShardIteratorRequest.Builder requestBuilder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
                 .streamName(streamIdentifier.streamName())
                 .shardIteratorType(ShardIteratorType.LATEST)
-                .shardId(shardId)
-                .build();
+                .shardId(shardId);
+        streamIdentifier.streamArnOptional().ifPresent(arn -> requestBuilder.streamARN(arn.toString()));
+        final GetShardIteratorRequest getShardIteratorRequest = requestBuilder.build();
 
         final GetShardIteratorResponse getShardIteratorResponse =
                 FutureUtils.resolveOrCancelFuture(kinesisClient.getShardIterator(getShardIteratorRequest), kinesisRequestTimeout);

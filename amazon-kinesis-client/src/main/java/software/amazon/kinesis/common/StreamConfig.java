@@ -16,11 +16,13 @@
 package software.amazon.kinesis.common;
 
 import lombok.Data;
+import lombok.NonNull;
 import lombok.experimental.Accessors;
 
 @Data
 @Accessors(fluent = true)
 public class StreamConfig {
+    @NonNull
     private final StreamIdentifier streamIdentifier;
     private final InitialPositionInStreamExtended initialPositionInStreamExtended;
     private String consumerArn;

@@ -45,11 +45,11 @@ public class MultiLangDaemonConfig {
     private static final String PROP_PROCESSING_LANGUAGE = "processingLanguage";
     private static final String PROP_MAX_ACTIVE_THREADS = "maxActiveThreads";
 
-    private MultiLangDaemonConfiguration multiLangDaemonConfiguration;
+    private final MultiLangDaemonConfiguration multiLangDaemonConfiguration;
 
-    private ExecutorService executorService;
+    private final ExecutorService executorService;
 
-    private MultiLangRecordProcessorFactory recordProcessorFactory;
+    private final MultiLangRecordProcessorFactory recordProcessorFactory;
 
     /**
      * Constructor.
@@ -165,7 +165,6 @@ public class MultiLangDaemonConfig {
                 propertyStream.close();
             }
         }
-
     }
 
     private static boolean validateProperties(Properties properties) {
@@ -182,12 +181,12 @@ public class MultiLangDaemonConfig {
         log.debug("Value for {} property is {}", PROP_MAX_ACTIVE_THREADS, maxActiveThreads);
         if (maxActiveThreads <= 0) {
             log.info("Using a cached thread pool.");
-            return new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<Runnable>(),
+            return new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(),
                     builder.build());
         } else {
             log.info("Using a fixed thread pool with {} max active threads.", maxActiveThreads);
             return new ThreadPoolExecutor(maxActiveThreads, maxActiveThreads, 0L, TimeUnit.MILLISECONDS,
-                    new LinkedBlockingQueue<Runnable>(), builder.build());
+                    new LinkedBlockingQueue<>(), builder.build());
         }
     }
 

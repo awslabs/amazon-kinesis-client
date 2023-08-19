@@ -15,43 +15,14 @@
 
 package software.amazon.kinesis.processor;
 
-import software.amazon.kinesis.common.InitialPositionInStream;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.common.StreamConfig;
-
-import java.util.List;
-
 /**
- * Interface for stream trackers. This is useful for KCL Workers that need
- * to consume data from multiple streams.
- * KCL will periodically probe this interface to learn about the new and old streams.
+ * Tracker for consuming multiple Kinesis streams.
  */
-public interface MultiStreamTracker {
+public interface MultiStreamTracker extends StreamTracker {
 
-    /**
-     * Returns the list of stream config, to be processed by the current application.
-     * <b>Note that the streams list CAN be changed during the application runtime.</b>
-     * This method will be called periodically by the KCL to learn about the change in streams to process.
-     *
-     * @return List of StreamConfig
-     */
-    List<StreamConfig> streamConfigList();
-
-    /**
-     * Strategy to delete leases of old streams in the lease table.
-     * <b>Note that the strategy CANNOT be changed during the application runtime.</b>
-     *
-     * @return StreamsLeasesDeletionStrategy
-     */
-    FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy();
-
-    /**
-     * The position for getting records from an "orphaned" stream that is in the lease table but not tracked
-     * Default assumes that the stream no longer need to be tracked, so use LATEST for faster shard end.
-     *
-     * <p>Default value: {@link InitialPositionInStream#LATEST}</p>
-     */
-    default InitialPositionInStreamExtended orphanedStreamInitialPositionInStream() {
-        return InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
+    @Override
+    default boolean isMultiStream() {
+        return true;
     }
+
 }

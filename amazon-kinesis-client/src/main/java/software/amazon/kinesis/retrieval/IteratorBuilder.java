@@ -41,11 +41,42 @@ public class IteratorBuilder {
                 ShardIteratorType.AFTER_SEQUENCE_NUMBER);
     }
 
+    /**
+     * Creates a GetShardIteratorRequest builder that uses AT_SEQUENCE_NUMBER ShardIteratorType.
+     *
+     * @param builder         An initial GetShardIteratorRequest builder to be updated.
+     * @param sequenceNumber  The sequence number to restart the request from.
+     * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP.
+     * @return An updated GetShardIteratorRequest.Builder.
+     */
     public static GetShardIteratorRequest.Builder request(GetShardIteratorRequest.Builder builder,
-            String sequenceNumber, InitialPositionInStreamExtended initialPosition) {
+                                                          String sequenceNumber,
+                                                          InitialPositionInStreamExtended initialPosition) {
+        return getShardIteratorRequest(builder, sequenceNumber, initialPosition, ShardIteratorType.AT_SEQUENCE_NUMBER);
+
+    }
+
+    /**
+     * Creates a GetShardIteratorRequest builder that uses AFTER_SEQUENCE_NUMBER ShardIteratorType.
+     *
+     * @param builder         An initial GetShardIteratorRequest builder to be updated.
+     * @param sequenceNumber  The sequence number to restart the request from.
+     * @param initialPosition One of LATEST, TRIM_HORIZON, or AT_TIMESTAMP.
+     * @return An updated GetShardIteratorRequest.Builder.
+     */
+    public static GetShardIteratorRequest.Builder reconnectRequest(GetShardIteratorRequest.Builder builder,
+                                                                   String sequenceNumber,
+                                                                   InitialPositionInStreamExtended initialPosition) {
+        return getShardIteratorRequest(builder, sequenceNumber, initialPosition, ShardIteratorType.AFTER_SEQUENCE_NUMBER);
+    }
+
+    private static GetShardIteratorRequest.Builder getShardIteratorRequest(GetShardIteratorRequest.Builder builder,
+                                                                           String sequenceNumber,
+                                                                           InitialPositionInStreamExtended initialPosition,
+                                                                           ShardIteratorType shardIteratorType) {
         return apply(builder, GetShardIteratorRequest.Builder::shardIteratorType, GetShardIteratorRequest.Builder::timestamp,
                 GetShardIteratorRequest.Builder::startingSequenceNumber, initialPosition, sequenceNumber,
-                ShardIteratorType.AT_SEQUENCE_NUMBER);
+                shardIteratorType);
     }
 
     private final static Map<String, ShardIteratorType> SHARD_ITERATOR_MAPPING;

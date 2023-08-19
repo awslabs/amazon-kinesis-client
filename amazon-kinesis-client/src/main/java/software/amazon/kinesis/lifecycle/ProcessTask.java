@@ -113,7 +113,7 @@ public class ProcessTask implements ConsumerTask {
      */
     @Override
     public TaskResult call() {
-        /**
+        /*
          * NOTE: the difference between appScope and shardScope is, appScope doesn't have shardId as a dimension,
          * therefore all data added to appScope, although from different shard consumer, will be sent to the same metric,
          * which is the app-level MillsBehindLatest metric.
@@ -180,8 +180,6 @@ public class ProcessTask implements ConsumerTask {
         }
     }
 
-
-
     private List<KinesisClientRecord> deaggregateAnyKplRecords(List<KinesisClientRecord> records) {
         if (shard == null) {
             return aggregatorUtil.deaggregate(records);
@@ -214,8 +212,10 @@ public class ProcessTask implements ConsumerTask {
         log.debug("Calling application processRecords() with {} records from {}", records.size(),
                 shardInfoId);
 
-        final ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder().records(records).cacheExitTime(input.cacheExitTime()).cacheEntryTime(input.cacheEntryTime())
-                .checkpointer(recordProcessorCheckpointer).millisBehindLatest(input.millisBehindLatest()).build();
+        final ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder().records(records)
+                .cacheExitTime(input.cacheExitTime()).cacheEntryTime(input.cacheEntryTime())
+                .isAtShardEnd(input.isAtShardEnd()).checkpointer(recordProcessorCheckpointer)
+                .millisBehindLatest(input.millisBehindLatest()).build();
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
         shardInfo.streamIdentifierSerOpt()
@@ -243,28 +243,6 @@ public class ProcessTask implements ConsumerTask {
      */
     private boolean shouldCallProcessRecords(List<KinesisClientRecord> records) {
         return (!records.isEmpty()) || shouldCallProcessRecordsEvenForEmptyRecordList;
-    }
-
-    /**
-     * Emits metrics, and sleeps if there are no records available
-     *
-     * @param startTimeMillis
-     *            the time when the task started
-     */
-    private void handleNoRecords(long startTimeMillis) {
-        log.debug("Kinesis didn't return any records for shard {}", shardInfoId);
-
-        long sleepTimeMillis = idleTimeInMilliseconds - (System.currentTimeMillis() - startTimeMillis);
-        if (sleepTimeMillis > 0) {
-            sleepTimeMillis = Math.max(sleepTimeMillis, idleTimeInMilliseconds);
-            try {
-                log.debug("Sleeping for {} ms since there were no new records in shard {}", sleepTimeMillis,
-                        shardInfoId);
-                Thread.sleep(sleepTimeMillis);
-            } catch (InterruptedException e) {
-                log.debug("ShardId {}: Sleep was interrupted", shardInfoId);
-            }
-        }
     }
 
     @Override

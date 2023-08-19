@@ -35,10 +35,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.atMost;
-import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.*;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -64,6 +65,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.runners.MockitoJUnitRunner;
 
+import org.mockito.stubbing.OngoingStubbing;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -102,6 +104,9 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.AutoDetectionAndDeferredDeletionStrategy;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.NoLeaseDeletionStrategy;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.ProvidedStreamsDeferredDeletionStrategy;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
@@ -121,7 +126,7 @@ public class SchedulerTest {
     private final String applicationName = "applicationName";
     private final String streamName = "streamName";
     private final String namespace = "testNamespace";
-    private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 5 * 1000L;
+    private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 1000L;
     private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
     private static final long LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 3 * 1000L;
 
@@ -172,7 +177,8 @@ public class SchedulerTest {
         shardRecordProcessorFactory = new TestShardRecordProcessorFactory();
 
         checkpointConfig = new CheckpointConfig().checkpointFactory(new TestKinesisCheckpointFactory());
-        coordinatorConfig = new CoordinatorConfig(applicationName).parentShardPollIntervalMillis(100L).workerStateChangeListener(workerStateChangeListener);
+        coordinatorConfig = new CoordinatorConfig(applicationName).parentShardPollIntervalMillis(100L)
+                .workerStateChangeListener(workerStateChangeListener);
         leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, streamName,
                 workerIdentifier).leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, false));
         lifecycleConfig = new LifecycleConfig();
@@ -184,7 +190,8 @@ public class SchedulerTest {
         when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
         when(shardSyncTaskManager.hierarchicalShardSyncer()).thenReturn(new HierarchicalShardSyncer());
         when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
-        when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(StreamConfig.class), any(MetricsFactory.class))).thenReturn(recordsPublisher);
+        when(retrievalFactory.createGetRecordsCache(any(ShardInfo.class), any(StreamConfig.class),
+                any(MetricsFactory.class))).thenReturn(recordsPublisher);
         when(shardDetector.streamIdentifier()).thenReturn(mock(StreamIdentifier.class));
 
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
@@ -317,7 +324,7 @@ public class SchedulerTest {
     }
 
     @Test
-    public final void testMultiStreamInitialization() throws ProvisionedThroughputException, DependencyException {
+    public final void testMultiStreamInitialization() {
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
         leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient,
@@ -325,9 +332,9 @@ public class SchedulerTest {
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
         scheduler.initialize();
-        shardDetectorMap.values().stream()
+        shardDetectorMap.values()
                 .forEach(shardDetector -> verify(shardDetector, times(1)).listShards());
-        shardSyncTaskManagerMap.values().stream()
+        shardSyncTaskManagerMap.values()
                 .forEach(shardSyncTM -> verify(shardSyncTM, times(1)).hierarchicalShardSyncer());
     }
 
@@ -343,16 +350,15 @@ public class SchedulerTest {
         // Note : As of today we retry for all streams in the next attempt. Hence the retry for each stream will vary.
         //        At the least we expect 2 retries for each stream. Since there are 4 streams, we expect at most
         //        the number of calls to be 5.
-        shardDetectorMap.values().stream()
-                .forEach(shardDetector -> verify(shardDetector, atLeast(2)).listShards());
-        shardDetectorMap.values().stream()
-                .forEach(shardDetector -> verify(shardDetector, atMost(5)).listShards());
-        shardSyncTaskManagerMap.values().stream()
-                .forEach(shardSyncTM -> verify(shardSyncTM, atLeast(2)).hierarchicalShardSyncer());
-        shardSyncTaskManagerMap.values().stream()
-                .forEach(shardSyncTM -> verify(shardSyncTM, atMost(5)).hierarchicalShardSyncer());
+        shardDetectorMap.values().forEach(shardDetector -> {
+            verify(shardDetector, atLeast(2)).listShards();
+            verify(shardDetector, atMost(5)).listShards();
+        });
+        shardSyncTaskManagerMap.values().forEach(shardSyncTM -> {
+            verify(shardSyncTM, atLeast(2)).hierarchicalShardSyncer();
+            verify(shardSyncTM, atMost(5)).hierarchicalShardSyncer();
+        });
     }
-
 
     @Test
     public final void testMultiStreamConsumersAreBuiltOncePerAccountStreamShard() throws KinesisClientLibException {
@@ -385,13 +391,12 @@ public class SchedulerTest {
         schedulerSpy.runProcessLoop();
         schedulerSpy.runProcessLoop();
 
-        initialShardInfo.stream().forEach(
+        initialShardInfo.forEach(
                 shardInfo -> verify(schedulerSpy).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), same(leaseCleanupManager)));
-        firstShardInfo.stream().forEach(
+        firstShardInfo.forEach(
                 shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager)));
-        secondShardInfo.stream().forEach(
+        secondShardInfo.forEach(
                 shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager)));
-
     }
 
     @Test
@@ -415,7 +420,7 @@ public class SchedulerTest {
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
         Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
         Assert.assertTrue("SyncedStreams should be empty", syncedStreams.isEmpty());
-        Assert.assertEquals(new HashSet(streamConfigList1), new HashSet(scheduler.currentStreamConfigMap().values()));
+        assertEquals(new HashSet<>(streamConfigList1), new HashSet<>(scheduler.currentStreamConfigMap().values()));
     }
 
     @Test
@@ -447,8 +452,7 @@ public class SchedulerTest {
     }
 
     @Test
-    public final void testMultiStreamSyncFromTableDefaultInitPos()
-            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+    public final void testMultiStreamSyncFromTableDefaultInitPos() {
         // Streams in lease table but not tracked by multiStreamTracker
         List<MultiStreamLease> leasesInTable = IntStream.range(1, 3).mapToObj(streamId -> new MultiStreamLease()
                 .streamIdentifier(
@@ -456,7 +460,7 @@ public class SchedulerTest {
                 .shardId("some_random_shard_id"))
                 .collect(Collectors.toCollection(LinkedList::new));
         // Include a stream that is already tracked by multiStreamTracker, just to make sure we will not touch this stream config later
-        leasesInTable.add(new MultiStreamLease().streamIdentifier("acc1:stream1:1").shardId("some_random_shard_id"));
+        leasesInTable.add(new MultiStreamLease().streamIdentifier("123456789012:stream1:1").shardId("some_random_shard_id"));
 
         // Expected StreamConfig after running syncStreamsFromLeaseTableOnAppInit
         // By default, Stream not present in multiStreamTracker will have initial position of LATEST
@@ -474,13 +478,12 @@ public class SchedulerTest {
                 metricsConfig, processorConfig, retrievalConfig);
         scheduler.syncStreamsFromLeaseTableOnAppInit(leasesInTable);
         Map<StreamIdentifier, StreamConfig> expectedConfigMap = expectedConfig.stream().collect(Collectors.toMap(
-                sc -> sc.streamIdentifier(), sc -> sc));
+                StreamConfig::streamIdentifier, Function.identity()));
         Assert.assertEquals(expectedConfigMap, scheduler.currentStreamConfigMap());
     }
 
     @Test
-    public final void testMultiStreamSyncFromTableCustomInitPos()
-            throws DependencyException, ProvisionedThroughputException, InvalidStateException {
+    public final void testMultiStreamSyncFromTableCustomInitPos() {
         Date testTimeStamp = new Date();
 
         // Streams in lease table but not tracked by multiStreamTracker
@@ -490,7 +493,7 @@ public class SchedulerTest {
                 .shardId("some_random_shard_id"))
                 .collect(Collectors.toCollection(LinkedList::new));
         // Include a stream that is already tracked by multiStreamTracker, just to make sure we will not touch this stream config later
-        leasesInTable.add(new MultiStreamLease().streamIdentifier("acc1:stream1:1").shardId("some_random_shard_id"));
+        leasesInTable.add(new MultiStreamLease().streamIdentifier("123456789012:stream1:1").shardId("some_random_shard_id"));
 
         // Expected StreamConfig after running syncStreamsFromLeaseTableOnAppInit
         // Stream not present in multiStreamTracker will have initial position specified by orphanedStreamInitialPositionInStream
@@ -645,7 +648,8 @@ public class SchedulerTest {
         testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(true, null);
     }
 
-    private final void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(boolean expectSyncedStreams, Set<StreamConfig> currentStreamConfigMapOverride)
+    private void testMultiStreamStaleStreamsAreDeletedAfterDefermentPeriod(boolean expectSyncedStreams,
+            Set<StreamConfig> currentStreamConfigMapOverride)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
         List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
                 StreamIdentifier.multiStreamInstance(
@@ -725,19 +729,12 @@ public class SchedulerTest {
         testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(true, false);
     }
 
-    private final void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(boolean expectPendingStreamsForDeletion,
+    private void testMultiStreamNewStreamsAreSyncedAndStaleStreamsAreNotDeletedImmediately(
+            boolean expectPendingStreamsForDeletion,
             boolean onlyStreamsNoLeasesDeletion)
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
-        List<StreamConfig> streamConfigList1 = IntStream.range(1, 5).mapToObj(streamId -> new StreamConfig(
-                StreamIdentifier.multiStreamInstance(
-                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
-                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
-                .collect(Collectors.toCollection(LinkedList::new));
-        List<StreamConfig> streamConfigList2 = IntStream.range(3, 7).mapToObj(streamId -> new StreamConfig(
-                StreamIdentifier.multiStreamInstance(
-                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
-                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST)))
-                .collect(Collectors.toCollection(LinkedList::new));
+        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1, 5);
+        List<StreamConfig> streamConfigList2 = createDummyStreamConfigList(3, 7);
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
         when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList1, streamConfigList2);
@@ -751,7 +748,7 @@ public class SchedulerTest {
                         Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)))
                 .collect(Collectors.toCollection(HashSet::new));
 
-        if(onlyStreamsNoLeasesDeletion) {
+        if (onlyStreamsNoLeasesDeletion) {
             expectedSyncedStreams = IntStream.concat(IntStream.range(1, 3), IntStream.range(5, 7))
                     .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
                             Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)))
@@ -765,7 +762,7 @@ public class SchedulerTest {
 
         Assert.assertEquals(expectedSyncedStreams, syncedStreams);
         List<StreamConfig> expectedCurrentStreamConfigs;
-        if(onlyStreamsNoLeasesDeletion) {
+        if (onlyStreamsNoLeasesDeletion) {
             expectedCurrentStreamConfigs = IntStream.range(3, 7).mapToObj(streamId -> new StreamConfig(
                     StreamIdentifier.multiStreamInstance(
                             Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
@@ -782,6 +779,75 @@ public class SchedulerTest {
                 Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
         Assert.assertEquals(expectPendingStreamsForDeletion ? expectedPendingStreams: Sets.newHashSet(),
                 scheduler.staleStreamDeletionMap().keySet());
+    }
+
+
+    @Test
+    public void testKinesisStaleDeletedStreamCleanup() throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1, 6);
+        List<StreamConfig> streamConfigList2 = createDummyStreamConfigList(1, 4);
+
+        prepareForStaleDeletedStreamCleanupTests(streamConfigList1, streamConfigList2);
+
+        // when KCL starts it starts with tracking 5 stream
+        assertEquals(Sets.newHashSet(streamConfigList1), Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        assertEquals(0, scheduler.staleStreamDeletionMap().size());
+
+        // 2 Streams are no longer needed to be consumed
+        Set<StreamIdentifier> syncedStreams1 = scheduler.checkAndSyncStreamShardsAndLeases();
+        assertEquals(Sets.newHashSet(streamConfigList1), Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        assertEquals(createDummyStreamConfigList(4, 6).stream()
+                                                      .map(StreamConfig::streamIdentifier)
+                                                      .collect(Collectors.toSet()), scheduler.staleStreamDeletionMap()
+                                                                                             .keySet());
+        assertEquals(0, syncedStreams1.size());
+
+        StreamConfig deletedStreamConfig = createDummyStreamConfig(5);
+        // One stream is deleted from Kinesis side
+        scheduler.deletedStreamListProvider().add(deletedStreamConfig.streamIdentifier());
+
+        Set<StreamIdentifier> syncedStreams2 = scheduler.checkAndSyncStreamShardsAndLeases();
+
+        Set<StreamConfig> expectedCurrentStreamConfigs = Sets.newHashSet(streamConfigList1);
+        expectedCurrentStreamConfigs.remove(deletedStreamConfig);
+
+        //assert kinesis deleted stream is cleaned up from KCL in memory state.
+        assertEquals(expectedCurrentStreamConfigs, Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+        assertEquals(Sets.newHashSet(createDummyStreamConfig(4).streamIdentifier()),
+                Sets.newHashSet(scheduler.staleStreamDeletionMap().keySet()));
+        assertEquals(1, syncedStreams2.size());
+        assertEquals(0, scheduler.deletedStreamListProvider().purgeAllDeletedStream().size());
+
+        verify(multiStreamTracker, times(3)).streamConfigList();
+
+    }
+
+    // Tests validate that no cleanup of stream is done if its still tracked in multiStreamTracker
+    @Test
+    public void testKinesisStaleDeletedStreamNoCleanUpForTrackedStream()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        List<StreamConfig> streamConfigList1 = createDummyStreamConfigList(1, 6);
+        prepareForStaleDeletedStreamCleanupTests(streamConfigList1);
+
+        scheduler.deletedStreamListProvider().add(createDummyStreamConfig(3).streamIdentifier());
+
+        Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
+
+        assertEquals(0, syncedStreams.size());
+        assertEquals(0, scheduler.staleStreamDeletionMap().size());
+        assertEquals(Sets.newHashSet(streamConfigList1), Sets.newHashSet(scheduler.currentStreamConfigMap().values()));
+    }
+
+    //Creates list of upperBound-lowerBound no of dummy StreamConfig
+    private List<StreamConfig> createDummyStreamConfigList(int lowerBound, int upperBound) {
+        return IntStream.range(lowerBound, upperBound).mapToObj(this::createDummyStreamConfig)
+                 .collect(Collectors.toCollection(LinkedList::new));
+    }
+    private StreamConfig createDummyStreamConfig(int streamId){
+        return new StreamConfig(
+                StreamIdentifier.multiStreamInstance(
+                        Joiner.on(":").join(streamId * 111111111, "multiStreamTest-" + streamId, streamId * 12345)),
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));
     }
 
     @Test
@@ -896,6 +962,72 @@ public class SchedulerTest {
 
         verify(eventFactory, times(1)).rejectedTaskEvent(eq(executorStateEvent), any());
         verify(rejectedTaskEvent, times(1)).accept(any());
+    }
+
+    @Test
+    public void testUpdateStreamMapIfMissingLatestStream() throws Exception {
+        prepareMultiStreamScheduler(createDummyStreamConfigList(1, 6));
+        scheduler.checkAndSyncStreamShardsAndLeases();
+        verify(scheduler).syncStreamsFromLeaseTableOnAppInit(any());
+    }
+
+    @Test
+    public void testNoDdbLookUpAsStreamMapContainsAllStreams() throws Exception {
+        final List<StreamConfig> streamConfigList = createDummyStreamConfigList(1, 6);
+        prepareMultiStreamScheduler(streamConfigList);
+        // Populate currentStreamConfigMap to simulate that the leader has the latest streams.
+        streamConfigList.forEach(s -> scheduler.currentStreamConfigMap().put(s.streamIdentifier(), s));
+        scheduler.checkAndSyncStreamShardsAndLeases();
+        verify(scheduler, never()).syncStreamsFromLeaseTableOnAppInit(any());
+    }
+
+    @Test
+    public void testNoDdbLookUpForNewStreamAsLeaderFlippedTheShardSyncFlags() throws Exception {
+        prepareMultiStreamScheduler();
+        scheduler.checkAndSyncStreamShardsAndLeases();
+        verify(scheduler, never()).syncStreamsFromLeaseTableOnAppInit(any());
+
+        final List<StreamConfig> streamConfigList = createDummyStreamConfigList(1, 6);
+        when(multiStreamTracker.streamConfigList()).thenReturn(streamConfigList);
+        scheduler.checkAndSyncStreamShardsAndLeases();
+
+        // Since the sync path has been executed once before the DDB sync flags should be flipped
+        // to prevent doing DDB lookups in the subsequent runs.
+        verify(scheduler, never()).syncStreamsFromLeaseTableOnAppInit(any());
+        assertEquals(0, streamConfigList.stream()
+                .filter(s -> !scheduler.currentStreamConfigMap().containsKey(s.streamIdentifier())).count());
+    }
+
+    @SafeVarargs
+    private final void prepareMultiStreamScheduler(List<StreamConfig>... streamConfigs) {
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig));
+        if (streamConfigs.length > 0) {
+            stubMultiStreamTracker(streamConfigs);
+        }
+        when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
+    }
+
+    @SafeVarargs
+    private final void prepareForStaleDeletedStreamCleanupTests(List<StreamConfig>... streamConfigs) {
+        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy()).thenReturn(new AutoDetectionAndDeferredDeletionStrategy() {
+            @Override
+            public Duration waitPeriodToDeleteFormerStreams() {
+                return Duration.ofDays(1);
+            }
+        });
+        stubMultiStreamTracker(streamConfigs);
+        prepareMultiStreamScheduler();
+    }
+
+    @SafeVarargs
+    private final void stubMultiStreamTracker(List<StreamConfig>... streamConfigs) {
+        OngoingStubbing<List<StreamConfig>> stub = when(multiStreamTracker.streamConfigList());
+        for (List<StreamConfig> streamConfig : streamConfigs) {
+            stub = stub.thenReturn(streamConfig);
+        }
     }
 
     /*private void runAndTestWorker(int numShards, int threadPoolSize) throws Exception {
@@ -1116,8 +1248,8 @@ public class SchedulerTest {
 
         @Override
         public ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory,
-                StreamConfig streamConfig) {
-            if(shouldReturnDefaultShardSyncTaskmanager) {
+                StreamConfig streamConfig, DeletedStreamListProvider deletedStreamListProvider) {
+            if (shouldReturnDefaultShardSyncTaskmanager) {
                 return shardSyncTaskManager;
             }
             final ShardSyncTaskManager shardSyncTaskManager = mock(ShardSyncTaskManager.class);
@@ -1129,7 +1261,7 @@ public class SchedulerTest {
             when(shardSyncTaskManager.hierarchicalShardSyncer()).thenReturn(hierarchicalShardSyncer);
             when(shardDetector.streamIdentifier()).thenReturn(streamConfig.streamIdentifier());
             when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
-            if(shardSyncFirstAttemptFailure) {
+            if (shardSyncFirstAttemptFailure) {
                 when(shardDetector.listShards())
                         .thenThrow(new RuntimeException("Service Exception"))
                         .thenReturn(Collections.EMPTY_LIST);
@@ -1166,21 +1298,20 @@ public class SchedulerTest {
         }
     }
 
-    // TODO: Upgrade to mockito >= 2.7.13, and use Spy on MultiStreamTracker to directly access the default methods without implementing TestMultiStreamTracker class
+    // TODO: Upgrade to mockito >= 2.7.13, and use Spy on MultiStreamTracker to directly access the default methods
+    //  without implementing TestMultiStreamTracker class
     @NoArgsConstructor
     private class TestMultiStreamTracker implements MultiStreamTracker {
         @Override
-        public List<StreamConfig> streamConfigList(){
-            return new ArrayList<StreamConfig>() {{
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc1:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
-                        InitialPositionInStream.LATEST)));
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc1:stream2:2"), InitialPositionInStreamExtended.newInitialPosition(
-                        InitialPositionInStream.LATEST)));
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc2:stream1:1"), InitialPositionInStreamExtended.newInitialPosition(
-                        InitialPositionInStream.LATEST)));
-                add(new StreamConfig(StreamIdentifier.multiStreamInstance("acc2:stream2:3"), InitialPositionInStreamExtended.newInitialPosition(
-                        InitialPositionInStream.LATEST)));
-            }};
+        public List<StreamConfig> streamConfigList() {
+            final InitialPositionInStreamExtended latest =
+                    InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
+
+            return Arrays.asList(
+                    new StreamConfig(StreamIdentifier.multiStreamInstance("123456789012:stream1:1"), latest),
+                    new StreamConfig(StreamIdentifier.multiStreamInstance("123456789012:stream2:2"), latest),
+                    new StreamConfig(StreamIdentifier.multiStreamInstance("210987654321:stream1:1"), latest),
+                    new StreamConfig(StreamIdentifier.multiStreamInstance("210987654321:stream2:3"), latest));
         }
 
         @Override

@@ -37,9 +37,9 @@ public class CheckpointerTest {
 
     @Test
     public final void testInitialSetCheckpoint() throws Exception {
-    	String sequenceNumber = "1";
+        String sequenceNumber = "1";
         String shardId = "myShardId";
-    	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(sequenceNumber);
+        ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(sequenceNumber);
         checkpoint.setCheckpoint(shardId, new ExtendedSequenceNumber(sequenceNumber), testConcurrencyToken);
         ExtendedSequenceNumber registeredCheckpoint = checkpoint.getCheckpoint(shardId);
         Assert.assertEquals(extendedSequenceNumber, registeredCheckpoint);
@@ -49,8 +49,8 @@ public class CheckpointerTest {
     public final void testAdvancingSetCheckpoint() throws Exception {
         String shardId = "myShardId";
         for (Integer i = 0; i < 10; i++) {
-        	String sequenceNumber = i.toString();
-        	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(sequenceNumber);
+            String sequenceNumber = i.toString();
+            ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(sequenceNumber);
             checkpoint.setCheckpoint(shardId, new ExtendedSequenceNumber(sequenceNumber), testConcurrencyToken);
             ExtendedSequenceNumber registeredCheckpoint = checkpoint.getCheckpoint(shardId);
             Assert.assertEquals(extendedSequenceNumber, registeredCheckpoint);
@@ -67,7 +67,7 @@ public class CheckpointerTest {
         String checkpointValue = "12345";
         String shardId = "testShardId-1";
         String concurrencyToken = "token-1";
-    	ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(checkpointValue);
+        ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(checkpointValue);
         checkpoint.setCheckpoint(shardId, new ExtendedSequenceNumber(checkpointValue), concurrencyToken);
         Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpoint(shardId));
         Assert.assertEquals(extendedSequenceNumber, checkpoint.getCheckpointObject(shardId).checkpoint());

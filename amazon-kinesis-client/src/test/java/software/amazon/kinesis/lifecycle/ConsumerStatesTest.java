@@ -40,7 +40,6 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
@@ -88,11 +87,7 @@ public class ConsumerStatesTest {
     @Mock
     private ShutdownNotification shutdownNotification;
     @Mock
-    private InitialPositionInStreamExtended initialPositionInStream;
-    @Mock
     private RecordsPublisher recordsPublisher;
-    @Mock
-    private KinesisAsyncClient kinesisClient;
     @Mock
     private ShardDetector shardDetector;
     @Mock
@@ -122,7 +117,8 @@ public class ConsumerStatesTest {
 
     @Before
     public void setup() {
-        argument = new ShardConsumerArgument(shardInfo, StreamIdentifier.singleStreamInstance(STREAM_NAME), leaseCoordinator, executorService, recordsPublisher,
+        argument = new ShardConsumerArgument(shardInfo, StreamIdentifier.singleStreamInstance(STREAM_NAME),
+                leaseCoordinator, executorService, recordsPublisher,
                 shardRecordProcessor, checkpointer, recordProcessorCheckpointer, parentShardPollIntervalMillis,
                 taskBackoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, listShardsBackoffTimeInMillis,
                 maxListShardsRetryAttempts, shouldCallProcessRecordsEvenForEmptyRecordList, idleTimeInMillis,
@@ -135,7 +131,7 @@ public class ConsumerStatesTest {
         when(recordProcessorCheckpointer.checkpointer()).thenReturn(checkpointer);
     }
 
-    private static final Class<LeaseRefresher> LEASE_REFRESHER_CLASS = (Class<LeaseRefresher>) (Class<?>) LeaseRefresher.class;
+    private static final Class<LeaseRefresher> LEASE_REFRESHER_CLASS = LeaseRefresher.class;
 
     @Test
     public void blockOnParentStateTest() {
@@ -432,7 +428,6 @@ public class ConsumerStatesTest {
                 }
             }
             this.matchingField = matching;
-
         }
 
         @Override

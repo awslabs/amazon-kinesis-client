@@ -28,16 +28,15 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
-import software.amazon.kinesis.multilang.MessageReader;
 import software.amazon.kinesis.multilang.messages.Message;
 import software.amazon.kinesis.multilang.messages.StatusMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class MessageReaderTest {
 
-    private static final String shardId = "shard-123";
+    private static final String SHARD_ID = "shard-123";
 
-    /*
+    /**
      * This line is based on the definition of the protocol for communication between the KCL record processor and
      * the client's process.
      */
@@ -45,7 +44,7 @@ public class MessageReaderTest {
         return String.format("{\"action\":\"checkpoint\", \"checkpoint\":\"%s\"}", sequenceNumber);
     }
 
-    /*
+    /**
      * This line is based on the definition of the protocol for communication between the KCL record processor and
      * the client's process.
      */
@@ -80,10 +79,9 @@ public class MessageReaderTest {
         String[] responseFors = new String[] { "initialize", "processRecords", "processRecords", "shutdown" };
         InputStream stream = buildInputStreamOfGoodInput(sequenceNumbers, responseFors);
         MessageReader reader =
-                new MessageReader().initialize(stream, shardId, new ObjectMapper(), Executors.newCachedThreadPool());
+                new MessageReader().initialize(stream, SHARD_ID, new ObjectMapper(), Executors.newCachedThreadPool());
 
         for (String responseFor : responseFors) {
-            StatusMessage statusMessage = null;
             try {
                 Message message = reader.getNextMessageFromSTDOUT().get();
                 if (message instanceof StatusMessage) {
@@ -103,14 +101,14 @@ public class MessageReaderTest {
         InputStream stream = buildInputStreamOfGoodInput(sequenceNumbers, responseFors);
 
         MessageReader reader =
-                new MessageReader().initialize(stream, shardId, new ObjectMapper(), Executors.newCachedThreadPool());
+                new MessageReader().initialize(stream, SHARD_ID, new ObjectMapper(), Executors.newCachedThreadPool());
         Future<Boolean> drainFuture = reader.drainSTDOUT();
         Boolean drainResult = drainFuture.get();
         Assert.assertNotNull(drainResult);
         Assert.assertTrue(drainResult);
     }
 
-    /*
+    /**
      * readValue should fail safely and just continue looping
      */
     @Test
@@ -135,7 +133,7 @@ public class MessageReaderTest {
         }
 
         MessageReader reader =
-                new MessageReader().initialize(bufferReader, shardId, new ObjectMapper(),
+                new MessageReader().initialize(bufferReader, SHARD_ID, new ObjectMapper(),
                         Executors.newCachedThreadPool());
 
         try {
@@ -150,7 +148,7 @@ public class MessageReaderTest {
     public void messageReaderBuilderTest() {
         InputStream stream = new ByteArrayInputStream("".getBytes());
         MessageReader reader =
-                new MessageReader().initialize(stream, shardId, new ObjectMapper(), Executors.newCachedThreadPool());
+                new MessageReader().initialize(stream, SHARD_ID, new ObjectMapper(), Executors.newCachedThreadPool());
         Assert.assertNotNull(reader);
     }
 
@@ -159,7 +157,7 @@ public class MessageReaderTest {
         BufferedReader input = Mockito.mock(BufferedReader.class);
         Mockito.doThrow(IOException.class).when(input).readLine();
         MessageReader reader =
-                new MessageReader().initialize(input, shardId, new ObjectMapper(), Executors.newCachedThreadPool());
+                new MessageReader().initialize(input, SHARD_ID, new ObjectMapper(), Executors.newCachedThreadPool());
 
         Future<Message> readTask = reader.getNextMessageFromSTDOUT();
 
@@ -177,7 +175,7 @@ public class MessageReaderTest {
     public void noMoreMessagesTest() throws InterruptedException {
         InputStream stream = new ByteArrayInputStream("".getBytes());
         MessageReader reader =
-                new MessageReader().initialize(stream, shardId, new ObjectMapper(), Executors.newCachedThreadPool());
+                new MessageReader().initialize(stream, SHARD_ID, new ObjectMapper(), Executors.newCachedThreadPool());
         Future<Message> future = reader.getNextMessageFromSTDOUT();
 
         try {

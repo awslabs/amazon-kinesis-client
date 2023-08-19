@@ -32,35 +32,30 @@ import org.mockito.Mockito;
 
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
-import software.amazon.kinesis.multilang.MessageWriter;
-import software.amazon.kinesis.multilang.messages.LeaseLostMessage;
 import software.amazon.kinesis.multilang.messages.Message;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 import static org.mockito.Mockito.verify;
 
 public class MessageWriterTest {
 
-    private static final String shardId = "shard-123";
+    private static final String SHARD_ID = "shard-123";
     MessageWriter messageWriter;
     OutputStream stream;
 
     @Rule
     public final ExpectedException thrown = ExpectedException.none();
 
-    // ExecutorService executor;
-
     @Before
     public void setup() {
         stream = Mockito.mock(OutputStream.class);
         messageWriter =
-                new MessageWriter().initialize(stream, shardId, new ObjectMapper(), Executors.newCachedThreadPool());
+                new MessageWriter().initialize(stream, SHARD_ID, new ObjectMapper(), Executors.newCachedThreadPool());
     }
 
     /*
@@ -86,7 +81,7 @@ public class MessageWriterTest {
 
     @Test
     public void writeInitializeMessageTest() throws IOException, InterruptedException, ExecutionException {
-        Future<Boolean> future = this.messageWriter.writeInitializeMessage(InitializationInput.builder().shardId(shardId).build());
+        Future<Boolean> future = this.messageWriter.writeInitializeMessage(InitializationInput.builder().shardId(SHARD_ID).build());
         future.get();
         verify(this.stream, Mockito.atLeastOnce()).write(Mockito.any(byte[].class), Mockito.anyInt(),
                 Mockito.anyInt());
@@ -131,20 +126,20 @@ public class MessageWriterTest {
     @Test
     public void streamIOExceptionTest() throws IOException, InterruptedException, ExecutionException {
         Mockito.doThrow(IOException.class).when(stream).flush();
-        Future<Boolean> initializeTask = this.messageWriter.writeInitializeMessage(InitializationInput.builder().shardId(shardId).build());
+        Future<Boolean> initializeTask = this.messageWriter.writeInitializeMessage(InitializationInput.builder().shardId(SHARD_ID).build());
         Boolean result = initializeTask.get();
         Assert.assertNotNull(result);
         Assert.assertFalse(result);
     }
 
     @Test
-    public void objectMapperFails() throws JsonProcessingException, InterruptedException, ExecutionException {
+    public void objectMapperFails() throws JsonProcessingException {
         thrown.expect(RuntimeException.class);
         thrown.expectMessage("Encountered I/O error while writing LeaseLostMessage action to subprocess");
 
         ObjectMapper mapper = Mockito.mock(ObjectMapper.class);
         Mockito.doThrow(JsonProcessingException.class).when(mapper).writeValueAsString(Mockito.any(Message.class));
-        messageWriter = new MessageWriter().initialize(stream, shardId, mapper, Executors.newCachedThreadPool());
+        messageWriter = new MessageWriter().initialize(stream, SHARD_ID, mapper, Executors.newCachedThreadPool());
 
         messageWriter.writeLeaseLossMessage(LeaseLostInput.builder().build());
     }
@@ -157,7 +152,7 @@ public class MessageWriterTest {
         Assert.assertFalse(this.messageWriter.isOpen());
         try {
             // Any message should fail
-            this.messageWriter.writeInitializeMessage(InitializationInput.builder().shardId(shardId).build());
+            this.messageWriter.writeInitializeMessage(InitializationInput.builder().shardId(SHARD_ID).build());
             Assert.fail("MessageWriter should be closed and unable to write.");
         } catch (IllegalStateException e) {
             // This should happen.

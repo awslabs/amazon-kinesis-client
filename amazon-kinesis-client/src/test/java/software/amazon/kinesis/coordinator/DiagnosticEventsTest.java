@@ -86,7 +86,7 @@ public class DiagnosticEventsTest {
         assertEquals(event.getLargestPoolSize(), largestPoolSize);
         assertEquals(event.getMaximumPoolSize(), maximumPoolSize);
         assertEquals(event.getLeasesOwned(), leaseAssignments.size());
-        assertEquals(event.getCurrentQueueSize(),0);
+        assertEquals(0, event.getCurrentQueueSize());
 
         verify(defaultHandler, times(1)).visit(event);
     }
@@ -110,7 +110,7 @@ public class DiagnosticEventsTest {
         assertEquals(event.getExecutorStateEvent().getLargestPoolSize(), largestPoolSize);
         assertEquals(event.getExecutorStateEvent().getMaximumPoolSize(), maximumPoolSize);
         assertEquals(event.getExecutorStateEvent().getLeasesOwned(), leaseAssignments.size());
-        assertEquals(event.getExecutorStateEvent().getCurrentQueueSize(),0);
+        assertEquals(0, event.getExecutorStateEvent().getCurrentQueueSize());
         assertTrue(event.getThrowable() instanceof TestRejectedTaskException);
 
         verify(defaultHandler, times(1)).visit(event);
@@ -136,7 +136,7 @@ public class DiagnosticEventsTest {
         assertEquals(executorStateEvent.getLargestPoolSize(), largestPoolSize);
         assertEquals(executorStateEvent.getMaximumPoolSize(), maximumPoolSize);
         assertEquals(executorStateEvent.getLeasesOwned(), leaseAssignments.size());
-        assertEquals(executorStateEvent.getCurrentQueueSize(),0);
+        assertEquals(0, executorStateEvent.getCurrentQueueSize());
 
         RejectedTaskEvent rejectedTaskEvent = factory.rejectedTaskEvent(executorStateEvent,
                 new TestRejectedTaskException());
@@ -145,7 +145,7 @@ public class DiagnosticEventsTest {
         assertEquals(rejectedTaskEvent.getExecutorStateEvent().getLargestPoolSize(), largestPoolSize);
         assertEquals(rejectedTaskEvent.getExecutorStateEvent().getMaximumPoolSize(), maximumPoolSize);
         assertEquals(rejectedTaskEvent.getExecutorStateEvent().getLeasesOwned(), leaseAssignments.size());
-        assertEquals(rejectedTaskEvent.getExecutorStateEvent().getCurrentQueueSize(),0);
+        assertEquals(0, rejectedTaskEvent.getExecutorStateEvent().getCurrentQueueSize());
         assertTrue(rejectedTaskEvent.getThrowable() instanceof TestRejectedTaskException);
     }
 

@@ -47,6 +47,16 @@ public interface ShardDetector {
     List<Shard> listShards();
 
     /**
+     * This method behaves exactly similar to listShards except the fact that this does not consume and throw
+     * ResourceNotFoundException instead of returning empty list.
+     *
+     * @return Shards
+     */
+    default List<Shard> listShardsWithoutConsumingResourceNotFoundException() {
+        throw new UnsupportedOperationException("listShardsWithoutConsumingResourceNotFoundException not implemented");
+    }
+
+    /**
      * List shards with shard filter.
      *
      * @param  ShardFilter
