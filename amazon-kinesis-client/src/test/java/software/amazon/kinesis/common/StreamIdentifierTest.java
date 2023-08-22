@@ -44,7 +44,8 @@ public class StreamIdentifierTest {
                 "123456789012:stream-name:", // missing creation epoch
                 "123456789012:stream-name:-123", // negative creation epoch
                 "123456789012:stream-name:abc", // non-numeric creation epoch
-                ""
+                "",
+                "::" // missing account id, stream name, and epoch
         )) {
             try {
                 StreamIdentifier.multiStreamInstance(pattern);
