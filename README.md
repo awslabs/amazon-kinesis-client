@@ -6,6 +6,8 @@ The **Amazon Kinesis Client Library for Java** (Amazon KCL) enables Java develop
 * [Kinesis Product Page][kinesis]
 * [Forum][kinesis-forum]
 * [Issues][kinesis-client-library-issues]
+* [FAQ](docs/FAQ.md)
+* [KCL Documentation](docs/) (folder)
 
 ### Recommended Upgrade for All Users of the 1.x Amazon Kinesis Client
 :warning: We recommend customers to migrate to 1.14.1 or newer to avoid [known bugs](https://github.com/awslabs/amazon-kinesis-client/issues/778) in 1.14.0 version
@@ -91,5 +93,5 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 [kinesis-guide-kpl]: http://docs.aws.amazon.com//kinesis/latest/dev/developing-producers-with-kpl.html
 [kinesis-guide-consumer-deaggregation]: http://docs.aws.amazon.com//kinesis/latest/dev/kinesis-kpl-consumer-deaggregation.html
 [kclpy]: https://github.com/awslabs/amazon-kinesis-client-python
-[multi-lang-protocol]: https://github.com/awslabs/amazon-kinesis-client/blob/master/amazon-kinesis-client-multilang/src/main/java/software/amazon/kinesis/multilang/package-info.java
+[multi-lang-protocol]: /amazon-kinesis-client-multilang/src/main/java/software/amazon/kinesis/multilang/package-info.java
 [migration-guide]: https://docs.aws.amazon.com/streams/latest/dev/kcl-migration.html
