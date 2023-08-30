@@ -1,5 +1,7 @@
 # Frequently Asked Questions (FAQ)
 
+---
+
 ## Stream Modality
 
 Questions related to stream modality (e.g., [MultiStreamTracker][multi-stream-tracker]).
@@ -18,6 +20,15 @@ The DDB `leaseKey`, used to persist metadata including lease checkpoint, has a m
 
 Transitioning an app -- either from single- to multi-, or vice versa -- creates a backwards-incompatible expectation on the `leaseKey`.
 As a result, a KCL app will be blind to any `leaseKey`, and its checkpoint, that does not match the expected format.
+For leases that don't exist in the expected format, processing may start from the default checkpoint (e.g., `LATEST`).
+
+As an example of potential impact from switching modality, assume `LATEST` is the default initial position in stream.
+When a KCL application's modality is switched, stream processing will start reading at this initial position ignoring the checkpoints from the previous modality.
+The impact of this is that any records written to the stream between restarting the KCL app will not be processed.
+If `TRIM_HORIZON` is used instead upon restarting the application, the application will start reading from its initial position solving for the gap in consumption of data but potentially resulting in duplicate consumption of records.
+Thus, please make sure that your application can handle this.
+
+---
 
 ## Resources
 
