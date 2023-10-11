@@ -6,7 +6,7 @@
   <artifactId>amazon-kinesis-client</artifactId>
   <packaging>jar</packaging>
   <name>Amazon Kinesis Client Library for Java</name>
-  <version>1.15.0</version>
+  <version>1.15.1-SNAPSHOT</version>
   <description>The Amazon Kinesis Client Library for Java enables Java developers to easily consume and process data
     from Amazon Kinesis.
   </description>
@@ -55,7 +55,7 @@
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
-      <version>31.0.1-jre</version>
+      <version>32.1.1-jre</version>
     </dependency>
     <dependency>
       <groupId>com.google.protobuf</groupId>
