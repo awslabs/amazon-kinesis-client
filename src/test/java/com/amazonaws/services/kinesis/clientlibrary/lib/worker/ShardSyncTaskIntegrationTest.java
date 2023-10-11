@@ -42,6 +42,7 @@ import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.leases.interfaces.IKinesisClientLeaseManager;
 import com.amazonaws.services.kinesis.model.StreamStatus;
+import com.amazonaws.services.kinesis.model.LimitExceededException;
 
 import static junit.framework.TestCase.fail;
 
@@ -58,6 +59,8 @@ public class ShardSyncTaskIntegrationTest {
     private IKinesisProxy kinesisProxy;
     private final KinesisShardSyncer shardSyncer = new KinesisShardSyncer(new KinesisLeaseCleanupValidator());
 
+    private static final int retryBackoffMillis = 1000;
+
     /**
      * @throws java.lang.Exception
      */
@@ -71,9 +74,13 @@ public class ShardSyncTaskIntegrationTest {
         } catch (AmazonServiceException ase) {
 
         }
-        StreamStatus status;
+        StreamStatus status = null;
         do {
-            status = StreamStatus.fromValue(kinesis.describeStream(STREAM_NAME).getStreamDescription().getStreamStatus());
+            try {
+                status = StreamStatus.fromValue(kinesis.describeStream(STREAM_NAME).getStreamDescription().getStreamStatus());
+            } catch (LimitExceededException e) {
+                Thread.sleep(retryBackoffMillis + (long) (Math.random() * 100));
+            }
         } while (status != StreamStatus.ACTIVE);
 
     }
