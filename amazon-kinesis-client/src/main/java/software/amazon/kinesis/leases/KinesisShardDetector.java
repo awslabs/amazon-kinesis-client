@@ -307,23 +307,26 @@ public class KinesisShardDetector implements ShardDetector {
     }
 
     @Override
-    public List<ChildShard> getChildShards(final String shardId) throws InterruptedException, ExecutionException, TimeoutException {
-        final GetShardIteratorRequest.Builder requestBuilder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
-                .streamName(streamIdentifier.streamName())
-                .shardIteratorType(ShardIteratorType.LATEST)
-                .shardId(shardId);
-        streamIdentifier.streamArnOptional().ifPresent(arn -> requestBuilder.streamARN(arn.toString()));
-        final GetShardIteratorRequest getShardIteratorRequest = requestBuilder.build();
+    public List<ChildShard> getChildShards(final String shardId)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        final GetShardIteratorRequest.Builder getShardIteratorRequestBuilder =
+                KinesisRequestsBuilder.getShardIteratorRequestBuilder()
+                        .streamName(streamIdentifier.streamName())
+                        .shardIteratorType(ShardIteratorType.LATEST)
+                        .shardId(shardId);
+        streamIdentifier.streamArnOptional().ifPresent(arn -> getShardIteratorRequestBuilder.streamARN(arn.toString()));
 
-        final GetShardIteratorResponse getShardIteratorResponse =
-                FutureUtils.resolveOrCancelFuture(kinesisClient.getShardIterator(getShardIteratorRequest), kinesisRequestTimeout);
+        final GetShardIteratorResponse getShardIteratorResponse = FutureUtils.resolveOrCancelFuture(
+                kinesisClient.getShardIterator(getShardIteratorRequestBuilder.build()),
+                kinesisRequestTimeout);
 
-        final GetRecordsRequest getRecordsRequest = KinesisRequestsBuilder.getRecordsRequestBuilder()
-                .shardIterator(getShardIteratorResponse.shardIterator())
-                .build();
+        final GetRecordsRequest.Builder getRecordsRequestBuilder = KinesisRequestsBuilder.getRecordsRequestBuilder()
+                .shardIterator(getShardIteratorResponse.shardIterator());
+        streamIdentifier.streamArnOptional().ifPresent(arn -> getRecordsRequestBuilder.streamARN(arn.toString()));
 
-        final GetRecordsResponse getRecordsResponse =
-                FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(getRecordsRequest), kinesisRequestTimeout);
+        final GetRecordsResponse getRecordsResponse = FutureUtils.resolveOrCancelFuture(
+                kinesisClient.getRecords(getRecordsRequestBuilder.build()),
+                kinesisRequestTimeout);
 
         return getRecordsResponse.childShards();
     }
