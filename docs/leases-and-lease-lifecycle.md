@@ -9,12 +9,12 @@ This document should help provide insights into the lease lifecycle.
 
 In KCL, a lease provides a temporal assignment between one Kinesis shard and an assigned worker.
 Leases are persistent for the duration of shard processing (detailed later).
-However, lease assignment is transient -- leases may be "stolen" by other workers in the same KCL application.
+However, the worker that is processing a lease may change since leases may be "stolen" by other workers in the same KCL application.
 
 ## Lease Table
 
 To persist metadata about lease state (e.g., last read checkpoint, current assigned worker), KCL creates a lease table in [DynamoDB][dynamodb].
-Each KCL application will have its own distinct lease table that transcludes the application name.
+Each KCL application will have its own distinct lease table that includes the application name.
 More information, including schema, is provided at [KCL LeaseTable][kcl-leasetable].
 
 ## Lease Assignment
