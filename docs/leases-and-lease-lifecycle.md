@@ -64,7 +64,9 @@ Discovered shards may result from:
 
 Lease syncing is a complex responsibility owned by the "leader" host in a KCL application.
 By invoking the [ListShards API][list-shards], KCL will identify the shards for the configured stream(s).
-This process is scheduled at a configurable interval so KCL can self-identify new shards introduced via stream mutations.
+This process is scheduled at a
+[configurable interval](https://github.com/awslabs/amazon-kinesis-client/blob/3d6800874cdc5e4c18df6ea0197f607f6298cab7/amazon-kinesis-client/src/main/java/software/amazon/kinesis/leases/LeaseManagementConfig.java#L204-L209)
+so KCL can self-identify new shards introduced via stream mutations.
 
 ![Abridged sequence diagram of the Shard Sync process.
 Listed participants are the Scheduler, LeaseCoordinator, PeriodicShardSyncManager, ShardSyncTask,
@@ -78,7 +80,7 @@ For convenience, links to code:
 * `ShardSyncTask`: [interface][consumer-task], [implementation][consumer-task-impl]
 * `LeaseRefresher`: [interface][lease-refresher], [implementation][lease-refresher-impl]
 * `LeaseSynchronizer`: [implementation][non-empty-lease-table-synchronizer]
-* `HierarchicalShardSyner`: [implementation][hierarchical-shard-syncer]
+* `HierarchicalShardSyncer`: [implementation][hierarchical-shard-syncer]
 * `ShardDetector`: [interface][shard-detector], [implementation][shard-detector-impl]
 
 Lease creation is a deterministic process.
@@ -98,6 +100,13 @@ Assuming leases `(4, 5, 7)` already exist, the leases created for an initial pos
 * `LATEST` creates `(6)` to resolve the gap on-par with epochs 103-205 which is required to eventually reach `LATEST`
 * `TRIM_HORIZON` creates `(0, 1)` to resolve the gap starting from the `TRIM_HORIZON`
 * `AT_TIMESTAMP(epoch=200)` creates `(0, 1)` to resolve the gap leading into epoch 200
+
+#### Avoiding a Shard-Sync
+
+To reduce Kinesis API calls, KCL will attempt to avoid unnecessary shard syncs.
+For example, if the discovered shards cover the entire partition range then a shard-sync is unlikely to yield a material difference.
+To dive deeper, see
+[PeriodicShardSyncManager#checkForShardSync(...)](https://github.com/awslabs/amazon-kinesis-client/blob/3d6800874cdc5e4c18df6ea0197f607f6298cab7/amazon-kinesis-client/src/main/java/software/amazon/kinesis/coordinator/PeriodicShardSyncManager.java#L267-L300))[^checkforshardsync].
 
 ## Lease Balancing
 
@@ -134,6 +143,9 @@ Customers should consider the following trade-offs when configuring the lease-ta
 
 Informative articles that are recommended (in no particular order):
 * https://aws.amazon.com/blogs/big-data/processing-amazon-dynamodb-streams-using-the-amazon-kinesis-client-library/
+
+[^checkforshardsync]: This code is a point-in-time reference to a specific commit to provide fixed line numbers.
+    This code reference is not guaranteed to remain consistent with the `master` branch.
 
 [consumer-task]: /amazon-kinesis-client/src/main/java/software/amazon/kinesis/lifecycle/ConsumerTask.java
 [consumer-task-impl]: /amazon-kinesis-client/src/main/java/software/amazon/kinesis/leases/ShardSyncTask.java
