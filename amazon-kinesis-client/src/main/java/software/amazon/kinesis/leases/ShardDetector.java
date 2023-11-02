@@ -59,7 +59,7 @@ public interface ShardDetector {
     /**
      * List shards with shard filter.
      *
-     * @param  ShardFilter
+     * @param shardFilter
      * @return Shards
      */
     default List<Shard> listShardsWithFilter(ShardFilter shardFilter) {
