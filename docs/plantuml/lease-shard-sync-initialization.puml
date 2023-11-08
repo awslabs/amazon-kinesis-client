@@ -1,0 +1,23 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+title KCL Shard Syncing Initialization (Abridged)
+
+participant Scheduler as S
+participant LeaseCoordinator as LC
+participant PeriodShardSyncManager as PSS
+participant "Lease Table (DDB)" as DDB
+
+alt on initialization
+  S->S: create PeriodicShardSyncManager(\n  ..., leaseRefresher, leasesRecoveryAuditorExecutionFrequencyMillis, ...)
+  S->LC: initialize()
+  opt if lease table does not exist
+    LC->DDB: create lease table
+  end
+  S->PSS: start()
+  PSS->PSS: schedule self every\n  leasesRecoveryAuditorExecutionFrequencyMillis
+end
+
+@enduml

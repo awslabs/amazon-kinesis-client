@@ -3,27 +3,15 @@
 
 autonumber
 
-title KCL Shard Syncing (Abridged)
+title KCL Shard Syncing Main Loop (Abridged)
 
-participant Scheduler as S
-participant LeaseCoordinator as LC
 participant PeriodShardSyncManager as PSS
 participant ShardSyncTask as SST
-participant "Lease Table (DDB)" as DDB
+participant ShardDetector as SD
+participant HierarchicalShardSyncer as HSS
 participant LeaseRefresher as LR
 participant LeaseSynchronizer as LS
-participant HierarchicalShardSyncer as HSS
-participant ShardDetector as SD
-
-alt on initialization
-  S->S: create PeriodicShardSyncManager(\n  ..., leaseRefresher, leasesRecoveryAuditorExecutionFrequencyMillis, ...)
-  S->LC: initialize()
-  opt if lease table does not exist
-    LC->DDB: create lease table
-  end
-  S->PSS: start()
-  PSS->PSS: schedule self every\n  leasesRecoveryAuditorExecutionFrequencyMillis
-end
+participant "Lease Table (DDB)" as DDB
 
 loop every leasesRecoveryAuditorExecutionFrequencyMillis
   opt if worker is not leader
@@ -38,16 +26,17 @@ loop every leasesRecoveryAuditorExecutionFrequencyMillis
   PSS->SST: call()
   SST->HSS: checkAndCreateLeasesForNewShards(\n  shardDetector, initialPosition, ...)
   opt if lease table is empty
-    HSS->HSS: getShardListAtInitialPosition(shardDetector, initialPosition)
+    HSS->HSS: getShardListAtInitialPosition(\n  shardDetector, initialPosition)
     HSS->SD: listShardsWithFilter(initialPositionFilter)
   else lease table is non-empty
     HSS->HSS: getShardList(shardDetector)
     HSS->SD: listShards(...)
     note over SD
-      ShardDetector invokes the Kinesis ListShards API.
+      ShardDetector invokes the
+      Kinesis Data Streams ListShards API.
     end note
   end
-  HSS->HSS: checkAndCreateLeaseForNewShards(\n  shardDetector, leaseRefresher, initialPosition, ...)
+  HSS->HSS: checkAndCreateLeaseForNewShards(\n  shardDetector, leaseRefresher,\n  initialPosition, ...)
   HSS->LR: listLeases()
   LR->DDB: scan(:streamName=streamName)
   DDB->LR: leases from table
