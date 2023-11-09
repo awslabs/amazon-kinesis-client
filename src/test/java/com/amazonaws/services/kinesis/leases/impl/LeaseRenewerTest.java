@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -70,7 +71,7 @@ public class LeaseRenewerTest {
         renewer = new LeaseRenewer<>(leaseManager,
                 workerIdentifier,
                 leaseDurationMillis,
-                Executors.newCachedThreadPool());
+                Executors.newCachedThreadPool(), new NullMetricsFactory());
     }
 
     @After

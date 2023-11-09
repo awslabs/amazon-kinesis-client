@@ -408,8 +408,7 @@ public class ShardConsumerTest {
                         streamConfig.getStreamProxy(),
                         shardInfo.getShardId(),
                         streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()
-                ),
-                metricsFactory
+                )
         );
 
         dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);
@@ -642,8 +641,7 @@ public class ShardConsumerTest {
                         streamConfig.getStreamProxy(),
                         shardInfo.getShardId(),
                         streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()
-                ),
-                metricsFactory
+                )
         );
 
         KinesisShardConsumer consumer =
@@ -791,8 +789,7 @@ public class ShardConsumerTest {
                         streamConfig.getStreamProxy(),
                         shardInfo.getShardId(),
                         streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()
-                ),
-                metricsFactory
+                )
         );
 
         KinesisShardConsumer consumer =
@@ -926,8 +923,7 @@ public class ShardConsumerTest {
                         streamConfig.getStreamProxy(),
                         shardInfo.getShardId(),
                         streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()
-                ),
-                metricsFactory
+                )
         );
 
         dataFetcher = new KinesisDataFetcher(streamConfig.getStreamProxy(), shardInfo);

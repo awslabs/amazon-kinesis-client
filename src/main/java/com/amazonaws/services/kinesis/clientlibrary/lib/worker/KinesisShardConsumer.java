@@ -185,8 +185,7 @@ public class KinesisShardConsumer implements IShardConsumer{
                         new SequenceNumberValidator(
                                 streamConfig.getStreamProxy(),
                                 shardInfo.getShardId(),
-                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
-                        metricsFactory),
+                                streamConfig.shouldValidateSequenceNumberBeforeCheckpointing())),
                 leaseCoordinator,
                 parentShardPollIntervalMillis,
                 cleanupLeasesOfCompletedShards,

@@ -1135,8 +1135,7 @@ public class Worker implements Runnable {
                 new SequenceNumberValidator(
                         streamConfig.getStreamProxy(),
                         shardInfo.getShardId(),
-                        streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()),
-                metricsFactory);
+                        streamConfig.shouldValidateSequenceNumberBeforeCheckpointing()));
 
         if(shardConsumerFactory == null){ //Default to KinesisShardConsumerFactory if null
             this.shardConsumerFactory = new KinesisShardConsumerFactory();
@@ -1526,7 +1525,7 @@ public class Worker implements Runnable {
             // We expect users to either inject both LeaseRenewer and the corresponding thread-pool, or neither of them (DEFAULT).
             if (leaseRenewer == null) {
                 ExecutorService leaseRenewerThreadPool = LeaseCoordinator.getDefaultLeaseRenewalExecutorService(config.getMaxLeaseRenewalThreads());
-                leaseRenewer = new LeaseRenewer<>(leaseManager, config.getWorkerIdentifier(), config.getFailoverTimeMillis(), leaseRenewerThreadPool);
+                leaseRenewer = new LeaseRenewer<>(leaseManager, config.getWorkerIdentifier(), config.getFailoverTimeMillis(), leaseRenewerThreadPool, metricsFactory);
             }
 
             if (leaderDecider == null) {
