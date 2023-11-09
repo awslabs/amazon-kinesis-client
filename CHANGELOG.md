@@ -3,6 +3,14 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.5.3 (November 8, 2023) 
+* [#1219](https://github.com/awslabs/amazon-kinesis-client/pull/1219) Provided streamArn in getRecords request 
+* [#1216](https://github.com/awslabs/amazon-kinesis-client/pull/1216) Updated AWS Glue Schema Registry from version 1.1.14 to 1.1.17.
+* [#1205](https://github.com/awslabs/amazon-kinesis-client/pull/1205) Updated the FAQ with impact of changing default checkpoint.
+* [#1203](https://github.com/awslabs/amazon-kinesis-client/pull/1203) Added links from README.md to FAQ and doc folder.
+* [#1202](https://github.com/awslabs/amazon-kinesis-client/pull/1202) Introduced a FAQ for Kinesis Client Library
+* [#1200](https://github.com/awslabs/amazon-kinesis-client/pull/1200) Added test case for StreamIdentifier serialization.
+
 ### Release 2.5.2 (2023-08-07)
 * [#1184](https://github.com/awslabs/amazon-kinesis-client/pull/1184) [#367] Enhanced multi-lang `AWSCredentialsProvider=...` decoder and c…
 * [#1186](https://github.com/awslabs/amazon-kinesis-client/pull/1186) Provided documentation for multilang's new NestedPropertyKey enhancement.
