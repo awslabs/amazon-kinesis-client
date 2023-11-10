@@ -32,17 +32,18 @@ import java.util.stream.Collectors;
  * Helper class for cleaning up leases.
  */
 @Accessors(fluent = true)
+@EqualsAndHashCode
 @Value
-@EqualsAndHashCode(exclude = {"queueEntryTime"})
 public class LeasePendingDeletion {
-    private final StreamIdentifier streamIdentifier;
-    private final Lease lease;
-    private final ShardInfo shardInfo;
-    private final ShardDetector shardDetector;
+
+    StreamIdentifier streamIdentifier;
+    Lease lease;
+    ShardInfo shardInfo;
+    ShardDetector shardDetector;
 
     /**
      * Discovers the child shards for this lease.
-     * @return
+     *
      * @throws InterruptedException
      * @throws ExecutionException
      * @throws TimeoutException

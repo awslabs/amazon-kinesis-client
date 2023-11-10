@@ -1,0 +1,33 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+title KCL Lease Taking
+
+participant LeaseCoordinator as LC
+participant LeaseTaker as LT
+participant LeaseRefresher as LR
+participant "Lease Table\n(DynamoDB)" as DDB
+
+loop every 2*(leaseDurationMillis + epsilonMillis)
+  LC->LT: takeLeases()
+  LT->LT: updateAllLeases()
+  LT->LR: listLeases()
+  LR->DDB: scan(:streamName=streamName)
+  DDB->LR: leases from table
+  LR->LT: leases from table
+  LT->LT: evict from memory any lease not returned from table
+  LT->LT: getExpiredLeases()
+  note over LT
+    Leases are "expired" if their last scan time exceeds the max lease duration.
+  end note
+  LT->LT: calculate lease count per host
+  LT->LT: chooseLeasesToSteal()
+  loop for each lease to take/steal
+    LT->LR: takeLease(lease, worker)
+    LR->DDB: updateItem(lease)
+  end
+end
+
+@enduml

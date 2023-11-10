@@ -1,0 +1,35 @@
+@startuml
+'https://plantuml.com/activity-diagram-legacy
+
+title KCL Shard<->Lease Assignments
+
+[*] --> ShardNoOp
+[*] --> ShardSplit
+[*] --> ShardMerge
+ShardNoOp --> [*]
+ShardSplit --> [*]
+ShardMerge --> [*]
+
+state ShardNoOp {
+  shard_0 : lease_0
+}
+
+state ShardSplit {
+  shard_1 : lease_1
+  shard_4 : lease_4
+  shard_5 : lease_5
+
+  shard_1 --> shard_4 : split
+  shard_1 --> shard_5 : split
+}
+
+state ShardMerge {
+  shard_2 : lease_2
+  shard_3 : lease_3
+  shard_6 : lease_6
+
+  shard_2 --> shard_6 : merge
+  shard_3 --> shard_6 : merge
+}
+
+@enduml
