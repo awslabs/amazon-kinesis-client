@@ -8,7 +8,7 @@ title KCL Lease Taking
 participant LeaseCoordinator as LC
 participant LeaseTaker as LT
 participant LeaseRefresher as LR
-participant "Lease Table (DDB)" as DDB
+participant "Lease Table\n(DynamoDB)" as DDB
 
 loop every 2*(leaseDurationMillis + epsilonMillis)
   LC->LT: takeLeases()

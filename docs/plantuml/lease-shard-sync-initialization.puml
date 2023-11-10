@@ -8,7 +8,7 @@ title KCL Shard Syncing Initialization (Abridged)
 participant Scheduler as S
 participant LeaseCoordinator as LC
 participant PeriodShardSyncManager as PSS
-participant "Lease Table (DDB)" as DDB
+participant "Lease Table\n(DynamoDB)" as DDB
 
 alt on initialization
   S->S: create PeriodicShardSyncManager(\n  ..., leaseRefresher, leasesRecoveryAuditorExecutionFrequencyMillis, ...)

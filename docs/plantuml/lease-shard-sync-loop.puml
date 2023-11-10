@@ -11,7 +11,7 @@ participant ShardDetector as SD
 participant HierarchicalShardSyncer as HSS
 participant LeaseRefresher as LR
 participant LeaseSynchronizer as LS
-participant "Lease Table (DDB)" as DDB
+participant "Lease Table\n(DynamoDB)" as DDB
 
 loop every leasesRecoveryAuditorExecutionFrequencyMillis
   opt if worker is not leader

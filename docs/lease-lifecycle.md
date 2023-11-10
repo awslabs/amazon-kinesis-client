@@ -18,7 +18,7 @@ However, the worker that is processing a lease may change since [leases may be "
 
 To persist metadata about lease state (e.g., [last read checkpoint, current assigned worker][kcl-concepts]), KCL creates a lease table in [DynamoDB][dynamodb].
 Each KCL application will have its own distinct lease table that includes the application name.
-More information, including schema, is provided at [KCL LeaseTable][kcl-leasetable].
+More information, including schema, is provided at [KCL Lease Table][kcl-leasetable].
 
 ## Lease Assignment
 
@@ -45,7 +45,7 @@ Leases follow a relatively simple, progressive state machine:
 
 Excluding `SHARD_END`, these phases are illustrative of KCL logic and are not explicitly codified.
 
-1. `DISCOVERY`: KCL [shard-syncing](#shard-syncing) identifies new shards.
+1. `DISCOVERY`: KCL [shard syncing](#shard-syncing) identifies new shards.
 Discovered shards may result from:
    * First time starting KCL with an empty lease table.
    * Stream operations (i.e., split, merge) that create child shards.
@@ -62,7 +62,7 @@ Discovered shards may result from:
    * Lease deletion will not occur until after its child lease(s) enter `PROCESSING`.
       * This tombstone helps KCL ensure durability and convergence for all discovered leases.
       * For more information, see [LeaseCleanupManager#cleanupLeaseForCompletedShard(...)][lease-cleanup-manager-cleanupleaseforcompletedshard][^fixed-commit-footnote]
-   * [Deletion is configurable][lease-cleanup-config] yet recommended to minimize I/O of lease table scans.
+   * [Deletion is configurable][lease-cleanup-config], yet recommended to minimize I/O of lease table scans.
 
 ### Shard Syncing
 
@@ -73,7 +73,7 @@ A shard sync is not guaranteed to identify new shards (e.g., KCL has already dis
 
 The following diagram is an abridged sequence diagram of key classes that initialize the shard sync workflow:
 ![Abridged sequence diagram of the Shard Sync initialization process.
-Listed participants are the Scheduler, LeaseCoordinator, PeriodicShardSyncManager, and Lease Table (DDB).
+Listed participants are the Scheduler, LeaseCoordinator, PeriodicShardSyncManager, and Lease Table (DynamoDB).
 Scheduler initializes the LeaseCoordinator which, in turn, creates the lease table if it does not exist.
 Finally, Scheduler starts the PeriodicShardSyncManager which schedules itself to execute every leasesRecoveryAuditorExecutionFrequencyMillis.
 ](images/lease-shard-sync-initialization.png)
@@ -81,11 +81,11 @@ Finally, Scheduler starts the PeriodicShardSyncManager which schedules itself to
 The following diagram outlines the key classes involved in the shard sync workflow:
 ![Abridged sequence diagram of the Shard Sync main processing loop.
 Listed participants are the PeriodicShardSyncManager, ShardSyncTask, ShardDetector,
-HierarchicalShardSyncer, LeaseRefresher, LeaseSynchronizer, and Lease Table (DDB).
-On each iteration, PeriodicShardSyncManger determines whether it's the leader and a shard-sync is required before proceeding.
+HierarchicalShardSyncer, LeaseRefresher, LeaseSynchronizer, and Lease Table (DynamoDB).
+On each iteration, PeriodicShardSyncManager determines whether it's the leader and a shard sync is required before proceeding.
 PeriodicShardSyncManager calls ShardSyncTask which calls HierarchicalShardSyncer which acquires the shard lists from ShardDetector.
-HierarchicalShardSyncer then invokes LeaseRefresher to scan the DDB lease table, and uses those returned leases to identify shards which do not have leases.
-Finally, HierarchicalShardSyncer uses LeaseRefresher to create any new leases in DDB.
+HierarchicalShardSyncer then invokes LeaseRefresher to scan the lease table, and uses those returned leases to identify shards which do not have leases.
+Finally, HierarchicalShardSyncer uses LeaseRefresher to create any new leases in the lease table.
 ](images/lease-shard-sync-loop.png)
 
 For more information, here are the links to KCL code:
@@ -117,10 +117,10 @@ Assuming leases `(4, 5, 7)` already exist, the leases created for an initial pos
 * `TRIM_HORIZON` creates `(0, 1)` to resolve the gap starting from the `TRIM_HORIZON`
 * `AT_TIMESTAMP(epoch=200)` creates `(0, 1)` to resolve the gap leading into epoch 200
 
-#### Avoiding a Shard-Sync
+#### Avoiding a Shard Sync
 
 To reduce Kinesis Data Streams API calls, KCL will attempt to avoid unnecessary shard syncs.
-For example, if the discovered shards cover the entire partition range then a shard-sync is unlikely to yield a material difference.
+For example, if the discovered shards cover the entire partition range then a shard sync is unlikely to yield a material difference.
 For more information, see
 [PeriodicShardSyncManager#checkForShardSync(...)][periodic-shard-sync-manager-checkforshardsync])[^fixed-commit-footnote].
 
@@ -132,7 +132,7 @@ This operation only accounts for lease assignments and does not factor in I/O lo
 For example, leases that are equally-distributed across KCL are not guaranteed to have equal I/O distribution.
 
 ![Sequence diagram of the KCL Lease Taking workflow.
-Participants include the LeaseCoordinator, LeaseTaker, LeaseRefresher, and Lease Table (DDB).
+Participants include the LeaseCoordinator, LeaseTaker, LeaseRefresher, and Lease Table (DynamoDB).
 LeaseRefresher is leveraged to acquire the leases from the lease table.
 LeaseTaker identifies which leases are eligible for taking/stealing.
 All taken/stolen leases are passed through LeaseRefresher to update the lease table.
@@ -148,8 +148,8 @@ Stolen leases are randomly selected from whichever worker has the most leases.
 The maximum number of leases to steal on each loop is configured via [maxLeasesToStealAtOneTime][max-leases-to-steal-config].
 
 Customers should consider the following trade-offs when configuring the lease-taking cadence:
-1. `LeaseRefresher` invokes a DDB `scan` against the lease table which has a cost proportional to the number of leases.
-1. Frequent balancing may cause high lease turn-over which incurs DDB `write` costs, and potentially redundant work for stolen leases.
+1. `LeaseRefresher` invokes a DynamoDB `scan` against the lease table which has a cost proportional to the number of leases.
+1. Frequent balancing may cause high lease turn-over which incurs DynamoDB `write` costs, and potentially redundant work for stolen leases.
 1. Low `maxLeasesToStealAtOneTime` may increase the time to fully (re)assign leases after an impactful event (e.g., deployment, host failure).
 
 # Additional Reading
