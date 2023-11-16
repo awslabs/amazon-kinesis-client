@@ -5,9 +5,10 @@ The **Amazon Kinesis Client Library for Java** (Amazon KCL) enables Java develop
 
 * [Kinesis Product Page][kinesis]
 * [Forum][kinesis-forum]
-* [Issues][kinesis-client-library-issues]
+* [Javadoc][kcl-javadoc]
 * [FAQ](docs/FAQ.md)
 * [KCL Documentation](docs/) (folder)
+* [Issues][kinesis-client-library-issues]
 
 ### Recommended Upgrade for All Users of the 1.x Amazon Kinesis Client
 :warning: We recommend customers to migrate to 1.14.1 or newer to avoid [known bugs](https://github.com/awslabs/amazon-kinesis-client/issues/778) in 1.14.0 version
@@ -81,10 +82,11 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 | 2.x | [master/CHANGELOG.md](CHANGELOG.md) |
 | 1.x | [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md) |
 
-[kinesis]: http://aws.amazon.com/kinesis
-[kinesis-forum]: http://developer.amazonwebservices.com/connect/forum.jspa?forumID=169
-[kinesis-client-library-issues]: https://github.com/awslabs/amazon-kinesis-client/issues
 [docs-signup]: http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-setup.html
+[kcl-javadoc]: https://javadoc.io/doc/software.amazon.kinesis/amazon-kinesis-client/
+[kinesis]: http://aws.amazon.com/kinesis
+[kinesis-client-library-issues]: https://github.com/awslabs/amazon-kinesis-client/issues
+[kinesis-forum]: http://developer.amazonwebservices.com/connect/forum.jspa?forumID=169
 [kinesis-guide]: http://docs.aws.amazon.com/kinesis/latest/dev/introduction.html
 [kinesis-guide-begin]: http://docs.aws.amazon.com/kinesis/latest/dev/before-you-begin.html
 [kinesis-guide-create]: http://docs.aws.amazon.com/kinesis/latest/dev/step-one-create-stream.html
