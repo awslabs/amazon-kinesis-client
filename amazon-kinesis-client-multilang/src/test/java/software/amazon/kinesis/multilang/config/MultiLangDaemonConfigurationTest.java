@@ -17,7 +17,9 @@ package software.amazon.kinesis.multilang.config;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
@@ -103,12 +105,20 @@ public class MultiLangDaemonConfigurationTest {
     public void testDefaultRetrievalConfigWithPollingConfigSet() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
         configuration.setMaxRecords(10);
+        configuration.setIdleTimeBetweenReadsInMillis(60000);
 
         MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration = configuration
                 .resolvedConfiguration(shardRecordProcessorFactory);
 
         assertThat(resolvedConfiguration.getRetrievalConfig().retrievalSpecificConfig(),
                 instanceOf(PollingConfig.class));
+        assertEquals(10,
+            ((PollingConfig) resolvedConfiguration.getRetrievalConfig().retrievalSpecificConfig()).maxRecords());
+        assertEquals(60000,
+            ((PollingConfig) resolvedConfiguration.getRetrievalConfig().retrievalSpecificConfig())
+                .idleTimeBetweenReadsInMillis());
+        assertTrue(((PollingConfig) resolvedConfiguration.getRetrievalConfig().retrievalSpecificConfig())
+            .usePollingConfigIdleTimeValue());
     }
 
     @Test

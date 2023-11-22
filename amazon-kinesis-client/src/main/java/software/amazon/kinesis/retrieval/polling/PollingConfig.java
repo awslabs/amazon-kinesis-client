@@ -18,6 +18,8 @@ package software.amazon.kinesis.retrieval.polling;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Function;
+
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
@@ -86,11 +88,15 @@ public class PollingConfig implements RetrievalSpecificConfig {
      * The value for how long the ShardConsumer should sleep in between calls to
      * {@link KinesisAsyncClient#getRecords(GetRecordsRequest)}.
      *
+     * If this is not set using {@link PollingConfig#idleTimeBetweenReadsInMillis},
+     * it defaults to 1500 ms.
+     *
      * <p>
-     * Default value: 1000L
+     * Default value: 1500L
      * </p>
      */
-    private long idleTimeBetweenReadsInMillis = 1000L;
+    @Setter(AccessLevel.NONE)
+    private long idleTimeBetweenReadsInMillis = 1500L;
 
     /**
      * Time to wait in seconds before the worker retries to get a record.
@@ -120,13 +126,22 @@ public class PollingConfig implements RetrievalSpecificConfig {
     private RecordsFetcherFactory recordsFetcherFactory = new SimpleRecordsFetcherFactory();
 
     /**
+     * @Deprecated Use {@link PollingConfig#idleTimeBetweenReadsInMillis} instead
+     */
+    @Deprecated
+    public void setIdleTimeBetweenReadsInMillis(long idleTimeBetweenReadsInMillis) {
+        idleTimeBetweenReadsInMillis(idleTimeBetweenReadsInMillis);
+    }
+
+    /**
      * Set the value for how long the ShardConsumer should sleep in between calls to
      * {@link KinesisAsyncClient#getRecords(GetRecordsRequest)}. If this is not specified here the value provided in
      * {@link RecordsFetcherFactory} will be used.
      */
-    public void setIdleTimeBetweenReadsInMillis(long idleTimeBetweenReadsInMillis) {
+    public PollingConfig idleTimeBetweenReadsInMillis(long idleTimeBetweenReadsInMillis) {
         usePollingConfigIdleTimeValue = true;
         this.idleTimeBetweenReadsInMillis = idleTimeBetweenReadsInMillis;
+        return this;
     }
 
     /**
