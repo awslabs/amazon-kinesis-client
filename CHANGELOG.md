@@ -3,15 +3,23 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
-### Release 2.5.3 (November 8, 2023) 
-* [#1219](https://github.com/awslabs/amazon-kinesis-client/pull/1219) Provided streamArn in getRecords request 
+### Release 2.5.4 (December 12, 2023)
+* [#1232](https://github.com/awslabs/amazon-kinesis-client/pull/1232) Upgrade ch.qos.logback:logback-classic dependency from 1.3.0 to 1.3.12 in /amazon-kinesis-client
+* [#1233](https://github.com/awslabs/amazon-kinesis-client/pull/1233) Upgrade ch.qos.logback:logback-classic dependency from 1.3.0 to 1.3.12 in /amazon-kinesis-client-multilang
+* [#1230](https://github.com/awslabs/amazon-kinesis-client/pull/1230) Bug fix which now allows MultiLangDaemon to configure idleTimeBetweenReadsInMillis
+* [#1229](https://github.com/awslabs/amazon-kinesis-client/pull/1229) Added link to `javadoc.io`-hosted Javadoc in the README
+* [#1218](https://github.com/awslabs/amazon-kinesis-client/pull/1218) Added doc for leases and the lease lifecycle to help explain lease lifecycle logic.
+* [#1226](https://github.com/awslabs/amazon-kinesis-client/pull/1226) Upgraded KCL from 2.5.3 to 2.5.4-SNAPSHOT
+
+### Release 2.5.3 (November 8, 2023)
+* [#1219](https://github.com/awslabs/amazon-kinesis-client/pull/1219) Provided streamArn in getRecords request
 * [#1216](https://github.com/awslabs/amazon-kinesis-client/pull/1216) Updated AWS Glue Schema Registry from version 1.1.14 to 1.1.17.
 * [#1205](https://github.com/awslabs/amazon-kinesis-client/pull/1205) Updated the FAQ with impact of changing default checkpoint.
 * [#1203](https://github.com/awslabs/amazon-kinesis-client/pull/1203) Added links from README.md to FAQ and doc folder.
 * [#1202](https://github.com/awslabs/amazon-kinesis-client/pull/1202) Introduced a FAQ for Kinesis Client Library
 * [#1200](https://github.com/awslabs/amazon-kinesis-client/pull/1200) Added test case for StreamIdentifier serialization.
 
-### Release 2.5.2 (2023-08-07)
+### Release 2.5.2 (August 7, 2023)
 * [#1184](https://github.com/awslabs/amazon-kinesis-client/pull/1184) [#367] Enhanced multi-lang `AWSCredentialsProvider=...` decoder and c…
 * [#1186](https://github.com/awslabs/amazon-kinesis-client/pull/1186) Provided documentation for multilang's new NestedPropertyKey enhancement.
 * [#1181](https://github.com/awslabs/amazon-kinesis-client/pull/1181) CVE-2023-2976: Upgrade Google Guava dependency version from `32.0.0-jre` to `32.1.1-jre`
