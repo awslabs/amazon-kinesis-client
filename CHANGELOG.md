@@ -1,6 +1,6 @@
 # Changelog
-### Latest Release (1.15.1 - Feb 1, 2023)
-* [#1214](https://github.com/awslabs/amazon-kinesis-client/pull/1214) Add backoff logic for ShardSyncTaskIntegrationTest
+### Latest Release (1.15.1 - Feb 2, 2023)
+* [#1214](https://github.com/awslabs/amazon-kinesis-client/pull/1214) Add backoff logic for ShardSyncTaskIntegrationTest and update 
 * [#1252](https://github.com/awslabs/amazon-kinesis-client/pull/1252) Update aws-java-sdk from 1.12.406 to 1.12.647
 
 ### Release (1.15.0 - Jun 8, 2023)
