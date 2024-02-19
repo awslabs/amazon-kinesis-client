@@ -335,6 +335,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     @Override
     public void subscribe(Subscriber<? super RecordsRetrieved> s) {
+        throwOnIllegalState();
         subscriber = s;
         subscriber.onSubscribe(new Subscription() {
             @Override
