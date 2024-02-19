@@ -14,8 +14,8 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ConsumerState;
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerStates.ShardConsumerState;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisConsumerStates.ConsumerState;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisConsumerStates.ShardConsumerState;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -50,7 +50,7 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 public class ConsumerStatesTest {
 
     @Mock
-    private ShardConsumer consumer;
+    private KinesisShardConsumer consumer;
     @Mock
     private StreamConfig streamConfig;
     @Mock
@@ -251,9 +251,9 @@ public class ConsumerStatesTest {
                 equalTo((IRecordProcessorCheckpointer) recordProcessorCheckpointer)));
         assertThat(task, shutdownReqTask(ShutdownNotification.class, "shutdownNotification", equalTo(shutdownNotification)));
 
-        assertThat(state.successTransition(), equalTo(ConsumerStates.SHUTDOWN_REQUEST_COMPLETION_STATE));
+        assertThat(state.successTransition(), equalTo(KinesisConsumerStates.SHUTDOWN_REQUEST_COMPLETION_STATE));
         assertThat(state.shutdownTransition(ShutdownReason.REQUESTED),
-                equalTo(ConsumerStates.SHUTDOWN_REQUEST_COMPLETION_STATE));
+                equalTo(KinesisConsumerStates.SHUTDOWN_REQUEST_COMPLETION_STATE));
         assertThat(state.shutdownTransition(ShutdownReason.ZOMBIE),
                 equalTo(ShardConsumerState.SHUTTING_DOWN.getConsumerState()));
         assertThat(state.shutdownTransition(ShutdownReason.TERMINATE),
@@ -266,7 +266,7 @@ public class ConsumerStatesTest {
 
     @Test
     public void shutdownRequestCompleteStateTest() {
-        ConsumerState state = ConsumerStates.SHUTDOWN_REQUEST_COMPLETION_STATE;
+        ConsumerState state = KinesisConsumerStates.SHUTDOWN_REQUEST_COMPLETION_STATE;
 
         assertThat(state.createTask(consumer), nullValue());
 
@@ -345,9 +345,9 @@ public class ConsumerStatesTest {
         verify(shutdownNotification, never()).shutdownComplete();
     }
 
-    static <ValueType> ReflectionPropertyMatcher<ShutdownTask, ValueType> shutdownTask(Class<ValueType> valueTypeClass,
+    static <ValueType> ReflectionPropertyMatcher<KinesisShutdownTask, ValueType> shutdownTask(Class<ValueType> valueTypeClass,
                                                                                        String propertyName, Matcher<ValueType> matcher) {
-        return taskWith(ShutdownTask.class, valueTypeClass, propertyName, matcher);
+        return taskWith(KinesisShutdownTask.class, valueTypeClass, propertyName, matcher);
     }
 
     static <ValueType> ReflectionPropertyMatcher<ShutdownNotificationTask, ValueType> shutdownReqTask(

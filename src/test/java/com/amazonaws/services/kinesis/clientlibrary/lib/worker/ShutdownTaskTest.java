@@ -19,6 +19,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -65,7 +66,7 @@ import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownTask.RETRY_RANDOM_MAX_RANGE;
+import static com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisShutdownTask.RETRY_RANDOM_MAX_RANGE;
 
 /**
  *
@@ -138,7 +139,7 @@ public class ShutdownTaskTest {
     }
 
     /**
-     * Test method for {@link ShutdownTask#call()}.
+     * Test method for {@link KinesisShutdownTask#call()}.
      */
     @Test
     public final void testCallWhenApplicationDoesNotCheckpoint() {
@@ -147,7 +148,7 @@ public class ShutdownTaskTest {
         when(leaseCoordinator.getLeaseManager()).thenReturn(leaseManager);
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
-        ShutdownTask task = new ShutdownTask(defaultShardInfo,
+        KinesisShutdownTask task = new KinesisShutdownTask(defaultShardInfo,
                 defaultRecordProcessor,
                 checkpointer,
                 ShutdownReason.TERMINATE,
@@ -170,7 +171,7 @@ public class ShutdownTaskTest {
     }
 
     /**
-     * Test method for {@link ShutdownTask#call()}.
+     * Test method for {@link KinesisShutdownTask#call()}.
      */
     @Test
     public final void testCallWhenCreatingLeaseThrows() throws Exception {
@@ -182,7 +183,7 @@ public class ShutdownTaskTest {
 
         final String exceptionMessage = "InvalidStateException is thrown.";
         when(leaseManager.createLeaseIfNotExists(any(KinesisClientLease.class))).thenThrow(new InvalidStateException(exceptionMessage));
-        ShutdownTask task = new ShutdownTask(defaultShardInfo,
+        KinesisShutdownTask task = new KinesisShutdownTask(defaultShardInfo,
                 defaultRecordProcessor,
                 checkpointer,
                 ShutdownReason.TERMINATE,
@@ -211,16 +212,21 @@ public class ShutdownTaskTest {
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
 
-        KinesisClientLease currentLease = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
-        currentLease.setCheckpoint(new ExtendedSequenceNumber("3298"));
+        KinesisClientLease currentLease1 = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        currentLease1.setCheckpoint(new ExtendedSequenceNumber("3298"));
+        KinesisClientLease currentLease2 = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        currentLease2.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
+
         KinesisClientLease adjacentParentLease = createLease("ShardId-1", "leaseOwner", Collections.emptyList());
-        when(leaseCoordinator.getCurrentlyHeldLease(defaultShardId)).thenReturn( currentLease);
-        when(leaseManager.getLease(defaultShardId)).thenReturn(currentLease);
+        when(leaseCoordinator.getCurrentlyHeldLease(defaultShardId)).thenReturn( currentLease1);
+        // 6 times as part of parent lease get in failure mode and then two times in actual execution
+        when(leaseManager.getLease(defaultShardId)).thenReturn(currentLease1, currentLease1, currentLease1, currentLease1,
+                currentLease1, currentLease1, currentLease1, currentLease2);
         when(leaseManager.getLease("ShardId-1")).thenReturn(null, null, null, null, null, adjacentParentLease);
 
         // Make first 5 attempts with partial parent info in lease table
         for (int i = 0; i < 5; i++) {
-            ShutdownTask task = spy(new ShutdownTask(defaultShardInfo,
+            KinesisShutdownTask task = spy(new KinesisShutdownTask(defaultShardInfo,
                                                      defaultRecordProcessor,
                                                      checkpointer,
                                                      ShutdownReason.TERMINATE,
@@ -246,7 +252,7 @@ public class ShutdownTaskTest {
         }
 
         // Make next attempt with complete parent info in lease table
-        ShutdownTask task = spy(new ShutdownTask(defaultShardInfo,
+        KinesisShutdownTask task = spy(new KinesisShutdownTask(defaultShardInfo,
                                                  defaultRecordProcessor,
                                                  checkpointer,
                                                  ShutdownReason.TERMINATE,
@@ -267,7 +273,7 @@ public class ShutdownTaskTest {
         verify(task, never()).isOneInNProbability(RETRY_RANDOM_MAX_RANGE);
         verify(getRecordsCache).shutdown();
         verify(defaultRecordProcessor).shutdown(any(ShutdownInput.class));
-        verify(leaseCoordinator, never()).dropLease(currentLease);
+        verify(leaseCoordinator, never()).dropLease(currentLease1);
     }
 
     @Test
@@ -284,7 +290,7 @@ public class ShutdownTaskTest {
         when(leaseManager.getLease("ShardId-1")).thenReturn(null, null, null, null, null, null, null, null, null, null, null);
 
         for (int i = 0; i < 10; i++) {
-            ShutdownTask task = spy(new ShutdownTask(defaultShardInfo,
+            KinesisShutdownTask task = spy(new KinesisShutdownTask(defaultShardInfo,
                                                      defaultRecordProcessor,
                                                      checkpointer,
                                                      ShutdownReason.TERMINATE,
@@ -309,7 +315,7 @@ public class ShutdownTaskTest {
             verify(defaultRecordProcessor, never()).shutdown(any(ShutdownInput.class));
         }
 
-        ShutdownTask task = spy(new ShutdownTask(defaultShardInfo,
+        KinesisShutdownTask task = spy(new KinesisShutdownTask(defaultShardInfo,
                                                  defaultRecordProcessor,
                                                  checkpointer,
                                                  ShutdownReason.TERMINATE,
@@ -337,10 +343,15 @@ public class ShutdownTaskTest {
     public final void testCallWhenShardEnd() throws Exception {
         RecordProcessorCheckpointer checkpointer = mock(RecordProcessorCheckpointer.class);
         when(checkpointer.getLastCheckpointValue()).thenReturn(ExtendedSequenceNumber.SHARD_END);
+        final KinesisClientLease parentLease1 = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        parentLease1.setCheckpoint(new ExtendedSequenceNumber("3298"));
+        final KinesisClientLease parentLease2 = createLease(defaultShardId, "leaseOwner", Collections.emptyList());
+        parentLease2.setCheckpoint(ExtendedSequenceNumber.SHARD_END);
+        when(leaseManager.getLease(defaultShardId)).thenReturn(parentLease1).thenReturn(parentLease2);
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
 
-        ShutdownTask task = new ShutdownTask(defaultShardInfo,
+        KinesisShutdownTask task = new KinesisShutdownTask(defaultShardInfo,
                                              defaultRecordProcessor,
                                              checkpointer,
                                              ShutdownReason.TERMINATE,
@@ -374,7 +385,7 @@ public class ShutdownTaskTest {
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
 
-        ShutdownTask task = new ShutdownTask(shardInfo,
+        KinesisShutdownTask task = new KinesisShutdownTask(shardInfo,
                                              defaultRecordProcessor,
                                              checkpointer,
                                              ShutdownReason.TERMINATE,
@@ -404,7 +415,7 @@ public class ShutdownTaskTest {
         boolean cleanupLeasesOfCompletedShards = false;
         boolean ignoreUnexpectedChildShards = false;
 
-        ShutdownTask task = new ShutdownTask(defaultShardInfo,
+        KinesisShutdownTask task = new KinesisShutdownTask(defaultShardInfo,
                                              defaultRecordProcessor,
                                              checkpointer,
                                              ShutdownReason.ZOMBIE,
@@ -427,12 +438,12 @@ public class ShutdownTaskTest {
     }
 
     /**
-     * Test method for {@link ShutdownTask#getTaskType()}.
+     * Test method for {@link KinesisShutdownTask#getTaskType()}.
      */
     @Test
     public final void testGetTaskType() {
         KinesisClientLibLeaseCoordinator leaseCoordinator = mock(KinesisClientLibLeaseCoordinator.class);
-        ShutdownTask task = new ShutdownTask(null, null, null, null,
+        KinesisShutdownTask task = new KinesisShutdownTask(null, null, null, null,
                                              null, null, false,
                                              false, leaseCoordinator, 0,
                                              getRecordsCache, shardSyncer, shardSyncStrategy, Collections.emptyList(), leaseCleanupManager);

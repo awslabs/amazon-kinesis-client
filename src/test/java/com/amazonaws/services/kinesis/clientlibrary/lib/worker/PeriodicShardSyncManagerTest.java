@@ -50,6 +50,7 @@ public class PeriodicShardSyncManagerTest {
     private static final String WORKER_ID = "workerId";
     public static final long LEASES_RECOVERY_AUDITOR_EXECUTION_FREQUENCY_MILLIS = 2 * 60 * 1000L;
     public static final int LEASES_RECOVERY_AUDITOR_INCONSISTENCY_CONFIDENCE_THRESHOLD = 3;
+    private static final int MAX_DEPTH_WITH_IN_PROGRESS_PARENTS = 1;
 
     /** Manager for PERIODIC shard sync strategy */
     private PeriodicShardSyncManager periodicShardSyncManager;
@@ -475,7 +476,7 @@ public class PeriodicShardSyncManagerTest {
         for (int i = 0; i < 1000; i++) {
             int maxInitialLeaseCount = 100;
             List<KinesisClientLease> leases = generateInitialLeases(maxInitialLeaseCount);
-            reshard(leases, 5, ReshardType.MERGE, maxInitialLeaseCount, true);
+            reshard(leases, MAX_DEPTH_WITH_IN_PROGRESS_PARENTS, ReshardType.MERGE, maxInitialLeaseCount, true);
             Collections.shuffle(leases);
             Assert.assertFalse(periodicShardSyncManager.hasHoleInLeases(leases).isPresent());
             Assert.assertFalse(auditorPeriodicShardSyncManager.hasHoleInLeases(leases).isPresent());
@@ -487,7 +488,7 @@ public class PeriodicShardSyncManagerTest {
         for (int i = 0; i < 1000; i++) {
             int maxInitialLeaseCount = 100;
             List<KinesisClientLease> leases = generateInitialLeases(maxInitialLeaseCount);
-            reshard(leases, 5, ReshardType.ANY, maxInitialLeaseCount, true);
+            reshard(leases, MAX_DEPTH_WITH_IN_PROGRESS_PARENTS, ReshardType.ANY, maxInitialLeaseCount, true);
             Collections.shuffle(leases);
             Assert.assertFalse(periodicShardSyncManager.hasHoleInLeases(leases).isPresent());
             Assert.assertFalse(auditorPeriodicShardSyncManager.hasHoleInLeases(leases).isPresent());

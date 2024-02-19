@@ -14,25 +14,24 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.leases.LeasePendingDeletion;
 import com.amazonaws.services.kinesis.clientlibrary.exceptions.internal.BlockedOnParentShardException;
-import com.amazonaws.services.kinesis.leases.exceptions.CustomerApplicationException;
-import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
-import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
-import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
-import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
-import com.amazonaws.services.kinesis.leases.impl.UpdateField;
-import com.amazonaws.services.kinesis.model.ChildShard;
-import com.amazonaws.util.CollectionUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor;
 import com.amazonaws.services.kinesis.clientlibrary.proxies.IKinesisProxy;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.clientlibrary.types.ShutdownInput;
+import com.amazonaws.services.kinesis.leases.LeasePendingDeletion;
+import com.amazonaws.services.kinesis.leases.exceptions.CustomerApplicationException;
+import com.amazonaws.services.kinesis.leases.exceptions.DependencyException;
+import com.amazonaws.services.kinesis.leases.exceptions.InvalidStateException;
+import com.amazonaws.services.kinesis.leases.exceptions.ProvisionedThroughputException;
 import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
+import com.amazonaws.services.kinesis.leases.impl.LeaseCleanupManager;
+import com.amazonaws.services.kinesis.leases.impl.UpdateField;
+import com.amazonaws.services.kinesis.model.ChildShard;
+import com.amazonaws.util.CollectionUtils;
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import java.util.List;
 import java.util.Objects;
@@ -44,9 +43,9 @@ import java.util.stream.Collectors;
 /**
  * Task for invoking the RecordProcessor shutdown() callback.
  */
-class ShutdownTask implements ITask {
+public class KinesisShutdownTask implements ITask {
 
-    private static final Log LOG = LogFactory.getLog(ShutdownTask.class);
+    private static final Log LOG = LogFactory.getLog(KinesisShutdownTask.class);
 
     @VisibleForTesting
     static final int RETRY_RANDOM_MAX_RANGE = 50;
@@ -72,7 +71,7 @@ class ShutdownTask implements ITask {
      * Constructor.
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
-    ShutdownTask(ShardInfo shardInfo,
+    KinesisShutdownTask(ShardInfo shardInfo,
             IRecordProcessor recordProcessor,
             RecordProcessorCheckpointer recordProcessorCheckpointer,
             ShutdownReason reason,
@@ -222,11 +221,29 @@ class ShutdownTask implements ITask {
                 .withCheckpointer(recordProcessorCheckpointer);
         recordProcessor.shutdown(shardEndShutdownInput);
 
-        final ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
+        boolean successfullyCheckpointedShardEnd = false;
 
-        final boolean successfullyCheckpointedShardEnd = lastCheckpointValue.equals(ExtendedSequenceNumber.SHARD_END);
+        KinesisClientLease leaseFromDdb = null;
+        try {
+            leaseFromDdb = leaseCoordinator.getLeaseManager().getLease(shardInfo.getShardId());
+        } catch (Exception e) {
+            LOG.error("Shard " + shardInfo.getShardId() + " : Unable to get lease entry for shard to verify shard end checkpointing.", e);
+        }
 
-        if ((lastCheckpointValue == null) || (!successfullyCheckpointedShardEnd)) {
+        if (leaseFromDdb != null && leaseFromDdb.getCheckpoint() != null) {
+            successfullyCheckpointedShardEnd = leaseFromDdb.getCheckpoint().equals(ExtendedSequenceNumber.SHARD_END);
+            final ExtendedSequenceNumber lastCheckpointValue = recordProcessorCheckpointer.getLastCheckpointValue();
+            if (!leaseFromDdb.getCheckpoint().equals(lastCheckpointValue)) {
+                LOG.error("Shard " + shardInfo.getShardId() +
+                        " : Checkpoint information mismatch between authoritative source and local cache. " +
+                        "This does not affect the application flow, but cut a ticket to Kinesis when you see this. " +
+                        "Authoritative entry : " + leaseFromDdb.getCheckpoint() + " Cache entry : " + lastCheckpointValue);
+            }
+        } else {
+            LOG.error("Shard " + shardInfo.getShardId() + " : No lease checkpoint entry for shard to verify shard end checkpointing. Lease Entry : " + leaseFromDdb);
+        }
+
+        if (!successfullyCheckpointedShardEnd) {
             throw new IllegalArgumentException("Application didn't checkpoint at end of shard "
                                                        + shardInfo.getShardId() + ". Application must checkpoint upon shutdown. " +
                                                        "See IRecordProcessor.shutdown javadocs for more information.");

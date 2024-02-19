@@ -1,3 +1,6 @@
+# Bugs in 1.14.0 version
+We recommend customers to migrate to 1.14.1 to avoid [known bugs](https://github.com/awslabs/amazon-kinesis-client/issues/778) in 1.14.0 version
+
 # Amazon Kinesis Client Library for Java
 [![Build Status](https://travis-ci.org/awslabs/amazon-kinesis-client.svg?branch=master)](https://travis-ci.org/awslabs/amazon-kinesis-client) ![BuildStatus](https://codebuild.us-west-2.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoiaWo4bDYyUkpWaG9ZTy9zeFVoaVlWbEwxazdicDJLcmZwUUpFWVVBM0ZueEJSeFIzNkhURzdVbUd6WUZHcGNxa3BEUzNrL0I5Nzc4NE9rbXhvdEpNdlFRPSIsIml2UGFyYW1ldGVyU3BlYyI6IlZDaVZJSTM1QW95bFRTQnYiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=v1.x)
 
@@ -31,7 +34,68 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.14.0 - August 17, 2020)
+### Latest Release (1.15.1 - Feb 5, 2023)
+* [#1214](https://github.com/awslabs/amazon-kinesis-client/pull/1214) Added backoff logic for ShardSyncTaskIntegrationTest
+* [#1214](https://github.com/awslabs/amazon-kinesis-client/pull/1214) Upgrade Guava version from 31.0.1 to 32.1.1
+* [#1252](https://github.com/awslabs/amazon-kinesis-client/pull/1252) Upgrade aws-java-sdk from 1.12.406 to 1.12.647
+
+### Release (1.15.0 - Jun 8, 2023)
+* **[#1108](https://github.com/awslabs/amazon-kinesis-client/pull/1108) Add support for Stream ARNs**
+* [#1111](https://github.com/awslabs/amazon-kinesis-client/pull/1111) More consistent testing behavior with HashRangesAreAlwaysComplete
+* [#1054](https://github.com/awslabs/amazon-kinesis-client/pull/1054) Upgrade log4j-core from 2.17.1 to 2.20.0
+* [#1103](https://github.com/awslabs/amazon-kinesis-client/pull/1103) Upgrade jackson-core from 2.13.0 to 2.15.0
+* [#943](https://github.com/awslabs/amazon-kinesis-client/pull/943) Upgrade nexus-staging-maven-plugin from 1.6.8 to 1.6.13
+* [#1044](https://github.com/awslabs/amazon-kinesis-client/pull/1044) Upgrade aws-java-sdk.version from 1.12.406 to 1.12.408
+* [#1055](https://github.com/awslabs/amazon-kinesis-client/pull/1055) Upgrade maven-compiler-plugin from 3.10.0 to 3.11.0
+
+### Release (1.14.10 - Feb 15, 2023)
+* Updated aws-java-sdk from 1.12.130 to 1.12.406
+* Updated com.google.protobuf from 3.19.4 to 3.19.6
+	* [Issue #1026](https://github.com/awslabs/amazon-kinesis-client/issues/1026)
+	* [PR #1042](https://github.com/awslabs/amazon-kinesis-client/pull/1042)
+
+### Release (1.14.9 - Dec 14, 2022)
+* [#995](https://github.com/awslabs/amazon-kinesis-client/commit/372f98b21a91487e36612d528c56765a44b0aa86) Every other change for DynamoDBStreamsKinesis Adapter Compatibility
+* [#970](https://github.com/awslabs/amazon-kinesis-client/commit/251b331a2e0fd912b50f8b5a12d088bf0b3263b9) PeriodicShardSyncManager Changes Needed for DynamoDBStreamsKinesisAdapter
+
+### Release (1.14.8 - Feb 24, 2022)
+* [Bump log4j-core from 2.17.0 to 2.17.1](https://github.com/awslabs/amazon-kinesis-client/commit/94b138a9d9a502ee0f4f000bb0efd2766ebadc37)
+* [Bump protobuf-java from 3.19.1 to 3.19.4](https://github.com/awslabs/amazon-kinesis-client/commit/a809b12c43c57a3d6ad3827feb60e4322614259c)
+* [Bump maven-compiler-plugin from 3.8.1 to 3.10.0](https://github.com/awslabs/amazon-kinesis-client/commit/37b5d7b9a1ccad483469ef542a6a7237462b14f2)
+
+### Release (1.14.7 - Dec 22, 2021)
+* [#881](https://github.com/awslabs/amazon-kinesis-client/pull/881) Update log4j test dependency from 2.16.0 to 2.17.0 and some other dependencies
+
+### Release (1.14.6 - Dec 15, 2021)
+* [#876](https://github.com/awslabs/amazon-kinesis-client/pull/876) Update log4j test dependency from 2.15.0 to 2.16.0
+
+### Release (1.14.5 - Dec 10, 2021)
+* [#872](https://github.com/awslabs/amazon-kinesis-client/pull/872) Update log4j test dependency from 1.2.17 to 2.15.0
+* [#873](https://github.com/awslabs/amazon-kinesis-client/pull/873) Upgrading version of AWS Java SDK to 1.12.128
+
+### Release (1.14.4 - June 14, 2021)
+* [Milestone#61](https://github.com/awslabs/amazon-kinesis-client/milestone/61)
+* [#816](https://github.com/awslabs/amazon-kinesis-client/pull/816) Updated the Worker shutdown logic to make sure that the `LeaseCleanupManager` also terminates all the threads that it has started.
+* [#821](https://github.com/awslabs/amazon-kinesis-client/pull/821) Upgrading version of AWS Java SDK to 1.12.3
+
+### Release (1.14.3 - May 3, 2021)
+* [Milestone#60](https://github.com/awslabs/amazon-kinesis-client/milestone/60)
+* [#811](https://github.com/awslabs/amazon-kinesis-client/pull/811) Fixing a bug in `KinesisProxy` that can lead to undetermined behavior during partial failures.
+* [#811](https://github.com/awslabs/amazon-kinesis-client/pull/811) Adding guardrails to handle duplicate shards from the service.
+
+## Release (1.14.2 - February 24, 2021)
+* [Milestone#57](https://github.com/awslabs/amazon-kinesis-client/milestone/57)
+* [#790](https://github.com/awslabs/amazon-kinesis-client/pull/790) Fixing a bug that caused paginated `ListShards` calls with the `ShardFilter` parameter to fail when the lease table was being initialized.
+
+### Release (1.14.1 - January 27, 2021)
+* [Milestone#56](https://github.com/awslabs/amazon-kinesis-client/milestone/56)
+
+* Fix for cross DDB table interference when multiple KCL applications are run in same JVM.
+* Fix and guards to avoid potential checkpoint rewind during shard end, which may block children shard processing.
+* Fix for thread cycle wastage on InitializeTask for deleted shard.
+* Improved logging in LeaseCleanupManager that would indicate why certain shards are not cleaned up from the lease table.
+
+### Release (1.14.0 - August 17, 2020)
 
 * [Milestone#50](https://github.com/awslabs/amazon-kinesis-client/milestone/50)
 

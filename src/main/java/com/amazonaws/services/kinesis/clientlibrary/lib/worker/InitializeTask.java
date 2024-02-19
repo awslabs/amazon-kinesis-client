@@ -14,6 +14,7 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
+import com.amazonaws.services.kinesis.clientlibrary.exceptions.KinesisClientLibNonRetryableException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -28,7 +29,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.MetricsLevel;
 /**
  * Task for initializing shard position and invoking the RecordProcessor initialize() API.
  */
-class InitializeTask implements ITask {
+public class InitializeTask implements ITask {
 
     private static final Log LOG = LogFactory.getLog(InitializeTask.class);
 
@@ -36,7 +37,7 @@ class InitializeTask implements ITask {
 
     private final ShardInfo shardInfo;
     private final IRecordProcessor recordProcessor;
-    private final KinesisDataFetcher dataFetcher;
+    private final IDataFetcher dataFetcher;
     private final TaskType taskType = TaskType.INITIALIZE;
     private final ICheckpoint checkpoint;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
@@ -48,11 +49,11 @@ class InitializeTask implements ITask {
     /**
      * Constructor.
      */
-    InitializeTask(ShardInfo shardInfo,
+    public InitializeTask(ShardInfo shardInfo,
                    IRecordProcessor recordProcessor,
                    ICheckpoint checkpoint,
                    RecordProcessorCheckpointer recordProcessorCheckpointer,
-                   KinesisDataFetcher dataFetcher,
+                   IDataFetcher dataFetcher,
                    long backoffTimeMillis,
                    StreamConfig streamConfig,
                    GetRecordsCache getRecordsCache) {
@@ -79,7 +80,15 @@ class InitializeTask implements ITask {
 
         try {
             LOG.debug("Initializing ShardId " + shardInfo.getShardId());
-            Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.getShardId());
+            Checkpoint initialCheckpointObject;
+            try {
+                initialCheckpointObject = checkpoint.getCheckpointObject(shardInfo.getShardId());
+            } catch (KinesisClientLibNonRetryableException e) {
+                LOG.error("Caught exception while fetching checkpoint for " + shardInfo.getShardId(), e);
+                final TaskResult result = new TaskResult(e);
+                result.leaseNotFound();
+                return result;
+            }
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.getCheckpoint();
 
             dataFetcher.initialize(initialCheckpoint.getSequenceNumber(), streamConfig.getInitialPositionInStream());

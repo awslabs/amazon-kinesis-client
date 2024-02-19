@@ -30,7 +30,7 @@ import java.util.List;
  * It will clean up leases/activities for shards that have been completely processed (if
  * cleanupLeasesUponShardCompletion is true).
  */
-class ShardSyncTask implements ITask {
+public class ShardSyncTask implements ITask {
 
     private static final Log LOG = LogFactory.getLog(ShardSyncTask.class);
 
@@ -56,7 +56,7 @@ class ShardSyncTask implements ITask {
      * @param shardSyncer shardSyncer instance used to check and create new leases
      * @param latestShards latest snapshot of shards to reuse
      */
-    ShardSyncTask(IKinesisProxy kinesisProxy,
+    public ShardSyncTask(IKinesisProxy kinesisProxy,
             ILeaseManager<KinesisClientLease> leaseManager,
             InitialPositionInStreamExtended initialPositionInStream,
             boolean cleanupLeasesUponShardCompletion,

@@ -186,7 +186,7 @@ public class WorkerTest {
     @Mock
     private IRecordProcessor v2RecordProcessor;
     @Mock
-    private ShardConsumer shardConsumer;
+    private IShardConsumer shardConsumer;
     @Mock
     private Future<TaskResult> taskFuture;
     @Mock
@@ -204,6 +204,10 @@ public class WorkerTest {
         when(config.getRecordsFetcherFactory()).thenReturn(recordsFetcherFactory);
         when(leaseCoordinator.getLeaseManager()).thenReturn(mock(ILeaseManager.class));
         when(streamConfig.getStreamProxy()).thenReturn(kinesisProxy);
+        Worker.MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 10;
+        Worker.MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 50;
+        Worker.LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 10;
+
     }
 
     // CHECKSTYLE:IGNORE AnonInnerLengthCheck FOR NEXT 50 LINES
@@ -293,13 +297,13 @@ public class WorkerTest {
                         KinesisClientLibConfiguration.DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST,
                         shardPrioritization);
         ShardInfo shardInfo = new ShardInfo(dummyKinesisShardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
-        ShardConsumer consumer = worker.createOrGetShardConsumer(shardInfo, streamletFactory);
+        IShardConsumer consumer = worker.createOrGetShardConsumer(shardInfo, streamletFactory);
         Assert.assertNotNull(consumer);
-        ShardConsumer consumer2 = worker.createOrGetShardConsumer(shardInfo, streamletFactory);
+        IShardConsumer consumer2 = worker.createOrGetShardConsumer(shardInfo, streamletFactory);
         Assert.assertSame(consumer, consumer2);
         ShardInfo shardInfoWithSameShardIdButDifferentConcurrencyToken =
                 new ShardInfo(dummyKinesisShardId, anotherConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
-        ShardConsumer consumer3 =
+        IShardConsumer consumer3 =
                 worker.createOrGetShardConsumer(shardInfoWithSameShardIdButDifferentConcurrencyToken, streamletFactory);
         Assert.assertNotNull(consumer3);
         Assert.assertNotSame(consumer3, consumer);
@@ -415,10 +419,10 @@ public class WorkerTest {
                 new ShardInfo(dummyKinesisShardId, anotherConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
         ShardInfo shardInfo2 = new ShardInfo(anotherDummyKinesisShardId, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
 
-        ShardConsumer consumerOfShardInfo1 = worker.createOrGetShardConsumer(shardInfo1, streamletFactory);
-        ShardConsumer consumerOfDuplicateOfShardInfo1ButWithAnotherConcurrencyToken =
+        IShardConsumer consumerOfShardInfo1 = worker.createOrGetShardConsumer(shardInfo1, streamletFactory);
+        IShardConsumer consumerOfDuplicateOfShardInfo1ButWithAnotherConcurrencyToken =
                 worker.createOrGetShardConsumer(duplicateOfShardInfo1ButWithAnotherConcurrencyToken, streamletFactory);
-        ShardConsumer consumerOfShardInfo2 = worker.createOrGetShardConsumer(shardInfo2, streamletFactory);
+        IShardConsumer consumerOfShardInfo2 = worker.createOrGetShardConsumer(shardInfo2, streamletFactory);
 
         Set<ShardInfo> assignedShards = new HashSet<ShardInfo>();
         assignedShards.add(shardInfo1);
@@ -1215,11 +1219,11 @@ public class WorkerTest {
                 false,
                 shardPrioritization);
 
-        final Map<ShardInfo, ShardConsumer> shardInfoShardConsumerMap = worker.getShardInfoShardConsumerMap();
+        final Map<ShardInfo, IShardConsumer> shardInfoShardConsumerMap = worker.getShardInfoShardConsumerMap();
         final ShardInfo completedShardInfo = KinesisClientLibLeaseCoordinator.convertLeaseToAssignment(completedLease);
-        final ShardConsumer completedShardConsumer = mock(ShardConsumer.class);
+        final KinesisShardConsumer completedShardConsumer = mock(KinesisShardConsumer.class);
         shardInfoShardConsumerMap.put(completedShardInfo, completedShardConsumer);
-        when(completedShardConsumer.getCurrentState()).thenReturn(ConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE);
+        when(completedShardConsumer.getCurrentState()).thenReturn(KinesisConsumerStates.ShardConsumerState.SHUTDOWN_COMPLETE);
 
         Callable<GracefulShutdownContext> callable = worker.createWorkerShutdownCallable();
         assertThat(worker.hasGracefulShutdownStarted(), equalTo(false));
@@ -1334,11 +1338,11 @@ public class WorkerTest {
 
         verify(executorService).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
                 .and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN)).and(ReflectionFieldMatcher
-                        .withField(ShutdownTask.class, "shardInfo", equalTo(shardInfo1)))));
+                        .withField(KinesisShutdownTask.class, "shardInfo", equalTo(shardInfo1)))));
 
         verify(executorService, never()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
                 .and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN)).and(ReflectionFieldMatcher
-                        .withField(ShutdownTask.class, "shardInfo", equalTo(shardInfo2)))));
+                        .withField(KinesisShutdownTask.class, "shardInfo", equalTo(shardInfo2)))));
 
     }
 
@@ -1447,11 +1451,11 @@ public class WorkerTest {
 
         verify(executorService, never()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
                 .and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN)).and(ReflectionFieldMatcher
-                        .withField(ShutdownTask.class, "shardInfo", equalTo(shardInfo1)))));
+                        .withField(KinesisShutdownTask.class, "shardInfo", equalTo(shardInfo1)))));
 
         verify(executorService, never()).submit(argThat(both(isA(MetricsCollectingTaskDecorator.class))
                 .and(TaskTypeMatcher.isOfType(TaskType.SHUTDOWN)).and(ReflectionFieldMatcher
-                        .withField(ShutdownTask.class, "shardInfo", equalTo(shardInfo2)))));
+                        .withField(KinesisShutdownTask.class, "shardInfo", equalTo(shardInfo2)))));
 
 
 
@@ -2009,19 +2013,19 @@ public class WorkerTest {
         @Override
         protected boolean matchesSafely(MetricsCollectingTaskDecorator item, Description mismatchDescription) {
             return Condition.matched(item, mismatchDescription)
-                    .and(new Condition.Step<MetricsCollectingTaskDecorator, ShutdownTask>() {
+                    .and(new Condition.Step<MetricsCollectingTaskDecorator, KinesisShutdownTask>() {
                         @Override
-                        public Condition<ShutdownTask> apply(MetricsCollectingTaskDecorator value,
+                        public Condition<KinesisShutdownTask> apply(MetricsCollectingTaskDecorator value,
                                 Description mismatch) {
-                            if (!(value.getOther() instanceof ShutdownTask)) {
+                            if (!(value.getOther() instanceof KinesisShutdownTask)) {
                                 mismatch.appendText("Wrapped task isn't a shutdown task");
                                 return Condition.notMatched();
                             }
-                            return Condition.matched((ShutdownTask) value.getOther(), mismatch);
+                            return Condition.matched((KinesisShutdownTask) value.getOther(), mismatch);
                         }
-                    }).and(new Condition.Step<ShutdownTask, ShutdownReason>() {
+                    }).and(new Condition.Step<KinesisShutdownTask, ShutdownReason>() {
                         @Override
-                        public Condition<ShutdownReason> apply(ShutdownTask value, Description mismatch) {
+                        public Condition<ShutdownReason> apply(KinesisShutdownTask value, Description mismatch) {
                             return Condition.matched(value.getReason(), mismatch);
                         }
                     }).matching(matcher);

@@ -24,7 +24,7 @@ import lombok.NonNull;
 @Data
 public class SynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrievalStrategy {
     @NonNull
-    private final KinesisDataFetcher dataFetcher;
+    private final IDataFetcher dataFetcher;
 
     @Override
     public GetRecordsResult getRecords(final int maxRecords) {
@@ -44,7 +44,7 @@ public class SynchronousGetRecordsRetrievalStrategy implements GetRecordsRetriev
     }
     
     @Override
-    public KinesisDataFetcher getDataFetcher() {
+    public IDataFetcher getDataFetcher() {
         return dataFetcher;
     }
 }

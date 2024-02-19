@@ -79,7 +79,7 @@ public class KinesisClientLibLeaseCoordinatorTest {
         leaseCoordinator.initialize();
     }
 
-    @Test(expected = KinesisClientLibIOException.class)
+    @Test(expected = com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException.class)
     public void testGetCheckpointObjectWithNoLease()
             throws DependencyException, ProvisionedThroughputException, IllegalStateException, InvalidStateException,
             KinesisClientLibException {

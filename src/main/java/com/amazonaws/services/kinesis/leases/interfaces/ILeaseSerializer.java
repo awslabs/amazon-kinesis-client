@@ -75,6 +75,14 @@ public interface ILeaseSerializer<T extends Lease> {
     public Map<String, ExpectedAttributeValue> getDynamoLeaseOwnerExpectation(T lease);
 
     /**
+     * @param lease
+     * @return the attribute value map asserting that the checkpoint state is as expected.
+     */
+    default Map<String, ExpectedAttributeValue> getDynamoLeaseCheckpointExpectation(T lease) {
+        throw new UnsupportedOperationException("DynamoLeaseCheckpointExpectation is not implemented");
+    }
+
+    /**
      * @return the attribute value map asserting that a lease does not exist.
      */
     public Map<String, ExpectedAttributeValue> getDynamoNonexistantExpectation();

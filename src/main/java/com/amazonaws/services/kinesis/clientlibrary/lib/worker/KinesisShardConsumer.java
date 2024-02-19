@@ -14,7 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -35,7 +34,6 @@ import com.amazonaws.services.kinesis.leases.impl.KinesisClientLease;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseManager;
 import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import com.google.common.annotations.VisibleForTesting;
-
 import lombok.Getter;
 
 /**
@@ -43,9 +41,9 @@ import lombok.Getter;
  * The instance should be shutdown when we lose the primary responsibility for a shard.
  * A new instance should be created if the primary responsibility is reassigned back to this process.
  */
-class ShardConsumer {
+public class KinesisShardConsumer implements IShardConsumer{
 
-    private static final Log LOG = LogFactory.getLog(ShardConsumer.class);
+    private static final Log LOG = LogFactory.getLog(KinesisShardConsumer.class);
 
     private final StreamConfig streamConfig;
     private final IRecordProcessor recordProcessor;
@@ -78,7 +76,7 @@ class ShardConsumer {
     @Getter
     private final GetRecordsCache getRecordsCache;
 
-    private static final GetRecordsRetrievalStrategy makeStrategy(KinesisDataFetcher dataFetcher,
+    private static final GetRecordsRetrievalStrategy makeStrategy(IDataFetcher dataFetcher,
             Optional<Integer> retryGetRecordsInSeconds,
             Optional<Integer> maxGetRecordsThreadPool,
             ShardInfo shardInfo) {
@@ -93,7 +91,7 @@ class ShardConsumer {
      * Tracks current state. It is only updated via the consumeStream/shutdown APIs. Therefore we don't do
      * much coordination/synchronization to handle concurrent reads/updates.
      */
-    private ConsumerStates.ConsumerState currentState = ConsumerStates.INITIAL_STATE;
+    private KinesisConsumerStates.ConsumerState currentState = KinesisConsumerStates.INITIAL_STATE;
     /*
      * Used to track if we lost the primary responsibility. Once set to true, we will start shutting down.
      * If we regain primary responsibility before shutdown is complete, Worker should create a new ShardConsumer object.
@@ -116,7 +114,7 @@ class ShardConsumer {
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     @Deprecated
-    ShardConsumer(ShardInfo shardInfo,
+    KinesisShardConsumer(ShardInfo shardInfo,
             StreamConfig streamConfig,
             ICheckpoint checkpoint,
             IRecordProcessor recordProcessor,
@@ -162,7 +160,7 @@ class ShardConsumer {
      */
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 10 LINES
     @Deprecated
-    ShardConsumer(ShardInfo shardInfo,
+    KinesisShardConsumer(ShardInfo shardInfo,
             StreamConfig streamConfig,
             ICheckpoint checkpoint,
             IRecordProcessor recordProcessor,
@@ -223,7 +221,7 @@ class ShardConsumer {
      * @param shardSyncer shardSyncer instance used to check and create new leases
      */
     @Deprecated
-    ShardConsumer(ShardInfo shardInfo,
+    KinesisShardConsumer(ShardInfo shardInfo,
             StreamConfig streamConfig,
             ICheckpoint checkpoint,
             IRecordProcessor recordProcessor,
@@ -243,7 +241,7 @@ class ShardConsumer {
         this(shardInfo, streamConfig, checkpoint, recordProcessor, recordProcessorCheckpointer, leaseCoordinator,
         parentShardPollIntervalMillis, cleanupLeasesOfCompletedShards, executorService, metricsFactory,
         backoffTimeMillis, skipShardSyncAtWorkerInitializationIfLeasesExist, kinesisDataFetcher, retryGetRecordsInSeconds,
-        maxGetRecordsThreadPool, config, shardSyncer, shardSyncStrategy, LeaseCleanupManager.createOrGetInstance(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
+        maxGetRecordsThreadPool, config, shardSyncer, shardSyncStrategy, LeaseCleanupManager.newInstance(streamConfig.getStreamProxy(), leaseCoordinator.getLeaseManager(),
                 Executors.newSingleThreadScheduledExecutor(), metricsFactory, config.shouldCleanupLeasesUponShardCompletion(),
                 config.leaseCleanupIntervalMillis(), config.completedLeaseCleanupThresholdMillis(),
                 config.garbageLeaseCleanupThresholdMillis(), config.getMaxRecords()));
@@ -269,23 +267,23 @@ class ShardConsumer {
      * @param shardSyncer shardSyncer instance used to check and create new leases
      * @param leaseCleanupManager used to clean up leases in lease table.
      */
-    ShardConsumer(ShardInfo shardInfo,
-                  StreamConfig streamConfig,
-                  ICheckpoint checkpoint,
-                  IRecordProcessor recordProcessor,
-                  RecordProcessorCheckpointer recordProcessorCheckpointer,
-                  KinesisClientLibLeaseCoordinator leaseCoordinator,
-                  long parentShardPollIntervalMillis,
-                  boolean cleanupLeasesOfCompletedShards,
-                  ExecutorService executorService,
-                  IMetricsFactory metricsFactory,
-                  long backoffTimeMillis,
-                  boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                  KinesisDataFetcher kinesisDataFetcher,
-                  Optional<Integer> retryGetRecordsInSeconds,
-                  Optional<Integer> maxGetRecordsThreadPool,
-                  KinesisClientLibConfiguration config, ShardSyncer shardSyncer, ShardSyncStrategy shardSyncStrategy,
-                  LeaseCleanupManager leaseCleanupManager) {
+    KinesisShardConsumer(ShardInfo shardInfo,
+            StreamConfig streamConfig,
+            ICheckpoint checkpoint,
+            IRecordProcessor recordProcessor,
+            RecordProcessorCheckpointer recordProcessorCheckpointer,
+            KinesisClientLibLeaseCoordinator leaseCoordinator,
+            long parentShardPollIntervalMillis,
+            boolean cleanupLeasesOfCompletedShards,
+            ExecutorService executorService,
+            IMetricsFactory metricsFactory,
+            long backoffTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+            KinesisDataFetcher kinesisDataFetcher,
+            Optional<Integer> retryGetRecordsInSeconds,
+            Optional<Integer> maxGetRecordsThreadPool,
+            KinesisClientLibConfiguration config, ShardSyncer shardSyncer, ShardSyncStrategy shardSyncStrategy,
+            LeaseCleanupManager leaseCleanupManager) {
         this.shardInfo = shardInfo;
         this.streamConfig = streamConfig;
         this.checkpoint = checkpoint;
@@ -314,7 +312,7 @@ class ShardConsumer {
      *
      * @return true if a new process task was submitted, false otherwise
      */
-    synchronized boolean consumeShard() {
+    public synchronized boolean consumeShard() {
         return checkAndSubmitNextTask();
     }
 
@@ -373,10 +371,6 @@ class ShardConsumer {
         return skipShardSyncAtWorkerInitializationIfLeasesExist;
     }
 
-    private enum TaskOutcome {
-        SUCCESSFUL, END_OF_SHARD, NOT_COMPLETE, FAILURE
-    }
-
     private TaskOutcome determineTaskOutcome() {
         try {
             TaskResult result = future.get();
@@ -391,6 +385,10 @@ class ShardConsumer {
                 return TaskOutcome.SUCCESSFUL;
             }
             logTaskException(result);
+            // This is the case of result with exception
+            if (result.isLeaseNotFound()) {
+                return TaskOutcome.LEASE_NOT_FOUND;
+            }
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
@@ -419,7 +417,7 @@ class ShardConsumer {
      *
      * @param shutdownNotification used to signal that the record processor has been given the chance to shutdown.
      */
-    void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
+    public void notifyShutdownRequested(ShutdownNotification shutdownNotification) {
         this.shutdownNotification = shutdownNotification;
         markForShutdown(ShutdownReason.REQUESTED);
     }
@@ -430,7 +428,7 @@ class ShardConsumer {
      *
      * @return true if shutdown is complete (false if shutdown is still in progress)
      */
-    synchronized boolean beginShutdown() {
+    public synchronized boolean beginShutdown() {
         markForShutdown(ShutdownReason.ZOMBIE);
         checkAndSubmitNextTask();
 
@@ -450,14 +448,14 @@ class ShardConsumer {
      *
      * @return true if shutdown is complete
      */
-    boolean isShutdown() {
+    public boolean isShutdown() {
         return currentState.isTerminal();
     }
 
     /**
      * @return the shutdownReason
      */
-    ShutdownReason getShutdownReason() {
+    public ShutdownReason getShutdownReason() {
         return shutdownReason;
     }
 
@@ -487,9 +485,13 @@ class ShardConsumer {
             markForShutdown(ShutdownReason.TERMINATE);
             LOG.info("Shard " + shardInfo.getShardId() + ": Mark for shutdown with reason TERMINATE");
         }
+        if (taskOutcome == TaskOutcome.LEASE_NOT_FOUND) {
+            markForShutdown(ShutdownReason.ZOMBIE);
+            LOG.info("Shard " + shardInfo.getShardId() + ": Mark for shutdown with reason ZOMBIE as lease was not found");
+        }
         if (isShutdownRequested() && taskOutcome != TaskOutcome.FAILURE) {
             currentState = currentState.shutdownTransition(shutdownReason);
-        } else if (isShutdownRequested() && ConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS.equals(currentState.getState())) {
+        } else if (isShutdownRequested() && KinesisConsumerStates.ShardConsumerState.WAITING_ON_PARENT_SHARDS.equals(currentState.getState())) {
             currentState = currentState.shutdownTransition(shutdownReason);
         } else if (taskOutcome == TaskOutcome.SUCCESSFUL) {
             if (currentState.getTaskType() == currentTask.getTaskType()) {
@@ -508,7 +510,7 @@ class ShardConsumer {
     }
 
     @VisibleForTesting
-    boolean isShutdownRequested() {
+    public boolean isShutdownRequested() {
         return shutdownReason != null;
     }
 
@@ -517,7 +519,7 @@ class ShardConsumer {
      *
      * @return the currentState
      */
-    ConsumerStates.ShardConsumerState getCurrentState() {
+    public KinesisConsumerStates.ShardConsumerState getCurrentState() {
         return currentState.getState();
     }
 

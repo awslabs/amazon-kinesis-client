@@ -93,6 +93,8 @@ public class ShardSyncerTest {
     private LeaseManager<KinesisClientLease> leaseManager = new KinesisClientLeaseManager("tempTestTable", ddbClient, KinesisClientLibConfiguration.DEFAULT_DDB_BILLING_MODE);
     protected static final KinesisLeaseCleanupValidator leaseCleanupValidator = new KinesisLeaseCleanupValidator();
     private static final KinesisShardSyncer shardSyncer = new KinesisShardSyncer(leaseCleanupValidator);
+    private static final HashKeyRange hashKeyRange = new HashKeyRange().withStartingHashKey("0").withEndingHashKey("10");
+
     /**
      * Old/Obsolete max value of a sequence number (2^128 -1).
      */
@@ -154,10 +156,10 @@ public class ShardSyncerTest {
         SequenceNumberRange sequenceRange = ShardObjectHelper.newSequenceNumberRange("342980", null);
 
         String shardId0 = "shardId-0";
-        shards.add(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange, hashKeyRange));
 
         String shardId1 = "shardId-1";
-        shards.add(ShardObjectHelper.newShard(shardId1, null, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardId1, null, null, sequenceRange, hashKeyRange));
 
         final LeaseSynchronizer leaseSynchronizer = getLeaseSynchronizer(shards, currentLeases);
 
@@ -183,16 +185,16 @@ public class ShardSyncerTest {
         SequenceNumberRange sequenceRange = ShardObjectHelper.newSequenceNumberRange("342980", null);
 
         String shardId0 = "shardId-0";
-        shards.add(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange, hashKeyRange));
 
         String shardId1 = "shardId-1";
-        shards.add(ShardObjectHelper.newShard(shardId1, null, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardId1, null, null, sequenceRange, hashKeyRange));
 
         String shardId2 = "shardId-2";
-        shards.add(ShardObjectHelper.newShard(shardId2, shardId1, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardId2, shardId1, null, sequenceRange, hashKeyRange));
 
         String shardIdWithLease = "shardId-3";
-        shards.add(ShardObjectHelper.newShard(shardIdWithLease, shardIdWithLease, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardIdWithLease, shardIdWithLease, null, sequenceRange, hashKeyRange));
 
         currentLeases.add(newLease(shardIdWithLease));
 
@@ -699,9 +701,9 @@ public class ShardSyncerTest {
         SequenceNumberRange sequenceRange = ShardObjectHelper.newSequenceNumberRange("342980", null);
 
         String shardId0 = "shardId-0";
-        shards.add(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange, hashKeyRange));
         String shardId1 = "shardId-1";
-        shards.add(ShardObjectHelper.newShard(shardId1, null, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardId1, null, null, sequenceRange, hashKeyRange));
         File dataFile = KinesisLocalFileDataCreator.generateTempDataFile(shards, 2, "testBootstrap1");
         dataFile.deleteOnExit();
         IKinesisProxy kinesisProxy = new KinesisLocalFileProxy(dataFile.getAbsolutePath());
@@ -731,10 +733,10 @@ public class ShardSyncerTest {
         SequenceNumberRange sequenceRange = ShardObjectHelper.newSequenceNumberRange("342980", null);
 
         String shardId0 = "shardId-0";
-        shards.add(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardId0, null, null, sequenceRange, hashKeyRange));
 
         String shardId1 = "shardId-1";
-        shards.add(ShardObjectHelper.newShard(shardId1, null, null, sequenceRange));
+        shards.add(ShardObjectHelper.newShard(shardId1, null, null, sequenceRange, hashKeyRange));
 
         Set<InitialPositionInStreamExtended> initialPositions = new HashSet<InitialPositionInStreamExtended>();
         initialPositions.add(INITIAL_POSITION_LATEST);
@@ -769,17 +771,20 @@ public class ShardSyncerTest {
         shardsWithoutLeases.add(ShardObjectHelper.newShard("shardId-0",
                 null,
                 null,
-                ShardObjectHelper.newSequenceNumberRange("303", "404")));
+                ShardObjectHelper.newSequenceNumberRange("303", "404"),
+                hashKeyRange));
         final String lastShardId = "shardId-1";
         shardsWithoutLeases.add(ShardObjectHelper.newShard(lastShardId,
                 null,
                 null,
-                ShardObjectHelper.newSequenceNumberRange("405", null)));
+                ShardObjectHelper.newSequenceNumberRange("405", null),
+                hashKeyRange));
 
         shardsWithLeases.add(ShardObjectHelper.newShard("shardId-2",
                 null,
                 null,
-                ShardObjectHelper.newSequenceNumberRange("202", "302")));
+                ShardObjectHelper.newSequenceNumberRange("202", "302"),
+                hashKeyRange));
         currentLeases.add(newLease("shardId-2"));
 
         final List<Shard> allShards =
@@ -805,12 +810,14 @@ public class ShardSyncerTest {
         shards.add(ShardObjectHelper.newShard(firstShardId,
                 null,
                 null,
-                ShardObjectHelper.newSequenceNumberRange("303", "404")));
+                ShardObjectHelper.newSequenceNumberRange("303", "404"),
+                hashKeyRange));
         final String lastShardId = "shardId-1";
         shards.add(ShardObjectHelper.newShard(lastShardId,
                 null,
                 null,
-                ShardObjectHelper.newSequenceNumberRange("405", null)));
+                ShardObjectHelper.newSequenceNumberRange("405", null),
+                hashKeyRange));
 
         final LeaseSynchronizer leaseSynchronizer = getLeaseSynchronizer(shards, currentLeases);
 
@@ -1969,14 +1976,14 @@ public class ShardSyncerTest {
         Map<String, Shard> kinesisShards = new HashMap<String, Shard>();
 
         String parentShardId = "shardId-parent";
-        kinesisShards.put(parentShardId, ShardObjectHelper.newShard(parentShardId, null, null, null));
+        kinesisShards.put(parentShardId, ShardObjectHelper.newShard(parentShardId, null, null, null, hashKeyRange));
         shardIdsOfCurrentLeases.add(parentShardId);
 
         String adjacentParentShardId = "shardId-adjacentParent";
-        kinesisShards.put(adjacentParentShardId, ShardObjectHelper.newShard(adjacentParentShardId, null, null, null));
+        kinesisShards.put(adjacentParentShardId, ShardObjectHelper.newShard(adjacentParentShardId, null, null, null, hashKeyRange));
 
         String shardId = "shardId-9-1";
-        Shard shard = ShardObjectHelper.newShard(shardId, parentShardId, adjacentParentShardId, null);
+        Shard shard = ShardObjectHelper.newShard(shardId, parentShardId, adjacentParentShardId, null, hashKeyRange);
         kinesisShards.put(shardId, shard);
 
         final MemoizationContext memoizationContext = new MemoizationContext();
@@ -2097,6 +2104,7 @@ public class ShardSyncerTest {
         String adjacentParentShardId = "shardId-adjacentParent";
         shard.setParentShardId(parentShardId);
         shard.setAdjacentParentShardId(adjacentParentShardId);
+        shard.setHashKeyRange(hashKeyRange);
 
         KinesisClientLease lease = shardSyncer.newKCLLease(shard);
         Assert.assertEquals(shardId, lease.getLeaseKey());

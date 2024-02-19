@@ -51,7 +51,7 @@ import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 /**
  * This class is used to coordinate/manage leases owned by this worker process and to get/set checkpoints.
  */
-class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLease> implements ICheckpoint {
+public class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLease> implements ICheckpoint {
 
     private static final Log LOG = LogFactory.getLog(KinesisClientLibLeaseCoordinator.class);
 
@@ -283,7 +283,8 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
         try {
             KinesisClientLease lease = leaseManager.getLease(shardId);
             if (lease == null) {
-                throw new KinesisClientLibIOException(errorMessage);
+                // This is a KinesisClientLibNonRetryableException
+                throw new com.amazonaws.services.kinesis.clientlibrary.exceptions.InvalidStateException(errorMessage);
             }
             return new Checkpoint(lease.getCheckpoint(), lease.getPendingCheckpoint());
         } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
@@ -367,7 +368,7 @@ class KinesisClientLibLeaseCoordinator extends LeaseCoordinator<KinesisClientLea
      *
      * @return LeaseManager
      */
-    ILeaseManager<KinesisClientLease> getLeaseManager() {
+    public ILeaseManager<KinesisClientLease> getLeaseManager() {
         return leaseManager;
     }
 

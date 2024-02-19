@@ -22,7 +22,7 @@ import java.util.List;
  * Used to capture information from a task that we want to communicate back to the higher layer.
  * E.g. exception thrown when executing the task, if we reach end of a shard.
  */
-class TaskResult {
+public class TaskResult {
 
     // Did we reach the end of the shard while processing this task.
     private boolean shardEndReached;
@@ -33,10 +33,12 @@ class TaskResult {
     // List of childShards of the current shard. This field is only required for the task result when we reach end of a shard.
     private List<ChildShard> childShards;
 
+    private boolean leaseNotFound;
+
     /**
      * @return the shardEndReached
      */
-    protected boolean isShardEndReached() {
+    public boolean isShardEndReached() {
         return shardEndReached;
     }
 
@@ -57,6 +59,14 @@ class TaskResult {
      */
     protected void setChildShards(List<ChildShard> childShards) { this.childShards = childShards; }
 
+    public boolean isLeaseNotFound() {
+        return leaseNotFound;
+    }
+
+    public void leaseNotFound() {
+        this.leaseNotFound = true;
+    }
+
     /**
      * @return the exception
      */
@@ -67,7 +77,7 @@ class TaskResult {
     /**
      * @param e Any exception encountered when running the process task.
      */
-    TaskResult(Exception e) {
+    public TaskResult(Exception e) {
         this(e, false);
     }
 

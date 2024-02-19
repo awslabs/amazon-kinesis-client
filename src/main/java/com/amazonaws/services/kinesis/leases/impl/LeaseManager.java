@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.dynamodbv2.model.BillingMode;
+import com.amazonaws.services.dynamodbv2.model.ExpectedAttributeValue;
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
 import com.amazonaws.services.kinesis.leases.util.DynamoUtils;
 import org.apache.commons.logging.Log;
@@ -582,7 +583,9 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         UpdateItemRequest request = new UpdateItemRequest();
         request.setTableName(table);
         request.setKey(serializer.getDynamoHashKey(lease));
-        request.setExpected(serializer.getDynamoLeaseCounterExpectation(lease));
+        Map<String, ExpectedAttributeValue> expectations = serializer.getDynamoLeaseCounterExpectation(lease);
+        expectations.putAll(serializer.getDynamoLeaseCheckpointExpectation(lease));
+        request.setExpected(expectations);
 
         Map<String, AttributeValueUpdate> updates = serializer.getDynamoLeaseCounterUpdate(lease);
         updates.putAll(serializer.getDynamoUpdateLeaseUpdate(lease));
@@ -624,7 +627,6 @@ public class LeaseManager<T extends Lease> implements ILeaseManager<T> {
         request.setExpected(serializer.getDynamoExistentExpectation(lease.getLeaseKey()));
 
         Map<String, AttributeValueUpdate> updates = serializer.getDynamoUpdateLeaseUpdate(lease, updateField);
-        updates.putAll(serializer.getDynamoUpdateLeaseUpdate(lease));
         request.setAttributeUpdates(updates);
 
         try {
