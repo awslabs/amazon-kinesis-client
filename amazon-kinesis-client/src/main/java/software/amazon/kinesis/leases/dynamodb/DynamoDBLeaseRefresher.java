@@ -80,6 +80,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
     private final Duration dynamoDbRequestTimeout;
     private final BillingMode billingMode;
+    private final boolean deletionProtectionEnabled;
     private final Collection<Tag> tags;
 
     private boolean newTableCreated = false;
@@ -134,7 +135,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
                                   final LeaseSerializer serializer, final boolean consistentReads,
                                   @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout) {
-        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout, BillingMode.PAY_PER_REQUEST);
+        this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout, BillingMode.PAY_PER_REQUEST, false);
     }
 
     /**
@@ -146,14 +147,15 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      * @param tableCreatorCallback
      * @param dynamoDbRequestTimeout
      * @param billingMode
+     * @param deletionProtectionEnabled
      */
     @Deprecated
     public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
                                   final LeaseSerializer serializer, final boolean consistentReads,
                                   @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout,
-                                  final BillingMode billingMode) {
+                                  final BillingMode billingMode, final boolean deletionProtectionEnabled) {
         this(table, dynamoDBClient, serializer, consistentReads, tableCreatorCallback, dynamoDbRequestTimeout,
-                billingMode, DefaultSdkAutoConstructList.getInstance());
+                billingMode, deletionProtectionEnabled, DefaultSdkAutoConstructList.getInstance());
     }
 
     /**
@@ -165,12 +167,14 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      * @param tableCreatorCallback
      * @param dynamoDbRequestTimeout
      * @param billingMode
+     * @param deletionProtectionEnabled
      * @param tags
      */
     public DynamoDBLeaseRefresher(final String table, final DynamoDbAsyncClient dynamoDBClient,
                                   final LeaseSerializer serializer, final boolean consistentReads,
                                   @NonNull final TableCreatorCallback tableCreatorCallback, Duration dynamoDbRequestTimeout,
-                                  final BillingMode billingMode, final Collection<Tag> tags) {
+                                  final BillingMode billingMode, final boolean deletionProtectionEnabled,
+                                  final Collection<Tag> tags) {
         this.table = table;
         this.dynamoDBClient = dynamoDBClient;
         this.serializer = serializer;
@@ -178,6 +182,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         this.tableCreatorCallback = tableCreatorCallback;
         this.dynamoDbRequestTimeout = dynamoDbRequestTimeout;
         this.billingMode = billingMode;
+        this.deletionProtectionEnabled = deletionProtectionEnabled;
         this.tags = tags;
     }
 
@@ -806,6 +811,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     private CreateTableRequest.Builder createTableRequestBuilder() {
         final CreateTableRequest.Builder builder = CreateTableRequest.builder().tableName(table).keySchema(serializer.getKeySchema())
                         .attributeDefinitions(serializer.getAttributeDefinitions())
+                        .deletionProtectionEnabled(deletionProtectionEnabled)
                         .tags(tags);
         if (BillingMode.PAY_PER_REQUEST.equals(billingMode)) {
             builder.billingMode(billingMode);

@@ -23,6 +23,6 @@ public class LeaseIntegrationBillingModePayPerRequestTest extends LeaseIntegrati
     @Override
     protected DynamoDBLeaseRefresher getLeaseRefresher() {
         return new DynamoDBLeaseRefresher(tableName+"Per-Request", ddbClient, leaseSerializer, true,
-                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PAY_PER_REQUEST);
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PAY_PER_REQUEST, false);
     }
 }
