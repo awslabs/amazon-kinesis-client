@@ -89,7 +89,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private final TableCreatorCallback tableCreatorCallback;
     private final Duration dynamoDbRequestTimeout;
     private final BillingMode billingMode;
-    private final boolean deletionProtectionEnabled;
+    private final boolean leaseTableDeletionProtectionEnabled;
     private final Collection<Tag> tags;
     private final boolean isMultiStreamMode;
     private final LeaseCleanupConfig leaseCleanupConfig;
@@ -484,7 +484,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      * @param tableCreatorCallback
      * @param dynamoDbRequestTimeout
      * @param billingMode
-     * @param deletionProtectionEnabled
+     * @param leaseTableDeletionProtectionEnabled
      * @param tags
      */
     private DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final StreamConfig streamConfig,
@@ -497,7 +497,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final long listShardsCacheAllowedAgeInSeconds, final int cacheMissWarningModulus,
             final long initialLeaseTableReadCapacity, final long initialLeaseTableWriteCapacity,
             final HierarchicalShardSyncer deprecatedHierarchicalShardSyncer, final TableCreatorCallback tableCreatorCallback,
-            Duration dynamoDbRequestTimeout, BillingMode billingMode, final boolean deletionProtectionEnabled,
+            Duration dynamoDbRequestTimeout, BillingMode billingMode, final boolean leaseTableDeletionProtectionEnabled,
             Collection<Tag> tags, LeaseSerializer leaseSerializer) {
         this(kinesisClient, dynamoDBClient, tableName,
                 workerIdentifier, executorService, failoverTimeMillis, epsilonMillis, maxLeasesForWorker,
@@ -506,7 +506,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
                 cacheMissWarningModulus, initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity,
                 deprecatedHierarchicalShardSyncer, tableCreatorCallback, dynamoDbRequestTimeout, billingMode,
-                deletionProtectionEnabled, tags, leaseSerializer, null, false,
+                leaseTableDeletionProtectionEnabled, tags, leaseSerializer, null, false,
                 LeaseManagementConfig.DEFAULT_LEASE_CLEANUP_CONFIG);
         this.streamConfig = streamConfig;
     }
@@ -538,7 +538,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      * @param tableCreatorCallback
      * @param dynamoDbRequestTimeout
      * @param billingMode
-     * @param deletionProtectionEnabled
+     * @param leaseTableDeletionProtectionEnabled
      * @param leaseSerializer
      * @param customShardDetectorProvider
      * @param isMultiStreamMode
@@ -554,7 +554,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final long listShardsCacheAllowedAgeInSeconds, final int cacheMissWarningModulus,
             final long initialLeaseTableReadCapacity, final long initialLeaseTableWriteCapacity,
             final HierarchicalShardSyncer deprecatedHierarchicalShardSyncer, final TableCreatorCallback tableCreatorCallback,
-            Duration dynamoDbRequestTimeout, BillingMode billingMode, final boolean deletionProtectionEnabled,
+            Duration dynamoDbRequestTimeout, BillingMode billingMode, final boolean leaseTableDeletionProtectionEnabled,
             Collection<Tag> tags, LeaseSerializer leaseSerializer,
             Function<StreamConfig, ShardDetector> customShardDetectorProvider, boolean isMultiStreamMode,
             LeaseCleanupConfig leaseCleanupConfig) {
@@ -583,7 +583,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         this.tableCreatorCallback = tableCreatorCallback;
         this.dynamoDbRequestTimeout = dynamoDbRequestTimeout;
         this.billingMode = billingMode;
-        this.deletionProtectionEnabled = deletionProtectionEnabled;
+        this.leaseTableDeletionProtectionEnabled = leaseTableDeletionProtectionEnabled;
         this.leaseSerializer = leaseSerializer;
         this.customShardDetectorProvider = customShardDetectorProvider;
         this.isMultiStreamMode = isMultiStreamMode;
@@ -655,7 +655,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     @Override
     public DynamoDBLeaseRefresher createLeaseRefresher() {
         return new DynamoDBLeaseRefresher(tableName, dynamoDBClient, leaseSerializer, consistentReads,
-                tableCreatorCallback, dynamoDbRequestTimeout, billingMode, deletionProtectionEnabled, tags);
+                tableCreatorCallback, dynamoDbRequestTimeout, billingMode, leaseTableDeletionProtectionEnabled, tags);
     }
 
     @Override

@@ -195,11 +195,11 @@ public class LeaseManagementConfig {
     private BillingMode billingMode = BillingMode.PAY_PER_REQUEST;
 
     /**
-     * Whether to enabled deletion protection on the DyanmoDB lease table created by KCL.
+     * Whether to enabled deletion protection on the DynamoDB lease table created by KCL.
      *
      * <p>Default value: false
      */
-    private boolean deletionProtectionEnabled = false;
+    private boolean leaseTableDeletionProtectionEnabled = false;
 
     /**
      * The list of tags to be applied to the DynamoDB table created for lease management.
@@ -389,7 +389,7 @@ public class LeaseManagementConfig {
                     tableCreatorCallback(),
                     dynamoDbRequestTimeout(),
                     billingMode(),
-                    deletionProtectionEnabled(),
+                    leaseTableDeletionProtectionEnabled(),
                     tags(),
                     leaseSerializer,
                     customShardDetectorProvider(),
