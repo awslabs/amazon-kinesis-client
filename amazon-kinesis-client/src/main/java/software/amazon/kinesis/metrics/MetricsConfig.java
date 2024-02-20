@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.metrics;
 
+import java.util.HashSet;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
@@ -94,7 +95,7 @@ public class MetricsConfig {
      * Default value: {@link MetricsConfig#METRICS_DIMENSIONS_ALL}
      * </p>
      */
-    private Set<String> metricsEnabledDimensions = METRICS_DIMENSIONS_ALL;
+    private HashSet<String> metricsEnabledDimensions = new HashSet<String>(METRICS_DIMENSIONS_ALL);
 
     /**
      * Buffer size for MetricDatums before publishing.
