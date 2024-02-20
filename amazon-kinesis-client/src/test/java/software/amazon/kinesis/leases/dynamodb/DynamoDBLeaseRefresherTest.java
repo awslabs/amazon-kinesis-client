@@ -374,6 +374,39 @@ public class DynamoDBLeaseRefresherTest {
     }
 
     @Test
+    public void testCreateLeaseTableProvisionedWithDeletionProtectionIfNotExists() throws Exception {
+        leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED, true);
+
+        when(dynamoDbClient.describeTable(describeTableRequest)).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
+                .thenThrow(ResourceNotFoundException.builder().message("Table doesn't exist").build());
+
+        final ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(10L)
+                                                                      .writeCapacityUnits(10L).build();
+        final CreateTableRequest createTableRequest = CreateTableRequest.builder()
+                                                                        .tableName(TABLE_NAME)
+                                                                        .keySchema(leaseSerializer.getKeySchema())
+                                                                        .attributeDefinitions(leaseSerializer.getAttributeDefinitions())
+                                                                        .provisionedThroughput(throughput)
+                                                                        .deletionProtectionEnabled(true)
+                                                                        .build();
+        when(dynamoDbClient.createTable(createTableRequest)).thenReturn(mockCreateTableFuture);
+        when(mockCreateTableFuture.get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
+                .thenReturn(null);
+
+        final boolean result = leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
+
+        verify(dynamoDbClient, times(1)).describeTable(describeTableRequest);
+        verify(dynamoDbClient, times(1)).createTable(createTableRequest);
+        verify(mockDescribeTableFuture, times(1))
+                .get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS));
+        verify(mockCreateTableFuture, times(1))
+                .get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS));
+        Assert.assertTrue(result);
+    }
+
+    @Test
     public void testCreateLeaseTableIfNotExists_throwsDependencyException() throws Exception {
         when(dynamoDbClient.describeTable(describeTableRequest)).thenReturn(mockDescribeTableFuture);
         when(mockDescribeTableFuture.get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
