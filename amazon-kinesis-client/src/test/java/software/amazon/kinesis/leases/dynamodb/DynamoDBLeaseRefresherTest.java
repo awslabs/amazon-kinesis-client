@@ -81,6 +81,7 @@ public class DynamoDBLeaseRefresherTest {
 
     private static final String TABLE_NAME = "test";
     private static final boolean CONSISTENT_READS = true;
+    private static final boolean DELETION_PROTECTION_ENABLED = false;
 
     @Mock
     private DynamoDbAsyncClient dynamoDbClient;
@@ -127,6 +128,7 @@ public class DynamoDBLeaseRefresherTest {
                 .keySchema(leaseSerializer.getKeySchema())
                 .attributeDefinitions(leaseSerializer.getAttributeDefinitions())
                 .billingMode(BillingMode.PAY_PER_REQUEST)
+                .deletionProtectionEnabled(DELETION_PROTECTION_ENABLED)
                 .build();
     }
 
@@ -286,7 +288,7 @@ public class DynamoDBLeaseRefresherTest {
     @Test
     public void testCreateLeaseTableProvisionedBillingModeIfNotExists() throws Exception {
         leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
-                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED);
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED, DELETION_PROTECTION_ENABLED);
 
         when(dynamoDbClient.describeTable(describeTableRequest)).thenReturn(mockDescribeTableFuture);
         when(mockDescribeTableFuture.get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
@@ -299,6 +301,7 @@ public class DynamoDBLeaseRefresherTest {
                 .keySchema(leaseSerializer.getKeySchema())
                 .attributeDefinitions(leaseSerializer.getAttributeDefinitions())
                 .provisionedThroughput(throughput)
+                .deletionProtectionEnabled(DELETION_PROTECTION_ENABLED)
                 .build();
         when(dynamoDbClient.createTable(createTableRequest)).thenReturn(mockCreateTableFuture);
         when(mockCreateTableFuture.get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
@@ -319,7 +322,7 @@ public class DynamoDBLeaseRefresherTest {
     public void testCreateLeaseTableWithTagsIfNotExists() throws Exception {
         tags = Collections.singletonList(Tag.builder().key("foo").value("bar").build());
         leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
-                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED, tags);
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED, DELETION_PROTECTION_ENABLED, tags);
 
         when(dynamoDbClient.describeTable(describeTableRequest)).thenReturn(mockDescribeTableFuture);
         when(mockDescribeTableFuture.get(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS))
@@ -332,6 +335,7 @@ public class DynamoDBLeaseRefresherTest {
                 .keySchema(leaseSerializer.getKeySchema())
                 .attributeDefinitions(leaseSerializer.getAttributeDefinitions())
                 .provisionedThroughput(throughput)
+                .deletionProtectionEnabled(DELETION_PROTECTION_ENABLED)
                 .tags(tags)
                 .build();
         when(dynamoDbClient.createTable(createTableRequest)).thenReturn(mockCreateTableFuture);
@@ -359,6 +363,39 @@ public class DynamoDBLeaseRefresherTest {
                 .thenReturn(null);
 
         final boolean result = leaseRefresher.createLeaseTableIfNotExists();
+
+        verify(dynamoDbClient, times(1)).describeTable(describeTableRequest);
+        verify(dynamoDbClient, times(1)).createTable(createTableRequest);
+        verify(mockDescribeTableFuture, times(1))
+                .get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS));
+        verify(mockCreateTableFuture, times(1))
+                .get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS));
+        Assert.assertTrue(result);
+    }
+
+    @Test
+    public void testCreateLeaseTableProvisionedWithDeletionProtectionIfNotExists() throws Exception {
+        leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED, true);
+
+        when(dynamoDbClient.describeTable(describeTableRequest)).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
+                .thenThrow(ResourceNotFoundException.builder().message("Table doesn't exist").build());
+
+        final ProvisionedThroughput throughput = ProvisionedThroughput.builder().readCapacityUnits(10L)
+                                                                      .writeCapacityUnits(10L).build();
+        final CreateTableRequest createTableRequest = CreateTableRequest.builder()
+                                                                        .tableName(TABLE_NAME)
+                                                                        .keySchema(leaseSerializer.getKeySchema())
+                                                                        .attributeDefinitions(leaseSerializer.getAttributeDefinitions())
+                                                                        .provisionedThroughput(throughput)
+                                                                        .deletionProtectionEnabled(true)
+                                                                        .build();
+        when(dynamoDbClient.createTable(createTableRequest)).thenReturn(mockCreateTableFuture);
+        when(mockCreateTableFuture.get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
+                .thenReturn(null);
+
+        final boolean result = leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
 
         verify(dynamoDbClient, times(1)).describeTable(describeTableRequest);
         verify(dynamoDbClient, times(1)).createTable(createTableRequest);
@@ -462,7 +499,7 @@ public class DynamoDBLeaseRefresherTest {
     @Test
     public void testCreateLeaseTableProvisionedBillingModeTimesOut() throws Exception {
         leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDbClient, leaseSerializer, CONSISTENT_READS,
-                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED);
+                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PROVISIONED, false);
         TimeoutException te = setRuleForDependencyTimeout();
 
         when(dynamoDbClient.describeTable(any(DescribeTableRequest.class))).thenReturn(mockDescribeTableFuture);
