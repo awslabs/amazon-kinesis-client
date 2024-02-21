@@ -378,14 +378,14 @@ public class PrefetchRecordsPublisherTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testGetNextRecordsWithoutStarting() {
+    public void testSubscribeWithoutStarting() {
         verify(executorService, never()).execute(any());
         Subscriber<RecordsRetrieved> mockSubscriber = mock(Subscriber.class);
         getRecordsCache.subscribe(mockSubscriber);
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testCallAfterShutdown() {
+    public void testRequestRecordsOnSubscriptionAfterShutdown() {
         GetRecordsResponse response = GetRecordsResponse.builder().records(
                         Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
                 .nextShardIterator(NEXT_SHARD_ITERATOR).build();
