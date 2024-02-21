@@ -31,8 +31,10 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,6 +66,7 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
@@ -375,15 +378,29 @@ public class PrefetchRecordsPublisherTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testGetNextRecordsWithoutStarting() {
+    public void testSubscribeWithoutStarting() {
         verify(executorService, never()).execute(any());
-        getRecordsCache.drainQueueForRequests();
+        Subscriber<RecordsRetrieved> mockSubscriber = mock(Subscriber.class);
+        getRecordsCache.subscribe(mockSubscriber);
     }
 
     @Test(expected = IllegalStateException.class)
-    public void testCallAfterShutdown() {
+    public void testRequestRecordsOnSubscriptionAfterShutdown() {
+        GetRecordsResponse response = GetRecordsResponse.builder().records(
+                        Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
+                .nextShardIterator(NEXT_SHARD_ITERATOR).build();
+        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        verify(getRecordsRetrievalStrategy, timeout(100).atLeastOnce()).getRecords(anyInt());
+
         when(executorService.isShutdown()).thenReturn(true);
-        getRecordsCache.drainQueueForRequests();
+        Subscriber<RecordsRetrieved> mockSubscriber = mock(Subscriber.class);
+        getRecordsCache.subscribe(mockSubscriber);
+        ArgumentCaptor<Subscription> subscriptionCaptor = ArgumentCaptor.forClass(Subscription.class);
+        verify(mockSubscriber).onSubscribe(subscriptionCaptor.capture());
+        subscriptionCaptor.getValue().request(1);
     }
 
     @Test

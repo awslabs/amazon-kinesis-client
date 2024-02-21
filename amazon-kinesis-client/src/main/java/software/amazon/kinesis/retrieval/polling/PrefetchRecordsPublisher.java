@@ -289,7 +289,6 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     }
 
     private PrefetchRecordsRetrieved peekNextResult() {
-        throwOnIllegalState();
         return publisherSession.peekNextRecord();
     }
 
@@ -336,6 +335,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
     @Override
     public void subscribe(Subscriber<? super RecordsRetrieved> s) {
+        throwOnIllegalState();
         subscriber = s;
         subscriber.onSubscribe(new Subscription() {
             @Override
@@ -389,6 +389,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         // If there is an event available to drain and if there is at least one demand,
         // then schedule it for delivery
         if (publisherSession.hasDemandToPublish() && canDispatchRecord(recordsToDeliver)) {
+            throwOnIllegalState();
             subscriber.onNext(recordsToDeliver.prepareForPublish());
             recordsToDeliver.dispatched();
             lastEventDeliveryTime = Instant.now();
