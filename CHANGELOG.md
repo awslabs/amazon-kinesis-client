@@ -3,6 +3,12 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.5.5 (2024-02-22)
+* [#1257](https://github.com/awslabs/amazon-kinesis-client/pull/1257) Prevent improper error logging during worker shutdown 
+* [#1260](https://github.com/awslabs/amazon-kinesis-client/pull/1260) Add Deletion protection config 
+* [#1258](https://github.com/awslabs/amazon-kinesis-client/pull/1258) Fix issue in configuring metricsEnabledDimensions 
+* [#1259](https://github.com/awslabs/amazon-kinesis-client/pull/1259) Add snapshot to version 
+
 ### Release 2.5.4 (December 12, 2023)
 * [#1232](https://github.com/awslabs/amazon-kinesis-client/pull/1232) Upgrade ch.qos.logback:logback-classic dependency from 1.3.0 to 1.3.12 in /amazon-kinesis-client
 * [#1233](https://github.com/awslabs/amazon-kinesis-client/pull/1233) Upgrade ch.qos.logback:logback-classic dependency from 1.3.0 to 1.3.12 in /amazon-kinesis-client-multilang
