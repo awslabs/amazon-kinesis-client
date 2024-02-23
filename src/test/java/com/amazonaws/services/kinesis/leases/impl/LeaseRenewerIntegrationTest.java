@@ -17,6 +17,7 @@ package com.amazonaws.services.kinesis.leases.impl;
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber;
 import com.amazonaws.services.kinesis.leases.exceptions.LeasingException;
 import com.amazonaws.services.kinesis.leases.interfaces.ILeaseRenewer;
+import com.amazonaws.services.kinesis.metrics.impl.NullMetricsFactory;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,7 +36,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
     @Before
     public void setUp() {
         renewer = new LeaseRenewer<KinesisClientLease>(
-                leaseManager, "foo", LEASE_DURATION_MILLIS, Executors.newCachedThreadPool());
+                leaseManager, "foo", LEASE_DURATION_MILLIS, Executors.newCachedThreadPool(), new NullMetricsFactory());
     }
 
     @Test
@@ -244,7 +245,7 @@ public class LeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         builder.withLease(shardId, owner);
         Map<String, KinesisClientLease> leases = builder.build();
         LeaseRenewer<KinesisClientLease> renewer =new LeaseRenewer<KinesisClientLease>(
-                leaseManager, owner, 30000L, Executors.newCachedThreadPool());
+                leaseManager, owner, 30000L, Executors.newCachedThreadPool(), new NullMetricsFactory());
         renewer.initialize();
         Map<String, KinesisClientLease> heldLeases = renewer.getCurrentlyHeldLeases();
         Assert.assertEquals(leases.size(), heldLeases.size());

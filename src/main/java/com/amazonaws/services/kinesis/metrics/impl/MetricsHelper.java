@@ -84,7 +84,7 @@ public class MetricsHelper {
      * 
      * @return true if metrics scope is present, else returns false
      */
-    public static boolean isMetricsScopePresent() {
+    private static boolean isMetricsScopePresent() {
         return currentScope.get() != null;
     }
 

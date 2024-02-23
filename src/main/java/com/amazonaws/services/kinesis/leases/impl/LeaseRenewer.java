@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -56,21 +57,24 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
     private final String workerIdentifier;
     private final long leaseDurationNanos;
     private final ExecutorService executorService;
+    private final IMetricsFactory metricsFactory;
 
     /**
      * Constructor.
-     * 
-     * @param leaseManager LeaseManager to use
-     * @param workerIdentifier identifier of this worker
+     *
+     * @param leaseManager        LeaseManager to use
+     * @param workerIdentifier    identifier of this worker
      * @param leaseDurationMillis duration of a lease in milliseconds
-     * @param executorService ExecutorService to use for renewing leases in parallel
+     * @param executorService     ExecutorService to use for renewing leases in parallel
+     * @param metricsFactory      Factory to use for MetricsScope objects
      */
     public LeaseRenewer(ILeaseManager<T> leaseManager, String workerIdentifier, long leaseDurationMillis,
-            ExecutorService executorService) {
+            ExecutorService executorService, IMetricsFactory metricsFactory) {
         this.leaseManager = leaseManager;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
         this.executorService = executorService;
+        this.metricsFactory = metricsFactory;
     }
 
     /**
@@ -292,6 +296,7 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
             return false;
         }
 
+        MetricsHelper.startScope(metricsFactory);
         long startTime = System.currentTimeMillis();
         boolean success = false;
         try {
@@ -333,6 +338,7 @@ public class LeaseRenewer<T extends Lease> implements ILeaseRenewer<T> {
             }
         } finally {
             MetricsHelper.addSuccessAndLatency("UpdateLease", startTime, success, MetricsLevel.DETAILED);
+            MetricsHelper.endScope();
         }
     }
 

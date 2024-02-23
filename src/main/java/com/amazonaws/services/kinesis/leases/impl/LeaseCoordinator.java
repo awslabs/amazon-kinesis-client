@@ -209,7 +209,7 @@ public class LeaseCoordinator<T extends Lease> {
         this(new LeaseTaker<>(leaseManager, leaseSelector, workerIdentifier, leaseDurationMillis)
                         .withMaxLeasesForWorker(maxLeasesForWorker)
                         .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime),
-                new LeaseRenewer<>(leaseManager, workerIdentifier, leaseDurationMillis,  getDefaultLeaseRenewalExecutorService(maxLeaseRenewerThreadCount)),
+                new LeaseRenewer<>(leaseManager, workerIdentifier, leaseDurationMillis,  getDefaultLeaseRenewalExecutorService(maxLeaseRenewerThreadCount), metricsFactory),
                 leaseDurationMillis,
                 epsilonMillis,
                 maxLeasesForWorker,

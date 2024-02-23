@@ -14,9 +14,6 @@
  */
 package com.amazonaws.services.kinesis.clientlibrary.lib.worker;
 
-import com.amazonaws.services.kinesis.metrics.impl.MetricsHelper;
-import com.amazonaws.services.kinesis.metrics.impl.ThreadSafeMetricsDelegatingScope;
-import com.amazonaws.services.kinesis.metrics.interfaces.IMetricsFactory;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -53,8 +50,6 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
     private SequenceNumberValidator sequenceNumberValidator;
 
     private ExtendedSequenceNumber sequenceNumberAtShardEnd;
-    
-    private IMetricsFactory metricsFactory;
 
     /**
      * Only has package level access, since only the Amazon Kinesis Client Library should be creating these.
@@ -64,12 +59,10 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
      */
     public RecordProcessorCheckpointer(ShardInfo shardInfo,
             ICheckpoint checkpoint,
-            SequenceNumberValidator validator,
-            IMetricsFactory metricsFactory) {
+            SequenceNumberValidator validator) {
         this.shardInfo = shardInfo;
         this.checkpoint = checkpoint;
         this.sequenceNumberValidator = validator;
-        this.metricsFactory = metricsFactory;
     }
 
     /**
@@ -290,33 +283,22 @@ public class RecordProcessorCheckpointer implements IRecordProcessorCheckpointer
             // just checkpoint at SHARD_END
             checkpointToRecord = ExtendedSequenceNumber.SHARD_END;
         }
-        
-        boolean unsetMetrics = false;
+
         // Don't checkpoint a value we already successfully checkpointed
-        try {
-            if (!MetricsHelper.isMetricsScopePresent()) {
-                MetricsHelper.setMetricsScope(new ThreadSafeMetricsDelegatingScope(metricsFactory.createMetrics()));
-                unsetMetrics = true;
-            }
-            if (extendedSequenceNumber != null && !extendedSequenceNumber.equals(lastCheckpointValue)) {
-                try {
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Setting " + shardInfo.getShardId() + ", token " + shardInfo.getConcurrencyToken()
-                                + " checkpoint to " + checkpointToRecord);
-                    }
-                    checkpoint.setCheckpoint(shardInfo.getShardId(), checkpointToRecord, shardInfo.getConcurrencyToken());
-                    lastCheckpointValue = checkpointToRecord;
-                } catch (ThrottlingException | ShutdownException | InvalidStateException
-                        | KinesisClientLibDependencyException e) {
-                    throw e;
-                } catch (KinesisClientLibException e) {
-                    LOG.warn("Caught exception setting checkpoint.", e);
-                    throw new KinesisClientLibDependencyException("Caught exception while checkpointing", e);
+        if (extendedSequenceNumber != null && !extendedSequenceNumber.equals(lastCheckpointValue)) {
+            try {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Setting " + shardInfo.getShardId() + ", token " + shardInfo.getConcurrencyToken()
+                            + " checkpoint to " + checkpointToRecord);
                 }
-            }
-        } finally {
-            if (unsetMetrics) {
-                MetricsHelper.unsetMetricsScope();
+                checkpoint.setCheckpoint(shardInfo.getShardId(), checkpointToRecord, shardInfo.getConcurrencyToken());
+                lastCheckpointValue = checkpointToRecord;
+            } catch (ThrottlingException | ShutdownException | InvalidStateException
+                     | KinesisClientLibDependencyException e) {
+                throw e;
+            } catch (KinesisClientLibException e) {
+                LOG.warn("Caught exception setting checkpoint.", e);
+                throw new KinesisClientLibDependencyException("Caught exception while checkpointing", e);
             }
         }
     }
