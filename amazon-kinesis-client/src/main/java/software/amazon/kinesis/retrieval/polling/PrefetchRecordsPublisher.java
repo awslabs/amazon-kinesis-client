@@ -42,6 +42,7 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
 import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -102,7 +103,6 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private final PublisherSession publisherSession;
     private final ReentrantReadWriteLock resetLock = new ReentrantReadWriteLock();
     private boolean wasReset = false;
-
     private Instant lastEventDeliveryTime = Instant.EPOCH;
     private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
 
@@ -511,6 +511,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     log.info("{} :  Thread was interrupted, indicating shutdown was called on the cache.", streamAndShardId);
+                } catch (InvalidArgumentException e) {
+                    log.info("{} :  records threw InvalidArgumentException - retrying with new iterator", streamAndShardId, e);
+                    publisherSession.dataFetcher().restartIterator();
                 } catch (ExpiredIteratorException e) {
                     log.info("{} :  records threw ExpiredIteratorException - restarting"
                             + " after greatest seqNum passed to customer", streamAndShardId, e);

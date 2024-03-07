@@ -140,6 +140,7 @@ public class PollingConfig implements RetrievalSpecificConfig {
         if (usePollingConfigIdleTimeValue) {
             recordsFetcherFactory.idleMillisBetweenCalls(idleTimeBetweenReadsInMillis);
         }
+        validateMaxRecords();
         return new SynchronousBlockingRetrievalFactory(streamName(), kinesisClient(), recordsFetcherFactory,
                 maxRecords(), kinesisRequestTimeout, dataFetcherProvider);
     }
@@ -151,6 +152,12 @@ public class PollingConfig implements RetrievalSpecificConfig {
                 throw new IllegalArgumentException(
                         "PollingConfig must not have streamName configured in multi-stream mode");
             }
+        }
+    }
+
+    private void validateMaxRecords() {
+        if (maxRecords() > 10000) {
+            throw new IllegalArgumentException("maxRecords must be less than or equal to 10000, but current value is " + maxRecords());
         }
     }
 }
