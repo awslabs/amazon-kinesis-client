@@ -1,4 +1,5 @@
 <!--
+
 /*
  * Copyright 2019 Amazon.com, Inc. or its affiliates.
  * Licensed under the Apache License, Version 2.0 (the
@@ -51,7 +52,7 @@
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
     <slf4j.version>2.0.7</slf4j.version>
-    <gsr.version>1.1.17</gsr.version>
+    <gsr.version>1.1.19</gsr.version>
     <skipITs>true</skipITs>
   </properties>
 
@@ -153,7 +154,7 @@
     <dependency>
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>
-      <version>1.3.12</version>
+      <version>1.3.14</version>
       <scope>test</scope>
     </dependency>
 
