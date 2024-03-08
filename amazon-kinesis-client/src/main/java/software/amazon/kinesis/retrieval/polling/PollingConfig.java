@@ -42,6 +42,8 @@ public class PollingConfig implements RetrievalSpecificConfig {
 
     public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
+    public static final int DEFAULT_MAX_RECORDS = 10000;
+
     /**
      * Configurable functional interface to override the existing DataFetcher.
      */
@@ -73,7 +75,7 @@ public class PollingConfig implements RetrievalSpecificConfig {
      * Default value: 10000
      * </p>
      */
-    private int maxRecords = 10000;
+    private int maxRecords = DEFAULT_MAX_RECORDS;
 
     /**
      * @param streamName    Name of Kinesis stream.
@@ -142,6 +144,14 @@ public class PollingConfig implements RetrievalSpecificConfig {
         usePollingConfigIdleTimeValue = true;
         this.idleTimeBetweenReadsInMillis = idleTimeBetweenReadsInMillis;
         return this;
+    }
+
+    public void maxRecords(int maxRecords) {
+        if (maxRecords > DEFAULT_MAX_RECORDS) {
+            throw new IllegalArgumentException(
+                    "maxRecords must be less than or equal to " +  DEFAULT_MAX_RECORDS + " but current value is " + maxRecords());
+        }
+        this.maxRecords = maxRecords;
     }
 
     /**

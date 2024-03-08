@@ -977,6 +977,10 @@ public class KinesisClientLibConfiguration {
      */
     public KinesisClientLibConfiguration withMaxRecords(int maxRecords) {
         checkIsValuePositive("MaxRecords", (long) maxRecords);
+        if (maxRecords > DEFAULT_MAX_RECORDS) {
+            throw new IllegalArgumentException(
+                    "maxRecords must be less than or equal to " + DEFAULT_MAX_RECORDS + " but current value is " + maxRecords);
+        }
         this.maxRecords = maxRecords;
         return this;
     }

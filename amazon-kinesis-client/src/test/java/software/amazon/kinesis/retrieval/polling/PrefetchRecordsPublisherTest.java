@@ -82,6 +82,7 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.leases.ShardObjectHelper;
@@ -449,6 +450,18 @@ public class PrefetchRecordsPublisherTest {
 
         RecordsRetrieved records = blockUntilRecordsAvailable();
         assertEquals(records.processRecordsInput().millisBehindLatest(), response.millisBehindLatest());
+    }
+
+    @Test
+    public void testInvalidArgumentExceptionIsRetried() {
+        when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL))
+                .thenThrow(InvalidArgumentException.builder().build())
+                .thenReturn(getRecordsResponse);
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+
+        verify(dataFetcher, times(1)).restartIterator();
     }
 
     @Test(timeout = 10000L)
