@@ -44,4 +44,9 @@ public class PollingConfigTest {
         config.validateState(true);
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidRecordLimit() {
+        config.maxRecords(PollingConfig.DEFAULT_MAX_RECORDS + 1);
+    }
+
 }

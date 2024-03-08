@@ -40,6 +40,8 @@ public class PollingConfig implements RetrievalSpecificConfig {
 
     public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
+    public static final int DEFAULT_MAX_RECORDS = 10000;
+
     /**
      * Configurable functional interface to override the existing DataFetcher.
      */
@@ -71,7 +73,7 @@ public class PollingConfig implements RetrievalSpecificConfig {
      * Default value: 10000
      * </p>
      */
-    private int maxRecords = 10000;
+    private int maxRecords = DEFAULT_MAX_RECORDS;
 
     /**
      * @param streamName    Name of Kinesis stream.
@@ -129,6 +131,14 @@ public class PollingConfig implements RetrievalSpecificConfig {
         this.idleTimeBetweenReadsInMillis = idleTimeBetweenReadsInMillis;
     }
 
+    public void maxRecords(int maxRecords) {
+        if (maxRecords > DEFAULT_MAX_RECORDS) {
+            throw new IllegalArgumentException(
+                    "maxRecords must be less than or equal to " +  DEFAULT_MAX_RECORDS + " but current value is " + maxRecords());
+        }
+        this.maxRecords = maxRecords;
+    }
+
     /**
      * The maximum time to wait for a future request from Kinesis to complete
      */
@@ -140,7 +150,6 @@ public class PollingConfig implements RetrievalSpecificConfig {
         if (usePollingConfigIdleTimeValue) {
             recordsFetcherFactory.idleMillisBetweenCalls(idleTimeBetweenReadsInMillis);
         }
-        validateMaxRecords();
         return new SynchronousBlockingRetrievalFactory(streamName(), kinesisClient(), recordsFetcherFactory,
                 maxRecords(), kinesisRequestTimeout, dataFetcherProvider);
     }
@@ -152,12 +161,6 @@ public class PollingConfig implements RetrievalSpecificConfig {
                 throw new IllegalArgumentException(
                         "PollingConfig must not have streamName configured in multi-stream mode");
             }
-        }
-    }
-
-    private void validateMaxRecords() {
-        if (maxRecords() > 10000) {
-            throw new IllegalArgumentException("maxRecords must be less than or equal to 10000, but current value is " + maxRecords());
         }
     }
 }

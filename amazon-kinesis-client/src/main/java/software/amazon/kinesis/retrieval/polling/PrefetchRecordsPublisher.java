@@ -512,7 +512,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     Thread.currentThread().interrupt();
                     log.info("{} :  Thread was interrupted, indicating shutdown was called on the cache.", streamAndShardId);
                 } catch (InvalidArgumentException e) {
-                    log.info("{} :  records threw InvalidArgumentException - retrying with new iterator", streamAndShardId, e);
+                    log.info("{} :  records threw InvalidArgumentException - iterator will be refreshed before retrying", streamAndShardId, e);
                     publisherSession.dataFetcher().restartIterator();
                 } catch (ExpiredIteratorException e) {
                     log.info("{} :  records threw ExpiredIteratorException - restarting"
