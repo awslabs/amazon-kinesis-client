@@ -3,6 +3,13 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.5.6 (2024-03-08)
+* [#1271](https://github.com/awslabs/amazon-kinesis-client/pull/1271) Adding snapshot for 2.5.6-SNAPSHOT 
+* [#1268](https://github.com/awslabs/amazon-kinesis-client/pull/1268) Upgrade ch.qos.logback:logback-classic dependency from 1.3.12 to 1.3.14
+* [#1268](https://github.com/awslabs/amazon-kinesis-client/pull/1268) Upgrade awssdk.version from 2.20.43 to 2.25.3
+* [#1268](https://github.com/awslabs/amazon-kinesis-client/pull/1268) Upgrade aws-java-sdk.version from 1.12.405 to 1.12.668
+* [#1268](https://github.com/awslabs/amazon-kinesis-client/pull/1268) Upgrade gsr.version from 1.1.17 to 1.1.19
+
 ### Release 2.5.5 (2024-02-22)
 * [#1257](https://github.com/awslabs/amazon-kinesis-client/pull/1257) Prevent improper error logging during worker shutdown 
 * [#1260](https://github.com/awslabs/amazon-kinesis-client/pull/1260) Add Deletion protection config 
