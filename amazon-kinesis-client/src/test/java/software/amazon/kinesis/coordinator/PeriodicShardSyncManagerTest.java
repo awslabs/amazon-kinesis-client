@@ -70,12 +70,14 @@ public class PeriodicShardSyncManagerTest {
     Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
     @Mock
     Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider;
+    @Mock
+    Map<StreamConfig, ShardSyncTaskManager> streamToShardSyncTaskManagerMap;
 
     @Before
     public void setup() {
         streamIdentifier = StreamIdentifier.multiStreamInstance("123456789012:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager("worker", leaderDecider, leaseRefresher, currentStreamConfigMap,
-                shardSyncTaskManagerProvider, true, new NullMetricsFactory(), 2 * 60 * 1000, 3);
+                shardSyncTaskManagerProvider, streamToShardSyncTaskManagerMap, true, new NullMetricsFactory(), 2 * 60 * 1000, 3);
     }
 
     @Test

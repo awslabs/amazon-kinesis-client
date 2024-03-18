@@ -84,6 +84,7 @@ class PeriodicShardSyncManager {
     private final LeaseRefresher leaseRefresher;
     private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
     private final Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider;
+    private final Map<StreamConfig, ShardSyncTaskManager> streamToShardSyncTaskManagerMap;
     private final ScheduledExecutorService shardSyncThreadPool;
     private final boolean isMultiStreamingMode;
     private final MetricsFactory metricsFactory;
@@ -93,11 +94,13 @@ class PeriodicShardSyncManager {
 
     PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, LeaseRefresher leaseRefresher,
             Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
-            Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider, boolean isMultiStreamingMode,
-            MetricsFactory metricsFactory,
+            Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider,
+            Map<StreamConfig, ShardSyncTaskManager> streamToShardSyncTaskManagerMap,
+            boolean isMultiStreamingMode, MetricsFactory metricsFactory,
             long leasesRecoveryAuditorExecutionFrequencyMillis,
             int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
         this(workerId, leaderDecider, leaseRefresher, currentStreamConfigMap, shardSyncTaskManagerProvider,
+                streamToShardSyncTaskManagerMap,
                 Executors.newSingleThreadScheduledExecutor(), isMultiStreamingMode, metricsFactory,
                 leasesRecoveryAuditorExecutionFrequencyMillis, leasesRecoveryAuditorInconsistencyConfidenceThreshold);
     }
@@ -105,6 +108,7 @@ class PeriodicShardSyncManager {
     PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, LeaseRefresher leaseRefresher,
             Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
             Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider,
+            Map<StreamConfig, ShardSyncTaskManager> streamToShardSyncTaskManagerMap,
             ScheduledExecutorService shardSyncThreadPool, boolean isMultiStreamingMode,
             MetricsFactory metricsFactory,
             long leasesRecoveryAuditorExecutionFrequencyMillis,
@@ -116,6 +120,7 @@ class PeriodicShardSyncManager {
         this.leaseRefresher = leaseRefresher;
         this.currentStreamConfigMap = currentStreamConfigMap;
         this.shardSyncTaskManagerProvider = shardSyncTaskManagerProvider;
+        this.streamToShardSyncTaskManagerMap = streamToShardSyncTaskManagerMap;
         this.shardSyncThreadPool = shardSyncThreadPool;
         this.isMultiStreamingMode = isMultiStreamingMode;
         this.metricsFactory = metricsFactory;
@@ -175,6 +180,7 @@ class PeriodicShardSyncManager {
                     PERIODIC_SHARD_SYNC_MANAGER);
             int numStreamsWithPartialLeases = 0;
             int numStreamsToSync = 0;
+            int numSkippedShardSyncTask = 0;
             boolean isRunSuccess = false;
             final long runStartMillis = System.currentTimeMillis();
 
@@ -205,12 +211,26 @@ class PeriodicShardSyncManager {
                             log.info("Skipping shard sync task for {} as stream is purged", streamIdentifier);
                             continue;
                         }
-                        final ShardSyncTaskManager shardSyncTaskManager = shardSyncTaskManagerProvider
-                                .apply(streamConfig);
+                        final ShardSyncTaskManager shardSyncTaskManager;
+                        if (streamToShardSyncTaskManagerMap.containsKey(streamConfig)) {
+                            log.info("shardSyncTaskManager for stream {} already exists",
+                                    streamIdentifier.streamName());
+                            shardSyncTaskManager = streamToShardSyncTaskManagerMap.get(streamConfig);
+                        }
+                        else {
+                            // If streamConfig of a stream has already been added to currentStreamConfigMap but
+                            // Scheduler failed to create shardSyncTaskManager for it, then Scheduler will not try
+                            // to create one later. So enable PeriodicShardSyncManager to do it for such cases
+                            log.info("Failed to get shardSyncTaskManager so creating one for stream {}.",
+                                    streamIdentifier.streamName());
+                            shardSyncTaskManager = streamToShardSyncTaskManagerMap.computeIfAbsent(
+                                    streamConfig, s -> shardSyncTaskManagerProvider.apply(s));
+                        }
                         if (!shardSyncTaskManager.submitShardSyncTask()) {
                             log.warn(
                                     "Failed to submit shard sync task for stream {}. This could be due to the previous pending shard sync task.",
                                     shardSyncTaskManager.shardDetector().streamIdentifier().streamName());
+                            numSkippedShardSyncTask += 1;
                         } else {
                             log.info("Submitted shard sync task for stream {} because of reason {}",
                                     shardSyncTaskManager.shardDetector().streamIdentifier().streamName(),
@@ -227,6 +247,7 @@ class PeriodicShardSyncManager {
             } finally {
                 scope.addData("NumStreamsWithPartialLeases", numStreamsWithPartialLeases, StandardUnit.COUNT, MetricsLevel.SUMMARY);
                 scope.addData("NumStreamsToSync", numStreamsToSync, StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                scope.addData("NumSkippedShardSyncTask", numSkippedShardSyncTask, StandardUnit.COUNT, MetricsLevel.SUMMARY);
                 MetricsUtil.addSuccessAndLatency(scope, isRunSuccess, runStartMillis, MetricsLevel.SUMMARY);
                 scope.end();
             }

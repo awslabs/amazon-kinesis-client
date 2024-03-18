@@ -196,7 +196,7 @@ public class ShardSyncTaskManager {
         } else {
             if (log.isDebugEnabled()) {
                 log.debug("Previous {} task still pending.  Not submitting new task. "
-                          + "Enqueued a request that will be executed when the current request completes.", currentTask.taskType());
+                          + "Triggered a pending request but will not be executed until the current request completes.", currentTask.taskType());
             }
             shardSyncRequestPending.compareAndSet(false /*expected*/, true /*update*/);
         }
@@ -207,25 +207,6 @@ public class ShardSyncTaskManager {
         if (exception != null || taskResult.getException() != null) {
             log.error("Caught exception running {} task: {}", currentTask.taskType(),
                     exception != null ? exception : taskResult.getException());
-        }
-        // Acquire lock here. If shardSyncRequestPending is false in this completionStage and
-        // submitShardSyncTask is invoked, before completion stage exits (future completes)
-        // but right after the value of shardSyncRequestPending is checked, it will result in
-        // shardSyncRequestPending being set to true, but no pending futures to trigger the next
-        // ShardSyncTask. By executing this stage in a Reentrant lock, we ensure that if the
-        // previous task is in this completion stage, checkAndSubmitNextTask is not invoked
-        // until this completionStage exits.
-        try {
-            lock.lock();
-            if (shardSyncRequestPending.get()) {
-                shardSyncRequestPending.set(false);
-                // reset future to null, so next call creates a new one
-                // without trying to get results from the old future.
-                future = null;
-                checkAndSubmitNextTask();
-            }
-        } finally {
-            lock.unlock();
         }
     }
 
