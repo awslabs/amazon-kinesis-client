@@ -3,6 +3,14 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.5.7 (2024-03-19)
+* [#1275](https://github.com/awslabs/amazon-kinesis-client/pull/1275) Update PollingConfig maxRecords method to return PollingConfig 
+* [#1236](https://github.com/awslabs/amazon-kinesis-client/pull/1236) Upgrade commons-io:commons-io from 2.11.0 to 2.15.1 
+* [#1189](https://github.com/awslabs/amazon-kinesis-client/pull/1189) Upgrade org.apache.maven.plugins:maven-resources-plugin from 3.3.0 to 3.3.1 
+* [#1139](https://github.com/awslabs/amazon-kinesis-client/pull/1139) Upgrade maven-surefire-plugin from 2.22.2 to 3.1.2 
+* [#1138](https://github.com/awslabs/amazon-kinesis-client/pull/1138) Upgrade maven-failsafe-plugin from 2.22.2 to 3.1.2 
+* [#1125](https://github.com/awslabs/amazon-kinesis-client/pull/1125) Upgrade maven-gpg-plugin from 3.0.1 to 3.1.0 
+
 ### Release 2.5.6 (2024-03-08)
 * [#1271](https://github.com/awslabs/amazon-kinesis-client/pull/1271) Adding snapshot for 2.5.6-SNAPSHOT 
 * [#1268](https://github.com/awslabs/amazon-kinesis-client/pull/1268) Upgrade ch.qos.logback:logback-classic dependency from 1.3.12 to 1.3.14
