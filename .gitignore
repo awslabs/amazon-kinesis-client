@@ -2,5 +2,7 @@ target/
 AwsCredentials.properties
 .idea
 *.iml
+.sdkmanrc
+.vscode
 *.swp
 .DS_Store

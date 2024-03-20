@@ -86,6 +86,21 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
         builder.takeMutateAssert(taker, "1");
     }
 
+    @Test
+    public void testTakeEvictedLease() throws LeasingException, InterruptedException {
+        TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
+
+        builder.withLease("1", "bar").build();
+
+        // This should not take anything because the lease is new and owned.
+        builder.takeMutateAssert(taker);
+
+        builder.evictLease("1");
+
+        // This should take because the lease has been evicted
+        builder.takeMutateAssert(taker, "1");
+    }
+
     /**
      * Verify that we take leases non-greedily by setting up an environment where there are 4 leases and 2 workers,
      * only one of which holds a lease. This leaves 3 free leases, but LeaseTaker should decide it needs 2 leases and
@@ -201,7 +216,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
     /**
      * Verify that one activity is stolen from the highest loaded server when a server needs more than one lease and no
      * expired leases are available. Setup: 4 leases, server foo holds 0, bar holds 1, baz holds 5.
-     * 
+     *
      * Foo should steal from baz.
      */
     @Test

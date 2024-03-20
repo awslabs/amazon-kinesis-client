@@ -72,6 +72,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
 
     private final long failoverTimeMillis;
     private final long epsilonMillis;
+    private final long leaseTakerIntervalMillis;
     private final int maxLeasesForWorker;
     private final int maxLeasesToStealAtOneTime;
     private final int maxLeaseRenewalThreads;
@@ -125,14 +126,14 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final String streamName,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
             final ExecutorService executorService, final InitialPositionInStreamExtended initialPositionInStream,
-            final long failoverTimeMillis, final long epsilonMillis, final int maxLeasesForWorker,
+            final long failoverTimeMillis, final long epsilonMillis, final long leaseTakerIntervalMillis, final int maxLeasesForWorker,
             final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
             final int maxListShardsRetryAttempts, final int maxCacheMissesBeforeReload,
             final long listShardsCacheAllowedAgeInSeconds, final int cacheMissWarningModulus) {
         this(kinesisClient, streamName, dynamoDBClient, tableName, workerIdentifier, executorService,
-                initialPositionInStream, failoverTimeMillis, epsilonMillis, maxLeasesForWorker,
+                initialPositionInStream, failoverTimeMillis, epsilonMillis, leaseTakerIntervalMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
@@ -175,7 +176,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final String streamName,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
             final ExecutorService executorService, final InitialPositionInStreamExtended initialPositionInStream,
-            final long failoverTimeMillis, final long epsilonMillis, final int maxLeasesForWorker,
+            final long failoverTimeMillis, final long epsilonMillis, final long leaseTakerIntervalMillis, final int maxLeasesForWorker,
             final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
@@ -183,7 +184,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final long listShardsCacheAllowedAgeInSeconds, final int cacheMissWarningModulus,
             final long initialLeaseTableReadCapacity, final long initialLeaseTableWriteCapacity) {
         this(kinesisClient, streamName, dynamoDBClient, tableName, workerIdentifier, executorService,
-                initialPositionInStream, failoverTimeMillis, epsilonMillis, maxLeasesForWorker,
+                initialPositionInStream, failoverTimeMillis, epsilonMillis, leaseTakerIntervalMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
@@ -225,7 +226,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final String streamName,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
             final ExecutorService executorService, final InitialPositionInStreamExtended initialPositionInStream,
-            final long failoverTimeMillis, final long epsilonMillis, final int maxLeasesForWorker,
+            final long failoverTimeMillis, final long epsilonMillis, final long leaseTakerIntervalMillis, final int maxLeasesForWorker,
             final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
@@ -234,7 +235,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final long initialLeaseTableReadCapacity, final long initialLeaseTableWriteCapacity,
             final HierarchicalShardSyncer hierarchicalShardSyncer, final TableCreatorCallback tableCreatorCallback) {
         this(kinesisClient, streamName, dynamoDBClient, tableName, workerIdentifier, executorService,
-                initialPositionInStream, failoverTimeMillis, epsilonMillis, maxLeasesForWorker,
+                initialPositionInStream, failoverTimeMillis, epsilonMillis, leaseTakerIntervalMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
@@ -276,7 +277,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final String streamName,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
             final ExecutorService executorService, final InitialPositionInStreamExtended initialPositionInStream,
-            final long failoverTimeMillis, final long epsilonMillis, final int maxLeasesForWorker,
+            final long failoverTimeMillis, final long epsilonMillis, final long leaseTakerIntervalMillis, final int maxLeasesForWorker,
             final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
@@ -286,7 +287,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             final HierarchicalShardSyncer hierarchicalShardSyncer, final TableCreatorCallback tableCreatorCallback,
             Duration dynamoDbRequestTimeout) {
         this(kinesisClient, streamName, dynamoDBClient, tableName, workerIdentifier, executorService,
-                initialPositionInStream, failoverTimeMillis, epsilonMillis, maxLeasesForWorker,
+                initialPositionInStream, failoverTimeMillis, epsilonMillis, leaseTakerIntervalMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
@@ -329,7 +330,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final String streamName,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
             final ExecutorService executorService, final InitialPositionInStreamExtended initialPositionInStream,
-            final long failoverTimeMillis, final long epsilonMillis, final int maxLeasesForWorker,
+            final long failoverTimeMillis, final long epsilonMillis, final long leaseTakerIntervalMillis, final int maxLeasesForWorker,
             final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
@@ -340,7 +341,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             Duration dynamoDbRequestTimeout, BillingMode billingMode) {
 
         this(kinesisClient, new StreamConfig(StreamIdentifier.singleStreamInstance(streamName), initialPositionInStream), dynamoDBClient, tableName,
-                workerIdentifier, executorService, failoverTimeMillis, epsilonMillis, maxLeasesForWorker,
+                workerIdentifier, executorService, failoverTimeMillis, epsilonMillis, leaseTakerIntervalMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
@@ -436,7 +437,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     @Deprecated
     private DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final StreamConfig streamConfig,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
-            final ExecutorService executorService, final long failoverTimeMillis, final long epsilonMillis,
+            final ExecutorService executorService, final long failoverTimeMillis, final long epsilonMillis, final long leaseTakerIntervalMillis,
             final int maxLeasesForWorker, final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
@@ -489,7 +490,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      */
     private DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final StreamConfig streamConfig,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
-            final ExecutorService executorService, final long failoverTimeMillis, final long epsilonMillis,
+            final ExecutorService executorService, final long failoverTimeMillis, final long epsilonMillis, final long leaseTakerIntervalMillis,
             final int maxLeasesForWorker, final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
@@ -500,7 +501,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             Duration dynamoDbRequestTimeout, BillingMode billingMode, final boolean leaseTableDeletionProtectionEnabled,
             Collection<Tag> tags, LeaseSerializer leaseSerializer) {
         this(kinesisClient, dynamoDBClient, tableName,
-                workerIdentifier, executorService, failoverTimeMillis, epsilonMillis, maxLeasesForWorker,
+                workerIdentifier, executorService, failoverTimeMillis, epsilonMillis, leaseTakerIntervalMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
@@ -546,7 +547,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      */
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
-            final ExecutorService executorService, final long failoverTimeMillis, final long epsilonMillis,
+            final ExecutorService executorService, final long failoverTimeMillis, final long epsilonMillis, final long leaseTakerIntervalMillis,
             final int maxLeasesForWorker, final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
@@ -565,6 +566,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         this.executorService = executorService;
         this.failoverTimeMillis = failoverTimeMillis;
         this.epsilonMillis = epsilonMillis;
+        this.leaseTakerIntervalMillis = leaseTakerIntervalMillis;
         this.maxLeasesForWorker = maxLeasesForWorker;
         this.maxLeasesToStealAtOneTime = maxLeasesToStealAtOneTime;
         this.maxLeaseRenewalThreads = maxLeaseRenewalThreads;
@@ -597,6 +599,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 workerIdentifier,
                 failoverTimeMillis,
                 epsilonMillis,
+                leaseTakerIntervalMillis,
                 maxLeasesForWorker,
                 maxLeasesToStealAtOneTime,
                 maxLeaseRenewalThreads,

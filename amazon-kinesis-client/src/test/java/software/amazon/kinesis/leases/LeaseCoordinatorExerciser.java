@@ -50,6 +50,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 @Slf4j
 public class LeaseCoordinatorExerciser {
+    private static final long LEASE_TAKER_INTERVAL_MILLIS = -1L;
     private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
     private static final int MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
     private static final int MAX_LEASE_RENEWER_THREAD_COUNT = 20;
@@ -88,7 +89,7 @@ public class LeaseCoordinatorExerciser {
             String workerIdentifier = "worker-" + Integer.toString(i);
 
             LeaseCoordinator coord = new DynamoDBLeaseCoordinator(leaseRefresher, workerIdentifier, leaseDurationMillis,
-                    epsilonMillis, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME,
+                    epsilonMillis, LEASE_TAKER_INTERVAL_MILLIS, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME,
                     MAX_LEASE_RENEWER_THREAD_COUNT, INITIAL_LEASE_TABLE_READ_CAPACITY,
                     INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
 

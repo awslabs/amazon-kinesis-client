@@ -189,9 +189,9 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                 return takenLeases;
             }
 
-            List<Lease> expiredLeases = getExpiredLeases();
+            List<Lease> availableLeases = getAvailableLeases();
 
-            Set<Lease> leasesToTake = computeLeasesToTake(expiredLeases);
+            Set<Lease> leasesToTake = computeLeasesToTake(availableLeases);
             leasesToTake = updateStaleLeasesWithLatestState(updateAllLeasesTotalTimeMillis, leasesToTake);
 
             Set<String> untakenLeaseKeys = new HashSet<>();
@@ -356,33 +356,42 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     }
 
     /**
-     * @return list of leases that were expired as of our last scan.
+     * @return list of leases that are available for the taking.
+     *  Expired leases and orphan leases (without owner) are considered available.
      */
-    private List<Lease> getExpiredLeases() {
-        List<Lease> expiredLeases = new ArrayList<>();
+    private List<Lease> getAvailableLeases() {
+        List<Lease> availableLeases = new ArrayList<>();
 
         for (Lease lease : allLeases.values()) {
-            if (lease.isExpired(leaseDurationNanos, lastScanTimeNanos)) {
-                expiredLeases.add(lease);
+            if (isExpired(lease) || isUnassigned(lease)) {
+                availableLeases.add(lease);
             }
         }
 
-        return expiredLeases;
+        return availableLeases;
+    }
+
+    private boolean isUnassigned(Lease lease) {
+        return lease.isUnassigned();
+    }
+
+    private boolean isExpired(Lease lease) {
+        return lease.isExpired(leaseDurationNanos, lastScanTimeNanos);
     }
 
     /**
      * Compute the number of leases I should try to take based on the state of the system.
      *
-     * @param expiredLeases list of leases we determined to be expired
+     * @param availableLeases list of leases we determined to be available
      * @return set of leases to take.
      */
-    private Set<Lease> computeLeasesToTake(List<Lease> expiredLeases) {
-        Map<String, Integer> leaseCounts = computeLeaseCounts(expiredLeases);
+    private Set<Lease> computeLeasesToTake(List<Lease> availableLeases) {
+        Map<String, Integer> leaseCounts = computeLeaseCounts(availableLeases);
         Set<Lease> leasesToTake = new HashSet<>();
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, TAKE_LEASES_DIMENSION);
         MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
 
-        final int numAvailableLeases = expiredLeases.size();
+        final int numAvailableLeases = availableLeases.size();
         int numLeases = 0;
         int numWorkers = 0;
         int numLeasesToReachTarget = 0;
@@ -450,16 +459,16 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                 return leasesToTake;
             }
 
-            // Shuffle expiredLeases so workers don't all try to contend for the same leases.
-            Collections.shuffle(expiredLeases);
+            // Shuffle availableLeases so workers don't all try to contend for the same leases.
+            Collections.shuffle(availableLeases);
 
-            if (expiredLeases.size() > 0) {
-                // If we have expired leases, get up to <needed> leases from expiredLeases
-                for (; numLeasesToReachTarget > 0 && expiredLeases.size() > 0; numLeasesToReachTarget--) {
-                    leasesToTake.add(expiredLeases.remove(0));
+            if (availableLeases.size() > 0) {
+                // If we have available leases, get up to <needed> leases from availableLeases
+                for (; numLeasesToReachTarget > 0 && availableLeases.size() > 0; numLeasesToReachTarget--) {
+                    leasesToTake.add(availableLeases.remove(0));
                 }
             } else {
-                // If there are no expired leases and we need a lease, consider stealing.
+                // If there are no available leases and we need a lease, consider stealing.
                 List<Lease> leasesToSteal = chooseLeasesToSteal(leaseCounts, numLeasesToReachTarget, target);
                 for (Lease leaseToSteal : leasesToSteal) {
                     log.info("Worker {} needed {} leases but none were expired, so it will steal lease {} from {}",
@@ -477,7 +486,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                         leasesToTake.size());
             }
         } finally {
-            scope.addData("ExpiredLeases", expiredLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            scope.addData("AvailableLeases", availableLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
             scope.addData("LeaseSpillover", leaseSpillover, StandardUnit.COUNT, MetricsLevel.SUMMARY);
             scope.addData("LeasesToTake", leasesToTake.size(), StandardUnit.COUNT, MetricsLevel.DETAILED);
             scope.addData("NeededLeases", Math.max(numLeasesToReachTarget, 0), StandardUnit.COUNT, MetricsLevel.DETAILED);
