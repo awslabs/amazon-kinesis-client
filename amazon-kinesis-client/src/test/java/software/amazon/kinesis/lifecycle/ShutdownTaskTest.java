@@ -310,13 +310,24 @@ public class ShutdownTaskTest {
         verify(leaseRefresher, never()).createLeaseIfNotExists(any(Lease.class));
     }
 
+    /**
+     * shutdownNotification is only set when ShardConsumer.gracefulShutdown() is called and should be null otherwise.
+     * The task should still call recordsPublisher.shutdown() regardless of the notification
+     */
     @Test
     public void testCallWhenShutdownNotificationIsSet() {
         final TaskResult result = createShutdownTaskWithNotification(LEASE_LOST, Collections.emptyList()).call();
-
         assertNull(result.getException());
         verify(recordsPublisher).shutdown();
         verify(shutdownNotification).shutdownComplete();
+    }
+
+    @Test
+    public void testCallWhenShutdownNotificationIsNull() {
+        final TaskResult result = createShutdownTask(LEASE_LOST, Collections.emptyList()).call();
+        assertNull(result.getException());
+        verify(recordsPublisher).shutdown();
+        verify(shutdownNotification, never()).shutdownComplete();
     }
 
     /**
