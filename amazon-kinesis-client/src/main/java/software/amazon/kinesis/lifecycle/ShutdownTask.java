@@ -87,6 +87,7 @@ public class ShutdownTask implements ConsumerTask {
     private final ShardRecordProcessorCheckpointer recordProcessorCheckpointer;
     @NonNull
     private final ShutdownReason reason;
+    private final ShutdownNotification shutdownNotification;
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
@@ -149,6 +150,12 @@ public class ShutdownTask implements ConsumerTask {
 
                 log.debug("Shutting down retrieval strategy for shard {}.", leaseKey);
                 recordsPublisher.shutdown();
+
+                // shutdownNotification is set when gracefulShutdown starts and is only used for gracefulShutdown
+                if (shutdownNotification != null) {
+                    shutdownNotification.shutdownComplete();
+                }
+
                 log.debug("Record processor completed shutdown() for shard {}", leaseKey);
 
                 return new TaskResult(null);

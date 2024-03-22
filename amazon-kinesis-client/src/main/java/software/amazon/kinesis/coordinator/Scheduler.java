@@ -191,6 +191,13 @@ public class Scheduler implements Runnable {
      * Used to ensure that only one requestedShutdown is in progress at a time.
      */
     private CompletableFuture<Boolean> gracefulShutdownFuture;
+
+    /**
+     * CountDownLatch used by the GracefulShutdownCoordinator. Reaching zero means that
+     * the scheduler's finalShutdown() call has completed.
+     */
+    private final CountDownLatch finalShutdownLatch = new CountDownLatch(1);
+
     @VisibleForTesting
     protected boolean gracefuleShutdownStarted = false;
 
@@ -878,6 +885,7 @@ public class Scheduler implements Runnable {
             ((CloudWatchMetricsFactory) metricsFactory).shutdown();
         }
         shutdownComplete = true;
+        finalShutdownLatch.countDown();
     }
 
     private List<ShardInfo> getShardInfoForAssignments() {

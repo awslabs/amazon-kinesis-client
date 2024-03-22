@@ -114,6 +114,8 @@ public class ShutdownTaskTest {
     private ShardRecordProcessor shardRecordProcessor;
     @Mock
     private LeaseCleanupManager leaseCleanupManager;
+    @Mock
+    private ShutdownNotification shutdownNotification;
 
     @Before
     public void setUp() throws Exception {
@@ -308,6 +310,15 @@ public class ShutdownTaskTest {
         verify(leaseRefresher, never()).createLeaseIfNotExists(any(Lease.class));
     }
 
+    @Test
+    public void testCallWhenShutdownNotificationIsSet() {
+        final TaskResult result = createShutdownTaskWithNotification(LEASE_LOST, Collections.emptyList()).call();
+
+        assertNull(result.getException());
+        verify(recordsPublisher).shutdown();
+        verify(shutdownNotification).shutdownComplete();
+    }
+
     /**
      * Test method for {@link ShutdownTask#taskType()}.
      */
@@ -372,7 +383,15 @@ public class ShutdownTaskTest {
     private ShutdownTask createShutdownTask(final ShutdownReason reason, final List<ChildShard> childShards,
             final ShardInfo shardInfo) {
         return new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
-                reason, INITIAL_POSITION_TRIM_HORIZON, false, false,
+                reason, null, INITIAL_POSITION_TRIM_HORIZON, false, false,
+                leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher, hierarchicalShardSyncer,
+                NULL_METRICS_FACTORY, childShards, STREAM_IDENTIFIER, leaseCleanupManager);
+    }
+
+    private ShutdownTask createShutdownTaskWithNotification(final ShutdownReason reason,
+            final List<ChildShard> childShards) {
+        return new ShutdownTask(SHARD_INFO, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
+                reason, shutdownNotification, INITIAL_POSITION_TRIM_HORIZON, false, false,
                 leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher, hierarchicalShardSyncer,
                 NULL_METRICS_FACTORY, childShards, STREAM_IDENTIFIER, leaseCleanupManager);
     }

@@ -39,6 +39,7 @@ class GracefulShutdownCoordinator {
     @Slf4j
     static class GracefulShutdownCallable implements Callable<Boolean> {
         private final Callable<GracefulShutdownContext> startWorkerShutdown;
+        private final long finalShutdownWaitTimeSeconds = 60;
 
         GracefulShutdownCallable(Callable<GracefulShutdownContext> startWorkerShutdown) {
             this.startWorkerShutdown = startWorkerShutdown;
@@ -149,13 +150,17 @@ class GracefulShutdownCoordinator {
         @Override
         public Boolean call() throws Exception {
             GracefulShutdownContext context;
+            boolean recordProcessorsShutdownSuccess;
+            boolean schedulerShutdownSuccess;
             try {
                 context = startWorkerShutdown.call();
+                recordProcessorsShutdownSuccess = waitForRecordProcessors(context);
+                schedulerShutdownSuccess = context.scheduler().finalShutdownLatch().await(finalShutdownWaitTimeSeconds, TimeUnit.SECONDS);
             } catch (Exception ex) {
                 log.warn("Caught exception while requesting initial worker shutdown.", ex);
                 throw ex;
             }
-            return context.isShutdownAlreadyCompleted() || waitForRecordProcessors(context);
+            return schedulerShutdownSuccess && recordProcessorsShutdownSuccess;
         }
     }
 }

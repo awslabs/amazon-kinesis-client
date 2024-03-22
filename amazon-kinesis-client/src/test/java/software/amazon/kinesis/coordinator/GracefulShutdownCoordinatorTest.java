@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -45,11 +46,18 @@ public class GracefulShutdownCoordinatorTest {
     @Mock
     private CountDownLatch notificationCompleteLatch;
     @Mock
+    private CountDownLatch finalShutdownLatch;
+    @Mock
     private Scheduler scheduler;
     @Mock
     private Callable<GracefulShutdownContext> contextCallable;
     @Mock
     private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoConsumerMap;
+
+    @Before
+    public void before() throws InterruptedException {
+        mockFinalShutdownLatchSucceeds();
+    }
 
     @Test
     public void testAllShutdownCompletedAlready() throws Exception {
@@ -286,6 +294,30 @@ public class GracefulShutdownCoordinatorTest {
         requestedShutdownCallable.call();
     }
 
+    @Test
+    public void testShutdownFailsDueToRecordProcessors() throws Exception {
+        Callable<Boolean> requestedShutdownCallable = buildRequestedShutdownCallable();
+
+        when(notificationCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(shutdownCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(false);
+        when(shutdownCompleteLatch.getCount()).thenReturn(1L);
+        when(scheduler.shutdownComplete()).thenReturn(true);
+        mockShardInfoConsumerMap(1);
+
+        assertThat(requestedShutdownCallable.call(), equalTo(false));
+    }
+
+    @Test
+    public void testShutdownFailsDueToWorker() throws Exception {
+        Callable<Boolean> requestedShutdownCallable = buildRequestedShutdownCallable();
+
+        when(notificationCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(shutdownCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(scheduler.finalShutdownLatch().await(anyLong(), any(TimeUnit.class))).thenReturn(false);
+
+        assertThat(requestedShutdownCallable.call(), equalTo(false));
+    }
+
     private void verifyLatchAwait(CountDownLatch latch) throws Exception {
         verifyLatchAwait(latch, times(1));
     }
@@ -317,6 +349,11 @@ public class GracefulShutdownCoordinatorTest {
         }
         when(shardInfoConsumerMap.size()).thenReturn(initialItemCount, additionalItemCounts);
         when(shardInfoConsumerMap.isEmpty()).thenReturn(initialItemCount == 0, additionalEmptyStates);
+    }
+
+    private void mockFinalShutdownLatchSucceeds() throws InterruptedException {
+        when(scheduler.finalShutdownLatch()).thenReturn(finalShutdownLatch);
+        when(finalShutdownLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
     }
 
 }
