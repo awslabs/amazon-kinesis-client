@@ -155,7 +155,7 @@ class GracefulShutdownCoordinator {
             try {
                 context = startWorkerShutdown.call();
                 recordProcessorsShutdownSuccess = waitForRecordProcessors(context);
-                schedulerShutdownSuccess = context.scheduler().finalShutdownLatch().await(finalShutdownWaitTimeSeconds, TimeUnit.SECONDS);
+                schedulerShutdownSuccess = context.scheduler().waitForFinalShutdown();
             } catch (Exception ex) {
                 log.warn("Caught exception while requesting initial worker shutdown.", ex);
                 throw ex;

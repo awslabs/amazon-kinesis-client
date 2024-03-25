@@ -113,6 +113,7 @@ public class Scheduler implements Runnable {
     private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 1000L;
     private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
     private static final long NEW_STREAM_CHECK_INTERVAL_MILLIS = 60_000L;
+    private static final long FINAL_SHUTDOWN_WAIT_TIME_SECONDS = 60L;
     private static final boolean SHOULD_DO_LEASE_SYNC_FOR_OLD_STREAMS = false;
     private static final String MULTI_STREAM_TRACKER = "MultiStreamTracker";
     private static final String ACTIVE_STREAMS_COUNT = "ActiveStreams.Count";
@@ -196,6 +197,7 @@ public class Scheduler implements Runnable {
      * CountDownLatch used by the GracefulShutdownCoordinator. Reaching zero means that
      * the scheduler's finalShutdown() call has completed.
      */
+    @Getter(AccessLevel.NONE)
     private final CountDownLatch finalShutdownLatch = new CountDownLatch(1);
 
     @VisibleForTesting
@@ -886,6 +888,21 @@ public class Scheduler implements Runnable {
         }
         shutdownComplete = true;
         finalShutdownLatch.countDown();
+    }
+
+    /**
+     * called by {@link GracefulShutdownCoordinator} to wait for the worker's final shutdown to complete before returning
+     * @return true if the final shutdown is successful, false otherwise.
+     */
+    boolean waitForFinalShutdown() {
+        boolean finalShutdownResult;
+        try {
+            finalShutdownResult = finalShutdownLatch.await(FINAL_SHUTDOWN_WAIT_TIME_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            log.warn("Final shutdown interrupted due to exception:", e);
+            return false;
+        }
+        return finalShutdownResult;
     }
 
     private List<ShardInfo> getShardInfoForAssignments() {

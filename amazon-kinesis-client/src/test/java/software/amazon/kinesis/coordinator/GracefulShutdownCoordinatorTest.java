@@ -46,8 +46,6 @@ public class GracefulShutdownCoordinatorTest {
     @Mock
     private CountDownLatch notificationCompleteLatch;
     @Mock
-    private CountDownLatch finalShutdownLatch;
-    @Mock
     private Scheduler scheduler;
     @Mock
     private Callable<GracefulShutdownContext> contextCallable;
@@ -56,7 +54,7 @@ public class GracefulShutdownCoordinatorTest {
 
     @Before
     public void before() throws InterruptedException {
-        mockFinalShutdownLatchSucceeds();
+        mockFinalShutdownSucceeds();
     }
 
     @Test
@@ -313,7 +311,7 @@ public class GracefulShutdownCoordinatorTest {
 
         when(notificationCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
         when(shutdownCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
-        when(scheduler.finalShutdownLatch().await(anyLong(), any(TimeUnit.class))).thenReturn(false);
+        when(scheduler.waitForFinalShutdown()).thenReturn(false);
 
         assertThat(requestedShutdownCallable.call(), equalTo(false));
     }
@@ -351,9 +349,8 @@ public class GracefulShutdownCoordinatorTest {
         when(shardInfoConsumerMap.isEmpty()).thenReturn(initialItemCount == 0, additionalEmptyStates);
     }
 
-    private void mockFinalShutdownLatchSucceeds() throws InterruptedException {
-        when(scheduler.finalShutdownLatch()).thenReturn(finalShutdownLatch);
-        when(finalShutdownLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+    private void mockFinalShutdownSucceeds() {
+        when(scheduler.waitForFinalShutdown()).thenReturn(true);
     }
 
 }
