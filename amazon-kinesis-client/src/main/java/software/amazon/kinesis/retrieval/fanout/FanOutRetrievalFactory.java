@@ -27,6 +27,7 @@ import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 
+import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -51,18 +52,16 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
 
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
-            final StreamConfig streamConfig,
-            final MetricsFactory metricsFactory) {
+            @NonNull final StreamConfig streamConfig,
+            @Nullable final MetricsFactory metricsFactory) {
         final Optional<String> streamIdentifierStr = shardInfo.streamIdentifierSerOpt();
         if (streamIdentifierStr.isPresent()) {
-            final StreamIdentifier streamIdentifier = StreamIdentifier.multiStreamInstance(streamIdentifierStr.get());
             return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
-                    getOrCreateConsumerArn(streamIdentifier, streamConfig.consumerArn()),
+                    getOrCreateConsumerArn(streamConfig.streamIdentifier(), streamConfig.consumerArn()),
                     streamIdentifierStr.get());
         } else {
-            final StreamIdentifier streamIdentifier = StreamIdentifier.singleStreamInstance(defaultStreamName);
             return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
-                    getOrCreateConsumerArn(streamIdentifier, defaultConsumerArn));
+                    getOrCreateConsumerArn(streamConfig.streamIdentifier(), defaultConsumerArn));
         }
     }
 

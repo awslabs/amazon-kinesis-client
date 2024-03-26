@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutorService;
 import lombok.NonNull;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -34,6 +35,8 @@ import software.amazon.kinesis.retrieval.RetrievalFactory;
  */
 @KinesisClientInternalApi
 public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory {
+    private static final String PREFETCHING_OPERATION_NAME = "Prefetching";
+
     @NonNull
     private final String streamName;
     @NonNull
@@ -66,12 +69,21 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
         this.maxFutureWait = maxFutureWait;
     }
 
-    @Override public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
+    @Deprecated
+    @Override
+    public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
         final StreamIdentifier streamIdentifier = shardInfo.streamIdentifierSerOpt().isPresent() ?
                 StreamIdentifier.multiStreamInstance(shardInfo.streamIdentifierSerOpt().get()) :
                 StreamIdentifier.singleStreamInstance(streamName);
 
+        return createGetRecordsRetrievalStrategy(shardInfo, streamIdentifier, metricsFactory);
+    }
+
+    @Override
+    public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
+            @NonNull final StreamIdentifier streamIdentifier,
+            @NonNull final MetricsFactory metricsFactory) {
         return new SynchronousGetRecordsRetrievalStrategy(
                 new KinesisDataFetcher(kinesisClient, new KinesisDataFetcherProviderConfig(
                         streamIdentifier,
@@ -82,12 +94,36 @@ public class SynchronousPrefetchingRetrievalFactory implements RetrievalFactory 
                 )));
     }
 
+    @Deprecated
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
             @NonNull final MetricsFactory metricsFactory) {
+        return createGetRecordsCache(shardInfo,
+                createGetRecordsRetrievalStrategy(shardInfo, metricsFactory),
+                metricsFactory);
+    }
+
+    @Override
+    public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
+            @NonNull final StreamConfig streamConfig,
+            @NonNull final MetricsFactory metricsFactory) {
+        return createGetRecordsCache(shardInfo,
+                createGetRecordsRetrievalStrategy(shardInfo, streamConfig.streamIdentifier(), metricsFactory),
+                metricsFactory);
+    }
+
+    private RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
+            @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+            @NonNull final MetricsFactory metricsFactory) {
         return new PrefetchRecordsPublisher(recordsFetcherFactory.maxPendingProcessRecordsInput(),
-                recordsFetcherFactory.maxByteSize(), recordsFetcherFactory.maxRecordsCount(), maxRecords,
-                createGetRecordsRetrievalStrategy(shardInfo, metricsFactory), executorService, idleMillisBetweenCalls,
-                metricsFactory, "Prefetching", shardInfo.shardId());
+                recordsFetcherFactory.maxByteSize(),
+                recordsFetcherFactory.maxRecordsCount(),
+                maxRecords,
+                getRecordsRetrievalStrategy,
+                executorService,
+                idleMillisBetweenCalls,
+                metricsFactory,
+                PREFETCHING_OPERATION_NAME,
+                shardInfo.shardId());
     }
 }
