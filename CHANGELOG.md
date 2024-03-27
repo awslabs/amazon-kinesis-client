@@ -3,6 +3,13 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.5.8 (2024-03-27)
+* [#1278](https://github.com/awslabs/amazon-kinesis-client/pull/1278) Upgrade awssdk.version from 2.25.3 to 2.25.11 
+* [#1279](https://github.com/awslabs/amazon-kinesis-client/pull/1279) Upgrade org.apache.maven.plugins:maven-gpg-plugin from 3.1.0 to 3.2.1 
+* [#1280](https://github.com/awslabs/amazon-kinesis-client/pull/1280) Upgrade org.apache.commons:commons-lang3 from 3.12.0 to 3.14.0 
+* [#1282](https://github.com/awslabs/amazon-kinesis-client/pull/1282) Upgrade org.apache.maven.plugins:maven-javadoc-plugin from 3.5.0 to 3.6.3 
+* [#1277](https://github.com/awslabs/amazon-kinesis-client/pull/1277) Reuse 'ShardSyncTaskManager' instance for existing stream to avoid duplicate enqueue of 'ShardSyncTask' 
+
 ### Release 2.5.7 (2024-03-19)
 * [#1275](https://github.com/awslabs/amazon-kinesis-client/pull/1275) Update PollingConfig maxRecords method to return PollingConfig 
 * [#1236](https://github.com/awslabs/amazon-kinesis-client/pull/1236) Upgrade commons-io:commons-io from 2.11.0 to 2.15.1 
