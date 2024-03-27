@@ -27,5 +27,3 @@ public class StreamConfig {
     private final InitialPositionInStreamExtended initialPositionInStreamExtended;
     private String consumerArn;
 }
-
-
