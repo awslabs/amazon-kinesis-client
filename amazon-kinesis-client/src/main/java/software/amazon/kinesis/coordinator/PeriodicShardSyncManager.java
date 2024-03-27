@@ -16,6 +16,7 @@ package software.amazon.kinesis.coordinator;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ComparisonChain;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
@@ -26,6 +27,7 @@ import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.utils.CollectionUtils;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -58,6 +60,7 @@ import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -70,6 +73,7 @@ import static software.amazon.kinesis.common.HashKeyRangeForLease.fromHashKeyRan
 @Getter
 @EqualsAndHashCode
 @Slf4j
+@KinesisClientInternalApi
 class PeriodicShardSyncManager {
     private static final long INITIAL_DELAY = 60 * 1000L;
     @VisibleForTesting
@@ -90,6 +94,8 @@ class PeriodicShardSyncManager {
     private final MetricsFactory metricsFactory;
     private final long leasesRecoveryAuditorExecutionFrequencyMillis;
     private final int leasesRecoveryAuditorInconsistencyConfidenceThreshold;
+    @Getter(AccessLevel.NONE)
+    private final AtomicBoolean leaderSynced;
     private boolean isRunning;
 
     PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, LeaseRefresher leaseRefresher,
@@ -98,11 +104,13 @@ class PeriodicShardSyncManager {
             Map<StreamConfig, ShardSyncTaskManager> streamToShardSyncTaskManagerMap,
             boolean isMultiStreamingMode, MetricsFactory metricsFactory,
             long leasesRecoveryAuditorExecutionFrequencyMillis,
-            int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
+            int leasesRecoveryAuditorInconsistencyConfidenceThreshold,
+            AtomicBoolean leaderSynced){
         this(workerId, leaderDecider, leaseRefresher, currentStreamConfigMap, shardSyncTaskManagerProvider,
                 streamToShardSyncTaskManagerMap,
                 Executors.newSingleThreadScheduledExecutor(), isMultiStreamingMode, metricsFactory,
-                leasesRecoveryAuditorExecutionFrequencyMillis, leasesRecoveryAuditorInconsistencyConfidenceThreshold);
+                leasesRecoveryAuditorExecutionFrequencyMillis, leasesRecoveryAuditorInconsistencyConfidenceThreshold,
+                leaderSynced);
     }
 
     PeriodicShardSyncManager(String workerId, LeaderDecider leaderDecider, LeaseRefresher leaseRefresher,
@@ -112,7 +120,8 @@ class PeriodicShardSyncManager {
             ScheduledExecutorService shardSyncThreadPool, boolean isMultiStreamingMode,
             MetricsFactory metricsFactory,
             long leasesRecoveryAuditorExecutionFrequencyMillis,
-            int leasesRecoveryAuditorInconsistencyConfidenceThreshold) {
+            int leasesRecoveryAuditorInconsistencyConfidenceThreshold,
+            AtomicBoolean leaderSynced) {
         Validate.notBlank(workerId, "WorkerID is required to initialize PeriodicShardSyncManager.");
         Validate.notNull(leaderDecider, "LeaderDecider is required to initialize PeriodicShardSyncManager.");
         this.workerId = workerId;
@@ -126,6 +135,7 @@ class PeriodicShardSyncManager {
         this.metricsFactory = metricsFactory;
         this.leasesRecoveryAuditorExecutionFrequencyMillis = leasesRecoveryAuditorExecutionFrequencyMillis;
         this.leasesRecoveryAuditorInconsistencyConfidenceThreshold = leasesRecoveryAuditorInconsistencyConfidenceThreshold;
+        this.leaderSynced = leaderSynced;
     }
 
     public synchronized TaskResult start() {
@@ -173,7 +183,7 @@ class PeriodicShardSyncManager {
     }
 
     private void runShardSync() {
-        if (leaderDecider.isLeader(workerId)) {
+        if (leaderDecider.isLeader(workerId) && leaderSynced.get()) {
             log.info(String.format("WorkerId %s is leader, running the periodic shard sync task", workerId));
 
             final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory,

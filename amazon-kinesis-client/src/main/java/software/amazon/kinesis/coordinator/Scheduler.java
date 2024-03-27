@@ -41,6 +41,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -184,7 +185,7 @@ public class Scheduler implements Runnable {
 
     private boolean leasesSyncedOnAppInit = false;
     @Getter(AccessLevel.NONE)
-    private boolean shouldSyncLeases = true;
+    private final AtomicBoolean leaderSynced = new AtomicBoolean(false);
 
     /**
      * Used to ensure that only one requestedShutdown is in progress at a time.
@@ -294,7 +295,8 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.workerIdentifier(), leaderDecider, leaseRefresher, currentStreamConfigMap,
                 shardSyncTaskManagerProvider, streamToShardSyncTaskManagerMap, isMultiStreamMode, metricsFactory,
                 leaseManagementConfig.leasesRecoveryAuditorExecutionFrequencyMillis(),
-                leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold());
+                leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold(),
+                leaderSynced);
         this.leaseCleanupManager = this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode)
                 .createLeaseCleanupManager(metricsFactory);
         this.schemaRegistryDecoder =
@@ -421,8 +423,9 @@ public class Scheduler implements Runnable {
             // check for new streams and sync with the scheduler state
             if (isLeader()) {
                 checkAndSyncStreamShardsAndLeases();
+                leaderSynced.set(true);
             } else {
-                shouldSyncLeases = true;
+                leaderSynced.set(false);
             }
 
             logExecutorState();
@@ -461,13 +464,28 @@ public class Scheduler implements Runnable {
                 final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = streamTracker.streamConfigList()
                         .stream().collect(Collectors.toMap(StreamConfig::streamIdentifier, Function.identity()));
                 // This is done to ensure that we clean up the stale streams lingering in the lease table.
-                if (isMultiStreamMode && (shouldSyncLeases || !leasesSyncedOnAppInit)) {
-                    // Skip updating the stream map due to no new stream since last sync
-                    if (newStreamConfigMap.keySet().stream().anyMatch(s -> !currentStreamConfigMap.containsKey(s))) {
-                        syncStreamsFromLeaseTableOnAppInit(fetchMultiStreamLeases());
+                if (!leaderSynced.get() || !leasesSyncedOnAppInit) {
+                    // Only sync from lease table again if the currentStreamConfigMap and newStreamConfigMap contain
+                    // different set of streams.
+                    if (!newStreamConfigMap.keySet().equals(currentStreamConfigMap.keySet())) {
+                        log.info("Syncing leases for leader to catch up");
+                        final List<MultiStreamLease> leaseTableLeases = fetchMultiStreamLeases();
+                        syncStreamsFromLeaseTableOnAppInit(leaseTableLeases);
+                        final Set<StreamIdentifier> streamsFromLeaseTable = leaseTableLeases.stream()
+                                .map(lease -> StreamIdentifier.multiStreamInstance(lease.streamIdentifier()))
+                                .collect(Collectors.toSet());
+                        // Remove stream from currentStreamConfigMap if this stream in not in the lease table and newStreamConfigMap.
+                        // This means that the leases have already been deleted by the last leader.
+                        currentStreamConfigMap.keySet().stream()
+                                .filter(streamIdentifier -> !newStreamConfigMap.containsKey(streamIdentifier)
+                                        && !streamsFromLeaseTable.contains(streamIdentifier)).forEach(stream -> {
+                                    log.info("Removing stream {} from currentStreamConfigMap due to not being active", stream);
+                                    currentStreamConfigMap.remove(stream);
+                                    staleStreamDeletionMap.remove(stream);
+                                    streamsSynced.add(stream);
+                                });
                     }
                     leasesSyncedOnAppInit = true;
-                    shouldSyncLeases = false;
                 }
 
                 // For new streams discovered, do a shard sync and update the currentStreamConfigMap
@@ -489,7 +507,6 @@ public class Scheduler implements Runnable {
                         staleStreamDeletionMap.putIfAbsent(streamIdentifier, Instant.now());
                     }
                 };
-
                 if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION) {
                     // Now, we are identifying the stale/old streams and enqueuing it for deferred deletion.
                     // It is assumed that all the workers will always have the latest and consistent snapshot of streams
@@ -633,10 +650,15 @@ public class Scheduler implements Runnable {
         final Map<String, List<MultiStreamLease>> streamIdToShardsMap = leases.stream().collect(
                 Collectors.groupingBy(MultiStreamLease::streamIdentifier, Collectors.toCollection(ArrayList::new)));
         for (StreamIdentifier streamIdentifier : streamIdentifiers) {
+            log.warn("Found old/deleted stream: {}. Directly deleting leases of this stream.", streamIdentifier);
+            // Removing streamIdentifier from this map so PSSM doesn't think there is a hole in the stream while
+            // scheduler attempts to delete the stream if the stream is taking longer to delete. If deletion fails
+            // it will be retried again since stream will still show up in the staleStreamDeletionMap.
+            // It is fine for PSSM to detect holes and it should not do shardsync because it takes few iterations
+            // to breach the hole confidence interval threshold.
+            currentStreamConfigMap.remove(streamIdentifier);
             // Deleting leases will cause the workers to shutdown the record processors for these shards.
             if (deleteMultiStreamLeases(streamIdToShardsMap.get(streamIdentifier.serialize()))) {
-                log.warn("Found old/deleted stream: {}. Directly deleting leases of this stream.", streamIdentifier);
-                currentStreamConfigMap.remove(streamIdentifier);
                 staleStreamDeletionMap.remove(streamIdentifier);
                 streamsSynced.add(streamIdentifier);
             }

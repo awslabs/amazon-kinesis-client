@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -77,7 +78,8 @@ public class PeriodicShardSyncManagerTest {
     public void setup() {
         streamIdentifier = StreamIdentifier.multiStreamInstance("123456789012:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager("worker", leaderDecider, leaseRefresher, currentStreamConfigMap,
-                shardSyncTaskManagerProvider, streamToShardSyncTaskManagerMap, true, new NullMetricsFactory(), 2 * 60 * 1000, 3);
+                shardSyncTaskManagerProvider, streamToShardSyncTaskManagerMap, true, new NullMetricsFactory(), 2 * 60 * 1000, 3,
+                new AtomicBoolean(true));
     }
 
     @Test
