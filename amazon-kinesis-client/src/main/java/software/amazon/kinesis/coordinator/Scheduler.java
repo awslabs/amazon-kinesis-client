@@ -784,7 +784,7 @@ public class Scheduler implements Runnable {
                         lease, notificationCompleteLatch, shutdownCompleteLatch);
                 ShardInfo shardInfo = DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease);
                 ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
-                if (consumer != null) {
+                if (consumer != null && !consumer.isShutdown()) {
                     consumer.gracefulShutdown(shutdownNotification);
                 } else {
                     //
