@@ -151,7 +151,7 @@ public class ShutdownTask implements ConsumerTask {
                 log.debug("Shutting down retrieval strategy for shard {}.", leaseKey);
                 recordsPublisher.shutdown();
 
-                // shutdownNotification is set when gracefulShutdown starts and is only used for gracefulShutdown
+                // shutdownNotification is only set and used when gracefulShutdown starts
                 if (shutdownNotification != null) {
                     shutdownNotification.shutdownComplete();
                 }
