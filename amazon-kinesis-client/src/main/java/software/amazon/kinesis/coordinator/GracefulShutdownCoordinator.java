@@ -39,7 +39,6 @@ class GracefulShutdownCoordinator {
     @Slf4j
     static class GracefulShutdownCallable implements Callable<Boolean> {
         private final Callable<GracefulShutdownContext> startWorkerShutdown;
-        private final long finalShutdownWaitTimeSeconds = 60;
 
         GracefulShutdownCallable(Callable<GracefulShutdownContext> startWorkerShutdown) {
             this.startWorkerShutdown = startWorkerShutdown;
