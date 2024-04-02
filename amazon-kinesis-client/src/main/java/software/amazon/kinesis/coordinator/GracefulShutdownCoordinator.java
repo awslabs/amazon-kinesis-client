@@ -23,6 +23,11 @@ import java.util.concurrent.TimeUnit;
 
 class GracefulShutdownCoordinator {
 
+    /**
+     * arbitrary wait time for worker's finalShutdown
+     */
+    private static final long FINAL_SHUTDOWN_WAIT_TIME_SECONDS = 60L;
+
     CompletableFuture<Boolean> startGracefulShutdown(Callable<Boolean> shutdownCallable) {
         CompletableFuture<Boolean> cf = new CompletableFuture<>();
         CompletableFuture.runAsync(() -> {
@@ -60,6 +65,21 @@ class GracefulShutdownCoordinator {
         private String awaitingFinalShutdownMessage(GracefulShutdownContext context) {
             long outstanding = context.shutdownCompleteLatch().getCount();
             return String.format("Waiting for %d record processors to complete final shutdown", outstanding);
+        }
+
+        /**
+         * used to wait for the worker's final shutdown to complete before returning the future for graceful shutdown
+         * @return true if the final shutdown is successful, false otherwise.
+         */
+        private boolean waitForFinalShutdown(GracefulShutdownContext context) {
+            boolean finalShutdownResult;
+            try {
+                finalShutdownResult = context.finalShutdownLatch().await(FINAL_SHUTDOWN_WAIT_TIME_SECONDS, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                log.warn("Final shutdown was interrupted:", e);
+                return false;
+            }
+            return finalShutdownResult;
         }
 
         private boolean waitForRecordProcessors(GracefulShutdownContext context) {
@@ -153,8 +173,8 @@ class GracefulShutdownCoordinator {
             boolean schedulerShutdownSuccess;
             try {
                 context = startWorkerShutdown.call();
-                recordProcessorsShutdownSuccess = waitForRecordProcessors(context);
-                schedulerShutdownSuccess = context.scheduler().waitForFinalShutdown();
+                recordProcessorsShutdownSuccess = context.isRecordProcessorShutdownComplete() || waitForRecordProcessors(context);
+                schedulerShutdownSuccess = waitForFinalShutdown(context);
             } catch (Exception ex) {
                 log.warn("Caught exception while requesting initial worker shutdown.", ex);
                 throw ex;
