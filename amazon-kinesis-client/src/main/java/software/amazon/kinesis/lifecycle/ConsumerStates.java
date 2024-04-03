@@ -478,6 +478,7 @@ class ConsumerStates {
                     argument.shardRecordProcessor(),
                     argument.recordProcessorCheckpointer(),
                     consumer.shutdownReason(),
+                    consumer.shutdownNotification(),
                     argument.initialPositionInStream(),
                     argument.cleanupLeasesOfCompletedShards(),
                     argument.ignoreUnexpectedChildShards(),
@@ -557,9 +558,6 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(ShardConsumerArgument argument, ShardConsumer consumer, ProcessRecordsInput input) {
-            if (consumer.shutdownNotification() != null) {
-                consumer.shutdownNotification().shutdownComplete();
-            }
             return null;
         }
 

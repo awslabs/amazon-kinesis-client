@@ -191,6 +191,14 @@ public class Scheduler implements Runnable {
      * Used to ensure that only one requestedShutdown is in progress at a time.
      */
     private CompletableFuture<Boolean> gracefulShutdownFuture;
+
+    /**
+     * CountDownLatch used by the GracefulShutdownCoordinator. Reaching zero means that
+     * the scheduler's finalShutdown() call has completed.
+     */
+    @Getter(AccessLevel.NONE)
+    private final CountDownLatch finalShutdownLatch = new CountDownLatch(1);
+
     @VisibleForTesting
     protected boolean gracefuleShutdownStarted = false;
 
@@ -797,7 +805,7 @@ public class Scheduler implements Runnable {
                 // If there are no leases notification is already completed, but we still need to shutdown the worker.
                 //
                 this.shutdown();
-                return GracefulShutdownContext.SHUTDOWN_ALREADY_COMPLETED;
+                return GracefulShutdownContext.builder().finalShutdownLatch(finalShutdownLatch).build();
             }
             CountDownLatch shutdownCompleteLatch = new CountDownLatch(leases.size());
             CountDownLatch notificationCompleteLatch = new CountDownLatch(leases.size());
@@ -818,7 +826,12 @@ public class Scheduler implements Runnable {
                     shutdownCompleteLatch.countDown();
                 }
             }
-            return new GracefulShutdownContext(shutdownCompleteLatch, notificationCompleteLatch, this);
+            return GracefulShutdownContext.builder()
+                    .shutdownCompleteLatch(shutdownCompleteLatch)
+                    .notificationCompleteLatch(notificationCompleteLatch)
+                    .finalShutdownLatch(finalShutdownLatch)
+                    .scheduler(this)
+                    .build();
         };
     }
 
@@ -878,6 +891,7 @@ public class Scheduler implements Runnable {
             ((CloudWatchMetricsFactory) metricsFactory).shutdown();
         }
         shutdownComplete = true;
+        finalShutdownLatch.countDown();
     }
 
     private List<ShardInfo> getShardInfoForAssignments() {

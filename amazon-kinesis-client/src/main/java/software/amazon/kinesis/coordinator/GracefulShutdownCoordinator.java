@@ -23,6 +23,11 @@ import java.util.concurrent.TimeUnit;
 
 class GracefulShutdownCoordinator {
 
+    /**
+     * arbitrary wait time for worker's finalShutdown
+     */
+    private static final long FINAL_SHUTDOWN_WAIT_TIME_SECONDS = 60L;
+
     CompletableFuture<Boolean> startGracefulShutdown(Callable<Boolean> shutdownCallable) {
         CompletableFuture<Boolean> cf = new CompletableFuture<>();
         CompletableFuture.runAsync(() -> {
@@ -62,7 +67,18 @@ class GracefulShutdownCoordinator {
             return String.format("Waiting for %d record processors to complete final shutdown", outstanding);
         }
 
+        /**
+         * used to wait for the worker's final shutdown to complete before returning the future for graceful shutdown
+         * @return true if the final shutdown is successful, false otherwise.
+         */
+        private boolean waitForFinalShutdown(GracefulShutdownContext context) throws InterruptedException {
+            return context.finalShutdownLatch().await(FINAL_SHUTDOWN_WAIT_TIME_SECONDS, TimeUnit.SECONDS);
+        }
+
         private boolean waitForRecordProcessors(GracefulShutdownContext context) {
+            if (context.isRecordProcessorShutdownComplete()) {
+                return true;
+            }
 
             //
             // Awaiting for all ShardConsumer/RecordProcessors to be notified that a shutdown has been requested.
@@ -148,14 +164,13 @@ class GracefulShutdownCoordinator {
 
         @Override
         public Boolean call() throws Exception {
-            GracefulShutdownContext context;
             try {
-                context = startWorkerShutdown.call();
+                final GracefulShutdownContext context = startWorkerShutdown.call();
+                return waitForRecordProcessors(context) && waitForFinalShutdown(context);
             } catch (Exception ex) {
                 log.warn("Caught exception while requesting initial worker shutdown.", ex);
                 throw ex;
             }
-            return context.isShutdownAlreadyCompleted() || waitForRecordProcessors(context);
         }
     }
 }

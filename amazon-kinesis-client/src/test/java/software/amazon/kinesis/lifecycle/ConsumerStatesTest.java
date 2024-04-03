@@ -17,10 +17,7 @@ package software.amazon.kinesis.lifecycle;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerState;
 
@@ -355,28 +352,17 @@ public class ConsumerStatesTest {
         ConsumerState state = ShardConsumerState.SHUTDOWN_COMPLETE.consumerState();
 
         assertThat(state.createTask(argument, consumer, null), nullValue());
-        verify(consumer, times(2)).shutdownNotification();
-        verify(shutdownNotification).shutdownComplete();
 
         assertThat(state.successTransition(), equalTo(state));
         for (ShutdownReason reason : ShutdownReason.values()) {
             assertThat(state.shutdownTransition(reason), equalTo(state));
         }
 
+        assertThat(state.isTerminal(), equalTo(true));
         assertThat(state.state(), equalTo(ShardConsumerState.SHUTDOWN_COMPLETE));
         assertThat(state.taskType(), equalTo(TaskType.SHUTDOWN_COMPLETE));
     }
 
-    @Test
-    public void shutdownCompleteStateNullNotificationTest() {
-        ConsumerState state = ShardConsumerState.SHUTDOWN_COMPLETE.consumerState();
-
-        when(consumer.shutdownNotification()).thenReturn(null);
-        assertThat(state.createTask(argument, consumer, null), nullValue());
-
-        verify(consumer).shutdownNotification();
-        verify(shutdownNotification, never()).shutdownComplete();
-    }
 
     static <ValueType> ReflectionPropertyMatcher<ShutdownTask, ValueType> shutdownTask(Class<ValueType> valueTypeClass,
             String propertyName, Matcher<ValueType> matcher) {
