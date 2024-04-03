@@ -125,8 +125,14 @@ public interface LeaseCoordinator {
 
     /**
      * @return Current shard/lease assignments
+     * @deprecated This method is deprecated and will be removed in future versions.
+     *             {@link LeaseCoordinator} implementations should not be required to construct and return
+     *             {@link ShardInfo} objects. {@link #getAssignments()} can be used to return the currently held leases.
      */
-    List<ShardInfo> getCurrentAssignments();
+    @Deprecated
+    default List<ShardInfo> getCurrentAssignments() {
+        throw new UnsupportedOperationException("This method is deprecated and should not be used.");
+    }
 
     /**
      * Default implementation returns an empty list and concrete implementation is expected to return all leases

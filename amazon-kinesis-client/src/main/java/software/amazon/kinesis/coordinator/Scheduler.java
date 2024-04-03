@@ -68,7 +68,6 @@ import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.leases.ShardSyncTaskManager;
-import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBMultiStreamLeaseSerializer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -812,7 +811,7 @@ public class Scheduler implements Runnable {
             for (Lease lease : leases) {
                 ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(leaseCoordinator,
                         lease, notificationCompleteLatch, shutdownCompleteLatch);
-                ShardInfo shardInfo = DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease);
+                final ShardInfo shardInfo = constructShardInfoFromLease(lease);
                 ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
                 if (consumer != null) {
                     consumer.gracefulShutdown(shutdownNotification);
@@ -895,7 +894,9 @@ public class Scheduler implements Runnable {
     }
 
     private List<ShardInfo> getShardInfoForAssignments() {
-        List<ShardInfo> assignedStreamShards = leaseCoordinator.getCurrentAssignments();
+        final List<ShardInfo> assignedStreamShards = leaseCoordinator.getAssignments().stream()
+                .map(this::constructShardInfoFromLease)
+                .collect(Collectors.toList());
         List<ShardInfo> prioritizedShards = shardPrioritization.prioritize(assignedStreamShards);
 
         if ((prioritizedShards != null) && (!prioritizedShards.isEmpty())) {
@@ -952,26 +953,20 @@ public class Scheduler implements Runnable {
                                           @NonNull final LeaseCleanupManager leaseCleanupManager) {
         ShardRecordProcessorCheckpointer checkpointer = coordinatorConfig.coordinatorFactory().createRecordProcessorCheckpointer(shardInfo,
                         checkpoint);
-        // The only case where streamName is not available will be when multistreamtracker not set. In this case,
-        // get the default stream name for the single stream application.
-        final StreamIdentifier streamIdentifier = getStreamIdentifier(shardInfo.streamIdentifierSerOpt());
-
-        // Irrespective of single stream app or multi stream app, streamConfig should always be available.
-        // If we have a shardInfo, that is not present in currentStreamConfigMap for whatever reason, then return default stream config
-        // to gracefully complete the reading.
-        StreamConfig streamConfig = currentStreamConfigMap.get(streamIdentifier);
-        if (streamConfig == null) {
-            streamConfig = streamTracker.createStreamConfig(streamIdentifier);
+        final StreamConfig streamConfig = shardInfo.streamConfig();
+        if (!currentStreamConfigMap.containsKey(streamConfig.streamIdentifier())) {
             log.info("Created orphan {}", streamConfig);
         }
-        Validate.notNull(streamConfig, "StreamConfig should not be null");
+        /*
+         * NOTE: RecordsPublisher#createGetRecordsCache(ShardInfo, StreamConfig, MetricsFactory) is deprecated.
+         *  RecordsPublisher#createGetRecordsCache(ShardInfo, MetricsFactory) will be called directly in the future.
+         */
         RecordsPublisher cache = retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, streamConfig, metricsFactory);
         ShardConsumerArgument argument = new ShardConsumerArgument(shardInfo,
-                streamConfig.streamIdentifier(),
                 leaseCoordinator,
                 executorService,
                 cache,
-                shardRecordProcessorFactory.shardRecordProcessor(streamIdentifier),
+                shardRecordProcessorFactory.shardRecordProcessor(streamConfig.streamIdentifier()),
                 checkpoint,
                 checkpointer,
                 parentShardPollIntervalMillis,
@@ -981,7 +976,6 @@ public class Scheduler implements Runnable {
                 maxListShardsRetryAttempts,
                 processorConfig.callProcessRecordsEvenForEmptyRecordList(),
                 shardConsumerDispatchPollIntervalMillis,
-                streamConfig.initialPositionInStreamExtended(),
                 cleanupLeasesUponShardCompletion,
                 ignoreUnexpetedChildShards,
                 shardDetectorProvider.apply(streamConfig),
@@ -1039,18 +1033,6 @@ public class Scheduler implements Runnable {
         executorStateEvent.accept(diagnosticEventHandler);
     }
 
-    private StreamIdentifier getStreamIdentifier(Optional<String> streamIdentifierString) {
-        final StreamIdentifier streamIdentifier;
-        if (streamIdentifierString.isPresent()) {
-            streamIdentifier = StreamIdentifier.multiStreamInstance(streamIdentifierString.get());
-        } else {
-            Validate.isTrue(!isMultiStreamMode, "Should not be in MultiStream Mode");
-            streamIdentifier = this.currentStreamConfigMap.values().iterator().next().streamIdentifier();
-        }
-        Validate.notNull(streamIdentifier, "Stream identifier should not be empty");
-        return streamIdentifier;
-    }
-
     /**
      * Logger for suppressing too much INFO logging. To avoid too much logging information Worker will output logging at
      * INFO level for a single pass through the main loop every minute. At DEBUG level it will output all INFO logs on
@@ -1088,6 +1070,31 @@ public class Scheduler implements Runnable {
                 infoReporting = true;
             }
         }
+    }
+
+    private ShardInfo constructShardInfoFromLease(final Lease lease) {
+        final boolean isMultiStreamLease = lease instanceof MultiStreamLease;
+
+        final Optional<String> streamIdentifierSerialization = isMultiStreamLease ?
+                Optional.of(((MultiStreamLease) lease).streamIdentifier()) : Optional.empty();
+        final StreamConfig streamConfig = getOrCreateStreamConfig(streamIdentifierSerialization);
+
+        final String shardId = isMultiStreamLease ? ((MultiStreamLease) lease).shardId() : lease.leaseKey();
+        return new ShardInfo(
+                shardId, lease.concurrencyToken().toString(), lease.parentShardIds(), lease.checkpoint(), streamConfig);
+    }
+
+    private StreamConfig getOrCreateStreamConfig(final Optional<String> streamIdentifierSerialization) {
+        if (!streamIdentifierSerialization.isPresent()) {
+            Validate.isTrue(!isMultiStreamMode, "Should not be in MultiStream Mode");
+            final StreamConfig streamConfig = currentStreamConfigMap.values().iterator().next();
+            Validate.notNull(streamConfig, "StreamConfig should not be null");
+            return streamConfig;
+        }
+
+        final StreamIdentifier streamIdentifier =
+                StreamIdentifier.multiStreamInstance(streamIdentifierSerialization.get());
+        return currentStreamConfigMap.getOrDefault(streamIdentifier, streamTracker.createStreamConfig(streamIdentifier));
     }
 
     @Deprecated

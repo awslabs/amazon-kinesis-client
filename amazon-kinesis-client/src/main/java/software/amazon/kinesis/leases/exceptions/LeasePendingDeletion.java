@@ -18,7 +18,6 @@ package software.amazon.kinesis.leases.exceptions;
 import lombok.EqualsAndHashCode;
 import lombok.Value;
 import lombok.experimental.Accessors;
-import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -36,7 +35,6 @@ import java.util.stream.Collectors;
 @Value
 public class LeasePendingDeletion {
 
-    StreamIdentifier streamIdentifier;
     Lease lease;
     ShardInfo shardInfo;
     ShardDetector shardDetector;

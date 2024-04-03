@@ -69,6 +69,10 @@ import lombok.Getter;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -85,6 +89,11 @@ import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ProcessTaskTest {
+    private static final StreamIdentifier TEST_STREAM_IDENTIFIER = StreamIdentifier.singleStreamInstance("streamName");
+    private static final InitialPositionInStreamExtended TEST_INITIAL_POSITION_IN_STREAM_EXTENDED =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final StreamConfig TEST_STREAM_CONFIG =
+            new StreamConfig(TEST_STREAM_IDENTIFIER, TEST_INITIAL_POSITION_IN_STREAM_EXTENDED);
     private static final long IDLE_TIME_IN_MILLISECONDS = 100L;
     private static final Schema SCHEMA_REGISTRY_SCHEMA = new Schema("{}", "AVRO", "demoSchema");
     private static final byte[] SCHEMA_REGISTRY_PAYLOAD = new byte[] {01, 05, 03, 05};
@@ -119,7 +128,7 @@ public class ProcessTaskTest {
     public void setUpProcessTask() {
         when(checkpointer.checkpointer()).thenReturn(mock(Checkpointer.class));
 
-        shardInfo = new ShardInfo(shardId, null, null, null);
+        shardInfo = new ShardInfo(shardId, null, null, null, TEST_STREAM_CONFIG);
     }
 
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput) {

@@ -49,6 +49,7 @@ import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
@@ -86,13 +87,15 @@ public class ShutdownTaskTest {
     private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
 
     private static final StreamIdentifier STREAM_IDENTIFIER = StreamIdentifier.singleStreamInstance("streamName");
+    private static final StreamConfig TEST_STREAM_CONFIG =
+            new StreamConfig(STREAM_IDENTIFIER, INITIAL_POSITION_TRIM_HORIZON);
 
     /**
      * Shard id for the default-provided {@link ShardInfo} and {@link Lease}.
      */
     private static final String SHARD_ID = "shardId-0";
     private static final ShardInfo SHARD_INFO = new ShardInfo(SHARD_ID, "concurrencyToken",
-            Collections.emptySet(), ExtendedSequenceNumber.LATEST);
+            Collections.emptySet(), ExtendedSequenceNumber.LATEST, TEST_STREAM_CONFIG);
 
     private ShutdownTask task;
 
@@ -274,7 +277,7 @@ public class ShutdownTaskTest {
     public final void testCallWhenShardNotFound() throws Exception {
         final Lease lease = setupLease("shardId-4", Collections.emptyList());
         final ShardInfo shardInfo = new ShardInfo(lease.leaseKey(), "concurrencyToken", Collections.emptySet(),
-                ExtendedSequenceNumber.LATEST);
+                ExtendedSequenceNumber.LATEST, TEST_STREAM_CONFIG);
 
         final TaskResult result = createShutdownTask(SHARD_END, Collections.emptyList(), shardInfo).call();
 
@@ -394,16 +397,16 @@ public class ShutdownTaskTest {
     private ShutdownTask createShutdownTask(final ShutdownReason reason, final List<ChildShard> childShards,
             final ShardInfo shardInfo) {
         return new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
-                reason, null, INITIAL_POSITION_TRIM_HORIZON, false, false,
+                reason, null, false, false,
                 leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher, hierarchicalShardSyncer,
-                NULL_METRICS_FACTORY, childShards, STREAM_IDENTIFIER, leaseCleanupManager);
+                NULL_METRICS_FACTORY, childShards, leaseCleanupManager);
     }
 
     private ShutdownTask createShutdownTaskWithNotification(final ShutdownReason reason,
             final List<ChildShard> childShards) {
         return new ShutdownTask(SHARD_INFO, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
-                reason, shutdownNotification, INITIAL_POSITION_TRIM_HORIZON, false, false,
+                reason, shutdownNotification, false, false,
                 leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher, hierarchicalShardSyncer,
-                NULL_METRICS_FACTORY, childShards, STREAM_IDENTIFIER, leaseCleanupManager);
+                NULL_METRICS_FACTORY, childShards, leaseCleanupManager);
     }
 }

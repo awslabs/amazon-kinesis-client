@@ -117,8 +117,8 @@ public class LeaseCleanupManager {
     public void enqueueForDeletion(LeasePendingDeletion leasePendingDeletion) {
         final Lease lease = leasePendingDeletion.lease();
         if (lease == null) {
-            log.warn("Cannot enqueue {} for {} as instance doesn't hold the lease for that shard.",
-                    leasePendingDeletion.shardInfo(), leasePendingDeletion.streamIdentifier());
+            log.warn("Cannot enqueue {} as instance doesn't hold the lease for that shard.",
+                    leasePendingDeletion.shardInfo());
         } else {
             log.debug("Enqueuing lease {} for deferred deletion.", lease.leaseKey());
             if (!deletionQueue.add(leasePendingDeletion)) {
@@ -166,7 +166,7 @@ public class LeaseCleanupManager {
             InterruptedException, DependencyException, ProvisionedThroughputException, InvalidStateException {
         final Lease lease = leasePendingDeletion.lease();
         final ShardInfo shardInfo = leasePendingDeletion.shardInfo();
-        final StreamIdentifier streamIdentifier = leasePendingDeletion.streamIdentifier();
+        final StreamIdentifier streamIdentifier = shardInfo.streamConfig().streamIdentifier();
 
         final AWSExceptionManager exceptionManager = createExceptionManager();
 
@@ -328,7 +328,8 @@ public class LeaseCleanupManager {
             while (!deletionQueue.isEmpty()) {
                 final LeasePendingDeletion leasePendingDeletion = deletionQueue.poll();
                 final String leaseKey = leasePendingDeletion.lease().leaseKey();
-                final StreamIdentifier streamIdentifier = leasePendingDeletion.streamIdentifier();
+                final StreamIdentifier streamIdentifier =
+                        leasePendingDeletion.shardInfo().streamConfig().streamIdentifier();
                 boolean deletionSucceeded = false;
                 try {
                     final LeaseCleanupResult leaseCleanupResult = cleanupLease(leasePendingDeletion,

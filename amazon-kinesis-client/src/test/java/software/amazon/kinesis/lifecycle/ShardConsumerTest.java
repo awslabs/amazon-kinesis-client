@@ -71,8 +71,11 @@ import org.reactivestreams.Subscription;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
@@ -88,7 +91,11 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @RunWith(MockitoJUnitRunner.class)
 @Slf4j
 public class ShardConsumerTest {
-
+    private static final StreamIdentifier TEST_STREAM_IDENTIFIER = StreamIdentifier.singleStreamInstance("streamName");
+    private static final InitialPositionInStreamExtended TEST_INITIAL_POSITION_IN_STREAM_EXTENDED =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final StreamConfig TEST_STREAM_CONFIG =
+            new StreamConfig(TEST_STREAM_IDENTIFIER, TEST_INITIAL_POSITION_IN_STREAM_EXTENDED);
     private final String shardId = "shardId-0-0";
     private final String concurrencyToken = "TestToken";
     private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
@@ -148,7 +155,8 @@ public class ShardConsumerTest {
 
     @Before
     public void before() {
-        shardInfo = new ShardInfo(shardId, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
+        shardInfo = new ShardInfo(
+                shardId, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON, TEST_STREAM_CONFIG);
         ThreadFactory factory = new ThreadFactoryBuilder().setNameFormat("test-" + testName.getMethodName() + "-%04d")
                 .setDaemon(true).build();
         executorService = new ThreadPoolExecutor(4, 4, 1, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), factory);

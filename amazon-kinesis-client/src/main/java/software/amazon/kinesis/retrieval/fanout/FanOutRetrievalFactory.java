@@ -19,17 +19,14 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
-import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
-import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
 
 @RequiredArgsConstructor
@@ -41,34 +38,23 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
     private final String defaultConsumerArn;
     private final Function<String, String> consumerArnCreator;
 
-    private Map<StreamIdentifier, String> implicitConsumerArnTracker = new HashMap<>();
+    private final Map<StreamIdentifier, String> implicitConsumerArnTracker = new HashMap<>();
 
-    @Override
-    public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(final ShardInfo shardInfo,
-            final MetricsFactory metricsFactory) {
-        return null;
-    }
-
+    /**
+     + {@inheritDoc}
+     */
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
-            final StreamConfig streamConfig,
             final MetricsFactory metricsFactory) {
-        final Optional<String> streamIdentifierStr = shardInfo.streamIdentifierSerOpt();
-        if (streamIdentifierStr.isPresent()) {
-            final StreamIdentifier streamIdentifier = StreamIdentifier.multiStreamInstance(streamIdentifierStr.get());
+        final StreamIdentifier streamIdentifier = shardInfo.streamConfig().streamIdentifier();
+        if (streamIdentifier.isMultiStreamInstance()) {
             return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
-                    getOrCreateConsumerArn(streamIdentifier, streamConfig.consumerArn()),
-                    streamIdentifierStr.get());
+                    getOrCreateConsumerArn(streamIdentifier, shardInfo.streamConfig().consumerArn()),
+                    streamIdentifier.serialize());
         } else {
-            final StreamIdentifier streamIdentifier = StreamIdentifier.singleStreamInstance(defaultStreamName);
             return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
                     getOrCreateConsumerArn(streamIdentifier, defaultConsumerArn));
         }
-    }
-
-    @Override
-    public RecordsPublisher createGetRecordsCache(ShardInfo shardInfo, MetricsFactory metricsFactory) {
-        throw new UnsupportedOperationException("FanoutRetrievalFactory needs StreamConfig Info");
     }
 
     private String getOrCreateConsumerArn(StreamIdentifier streamIdentifier, String consumerArn) {

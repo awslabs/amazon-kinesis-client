@@ -26,6 +26,10 @@ import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -38,16 +42,28 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  *
  */
 public class BlockOnParentShardTaskTest {
+    private static final String TEST_STREAM_NAME = "stream";
+    private static final String TEST_ACCOUNT_ID = "123456789012";
+    private static final long TEST_CREATION_EPOCH = 1234567890L;
+    private static final String TEST_STREAM_ID_SERIALIZATION =
+            String.join(":", TEST_ACCOUNT_ID, TEST_STREAM_NAME, String.valueOf(TEST_CREATION_EPOCH));
+    private static final InitialPositionInStreamExtended TEST_INITIAL_POSITION_IN_STREAM_EXTENDED =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final StreamConfig TEST_STREAM_CONFIG = new StreamConfig(
+            StreamIdentifier.singleStreamInstance(TEST_STREAM_NAME), TEST_INITIAL_POSITION_IN_STREAM_EXTENDED);
+    private static final StreamConfig TEST_MULTI_STREAM_CONFIG = new StreamConfig(
+            StreamIdentifier.multiStreamInstance(TEST_STREAM_ID_SERIALIZATION),
+            TEST_INITIAL_POSITION_IN_STREAM_EXTENDED);
     private final long backoffTimeInMillis = 50L;
     private final String shardId = "shardId-97";
-    private final String streamId = "123:stream:146";
     private final String concurrencyToken = "testToken";
     private final List<String> emptyParentShardIds = new ArrayList<>();
     private ShardInfo shardInfo;
 
     @Before
     public void setup() {
-        shardInfo = new ShardInfo(shardId, concurrencyToken, emptyParentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
+        shardInfo = new ShardInfo(shardId, concurrencyToken, emptyParentShardIds,
+                ExtendedSequenceNumber.TRIM_HORIZON, TEST_STREAM_CONFIG);
     }
 
     /**
@@ -94,14 +110,16 @@ public class BlockOnParentShardTaskTest {
 
         // test single parent
         parentShardIds.add(parent1ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
+        shardInfo = new ShardInfo(
+                shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, TEST_STREAM_CONFIG);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
+        shardInfo = new ShardInfo(
+                shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, TEST_STREAM_CONFIG);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNull(result.getException());
@@ -118,8 +136,8 @@ public class BlockOnParentShardTaskTest {
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         ShardInfo shardInfo = null;
         BlockOnParentShardTask task = null;
-        String parent1LeaseKey = streamId + ":" + "shardId-1";
-        String parent2LeaseKey = streamId + ":" + "shardId-2";
+        final String parent1LeaseKey = TEST_STREAM_ID_SERIALIZATION + ":" + "shardId-1";
+        final String parent2LeaseKey = TEST_STREAM_ID_SERIALIZATION + ":" + "shardId-2";
         String parent1ShardId = "shardId-1";
         String parent2ShardId = "shardId-2";
         List<String> parentShardIds = new ArrayList<>();
@@ -136,15 +154,16 @@ public class BlockOnParentShardTaskTest {
 
         // test single parent
         parentShardIds.add(parent1ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON,
-                streamId);
+        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds,
+                ExtendedSequenceNumber.TRIM_HORIZON, TEST_MULTI_STREAM_CONFIG);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
+        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds,
+                ExtendedSequenceNumber.TRIM_HORIZON, TEST_MULTI_STREAM_CONFIG);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNull(result.getException());
@@ -178,14 +197,16 @@ public class BlockOnParentShardTaskTest {
 
         // test single parent
         parentShardIds.add(parent1ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
+        shardInfo = new ShardInfo(
+                shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, TEST_STREAM_CONFIG);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNotNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
+        shardInfo = new ShardInfo(
+                shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, TEST_STREAM_CONFIG);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNotNull(result.getException());
@@ -203,8 +224,8 @@ public class BlockOnParentShardTaskTest {
 
         ShardInfo shardInfo = null;
         BlockOnParentShardTask task = null;
-        String parent1LeaseKey = streamId + ":" + "shardId-1";
-        String parent2LeaseKey = streamId + ":" + "shardId-2";
+        String parent1LeaseKey = TEST_STREAM_ID_SERIALIZATION + ":" + "shardId-1";
+        String parent2LeaseKey = TEST_STREAM_ID_SERIALIZATION + ":" + "shardId-2";
         String parent1ShardId = "shardId-1";
         String parent2ShardId = "shardId-2";
         List<String> parentShardIds = new ArrayList<>();
@@ -222,14 +243,16 @@ public class BlockOnParentShardTaskTest {
 
         // test single parent
         parentShardIds.add(parent1ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
+        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds,
+                ExtendedSequenceNumber.TRIM_HORIZON, TEST_MULTI_STREAM_CONFIG);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNotNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
+        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds,
+                ExtendedSequenceNumber.TRIM_HORIZON, TEST_MULTI_STREAM_CONFIG);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNotNull(result.getException());
@@ -249,7 +272,8 @@ public class BlockOnParentShardTaskTest {
         String parentShardId = "shardId-1";
         List<String> parentShardIds = new ArrayList<>();
         parentShardIds.add(parentShardId);
-        ShardInfo shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
+        final ShardInfo shardInfo = new ShardInfo(
+                shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, TEST_STREAM_CONFIG);
         TaskResult result = null;
         Lease parentLease = new Lease();
         LeaseRefresher leaseRefresher = mock(LeaseRefresher.class);

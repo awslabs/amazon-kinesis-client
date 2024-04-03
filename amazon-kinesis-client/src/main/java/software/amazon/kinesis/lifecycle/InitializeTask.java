@@ -51,8 +51,6 @@ public class InitializeTask implements ConsumerTask {
     @NonNull
     private final ShardRecordProcessorCheckpointer recordProcessorCheckpointer;
     @NonNull
-    private final InitialPositionInStreamExtended initialPositionInStream;
-    @NonNull
     private final RecordsPublisher cache;
 
     // Back off for this interval if we encounter a problem (exception)
@@ -78,6 +76,8 @@ public class InitializeTask implements ConsumerTask {
             final String leaseKey = ShardInfo.getLeaseKey(shardInfo);
             Checkpoint initialCheckpointObject = checkpoint.getCheckpointObject(leaseKey);
             ExtendedSequenceNumber initialCheckpoint = initialCheckpointObject.checkpoint();
+            final InitialPositionInStreamExtended initialPositionInStream =
+                    shardInfo.streamConfig().initialPositionInStreamExtended();
             log.debug("[{}]: Checkpoint: {} -- Initial Position: {}", leaseKey, initialCheckpoint,
                     initialPositionInStream);
 

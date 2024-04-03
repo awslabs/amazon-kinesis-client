@@ -67,8 +67,7 @@ public class StreamIdentifier {
      *         or {@link #streamName} in single-stream mode.
      */
     public String serialize() {
-        if (!streamCreationEpochOptional.isPresent()) {
-            // creation epoch is expected to be empty in single-stream mode
+        if (!isMultiStreamInstance()) {
             return streamName;
         }
 
@@ -83,6 +82,16 @@ public class StreamIdentifier {
     @Override
     public String toString() {
         return serialize();
+    }
+
+    /**
+     * Determine whether this {@link StreamIdentifier} is a multi-stream instance.
+     *
+     * @return true if this is a multi-stream instance, false otherwise.
+     */
+    public boolean isMultiStreamInstance() {
+        // creation epoch is expected to be present if and only if in multi-stream mode
+        return streamCreationEpochOptional.isPresent();
     }
 
     /**
