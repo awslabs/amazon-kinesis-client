@@ -83,6 +83,9 @@ class GracefulShutdownCoordinator {
         }
 
         private boolean waitForRecordProcessors(GracefulShutdownContext context) {
+            if (context.isRecordProcessorShutdownComplete()) {
+                return true;
+            }
 
             //
             // Awaiting for all ShardConsumer/RecordProcessors to be notified that a shutdown has been requested.
@@ -168,18 +171,13 @@ class GracefulShutdownCoordinator {
 
         @Override
         public Boolean call() throws Exception {
-            GracefulShutdownContext context;
-            boolean recordProcessorsShutdownSuccess;
-            boolean schedulerShutdownSuccess;
             try {
-                context = startWorkerShutdown.call();
-                recordProcessorsShutdownSuccess = context.isRecordProcessorShutdownComplete() || waitForRecordProcessors(context);
-                schedulerShutdownSuccess = waitForFinalShutdown(context);
+                final GracefulShutdownContext context = startWorkerShutdown.call();
+                return waitForRecordProcessors(context) && waitForFinalShutdown(context);
             } catch (Exception ex) {
                 log.warn("Caught exception while requesting initial worker shutdown.", ex);
                 throw ex;
             }
-            return schedulerShutdownSuccess && recordProcessorsShutdownSuccess;
         }
     }
 }
