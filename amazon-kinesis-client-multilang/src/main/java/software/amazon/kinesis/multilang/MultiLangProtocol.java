@@ -27,14 +27,7 @@ import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
-import software.amazon.kinesis.multilang.messages.CheckpointMessage;
-import software.amazon.kinesis.multilang.messages.InitializeMessage;
-import software.amazon.kinesis.multilang.messages.LeaseLostMessage;
-import software.amazon.kinesis.multilang.messages.Message;
-import software.amazon.kinesis.multilang.messages.ProcessRecordsMessage;
-import software.amazon.kinesis.multilang.messages.ShardEndedMessage;
-import software.amazon.kinesis.multilang.messages.ShutdownRequestedMessage;
-import software.amazon.kinesis.multilang.messages.StatusMessage;
+import software.amazon.kinesis.multilang.messages.*;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 
 /**
@@ -193,6 +186,10 @@ class MultiLangProtocol {
             if (checkpointFailed.orElse(false)) {
                 return false;
             }
+
+            Optional<Boolean> messageLogged = message.filter(m -> m instanceof LogMessage)
+                    .map(m -> (LogMessage) m)
+                    .map(m -> m.getLogger().apply(m.getMessage()));
 
             statusMessage = message.filter(m -> m instanceof StatusMessage).map(m -> (StatusMessage) m );
         }
