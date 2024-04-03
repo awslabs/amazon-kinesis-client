@@ -71,15 +71,8 @@ class GracefulShutdownCoordinator {
          * used to wait for the worker's final shutdown to complete before returning the future for graceful shutdown
          * @return true if the final shutdown is successful, false otherwise.
          */
-        private boolean waitForFinalShutdown(GracefulShutdownContext context) {
-            boolean finalShutdownResult;
-            try {
-                finalShutdownResult = context.finalShutdownLatch().await(FINAL_SHUTDOWN_WAIT_TIME_SECONDS, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                log.warn("Final shutdown was interrupted:", e);
-                return false;
-            }
-            return finalShutdownResult;
+        private boolean waitForFinalShutdown(GracefulShutdownContext context) throws InterruptedException {
+            return context.finalShutdownLatch().await(FINAL_SHUTDOWN_WAIT_TIME_SECONDS, TimeUnit.SECONDS);
         }
 
         private boolean waitForRecordProcessors(GracefulShutdownContext context) {

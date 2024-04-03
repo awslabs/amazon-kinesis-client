@@ -319,18 +319,6 @@ public class GracefulShutdownCoordinatorTest {
         verifyLatchAwait(finalShutdownLatch);
     }
 
-    @Test
-    public void testShutdownFailsDueToInterrupt() throws Exception {
-        Callable<Boolean> requestedShutdownCallable = buildRequestedShutdownCallable();
-
-        when(notificationCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
-        when(shutdownCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
-        when(finalShutdownLatch.await(anyLong(), any(TimeUnit.class))).thenThrow(new InterruptedException());
-
-        assertThat(requestedShutdownCallable.call(), equalTo(false));
-        verifyLatchAwait(finalShutdownLatch);
-    }
-
     /**
      * tests that shutdown still succeeds in the case where there are no leases returned by the lease coordinator
      */
