@@ -2,6 +2,7 @@ package software.amazon.kinesis.application;
 
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.InvalidStateException;
 import software.amazon.kinesis.exceptions.ShutdownException;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
@@ -23,12 +24,15 @@ public class TestRecordProcessor implements ShardRecordProcessor {
 
     private static final String SHARD_ID_MDC_KEY = "ShardId";
 
+    private StreamIdentifier streamIdentifier;
+
     private String shardId;
 
     private final RecordValidatorQueue recordValidator;
 
-    public TestRecordProcessor(RecordValidatorQueue recordValidator) {
+    public TestRecordProcessor(StreamIdentifier streamIdentifier, RecordValidatorQueue recordValidator) {
         this.recordValidator = recordValidator;
+        this.streamIdentifier = streamIdentifier;
     }
 
     @Override
@@ -51,8 +55,9 @@ public class TestRecordProcessor implements ShardRecordProcessor {
 
             for (KinesisClientRecord kinesisRecord : processRecordsInput.records()) {
                 final String data = new String(asByteArray(kinesisRecord.data()));
-                log.info("Processing record pk: {}", data);
-                recordValidator.add(shardId, data);
+                log.info("Processing record pk for stream {}: {}", streamIdentifier.streamName(), data);
+                String recordValidatorKey = streamIdentifier.toString() + "-" + shardId;
+                recordValidator.add(recordValidatorKey, data);
             }
 
         } catch (Throwable t) {

@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
 import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -18,6 +19,7 @@ import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.common.ConfigsBuilder;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.config.KCLAppConfig;
+import software.amazon.kinesis.config.RetrievalMode;
 import software.amazon.kinesis.coordinator.CoordinatorConfig;
 import software.amazon.kinesis.coordinator.Scheduler;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
@@ -33,6 +35,7 @@ import software.amazon.kinesis.utils.StreamExistenceManager;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -45,8 +48,9 @@ import java.util.concurrent.TimeoutException;
 public class TestConsumer {
     public final KCLAppConfig consumerConfig;
     public final Region region;
-    public final String streamName;
+    public final List<String> streamNames;
     public final KinesisAsyncClient kinesisClient;
+    public final KinesisAsyncClient kinesisClientForStreamOwner;
     private MetricsConfig metricsConfig;
     private RetrievalConfig retrievalConfig;
     private CheckpointConfig checkpointConfig;
@@ -67,12 +71,17 @@ public class TestConsumer {
     public TestConsumer(KCLAppConfig consumerConfig) throws Exception {
         this.consumerConfig = consumerConfig;
         this.region = consumerConfig.getRegion();
-        this.streamName = consumerConfig.getStreamName();
-        this.kinesisClient = consumerConfig.buildAsyncKinesisClient();
+        this.streamNames = consumerConfig.getStreamNames();
+        this.kinesisClientForStreamOwner = consumerConfig.buildAsyncKinesisClientForStreamOwner();
+        this.kinesisClient = consumerConfig.buildAsyncKinesisClientForConsumer();
         this.dynamoClient = consumerConfig.buildAsyncDynamoDbClient();
     }
 
     public void run() throws Exception {
+
+        if (consumerConfig.isCrossAccount()) {
+            verifyCrossAccountCreds();
+        }
 
         final StreamExistenceManager streamExistenceManager = new StreamExistenceManager(this.consumerConfig);
         final LeaseTableManager leaseTableManager = new LeaseTableManager(this.dynamoClient);
@@ -81,10 +90,11 @@ public class TestConsumer {
         cleanTestResources(streamExistenceManager, leaseTableManager);
 
         // Check if stream is created. If not, create it
-        streamExistenceManager.checkStreamAndCreateIfNecessary(this.streamName);
+        streamExistenceManager.checkStreamsAndCreateIfNecessary();
+        Map<Arn, Arn> streamToConsumerArnsMap = streamExistenceManager.createCrossAccountConsumerIfNecessary();
 
         startProducer();
-        setUpConsumerResources();
+        setUpConsumerResources(streamToConsumerArnsMap);
 
         try {
             startConsumer();
@@ -116,6 +126,13 @@ public class TestConsumer {
         }
     }
 
+    private void verifyCrossAccountCreds() {
+        if (consumerConfig.getCrossAccountCredentialsProvider() == null) {
+            throw new RuntimeException("To run cross account integration tests, pass in an AWS profile with -D" +
+                    KCLAppConfig.CROSS_ACCOUNT_PROFILE_PROPERTY);
+        }
+    }
+
     private void cleanTestResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager) throws Exception {
         log.info("----------Before starting, Cleaning test environment----------");
         log.info("----------Deleting all lease tables in account----------");
@@ -135,25 +152,35 @@ public class TestConsumer {
         if (consumerConfig.getReshardFactorList() != null) {
             log.info("----Reshard Config found: {}", consumerConfig.getReshardFactorList());
 
-            final StreamScaler s = new StreamScaler(
-                    kinesisClient,
-                    consumerConfig.getStreamName(),
-                    consumerConfig.getReshardFactorList(),
-                    consumerConfig
-            );
+            for (String streamName : consumerConfig.getStreamNames()) {
+                final StreamScaler streamScaler = new StreamScaler(kinesisClientForStreamOwner, streamName,
+                        consumerConfig.getReshardFactorList(), consumerConfig);
 
-            // Schedule the stream scales 4 minutes apart with 2 minute starting delay
-            for (int i = 0; i < consumerConfig.getReshardFactorList().size(); i++) {
-                producerExecutor.schedule(s, (4 * i) + 2, TimeUnit.MINUTES);
+                // Schedule the stream scales 4 minutes apart with 2 minute starting delay
+                for (int i = 0; i < consumerConfig.getReshardFactorList()
+                                                  .size(); i++) {
+                    producerExecutor.schedule(streamScaler, (4 * i) + 2, TimeUnit.MINUTES);
+                }
             }
         }
     }
 
-    private void setUpConsumerResources() throws Exception {
+    private void setUpConsumerResources(Map<Arn, Arn> streamToConsumerArnsMap) throws Exception {
         // Setup configuration of KCL (including DynamoDB and CloudWatch)
-        final ConfigsBuilder configsBuilder = consumerConfig.getConfigsBuilder();
+        final ConfigsBuilder configsBuilder = consumerConfig.getConfigsBuilder(streamToConsumerArnsMap);
 
-        retrievalConfig = consumerConfig.getRetrievalConfig();
+        // For polling mode in both CAA and non CAA, set retrievalSpecificConfig to use PollingConfig
+        // For SingleStreamMode EFO CAA, must set the retrieval config to specify the consumerArn in FanoutConfig
+        // For MultiStream EFO CAA, the consumerArn can be set in StreamConfig
+        if (consumerConfig.getRetrievalMode().equals(RetrievalMode.POLLING)) {
+            retrievalConfig = consumerConfig.getRetrievalConfig(configsBuilder, null);
+        } else if (consumerConfig.isCrossAccount()) {
+            retrievalConfig = consumerConfig.getRetrievalConfig(configsBuilder,
+                    streamToConsumerArnsMap);
+        } else {
+            retrievalConfig = configsBuilder.retrievalConfig();
+        }
+
         checkpointConfig = configsBuilder.checkpointConfig();
         coordinatorConfig = configsBuilder.coordinatorConfig();
         leaseManagementConfig = configsBuilder.leaseManagementConfig()
@@ -194,23 +221,27 @@ public class TestConsumer {
     }
 
     public void publishRecord() {
-        final PutRecordRequest request;
-        try {
-            request = PutRecordRequest.builder()
-                    .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
-                    .streamName(this.streamName)
-                    .data(SdkBytes.fromByteBuffer(wrapWithCounter(5, payloadCounter))) // 1024 is 1 KB
-                    .build();
-            kinesisClient.putRecord(request).get();
+        for (String streamName : consumerConfig.getStreamNames()) {
+            try {
+                final PutRecordRequest request = PutRecordRequest.builder()
+                                          .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
+                                          .streamName(streamName)
+                                          .data(SdkBytes.fromByteBuffer(wrapWithCounter(5, payloadCounter))) // 1024
+                                          // is 1 KB
+                                          .build();
+                kinesisClientForStreamOwner.putRecord(request)
+                                           .get();
 
-            // Increment the payload counter if the putRecord call was successful
-            payloadCounter = payloadCounter.add(new BigInteger("1"));
-            successfulPutRecords += 1;
-            log.info("---------Record published, successfulPutRecords is now: {}", successfulPutRecords);
-        } catch (InterruptedException e) {
-            log.info("Interrupted, assuming shutdown. ", e);
-        } catch (ExecutionException | RuntimeException e) {
-            log.error("Error during publish records", e);
+                // Increment the payload counter if the putRecord call was successful
+                payloadCounter = payloadCounter.add(new BigInteger("1"));
+                successfulPutRecords += 1;
+                log.info("---------Record published for stream {}, successfulPutRecords is now: {}",
+                        streamName, successfulPutRecords);
+            } catch (InterruptedException e) {
+                log.info("Interrupted, assuming shutdown. ", e);
+            } catch (ExecutionException | RuntimeException e) {
+                log.error("Error during publish records", e);
+            }
         }
     }
 
@@ -248,10 +279,13 @@ public class TestConsumer {
     }
 
     private void deleteResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager) throws Exception {
-        log.info("-------------Start deleting stream.---------");
-        streamExistenceManager.deleteResource(this.streamName);
+        log.info("-------------Start deleting streams.---------");
+        for (String streamName : consumerConfig.getStreamNames()) {
+            log.info("Deleting stream {}", streamName);
+            streamExistenceManager.deleteResource(streamName);
+        }
         log.info("---------Start deleting lease table.---------");
-        leaseTableManager.deleteResource(this.consumerConfig.getStreamName());
+        leaseTableManager.deleteResource(consumerConfig.getApplicationName());
         log.info("---------Finished deleting resources.---------");
     }
 

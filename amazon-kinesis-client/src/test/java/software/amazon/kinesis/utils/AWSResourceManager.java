@@ -1,5 +1,7 @@
 package software.amazon.kinesis.utils;
 
+import software.amazon.kinesis.config.KCLAppConfig;
+
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -66,7 +68,7 @@ public abstract class AWSResourceManager {
         final List<String> resourceNames = getAllResourceNames();
         for (String resourceName : resourceNames) {
             // Delete all resources that have prefix "KCLRelease"
-            if (resourceName.startsWith("KCLRelease")) {
+            if (resourceName.startsWith(KCLAppConfig.INTEGRATION_TEST_RESOURCE_PREFIX)) {
                 deleteResource(resourceName);
             }
         }
