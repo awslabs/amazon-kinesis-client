@@ -37,12 +37,11 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
-
-import java.util.Optional;
 
 @RunWith(MockitoJUnitRunner.class)
 public class FanOutConfigTest {
@@ -51,6 +50,12 @@ public class FanOutConfigTest {
     private static final String TEST_APPLICATION_NAME = "TestApplication";
     private static final String TEST_STREAM_NAME = "TestStream";
     private static final String TEST_CONSUMER_NAME = "TestConsumerName";
+    private static final String TEST_ACCOUNT_ID = "123456789012";
+    private static final long TEST_CREATION_EPOCH = 1234567890L;
+    private static final String TEST_STREAM_IDENTIFIER_SERIALIZATION =
+            String.join(":", TEST_ACCOUNT_ID, TEST_STREAM_NAME, String.valueOf(TEST_CREATION_EPOCH));
+    private static final StreamIdentifier TEST_STREAM_IDENTIFIER =
+            StreamIdentifier.multiStreamInstance(TEST_STREAM_IDENTIFIER_SERIALIZATION);
 
     @Mock
     private FanOutConsumerRegistration consumerRegistration;
@@ -85,23 +90,23 @@ public class FanOutConfigTest {
 
     @Test
     public void testRegisterCalledWhenConsumerArnUnset() throws Exception {
-        getRecordsCache(null);
+        getRecordsCache();
 
         verify(consumerRegistration).getOrCreateStreamConsumerArn();
     }
 
     @Test
     public void testRegisterNotCalledWhenConsumerArnSetInMultiStreamMode() throws Exception {
-        when(streamConfig.consumerArn()).thenReturn("consumerArn");
+        when(streamConfig.consumerArn()).thenReturn(TEST_CONSUMER_ARN);
 
-        getRecordsCache("123456789012:stream:12345");
+        getRecordsCache();
 
         verify(consumerRegistration, never()).getOrCreateStreamConsumerArn();
     }
 
     @Test
     public void testRegisterCalledWhenConsumerArnNotSetInMultiStreamMode() throws Exception {
-        getRecordsCache("123456789012:stream:12345");
+        getRecordsCache();
 
         verify(consumerRegistration).getOrCreateStreamConsumerArn();
     }
@@ -112,7 +117,7 @@ public class FanOutConfigTest {
         when(consumerRegistration.getOrCreateStreamConsumerArn()).thenThrow(de);
 
         try {
-            getRecordsCache(null);
+            getRecordsCache();
             Assert.fail("should throw");
         } catch (RuntimeException e) {
             verify(consumerRegistration).getOrCreateStreamConsumerArn();
@@ -122,7 +127,7 @@ public class FanOutConfigTest {
 
     @Test
     public void testCreationWithApplicationName() {
-        getRecordsCache(null);
+        getRecordsCache();
 
         assertEquals(TEST_STREAM_NAME, config.streamName());
         assertEquals(TEST_APPLICATION_NAME, config.applicationName());
@@ -134,7 +139,7 @@ public class FanOutConfigTest {
                 // unset common parameters
                 .applicationName(null);
 
-        getRecordsCache(null);
+        getRecordsCache();
 
         assertEquals(TEST_STREAM_NAME, config.streamName());
         assertEquals(TEST_CONSUMER_NAME, config.consumerName());
@@ -144,7 +149,7 @@ public class FanOutConfigTest {
     public void testCreationWithBothConsumerApplication() {
         config = config.consumerName(TEST_CONSUMER_NAME);
 
-        getRecordsCache(null);
+        getRecordsCache();
 
         assertEquals(TEST_STREAM_NAME, config.streamName());
         assertEquals(TEST_CONSUMER_NAME, config.consumerName());
@@ -197,9 +202,10 @@ public class FanOutConfigTest {
         }
     }
 
-    private void getRecordsCache(final String streamIdentifer) {
+    private void getRecordsCache() {
         final ShardInfo shardInfo = mock(ShardInfo.class);
-        when(shardInfo.streamIdentifierSerOpt()).thenReturn(Optional.ofNullable(streamIdentifer));
+        when(shardInfo.streamConfig()).thenReturn(streamConfig);
+        when(streamConfig.streamIdentifier()).thenReturn(TEST_STREAM_IDENTIFIER);
 
         final RetrievalFactory factory = config.retrievalFactory();
         factory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));

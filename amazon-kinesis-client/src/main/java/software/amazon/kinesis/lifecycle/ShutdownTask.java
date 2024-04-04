@@ -27,8 +27,6 @@ import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.Lease;
@@ -88,8 +86,6 @@ public class ShutdownTask implements ConsumerTask {
     @NonNull
     private final ShutdownReason reason;
     private final ShutdownNotification shutdownNotification;
-    @NonNull
-    private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
     private final boolean ignoreUnexpectedChildShards;
     @NonNull
@@ -105,8 +101,6 @@ public class ShutdownTask implements ConsumerTask {
     private final TaskType taskType = TaskType.SHUTDOWN;
 
     private final List<ChildShard> childShards;
-    @NonNull
-    private final StreamIdentifier streamIdentifier;
     @NonNull
     private final LeaseCleanupManager leaseCleanupManager;
 
@@ -198,8 +192,8 @@ public class ShutdownTask implements ConsumerTask {
             createLeasesForChildShardsIfNotExist(scope);
             updateLeaseWithChildShards(currentShardLease);
         }
-        final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(streamIdentifier, currentShardLease,
-                shardInfo, shardDetector);
+        final LeasePendingDeletion leasePendingDeletion = new LeasePendingDeletion(
+                currentShardLease, shardInfo, shardDetector);
         if (!leaseCleanupManager.isEnqueuedForDeletion(leasePendingDeletion)) {
             boolean isSuccess = false;
             try {

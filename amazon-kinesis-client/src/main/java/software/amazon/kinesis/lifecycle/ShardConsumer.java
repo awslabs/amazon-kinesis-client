@@ -133,7 +133,7 @@ public class ShardConsumer {
         this.recordsPublisher = recordsPublisher;
         this.executorService = executorService;
         this.shardInfo = shardInfo;
-        this.streamIdentifier = shardInfo.streamIdentifierSerOpt().orElse("single_stream_mode");
+        this.streamIdentifier = shardInfo.streamConfig().streamIdentifier().serialize();
         this.shardConsumerArgument = shardConsumerArgument;
         this.logWarningForTaskAfterMillis = logWarningForTaskAfterMillis;
         this.taskExecutionListener = taskExecutionListener;

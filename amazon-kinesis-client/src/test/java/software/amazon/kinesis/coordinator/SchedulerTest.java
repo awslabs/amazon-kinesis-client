@@ -17,6 +17,7 @@ package software.amazon.kinesis.coordinator;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
@@ -39,6 +40,7 @@ import static org.mockito.internal.verification.VerificationModeFactory.atMost;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -47,11 +49,14 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
+import com.amazonaws.util.CollectionUtils;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Sets;
 import io.reactivex.rxjava3.plugins.RxJavaPlugins;
@@ -61,11 +66,13 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import org.mockito.stubbing.OngoingStubbing;
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -78,6 +85,7 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.exceptions.KinesisClientLibNonRetryableException;
+import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.LeaseCoordinator;
@@ -111,6 +119,7 @@ import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
+import software.amazon.kinesis.processor.StreamTracker;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
@@ -129,6 +138,10 @@ public class SchedulerTest {
     private static final long MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 1000L;
     private static final long MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS = 30 * 1000L;
     private static final long LEASE_TABLE_CHECK_FREQUENCY_MILLIS = 3 * 1000L;
+    private static final InitialPositionInStreamExtended TEST_INITIAL_POSITION =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final String TEST_SHARD_ID = "shardId-000000000001";
+    private static final UUID TEST_CONCURRENCY_TOKEN = UUID.randomUUID();
 
     private Scheduler scheduler;
     private ShardRecordProcessorFactory shardRecordProcessorFactory;
@@ -139,6 +152,7 @@ public class SchedulerTest {
     private MetricsConfig metricsConfig;
     private ProcessorConfig processorConfig;
     private RetrievalConfig retrievalConfig;
+    private StreamConfig streamConfig;
 
     @Mock
     private KinesisAsyncClient kinesisClient;
@@ -196,6 +210,7 @@ public class SchedulerTest {
 
         scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
                 metricsConfig, processorConfig, retrievalConfig);
+        streamConfig = scheduler.currentStreamConfigMap().values().iterator().next();
     }
 
     /**
@@ -212,9 +227,9 @@ public class SchedulerTest {
 
     @Test
     public final void testCreateOrGetShardConsumer() {
-        final String shardId = "shardId-000000000000";
         final String concurrencyToken = "concurrencyToken";
-        final ShardInfo shardInfo = new ShardInfo(shardId, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
+        final ShardInfo shardInfo =
+                new ShardInfo(TEST_SHARD_ID, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON, streamConfig);
         final ShardConsumer shardConsumer1 = scheduler.createOrGetShardConsumer(shardInfo, shardRecordProcessorFactory, leaseCleanupManager);
         assertNotNull(shardConsumer1);
         final ShardConsumer shardConsumer2 = scheduler.createOrGetShardConsumer(shardInfo, shardRecordProcessorFactory, leaseCleanupManager);
@@ -223,8 +238,8 @@ public class SchedulerTest {
         assertSame(shardConsumer1, shardConsumer2);
 
         final String anotherConcurrencyToken = "anotherConcurrencyToken";
-        final ShardInfo shardInfo2 = new ShardInfo(shardId, anotherConcurrencyToken, null,
-                ExtendedSequenceNumber.TRIM_HORIZON);
+        final ShardInfo shardInfo2 = new ShardInfo(
+                TEST_SHARD_ID, anotherConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON, streamConfig);
         final ShardConsumer shardConsumer3 = scheduler.createOrGetShardConsumer(shardInfo2, shardRecordProcessorFactory, leaseCleanupManager);
         assertNotNull(shardConsumer3);
 
@@ -234,33 +249,29 @@ public class SchedulerTest {
     // TODO: figure out the behavior of the test.
     @Test
     public void testWorkerLoopWithCheckpoint() throws Exception {
-        final String shardId = "shardId-000000000000";
-        final String concurrencyToken = "concurrencyToken";
         final ExtendedSequenceNumber firstSequenceNumber = ExtendedSequenceNumber.TRIM_HORIZON;
         final ExtendedSequenceNumber secondSequenceNumber = new ExtendedSequenceNumber("1000");
         final ExtendedSequenceNumber finalSequenceNumber = new ExtendedSequenceNumber("2000");
-
-        final List<ShardInfo> initialShardInfo = Collections.singletonList(
-                new ShardInfo(shardId, concurrencyToken, null, firstSequenceNumber));
-        final List<ShardInfo> firstShardInfo = Collections.singletonList(
-                new ShardInfo(shardId, concurrencyToken, null, secondSequenceNumber));
-        final List<ShardInfo> secondShardInfo = Collections.singletonList(
-                new ShardInfo(shardId, concurrencyToken, null, finalSequenceNumber));
-
         final Checkpoint firstCheckpoint = new Checkpoint(firstSequenceNumber, null, null);
+        when(checkpoint.getCheckpointObject(eq(TEST_SHARD_ID))).thenReturn(firstCheckpoint);
 
-        when(leaseCoordinator.getCurrentAssignments()).thenReturn(initialShardInfo, firstShardInfo, secondShardInfo);
-        when(checkpoint.getCheckpointObject(eq(shardId))).thenReturn(firstCheckpoint);
+        when(leaseCoordinator.getAssignments()).thenReturn(
+                Stream.of(firstSequenceNumber, secondSequenceNumber, finalSequenceNumber)
+                        .map(SchedulerTest::constructLease)
+                        .collect(Collectors.toList()));
 
         Scheduler schedulerSpy = spy(scheduler);
         schedulerSpy.runProcessLoop();
         schedulerSpy.runProcessLoop();
         schedulerSpy.runProcessLoop();
 
-        verify(schedulerSpy).buildConsumer(same(initialShardInfo.get(0)), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
-        verify(schedulerSpy, never()).buildConsumer(same(firstShardInfo.get(0)), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
-        verify(schedulerSpy, never()).buildConsumer(same(secondShardInfo.get(0)), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
-        verify(checkpoint).getCheckpointObject(eq(shardId));
+        final ShardInfo expectedShardInfo =
+                new ShardInfo(TEST_SHARD_ID, TEST_CONCURRENCY_TOKEN.toString(), null, null, streamConfig);
+        verify(schedulerSpy).buildConsumer(
+                eq(expectedShardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager));
+        // consumer is only built a total of once for all the three returned assignments
+        verify(schedulerSpy, times(1)).buildConsumer(any(), any(), any());
+        verify(checkpoint).getCheckpointObject(eq(TEST_SHARD_ID));
     }
 
     @Test
@@ -270,10 +281,12 @@ public class SchedulerTest {
         final String concurrencyToken = "concurrencyToken";
         final String anotherConcurrencyToken = "anotherConcurrencyToken";
 
-        final ShardInfo shardInfo0 = new ShardInfo(shard0, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
-        final ShardInfo shardInfo0WithAnotherConcurrencyToken = new ShardInfo(shard0, anotherConcurrencyToken, null,
-                ExtendedSequenceNumber.TRIM_HORIZON);
-        final ShardInfo shardInfo1 = new ShardInfo(shard1, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
+        final ShardInfo shardInfo0 =
+                new ShardInfo(shard0, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON, streamConfig);
+        final ShardInfo shardInfo0WithAnotherConcurrencyToken =
+                new ShardInfo(shard0, anotherConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON, streamConfig);
+        final ShardInfo shardInfo1 =
+                new ShardInfo(shard1, concurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON, streamConfig);
 
         final ShardConsumer shardConsumer0 = scheduler.createOrGetShardConsumer(shardInfo0, shardRecordProcessorFactory, leaseCleanupManager);
         final ShardConsumer shardConsumer0WithAnotherConcurrencyToken =
@@ -362,25 +375,23 @@ public class SchedulerTest {
 
     @Test
     public final void testMultiStreamConsumersAreBuiltOncePerAccountStreamShard() throws KinesisClientLibException {
-        final String shardId = "shardId-000000000000";
-        final String concurrencyToken = "concurrencyToken";
         final ExtendedSequenceNumber firstSequenceNumber = ExtendedSequenceNumber.TRIM_HORIZON;
         final ExtendedSequenceNumber secondSequenceNumber = new ExtendedSequenceNumber("1000");
         final ExtendedSequenceNumber finalSequenceNumber = new ExtendedSequenceNumber("2000");
 
-        final List<ShardInfo> initialShardInfo = multiStreamTracker.streamConfigList().stream()
-                .map(sc -> new ShardInfo(shardId, concurrencyToken, null, firstSequenceNumber,
-                        sc.streamIdentifier().serialize())).collect(Collectors.toList());
-        final List<ShardInfo> firstShardInfo = multiStreamTracker.streamConfigList().stream()
-                .map(sc -> new ShardInfo(shardId, concurrencyToken, null, secondSequenceNumber,
-                        sc.streamIdentifier().serialize())).collect(Collectors.toList());
-        final List<ShardInfo> secondShardInfo = multiStreamTracker.streamConfigList().stream()
-                .map(sc -> new ShardInfo(shardId, concurrencyToken, null, finalSequenceNumber,
-                        sc.streamIdentifier().serialize())).collect(Collectors.toList());
+        final List<Lease> initialLeases = multiStreamTracker.streamConfigList().stream()
+                .map(sc -> constructMultiStreamLease(sc.streamIdentifier().serialize(), firstSequenceNumber))
+                .collect(Collectors.toList());
+        final List<Lease> firstLeases = multiStreamTracker.streamConfigList().stream()
+                .map(sc -> constructMultiStreamLease(sc.streamIdentifier().serialize(), secondSequenceNumber))
+                .collect(Collectors.toList());
+        final List<Lease> secondLeases = multiStreamTracker.streamConfigList().stream()
+                .map(sc -> constructMultiStreamLease(sc.streamIdentifier().serialize(), finalSequenceNumber))
+                .collect(Collectors.toList());
 
         final Checkpoint firstCheckpoint = new Checkpoint(firstSequenceNumber, null, null);
 
-        when(leaseCoordinator.getCurrentAssignments()).thenReturn(initialShardInfo, firstShardInfo, secondShardInfo);
+        when(leaseCoordinator.getAssignments()).thenReturn(initialLeases, firstLeases, secondLeases);
         when(checkpoint.getCheckpointObject(anyString())).thenReturn(firstCheckpoint);
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
@@ -391,12 +402,14 @@ public class SchedulerTest {
         schedulerSpy.runProcessLoop();
         schedulerSpy.runProcessLoop();
 
-        initialShardInfo.forEach(
-                shardInfo -> verify(schedulerSpy).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), same(leaseCleanupManager)));
-        firstShardInfo.forEach(
-                shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager)));
-        secondShardInfo.forEach(
-                shardInfo -> verify(schedulerSpy, never()).buildConsumer(same(shardInfo), eq(shardRecordProcessorFactory), eq(leaseCleanupManager)));
+        final List<ShardInfo> expectedShardInfos = multiStreamTracker.streamConfigList().stream()
+                .map(sc -> new ShardInfo(TEST_SHARD_ID, TEST_CONCURRENCY_TOKEN.toString(), null, null, sc))
+                .collect(Collectors.toList());
+
+        expectedShardInfos.forEach(shardInfo -> verify(schedulerSpy).buildConsumer(
+                eq(shardInfo), eq(shardRecordProcessorFactory), same(leaseCleanupManager)));
+        // consumer is only built once for each of the unique shards assigned to it
+        verify(schedulerSpy, times(multiStreamTracker.streamConfigList().size())).buildConsumer(any(), any(), any());
     }
 
     @Test
@@ -1078,6 +1091,114 @@ public class SchedulerTest {
         when(dynamoDBLeaseRefresher.listLeases()).thenReturn(configs.stream()
                 .map(s -> new MultiStreamLease().streamIdentifier(s.streamIdentifier().toString())
                         .shardId("some_random_shard_id")).collect(Collectors.toList()));
+    }
+
+    @Test
+    public void testShardInfoConstructionFromSingleStreamLease() {
+        final List<String> parentShardIds = Arrays.asList("shardId-000000000000", "shardId-000000000001");
+        final ExtendedSequenceNumber checkpoint = new ExtendedSequenceNumber("1234");
+
+        final Lease lease = constructLease(parentShardIds, checkpoint);
+        when(leaseCoordinator.getAssignments()).thenReturn(Collections.singletonList(lease));
+
+        final Scheduler schedulerSpy = spy(scheduler);
+        schedulerSpy.runProcessLoop();
+
+        final ArgumentCaptor<ShardInfo> shardInfoArgumentCaptor = ArgumentCaptor.forClass(ShardInfo.class);
+        verify(schedulerSpy).buildConsumer(shardInfoArgumentCaptor.capture(), any(), any());
+
+        final ShardInfo expectedShardInfo = new ShardInfo(
+                TEST_SHARD_ID, TEST_CONCURRENCY_TOKEN.toString(), parentShardIds, checkpoint, streamConfig);
+        final ShardInfo actualShardInfo = shardInfoArgumentCaptor.getValue();
+        assertEquals(expectedShardInfo, actualShardInfo);
+        // checkpoint is not included in ShardInfo equality check
+        assertEquals(expectedShardInfo.checkpoint(), actualShardInfo.checkpoint());
+    }
+
+    @Test
+    public void testShardInfoConstructionFromMultiStreamLeases() {
+        final StreamConfig streamConfigWithSerialization = new StreamConfig(StreamIdentifier.multiStreamInstance(
+                "123456789012:streamBySerialization:1111111111"), TEST_INITIAL_POSITION);
+        final StreamConfig streamConfigWithArn = new StreamConfig(StreamIdentifier.multiStreamInstance(
+                Arn.fromString("arn:aws:kinesis:us-east-1:123456789012:stream/streamByArn"), 2222222222L),
+                TEST_INITIAL_POSITION);
+        final StreamConfig streamConfigForOrphanStream = new StreamConfig(StreamIdentifier.multiStreamInstance(
+                "123456789012:streamNotProvidedInStreamConfigList:3333333333"), TEST_INITIAL_POSITION);
+
+        final StreamTracker streamTracker = new MultiStreamTracker() {
+            @Override
+            public List<StreamConfig> streamConfigList() {
+                return Arrays.asList(streamConfigWithSerialization, streamConfigWithArn);
+            }
+            @Override
+            public FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy() {
+                return new FormerStreamsLeasesDeletionStrategy.NoLeaseDeletionStrategy();
+            }
+        };
+
+        retrievalConfig =
+                new RetrievalConfig(kinesisClient, streamTracker, applicationName).retrievalFactory(retrievalFactory);
+        scheduler = new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
+                metricsConfig, processorConfig, retrievalConfig);
+        when(leaseCoordinator.getAssignments()).thenReturn(
+                Stream.of(streamConfigWithSerialization, streamConfigWithArn, streamConfigForOrphanStream)
+                        .map(streamConfig -> constructMultiStreamLease(streamConfig.streamIdentifier().serialize()))
+                        .collect(Collectors.toList()));
+
+        final Scheduler schedulerSpy = spy(scheduler);
+        schedulerSpy.runProcessLoop();
+
+        final ArgumentCaptor<ShardInfo> shardInfoArgumentCaptor = ArgumentCaptor.forClass(ShardInfo.class);
+        verify(schedulerSpy, times(3)).buildConsumer(
+                shardInfoArgumentCaptor.capture(),
+                any(ShardRecordProcessorFactory.class),
+                any(LeaseCleanupManager.class));
+
+        // shardInfo should be constructed with a reference to the original streamConfig from streamConfigList
+        assertSame(streamConfigWithSerialization, shardInfoArgumentCaptor.getAllValues().get(0).streamConfig());
+        assertSame(streamConfigWithArn, shardInfoArgumentCaptor.getAllValues().get(1).streamConfig());
+
+        // for a streamConfig that is not present in the streamConfigList/currentStreamConfigMap,
+        // shardInfo is constructed with a newly created StreamConfig instance
+        final StreamConfig actualStreamConfigForOrphanStream =
+                shardInfoArgumentCaptor.getAllValues().get(2).streamConfig();
+        assertEquals(streamConfigForOrphanStream.streamIdentifier(),
+                actualStreamConfigForOrphanStream.streamIdentifier());
+        assertNotSame(streamConfigForOrphanStream, actualStreamConfigForOrphanStream);
+        assertNotEquals(streamConfigForOrphanStream.initialPositionInStreamExtended(),
+                actualStreamConfigForOrphanStream.initialPositionInStreamExtended());
+        assertEquals(multiStreamTracker.orphanedStreamInitialPositionInStream(),
+                actualStreamConfigForOrphanStream.initialPositionInStreamExtended());
+    }
+
+    private static Lease constructMultiStreamLease(String streamIdentifier) {
+        return constructMultiStreamLease(streamIdentifier, ExtendedSequenceNumber.TRIM_HORIZON);
+    }
+
+    private static Lease constructMultiStreamLease(String streamIdentifier, ExtendedSequenceNumber checkpoint) {
+        final MultiStreamLease lease = new MultiStreamLease();
+        lease.streamIdentifier(streamIdentifier);
+        lease.shardId(TEST_SHARD_ID);
+        return updateLease(lease, String.join(":", streamIdentifier, TEST_SHARD_ID), null, checkpoint);
+    }
+
+    private static Lease constructLease(ExtendedSequenceNumber checkpoint) {
+        return constructLease(null, checkpoint);
+    }
+
+    private static Lease constructLease(Collection<String> parentShardIds, ExtendedSequenceNumber checkpoint) {
+        return updateLease(new Lease(), TEST_SHARD_ID, parentShardIds, checkpoint);
+    }
+
+    private static Lease updateLease(Lease leaseToUpdate, String leaseKey, Collection<String> parentShardIds,
+            ExtendedSequenceNumber checkpoint) {
+        leaseToUpdate.leaseKey(leaseKey);
+        leaseToUpdate.concurrencyToken(TEST_CONCURRENCY_TOKEN);
+        if (!CollectionUtils.isNullOrEmpty(parentShardIds)) {
+            leaseToUpdate.parentShardIds(parentShardIds);
+        }
+        leaseToUpdate.checkpoint(checkpoint);
+        return leaseToUpdate;
     }
 
     /*private void runAndTestWorker(int numShards, int threadPoolSize) throws Exception {

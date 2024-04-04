@@ -25,9 +25,18 @@ import java.util.Random;
 
 import org.junit.Test;
 
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 public class ParentsFirstShardPrioritizationUnitTest {
+    private static final StreamIdentifier TEST_STREAM_IDENTIFIER = StreamIdentifier.singleStreamInstance("streamName");
+    private static final InitialPositionInStreamExtended TEST_INITIAL_POSITION_IN_STREAM_EXTENDED =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final StreamConfig TEST_STREAM_CONFIG =
+            new StreamConfig(TEST_STREAM_IDENTIFIER, TEST_INITIAL_POSITION_IN_STREAM_EXTENDED);
 
     @Test(expected = IllegalArgumentException.class)
     public void testMaxDepthNegativeShouldFail() {
@@ -193,7 +202,7 @@ public class ParentsFirstShardPrioritizationUnitTest {
         }
 
         ShardInfo build() {
-            return new ShardInfo(shardId, concurrencyToken, parentShardIds, checkpoint);
+            return new ShardInfo(shardId, concurrencyToken, parentShardIds, checkpoint, TEST_STREAM_CONFIG);
         }
     }
 

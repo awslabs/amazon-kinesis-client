@@ -23,6 +23,9 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.LeasePendingDeletion;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -45,10 +48,13 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.class)
 public class LeaseCleanupManagerTest {
 
+    private static final StreamIdentifier TEST_STREAM_IDENTIFIER = StreamIdentifier.singleStreamInstance("streamName");
+    private static final InitialPositionInStreamExtended TEST_INITIAL_POSITION_IN_STREAM_EXTENDED =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final StreamConfig TEST_STREAM_CONFIG =
+            new StreamConfig(TEST_STREAM_IDENTIFIER, TEST_INITIAL_POSITION_IN_STREAM_EXTENDED);
     private static final ShardInfo SHARD_INFO = new ShardInfo("shardId", "concurrencyToken",
-            Collections.emptySet(), ExtendedSequenceNumber.LATEST);
-
-    private static final StreamIdentifier STREAM_IDENTIFIER = StreamIdentifier.singleStreamInstance("streamName");
+            Collections.emptySet(), ExtendedSequenceNumber.LATEST, TEST_STREAM_CONFIG);
 
     private final long leaseCleanupIntervalMillis = Duration.ofSeconds(1).toMillis();
     private final long completedLeaseCleanupIntervalMillis = Duration.ofSeconds(0).toMillis();
@@ -175,7 +181,7 @@ public class LeaseCleanupManagerTest {
     @Test
     public final void testLeaseNotDeletedWhenParentsStillPresent() throws Exception {
         final ShardInfo shardInfo = new ShardInfo("shardId-0", "concurrencyToken", Collections.singleton("parent"),
-                ExtendedSequenceNumber.LATEST);
+                ExtendedSequenceNumber.LATEST, TEST_STREAM_CONFIG);
 
         verifyExpectedDeletedLeasesCompletedShardCase(shardInfo, childShardsForMerge(), ExtendedSequenceNumber.LATEST, 0);
     }
@@ -296,6 +302,6 @@ public class LeaseCleanupManagerTest {
     }
 
     private LeasePendingDeletion createLeasePendingDeletion(final Lease lease, final ShardInfo shardInfo) {
-        return new LeasePendingDeletion(STREAM_IDENTIFIER, lease, shardInfo, shardDetector);
+        return new LeasePendingDeletion(lease, shardInfo, shardDetector);
     }
 }

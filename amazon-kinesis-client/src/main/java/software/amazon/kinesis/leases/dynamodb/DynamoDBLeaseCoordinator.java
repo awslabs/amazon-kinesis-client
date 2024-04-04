@@ -17,7 +17,6 @@ package software.amazon.kinesis.leases.dynamodb;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,7 +28,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
@@ -37,8 +35,6 @@ import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseRenewer;
 import software.amazon.kinesis.leases.LeaseTaker;
-import software.amazon.kinesis.leases.MultiStreamLease;
-import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
@@ -364,34 +360,6 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
         return new ThreadPoolExecutor(coreLeaseCount, maximumPoolSize, 60, TimeUnit.SECONDS,
                 new LinkedTransferQueue<>(), LEASE_RENEWAL_THREAD_FACTORY);
-    }
-
-    @Override
-    public List<ShardInfo> getCurrentAssignments() {
-        Collection<Lease> leases = getAssignments();
-        return convertLeasesToAssignments(leases);
-    }
-
-    private static List<ShardInfo> convertLeasesToAssignments(final Collection<Lease> leases) {
-        if (leases == null) {
-            return Collections.emptyList();
-        }
-        return leases.stream().map(DynamoDBLeaseCoordinator::convertLeaseToAssignment).collect(Collectors.toList());
-    }
-
-    /**
-     * Utility method to convert the basic lease or multistream lease to ShardInfo
-     * @param lease
-     * @return ShardInfo
-     */
-    public static ShardInfo convertLeaseToAssignment(final Lease lease) {
-        if (lease instanceof MultiStreamLease) {
-            return new ShardInfo(((MultiStreamLease) lease).shardId(), lease.concurrencyToken().toString(), lease.parentShardIds(),
-                    lease.checkpoint(), ((MultiStreamLease) lease).streamIdentifier());
-        } else {
-            return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
-                    lease.checkpoint());
-        }
     }
 
     /**

@@ -60,8 +60,11 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
@@ -73,6 +76,11 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @Slf4j
 @RunWith(MockitoJUnitRunner.class)
 public class ShardConsumerSubscriberTest {
+    private static final StreamIdentifier TEST_STREAM_IDENTIFIER = StreamIdentifier.singleStreamInstance("streamName");
+    private static final InitialPositionInStreamExtended TEST_INITIAL_POSITION_IN_STREAM_EXTENDED =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final StreamConfig TEST_STREAM_CONFIG =
+            new StreamConfig(TEST_STREAM_IDENTIFIER, TEST_INITIAL_POSITION_IN_STREAM_EXTENDED);
 
     private final Object processedNotifier = new Object();
 
@@ -104,8 +112,8 @@ public class ShardConsumerSubscriberTest {
                 .setNameFormat("test-" + testName.getMethodName() + "-%04d").setDaemon(true).build());
         recordsPublisher = new TestPublisher();
 
-        ShardInfo shardInfo = new ShardInfo("shard-001", "", Collections.emptyList(),
-                ExtendedSequenceNumber.TRIM_HORIZON);
+        final ShardInfo shardInfo = new ShardInfo(
+                "shard-001", "", Collections.emptyList(), ExtendedSequenceNumber.TRIM_HORIZON, TEST_STREAM_CONFIG);
         when(shardConsumer.shardInfo()).thenReturn(shardInfo);
 
         processRecordsInput = ProcessRecordsInput.builder().records(Collections.emptyList())

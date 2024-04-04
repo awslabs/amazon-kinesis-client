@@ -18,8 +18,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
 
+import lombok.AccessLevel;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
@@ -27,6 +27,7 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.ToString;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -34,15 +35,20 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  */
 @Getter
 @Accessors(fluent = true)
-@ToString
+@ToString(exclude = {"isMultiStreamMode", "streamIdentifierStr"})
 public class ShardInfo {
 
-    private final Optional<String> streamIdentifierSerOpt;
     private final String shardId;
     private final String concurrencyToken;
     // Sorted list of parent shardIds.
     private final List<String> parentShardIds;
     private final ExtendedSequenceNumber checkpoint;
+    private final StreamConfig streamConfig;
+
+    @Getter(AccessLevel.NONE)
+    private final boolean isMultiStreamMode;
+    @Getter(AccessLevel.NONE)
+    private final String streamIdentifierStr;
 
     /**
      * Creates a new ShardInfo object. The checkpoint is not part of the equality, but is used for debugging output.
@@ -55,28 +61,14 @@ public class ShardInfo {
      *            Parent shards of the shard identified by Kinesis shardId
      * @param checkpoint
      *            the latest checkpoint from lease
-     */
-    public ShardInfo(@NonNull final String shardId,
-            final String concurrencyToken,
-            final Collection<String> parentShardIds,
-            final ExtendedSequenceNumber checkpoint) {
-        this(shardId, concurrencyToken, parentShardIds, checkpoint, null);
-    }
-
-    /**
-     * Creates a new ShardInfo object that has an option to pass a serialized streamIdentifier.
-     * The checkpoint is not part of the equality, but is used for debugging output.
-     * @param shardId
-     * @param concurrencyToken
-     * @param parentShardIds
-     * @param checkpoint
-     * @param streamIdentifierSer
+     * @param streamConfig
+     *            The {@link StreamConfig} instance for the stream that the shard belongs to
      */
     public ShardInfo(@NonNull final String shardId,
             final String concurrencyToken,
             final Collection<String> parentShardIds,
             final ExtendedSequenceNumber checkpoint,
-            final String streamIdentifierSer) {
+            @NonNull final StreamConfig streamConfig) {
         this.shardId = shardId;
         this.concurrencyToken = concurrencyToken;
         this.parentShardIds = new LinkedList<>();
@@ -87,7 +79,9 @@ public class ShardInfo {
         // This makes it easy to check for equality in ShardInfo.equals method.
         Collections.sort(this.parentShardIds);
         this.checkpoint = checkpoint;
-        this.streamIdentifierSerOpt = Optional.ofNullable(streamIdentifierSer);
+        this.streamConfig = streamConfig;
+        this.isMultiStreamMode = streamConfig.streamIdentifier().isMultiStreamInstance();
+        this.streamIdentifierStr = streamConfig.streamIdentifier().serialize();
     }
 
     /**
@@ -114,7 +108,8 @@ public class ShardInfo {
     @Override
     public int hashCode() {
         return new HashCodeBuilder()
-                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamIdentifierSerOpt.orElse("")).toHashCode();
+                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamIdentifierStr)
+                .toHashCode();
     }
 
     /**
@@ -139,7 +134,7 @@ public class ShardInfo {
         ShardInfo other = (ShardInfo) obj;
         return new EqualsBuilder().append(concurrencyToken, other.concurrencyToken)
                 .append(parentShardIds, other.parentShardIds).append(shardId, other.shardId)
-                .append(streamIdentifierSerOpt.orElse(""), other.streamIdentifierSerOpt.orElse("")).isEquals();
+                .append(streamIdentifierStr, other.streamIdentifierStr).isEquals();
 
     }
 
@@ -159,8 +154,8 @@ public class ShardInfo {
      * @return lease key
      */
     public static String getLeaseKey(ShardInfo shardInfo, String shardIdOverride) {
-        return shardInfo.streamIdentifierSerOpt().isPresent() ?
-               MultiStreamLease.getLeaseKey(shardInfo.streamIdentifierSerOpt().get(), shardIdOverride) :
+        return shardInfo.isMultiStreamMode ?
+               MultiStreamLease.getLeaseKey(shardInfo.streamIdentifierStr, shardIdOverride) :
                shardIdOverride;
     }
 

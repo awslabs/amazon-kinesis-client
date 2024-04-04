@@ -30,6 +30,10 @@ import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.PreparedCheckpointer;
@@ -40,6 +44,11 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  */
 @RunWith(MockitoJUnitRunner.class)
 public class ShardShardRecordProcessorCheckpointerTest {
+    private static final StreamIdentifier TEST_STREAM_IDENTIFIER = StreamIdentifier.singleStreamInstance("streamName");
+    private static final InitialPositionInStreamExtended TEST_INITIAL_POSITION_IN_STREAM_EXTENDED =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final StreamConfig TEST_STREAM_CONFIG =
+            new StreamConfig(TEST_STREAM_IDENTIFIER, TEST_INITIAL_POSITION_IN_STREAM_EXTENDED);
     private String startingSequenceNumber = "13";
     private ExtendedSequenceNumber startingExtendedSequenceNumber = new ExtendedSequenceNumber(startingSequenceNumber);
     private String testConcurrencyToken = "testToken";
@@ -57,7 +66,8 @@ public class ShardShardRecordProcessorCheckpointerTest {
         checkpoint.setCheckpoint(shardId, startingExtendedSequenceNumber, testConcurrencyToken);
         assertThat(this.startingExtendedSequenceNumber, equalTo(checkpoint.getCheckpoint(shardId)));
 
-        shardInfo = new ShardInfo(shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON);
+        shardInfo = new ShardInfo(
+                shardId, testConcurrencyToken, null, ExtendedSequenceNumber.TRIM_HORIZON, TEST_STREAM_CONFIG);
     }
 
     /**

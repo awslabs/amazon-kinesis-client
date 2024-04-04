@@ -20,8 +20,6 @@ import lombok.NonNull;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.ShardDetector;
@@ -43,8 +41,6 @@ public class ShardConsumerArgument {
     @NonNull
     private final ShardInfo shardInfo;
     @NonNull
-    private final StreamIdentifier streamIdentifier;
-    @NonNull
     private final LeaseCoordinator leaseCoordinator;
     @NonNull
     private final ExecutorService executorService;
@@ -63,8 +59,6 @@ public class ShardConsumerArgument {
     private final int maxListShardsRetryAttempts;
     private final boolean shouldCallProcessRecordsEvenForEmptyRecordList;
     private final long idleTimeInMilliseconds;
-    @NonNull
-    private final InitialPositionInStreamExtended initialPositionInStream;
     private final boolean cleanupLeasesOfCompletedShards;
     private final boolean ignoreUnexpectedChildShards;
     @NonNull

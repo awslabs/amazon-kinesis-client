@@ -188,7 +188,7 @@ class ConsumerStates {
             return new InitializeTask(argument.shardInfo(),
                     argument.shardRecordProcessor(),
                     argument.checkpoint(),
-                    argument.recordProcessorCheckpointer(), argument.initialPositionInStream(),
+                    argument.recordProcessorCheckpointer(),
                     argument.recordsPublisher(),
                     argument.taskBackoffTimeMillis(),
                     argument.metricsFactory());
@@ -479,7 +479,6 @@ class ConsumerStates {
                     argument.recordProcessorCheckpointer(),
                     consumer.shutdownReason(),
                     consumer.shutdownNotification(),
-                    argument.initialPositionInStream(),
                     argument.cleanupLeasesOfCompletedShards(),
                     argument.ignoreUnexpectedChildShards(),
                     argument.leaseCoordinator(),
@@ -488,7 +487,6 @@ class ConsumerStates {
                     argument.hierarchicalShardSyncer(),
                     argument.metricsFactory(),
                     input == null ? null : input.childShards(),
-                    argument.streamIdentifier(),
                     argument.leaseCleanupManager());
         }
 
