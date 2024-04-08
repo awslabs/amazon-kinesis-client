@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 public class DynamoDBLeaseCoordinatorTest {
 
     private static final String WORKER_ID = UUID.randomUUID().toString();
+    private static final long VERY_OLD_LEASE_DURATION_MULTIPLIER = 5;
     private static final long LEASE_DURATION_MILLIS = 5000L;
     private static final long EPSILON_MILLIS = 25L;
     private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
@@ -39,7 +40,8 @@ public class DynamoDBLeaseCoordinatorTest {
     @Before
     public void setup() {
         this.leaseCoordinator = new DynamoDBLeaseCoordinator(leaseRefresher, WORKER_ID, LEASE_DURATION_MILLIS,
-                EPSILON_MILLIS, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
+                VERY_OLD_LEASE_DURATION_MULTIPLIER, EPSILON_MILLIS, MAX_LEASES_FOR_WORKER,
+                MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
                 INITIAL_LEASE_TABLE_READ_CAPACITY, INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
     }
 

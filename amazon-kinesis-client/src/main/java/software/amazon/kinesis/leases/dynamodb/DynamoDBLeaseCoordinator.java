@@ -34,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseRenewer;
 import software.amazon.kinesis.leases.LeaseTaker;
@@ -140,6 +141,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      * @param metricsFactory
      *            Used to publish metrics about lease operations
      */
+    @Deprecated
     public DynamoDBLeaseCoordinator(final LeaseRefresher leaseRefresher,
                                     final String workerIdentifier,
                                     final long leaseDurationMillis,
@@ -150,11 +152,54 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                                     final long initialLeaseTableReadCapacity,
                                     final long initialLeaseTableWriteCapacity,
                                     final MetricsFactory metricsFactory) {
+        this(leaseRefresher, workerIdentifier, leaseDurationMillis,
+                LeaseManagementConfig.DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER, epsilonMillis, maxLeasesForWorker,
+                maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount,
+                TableConstants.DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY,
+                TableConstants.DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param leaseRefresher
+     *            LeaseRefresher instance to use
+     * @param workerIdentifier
+     *            Identifies the worker (e.g. useful to track lease ownership)
+     * @param leaseDurationMillis
+     *            Duration of a lease
+     * @param veryOldLeaseDurationMultiplier
+     *            Multiplier to determine when leases should be taken at priority
+     * @param epsilonMillis
+     *            Allow for some variance when calculating lease expirations
+     * @param maxLeasesForWorker
+     *            Max leases this Worker can handle at a time
+     * @param maxLeasesToStealAtOneTime
+     *            Steal up to these many leases at a time (for load balancing)
+     * @param initialLeaseTableReadCapacity
+     *            Initial dynamodb lease table read iops if creating the lease table
+     * @param initialLeaseTableWriteCapacity
+     *            Initial dynamodb lease table write iops if creating the lease table
+     * @param metricsFactory
+     *            Used to publish metrics about lease operations
+     */
+    public DynamoDBLeaseCoordinator(final LeaseRefresher leaseRefresher,
+            final String workerIdentifier,
+            final long leaseDurationMillis,
+            final long veryOldLeaseDurationMultiplier,
+            final long epsilonMillis,
+            final int maxLeasesForWorker,
+            final int maxLeasesToStealAtOneTime,
+            final int maxLeaseRenewerThreadCount,
+            final long initialLeaseTableReadCapacity,
+            final long initialLeaseTableWriteCapacity,
+            final MetricsFactory metricsFactory) {
         this.leaseRefresher = leaseRefresher;
         this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
         this.leaseTaker = new DynamoDBLeaseTaker(leaseRefresher, workerIdentifier, leaseDurationMillis, metricsFactory)
                 .withMaxLeasesForWorker(maxLeasesForWorker)
-                .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
+                .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime)
+                .withVeryOldLeaseDurationNanosMultipler(veryOldLeaseDurationMultiplier);
         this.leaseRenewer = new DynamoDBLeaseRenewer(
                 leaseRefresher, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool, metricsFactory);
         this.renewerIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, epsilonMillis);

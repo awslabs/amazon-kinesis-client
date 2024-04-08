@@ -71,6 +71,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private Function<StreamConfig, ShardDetector> customShardDetectorProvider;
 
     private final long failoverTimeMillis;
+    private final long veryOldLeaseDurationMultiplier;
     private final long epsilonMillis;
     private final int maxLeasesForWorker;
     private final int maxLeasesToStealAtOneTime;
@@ -487,6 +488,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      * @param leaseTableDeletionProtectionEnabled
      * @param tags
      */
+    @Deprecated
     private DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient, final StreamConfig streamConfig,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
             final ExecutorService executorService, final long failoverTimeMillis, final long epsilonMillis,
@@ -544,9 +546,70 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      * @param isMultiStreamMode
      * @param leaseCleanupConfig
      */
+    @Deprecated
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
             final ExecutorService executorService, final long failoverTimeMillis, final long epsilonMillis,
+            final int maxLeasesForWorker, final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
+            final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
+            final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
+            final int maxListShardsRetryAttempts, final int maxCacheMissesBeforeReload,
+            final long listShardsCacheAllowedAgeInSeconds, final int cacheMissWarningModulus,
+            final long initialLeaseTableReadCapacity, final long initialLeaseTableWriteCapacity,
+            final HierarchicalShardSyncer deprecatedHierarchicalShardSyncer, final TableCreatorCallback tableCreatorCallback,
+            Duration dynamoDbRequestTimeout, BillingMode billingMode, final boolean leaseTableDeletionProtectionEnabled,
+            Collection<Tag> tags, LeaseSerializer leaseSerializer,
+            Function<StreamConfig, ShardDetector> customShardDetectorProvider, boolean isMultiStreamMode,
+            LeaseCleanupConfig leaseCleanupConfig) {
+        this(kinesisClient, dynamoDBClient, tableName,
+                workerIdentifier, executorService, failoverTimeMillis, 3, epsilonMillis, maxLeasesForWorker,
+                maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
+                ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
+                maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
+                cacheMissWarningModulus, initialLeaseTableReadCapacity, initialLeaseTableWriteCapacity,
+                deprecatedHierarchicalShardSyncer, tableCreatorCallback, dynamoDbRequestTimeout, billingMode,
+                leaseTableDeletionProtectionEnabled, tags, leaseSerializer, customShardDetectorProvider, isMultiStreamMode,
+                leaseCleanupConfig);
+    }
+
+    /**
+     * Constructor.
+     * @param kinesisClient
+     * @param dynamoDBClient
+     * @param tableName
+     * @param workerIdentifier
+     * @param executorService
+     * @param failoverTimeMillis
+     * @param veryOldLeaseDurationMultiplier
+     * @param epsilonMillis
+     * @param maxLeasesForWorker
+     * @param maxLeasesToStealAtOneTime
+     * @param maxLeaseRenewalThreads
+     * @param cleanupLeasesUponShardCompletion
+     * @param ignoreUnexpectedChildShards
+     * @param shardSyncIntervalMillis
+     * @param consistentReads
+     * @param listShardsBackoffTimeMillis
+     * @param maxListShardsRetryAttempts
+     * @param maxCacheMissesBeforeReload
+     * @param listShardsCacheAllowedAgeInSeconds
+     * @param cacheMissWarningModulus
+     * @param initialLeaseTableReadCapacity
+     * @param initialLeaseTableWriteCapacity
+     * @param deprecatedHierarchicalShardSyncer
+     * @param tableCreatorCallback
+     * @param dynamoDbRequestTimeout
+     * @param billingMode
+     * @param leaseTableDeletionProtectionEnabled
+     * @param leaseSerializer
+     * @param customShardDetectorProvider
+     * @param isMultiStreamMode
+     * @param leaseCleanupConfig
+     */
+    public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient,
+            final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
+            final ExecutorService executorService, final long failoverTimeMillis,
+            final long veryOldLeaseDurationMultiplier, final long epsilonMillis,
             final int maxLeasesForWorker, final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
@@ -564,6 +627,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         this.workerIdentifier = workerIdentifier;
         this.executorService = executorService;
         this.failoverTimeMillis = failoverTimeMillis;
+        this.veryOldLeaseDurationMultiplier = veryOldLeaseDurationMultiplier;
         this.epsilonMillis = epsilonMillis;
         this.maxLeasesForWorker = maxLeasesForWorker;
         this.maxLeasesToStealAtOneTime = maxLeasesToStealAtOneTime;
@@ -596,6 +660,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         return new DynamoDBLeaseCoordinator(this.createLeaseRefresher(),
                 workerIdentifier,
                 failoverTimeMillis,
+                veryOldLeaseDurationMultiplier,
                 epsilonMillis,
                 maxLeasesForWorker,
                 maxLeasesToStealAtOneTime,
