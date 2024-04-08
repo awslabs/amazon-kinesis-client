@@ -91,7 +91,10 @@ public class StreamIdentifier {
      *
      * @param streamIdentifierSer a String of {@code account:stream:creationEpoch}
      * @return StreamIdentifier with {@link #accountIdOptional} and {@link #streamCreationEpochOptional} present
+     *
+     * @deprecated This method is deprecated. Please use {@link #multiStreamInstance(Arn, long)} instead.
      */
+    @Deprecated
     public static StreamIdentifier multiStreamInstance(String streamIdentifierSer) {
         final Matcher matcher = STREAM_IDENTIFIER_PATTERN.matcher(streamIdentifierSer);
         if (matcher.matches()) {
@@ -142,7 +145,10 @@ public class StreamIdentifier {
      * Create a single stream instance for StreamIdentifier from stream name.
      *
      * @param streamName stream name of a Kinesis stream
+     *
+     * @deprecated This method is deprecated. Please use {@link #singleStreamInstance(Arn)} instead.
      */
+    @Deprecated
     public static StreamIdentifier singleStreamInstance(String streamName) {
         Validate.notEmpty(streamName, "StreamName should not be empty");
 
