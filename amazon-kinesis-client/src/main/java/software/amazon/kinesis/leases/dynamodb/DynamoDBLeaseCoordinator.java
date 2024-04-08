@@ -49,6 +49,7 @@ import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
 import static software.amazon.kinesis.common.CommonCalculations.getRenewerTakerIntervalMillis;
+import static software.amazon.kinesis.common.CommonCalculations.getLeaseTakerIntervalMillis;
 
 /**
  * LeaseCoordinator abstracts away LeaseTaker and LeaseRenewer from the application code that's using leasing. It owns
@@ -108,12 +109,13 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                                     final String workerIdentifier,
                                     final long leaseDurationMillis,
                                     final long epsilonMillis,
+                                    final long leaseTakerIntervalMillis,
                                     final int maxLeasesForWorker,
                                     final int maxLeasesToStealAtOneTime,
                                     final int maxLeaseRenewerThreadCount,
                                     final MetricsFactory metricsFactory) {
-        this(leaseRefresher, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
-                maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount,
+        this(leaseRefresher, workerIdentifier, leaseDurationMillis, epsilonMillis, leaseTakerIntervalMillis,
+                maxLeasesForWorker, maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount,
                 TableConstants.DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY,
                 TableConstants.DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
     }
@@ -144,6 +146,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                                     final String workerIdentifier,
                                     final long leaseDurationMillis,
                                     final long epsilonMillis,
+                                    final long leaseTakerIntervalMillis,
                                     final int maxLeasesForWorker,
                                     final int maxLeasesToStealAtOneTime,
                                     final int maxLeaseRenewerThreadCount,
@@ -158,7 +161,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         this.leaseRenewer = new DynamoDBLeaseRenewer(
                 leaseRefresher, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool, metricsFactory);
         this.renewerIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, epsilonMillis);
-        this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
+        this.takerIntervalMillis = getLeaseTakerIntervalMillis(leaseTakerIntervalMillis, leaseDurationMillis, epsilonMillis);
         if (initialLeaseTableReadCapacity <= 0) {
             throw new IllegalArgumentException("readCapacity should be >= 1");
         }

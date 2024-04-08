@@ -75,4 +75,5 @@ public class ShardConsumerArgument {
     private final MetricsFactory metricsFactory;
     private final LeaseCleanupManager leaseCleanupManager;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
+    private final boolean evictLeaseOnShutdown;
 }

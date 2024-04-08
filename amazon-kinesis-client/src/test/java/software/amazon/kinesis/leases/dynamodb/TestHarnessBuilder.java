@@ -30,6 +30,7 @@ import software.amazon.kinesis.leases.LeaseRenewer;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 public class TestHarnessBuilder {
@@ -94,6 +95,11 @@ public class TestHarnessBuilder {
 
     public void passTime(long millis) {
         currentTimeNanos += millis * 1000000;
+    }
+
+    public void evictLease(String shardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+      Lease lease = leases.get(shardId);
+      leaseRefresher.evictLease(lease);
     }
 
     public Map<String, Lease> takeMutateAssert(DynamoDBLeaseTaker taker, int numToTake)

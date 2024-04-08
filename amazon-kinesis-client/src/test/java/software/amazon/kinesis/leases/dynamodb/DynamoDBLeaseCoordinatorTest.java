@@ -21,6 +21,7 @@ public class DynamoDBLeaseCoordinatorTest {
     private static final String WORKER_ID = UUID.randomUUID().toString();
     private static final long LEASE_DURATION_MILLIS = 5000L;
     private static final long EPSILON_MILLIS = 25L;
+    private static final long LEASE_TAKER_INTERVAL_MILLIS = -1L;
     private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
     private static final int MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
     private static final int MAX_LEASE_RENEWER_THREAD_COUNT = 20;
@@ -38,8 +39,8 @@ public class DynamoDBLeaseCoordinatorTest {
 
     @Before
     public void setup() {
-        this.leaseCoordinator = new DynamoDBLeaseCoordinator(leaseRefresher, WORKER_ID, LEASE_DURATION_MILLIS,
-                EPSILON_MILLIS, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
+        this.leaseCoordinator = new DynamoDBLeaseCoordinator(leaseRefresher, WORKER_ID, LEASE_DURATION_MILLIS, EPSILON_MILLIS,
+                LEASE_TAKER_INTERVAL_MILLIS, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
                 INITIAL_LEASE_TABLE_READ_CAPACITY, INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
     }
 
