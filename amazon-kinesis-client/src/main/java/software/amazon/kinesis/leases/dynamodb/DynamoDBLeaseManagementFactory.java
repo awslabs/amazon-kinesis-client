@@ -562,7 +562,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             Function<StreamConfig, ShardDetector> customShardDetectorProvider, boolean isMultiStreamMode,
             LeaseCleanupConfig leaseCleanupConfig) {
         this(kinesisClient, dynamoDBClient, tableName,
-                workerIdentifier, executorService, failoverTimeMillis, 3, epsilonMillis, maxLeasesForWorker,
+                workerIdentifier, executorService, failoverTimeMillis,
+                LeaseManagementConfig.DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER, epsilonMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,

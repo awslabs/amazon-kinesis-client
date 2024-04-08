@@ -62,6 +62,14 @@ public class KinesisClientLibConfiguration {
     public static final long DEFAULT_FAILOVER_TIME_MILLIS = 10000L;
 
     /**
+     * Multiplier for the failoverTimeMillis in which leases which are expired for an extended period of time defined by
+     * (veryOldLeaseDurationMultiplier * failoverTimeMillis) are taken with priority, disregarding the target
+     * but obeying the maximum limit per worker.
+     *
+     */
+    public static final long DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER = 3L;
+
+    /**
      * Max records to fetch from Kinesis in a single GetRecords call.
      */
     public static final int DEFAULT_MAX_RECORDS = 10000;
@@ -217,6 +225,7 @@ public class KinesisClientLibConfiguration {
     private AwsCredentialsProvider dynamoDBCredentialsProvider;
     private AwsCredentialsProvider cloudWatchCredentialsProvider;
     private long failoverTimeMillis;
+    private long veryOldLeaseDurationMultiplier;
     private String workerIdentifier;
     private long shardSyncIntervalMillis;
     private int maxRecords;
@@ -956,6 +965,12 @@ public class KinesisClientLibConfiguration {
     public KinesisClientLibConfiguration withFailoverTimeMillis(long failoverTimeMillis) {
         checkIsValuePositive("FailoverTimeMillis", failoverTimeMillis);
         this.failoverTimeMillis = failoverTimeMillis;
+        return this;
+    }
+
+    public KinesisClientLibConfiguration withVeryOldLeaseDurationMultiplier(long veryOldLeaseDurationMultiplier) {
+        checkIsValuePositive("VeryOldLeaseDurationMultiplier", veryOldLeaseDurationMultiplier);
+        this.veryOldLeaseDurationMultiplier = veryOldLeaseDurationMultiplier;
         return this;
     }
 
