@@ -310,6 +310,18 @@ public class ShutdownTaskTest {
         verify(leaseRefresher, never()).createLeaseIfNotExists(any(Lease.class));
     }
 
+    /**
+     * shutdownNotification is only set when ShardConsumer.gracefulShutdown() is called and should be null otherwise.
+     * The task should still call recordsPublisher.shutdown() regardless of the notification
+     */
+    @Test
+    public void testCallWhenShutdownNotificationIsSet() {
+        final TaskResult result = createShutdownTaskWithNotification(LEASE_LOST, Collections.emptyList()).call();
+        assertNull(result.getException());
+        verify(recordsPublisher).shutdown();
+        verify(shutdownNotification).shutdownComplete();
+    }
+
     @Test
     public void testCallWhenShutdownNotificationIsNull() {
         final TaskResult result = createShutdownTask(LEASE_LOST, Collections.emptyList()).call();
@@ -382,7 +394,15 @@ public class ShutdownTaskTest {
     private ShutdownTask createShutdownTask(final ShutdownReason reason, final List<ChildShard> childShards,
             final ShardInfo shardInfo) {
         return new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
-                reason, INITIAL_POSITION_TRIM_HORIZON, false, false,
+                reason, null, INITIAL_POSITION_TRIM_HORIZON, false, false,
+                leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher, hierarchicalShardSyncer,
+                NULL_METRICS_FACTORY, childShards, STREAM_IDENTIFIER, leaseCleanupManager);
+    }
+
+    private ShutdownTask createShutdownTaskWithNotification(final ShutdownReason reason,
+            final List<ChildShard> childShards) {
+        return new ShutdownTask(SHARD_INFO, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
+                reason, shutdownNotification, INITIAL_POSITION_TRIM_HORIZON, false, false,
                 leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher, hierarchicalShardSyncer,
                 NULL_METRICS_FACTORY, childShards, STREAM_IDENTIFIER, leaseCleanupManager);
     }

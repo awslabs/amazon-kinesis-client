@@ -478,6 +478,7 @@ class ConsumerStates {
                     argument.shardRecordProcessor(),
                     argument.recordProcessorCheckpointer(),
                     consumer.shutdownReason(),
+                    consumer.shutdownNotification(),
                     argument.initialPositionInStream(),
                     argument.cleanupLeasesOfCompletedShards(),
                     argument.ignoreUnexpectedChildShards(),
