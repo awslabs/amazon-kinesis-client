@@ -57,7 +57,7 @@ public class LeaseManagementConfig {
     public static final long DEFAULT_COMPLETED_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(5).toMillis();
     public static final long DEFAULT_GARBAGE_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(30).toMillis();
     public static final long DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 2 * 60 * 1000L;
-    public static final long DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER = 3L;
+    public static final long DEFAULT_AGED_FAILOVER_TIME_MULTIPLIER = 3L;
     public static final int DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY = 3;
 
 
@@ -105,12 +105,12 @@ public class LeaseManagementConfig {
 
     /**
      * Multiplier for the failoverTimeMillis in which leases which are expired for an extended period of time defined by
-     * (veryOldLeaseDurationMultiplier * failoverTimeMillis) are taken with priority, disregarding the target
+     * (agedFailoverTimeMultiplier * failoverTimeMillis) are taken with priority, disregarding the target
      * but obeying the maximum limit per worker.
      *
      * <p>Default value: 3L </p>
      */
-    private long veryOldLeaseDurationMultiplier = DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER;
+    private long agedFailoverTimeMultiplier = DEFAULT_AGED_FAILOVER_TIME_MULTIPLIER;
 
     /**
      * Shard sync interval in milliseconds - e.g. wait for this long between shard sync tasks.
@@ -380,7 +380,7 @@ public class LeaseManagementConfig {
                     workerIdentifier(),
                     executorService(),
                     failoverTimeMillis(),
-                    veryOldLeaseDurationMultiplier(),
+                    agedFailoverTimeMultiplier(),
                     epsilonMillis(),
                     maxLeasesForWorker(),
                     maxLeasesToStealAtOneTime(),

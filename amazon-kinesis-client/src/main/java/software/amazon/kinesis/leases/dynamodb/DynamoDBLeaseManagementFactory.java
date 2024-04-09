@@ -71,7 +71,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private Function<StreamConfig, ShardDetector> customShardDetectorProvider;
 
     private final long failoverTimeMillis;
-    private final long veryOldLeaseDurationMultiplier;
+    private final long agedFailoverTimeMultiplier;
     private final long epsilonMillis;
     private final int maxLeasesForWorker;
     private final int maxLeasesToStealAtOneTime;
@@ -563,7 +563,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             LeaseCleanupConfig leaseCleanupConfig) {
         this(kinesisClient, dynamoDBClient, tableName,
                 workerIdentifier, executorService, failoverTimeMillis,
-                LeaseManagementConfig.DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER, epsilonMillis, maxLeasesForWorker,
+                LeaseManagementConfig.DEFAULT_AGED_FAILOVER_TIME_MULTIPLIER, epsilonMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewalThreads, cleanupLeasesUponShardCompletion,
                 ignoreUnexpectedChildShards, shardSyncIntervalMillis, consistentReads, listShardsBackoffTimeMillis,
                 maxListShardsRetryAttempts, maxCacheMissesBeforeReload, listShardsCacheAllowedAgeInSeconds,
@@ -581,7 +581,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      * @param workerIdentifier
      * @param executorService
      * @param failoverTimeMillis
-     * @param veryOldLeaseDurationMultiplier
+     * @param agedFailoverTimeMultiplier
      * @param epsilonMillis
      * @param maxLeasesForWorker
      * @param maxLeasesToStealAtOneTime
@@ -610,7 +610,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
             final ExecutorService executorService, final long failoverTimeMillis,
-            final long veryOldLeaseDurationMultiplier, final long epsilonMillis,
+            final long agedFailoverTimeMultiplier, final long epsilonMillis,
             final int maxLeasesForWorker, final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
@@ -628,7 +628,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         this.workerIdentifier = workerIdentifier;
         this.executorService = executorService;
         this.failoverTimeMillis = failoverTimeMillis;
-        this.veryOldLeaseDurationMultiplier = veryOldLeaseDurationMultiplier;
+        this.agedFailoverTimeMultiplier = agedFailoverTimeMultiplier;
         this.epsilonMillis = epsilonMillis;
         this.maxLeasesForWorker = maxLeasesForWorker;
         this.maxLeasesToStealAtOneTime = maxLeasesToStealAtOneTime;
@@ -661,7 +661,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         return new DynamoDBLeaseCoordinator(this.createLeaseRefresher(),
                 workerIdentifier,
                 failoverTimeMillis,
-                veryOldLeaseDurationMultiplier,
+                agedFailoverTimeMultiplier,
                 epsilonMillis,
                 maxLeasesForWorker,
                 maxLeasesToStealAtOneTime,

@@ -107,11 +107,11 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * Overrides the default very old lease duration nanos multiplier to increase the threshold for taking very old leases.
      * Setting this to a higher value than 3 will increase the threshold for very old lease taking.
      *
-     * @param veryOldLeaseDurationNanosMultipler Very old lease duration multiplier for adjusting very old lease taking.
+     * @param veryOldLeaseDurationNanosMultiplier Very old lease duration multiplier for adjusting very old lease taking.
      * @return LeaseTaker
      */
-    public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultipler(long veryOldLeaseDurationNanosMultipler) {
-        this.veryOldLeaseDurationNanosMultiplier = veryOldLeaseDurationNanosMultipler;
+    public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultiplier(long veryOldLeaseDurationNanosMultiplier) {
+        this.veryOldLeaseDurationNanosMultiplier = veryOldLeaseDurationNanosMultiplier;
         return this;
     }
 
@@ -191,7 +191,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
 
             List<Lease> expiredLeases = getExpiredLeases();
 
-            Set<Lease> leasesToTake = computeLeasesToTake(expiredLeases);
+            Set<Lease> leasesToTake = computeLeasesToTake(expiredLeases, timeProvider);
             leasesToTake = updateStaleLeasesWithLatestState(updateAllLeasesTotalTimeMillis, leasesToTake);
 
             Set<String> untakenLeaseKeys = new HashSet<>();
@@ -374,9 +374,11 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * Compute the number of leases I should try to take based on the state of the system.
      *
      * @param expiredLeases list of leases we determined to be expired
+     * @param timeProvider callable which returns the current time in nanos
      * @return set of leases to take.
      */
-    private Set<Lease> computeLeasesToTake(List<Lease> expiredLeases) {
+    @VisibleForTesting
+    Set<Lease> computeLeasesToTake(List<Lease> expiredLeases, Callable<Long> timeProvider) throws DependencyException {
         Map<String, Integer> leaseCounts = computeLeaseCounts(expiredLeases);
         Set<Lease> leasesToTake = new HashSet<>();
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, TAKE_LEASES_DIMENSION);
@@ -430,7 +432,13 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             // If there are leases that have been expired for an extended period of
             // time, take them with priority, disregarding the target (computed
             // later) but obeying the maximum limit per worker.
-            final long nanoThreshold = System.nanoTime() - (veryOldLeaseDurationNanosMultiplier * leaseDurationNanos);
+            long currentNanoTime;
+            try {
+                currentNanoTime = timeProvider.call();
+            } catch (Exception e) {
+                throw new DependencyException("Exception caught from timeProvider", e);
+            }
+            final long nanoThreshold = currentNanoTime - (veryOldLeaseDurationNanosMultiplier * leaseDurationNanos);
             final List<Lease> veryOldLeases = allLeases.values().stream()
                     .filter(lease -> nanoThreshold > lease.lastCounterIncrementNanos())
                     .collect(Collectors.toList());

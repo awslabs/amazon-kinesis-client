@@ -87,7 +87,7 @@ public class MultiLangDaemonConfiguration {
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private long failoverTimeMillis;
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
-    private long veryOldLeaseDurationMultiplier;
+    private long agedFailoverTimeMultiplier;
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private long shardSyncIntervalMillis;
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
