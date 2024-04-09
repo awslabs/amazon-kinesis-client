@@ -108,7 +108,7 @@ public class LeaseManagementConfig {
      * (agedFailoverTimeMultiplier * failoverTimeMillis) are taken with priority, disregarding the target
      * but obeying the maximum limit per worker.
      *
-     * <p>Default value: 3L </p>
+     * <p>Default value: 3 </p>
      */
     private int agedFailoverTimeMultiplier = DEFAULT_AGED_FAILOVER_TIME_MULTIPLIER;
 

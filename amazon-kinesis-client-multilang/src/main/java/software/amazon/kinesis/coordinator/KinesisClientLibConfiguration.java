@@ -62,14 +62,6 @@ public class KinesisClientLibConfiguration {
     public static final long DEFAULT_FAILOVER_TIME_MILLIS = 10000L;
 
     /**
-     * Multiplier for the failoverTimeMillis in which leases which are expired for an extended period of time defined by
-     * (agedFailoverTimeMultiplier * failoverTimeMillis) are taken with priority, disregarding the target
-     * but obeying the maximum limit per worker.
-     *
-     */
-    public static final long DEFAULT_AGED_FAILOVER_TIME_MULTIPLIER = 3L;
-
-    /**
      * Max records to fetch from Kinesis in a single GetRecords call.
      */
     public static final int DEFAULT_MAX_RECORDS = 10000;
