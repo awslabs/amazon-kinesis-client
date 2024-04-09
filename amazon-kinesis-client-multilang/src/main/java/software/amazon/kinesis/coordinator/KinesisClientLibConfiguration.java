@@ -225,7 +225,7 @@ public class KinesisClientLibConfiguration {
     private AwsCredentialsProvider dynamoDBCredentialsProvider;
     private AwsCredentialsProvider cloudWatchCredentialsProvider;
     private long failoverTimeMillis;
-    private long agedFailoverTimeMultiplier;
+    private int agedFailoverTimeMultiplier;
     private String workerIdentifier;
     private long shardSyncIntervalMillis;
     private int maxRecords;
@@ -968,7 +968,7 @@ public class KinesisClientLibConfiguration {
         return this;
     }
 
-    public KinesisClientLibConfiguration withAgedFailoverTimeMultiplier(long agedFailoverTimeMultiplier) {
+    public KinesisClientLibConfiguration withAgedFailoverTimeMultiplier(int agedFailoverTimeMultiplier) {
         checkIsValuePositive("AgedFailoverTimeMultiplier", agedFailoverTimeMultiplier);
         this.agedFailoverTimeMultiplier = agedFailoverTimeMultiplier;
         return this;

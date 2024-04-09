@@ -70,7 +70,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     private int maxLeasesForWorker = Integer.MAX_VALUE;
     private int maxLeasesToStealAtOneTime = 1;
 
-    private long veryOldLeaseDurationNanosMultiplier = 3;
+    private int veryOldLeaseDurationNanosMultiplier = 3;
     private long lastScanTimeNanos = 0L;
 
     public DynamoDBLeaseTaker(LeaseRefresher leaseRefresher, String workerIdentifier, long leaseDurationMillis,
@@ -110,7 +110,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * @param veryOldLeaseDurationNanosMultiplier Very old lease duration multiplier for adjusting very old lease taking.
      * @return LeaseTaker
      */
-    public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultiplier(long veryOldLeaseDurationNanosMultiplier) {
+    public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultiplier(int veryOldLeaseDurationNanosMultiplier) {
         this.veryOldLeaseDurationNanosMultiplier = veryOldLeaseDurationNanosMultiplier;
         return this;
     }

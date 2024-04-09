@@ -186,7 +186,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     public DynamoDBLeaseCoordinator(final LeaseRefresher leaseRefresher,
             final String workerIdentifier,
             final long leaseDurationMillis,
-            final long agedFailoverTimeMultiplier,
+            final int agedFailoverTimeMultiplier,
             final long epsilonMillis,
             final int maxLeasesForWorker,
             final int maxLeasesToStealAtOneTime,

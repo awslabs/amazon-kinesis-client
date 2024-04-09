@@ -102,7 +102,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
         builder.withLease("4", "bar").build();
 
         // setting multiplier to unusually high number to avoid very old lease taking
-        taker.withVeryOldLeaseDurationNanosMultiplier(5000000000L);
+        taker.withVeryOldLeaseDurationNanosMultiplier(5000000);
         builder.takeMutateAssert(taker, 2);
     }
 

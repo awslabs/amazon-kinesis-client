@@ -19,7 +19,7 @@ import static org.mockito.Mockito.when;
 public class DynamoDBLeaseCoordinatorTest {
 
     private static final String WORKER_ID = UUID.randomUUID().toString();
-    private static final long VERY_OLD_LEASE_DURATION_MULTIPLIER = 5;
+    private static final int VERY_OLD_LEASE_DURATION_MULTIPLIER = 5;
     private static final long LEASE_DURATION_MILLIS = 5000L;
     private static final long EPSILON_MILLIS = 25L;
     private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;

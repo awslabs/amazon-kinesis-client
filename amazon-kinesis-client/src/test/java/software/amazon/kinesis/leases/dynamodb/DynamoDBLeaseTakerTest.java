@@ -48,7 +48,7 @@ public class DynamoDBLeaseTakerTest {
 
     private static final String WORKER_IDENTIFIER = "foo";
     private static final long LEASE_DURATION_MILLIS = 1000L;
-    private static final long VERY_OLD_LEASE_DURATION_MULTIPLIER = 5L;
+    private static final int VERY_OLD_LEASE_DURATION_MULTIPLIER = 5;
     private static final long MOCK_CURRENT_TIME = 10000000000L;
 
     private DynamoDBLeaseTaker dynamoDBLeaseTaker;

@@ -71,7 +71,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private Function<StreamConfig, ShardDetector> customShardDetectorProvider;
 
     private final long failoverTimeMillis;
-    private final long agedFailoverTimeMultiplier;
+    private final int agedFailoverTimeMultiplier;
     private final long epsilonMillis;
     private final int maxLeasesForWorker;
     private final int maxLeasesToStealAtOneTime;
@@ -610,7 +610,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     public DynamoDBLeaseManagementFactory(final KinesisAsyncClient kinesisClient,
             final DynamoDbAsyncClient dynamoDBClient, final String tableName, final String workerIdentifier,
             final ExecutorService executorService, final long failoverTimeMillis,
-            final long agedFailoverTimeMultiplier, final long epsilonMillis,
+            final int agedFailoverTimeMultiplier, final long epsilonMillis,
             final int maxLeasesForWorker, final int maxLeasesToStealAtOneTime, final int maxLeaseRenewalThreads,
             final boolean cleanupLeasesUponShardCompletion, final boolean ignoreUnexpectedChildShards,
             final long shardSyncIntervalMillis, final boolean consistentReads, final long listShardsBackoffTimeMillis,
