@@ -697,6 +697,9 @@ public class ShardConsumerTest {
         shutdownTaskInput = shutdownTaskInput.toBuilder().taskOutcome(TaskOutcome.SUCCESSFUL).build();
         // No task is created/run for this shutdownRequestedAwaitState, so there's no task outcome.
 
+        // shutdownNotification.shutdownComplete() should only be called for gracefulShutdown
+        verify(shutdownNotification, times(1)).shutdownComplete();
+
         verify(taskExecutionListener, times(1)).afterTaskExecution(initialTaskInput);
         verify(taskExecutionListener, times(2)).afterTaskExecution(processTaskInput);
         verify(taskExecutionListener, times(1)).afterTaskExecution(shutdownRequestedTaskInput);
