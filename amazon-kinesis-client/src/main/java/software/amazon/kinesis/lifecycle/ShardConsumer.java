@@ -313,6 +313,12 @@ public class ShardConsumer {
                 }
 
                 executeTask(shardEndProcessRecordsInput);
+
+                // call shutdownNotification.shutdownComplete() if shutting down as part of gracefulShutdown
+                if (currentState.state() == ConsumerStates.ShardConsumerState.SHUTTING_DOWN &&
+                        taskOutcome == TaskOutcome.SUCCESSFUL && shutdownNotification != null) {
+                    shutdownNotification.shutdownComplete();
+                }
                 return false;
             }
         }, executorService);
