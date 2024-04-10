@@ -22,7 +22,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -46,6 +48,8 @@ public class DynamoDBLeaseTakerTest {
 
     private static final String WORKER_IDENTIFIER = "foo";
     private static final long LEASE_DURATION_MILLIS = 1000L;
+    private static final int VERY_OLD_LEASE_DURATION_MULTIPLIER = 5;
+    private static final long MOCK_CURRENT_TIME = 10000000000L;
 
     private DynamoDBLeaseTaker dynamoDBLeaseTaker;
 
@@ -88,7 +92,7 @@ public class DynamoDBLeaseTakerTest {
 
         when(leaseRefresher.listLeases()).thenReturn(leases);
         when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
-        when(timeProvider.call()).thenReturn(1000L);
+        when(timeProvider.call()).thenReturn(MOCK_CURRENT_TIME);
 
         final Map<String, Integer> actualOutput = dynamoDBLeaseTaker.computeLeaseCounts(ImmutableList.of());
 
@@ -112,13 +116,39 @@ public class DynamoDBLeaseTakerTest {
 
         when(leaseRefresher.listLeases()).thenReturn(leases);
         when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
-        when(timeProvider.call()).thenReturn(1000L);
+        when(timeProvider.call()).thenReturn(MOCK_CURRENT_TIME);
 
         final Map<String, Integer> actualOutput = dynamoDBLeaseTaker.computeLeaseCounts(leases);
 
         final Map<String, Integer> expectedOutput = new HashMap<>();
         expectedOutput.put("foo", 0);
         assertEquals(expectedOutput, actualOutput);
+    }
+
+    @Test
+    public void test_veryOldLeaseDurationNanosMultiplierGetsCorrectLeases() throws Exception {
+        long veryOldThreshold = MOCK_CURRENT_TIME -
+                (TimeUnit.MILLISECONDS.toNanos(LEASE_DURATION_MILLIS) * VERY_OLD_LEASE_DURATION_MULTIPLIER);
+        DynamoDBLeaseTaker dynamoDBLeaseTakerWithCustomMultiplier =
+                new DynamoDBLeaseTaker(leaseRefresher, WORKER_IDENTIFIER, LEASE_DURATION_MILLIS, metricsFactory)
+                        .withVeryOldLeaseDurationNanosMultiplier(VERY_OLD_LEASE_DURATION_MULTIPLIER);
+        final List<Lease> allLeases = new ImmutableList.Builder<Lease>()
+                .add(createLease("foo", "2", MOCK_CURRENT_TIME))
+                .add(createLease("bar", "3", veryOldThreshold - 1))
+                .add(createLease("baz", "4", veryOldThreshold))
+                .build();
+        final List<Lease> expiredLeases = allLeases.subList(1, 3);
+
+        dynamoDBLeaseTakerWithCustomMultiplier.allLeases.putAll(
+                allLeases.stream().collect(Collectors.toMap(Lease::leaseKey, Function.identity())));
+        when(leaseRefresher.listLeases()).thenReturn(allLeases);
+        when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
+        when(timeProvider.call()).thenReturn(MOCK_CURRENT_TIME);
+
+        Set<Lease> output = dynamoDBLeaseTakerWithCustomMultiplier.computeLeasesToTake(expiredLeases, timeProvider);
+        final Set<Lease> expectedOutput = new HashSet<>();
+        expectedOutput.add(allLeases.get(1));
+        assertEquals(expectedOutput, output);
     }
 
     private Lease createLease(String leaseOwner, String leaseKey) {
@@ -130,6 +160,19 @@ public class DynamoDBLeaseTakerTest {
         lease.parentShardIds(Collections.singleton("parentShardId"));
         lease.childShardIds(new HashSet<>());
         lease.leaseKey(leaseKey);
+        return lease;
+    }
+
+    private Lease createLease(String leaseOwner, String leaseKey, long lastCounterIncrementNanos) {
+        final Lease lease = new Lease();
+        lease.checkpoint(new ExtendedSequenceNumber("checkpoint"));
+        lease.ownerSwitchesSinceCheckpoint(0L);
+        lease.leaseCounter(0L);
+        lease.leaseOwner(leaseOwner);
+        lease.parentShardIds(Collections.singleton("parentShardId"));
+        lease.childShardIds(new HashSet<>());
+        lease.leaseKey(leaseKey);
+        lease.lastCounterIncrementNanos(lastCounterIncrementNanos);
         return lease;
     }
 }

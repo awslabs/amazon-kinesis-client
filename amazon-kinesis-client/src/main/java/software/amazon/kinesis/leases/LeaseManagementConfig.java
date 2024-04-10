@@ -57,6 +57,7 @@ public class LeaseManagementConfig {
     public static final long DEFAULT_COMPLETED_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(5).toMillis();
     public static final long DEFAULT_GARBAGE_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(30).toMillis();
     public static final long DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 2 * 60 * 1000L;
+    public static final int DEFAULT_AGED_FAILOVER_TIME_MULTIPLIER = 3;
     public static final int DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY = 3;
 
 
@@ -101,6 +102,15 @@ public class LeaseManagementConfig {
      * <p>Default value: 10000L</p>
      */
     private long failoverTimeMillis = 10000L;
+
+    /**
+     * Multiplier for the failoverTimeMillis in which leases which are expired for an extended period of time defined by
+     * (agedFailoverTimeMultiplier * failoverTimeMillis) are taken with priority, disregarding the target
+     * but obeying the maximum limit per worker.
+     *
+     * <p>Default value: 3 </p>
+     */
+    private int agedFailoverTimeMultiplier = DEFAULT_AGED_FAILOVER_TIME_MULTIPLIER;
 
     /**
      * Shard sync interval in milliseconds - e.g. wait for this long between shard sync tasks.
@@ -370,6 +380,7 @@ public class LeaseManagementConfig {
                     workerIdentifier(),
                     executorService(),
                     failoverTimeMillis(),
+                    agedFailoverTimeMultiplier(),
                     epsilonMillis(),
                     maxLeasesForWorker(),
                     maxLeasesToStealAtOneTime(),
