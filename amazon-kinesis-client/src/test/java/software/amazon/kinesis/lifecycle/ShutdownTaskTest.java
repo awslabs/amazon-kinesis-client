@@ -393,17 +393,46 @@ public class ShutdownTaskTest {
 
     private ShutdownTask createShutdownTask(final ShutdownReason reason, final List<ChildShard> childShards,
             final ShardInfo shardInfo) {
-        return new ShutdownTask(shardInfo, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
-                reason, null, INITIAL_POSITION_TRIM_HORIZON, false, false,
-                leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher, hierarchicalShardSyncer,
-                NULL_METRICS_FACTORY, childShards, STREAM_IDENTIFIER, leaseCleanupManager);
+        return ShutdownTask.builder()
+                .shardInfo(shardInfo)
+                .shardDetector(shardDetector)
+                .shardRecordProcessor(shardRecordProcessor)
+                .recordProcessorCheckpointer(recordProcessorCheckpointer)
+                .reason(reason)
+                .initialPositionInStream(INITIAL_POSITION_TRIM_HORIZON)
+                .cleanupLeasesOfCompletedShards(false)
+                .ignoreUnexpectedChildShards(false)
+                .leaseCoordinator(leaseCoordinator)
+                .backoffTimeMillis(TASK_BACKOFF_TIME_MILLIS)
+                .recordsPublisher(recordsPublisher)
+                .hierarchicalShardSyncer(hierarchicalShardSyncer)
+                .metricsFactory(NULL_METRICS_FACTORY)
+                .childShards(childShards)
+                .streamIdentifier(STREAM_IDENTIFIER)
+                .leaseCleanupManager(leaseCleanupManager)
+                .build();
     }
 
     private ShutdownTask createShutdownTaskWithNotification(final ShutdownReason reason,
             final List<ChildShard> childShards) {
-        return new ShutdownTask(SHARD_INFO, shardDetector, shardRecordProcessor, recordProcessorCheckpointer,
-                reason, shutdownNotification, INITIAL_POSITION_TRIM_HORIZON, false, false,
-                leaseCoordinator, TASK_BACKOFF_TIME_MILLIS, recordsPublisher, hierarchicalShardSyncer,
-                NULL_METRICS_FACTORY, childShards, STREAM_IDENTIFIER, leaseCleanupManager);
+        return ShutdownTask.builder()
+                .shardInfo(SHARD_INFO)
+                .shardDetector(shardDetector)
+                .shardRecordProcessor(shardRecordProcessor)
+                .recordProcessorCheckpointer(recordProcessorCheckpointer)
+                .reason(reason)
+                .initialPositionInStream(INITIAL_POSITION_TRIM_HORIZON)
+                .cleanupLeasesOfCompletedShards(false)
+                .ignoreUnexpectedChildShards(false)
+                .leaseCoordinator(leaseCoordinator)
+                .backoffTimeMillis(TASK_BACKOFF_TIME_MILLIS)
+                .recordsPublisher(recordsPublisher)
+                .hierarchicalShardSyncer(hierarchicalShardSyncer)
+                .metricsFactory(NULL_METRICS_FACTORY)
+                .childShards(childShards)
+                .streamIdentifier(STREAM_IDENTIFIER)
+                .leaseCleanupManager(leaseCleanupManager)
+                .shutdownNotification(shutdownNotification)
+                .build();
     }
 }

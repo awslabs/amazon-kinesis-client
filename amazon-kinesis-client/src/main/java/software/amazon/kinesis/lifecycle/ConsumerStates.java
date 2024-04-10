@@ -472,24 +472,25 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(ShardConsumerArgument argument, ShardConsumer consumer, ProcessRecordsInput input) {
-            // TODO: set shutdown reason
-            return new ShutdownTask(argument.shardInfo(),
-                    argument.shardDetector(),
-                    argument.shardRecordProcessor(),
-                    argument.recordProcessorCheckpointer(),
-                    consumer.shutdownReason(),
-                    consumer.shutdownNotification(),
-                    argument.initialPositionInStream(),
-                    argument.cleanupLeasesOfCompletedShards(),
-                    argument.ignoreUnexpectedChildShards(),
-                    argument.leaseCoordinator(),
-                    argument.taskBackoffTimeMillis(),
-                    argument.recordsPublisher(),
-                    argument.hierarchicalShardSyncer(),
-                    argument.metricsFactory(),
-                    input == null ? null : input.childShards(),
-                    argument.streamIdentifier(),
-                    argument.leaseCleanupManager());
+            return ShutdownTask.builder()
+                    .shardInfo(argument.shardInfo())
+                    .shardDetector(argument.shardDetector())
+                    .shardRecordProcessor(argument.shardRecordProcessor())
+                    .recordProcessorCheckpointer(argument.recordProcessorCheckpointer())
+                    .reason(consumer.shutdownReason())
+                    .shutdownNotification(consumer.shutdownNotification())
+                    .initialPositionInStream(argument.initialPositionInStream())
+                    .cleanupLeasesOfCompletedShards(argument.cleanupLeasesOfCompletedShards())
+                    .ignoreUnexpectedChildShards(argument.ignoreUnexpectedChildShards())
+                    .leaseCoordinator(argument.leaseCoordinator())
+                    .backoffTimeMillis(argument.taskBackoffTimeMillis())
+                    .recordsPublisher(argument.recordsPublisher())
+                    .hierarchicalShardSyncer(argument.hierarchicalShardSyncer())
+                    .metricsFactory(argument.metricsFactory())
+                    .childShards(input == null ? null : input.childShards())
+                    .streamIdentifier(argument.streamIdentifier())
+                    .leaseCleanupManager(argument.leaseCleanupManager())
+                    .build();
         }
 
         @Override
