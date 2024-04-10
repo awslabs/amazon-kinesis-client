@@ -91,6 +91,17 @@ public class MultiLangDaemonConfigurationTest {
     }
 
     @Test
+    public void testSetAgedFailoverTimeMultiplier() {
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setAgedFailoverTimeMultiplier(5);
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration = configuration
+                .resolvedConfiguration(shardRecordProcessorFactory);
+
+        assertThat(resolvedConfiguration.leaseManagementConfig.agedFailoverTimeMultiplier(), equalTo(5));
+    }
+
+    @Test
     public void testDefaultRetrievalConfig() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
 
