@@ -41,7 +41,6 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
-import software.amazon.kinesis.processor.StreamTracker;
 
 import static software.amazon.kinesis.common.CommonCalculations.getRenewerTakerIntervalMillis;
 
@@ -105,11 +104,11 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     }
 
     /**
-     * @deprecated Misspelled method, use{@link DynamoDBLeaseTaker#withVeryOldLeaseDurationNanosMultiplier(int)}
+     * @deprecated Misspelled method, use {@link DynamoDBLeaseTaker#withVeryOldLeaseDurationNanosMultiplier(int)}
      */
     @Deprecated
     public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultipler(long veryOldLeaseDurationNanosMultipler) {
-        this.veryOldLeaseDurationNanosMultiplier = veryOldLeaseDurationNanosMultipler;
+        this.veryOldLeaseDurationNanosMultiplier = (int) veryOldLeaseDurationNanosMultipler;
         return this;
     }
 
