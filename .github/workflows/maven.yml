@@ -30,3 +30,5 @@ jobs:
           distribution: 'corretto'
       - name: Build with Maven
         run: mvn -B package --file pom.xml -DskipITs
+      - name: Check for backwards compatibility
+        run: mvn clirr:check
