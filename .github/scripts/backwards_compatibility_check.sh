@@ -31,10 +31,13 @@ diff <(echo "$LATEST_PACKAGES") <(echo "$CURRENT_PACKAGES") | grep '^<' && REMOV
 echo "Checking if methods in $LATEST_VERSION were removed in $CURRENT_VERSION"
 for package in $LATEST_PACKAGES
 do
-  # Get the second line of the output which indicates whether a class is public. Only classes that
-  # are public should be checked; other classes will not break backwards compatibility.
+  # Skip classes which are not public. Only public class should be checked since other classes will not break backwards compatibility.
   CLASS_DEFINITION=$(javap -classpath $LATEST_JAR $package | head -2 | tail -1)
-  if [[ $CLASS_DEFINITION != *"public"* ]]
+
+  # Skip classes with the KinesisClientInternalApi annotation. These classes are subject to breaking backwards compatibility.
+  INTERNAL_API_RESULT=$(javap -v -classpath $LATEST_JAR $package | grep KinesisClientInternalApi)
+
+  if [[ $CLASS_DEFINITION != *"public"* || $INTERNAL_API_RESULT != "" ]]
   then
     continue
   fi
