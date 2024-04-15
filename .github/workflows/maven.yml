@@ -44,4 +44,4 @@ jobs:
           java-version: '8'
           distribution: 'corretto'
       - name: Check backwards compatibility of changes
-        run: .github/workflows/backwards_compatibility_check.sh
+        run: .github/scripts/backwards_compatibility_check.sh
