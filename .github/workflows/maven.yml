@@ -12,7 +12,6 @@ on:
   push:
     branches:
       - "master"
-      - "bwc"
   pull_request:
     branches:
       - "master"
