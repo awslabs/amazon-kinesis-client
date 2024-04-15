@@ -37,6 +37,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -58,6 +59,8 @@ public class FanOutConfigTest {
     private KinesisAsyncClient kinesisClient;
     @Mock
     private StreamConfig streamConfig;
+    @Mock
+    private StreamIdentifier streamIdentifier;
 
     private FanOutConfig config;
 
@@ -69,6 +72,8 @@ public class FanOutConfigTest {
                 .streamName(TEST_STREAM_NAME);
         doReturn(consumerRegistration).when(config)
                 .createConsumerRegistration(eq(kinesisClient), anyString(), anyString());
+        when(streamConfig.streamIdentifier()).thenReturn(streamIdentifier);
+        when(streamIdentifier.streamName()).thenReturn(TEST_STREAM_NAME);
     }
 
     @Test
