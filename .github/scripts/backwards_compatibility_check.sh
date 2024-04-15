@@ -29,7 +29,7 @@ diff <(echo "$LATEST_PACKAGES") <(echo "$CURRENT_PACKAGES") | grep '^<' && REMOV
 
 # check if any methods within the packages were removed
 echo "Checking if methods in $LATEST_VERSION were removed in $CURRENT_VERSION"
-for package in $CURRENT_PACKAGES
+for package in $LATEST_PACKAGES
 do
   # Get the second line of the output which indicates whether a class is public. Only classes that
   # are public should be checked; other classes will not break backwards compatibility.
