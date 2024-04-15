@@ -21,6 +21,7 @@ import lombok.Data;
 import lombok.NonNull;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -50,20 +51,6 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
 
     private final Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider;
 
-    @Deprecated
-    public SynchronousBlockingRetrievalFactory(String streamName,
-                                               KinesisAsyncClient kinesisClient,
-                                               RecordsFetcherFactory recordsFetcherFactory,
-                                               int maxRecords,
-                                               Duration kinesisRequestTimeout) {
-        this(streamName,
-                kinesisClient,
-                recordsFetcherFactory,
-                maxRecords,
-                kinesisRequestTimeout,
-                defaultDataFetcherProvider(kinesisClient));
-    }
-
     public SynchronousBlockingRetrievalFactory(String streamName,
                                                KinesisAsyncClient kinesisClient,
                                                RecordsFetcherFactory recordsFetcherFactory,
@@ -79,26 +66,14 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
                 defaultDataFetcherProvider(kinesisClient) : dataFetcherProvider;
     }
 
-    @Deprecated
-    public SynchronousBlockingRetrievalFactory(String streamName,
-                                               KinesisAsyncClient kinesisClient,
-                                               RecordsFetcherFactory recordsFetcherFactory,
-                                               int maxRecords) {
-        this(streamName, kinesisClient, recordsFetcherFactory, maxRecords, PollingConfig.DEFAULT_REQUEST_TIMEOUT);
-    }
-
     private static Function<DataFetcherProviderConfig, DataFetcher> defaultDataFetcherProvider(
             KinesisAsyncClient kinesisClient) {
         return dataFetcherProviderConfig -> new KinesisDataFetcher(kinesisClient, dataFetcherProviderConfig);
     }
 
-    @Override
-    public GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
-                                                                         @NonNull final MetricsFactory metricsFactory) {
-        final StreamIdentifier streamIdentifier = shardInfo.streamIdentifierSerOpt().isPresent() ?
-                StreamIdentifier.multiStreamInstance(shardInfo.streamIdentifierSerOpt().get()) :
-                StreamIdentifier.singleStreamInstance(streamName);
-
+    private GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
+            @NonNull final StreamIdentifier streamIdentifier,
+            @NonNull final MetricsFactory metricsFactory) {
         final DataFetcherProviderConfig kinesisDataFetcherProviderConfig = new KinesisDataFetcherProviderConfig(
                 streamIdentifier,
                 shardInfo.shardId(),
@@ -113,8 +88,12 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
 
     @Override
     public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
+            @NonNull final StreamConfig streamConfig,
             @NonNull final MetricsFactory metricsFactory) {
-        return recordsFetcherFactory.createRecordsFetcher(createGetRecordsRetrievalStrategy(shardInfo, metricsFactory),
-                shardInfo.shardId(), metricsFactory, maxRecords);
+        return recordsFetcherFactory.createRecordsFetcher(
+                createGetRecordsRetrievalStrategy(shardInfo, streamConfig.streamIdentifier(), metricsFactory),
+                shardInfo.shardId(),
+                metricsFactory,
+                maxRecords);
     }
 }
