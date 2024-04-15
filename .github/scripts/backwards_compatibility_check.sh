@@ -15,7 +15,7 @@ LATEST_VERSION=$(ls $KCL_MAVEN_DIR | grep '[0-9].[0-9].[0-9]')
 LATEST_JAR=$KCL_MAVEN_DIR/$LATEST_VERSION/amazon-kinesis-client-$LATEST_VERSION.jar
 
 # get the current jar (i.e. the jar that is pending review)
-mvn install -DskipTests
+mvn -B install -DskipTests
 CURRENT_VERSION=$(mvn -q  -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)
 CURRENT_JAR=$KCL_MAVEN_DIR/$CURRENT_VERSION/amazon-kinesis-client-$CURRENT_VERSION.jar
 
