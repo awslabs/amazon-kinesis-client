@@ -52,7 +52,7 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 @KinesisClientInternalApi
 public class ShardConsumer {
 
-    public static final int MAX_TIME_BETWEEN_REQUEST_RESPONSE = 60 * 1000;
+    public static final int MAX_TIME_BETWEEN_REQUEST_RESPONSE = Integer.parseInt(System.getProperty("software.amazon.kinesis.lifecycle.ShardConsumer.max_time", "60000"));
     private final RecordsPublisher recordsPublisher;
     private final ExecutorService executorService;
     private final ShardInfo shardInfo;
