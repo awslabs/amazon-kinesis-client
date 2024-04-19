@@ -27,51 +27,50 @@ get_current_jar() {
 }
 
 # Skip classes with the KinesisClientInternalApi annotation. These classes are subject to breaking backwards compatibility.
-ignore_kinesis_client_internal_api() {
+is_kinesis_client_internal_api() {
   local current_class="$1"
   local grep_internal_api_result=$(javap -v -classpath "$LATEST_JAR" "$current_class" | grep KinesisClientInternalApi)
-  if [[ "$grep_internal_api_result" != "" ]]
-  then
-    continue
-  fi
+  [[ "$grep_internal_api_result" != "" ]]
+  return $?
 }
 
 # Skip classes which are not public (e.g. package level). These classes will not break backwards compatibility.
-ignore_non_public_classes() {
+is_non_public_class() {
   local current_class="$1"
   local class_definition=$(javap -classpath "$LATEST_JAR" "$current_class" | head -2 | tail -1)
-  if [[ "$class_definition" != *"public"* ]]
-  then
-    continue
-  fi
+  [[ "$class_definition" != *"public"* ]]
+  return $?
 }
 
 # Ignore methods that change from abstract to non-abstract (and vice versa) if the class is an interface.
-ignore_abstract_changes_in_interfaces(){
+ignore_abstract_changes_in_interfaces() {
   local current_class="$1"
   local class_definition=$(javap -classpath "$LATEST_JAR" "$current_class" | head -2 | tail -1)
   if [[ $class_definition == *"interface"* ]]
   then
-    LATEST_METHODS=${latest_methods// abstract / }
-    CURRENT_METHODS=${current_methods// abstract / }
+    LATEST_METHODS=${LATEST_METHODS// abstract / }
+    CURRENT_METHODS=${CURRENT_METHODS// abstract / }
   fi
 }
 
 # Checks if there are any methods in the latest version that were removed in the current version.
 find_removed_methods() {
   echo "Checking if methods in current version (v$CURRENT_VERSION) were removed from latest version (v$LATEST_VERSION)"
-  local latest_classes=$(jar tf $LATEST_JAR | grep .class | tr / . |  sed 's/\.class$//' | sort)
+  local latest_classes=$(jar tf $LATEST_JAR | grep .class | tr / . |  sed 's/\.class$//')
   for class in $latest_classes
   do
-    ignore_kinesis_client_internal_api "$class"
-    ignore_non_public_classes "$class"
+
+    if is_kinesis_client_internal_api "$class" || is_non_public_class "$class"
+    then
+      continue
+    fi
 
     LATEST_METHODS=$(javap -classpath "$LATEST_JAR" "$class")
     CURRENT_METHODS=$(javap -classpath "$CURRENT_JAR" "$class")
 
     ignore_abstract_changes_in_interfaces "$class"
 
-    local removed_methods=$(diff <(echo "$latest_methods") <(echo "$current_methods") | grep '^<')
+    local removed_methods=$(diff <(echo "$LATEST_METHODS") <(echo "$CURRENT_METHODS") | grep '^<')
 
     if [[ "$removed_methods" != "" ]]
     then
