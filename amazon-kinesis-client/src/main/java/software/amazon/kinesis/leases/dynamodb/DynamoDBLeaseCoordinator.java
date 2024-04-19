@@ -169,7 +169,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      * @param leaseDurationMillis
      *            Duration of a lease
      * @param enablePriorityLeaseAssignment
-     *            Whether to do priority lease assignment for very expired leases
+     *            Whether to enable priority lease assignment for very expired leases
      * @param epsilonMillis
      *            Allow for some variance when calculating lease expirations
      * @param maxLeasesForWorker
