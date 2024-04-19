@@ -91,14 +91,14 @@ public class MultiLangDaemonConfigurationTest {
     }
 
     @Test
-    public void testSetAgedFailoverTimeMultiplier() {
+    public void testSetDoPriorityLeaseTaking() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
-        configuration.setAgedFailoverTimeMultiplier(5);
+        configuration.setDoPriorityLeaseTaking(Boolean.FALSE);
 
-        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration = configuration
-                .resolvedConfiguration(shardRecordProcessorFactory);
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration = configuration.resolvedConfiguration(
+                shardRecordProcessorFactory);
 
-        assertThat(resolvedConfiguration.leaseManagementConfig.agedFailoverTimeMultiplier(), equalTo(5));
+        assertThat(resolvedConfiguration.leaseManagementConfig.doPriorityLeaseTaking(), equalTo(false));
     }
 
     @Test

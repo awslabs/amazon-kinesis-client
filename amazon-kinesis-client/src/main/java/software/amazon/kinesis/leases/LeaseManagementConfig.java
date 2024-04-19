@@ -57,7 +57,7 @@ public class LeaseManagementConfig {
     public static final long DEFAULT_COMPLETED_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(5).toMillis();
     public static final long DEFAULT_GARBAGE_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(30).toMillis();
     public static final long DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 2 * 60 * 1000L;
-    public static final int DEFAULT_AGED_FAILOVER_TIME_MULTIPLIER = 3;
+    public static final boolean DEFAULT_DO_PRIORITY_LEASE_TAKING = true;
     public static final int DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY = 3;
 
 
@@ -104,13 +104,14 @@ public class LeaseManagementConfig {
     private long failoverTimeMillis = 10000L;
 
     /**
-     * Multiplier for the failoverTimeMillis in which leases which are expired for an extended period of time defined by
-     * (agedFailoverTimeMultiplier * failoverTimeMillis) are taken with priority, disregarding the target
-     * but obeying the maximum limit per worker.
+     * Whether workers should take very expired leases at priority. A very expired lease is when a worker does not
+     * renew its lease in 3 * {@link LeaseManagementConfig#failoverTimeMillis}. Very expired leases will be taken at
+     * priority for a worker which disregards the target leases for the worker but obeys
+     * {@link LeaseManagementConfig#maxLeasesForWorker}
      *
-     * <p>Default value: 3 </p>
+     * <p>Default value: true </p>
      */
-    private int agedFailoverTimeMultiplier = DEFAULT_AGED_FAILOVER_TIME_MULTIPLIER;
+    private boolean doPriorityLeaseTaking = DEFAULT_DO_PRIORITY_LEASE_TAKING;
 
     /**
      * Shard sync interval in milliseconds - e.g. wait for this long between shard sync tasks.
@@ -380,7 +381,7 @@ public class LeaseManagementConfig {
                     workerIdentifier(),
                     executorService(),
                     failoverTimeMillis(),
-                    agedFailoverTimeMultiplier(),
+                    doPriorityLeaseTaking(),
                     epsilonMillis(),
                     maxLeasesForWorker(),
                     maxLeasesToStealAtOneTime(),

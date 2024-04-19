@@ -48,6 +48,7 @@ public class DynamoDBLeaseTakerTest {
 
     private static final String WORKER_IDENTIFIER = "foo";
     private static final long LEASE_DURATION_MILLIS = 1000L;
+    private static final int DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER = 3;
     private static final int VERY_OLD_LEASE_DURATION_MULTIPLIER = 5;
     private static final long MOCK_CURRENT_TIME = 10000000000L;
 
@@ -148,6 +149,32 @@ public class DynamoDBLeaseTakerTest {
         Set<Lease> output = dynamoDBLeaseTakerWithCustomMultiplier.computeLeasesToTake(expiredLeases, timeProvider);
         final Set<Lease> expectedOutput = new HashSet<>();
         expectedOutput.add(allLeases.get(1));
+        assertEquals(expectedOutput, output);
+    }
+
+    @Test
+    public void test_disableDoPriorityLeaseTakingGetsCorrectLeases() throws Exception {
+        long veryOldThreshold = MOCK_CURRENT_TIME -
+                (TimeUnit.MILLISECONDS.toNanos(LEASE_DURATION_MILLIS) * DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER);
+        DynamoDBLeaseTaker dynamoDBLeaseTakerWithCustomMultiplier =
+                new DynamoDBLeaseTaker(leaseRefresher, WORKER_IDENTIFIER, LEASE_DURATION_MILLIS, metricsFactory)
+                        .withDoPriorityLeaseTaking(false);
+        final List<Lease> allLeases = new ArrayList<>();
+        allLeases.add(createLease("foo", "2", MOCK_CURRENT_TIME));
+        allLeases.add(createLease("bar", "3", veryOldThreshold - 1));
+        allLeases.add(createLease("baz", "4", veryOldThreshold + 1));
+        final List<Lease> expiredLeases = allLeases.subList(1, 3);
+
+        dynamoDBLeaseTakerWithCustomMultiplier.allLeases.putAll(
+                allLeases.stream().collect(Collectors.toMap(Lease::leaseKey, Function.identity())));
+        when(leaseRefresher.listLeases()).thenReturn(allLeases);
+        when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
+        when(timeProvider.call()).thenReturn(MOCK_CURRENT_TIME);
+
+        Set<Lease> output = dynamoDBLeaseTakerWithCustomMultiplier.computeLeasesToTake(expiredLeases, timeProvider);
+        final Set<Lease> expectedOutput = new HashSet<>();
+        expectedOutput.add(createLease("bar", "3", veryOldThreshold - 1));
+        expectedOutput.add(createLease("baz", "4", veryOldThreshold + 1));
         assertEquals(expectedOutput, output);
     }
 

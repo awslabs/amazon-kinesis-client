@@ -69,7 +69,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     // TODO: Remove these defaults and use the defaults in the config
     private int maxLeasesForWorker = Integer.MAX_VALUE;
     private int maxLeasesToStealAtOneTime = 1;
-
+    private boolean doPriorityLeaseTaking = true;
     private int veryOldLeaseDurationNanosMultiplier = 3;
     private long lastScanTimeNanos = 0L;
 
@@ -121,6 +121,11 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      */
     public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultiplier(int veryOldLeaseDurationNanosMultiplier) {
         this.veryOldLeaseDurationNanosMultiplier = veryOldLeaseDurationNanosMultiplier;
+        return this;
+    }
+
+    public DynamoDBLeaseTaker withDoPriorityLeaseTaking(boolean doPriorityLeaseTaking) {
+        this.doPriorityLeaseTaking = doPriorityLeaseTaking;
         return this;
     }
 
@@ -441,25 +446,28 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             // If there are leases that have been expired for an extended period of
             // time, take them with priority, disregarding the target (computed
             // later) but obeying the maximum limit per worker.
-            long currentNanoTime;
-            try {
-                currentNanoTime = timeProvider.call();
-            } catch (Exception e) {
-                throw new DependencyException("Exception caught from timeProvider", e);
-            }
-            final long nanoThreshold = currentNanoTime - (veryOldLeaseDurationNanosMultiplier * leaseDurationNanos);
-            final List<Lease> veryOldLeases = allLeases.values().stream()
-                    .filter(lease -> nanoThreshold > lease.lastCounterIncrementNanos())
-                    .collect(Collectors.toList());
-
-            if (!veryOldLeases.isEmpty()) {
-                Collections.shuffle(veryOldLeases);
-                veryOldLeaseCount = Math.max(0, Math.min(maxLeasesForWorker - currentLeaseCount, veryOldLeases.size()));
-                HashSet<Lease> result = new HashSet<>(veryOldLeases.subList(0, veryOldLeaseCount));
-                if (veryOldLeaseCount > 0) {
-                    log.info("Taking leases that have been expired for a long time: {}", result);
+            if (doPriorityLeaseTaking) {
+                long currentNanoTime;
+                try {
+                    currentNanoTime = timeProvider.call();
+                } catch (Exception e) {
+                    throw new DependencyException("Exception caught from timeProvider", e);
                 }
-                return result;
+                final long nanoThreshold = currentNanoTime - (veryOldLeaseDurationNanosMultiplier * leaseDurationNanos);
+                final List<Lease> veryOldLeases = allLeases.values()
+                                                           .stream()
+                                                           .filter(lease -> nanoThreshold > lease.lastCounterIncrementNanos())
+                                                           .collect(Collectors.toList());
+
+                if (!veryOldLeases.isEmpty()) {
+                    Collections.shuffle(veryOldLeases);
+                    veryOldLeaseCount = Math.max(0, Math.min(maxLeasesForWorker - currentLeaseCount, veryOldLeases.size()));
+                    HashSet<Lease> result = new HashSet<>(veryOldLeases.subList(0, veryOldLeaseCount));
+                    if (veryOldLeaseCount > 0) {
+                        log.info("Taking leases that have been expired for a long time: {}", result);
+                    }
+                    return result;
+                }
             }
 
             if (numLeasesToReachTarget <= 0) {
