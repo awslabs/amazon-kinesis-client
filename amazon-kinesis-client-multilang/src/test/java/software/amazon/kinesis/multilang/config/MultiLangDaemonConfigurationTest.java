@@ -91,14 +91,14 @@ public class MultiLangDaemonConfigurationTest {
     }
 
     @Test
-    public void testSetDoPriorityLeaseTaking() {
+    public void testSetEnablePriorityLeaseAssignment() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
-        configuration.setDoPriorityLeaseTaking(Boolean.FALSE);
+        configuration.setEnablePriorityLeaseAssignment(false);
 
         MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration = configuration.resolvedConfiguration(
                 shardRecordProcessorFactory);
 
-        assertThat(resolvedConfiguration.leaseManagementConfig.doPriorityLeaseTaking(), equalTo(false));
+        assertThat(resolvedConfiguration.leaseManagementConfig.enablePriorityLeaseAssignment(), equalTo(false));
     }
 
     @Test

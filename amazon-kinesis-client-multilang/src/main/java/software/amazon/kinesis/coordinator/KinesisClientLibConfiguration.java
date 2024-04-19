@@ -217,7 +217,7 @@ public class KinesisClientLibConfiguration {
     private AwsCredentialsProvider dynamoDBCredentialsProvider;
     private AwsCredentialsProvider cloudWatchCredentialsProvider;
     private long failoverTimeMillis;
-    private boolean doPriorityLeaseTaking;
+    private boolean enablePriorityLeaseAssignment;
     private String workerIdentifier;
     private long shardSyncIntervalMillis;
     private int maxRecords;
@@ -960,8 +960,8 @@ public class KinesisClientLibConfiguration {
         return this;
     }
 
-    public KinesisClientLibConfiguration withDoPriorityLeaseTaking(boolean doPriorityLeaseTaking) {
-        this.doPriorityLeaseTaking = doPriorityLeaseTaking;
+    public KinesisClientLibConfiguration withEnablePriorityLeaseAssignment(boolean enablePriorityLeaseAssignment) {
+        this.enablePriorityLeaseAssignment = enablePriorityLeaseAssignment;
         return this;
     }
 

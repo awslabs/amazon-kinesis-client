@@ -57,7 +57,7 @@ public class LeaseManagementConfig {
     public static final long DEFAULT_COMPLETED_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(5).toMillis();
     public static final long DEFAULT_GARBAGE_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(30).toMillis();
     public static final long DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 2 * 60 * 1000L;
-    public static final boolean DEFAULT_DO_PRIORITY_LEASE_TAKING = true;
+    public static final boolean DEFAULT_ENABLE_PRIORITY_LEASE_ASSIGNMENT = true;
     public static final int DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY = 3;
 
 
@@ -107,11 +107,12 @@ public class LeaseManagementConfig {
      * Whether workers should take very expired leases at priority. A very expired lease is when a worker does not
      * renew its lease in 3 * {@link LeaseManagementConfig#failoverTimeMillis}. Very expired leases will be taken at
      * priority for a worker which disregards the target leases for the worker but obeys
-     * {@link LeaseManagementConfig#maxLeasesForWorker}
+     * {@link LeaseManagementConfig#maxLeasesForWorker}. New leases for new shards due to shard mutation are
+     * considered to be very expired and taken with priority.
      *
      * <p>Default value: true </p>
      */
-    private boolean doPriorityLeaseTaking = DEFAULT_DO_PRIORITY_LEASE_TAKING;
+    private boolean enablePriorityLeaseAssignment = DEFAULT_ENABLE_PRIORITY_LEASE_ASSIGNMENT;
 
     /**
      * Shard sync interval in milliseconds - e.g. wait for this long between shard sync tasks.
@@ -381,7 +382,7 @@ public class LeaseManagementConfig {
                     workerIdentifier(),
                     executorService(),
                     failoverTimeMillis(),
-                    doPriorityLeaseTaking(),
+                    enablePriorityLeaseAssignment(),
                     epsilonMillis(),
                     maxLeasesForWorker(),
                     maxLeasesToStealAtOneTime(),

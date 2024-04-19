@@ -153,7 +153,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                                     final long initialLeaseTableWriteCapacity,
                                     final MetricsFactory metricsFactory) {
         this(leaseRefresher, workerIdentifier, leaseDurationMillis,
-                LeaseManagementConfig.DEFAULT_DO_PRIORITY_LEASE_TAKING, epsilonMillis, maxLeasesForWorker,
+                LeaseManagementConfig.DEFAULT_ENABLE_PRIORITY_LEASE_ASSIGNMENT, epsilonMillis, maxLeasesForWorker,
                 maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount,
                 TableConstants.DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY,
                 TableConstants.DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
@@ -168,8 +168,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      *            Identifies the worker (e.g. useful to track lease ownership)
      * @param leaseDurationMillis
      *            Duration of a lease
-     * @param doPriorityLeaseTaking
-     *            Whether to do priority lease taking for very expired leases
+     * @param enablePriorityLeaseAssignment
+     *            Whether to do priority lease assignment for very expired leases
      * @param epsilonMillis
      *            Allow for some variance when calculating lease expirations
      * @param maxLeasesForWorker
@@ -186,7 +186,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     public DynamoDBLeaseCoordinator(final LeaseRefresher leaseRefresher,
             final String workerIdentifier,
             final long leaseDurationMillis,
-            final boolean doPriorityLeaseTaking,
+            final boolean enablePriorityLeaseAssignment,
             final long epsilonMillis,
             final int maxLeasesForWorker,
             final int maxLeasesToStealAtOneTime,
@@ -199,7 +199,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         this.leaseTaker = new DynamoDBLeaseTaker(leaseRefresher, workerIdentifier, leaseDurationMillis, metricsFactory)
                 .withMaxLeasesForWorker(maxLeasesForWorker)
                 .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime)
-                .withDoPriorityLeaseTaking(doPriorityLeaseTaking);
+                .withEnablePriorityLeaseAssignment(enablePriorityLeaseAssignment);
         this.leaseRenewer = new DynamoDBLeaseRenewer(
                 leaseRefresher, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool, metricsFactory);
         this.renewerIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, epsilonMillis);

@@ -69,7 +69,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     // TODO: Remove these defaults and use the defaults in the config
     private int maxLeasesForWorker = Integer.MAX_VALUE;
     private int maxLeasesToStealAtOneTime = 1;
-    private boolean doPriorityLeaseTaking = true;
+    private boolean enablePriorityLeaseAssignment = true;
     private int veryOldLeaseDurationNanosMultiplier = 3;
     private long lastScanTimeNanos = 0L;
 
@@ -124,8 +124,8 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
         return this;
     }
 
-    public DynamoDBLeaseTaker withDoPriorityLeaseTaking(boolean doPriorityLeaseTaking) {
-        this.doPriorityLeaseTaking = doPriorityLeaseTaking;
+    public DynamoDBLeaseTaker withEnablePriorityLeaseAssignment(boolean enablePriorityLeaseAssignment) {
+        this.enablePriorityLeaseAssignment = enablePriorityLeaseAssignment;
         return this;
     }
 
@@ -446,7 +446,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             // If there are leases that have been expired for an extended period of
             // time, take them with priority, disregarding the target (computed
             // later) but obeying the maximum limit per worker.
-            if (doPriorityLeaseTaking) {
+            if (enablePriorityLeaseAssignment) {
                 long currentNanoTime;
                 try {
                     currentNanoTime = timeProvider.call();
