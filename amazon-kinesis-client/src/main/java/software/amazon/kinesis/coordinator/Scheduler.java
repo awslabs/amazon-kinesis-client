@@ -49,8 +49,11 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.arns.Arn;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -97,6 +100,7 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
+import static software.amazon.kinesis.common.ArnUtil.constructStreamArn;
 import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType;
 import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION;
 
@@ -153,7 +157,7 @@ public class Scheduler implements Runnable {
     private final long failoverTimeMillis;
     private final long taskBackoffTimeMillis;
     private final boolean isMultiStreamMode;
-    private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap = new ConcurrentHashMap<>();
+    private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap = new StreamConfigMap();
     private final StreamTracker streamTracker;
     private final FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy;
     private final long listShardsBackoffTimeMillis;
@@ -961,7 +965,7 @@ public class Scheduler implements Runnable {
         // to gracefully complete the reading.
         StreamConfig streamConfig = currentStreamConfigMap.get(streamIdentifier);
         if (streamConfig == null) {
-            streamConfig = streamTracker.createStreamConfig(streamIdentifier);
+            streamConfig = withStreamArn(streamTracker.createStreamConfig(streamIdentifier), getKinesisRegion());
             log.info("Created orphan {}", streamConfig);
         }
         Validate.notNull(streamConfig, "StreamConfig should not be null");
@@ -1049,6 +1053,67 @@ public class Scheduler implements Runnable {
         }
         Validate.notNull(streamIdentifier, "Stream identifier should not be empty");
         return streamIdentifier;
+    }
+
+    private Region getKinesisRegion() {
+        return retrievalConfig.kinesisClient().serviceClientConfiguration().region();
+    }
+
+    /**
+     * Create and return a copy of a {@link StreamConfig} object
+     * with {@link StreamIdentifier#streamArnOptional()} populated.
+     * Only to be used in multi-stream mode.
+     *
+     * @param streamConfig The {@link StreamConfig} object to return a copy of.
+     * @param kinesisRegion The {@link Region} the stream exists in, to be used for constructing the {@link Arn}.
+     * @return A copy of the {@link StreamConfig} with {@link StreamIdentifier#streamArnOptional()} populated.
+     */
+    private static StreamConfig withStreamArn(
+            @NonNull final StreamConfig streamConfig, @NonNull final Region kinesisRegion) {
+        Validate.isTrue(streamConfig.streamIdentifier().accountIdOptional().isPresent(),
+                "accountId should not be empty");
+        Validate.isTrue(streamConfig.streamIdentifier().streamCreationEpochOptional().isPresent(),
+                "streamCreationEpoch should not be empty");
+
+        log.info("Constructing stream ARN for {} using the Kinesis client's configured region - {}.",
+                streamConfig.streamIdentifier(), kinesisRegion);
+
+        final StreamIdentifier streamIdentifierWithArn = StreamIdentifier.multiStreamInstance(
+                constructStreamArn(
+                        kinesisRegion,
+                        streamConfig.streamIdentifier().accountIdOptional().get(),
+                        streamConfig.streamIdentifier().streamName()),
+                streamConfig.streamIdentifier().streamCreationEpochOptional().get());
+
+        return new StreamConfig(
+                streamIdentifierWithArn, streamConfig.initialPositionInStreamExtended(), streamConfig.consumerArn());
+    }
+
+    @RequiredArgsConstructor
+    private class StreamConfigMap extends ConcurrentHashMap<StreamIdentifier, StreamConfig> {
+        /**
+         * If {@link StreamIdentifier#streamArnOptional()} is present for the provided
+         * {@link StreamConfig#streamIdentifier()}, validates that the region in the stream ARN is consistent with the
+         * region that the Kinesis client ({@link RetrievalConfig#kinesisClient()}) is configured with.
+         * <p>
+         * In multi-stream mode, ensures stream ARN is always present by constructing it using the Kinesis client
+         * region when {@link StreamIdentifier#streamArnOptional()} is {@link Optional#empty()}.
+         * <p>
+         * {@inheritDoc}
+         */
+        @Override
+        public StreamConfig put(
+                @NonNull final StreamIdentifier streamIdentifier, @NonNull final StreamConfig streamConfig) {
+            final Region kinesisRegion = getKinesisRegion();
+
+            return super.put(streamIdentifier, streamConfig.streamIdentifier().streamArnOptional()
+                    .map(streamArn -> {
+                        Validate.isTrue(kinesisRegion.id().equals(streamArn.region().get()),
+                                "The provided streamARN " + streamArn
+                                        + " does not match the Kinesis client's configured region - " + kinesisRegion);
+                        return streamConfig;
+                    }).orElse(isMultiStreamMode ? withStreamArn(streamConfig, kinesisRegion) : streamConfig));
+        }
     }
 
     /**
