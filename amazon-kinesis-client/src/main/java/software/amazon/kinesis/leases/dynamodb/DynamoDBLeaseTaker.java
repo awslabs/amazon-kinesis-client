@@ -373,15 +373,9 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * @return list of leases that available as of our last scan.
      */
     private List<Lease> getAvailableLeases() {
-        List<Lease> availableLeases = new ArrayList<>();
-
-        for (Lease lease : allLeases.values()) {
-            if (lease.isAvailable(leaseDurationNanos, lastScanTimeNanos)) {
-                availableLeases.add(lease);
-            }
-        }
-
-        return availableLeases;
+        return allLeases.values().stream()
+            .filter(lease->lease.isAvailable(leaseDurationNanos, lastScanTimeNanos))
+            .collect(Collectors.toList());
     }
 
     /**

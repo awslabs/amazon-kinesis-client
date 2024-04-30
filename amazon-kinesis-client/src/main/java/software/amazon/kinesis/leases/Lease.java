@@ -174,7 +174,7 @@ public class Lease {
     /**
      * @param leaseDurationNanos duration of lease in nanoseconds
      * @param asOfNanos time in nanoseconds to check expiration as-of
-     * @return true if lease lease is ready te taken
+     * @return true if lease lease is ready to be taken
      */
     public boolean isAvailable(long leaseDurationNanos, long asOfNanos) {
         return isUnassigned() || isExpired(leaseDurationNanos, asOfNanos);
