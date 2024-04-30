@@ -15,10 +15,14 @@
 
 package software.amazon.kinesis.common;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 
+@AllArgsConstructor
+@RequiredArgsConstructor
 @Data
 @Accessors(fluent = true)
 public class StreamConfig {
