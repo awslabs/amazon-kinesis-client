@@ -174,6 +174,15 @@ public class Lease {
     /**
      * @param leaseDurationNanos duration of lease in nanoseconds
      * @param asOfNanos time in nanoseconds to check expiration as-of
+     * @return true if lease lease is ready to be taken
+     */
+    public boolean isAvailable(long leaseDurationNanos, long asOfNanos) {
+        return isUnassigned() || isExpired(leaseDurationNanos, asOfNanos);
+    }
+
+    /**
+     * @param leaseDurationNanos duration of lease in nanoseconds
+     * @param asOfNanos time in nanoseconds to check expiration as-of
      * @return true if lease is expired as-of given time, false otherwise
      */
     public boolean isExpired(long leaseDurationNanos, long asOfNanos) {
@@ -188,6 +197,13 @@ public class Lease {
         } else {
             return age > leaseDurationNanos;
         }
+    }
+
+    /**
+     * @return true if lease is not currently owned
+     */
+    private boolean isUnassigned() {
+        return leaseOwner == null;
     }
 
     /**
