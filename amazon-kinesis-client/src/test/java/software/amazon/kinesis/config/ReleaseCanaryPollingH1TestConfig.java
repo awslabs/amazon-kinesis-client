@@ -1,12 +1,10 @@
 package software.amazon.kinesis.config;
 
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.retrieval.RetrievalConfig;
-import software.amazon.kinesis.retrieval.polling.PollingConfig;
 
-import java.io.IOException;
-import java.net.URISyntaxException;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -16,9 +14,17 @@ public class ReleaseCanaryPollingH1TestConfig extends KCLAppConfig {
 
     private final UUID uniqueId = UUID.randomUUID();
 
+    private final String applicationName = "PollingH1Test";
+    private final String streamName = "2XPollingH1TestStream_" + uniqueId;
+
     @Override
-    public String getStreamName() {
-        return "KCLReleaseCanary2XPollingH1TestStream_" + uniqueId;
+    public String getTestName() {
+        return applicationName;
+    }
+
+    @Override
+    public List<Arn> getStreamArns() {
+        return Collections.singletonList(buildStreamArn(streamName));
     }
 
     @Override
@@ -27,15 +33,7 @@ public class ReleaseCanaryPollingH1TestConfig extends KCLAppConfig {
     }
 
     @Override
-    public RetrievalConfig getRetrievalConfig() throws IOException, URISyntaxException {
-
-        final InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
-                .newInitialPosition(getInitialPosition());
-
-        final RetrievalConfig config = getConfigsBuilder().retrievalConfig();
-        config.initialPositionInStreamExtended(initialPosition);
-        config.retrievalSpecificConfig(new PollingConfig(getStreamName(), config.kinesisClient()));
-
-        return config;
+    public RetrievalMode getRetrievalMode() {
+        return RetrievalMode.POLLING;
     }
 }
