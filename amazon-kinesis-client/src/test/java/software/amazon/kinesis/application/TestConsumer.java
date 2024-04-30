@@ -44,6 +44,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.junit.Assume.assumeTrue;
+
 @Slf4j
 public class TestConsumer {
     public final KCLAppConfig consumerConfig;
@@ -79,8 +81,9 @@ public class TestConsumer {
 
     public void run() throws Exception {
 
+        // Skip cross account tests if no cross account credentials are provided
         if (consumerConfig.isCrossAccount()) {
-            verifyCrossAccountCreds();
+            assumeTrue(consumerConfig.getCrossAccountCredentialsProvider() != null);
         }
 
         final StreamExistenceManager streamExistenceManager = new StreamExistenceManager(this.consumerConfig);
@@ -123,13 +126,6 @@ public class TestConsumer {
         } finally {
             // Clean up resources created
             deleteResources(streamExistenceManager, leaseTableManager);
-        }
-    }
-
-    private void verifyCrossAccountCreds() {
-        if (consumerConfig.getCrossAccountCredentialsProvider() == null) {
-            throw new RuntimeException("To run cross account integration tests, pass in an AWS profile with -D" +
-                    KCLAppConfig.CROSS_ACCOUNT_PROFILE_PROPERTY);
         }
     }
 
