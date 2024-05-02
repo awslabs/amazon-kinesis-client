@@ -179,6 +179,10 @@ public class ShardConsumer {
                         // Task rejection during the subscribe() call will not be propagated back as it not executed
                         // in the context of the Scheduler thread. Hence we should not assume the subscription will
                         // always be successful.
+                        // But if subscription was not successful, then it will recover
+                        // during healthCheck which will restart subscription.
+                        // From Shardconsumer point of view, initialization after the below subscribe call
+                        // is complete
                         subscribe();
                         needsInitialization = false;
                     }
@@ -276,6 +280,16 @@ public class ShardConsumer {
 
     @VisibleForTesting
     synchronized CompletableFuture<Boolean> initializeComplete() {
+        if (!needsInitialization) {
+            // initialization already complete, this must be a no-op.
+            // ShardConsumer must be in ProcessingState and
+            // any further activity will be driven by publisher pushing data to subscriber
+            // which invokes handleInput and that triggers ProcessTask.
+            // Scheduler is only meant to do health-checks to ensure the consumer
+            // is not stuck for any reason and to do shutdown handling.
+            return CompletableFuture.completedFuture(true);
+        }
+
         if (taskOutcome != null) {
             updateState(taskOutcome);
         }
