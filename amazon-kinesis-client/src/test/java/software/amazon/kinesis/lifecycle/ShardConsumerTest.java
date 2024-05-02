@@ -868,26 +868,31 @@ public class ShardConsumerTest {
         when(mockState.taskType()).thenReturn(TaskType.BLOCK_ON_PARENT_SHARDS);
         ConsumerTask mockTask = mock(ConsumerTask.class);
         when(mockState.createTask(any(), any(), any())).thenReturn(mockTask);
+        // Simulate successful BlockedOnParent task execution
+        // and successful Initialize task execution
         when(mockTask.call()).thenReturn(new TaskResult(false));
 
-        // Invoke async processing of blocked on parent task
+        log.info("Scheduler Thread: Invoking ShardConsumer.executeLifecycle() to initiate async" +
+            " processing of blocked on parent task");
         consumer.executeLifecycle();
         ArgumentCaptor<Runnable> taskToExecute = ArgumentCaptor.forClass(Runnable.class);
         verify(mockExecutor, timeout(100)).execute(taskToExecute.capture());
         taskToExecute.getValue().run();
+        log.info("RecordProcessor Thread: Simulated successful execution of Blocked on parent task");
         reset(mockExecutor);
 
-        // move to initializing state and
-        // Invoke async processing of initialize state
+        log.info("Scheduler Thread: Invoking ShardConsumer.executeLifecycle() to move to InitializingState" +
+            " and initiate async processing of initialize task");
         when(mockState.successTransition()).thenReturn(mockState);
         when(mockState.state()).thenReturn(ShardConsumerState.INITIALIZING);
         when(mockState.taskType()).thenReturn(TaskType.INITIALIZE);
         consumer.executeLifecycle();
         verify(mockExecutor, timeout(100)).execute(taskToExecute.capture());
+        log.info("RecordProcessor Thread: Simulated successful execution of Initialize task");
         taskToExecute.getValue().run();
 
-        // Move to processing state
-        // and complete initialization future successfully
+        log.info("Scheduler Thread: Invoking ShardConsumer.executeLifecycle() to move to ProcessingState" +
+            " and mark initialization future as complete");
         when(mockState.state()).thenReturn(ShardConsumerState.PROCESSING);
         consumer.executeLifecycle();
 
@@ -908,17 +913,18 @@ public class ShardConsumerTest {
             when(mockState.taskType()).thenReturn(TaskType.PROCESS);
             ConsumerTask mockProcessTask = mock(ConsumerTask.class);
             when(mockState.createTask(any(), any(), any())).thenReturn(mockProcessTask);
-            CountDownLatch waitForSubscribeLatch = new CountDownLatch(1);
             when(mockProcessTask.call()).then(input -> {
                 // first we want to wait for subscribe to be called,
                 // but we cannot control the timing, so wait for 10 seconds
                 // to let the main thread invoke executeLifecyle which
                 // will perform subscribe
                 processTaskLatch.countDown();
-                log.info("Waiting for countdown latch");
-                waitForSubscribeLatch.await(10, TimeUnit.SECONDS);
-                log.info("Waiting for countdown latch - DONE");
+                log.info("Record Processor Thread: Holding shardConsumer lock, waiting for 10 seconds to" +
+                    " let subscribe be called by scheduler thread");
+                Thread.sleep(10 * 1000);
+                log.info("RecordProcessor Thread: Done waiting");
                 // then return shard end result
+                log.info("RecordProcessor Thread: Simulating execution of ProcessTask and returning shard-end result");
                 return new TaskResult(true);
             });
             Subscription mockSubscription = mock(Subscription.class);
@@ -927,10 +933,10 @@ public class ShardConsumerTest {
 
         processTaskLatch.await();
 
-        // now invoke lifecycle which should invoke subscribe
-        // but since we cannot countdown the latch, the latch will timeout
+        // invoke executeLifecycle, which should invoke subscribe
         // meanwhile if scheduler tries to acquire the ShardConsumer lock it will
-        // be blocked during initialization processing. Thereby creating the
+        // be blocked during initialization processing because handleInput was
+        // already invoked and will be holding the lock. Thereby creating the
         // race condition we want.
         reset(mockState);
         AtomicBoolean successTransitionCalled = new AtomicBoolean(false);
@@ -949,12 +955,14 @@ public class ShardConsumerTest {
            }
            return ShardConsumerState.PROCESSING;
         });
+        log.info("Scheduler Thread: Invoking ShardConsumer.executeLifecycle() to invoke subscribe and" +
+            " complete initialization");
         consumer.executeLifecycle();
         // initialization should be done by now, make sure shard consumer did not
         // perform shutdown processing yet.
+        log.info("Verifying scheduler did not perform shutdown transition during initialization");
         verify(mockState, times(0)).shutdownTransition(any());
     }
-
 
     private void mockSuccessfulShutdown(CyclicBarrier taskCallBarrier) {
         mockSuccessfulShutdown(taskCallBarrier, null);
