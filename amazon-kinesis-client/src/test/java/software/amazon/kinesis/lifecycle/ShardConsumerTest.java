@@ -958,8 +958,8 @@ public class ShardConsumerTest {
         log.info("Scheduler Thread: Invoking ShardConsumer.executeLifecycle() to invoke subscribe and" +
             " complete initialization");
         consumer.executeLifecycle();
-        // initialization should be done by now, make sure shard consumer did not
-        // perform shutdown processing yet.
+        log.info("Scheduler Thread: Done initializing the ShardConsumer");
+
         log.info("Verifying scheduler did not perform shutdown transition during initialization");
         verify(mockState, times(0)).shutdownTransition(any());
     }
