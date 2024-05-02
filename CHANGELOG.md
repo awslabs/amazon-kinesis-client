@@ -3,6 +3,16 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.6.0 (2024-05-01)
+* [#1317](https://github.com/awslabs/amazon-kinesis-client/pull/1317) Add enablePriorityLeaseAssignment config
+* [#1320](https://github.com/awslabs/amazon-kinesis-client/pull/1320) Update lease taker to get unassigned leases
+* [#1318](https://github.com/awslabs/amazon-kinesis-client/pull/1318) Internally construct and use stream ARNs for all streams in multi-stream mode
+* [#1291](https://github.com/awslabs/amazon-kinesis-client/pull/1291) Update RetrievalFactory implementations to utilize the StreamIdentifier field of StreamConfig
+* [#1308](https://github.com/awslabs/amazon-kinesis-client/pull/1308) Move shutdownComplete call to ShardConsumer
+* [#1313](https://github.com/awslabs/amazon-kinesis-client/pull/1313) Add additional integration tests for multi-stream and cross account access
+* [#1273](https://github.com/awslabs/amazon-kinesis-client/pull/1273) Optimize currentStreamConfigMap by cleaning up lingering streams
+* [#1302](https://github.com/awslabs/amazon-kinesis-client/pull/1302) Fix gracefulShutdown behavior in Scheduler
+
 ### Release 2.5.8 (2024-03-27)
 * [#1278](https://github.com/awslabs/amazon-kinesis-client/pull/1278) Upgrade awssdk.version from 2.25.3 to 2.25.11 
 * [#1279](https://github.com/awslabs/amazon-kinesis-client/pull/1279) Upgrade org.apache.maven.plugins:maven-gpg-plugin from 3.1.0 to 3.2.1 
