@@ -995,14 +995,14 @@ public class SchedulerTest {
     }
 
     @Test
-    public void testNoDdbLookUpAsStreamMapContainsAllStreams() throws Exception {
+    public void testSyncLeaseAsThisIsInitialAppBootstrapEvenThoughStreamMapContainsAllStreams() {
         final List<StreamConfig> streamConfigList = createDummyStreamConfigList(1, 6);
         when(multiStreamTracker.streamConfigList()).thenReturn(Collections.emptyList());
         prepareMultiStreamScheduler(streamConfigList);
         // Populate currentStreamConfigMap to simulate that the leader has the latest streams.
         multiStreamTracker.streamConfigList().forEach(s -> scheduler.currentStreamConfigMap().put(s.streamIdentifier(), s));
-        scheduler.checkAndSyncStreamShardsAndLeases();
-        verify(scheduler, never()).syncStreamsFromLeaseTableOnAppInit(any());
+        scheduler.runProcessLoop();
+        verify(scheduler).syncStreamsFromLeaseTableOnAppInit(any());
         assertTrue(scheduler.currentStreamConfigMap().size() != 0);
     }
 

@@ -476,29 +476,29 @@ public class Scheduler implements Runnable {
                 final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = streamTracker.streamConfigList()
                         .stream().collect(Collectors.toMap(StreamConfig::streamIdentifier, Function.identity()));
                 // This is done to ensure that we clean up the stale streams lingering in the lease table.
-                if (!leaderSynced.get() || !leasesSyncedOnAppInit) {
-                    // Only sync from lease table again if the currentStreamConfigMap and newStreamConfigMap contain
-                    // different set of streams.
-                    if (!newStreamConfigMap.keySet().equals(currentStreamConfigMap.keySet())) {
-                        log.info("Syncing leases for leader to catch up");
-                        final List<MultiStreamLease> leaseTableLeases = fetchMultiStreamLeases();
-                        syncStreamsFromLeaseTableOnAppInit(leaseTableLeases);
-                        final Set<StreamIdentifier> streamsFromLeaseTable = leaseTableLeases.stream()
-                                .map(lease -> StreamIdentifier.multiStreamInstance(lease.streamIdentifier()))
-                                .collect(Collectors.toSet());
-                        // Remove stream from currentStreamConfigMap if this stream in not in the lease table and newStreamConfigMap.
-                        // This means that the leases have already been deleted by the last leader.
-                        currentStreamConfigMap.keySet().stream()
-                                .filter(streamIdentifier -> !newStreamConfigMap.containsKey(streamIdentifier)
-                                        && !streamsFromLeaseTable.contains(streamIdentifier)).forEach(stream -> {
-                                    log.info("Removing stream {} from currentStreamConfigMap due to not being active", stream);
-                                    currentStreamConfigMap.remove(stream);
-                                    staleStreamDeletionMap.remove(stream);
-                                    streamsSynced.add(stream);
-                                });
-                    }
-                    leasesSyncedOnAppInit = true;
+                // Only sync from lease table again if the currentStreamConfigMap and newStreamConfigMap contain
+                // different set of streams and Leader has not synced the leases yet
+                // or this is the first app bootstrap.
+                if ((!leaderSynced.get() && !newStreamConfigMap.keySet().equals(currentStreamConfigMap.keySet()))
+                        || !leasesSyncedOnAppInit) {
+                    log.info("Syncing leases for leader to catch up");
+                    final List<MultiStreamLease> leaseTableLeases = fetchMultiStreamLeases();
+                    syncStreamsFromLeaseTableOnAppInit(leaseTableLeases);
+                    final Set<StreamIdentifier> streamsFromLeaseTable = leaseTableLeases.stream()
+                            .map(lease -> StreamIdentifier.multiStreamInstance(lease.streamIdentifier()))
+                            .collect(Collectors.toSet());
+                    // Remove stream from currentStreamConfigMap if this stream in not in the lease table and newStreamConfigMap.
+                    // This means that the leases have already been deleted by the last leader.
+                    currentStreamConfigMap.keySet().stream()
+                            .filter(streamIdentifier -> !newStreamConfigMap.containsKey(streamIdentifier)
+                                    && !streamsFromLeaseTable.contains(streamIdentifier)).forEach(stream -> {
+                                log.info("Removing stream {} from currentStreamConfigMap due to not being active", stream);
+                                currentStreamConfigMap.remove(stream);
+                                staleStreamDeletionMap.remove(stream);
+                                streamsSynced.add(stream);
+                            });
                 }
+                leasesSyncedOnAppInit = true;
 
                 // For new streams discovered, do a shard sync and update the currentStreamConfigMap
                 for (StreamIdentifier streamIdentifier : newStreamConfigMap.keySet()) {
