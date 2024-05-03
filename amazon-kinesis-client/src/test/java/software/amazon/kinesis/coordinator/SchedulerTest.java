@@ -1154,7 +1154,7 @@ public class SchedulerTest {
     }
 
     @Test
-    public void testMismatchingArnRegionAndKinesisClientRegionThrowsException() {
+    public void testMismatchingArnRegionAndKinesisClientRegionOnSchedulerConstructionThrowsException() {
         final Region streamArnRegion = Region.US_WEST_1;
         Assert.assertNotEquals(streamArnRegion, kinesisClient.serviceClientConfiguration().region());
 
@@ -1167,6 +1167,35 @@ public class SchedulerTest {
 
         assertThrows(IllegalArgumentException.class, () -> new Scheduler(checkpointConfig, coordinatorConfig,
                 leaseManagementConfig, lifecycleConfig, metricsConfig, processorConfig, retrievalConfig));
+    }
+
+    @Test
+    public void testDynamicallyAddedStreamsWithRegionMismatchingKinesisClientRegionAreIgnored() throws Exception {
+        final Region mismatchingStreamRegion = Region.US_WEST_1;
+        final Region kinesisClientRegion = kinesisClient.serviceClientConfiguration().region();
+        Assert.assertNotEquals(mismatchingStreamRegion, kinesisClientRegion);
+
+        final StreamIdentifier streamWithMismatchingRegion = StreamIdentifier.multiStreamInstance(
+                Arn.fromString(constructStreamArnStr(mismatchingStreamRegion, TEST_ACCOUNT, "stream-1")), TEST_EPOCH);
+
+        final StreamIdentifier streamWithMatchingRegion = StreamIdentifier.multiStreamInstance(
+                Arn.fromString(constructStreamArnStr(kinesisClientRegion, TEST_ACCOUNT, "stream-2")), TEST_EPOCH);
+
+        when(multiStreamTracker.streamConfigList()).thenReturn(
+                Collections.emptyList(),    // returned on scheduler construction
+                Arrays.asList(              // returned on stream sync
+                        new StreamConfig(streamWithMismatchingRegion, TEST_INITIAL_POSITION),
+                        new StreamConfig(streamWithMatchingRegion, TEST_INITIAL_POSITION)));
+        retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
+                .retrievalFactory(retrievalFactory);
+        scheduler = spy(new Scheduler(checkpointConfig, coordinatorConfig,
+                leaseManagementConfig, lifecycleConfig, metricsConfig, processorConfig, retrievalConfig));
+        when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
+
+        final Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
+        final Set<StreamIdentifier> currentStreamConfigMapKeys = scheduler.currentStreamConfigMap().keySet();
+        assertFalse(Sets.union(currentStreamConfigMapKeys, syncedStreams).contains(streamWithMismatchingRegion));
+        assertTrue(Sets.union(currentStreamConfigMapKeys, syncedStreams).contains(streamWithMatchingRegion));
     }
 
     private static String constructStreamIdentifierSer(long accountId, String streamName) {

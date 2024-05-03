@@ -123,6 +123,7 @@ public class Scheduler implements Runnable {
     private static final String PENDING_STREAMS_DELETION_COUNT = "StreamsPendingDeletion.Count";
     private static final String DELETED_STREAMS_COUNT = "DeletedStreams.Count";
     private static final String NON_EXISTING_STREAM_DELETE_COUNT = "NonExistingStreamDelete.Count";
+    private static final String IGNORED_STREAMS_COUNT = "IgnoredStreams.Count";
 
     private final SchedulerLog slog = new SchedulerLog();
 
@@ -504,10 +505,17 @@ public class Scheduler implements Runnable {
                 for (StreamIdentifier streamIdentifier : newStreamConfigMap.keySet()) {
                     if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
                         final StreamConfig streamConfig = newStreamConfigMap.get(streamIdentifier);
+                        try {
+                            currentStreamConfigMap.put(streamIdentifier, streamConfig);
+                        } catch (IllegalArgumentException e) {
+                            log.error("Failed to add stream {} to application. This stream will not be processed.",
+                                    streamConfig.streamIdentifier(), e);
+                            MetricsUtil.addCount(metricsScope, IGNORED_STREAMS_COUNT, 1, MetricsLevel.DETAILED);
+                            continue;
+                        }
                         log.info("Found new stream to process: {}. Syncing shards of that stream.", streamConfig);
                         ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(streamConfig);
                         shardSyncTaskManager.submitShardSyncTask();
-                        currentStreamConfigMap.put(streamIdentifier, streamConfig);
                         streamsSynced.add(streamIdentifier);
                     } else {
                         log.debug("{} is already being processed - skipping shard sync.", streamIdentifier);
