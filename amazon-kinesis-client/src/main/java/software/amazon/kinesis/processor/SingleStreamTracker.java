@@ -45,6 +45,14 @@ public class SingleStreamTracker implements StreamTracker {
 
     private final List<StreamConfig> streamConfigs;
 
+    /**
+     * Cached reference to {@link StreamConfig#initialPositionInStreamExtended()}
+     * to avoid unnecessary getter invocations.
+     */
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    private final InitialPositionInStreamExtended initialPositionInStream;
+
     public SingleStreamTracker(String streamName) {
         this(StreamIdentifier.singleStreamInstance(streamName));
     }
@@ -72,6 +80,7 @@ public class SingleStreamTracker implements StreamTracker {
     public SingleStreamTracker(@NonNull StreamIdentifier streamIdentifier, @NonNull StreamConfig streamConfig) {
         this.streamIdentifier = streamIdentifier;
         this.streamConfigs = Collections.singletonList(streamConfig);
+        this.initialPositionInStream = streamConfig.initialPositionInStreamExtended();
     }
 
     @Override
@@ -82,6 +91,11 @@ public class SingleStreamTracker implements StreamTracker {
     @Override
     public FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy() {
         return NO_LEASE_DELETION;
+    }
+
+    @Override
+    public InitialPositionInStreamExtended orphanedStreamInitialPositionInStream() {
+        return initialPositionInStream;
     }
 
     @Override
