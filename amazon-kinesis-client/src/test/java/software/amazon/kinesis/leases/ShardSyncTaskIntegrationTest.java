@@ -14,7 +14,6 @@
  */
 package software.amazon.kinesis.leases;
 
-//import java.net.URI;
 
 import java.util.HashSet;
 import java.util.List;
@@ -27,8 +26,6 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
-//import software.amazon.awssdk.core.client.builder.ClientAsyncHttpConfiguration;
-//import software.amazon.awssdk.http.nio.netty.NettySdkHttpClientFactory;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
