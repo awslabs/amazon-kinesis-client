@@ -20,10 +20,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.reactivestreams.Subscriber;
+import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-
-import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
@@ -44,14 +43,15 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     private Subscriber<? super RecordsRetrieved> subscriber;
     private RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
 
-    public BlockingRecordsPublisher(final int maxRecordsPerCall,
-                                    final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
+    public BlockingRecordsPublisher(
+            final int maxRecordsPerCall, final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy) {
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
     }
 
     @Override
-    public void start(ExtendedSequenceNumber extendedSequenceNumber,
+    public void start(
+            ExtendedSequenceNumber extendedSequenceNumber,
             InitialPositionInStreamExtended initialPositionInStreamExtended) {
         //
         // Nothing to do here
@@ -60,10 +60,12 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
 
     public ProcessRecordsInput getNextResult() {
         GetRecordsResponse getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
-        final RequestDetails getRecordsRequestDetails = new RequestDetails(getRecordsResult.responseMetadata().requestId(), Instant.now().toString());
+        final RequestDetails getRecordsRequestDetails = new RequestDetails(
+                getRecordsResult.responseMetadata().requestId(), Instant.now().toString());
         setLastSuccessfulRequestDetails(getRecordsRequestDetails);
         List<KinesisClientRecord> records = getRecordsResult.records().stream()
-                .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
+                .map(KinesisClientRecord::fromRecord)
+                .collect(Collectors.toList());
         return ProcessRecordsInput.builder()
                 .records(records)
                 .millisBehindLatest(getRecordsResult.millisBehindLatest())

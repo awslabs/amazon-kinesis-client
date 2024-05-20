@@ -35,5 +35,4 @@ public class ShutdownException extends KinesisClientLibNonRetryableException {
     public ShutdownException(String message, Exception e) {
         super(message, e);
     }
-
 }

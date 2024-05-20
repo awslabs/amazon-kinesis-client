@@ -1,22 +1,19 @@
 package software.amazon.kinesis.config;
 
+import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import lombok.Builder;
 import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-import software.amazon.kinesis.common.FutureUtils;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.common.StreamConfig;
-import software.amazon.kinesis.common.StreamIdentifier;
-import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
-import software.amazon.kinesis.processor.MultiStreamTracker;
-import software.amazon.kinesis.processor.SingleStreamTracker;
-import software.amazon.kinesis.retrieval.RetrievalConfig;
-import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
-import software.amazon.kinesis.retrieval.polling.PollingConfig;
-import software.amazon.kinesis.utils.RecordValidatorQueue;
-import software.amazon.kinesis.utils.ReshardOptions;
-import software.amazon.kinesis.application.TestRecordProcessorFactory;
-import lombok.Builder;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.http.Protocol;
@@ -33,20 +30,22 @@ import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryReques
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamSummaryResponse;
 import software.amazon.awssdk.services.sts.StsAsyncClient;
 import software.amazon.awssdk.utils.AttributeMap;
+import software.amazon.kinesis.application.TestRecordProcessorFactory;
 import software.amazon.kinesis.common.ConfigsBuilder;
+import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.InitialPositionInStream;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
+import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
-
-import java.io.IOException;
-import java.net.Inet4Address;
-import java.net.URISyntaxException;
-import java.net.UnknownHostException;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.processor.SingleStreamTracker;
+import software.amazon.kinesis.retrieval.RetrievalConfig;
+import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
+import software.amazon.kinesis.retrieval.polling.PollingConfig;
+import software.amazon.kinesis.utils.RecordValidatorQueue;
+import software.amazon.kinesis.utils.ReshardOptions;
 
 /**
  * Default configuration for a producer or consumer used in integration tests.
@@ -79,9 +78,10 @@ public abstract class KCLAppConfig {
 
     public List<String> getStreamNames() {
         if (this.streamNames == null) {
-            return getStreamArns().stream().map(streamArn ->
-                                          streamArn.toString().substring(streamArn.toString().indexOf("/") + 1))
-                                  .collect(Collectors.toList());
+            return getStreamArns().stream()
+                    .map(streamArn ->
+                            streamArn.toString().substring(streamArn.toString().indexOf("/") + 1))
+                    .collect(Collectors.toList());
         } else {
             return this.streamNames;
         }
@@ -93,9 +93,13 @@ public abstract class KCLAppConfig {
         return INTEGRATION_TEST_RESOURCE_PREFIX + getTestName();
     }
 
-    public int getShardCount() { return 4; }
+    public int getShardCount() {
+        return 4;
+    }
 
-    public Region getRegion() { return Region.US_WEST_2; }
+    public Region getRegion() {
+        return Region.US_WEST_2;
+    }
 
     /**
      * Gets credentials for passed in profile with "-DawsProfile" which should match "~/.aws/config". Otherwise,
@@ -103,8 +107,9 @@ public abstract class KCLAppConfig {
      */
     private AwsCredentialsProvider getCredentialsProvider() {
         final String awsProfile = System.getProperty(AWS_ACCOUNT_PROFILE_PROPERTY);
-        return (awsProfile != null) ?
-                ProfileCredentialsProvider.builder().profileName(awsProfile).build() : DefaultCredentialsProvider.create();
+        return (awsProfile != null)
+                ? ProfileCredentialsProvider.builder().profileName(awsProfile).build()
+                : DefaultCredentialsProvider.create();
     }
 
     public boolean isCrossAccount() {
@@ -138,9 +143,9 @@ public abstract class KCLAppConfig {
         if (this.accountIdForConsumer == null) {
             try {
                 this.accountIdForConsumer = FutureUtils.resolveOrCancelFuture(
-                        buildStsAsyncClientForConsumer().getCallerIdentity(), Duration.ofSeconds(30)).account();
-            }
-            catch (Exception e) {
+                                buildStsAsyncClientForConsumer().getCallerIdentity(), Duration.ofSeconds(30))
+                        .account();
+            } catch (Exception e) {
                 log.error("Error when getting account ID through STS for consumer", e);
             }
         }
@@ -151,9 +156,9 @@ public abstract class KCLAppConfig {
         if (this.accountIdForStreamOwner == null) {
             try {
                 this.accountIdForStreamOwner = FutureUtils.resolveOrCancelFuture(
-                        buildStsAsyncClientForStreamOwner().getCallerIdentity(), Duration.ofSeconds(30)).account();
-            }
-            catch (Exception e) {
+                                buildStsAsyncClientForStreamOwner().getCallerIdentity(), Duration.ofSeconds(30))
+                        .account();
+            } catch (Exception e) {
                 log.error("Error when getting account ID through STS for consumer", e);
             }
         }
@@ -187,8 +192,8 @@ public abstract class KCLAppConfig {
         return this.kinesisAsyncClientForStreamOwner;
     }
 
-
-    private KinesisAsyncClient buildAsyncKinesisClient(AwsCredentialsProvider creds) throws URISyntaxException, IOException {
+    private KinesisAsyncClient buildAsyncKinesisClient(AwsCredentialsProvider creds)
+            throws URISyntaxException, IOException {
         // Setup H2 client config.
         final NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder()
                 .maxConcurrency(Integer.MAX_VALUE)
@@ -198,7 +203,8 @@ public abstract class KCLAppConfig {
                 builder.buildWithDefaults(AttributeMap.builder().build());
 
         // Setup client builder by default values
-        final KinesisAsyncClientBuilder kinesisAsyncClientBuilder = KinesisAsyncClient.builder().region(getRegion());
+        final KinesisAsyncClientBuilder kinesisAsyncClientBuilder =
+                KinesisAsyncClient.builder().region(getRegion());
         kinesisAsyncClientBuilder.httpClient(sdkAsyncHttpClient);
         kinesisAsyncClientBuilder.credentialsProvider(creds);
 
@@ -208,9 +214,9 @@ public abstract class KCLAppConfig {
     private StsAsyncClient buildStsAsyncClientForConsumer() {
         if (this.stsAsyncClientForConsumer == null) {
             this.stsAsyncClientForConsumer = StsAsyncClient.builder()
-                                                           .credentialsProvider(getCredentialsProvider())
-                                                           .region(getRegion())
-                                                           .build();
+                    .credentialsProvider(getCredentialsProvider())
+                    .region(getRegion())
+                    .build();
         }
         return this.stsAsyncClientForConsumer;
     }
@@ -220,8 +226,7 @@ public abstract class KCLAppConfig {
             final StsAsyncClient client;
             if (isCrossAccount()) {
                 client = buildStsAsyncClient(getCrossAccountCredentialsProvider());
-            }
-            else {
+            } else {
                 client = buildStsAsyncClient(getCredentialsProvider());
             }
             this.stsAsyncClientForStreamOwner = client;
@@ -238,7 +243,8 @@ public abstract class KCLAppConfig {
 
     public final DynamoDbAsyncClient buildAsyncDynamoDbClient() throws IOException {
         if (this.dynamoDbAsyncClient == null) {
-            final DynamoDbAsyncClientBuilder builder = DynamoDbAsyncClient.builder().region(getRegion());
+            final DynamoDbAsyncClientBuilder builder =
+                    DynamoDbAsyncClient.builder().region(getRegion());
             builder.credentialsProvider(getCredentialsProvider());
             this.dynamoDbAsyncClient = builder.build();
         }
@@ -247,7 +253,8 @@ public abstract class KCLAppConfig {
 
     public final CloudWatchAsyncClient buildAsyncCloudWatchClient() throws IOException {
         if (this.cloudWatchAsyncClient == null) {
-            final CloudWatchAsyncClientBuilder builder = CloudWatchAsyncClient.builder().region(getRegion());
+            final CloudWatchAsyncClientBuilder builder =
+                    CloudWatchAsyncClient.builder().region(getRegion());
             builder.credentialsProvider(getCredentialsProvider());
             this.cloudWatchAsyncClient = builder.build();
         }
@@ -276,8 +283,13 @@ public abstract class KCLAppConfig {
             final SingleStreamTracker singleStreamTracker = new SingleStreamTracker(
                     StreamIdentifier.singleStreamInstance(getStreamArns().get(0)),
                     buildStreamConfigList(streamToConsumerArnsMap).get(0));
-            return new ConfigsBuilder(singleStreamTracker, getApplicationName(),
-                    buildAsyncKinesisClientForConsumer(), buildAsyncDynamoDbClient(), buildAsyncCloudWatchClient(), workerId,
+            return new ConfigsBuilder(
+                    singleStreamTracker,
+                    getApplicationName(),
+                    buildAsyncKinesisClientForConsumer(),
+                    buildAsyncDynamoDbClient(),
+                    buildAsyncCloudWatchClient(),
+                    workerId,
                     getShardRecordProcessorFactory());
         } else {
             final MultiStreamTracker multiStreamTracker = new MultiStreamTracker() {
@@ -285,34 +297,46 @@ public abstract class KCLAppConfig {
                 public List<StreamConfig> streamConfigList() {
                     return buildStreamConfigList(streamToConsumerArnsMap);
                 }
+
                 @Override
                 public FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy() {
                     return new FormerStreamsLeasesDeletionStrategy.NoLeaseDeletionStrategy();
                 }
             };
-            return new ConfigsBuilder(multiStreamTracker, getApplicationName(),
-                    buildAsyncKinesisClientForConsumer(), buildAsyncDynamoDbClient(), buildAsyncCloudWatchClient(), workerId,
+            return new ConfigsBuilder(
+                    multiStreamTracker,
+                    getApplicationName(),
+                    buildAsyncKinesisClientForConsumer(),
+                    buildAsyncDynamoDbClient(),
+                    buildAsyncCloudWatchClient(),
+                    workerId,
                     getShardRecordProcessorFactory());
         }
     }
 
     private List<StreamConfig> buildStreamConfigList(Map<Arn, Arn> streamToConsumerArnsMap) {
-        return getStreamArns().stream().map(streamArn-> {
-            final StreamIdentifier streamIdentifier;
-            if (getStreamArns().size() == 1) {
-                streamIdentifier = StreamIdentifier.singleStreamInstance(streamArn);
-            } else { //is multi-stream
-                streamIdentifier = StreamIdentifier.multiStreamInstance(streamArn, getCreationEpoch(streamArn));
-            }
+        return getStreamArns().stream()
+                .map(streamArn -> {
+                    final StreamIdentifier streamIdentifier;
+                    if (getStreamArns().size() == 1) {
+                        streamIdentifier = StreamIdentifier.singleStreamInstance(streamArn);
+                    } else { // is multi-stream
+                        streamIdentifier = StreamIdentifier.multiStreamInstance(streamArn, getCreationEpoch(streamArn));
+                    }
 
-            if (streamToConsumerArnsMap != null) {
-                final StreamConfig streamConfig = new StreamConfig(streamIdentifier,
-                        InitialPositionInStreamExtended.newInitialPosition(getInitialPosition()));
-                return streamConfig.consumerArn(streamToConsumerArnsMap.get(streamArn).toString());
-            } else {
-                return new StreamConfig(streamIdentifier, InitialPositionInStreamExtended.newInitialPosition(getInitialPosition()));
-            }
-        }).collect(Collectors.toList());
+                    if (streamToConsumerArnsMap != null) {
+                        final StreamConfig streamConfig = new StreamConfig(
+                                streamIdentifier,
+                                InitialPositionInStreamExtended.newInitialPosition(getInitialPosition()));
+                        return streamConfig.consumerArn(
+                                streamToConsumerArnsMap.get(streamArn).toString());
+                    } else {
+                        return new StreamConfig(
+                                streamIdentifier,
+                                InitialPositionInStreamExtended.newInitialPosition(getInitialPosition()));
+                    }
+                })
+                .collect(Collectors.toList());
     }
 
     private long getCreationEpoch(Arn streamArn) {
@@ -320,7 +344,7 @@ public abstract class KCLAppConfig {
                 .streamARN(streamArn.toString())
                 .build();
 
-       DescribeStreamSummaryResponse response = null;
+        DescribeStreamSummaryResponse response = null;
         try {
             response = FutureUtils.resolveOrCancelFuture(
                     buildAsyncKinesisClientForStreamOwner().describeStreamSummary(request), Duration.ofSeconds(60));
@@ -330,17 +354,18 @@ public abstract class KCLAppConfig {
         return response.streamDescriptionSummary().streamCreationTimestamp().toEpochMilli();
     }
 
-
     public abstract RetrievalMode getRetrievalMode();
 
     public RetrievalConfig getRetrievalConfig(ConfigsBuilder configsBuilder, Map<Arn, Arn> streamToConsumerArnsMap) {
         final RetrievalConfig config = configsBuilder.retrievalConfig();
         if (getRetrievalMode() == RetrievalMode.POLLING) {
-                config.retrievalSpecificConfig(new PollingConfig(config.kinesisClient()));
+            config.retrievalSpecificConfig(new PollingConfig(config.kinesisClient()));
         } else {
             if (getStreamArns().size() == 1) {
-                final Arn consumerArn = streamToConsumerArnsMap.get(getStreamArns().get(0));
-                config.retrievalSpecificConfig(new FanOutConfig(config.kinesisClient()).consumerArn(consumerArn.toString()));
+                final Arn consumerArn =
+                        streamToConsumerArnsMap.get(getStreamArns().get(0));
+                config.retrievalSpecificConfig(
+                        new FanOutConfig(config.kinesisClient()).consumerArn(consumerArn.toString()));
             }
             // For CAA multi-stream EFO, consumerArn is specified in StreamConfig
         }
@@ -349,8 +374,9 @@ public abstract class KCLAppConfig {
 
     public Arn buildStreamArn(String streamName) {
         final String partition = getRegion().metadata().partition().id();
-        return Arn.fromString(String.join(":", "arn", partition, "kinesis", getRegion().id(),
-                getAccountIdForStreamOwner(), "stream") + "/" + INTEGRATION_TEST_RESOURCE_PREFIX + streamName);
+        return Arn.fromString(
+                String.join(":", "arn", partition, "kinesis", getRegion().id(), getAccountIdForStreamOwner(), "stream")
+                        + "/" + INTEGRATION_TEST_RESOURCE_PREFIX + streamName);
     }
 
     /**
@@ -364,5 +390,4 @@ public abstract class KCLAppConfig {
         private int recordSizeKB;
         private long callPeriodMills;
     }
-
 }

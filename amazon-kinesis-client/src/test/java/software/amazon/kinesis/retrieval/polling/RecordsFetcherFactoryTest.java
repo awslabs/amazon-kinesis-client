@@ -14,16 +14,11 @@
  */
 package software.amazon.kinesis.retrieval.polling;
 
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.Mockito.when;
-
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.DataFetchingStrategy;
@@ -31,14 +26,20 @@ import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Mockito.when;
+
 public class RecordsFetcherFactoryTest {
     private String shardId = "TestShard";
     private RecordsFetcherFactory recordsFetcherFactory;
 
     @Mock
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+
     @Mock
     private MetricsFactory metricsFactory;
+
     @Mock
     private DataFetcher dataFetcher;
 
@@ -52,18 +53,18 @@ public class RecordsFetcherFactoryTest {
 
     @Test
     @Ignore
-//    TODO: remove test no longer holds true
+    //    TODO: remove test no longer holds true
     public void createDefaultRecordsFetcherTest() {
-        RecordsPublisher recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId,
-                metricsFactory, 1);
+        RecordsPublisher recordsCache =
+                recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId, metricsFactory, 1);
         assertThat(recordsCache, instanceOf(BlockingRecordsPublisher.class));
     }
 
     @Test
     public void createPrefetchRecordsFetcherTest() {
         recordsFetcherFactory.dataFetchingStrategy(DataFetchingStrategy.PREFETCH_CACHED);
-        RecordsPublisher recordsCache = recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId,
-                metricsFactory, 1);
+        RecordsPublisher recordsCache =
+                recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId, metricsFactory, 1);
         assertThat(recordsCache, instanceOf(PrefetchRecordsPublisher.class));
     }
 }

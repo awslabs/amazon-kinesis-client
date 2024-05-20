@@ -20,13 +20,12 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 
-import org.apache.commons.lang3.builder.EqualsBuilder;
-import org.apache.commons.lang3.builder.HashCodeBuilder;
-
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.ToString;
 import lombok.experimental.Accessors;
+import org.apache.commons.lang3.builder.EqualsBuilder;
+import org.apache.commons.lang3.builder.HashCodeBuilder;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -46,7 +45,7 @@ public class ShardInfo {
 
     /**
      * Creates a new ShardInfo object. The checkpoint is not part of the equality, but is used for debugging output.
-     * 
+     *
      * @param shardId
      *            Kinesis shardId that this will be about
      * @param concurrencyToken
@@ -56,7 +55,8 @@ public class ShardInfo {
      * @param checkpoint
      *            the latest checkpoint from lease
      */
-    public ShardInfo(@NonNull final String shardId,
+    public ShardInfo(
+            @NonNull final String shardId,
             final String concurrencyToken,
             final Collection<String> parentShardIds,
             final ExtendedSequenceNumber checkpoint) {
@@ -72,7 +72,8 @@ public class ShardInfo {
      * @param checkpoint
      * @param streamIdentifierSer
      */
-    public ShardInfo(@NonNull final String shardId,
+    public ShardInfo(
+            @NonNull final String shardId,
             final String concurrencyToken,
             final Collection<String> parentShardIds,
             final ExtendedSequenceNumber checkpoint,
@@ -92,7 +93,7 @@ public class ShardInfo {
 
     /**
      * A list of shards that are parents of this shard. This may be empty if the shard has no parents.
-     * 
+     *
      * @return a list of shardId's that are parents of this shard, or empty if the shard has no parents.
      */
     public List<String> parentShardIds() {
@@ -114,7 +115,11 @@ public class ShardInfo {
     @Override
     public int hashCode() {
         return new HashCodeBuilder()
-                .append(concurrencyToken).append(parentShardIds).append(shardId).append(streamIdentifierSerOpt.orElse("")).toHashCode();
+                .append(concurrencyToken)
+                .append(parentShardIds)
+                .append(shardId)
+                .append(streamIdentifierSerOpt.orElse(""))
+                .toHashCode();
     }
 
     /**
@@ -137,10 +142,12 @@ public class ShardInfo {
             return false;
         }
         ShardInfo other = (ShardInfo) obj;
-        return new EqualsBuilder().append(concurrencyToken, other.concurrencyToken)
-                .append(parentShardIds, other.parentShardIds).append(shardId, other.shardId)
-                .append(streamIdentifierSerOpt.orElse(""), other.streamIdentifierSerOpt.orElse("")).isEquals();
-
+        return new EqualsBuilder()
+                .append(concurrencyToken, other.concurrencyToken)
+                .append(parentShardIds, other.parentShardIds)
+                .append(shardId, other.shardId)
+                .append(streamIdentifierSerOpt.orElse(""), other.streamIdentifierSerOpt.orElse(""))
+                .isEquals();
     }
 
     /**
@@ -159,9 +166,9 @@ public class ShardInfo {
      * @return lease key
      */
     public static String getLeaseKey(ShardInfo shardInfo, String shardIdOverride) {
-        return shardInfo.streamIdentifierSerOpt().isPresent() ?
-               MultiStreamLease.getLeaseKey(shardInfo.streamIdentifierSerOpt().get(), shardIdOverride) :
-               shardIdOverride;
+        return shardInfo.streamIdentifierSerOpt().isPresent()
+                ? MultiStreamLease.getLeaseKey(
+                        shardInfo.streamIdentifierSerOpt().get(), shardIdOverride)
+                : shardIdOverride;
     }
-
 }

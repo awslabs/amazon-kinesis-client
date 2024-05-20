@@ -25,10 +25,10 @@ import software.amazon.awssdk.services.cloudwatch.model.StatisticSet;
  * An IMetricsScope that accumulates data from multiple calls to addData with
  * the same name parameter. It tracks min, max, sample count, and sum for each
  * named metric.
- * 
+ *
  * @param <KeyType> can be a class or object defined by the user that stores information about a MetricDatum needed
  *        by the user.
- * 
+ *
  *        The following is a example of what a KeyType class might look like:
  *        class SampleKeyType {
  *              private long timeKeyCreated;
@@ -61,9 +61,9 @@ public abstract class AccumulatingMetricsScope<KeyType> extends EndingMetricsSco
     protected abstract KeyType getKey(String name);
 
     /**
-     * Adds data points to an IMetricsScope. Multiple calls to IMetricsScopes that have the 
+     * Adds data points to an IMetricsScope. Multiple calls to IMetricsScopes that have the
      * same key will have their data accumulated.
-     * 
+     *
      * @param key
      *        data point key
      * @param name
@@ -79,9 +79,15 @@ public abstract class AccumulatingMetricsScope<KeyType> extends EndingMetricsSco
         final MetricDatum datum = data.get(key);
         final MetricDatum metricDatum;
         if (datum == null) {
-            metricDatum = MetricDatum.builder().metricName(name).unit(unit)
-                    .statisticValues(
-                            StatisticSet.builder().maximum(value).minimum(value).sampleCount(1.0).sum(value).build())
+            metricDatum = MetricDatum.builder()
+                    .metricName(name)
+                    .unit(unit)
+                    .statisticValues(StatisticSet.builder()
+                            .maximum(value)
+                            .minimum(value)
+                            .sampleCount(1.0)
+                            .sum(value)
+                            .build())
                     .build();
         } else {
             if (!datum.unit().equals(unit)) {
@@ -91,8 +97,10 @@ public abstract class AccumulatingMetricsScope<KeyType> extends EndingMetricsSco
             final StatisticSet oldStatisticSet = datum.statisticValues();
             final StatisticSet statisticSet = oldStatisticSet.toBuilder()
                     .maximum(Math.max(value, oldStatisticSet.maximum()))
-                    .minimum(Math.min(value, oldStatisticSet.minimum())).sampleCount(oldStatisticSet.sampleCount() + 1)
-                    .sum(oldStatisticSet.sum() + value).build();
+                    .minimum(Math.min(value, oldStatisticSet.minimum()))
+                    .sampleCount(oldStatisticSet.sampleCount() + 1)
+                    .sum(oldStatisticSet.sum() + value)
+                    .build();
 
             metricDatum = datum.toBuilder().statisticValues(statisticSet).build();
         }

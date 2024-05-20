@@ -61,8 +61,11 @@ class MultiLangProtocol {
      * @param initializationInput
      *            information about the shard this processor is starting to process
      */
-    MultiLangProtocol(MessageReader messageReader, MessageWriter messageWriter,
-            InitializationInput initializationInput, MultiLangDaemonConfiguration configuration) {
+    MultiLangProtocol(
+            MessageReader messageReader,
+            MessageWriter messageWriter,
+            InitializationInput initializationInput,
+            MultiLangDaemonConfiguration configuration) {
         this.messageReader = messageReader;
         this.messageWriter = messageWriter;
         this.initializationInput = initializationInput;
@@ -82,7 +85,6 @@ class MultiLangProtocol {
          */
         Future<Boolean> writeFuture = messageWriter.writeInitializeMessage(initializationInput);
         return waitForStatusMessage(InitializeMessage.ACTION, null, writeFuture);
-
     }
 
     /**
@@ -100,7 +102,7 @@ class MultiLangProtocol {
 
     /**
      * Notifies the client process that the lease has been lost, and it needs to shutdown.
-     * 
+     *
      * @param leaseLostInput
      *            the lease lost input that is passed to the {@link MessageWriter}
      * @return true if the message was successfully writtem
@@ -115,7 +117,9 @@ class MultiLangProtocol {
      * @return
      */
     boolean shardEnded(ShardEndedInput shardEndedInput) {
-        return waitForStatusMessage(ShardEndedMessage.ACTION, shardEndedInput.checkpointer(),
+        return waitForStatusMessage(
+                ShardEndedMessage.ACTION,
+                shardEndedInput.checkpointer(),
                 messageWriter.writeShardEndedMessage(shardEndedInput));
     }
 
@@ -147,8 +151,8 @@ class MultiLangProtocol {
      *            The writing task.
      * @return Whether or not this operation succeeded.
      */
-    private boolean waitForStatusMessage(String action, RecordProcessorCheckpointer checkpointer,
-            Future<Boolean> writeFuture) {
+    private boolean waitForStatusMessage(
+            String action, RecordProcessorCheckpointer checkpointer, Future<Boolean> writeFuture) {
         boolean statusWasCorrect = waitForStatusMessage(action, checkpointer);
 
         // Examine whether or not we failed somewhere along the line.
@@ -194,7 +198,7 @@ class MultiLangProtocol {
                 return false;
             }
 
-            statusMessage = message.filter(m -> m instanceof StatusMessage).map(m -> (StatusMessage) m );
+            statusMessage = message.filter(m -> m instanceof StatusMessage).map(m -> (StatusMessage) m);
         }
         return this.validateStatusMessage(statusMessage.get(), action);
     }
@@ -207,13 +211,17 @@ class MultiLangProtocol {
         try {
             return Optional.of(fm.get());
         } catch (InterruptedException e) {
-            log.error("Interrupted while waiting for {} message for shard {}", action,
-                    initializationInput.shardId(), e);
+            log.error(
+                    "Interrupted while waiting for {} message for shard {}", action, initializationInput.shardId(), e);
         } catch (ExecutionException e) {
-            log.error("Failed to get status message for {} action for shard {}", action,
-                    initializationInput.shardId(), e);
+            log.error(
+                    "Failed to get status message for {} action for shard {}",
+                    action,
+                    initializationInput.shardId(),
+                    e);
         } catch (TimeoutException e) {
-            log.error("Timedout to get status message for {} action for shard {}. Terminating...",
+            log.error(
+                    "Timedout to get status message for {} action for shard {}. Terminating...",
                     action,
                     initializationInput.shardId(),
                     e);
@@ -240,11 +248,14 @@ class MultiLangProtocol {
      * @return Whether or not this operation succeeded.
      */
     private boolean validateStatusMessage(StatusMessage statusMessage, String action) {
-        log.info("Received response {} from subprocess while waiting for {}"
-                + " while processing shard {}", statusMessage, action,  initializationInput.shardId());
-        return !(statusMessage == null || statusMessage.getResponseFor() == null || !statusMessage.getResponseFor()
-                .equals(action));
-
+        log.info(
+                "Received response {} from subprocess while waiting for {}" + " while processing shard {}",
+                statusMessage,
+                action,
+                initializationInput.shardId());
+        return !(statusMessage == null
+                || statusMessage.getResponseFor() == null
+                || !statusMessage.getResponseFor().equals(action));
     }
 
     /**
@@ -274,13 +285,12 @@ class MultiLangProtocol {
                 }
                 return this.messageWriter.writeCheckpointMessageWithError(sequenceNumber, subSequenceNumber, null);
             } else {
-                String message =
-                        String.format("Was asked to checkpoint at %s but no checkpointer was provided for shard %s",
-                                sequenceNumber, initializationInput.shardId());
+                String message = String.format(
+                        "Was asked to checkpoint at %s but no checkpointer was provided for shard %s",
+                        sequenceNumber, initializationInput.shardId());
                 log.error(message);
-                return this.messageWriter.writeCheckpointMessageWithError(sequenceNumber, subSequenceNumber,
-                        new InvalidStateException(
-                        message));
+                return this.messageWriter.writeCheckpointMessageWithError(
+                        sequenceNumber, subSequenceNumber, new InvalidStateException(message));
             }
         } catch (Throwable t) {
             return this.messageWriter.writeCheckpointMessageWithError(sequenceNumber, subSequenceNumber, t);
@@ -288,8 +298,8 @@ class MultiLangProtocol {
     }
 
     private String logCheckpointMessage(String sequenceNumber, Long subSequenceNumber) {
-        return String.format("Attempting to checkpoint shard %s @ sequence number %s, and sub sequence number %s",
+        return String.format(
+                "Attempting to checkpoint shard %s @ sequence number %s, and sub sequence number %s",
                 initializationInput.shardId(), sequenceNumber, subSequenceNumber);
     }
-
 }

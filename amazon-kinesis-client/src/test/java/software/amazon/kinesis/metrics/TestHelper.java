@@ -14,25 +14,24 @@
  */
 package software.amazon.kinesis.metrics;
 
-
 import software.amazon.awssdk.services.cloudwatch.model.Dimension;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.cloudwatch.model.StatisticSet;
 
 public class TestHelper {
-    public static MetricDatum constructDatum(String name,
-                                             StandardUnit unit,
-                                             double maximum,
-                                             double minimum,
-                                             double sum,
-                                             double count) {
-        return MetricDatum.builder().metricName(name)
+    public static MetricDatum constructDatum(
+            String name, StandardUnit unit, double maximum, double minimum, double sum, double count) {
+        return MetricDatum.builder()
+                .metricName(name)
                 .unit(unit)
-                .statisticValues(StatisticSet.builder().maximum(maximum)
+                .statisticValues(StatisticSet.builder()
+                        .maximum(maximum)
                         .minimum(minimum)
                         .sum(sum)
-                        .sampleCount(count).build()).build();
+                        .sampleCount(count)
+                        .build())
+                .build();
     }
 
     public static Dimension constructDimension(String name, String value) {

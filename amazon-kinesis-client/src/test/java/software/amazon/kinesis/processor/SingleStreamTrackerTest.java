@@ -15,17 +15,17 @@
 
 package software.amazon.kinesis.processor;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThat;
-
 import org.hamcrest.Matchers;
 import org.junit.Test;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThat;
 
 public class SingleStreamTrackerTest {
 
@@ -43,8 +43,8 @@ public class SingleStreamTrackerTest {
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
         assertNotEquals(expectedPosition, StreamTracker.DEFAULT_POSITION_IN_STREAM);
 
-        final StreamTracker tracker = new SingleStreamTracker(
-                StreamIdentifier.singleStreamInstance(STREAM_NAME), expectedPosition);
+        final StreamTracker tracker =
+                new SingleStreamTracker(StreamIdentifier.singleStreamInstance(STREAM_NAME), expectedPosition);
         validate(tracker, expectedPosition);
     }
 
@@ -55,12 +55,12 @@ public class SingleStreamTrackerTest {
     private static void validate(StreamTracker tracker, InitialPositionInStreamExtended expectedPosition) {
         assertEquals(1, tracker.streamConfigList().size());
         assertFalse(tracker.isMultiStream());
-        assertThat(tracker.formerStreamsLeasesDeletionStrategy(),
+        assertThat(
+                tracker.formerStreamsLeasesDeletionStrategy(),
                 Matchers.instanceOf(FormerStreamsLeasesDeletionStrategy.NoLeaseDeletionStrategy.class));
 
         final StreamConfig config = tracker.streamConfigList().get(0);
         assertEquals(STREAM_NAME, config.streamIdentifier().streamName());
         assertEquals(expectedPosition, config.initialPositionInStreamExtended());
     }
-
 }

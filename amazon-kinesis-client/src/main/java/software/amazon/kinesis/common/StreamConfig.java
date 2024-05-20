@@ -28,8 +28,7 @@ import lombok.experimental.Accessors;
 public class StreamConfig {
     @NonNull
     private final StreamIdentifier streamIdentifier;
+
     private final InitialPositionInStreamExtended initialPositionInStreamExtended;
     private String consumerArn;
 }
-
-

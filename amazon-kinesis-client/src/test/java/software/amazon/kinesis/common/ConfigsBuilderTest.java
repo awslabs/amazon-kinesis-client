@@ -18,10 +18,6 @@ package software.amazon.kinesis.common;
 import java.util.Arrays;
 import java.util.Optional;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.mockito.Mockito.mock;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -35,6 +31,10 @@ import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.mockito.Mockito.mock;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ConfigsBuilderTest {
@@ -66,7 +66,13 @@ public class ConfigsBuilderTest {
                 createConfig(new SingleStreamTracker(streamArn)))) {
             assertEquals(Optional.empty(), cb.appStreamTracker().left());
             assertEquals(streamName, cb.appStreamTracker().right().get());
-            assertEquals(streamName, cb.streamTracker().streamConfigList().get(0).streamIdentifier().streamName());
+            assertEquals(
+                    streamName,
+                    cb.streamTracker()
+                            .streamConfigList()
+                            .get(0)
+                            .streamIdentifier()
+                            .streamName());
             assertFalse(cb.streamTracker().isMultiStream());
         }
     }
@@ -76,25 +82,45 @@ public class ConfigsBuilderTest {
         final StreamTracker mockMultiStreamTracker = mock(MultiStreamTracker.class);
         final ConfigsBuilder configByMultiTracker = createConfig(mockMultiStreamTracker);
         assertEquals(Optional.empty(), configByMultiTracker.appStreamTracker().right());
-        assertEquals(mockMultiStreamTracker, configByMultiTracker.appStreamTracker().left().get());
+        assertEquals(
+                mockMultiStreamTracker,
+                configByMultiTracker.appStreamTracker().left().get());
         assertEquals(mockMultiStreamTracker, configByMultiTracker.streamTracker());
     }
 
     private ConfigsBuilder createConfig(String streamName) {
         // intentional invocation of constructor where streamName is a String
-        return new ConfigsBuilder(streamName, APPLICATION_NAME, mockKinesisClient, mockDynamoClient,
-                mockCloudWatchClient, WORKER_IDENTIFIER, mockShardProcessorFactory);
+        return new ConfigsBuilder(
+                streamName,
+                APPLICATION_NAME,
+                mockKinesisClient,
+                mockDynamoClient,
+                mockCloudWatchClient,
+                WORKER_IDENTIFIER,
+                mockShardProcessorFactory);
     }
 
     private ConfigsBuilder createConfig(Arn streamArn) {
         // intentional invocation of constructor where streamArn is an Arn
-        return new ConfigsBuilder(streamArn, APPLICATION_NAME, mockKinesisClient, mockDynamoClient,
-                mockCloudWatchClient, WORKER_IDENTIFIER, mockShardProcessorFactory);
+        return new ConfigsBuilder(
+                streamArn,
+                APPLICATION_NAME,
+                mockKinesisClient,
+                mockDynamoClient,
+                mockCloudWatchClient,
+                WORKER_IDENTIFIER,
+                mockShardProcessorFactory);
     }
 
     private ConfigsBuilder createConfig(StreamTracker streamTracker) {
-        return new ConfigsBuilder(streamTracker, APPLICATION_NAME, mockKinesisClient, mockDynamoClient,
-                mockCloudWatchClient, WORKER_IDENTIFIER, mockShardProcessorFactory);
+        return new ConfigsBuilder(
+                streamTracker,
+                APPLICATION_NAME,
+                mockKinesisClient,
+                mockDynamoClient,
+                mockCloudWatchClient,
+                WORKER_IDENTIFIER,
+                mockShardProcessorFactory);
     }
 
     private static Arn createArn(String streamName) {
@@ -106,5 +132,4 @@ public class ConfigsBuilderTest {
                 .resource("stream/" + streamName)
                 .build();
     }
-
 }

@@ -14,18 +14,11 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
-
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -33,6 +26,12 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  *
@@ -58,7 +57,7 @@ public class BlockOnParentShardTaskTest {
      */
     @Test
     public final void testCallNoParents()
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         LeaseRefresher leaseRefresher = mock(LeaseRefresher.class);
         when(leaseRefresher.getLease(shardId)).thenReturn(null);
 
@@ -75,7 +74,7 @@ public class BlockOnParentShardTaskTest {
      */
     @Test
     public final void testCallShouldNotThrowBlockedOnParentWhenParentsHaveFinished()
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         ShardInfo shardInfo = null;
         BlockOnParentShardTask task = null;
         String parent1ShardId = "shardId-1";
@@ -136,15 +135,16 @@ public class BlockOnParentShardTaskTest {
 
         // test single parent
         parentShardIds.add(parent1ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON,
-                streamId);
+        shardInfo =
+                new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
+        shardInfo =
+                new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNull(result.getException());
@@ -222,14 +222,16 @@ public class BlockOnParentShardTaskTest {
 
         // test single parent
         parentShardIds.add(parent1ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
+        shardInfo =
+                new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNotNull(result.getException());
 
         // test two parents
         parentShardIds.add(parent2ShardId);
-        shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
+        shardInfo =
+                new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON, streamId);
         task = new BlockOnParentShardTask(shardInfo, leaseRefresher, backoffTimeInMillis);
         result = task.call();
         assertNotNull(result.getException());
@@ -243,13 +245,14 @@ public class BlockOnParentShardTaskTest {
      */
     @Test
     public final void testCallBeforeAndAfterAParentFinishes()
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
 
         BlockOnParentShardTask task = null;
         String parentShardId = "shardId-1";
         List<String> parentShardIds = new ArrayList<>();
         parentShardIds.add(parentShardId);
-        ShardInfo shardInfo = new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
+        ShardInfo shardInfo =
+                new ShardInfo(shardId, concurrencyToken, parentShardIds, ExtendedSequenceNumber.TRIM_HORIZON);
         TaskResult result = null;
         Lease parentLease = new Lease();
         LeaseRefresher leaseRefresher = mock(LeaseRefresher.class);
@@ -276,5 +279,4 @@ public class BlockOnParentShardTaskTest {
         BlockOnParentShardTask task = new BlockOnParentShardTask(shardInfo, null, backoffTimeInMillis);
         assertEquals(TaskType.BLOCK_ON_PARENT_SHARDS, task.taskType());
     }
-
 }

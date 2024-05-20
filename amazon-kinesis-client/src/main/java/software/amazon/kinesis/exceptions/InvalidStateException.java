@@ -19,16 +19,16 @@ package software.amazon.kinesis.exceptions;
  * is not found).
  */
 public class InvalidStateException extends KinesisClientLibNonRetryableException {
-    
+
     private static final long serialVersionUID = 1L;
-    
+
     /**
      * @param message provides more details about the cause and potential ways to debug/address.
      */
     public InvalidStateException(String message) {
         super(message);
     }
-    
+
     /**
      * @param message provides more details about the cause and potential ways to debug/address.
      * @param e Cause of the exception
@@ -36,5 +36,4 @@ public class InvalidStateException extends KinesisClientLibNonRetryableException
     public InvalidStateException(String message, Exception e) {
         super(message, e);
     }
-
 }

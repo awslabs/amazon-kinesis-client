@@ -14,11 +14,11 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import org.junit.Assert;
 import org.junit.Test;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Unit tests of ShutdownReason enum class.
@@ -42,5 +42,4 @@ public class ShutdownReasonTest {
         assertTrue(ShutdownReason.REQUESTED.canTransitionTo(ShutdownReason.LEASE_LOST));
         assertTrue(ShutdownReason.REQUESTED.canTransitionTo(ShutdownReason.SHARD_END));
     }
-
 }

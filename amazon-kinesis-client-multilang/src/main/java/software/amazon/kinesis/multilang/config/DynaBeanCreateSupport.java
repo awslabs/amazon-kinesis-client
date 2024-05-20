@@ -30,8 +30,8 @@ class DynaBeanCreateSupport {
     private final List<TypeTag> createTypes = new ArrayList<>();
     private Object[] createValues = null;
 
-    DynaBeanCreateSupport(Class<?> destinedClass, ConvertUtilsBean convertUtilsBean,
-            List<String> classPrefixSearchList) {
+    DynaBeanCreateSupport(
+            Class<?> destinedClass, ConvertUtilsBean convertUtilsBean, List<String> classPrefixSearchList) {
         this.destinedClass = destinedClass;
         this.convertUtilsBean = convertUtilsBean;
         this.classPrefixSearchList = classPrefixSearchList;
@@ -58,8 +58,8 @@ class DynaBeanCreateSupport {
 
     Object build() {
 
-        Method createMethod = DynaBeanBuilderUtils.getMethod(destinedClass, "create",
-                createTypes.stream().map(t -> t.type).toArray(i -> new Class<?>[i]));
+        Method createMethod = DynaBeanBuilderUtils.getMethod(
+                destinedClass, "create", createTypes.stream().map(t -> t.type).toArray(i -> new Class<?>[i]));
         Object arguments[] = new Object[createValues.length];
         for (int i = 0; i < createValues.length; ++i) {
             if (createValues[i] instanceof BuilderDynaBean) {
@@ -77,8 +77,8 @@ class DynaBeanCreateSupport {
                 return createValues[index];
             } else {
                 if (createValues[index] == null) {
-                    createValues[index] = new BuilderDynaBean(createTypes.get(index).type, convertUtilsBean, null,
-                            classPrefixSearchList);
+                    createValues[index] = new BuilderDynaBean(
+                            createTypes.get(index).type, convertUtilsBean, null, classPrefixSearchList);
                 }
                 return createValues[index];
             }
@@ -89,13 +89,11 @@ class DynaBeanCreateSupport {
     public void set(String name, int index, Object value) {
         if (StringUtils.isEmpty(name)) {
             if (index >= createValues.length) {
-                throw new IllegalArgumentException(
-                        String.format("%d exceeds the maximum number of arguments (%d) for %s", index,
-                                createValues.length, destinedClass.getName()));
+                throw new IllegalArgumentException(String.format(
+                        "%d exceeds the maximum number of arguments (%d) for %s",
+                        index, createValues.length, destinedClass.getName()));
             }
             createValues[index] = value;
         }
-
     }
-
 }

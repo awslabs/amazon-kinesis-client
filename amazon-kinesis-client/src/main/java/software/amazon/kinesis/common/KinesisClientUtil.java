@@ -15,13 +15,13 @@
 
 package software.amazon.kinesis.common;
 
+import java.time.Duration;
+
 import software.amazon.awssdk.http.Protocol;
 import software.amazon.awssdk.http.nio.netty.Http2Configuration;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClientBuilder;
-
-import java.time.Duration;
 
 /**
  * Utility to setup KinesisAsyncClient to be used with KCL.
@@ -42,9 +42,12 @@ public class KinesisClientUtil {
     }
 
     public static KinesisAsyncClientBuilder adjustKinesisClientBuilder(KinesisAsyncClientBuilder builder) {
-        return builder.httpClientBuilder(NettyNioAsyncHttpClient.builder().maxConcurrency(Integer.MAX_VALUE)
-                .http2Configuration(Http2Configuration.builder().initialWindowSize(INITIAL_WINDOW_SIZE_BYTES)
-                        .healthCheckPingPeriod(Duration.ofMillis(HEALTH_CHECK_PING_PERIOD_MILLIS)).build())
+        return builder.httpClientBuilder(NettyNioAsyncHttpClient.builder()
+                .maxConcurrency(Integer.MAX_VALUE)
+                .http2Configuration(Http2Configuration.builder()
+                        .initialWindowSize(INITIAL_WINDOW_SIZE_BYTES)
+                        .healthCheckPingPeriod(Duration.ofMillis(HEALTH_CHECK_PING_PERIOD_MILLIS))
+                        .build())
                 .protocol(Protocol.HTTP2));
     }
 }

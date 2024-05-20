@@ -30,7 +30,7 @@ public class MetricsCollectingTaskDecorator implements ConsumerTask {
 
     /**
      * Constructor.
-     * 
+     *
      * @param other
      *            task to report metrics on
      * @param factory
@@ -46,14 +46,15 @@ public class MetricsCollectingTaskDecorator implements ConsumerTask {
      */
     @Override
     public TaskResult call() {
-        MetricsScope scope = MetricsUtil.createMetricsWithOperation(factory, other.getClass().getSimpleName());
+        MetricsScope scope =
+                MetricsUtil.createMetricsWithOperation(factory, other.getClass().getSimpleName());
         TaskResult result = null;
         final long startTimeMillis = System.currentTimeMillis();
         try {
             result = other.call();
         } finally {
-            MetricsUtil.addSuccessAndLatency(scope, result != null && result.getException() == null, startTimeMillis,
-                    MetricsLevel.SUMMARY);
+            MetricsUtil.addSuccessAndLatency(
+                    scope, result != null && result.getException() == null, startTimeMillis, MetricsLevel.SUMMARY);
             MetricsUtil.endScope(scope);
         }
         return result;

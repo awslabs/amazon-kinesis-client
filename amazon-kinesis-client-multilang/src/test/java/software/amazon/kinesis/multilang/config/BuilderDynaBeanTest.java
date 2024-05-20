@@ -15,16 +15,14 @@
 
 package software.amazon.kinesis.multilang.config;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
-
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.Accessors;
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 import org.junit.Before;
@@ -32,11 +30,12 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.RequiredArgsConstructor;
-import lombok.ToString;
-import lombok.experimental.Accessors;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 public class BuilderDynaBeanTest {
 
@@ -109,8 +108,8 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testComplexCreateAllParameters() throws Exception {
-        TestComplexCreate expected = TestComplexCreate.create("real",
-                TestSimpleBuilder.builder().stringL1("l1").longVal(10L).build());
+        TestComplexCreate expected = TestComplexCreate.create(
+                "real", TestSimpleBuilder.builder().stringL1("l1").longVal(10L).build());
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestComplexCreate.class, convertUtilsBean);
         utilsBean.setProperty(builderDynaBean, "[0]", expected.realName);
@@ -136,8 +135,8 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testComplexCreateComplexParameterOnly() throws Exception {
-        TestComplexCreate expected = TestComplexCreate.create(null,
-                TestSimpleBuilder.builder().stringL1("l1").longVal(10L).build());
+        TestComplexCreate expected = TestComplexCreate.create(
+                null, TestSimpleBuilder.builder().stringL1("l1").longVal(10L).build());
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestComplexCreate.class, convertUtilsBean);
         utilsBean.setProperty(builderDynaBean, "[1].stringL1", expected.test1.stringL1);
@@ -161,7 +160,8 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testSimpleBuilderAllParameters() throws Exception {
-        TestSimpleBuilder expected = TestSimpleBuilder.builder().stringL1("l1").longVal(10L).build();
+        TestSimpleBuilder expected =
+                TestSimpleBuilder.builder().stringL1("l1").longVal(10L).build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestSimpleBuilder.class, convertUtilsBean);
         utilsBean.setProperty(builderDynaBean, "stringL1", expected.stringL1);
@@ -213,12 +213,14 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testComplexCreateSimpleBuilderVariantAllParameters() throws Exception {
-        TestSimpleBuilder variant = TestSimpleBuilder.builder().longVal(10L).stringL1("variant").build();
+        TestSimpleBuilder variant =
+                TestSimpleBuilder.builder().longVal(10L).stringL1("variant").build();
         TestComplexCreateVariance expected = TestComplexCreateVariance.create("simple-builder", variant);
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestComplexCreateVariance.class, convertUtilsBean);
         utilsBean.setProperty(builderDynaBean, "[0]", expected.varianceName);
-        utilsBean.setProperty(builderDynaBean, "[1].class", expected.variant.getClass().getName());
+        utilsBean.setProperty(
+                builderDynaBean, "[1].class", expected.variant.getClass().getName());
         utilsBean.setProperty(builderDynaBean, "[1].longVal", variant.longVal);
         utilsBean.setProperty(builderDynaBean, "[1].stringL1", variant.stringL1);
 
@@ -229,8 +231,11 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testComplexCreateVariantBuilderAllParameters() throws Exception {
-        TestVariantBuilder variant = TestVariantBuilder.builder().variantBuilderName("variant-build").intClass(20)
-                .testEnum(TestEnum.Blue).build();
+        TestVariantBuilder variant = TestVariantBuilder.builder()
+                .variantBuilderName("variant-build")
+                .intClass(20)
+                .testEnum(TestEnum.Blue)
+                .build();
         TestComplexCreateVariance expected = TestComplexCreateVariance.create("builder-variant", variant);
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestComplexCreateVariance.class, convertUtilsBean);
@@ -264,13 +269,16 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testComplexCreateVariantBuilderAllParametersPrefixWithJoiner() throws Exception {
-        TestVariantBuilder variant = TestVariantBuilder.builder().variantBuilderName("variant-build").intClass(20)
-                .testEnum(TestEnum.Blue).build();
+        TestVariantBuilder variant = TestVariantBuilder.builder()
+                .variantBuilderName("variant-build")
+                .intClass(20)
+                .testEnum(TestEnum.Blue)
+                .build();
         TestComplexCreateVariance expected = TestComplexCreateVariance.create("builder-variant-prefix", variant);
 
         String prefix = variant.getClass().getEnclosingClass().getName() + "$";
-        BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestComplexCreateVariance.class, convertUtilsBean,
-                prefix);
+        BuilderDynaBean builderDynaBean =
+                new BuilderDynaBean(TestComplexCreateVariance.class, convertUtilsBean, prefix);
         utilsBean.setProperty(builderDynaBean, "[0]", expected.varianceName);
         utilsBean.setProperty(builderDynaBean, "[1].class", variant.getClass().getSimpleName());
         utilsBean.setProperty(builderDynaBean, "[1].variantBuilderName", variant.variantBuilderName);
@@ -284,13 +292,16 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testComplexCreateVariantBuilderAllParametersPrefixWithOutJoiner() throws Exception {
-        TestVariantBuilder variant = TestVariantBuilder.builder().variantBuilderName("variant-build").intClass(20)
-                .testEnum(TestEnum.Blue).build();
+        TestVariantBuilder variant = TestVariantBuilder.builder()
+                .variantBuilderName("variant-build")
+                .intClass(20)
+                .testEnum(TestEnum.Blue)
+                .build();
         TestComplexCreateVariance expected = TestComplexCreateVariance.create("builder-variant-prefix", variant);
 
         String prefix = variant.getClass().getEnclosingClass().getName();
-        BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestComplexCreateVariance.class, convertUtilsBean,
-                prefix);
+        BuilderDynaBean builderDynaBean =
+                new BuilderDynaBean(TestComplexCreateVariance.class, convertUtilsBean, prefix);
         utilsBean.setProperty(builderDynaBean, "[0]", expected.varianceName);
         utilsBean.setProperty(builderDynaBean, "[1].class", variant.getClass().getSimpleName());
         utilsBean.setProperty(builderDynaBean, "[1].variantBuilderName", variant.variantBuilderName);
@@ -330,11 +341,21 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testComplexRootAllParameters() throws Exception {
-        TestSimpleBuilder simpleBuilder = TestSimpleBuilder.builder().stringL1("simple-l1").longVal(20L).build();
-        TestRootClass expected = TestRootClass.builder().intVal(10).stringVal("root").testEnum(TestEnum.Red)
-                .testComplexCreate(TestComplexCreate.create("real",
-                        TestSimpleBuilder.builder().stringL1("complex-l1").longVal(10L).build()))
-                .testSimpleBuilder(simpleBuilder).testSimpleCreate(TestSimpleCreate.create("first", "last")).build();
+        TestSimpleBuilder simpleBuilder =
+                TestSimpleBuilder.builder().stringL1("simple-l1").longVal(20L).build();
+        TestRootClass expected = TestRootClass.builder()
+                .intVal(10)
+                .stringVal("root")
+                .testEnum(TestEnum.Red)
+                .testComplexCreate(TestComplexCreate.create(
+                        "real",
+                        TestSimpleBuilder.builder()
+                                .stringL1("complex-l1")
+                                .longVal(10L)
+                                .build()))
+                .testSimpleBuilder(simpleBuilder)
+                .testSimpleCreate(TestSimpleCreate.create("first", "last"))
+                .build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestRootClass.class, convertUtilsBean);
 
@@ -342,10 +363,10 @@ public class BuilderDynaBeanTest {
         utilsBean.setProperty(builderDynaBean, "stringVal", expected.stringVal);
         utilsBean.setProperty(builderDynaBean, "testEnum", expected.testEnum);
         utilsBean.setProperty(builderDynaBean, "testComplexCreate.[0]", expected.testComplexCreate.realName);
-        utilsBean.setProperty(builderDynaBean, "testComplexCreate.[1].stringL1",
-                expected.testComplexCreate.test1.stringL1);
-        utilsBean.setProperty(builderDynaBean, "testComplexCreate.[1].longVal",
-                expected.testComplexCreate.test1.longVal);
+        utilsBean.setProperty(
+                builderDynaBean, "testComplexCreate.[1].stringL1", expected.testComplexCreate.test1.stringL1);
+        utilsBean.setProperty(
+                builderDynaBean, "testComplexCreate.[1].longVal", expected.testComplexCreate.test1.longVal);
         utilsBean.setProperty(builderDynaBean, "testSimpleBuilder.class", TestSimpleBuilder.class.getName());
         utilsBean.setProperty(builderDynaBean, "testSimpleBuilder.stringL1", simpleBuilder.stringL1);
         utilsBean.setProperty(builderDynaBean, "testSimpleBuilder.longVal", simpleBuilder.longVal);
@@ -370,7 +391,11 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testComplexRootTopLevelOnly() throws Exception {
-        TestRootClass expected = TestRootClass.builder().intVal(10).stringVal("root").testEnum(TestEnum.Red).build();
+        TestRootClass expected = TestRootClass.builder()
+                .intVal(10)
+                .stringVal("root")
+                .testEnum(TestEnum.Red)
+                .build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestRootClass.class, convertUtilsBean);
 
@@ -385,12 +410,17 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testSupplierNotUsed() throws Exception {
-        TestVariantBuilder variant = TestVariantBuilder.builder().testEnum(TestEnum.Green).intClass(10)
-                .variantBuilderName("variant-supplier").build();
-        TestSupplierClass expected = TestSupplierClass.builder().variantClass(variant).build();
+        TestVariantBuilder variant = TestVariantBuilder.builder()
+                .testEnum(TestEnum.Green)
+                .intClass(10)
+                .variantBuilderName("variant-supplier")
+                .build();
+        TestSupplierClass expected =
+                TestSupplierClass.builder().variantClass(variant).build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestSupplierClass.class, convertUtilsBean);
-        utilsBean.setProperty(builderDynaBean, "variantClass.class", variant.getClass().getName());
+        utilsBean.setProperty(
+                builderDynaBean, "variantClass.class", variant.getClass().getName());
         utilsBean.setProperty(builderDynaBean, "variantClass.testEnum", variant.testEnum);
         utilsBean.setProperty(builderDynaBean, "variantClass.intClass", variant.intClass);
         utilsBean.setProperty(builderDynaBean, "variantClass.variantBuilderName", variant.variantBuilderName);
@@ -422,8 +452,11 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testVariantBuildsToSuperType() throws Exception {
-        TestVariantBuilder expected = TestVariantBuilder.builder().intClass(10).testEnum(TestEnum.Green)
-                .variantBuilderName("variant-super").build();
+        TestVariantBuilder expected = TestVariantBuilder.builder()
+                .intClass(10)
+                .testEnum(TestEnum.Green)
+                .variantBuilderName("variant-super")
+                .build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestInterface.class, convertUtilsBean);
         utilsBean.setProperty(builderDynaBean, "class", expected.getClass().getName());
@@ -439,9 +472,11 @@ public class BuilderDynaBeanTest {
     @Test
     public void testEmptyPropertyHandler() throws Exception {
         String emptyPropertyValue = "test-property";
-        TestVariantCreate expected = TestVariantCreate.create(emptyPropertyValue, (long) emptyPropertyValue.length(),
-                emptyPropertyValue + "-vary");
-        BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestInterface.class, convertUtilsBean,
+        TestVariantCreate expected = TestVariantCreate.create(
+                emptyPropertyValue, (long) emptyPropertyValue.length(), emptyPropertyValue + "-vary");
+        BuilderDynaBean builderDynaBean = new BuilderDynaBean(
+                TestInterface.class,
+                convertUtilsBean,
                 s -> TestVariantCreate.create(s, (long) s.length(), s + "-vary"));
         utilsBean.setProperty(builderDynaBean, "", emptyPropertyValue);
 
@@ -455,8 +490,8 @@ public class BuilderDynaBeanTest {
         thrown.expect(IllegalStateException.class);
         thrown.expectMessage(containsString("When a property handler is resolved further properties may not be set."));
 
-        BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestInterface.class, convertUtilsBean,
-                s -> TestVariantCreate.create("test", 10, "test"));
+        BuilderDynaBean builderDynaBean = new BuilderDynaBean(
+                TestInterface.class, convertUtilsBean, s -> TestVariantCreate.create("test", 10, "test"));
         utilsBean.setProperty(builderDynaBean, "", "test");
         utilsBean.setProperty(builderDynaBean, "[0]", "test");
     }
@@ -468,8 +503,8 @@ public class BuilderDynaBeanTest {
         thrown.expectMessage(containsString(TestInterface.class.getName()));
         thrown.expectMessage(containsString("cannot be assigned to"));
 
-        BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestInterface.class, convertUtilsBean,
-                s -> TestEnum.Green);
+        BuilderDynaBean builderDynaBean =
+                new BuilderDynaBean(TestInterface.class, convertUtilsBean, s -> TestEnum.Green);
 
         utilsBean.setProperty(builderDynaBean, "", "test");
 
@@ -478,8 +513,11 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testSimpleArrayValues() throws Exception {
-        SimpleArrayClassVariant expected = SimpleArrayClassVariant.builder().ints(new Integer[] { 1, 2, 3 })
-                .variantName("simple-array").longs(new Long[] { 1L, 2L, 3L }).strings(new String[] { "a", "b", "c" })
+        SimpleArrayClassVariant expected = SimpleArrayClassVariant.builder()
+                .ints(new Integer[] {1, 2, 3})
+                .variantName("simple-array")
+                .longs(new Long[] {1L, 2L, 3L})
+                .strings(new String[] {"a", "b", "c"})
                 .build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(SimpleArrayClassVariant.class, convertUtilsBean);
@@ -503,12 +541,20 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testComplexArrayValuesBuilder() throws Exception {
-        TestVariantBuilder variant1 = TestVariantBuilder.builder().variantBuilderName("variant-1")
-                .testEnum(TestEnum.Green).intClass(10).build();
-        TestVariantBuilder variant2 = TestVariantBuilder.builder().variantBuilderName("variant-2")
-                .testEnum(TestEnum.Blue).intClass(20).build();
-        ComplexArrayClassVariant expected = ComplexArrayClassVariant.builder().variantName("complex-test")
-                .tests(new TestInterface[] { variant1, variant2 }).build();
+        TestVariantBuilder variant1 = TestVariantBuilder.builder()
+                .variantBuilderName("variant-1")
+                .testEnum(TestEnum.Green)
+                .intClass(10)
+                .build();
+        TestVariantBuilder variant2 = TestVariantBuilder.builder()
+                .variantBuilderName("variant-2")
+                .testEnum(TestEnum.Blue)
+                .intClass(20)
+                .build();
+        ComplexArrayClassVariant expected = ComplexArrayClassVariant.builder()
+                .variantName("complex-test")
+                .tests(new TestInterface[] {variant1, variant2})
+                .build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(ComplexArrayClassVariant.class, convertUtilsBean);
 
@@ -533,18 +579,22 @@ public class BuilderDynaBeanTest {
         TestVariantCreate variant1 = TestVariantCreate.create("variant-1", 10L, "vary-1");
         TestVariantCreate variant2 = TestVariantCreate.create("variant-2", 20L, "vary-2");
 
-        ComplexArrayClassVariant expected = ComplexArrayClassVariant.builder().variantName("create-test")
-                .tests(new TestInterface[] { variant1, variant2 }).build();
+        ComplexArrayClassVariant expected = ComplexArrayClassVariant.builder()
+                .variantName("create-test")
+                .tests(new TestInterface[] {variant1, variant2})
+                .build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(ComplexArrayClassVariant.class, convertUtilsBean);
 
         utilsBean.setProperty(builderDynaBean, "variantName", expected.variantName);
-        utilsBean.setProperty(builderDynaBean, "tests[0].class", variant1.getClass().getName());
+        utilsBean.setProperty(
+                builderDynaBean, "tests[0].class", variant1.getClass().getName());
         utilsBean.setProperty(builderDynaBean, "tests[0].[0]", variant1.variantCreateName);
         utilsBean.setProperty(builderDynaBean, "tests[0].[1]", variant1.longClass);
         utilsBean.setProperty(builderDynaBean, "tests[0].[2]", variant1.varyString);
 
-        utilsBean.setProperty(builderDynaBean, "tests[1].class", variant2.getClass().getName());
+        utilsBean.setProperty(
+                builderDynaBean, "tests[1].class", variant2.getClass().getName());
         utilsBean.setProperty(builderDynaBean, "tests[1].[0]", variant2.variantCreateName);
         utilsBean.setProperty(builderDynaBean, "tests[1].[1]", variant2.longClass);
         utilsBean.setProperty(builderDynaBean, "tests[1].[2]", variant2.varyString);
@@ -552,7 +602,6 @@ public class BuilderDynaBeanTest {
         ComplexArrayClassVariant actual = builderDynaBean.build(ComplexArrayClassVariant.class);
 
         assertThat(actual, equalTo(expected));
-
     }
 
     @Test
@@ -562,13 +611,18 @@ public class BuilderDynaBeanTest {
             if (i % 2 == 0) {
                 variants[i] = TestVariantCreate.create("create-variant-" + i, i + 5, "vary-" + i);
             } else {
-                variants[i] = TestVariantBuilder.builder().testEnum(TestEnum.values()[i % TestEnum.values().length])
-                        .intClass(i).variantBuilderName("builder-variant-" + i).build();
+                variants[i] = TestVariantBuilder.builder()
+                        .testEnum(TestEnum.values()[i % TestEnum.values().length])
+                        .intClass(i)
+                        .variantBuilderName("builder-variant-" + i)
+                        .build();
             }
         }
 
-        ComplexArrayClassVariant expected = ComplexArrayClassVariant.builder().variantName("large-complex")
-                .tests(variants).build();
+        ComplexArrayClassVariant expected = ComplexArrayClassVariant.builder()
+                .variantName("large-complex")
+                .tests(variants)
+                .build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(ComplexArrayClassVariant.class, convertUtilsBean);
 
@@ -578,13 +632,15 @@ public class BuilderDynaBeanTest {
             TestInterface variant = variants[i];
             if (variant instanceof TestVariantCreate) {
                 TestVariantCreate create = (TestVariantCreate) variant;
-                utilsBean.setProperty(builderDynaBean, prefix + "class", create.getClass().getName());
+                utilsBean.setProperty(
+                        builderDynaBean, prefix + "class", create.getClass().getName());
                 utilsBean.setProperty(builderDynaBean, prefix + "[0]", create.variantCreateName);
                 utilsBean.setProperty(builderDynaBean, prefix + "[1]", create.longClass);
                 utilsBean.setProperty(builderDynaBean, prefix + "[2]", create.varyString);
             } else if (variant instanceof TestVariantBuilder) {
                 TestVariantBuilder builder = (TestVariantBuilder) variant;
-                utilsBean.setProperty(builderDynaBean, prefix + "class", builder.getClass().getName());
+                utilsBean.setProperty(
+                        builderDynaBean, prefix + "class", builder.getClass().getName());
                 utilsBean.setProperty(builderDynaBean, prefix + "variantBuilderName", builder.variantBuilderName);
                 utilsBean.setProperty(builderDynaBean, prefix + "intClass", builder.intClass);
                 utilsBean.setProperty(builderDynaBean, prefix + "testEnum", builder.testEnum);
@@ -667,25 +723,27 @@ public class BuilderDynaBeanTest {
 
     @Test
     public void testAdditionalMutators() throws Exception {
-        TestSimpleBuilder expected = TestSimpleBuilder.builder().stringL1("test").longVal(10L).build();
+        TestSimpleBuilder expected =
+                TestSimpleBuilder.builder().stringL1("test").longVal(10L).build();
 
         BuilderDynaBean builderDynaBean = new BuilderDynaBean(TestSimpleBuilder.class, convertUtilsBean);
 
         utilsBean.setProperty(builderDynaBean, "stringL1", expected.stringL1);
 
-        TestSimpleBuilder actual = builderDynaBean.build(TestSimpleBuilder.class,
-                b -> ((TestSimpleBuilder.TestSimpleBuilderBuilder) b).longVal(expected.longVal));
+        TestSimpleBuilder actual =
+                builderDynaBean.build(TestSimpleBuilder.class, b -> ((TestSimpleBuilder.TestSimpleBuilderBuilder) b)
+                        .longVal(expected.longVal));
 
         assertThat(actual, equalTo(expected));
     }
 
     public enum TestEnum {
-        Red, Green, Blue
+        Red,
+        Green,
+        Blue
     }
 
-    public interface TestInterface {
-
-    }
+    public interface TestInterface {}
 
     @Accessors(fluent = true)
     @ToString
@@ -838,7 +896,5 @@ public class BuilderDynaBeanTest {
         }
 
         public String name = "default";
-
     }
-
 }

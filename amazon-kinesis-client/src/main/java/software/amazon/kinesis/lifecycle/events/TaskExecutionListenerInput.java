@@ -18,9 +18,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.lifecycle.TaskExecutionListener;
 import software.amazon.kinesis.lifecycle.TaskOutcome;
 import software.amazon.kinesis.lifecycle.TaskType;
-import software.amazon.kinesis.lifecycle.TaskExecutionListener;
 
 /**
  * Container for the parameters to the TaskExecutionListener's

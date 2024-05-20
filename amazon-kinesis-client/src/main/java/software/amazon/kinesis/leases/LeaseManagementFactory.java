@@ -32,7 +32,9 @@ public interface LeaseManagementFactory {
         throw new UnsupportedOperationException();
     }
 
-    default ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory, StreamConfig streamConfig,
+    default ShardSyncTaskManager createShardSyncTaskManager(
+            MetricsFactory metricsFactory,
+            StreamConfig streamConfig,
             DeletedStreamListProvider deletedStreamListProvider) {
         throw new UnsupportedOperationException("createShardSyncTaskManager method not implemented");
     }
@@ -46,5 +48,4 @@ public interface LeaseManagementFactory {
     }
 
     LeaseCleanupManager createLeaseCleanupManager(MetricsFactory metricsFactory);
-
 }

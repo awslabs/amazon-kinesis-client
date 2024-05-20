@@ -43,27 +43,26 @@ public class CloudWatchPublisherRunnable implements Runnable {
 
     /**
      * Constructor.
-     * 
+     *
      * @param metricsPublisher publishes metrics
      * @param bufferTimeMillis time between publishing metrics
      * @param maxQueueSize max size of metrics to publish
      * @param batchSize size of batch that can be published at a time
      */
-
-    public CloudWatchPublisherRunnable(CloudWatchMetricsPublisher metricsPublisher,
-                                       long bufferTimeMillis,
-                                       int maxQueueSize,
-                                       int batchSize) {
+    public CloudWatchPublisherRunnable(
+            CloudWatchMetricsPublisher metricsPublisher, long bufferTimeMillis, int maxQueueSize, int batchSize) {
         this(metricsPublisher, bufferTimeMillis, maxQueueSize, batchSize, 0);
     }
 
-    public CloudWatchPublisherRunnable(CloudWatchMetricsPublisher metricsPublisher,
-                                       long bufferTimeMillis,
-                                       int maxQueueSize,
-                                       int batchSize,
-                                       int maxJitter) {
+    public CloudWatchPublisherRunnable(
+            CloudWatchMetricsPublisher metricsPublisher,
+            long bufferTimeMillis,
+            int maxQueueSize,
+            int batchSize,
+            int maxJitter) {
         if (log.isDebugEnabled()) {
-            log.debug("Constructing CloudWatchPublisherRunnable with maxBufferTimeMillis {} maxQueueSize {} batchSize {} maxJitter {}",
+            log.debug(
+                    "Constructing CloudWatchPublisherRunnable with maxBufferTimeMillis {} maxQueueSize {} batchSize {} maxJitter {}",
                     bufferTimeMillis,
                     maxQueueSize,
                     batchSize,
@@ -98,7 +97,7 @@ public class CloudWatchPublisherRunnable implements Runnable {
         synchronized (queue) {
             /*
              * We should send if:
-             * 
+             *
              * it's been maxBufferTimeMillis since our last send
              * or if the queue contains > batchSize elements
              * or if we're shutting down
@@ -121,8 +120,7 @@ public class CloudWatchPublisherRunnable implements Runnable {
             } else {
                 long waitTime = bufferTimeMillis - timeSinceFlush;
                 if (log.isDebugEnabled()) {
-                    log.debug("Waiting up to {} ms for {} more datums to appear.", waitTime, flushSize
-                            - queue.size());
+                    log.debug("Waiting up to {} ms for {} more datums to appear.", waitTime, flushSize - queue.size());
                 }
 
                 try {
@@ -169,7 +167,7 @@ public class CloudWatchPublisherRunnable implements Runnable {
 
     /**
      * Enqueues metric data for publication.
-     * 
+     *
      * @param data collection of MetricDatum to enqueue
      */
     public void enqueue(Collection<MetricDatumWithKey<CloudWatchMetricKey>> data) {
@@ -197,5 +195,4 @@ public class CloudWatchPublisherRunnable implements Runnable {
             queue.notify();
         }
     }
-
 }

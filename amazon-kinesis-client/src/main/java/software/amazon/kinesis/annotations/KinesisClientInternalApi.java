@@ -22,5 +22,4 @@ import java.lang.annotation.RetentionPolicy;
  * Any class/method/variable marked with this annotation is subject to breaking changes between minor releases.
  */
 @Retention(RetentionPolicy.CLASS)
-public @interface KinesisClientInternalApi {
-}
+public @interface KinesisClientInternalApi {}

@@ -15,7 +15,6 @@
 
 package software.amazon.kinesis.checkpoint;
 
-
 import lombok.Data;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.checkpoint.dynamodb.DynamoDBCheckpointFactory;

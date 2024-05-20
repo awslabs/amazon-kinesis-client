@@ -15,6 +15,11 @@
 
 package software.amazon.kinesis.coordinator;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Before;
 import org.junit.Test;
@@ -24,11 +29,6 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseBuilder;
 import software.amazon.kinesis.leases.LeaseCoordinator;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -41,8 +41,10 @@ import static org.mockito.Mockito.when;
 public class DiagnosticEventsTest {
     @Mock
     private ThreadPoolExecutor executor;
+
     @Mock
     private LeaseCoordinator leaseCoordinator;
+
     @Mock
     private DiagnosticEventHandler defaultHandler;
 
@@ -138,8 +140,8 @@ public class DiagnosticEventsTest {
         assertEquals(executorStateEvent.getLeasesOwned(), leaseAssignments.size());
         assertEquals(0, executorStateEvent.getCurrentQueueSize());
 
-        RejectedTaskEvent rejectedTaskEvent = factory.rejectedTaskEvent(executorStateEvent,
-                new TestRejectedTaskException());
+        RejectedTaskEvent rejectedTaskEvent =
+                factory.rejectedTaskEvent(executorStateEvent, new TestRejectedTaskException());
         assertEquals(rejectedTaskEvent.getExecutorStateEvent().getActiveThreads(), activeThreadCount);
         assertEquals(rejectedTaskEvent.getExecutorStateEvent().getCoreThreads(), corePoolSize);
         assertEquals(rejectedTaskEvent.getExecutorStateEvent().getLargestPoolSize(), largestPoolSize);
@@ -150,7 +152,9 @@ public class DiagnosticEventsTest {
     }
 
     private class TestRejectedTaskException extends Exception {
-        private TestRejectedTaskException() { super(); }
+        private TestRejectedTaskException() {
+            super();
+        }
     }
 
     private class CustomHandler implements DiagnosticEventHandler {

@@ -37,8 +37,7 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
     /**
      * Constructor.
      */
-    AWSCredentialsProviderPropertyValueDecoder() {
-    }
+    AWSCredentialsProviderPropertyValueDecoder() {}
 
     /**
      * Get AWSCredentialsProvider property.
@@ -104,9 +103,8 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
 
                 if (provider == null) {
                     // attempt to invoke a public varargs/array constructor of FooClass(String[])
-                    provider = constructProvider(providerName, () ->
-                        clazz.getConstructor(String[].class).newInstance((Object) varargs)
-                    );
+                    provider = constructProvider(providerName, () -> clazz.getConstructor(String[].class)
+                            .newInstance((Object) varargs));
                 }
             }
 
@@ -138,24 +136,26 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
 
     private static List<String> getPossibleFullClassNames(final String provider) {
         return Stream.of(
-                // Customer provides a short name of common providers in com.amazonaws.auth package
-                // (e.g., any classes implementing the AWSCredentialsProvider interface)
-                // @see http://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/auth/AWSCredentialsProvider.html
-                "com.amazonaws.auth.",
+                        // Customer provides a short name of common providers in com.amazonaws.auth package
+                        // (e.g., any classes implementing the AWSCredentialsProvider interface)
+                        // @see
+                        // http://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/auth/AWSCredentialsProvider.html
+                        "com.amazonaws.auth.",
 
-                // Customer provides a short name of a provider offered by this multi-lang package
-                "software.amazon.kinesis.multilang.auth.",
+                        // Customer provides a short name of a provider offered by this multi-lang package
+                        "software.amazon.kinesis.multilang.auth.",
 
-                // Customer provides a fully-qualified provider name, or a custom credentials provider
-                // (e.g., com.amazonaws.auth.ClasspathFileCredentialsProvider, org.mycompany.FooProvider)
-                ""
-        ).map(prefix -> prefix + provider).collect(Collectors.toList());
+                        // Customer provides a fully-qualified provider name, or a custom credentials provider
+                        // (e.g., com.amazonaws.auth.ClasspathFileCredentialsProvider, org.mycompany.FooProvider)
+                        "")
+                .map(prefix -> prefix + provider)
+                .collect(Collectors.toList());
     }
 
     @FunctionalInterface
     private interface CredentialsProviderConstructor<T extends AWSCredentialsProvider> {
-        T construct() throws IllegalAccessException, InstantiationException,
-                InvocationTargetException, NoSuchMethodException;
+        T construct()
+                throws IllegalAccessException, InstantiationException, InvocationTargetException, NoSuchMethodException;
     }
 
     /**
@@ -179,5 +179,4 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
         }
         return null;
     }
-
 }

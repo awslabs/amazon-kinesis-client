@@ -19,7 +19,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
-
 import lombok.Data;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
@@ -33,14 +32,16 @@ public class MetricsConfig {
     /**
      * Metrics dimensions that always will be enabled regardless of the config provided by user.
      */
-    public static final Set<String> METRICS_ALWAYS_ENABLED_DIMENSIONS = ImmutableSet
-            .of(MetricsUtil.OPERATION_DIMENSION_NAME);
+    public static final Set<String> METRICS_ALWAYS_ENABLED_DIMENSIONS =
+            ImmutableSet.of(MetricsUtil.OPERATION_DIMENSION_NAME);
 
     /**
      * Allowed dimensions for CloudWatch metrics. By default, worker ID dimension will be disabled.
      */
-    public static final Set<String> METRICS_ALWAYS_ENABLED_DIMENSIONS_WITH_SHARD_ID = ImmutableSet.<String> builder()
-            .addAll(METRICS_ALWAYS_ENABLED_DIMENSIONS).add(MetricsUtil.SHARD_ID_DIMENSION_NAME).build();
+    public static final Set<String> METRICS_ALWAYS_ENABLED_DIMENSIONS_WITH_SHARD_ID = ImmutableSet.<String>builder()
+            .addAll(METRICS_ALWAYS_ENABLED_DIMENSIONS)
+            .add(MetricsUtil.SHARD_ID_DIMENSION_NAME)
+            .build();
 
     /**
      * Metrics dimensions that signify all possible dimensions.
@@ -110,8 +111,14 @@ public class MetricsConfig {
 
     public MetricsFactory metricsFactory() {
         if (metricsFactory == null) {
-            metricsFactory = new CloudWatchMetricsFactory(cloudWatchClient(), namespace(), metricsBufferTimeMillis(),
-                    metricsMaxQueueSize(), metricsLevel(), metricsEnabledDimensions(), publisherFlushBuffer());
+            metricsFactory = new CloudWatchMetricsFactory(
+                    cloudWatchClient(),
+                    namespace(),
+                    metricsBufferTimeMillis(),
+                    metricsMaxQueueSize(),
+                    metricsLevel(),
+                    metricsEnabledDimensions(),
+                    publisherFlushBuffer());
         }
         return metricsFactory;
     }

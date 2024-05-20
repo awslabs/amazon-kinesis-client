@@ -25,7 +25,7 @@ public interface ConsumerTask extends Callable<TaskResult> {
     /**
      * Perform task logic.
      * E.g. perform set up (e.g. fetch records) and invoke a callback (e.g. processRecords() API).
-     * 
+     *
      * @return TaskResult (captures any exceptions encountered during execution of the task)
      */
     TaskResult call();
@@ -34,5 +34,4 @@ public interface ConsumerTask extends Callable<TaskResult> {
      * @return TaskType
      */
     TaskType taskType();
-
 }

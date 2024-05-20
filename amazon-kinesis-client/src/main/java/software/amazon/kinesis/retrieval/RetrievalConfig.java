@@ -111,29 +111,34 @@ public class RetrievalConfig {
      * @see StreamTracker#createStreamConfig(StreamIdentifier)
      */
     @Deprecated
-    private InitialPositionInStreamExtended initialPositionInStreamExtended = InitialPositionInStreamExtended
-            .newInitialPosition(InitialPositionInStream.LATEST);
+    private InitialPositionInStreamExtended initialPositionInStreamExtended =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
 
     private RetrievalSpecificConfig retrievalSpecificConfig;
 
     private RetrievalFactory retrievalFactory;
 
-    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull String streamName,
-                           @NonNull String applicationName) {
+    public RetrievalConfig(
+            @NonNull KinesisAsyncClient kinesisAsyncClient,
+            @NonNull String streamName,
+            @NonNull String applicationName) {
         this(kinesisAsyncClient, new SingleStreamTracker(streamName), applicationName);
     }
 
-    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull Arn streamArn,
-                           @NonNull String applicationName) {
+    public RetrievalConfig(
+            @NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull Arn streamArn, @NonNull String applicationName) {
         this(kinesisAsyncClient, new SingleStreamTracker(streamArn), applicationName);
     }
 
-    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull StreamTracker streamTracker,
-                           @NonNull String applicationName) {
+    public RetrievalConfig(
+            @NonNull KinesisAsyncClient kinesisAsyncClient,
+            @NonNull StreamTracker streamTracker,
+            @NonNull String applicationName) {
         this.kinesisClient = kinesisAsyncClient;
         this.streamTracker = streamTracker;
         this.applicationName = applicationName;
-        this.appStreamTracker = DeprecationUtils.convert(streamTracker,
+        this.appStreamTracker = DeprecationUtils.convert(
+                streamTracker,
                 singleStreamTracker -> singleStreamTracker.streamConfigList().get(0));
     }
 
@@ -148,7 +153,8 @@ public class RetrievalConfig {
      * @see StreamTracker#createStreamConfig(StreamIdentifier)
      */
     @Deprecated
-    public RetrievalConfig initialPositionInStreamExtended(InitialPositionInStreamExtended initialPositionInStreamExtended) {
+    public RetrievalConfig initialPositionInStreamExtended(
+            InitialPositionInStreamExtended initialPositionInStreamExtended) {
         if (streamTracker().isMultiStream()) {
             throw new IllegalArgumentException(
                     "Cannot set initialPositionInStreamExtended when multiStreamTracker is set");
@@ -170,8 +176,7 @@ public class RetrievalConfig {
     public RetrievalFactory retrievalFactory() {
         if (retrievalFactory == null) {
             if (retrievalSpecificConfig == null) {
-                final FanOutConfig fanOutConfig = new FanOutConfig(kinesisClient())
-                        .applicationName(applicationName());
+                final FanOutConfig fanOutConfig = new FanOutConfig(kinesisClient()).applicationName(applicationName());
                 if (!streamTracker.isMultiStream()) {
                     final String streamName = getSingleStreamIdentifier().streamName();
                     fanOutConfig.streamName(streamName);
@@ -190,5 +195,4 @@ public class RetrievalConfig {
     private StreamIdentifier getSingleStreamIdentifier() {
         return streamTracker.streamConfigList().get(0).streamIdentifier();
     }
-
 }

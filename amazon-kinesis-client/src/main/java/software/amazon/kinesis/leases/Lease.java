@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,12 +40,19 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 @NoArgsConstructor
 @Getter
 @Accessors(fluent = true)
-@EqualsAndHashCode(exclude = {"concurrencyToken", "lastCounterIncrementNanos", "childShardIds", "pendingCheckpointState", "isMarkedForLeaseSteal"})
+@EqualsAndHashCode(
+        exclude = {
+            "concurrencyToken",
+            "lastCounterIncrementNanos",
+            "childShardIds",
+            "pendingCheckpointState",
+            "isMarkedForLeaseSteal"
+        })
 @ToString
 public class Lease {
     /**
      * See javadoc for System.nanoTime - summary:
-     * 
+     *
      * Sometimes System.nanoTime's return values will wrap due to overflow. When they do, the difference between two
      * values will be very large. We will consider leases to be expired if they are more than a year old.
      */
@@ -100,36 +108,71 @@ public class Lease {
      * Count of distinct lease holders between checkpoints.
      */
     private Long ownerSwitchesSinceCheckpoint = 0L;
+
     private final Set<String> parentShardIds = new HashSet<>();
     private final Set<String> childShardIds = new HashSet<>();
     private HashKeyRangeForLease hashKeyRangeForLease;
 
     /**
      * Copy constructor, used by clone().
-     * 
+     *
      * @param lease lease to copy
      */
     protected Lease(Lease lease) {
-        this(lease.leaseKey(), lease.leaseOwner(), lease.leaseCounter(), lease.concurrencyToken(),
-                lease.lastCounterIncrementNanos(), lease.checkpoint(), lease.pendingCheckpoint(),
-                lease.ownerSwitchesSinceCheckpoint(), lease.parentShardIds(), lease.childShardIds(),
-                lease.pendingCheckpointState(), lease.hashKeyRangeForLease());
+        this(
+                lease.leaseKey(),
+                lease.leaseOwner(),
+                lease.leaseCounter(),
+                lease.concurrencyToken(),
+                lease.lastCounterIncrementNanos(),
+                lease.checkpoint(),
+                lease.pendingCheckpoint(),
+                lease.ownerSwitchesSinceCheckpoint(),
+                lease.parentShardIds(),
+                lease.childShardIds(),
+                lease.pendingCheckpointState(),
+                lease.hashKeyRangeForLease());
     }
 
     @Deprecated
-    public Lease(final String leaseKey, final String leaseOwner, final Long leaseCounter,
-                 final UUID concurrencyToken, final Long lastCounterIncrementNanos,
-                 final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint,
-                 final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds) {
-        this(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos, checkpoint, pendingCheckpoint,
-                ownerSwitchesSinceCheckpoint, parentShardIds, new HashSet<>(), null, null);
+    public Lease(
+            final String leaseKey,
+            final String leaseOwner,
+            final Long leaseCounter,
+            final UUID concurrencyToken,
+            final Long lastCounterIncrementNanos,
+            final ExtendedSequenceNumber checkpoint,
+            final ExtendedSequenceNumber pendingCheckpoint,
+            final Long ownerSwitchesSinceCheckpoint,
+            final Set<String> parentShardIds) {
+        this(
+                leaseKey,
+                leaseOwner,
+                leaseCounter,
+                concurrencyToken,
+                lastCounterIncrementNanos,
+                checkpoint,
+                pendingCheckpoint,
+                ownerSwitchesSinceCheckpoint,
+                parentShardIds,
+                new HashSet<>(),
+                null,
+                null);
     }
 
-    public Lease(final String leaseKey, final String leaseOwner, final Long leaseCounter,
-                    final UUID concurrencyToken, final Long lastCounterIncrementNanos,
-                    final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint,
-                    final Long ownerSwitchesSinceCheckpoint, final Set<String> parentShardIds, final Set<String> childShardIds,
-                    final byte[] pendingCheckpointState, final HashKeyRangeForLease hashKeyRangeForLease) {
+    public Lease(
+            final String leaseKey,
+            final String leaseOwner,
+            final Long leaseCounter,
+            final UUID concurrencyToken,
+            final Long lastCounterIncrementNanos,
+            final ExtendedSequenceNumber checkpoint,
+            final ExtendedSequenceNumber pendingCheckpoint,
+            final Long ownerSwitchesSinceCheckpoint,
+            final Set<String> parentShardIds,
+            final Set<String> childShardIds,
+            final byte[] pendingCheckpointState,
+            final HashKeyRangeForLease hashKeyRangeForLease) {
         this.leaseKey = leaseKey;
         this.leaseOwner = leaseOwner;
         this.leaseCounter = leaseCounter;
@@ -159,7 +202,7 @@ public class Lease {
     /**
      * Updates this Lease's mutable, application-specific fields based on the passed-in lease object. Does not update
      * fields that are internal to the leasing library (leaseKey, leaseOwner, leaseCounter).
-     * 
+     *
      * @param lease
      */
     public void update(final Lease lease) {
@@ -208,7 +251,7 @@ public class Lease {
 
     /**
      * Sets lastCounterIncrementNanos
-     * 
+     *
      * @param lastCounterIncrementNanos last renewal in nanoseconds since the epoch
      */
     public void lastCounterIncrementNanos(Long lastCounterIncrementNanos) {
@@ -217,7 +260,7 @@ public class Lease {
 
     /**
      * Sets concurrencyToken.
-     * 
+     *
      * @param concurrencyToken may not be null
      */
     public void concurrencyToken(@NonNull final UUID concurrencyToken) {
@@ -226,7 +269,7 @@ public class Lease {
 
     /**
      * Sets leaseKey. LeaseKey is immutable once set.
-     * 
+     *
      * @param leaseKey may not be null.
      */
     public void leaseKey(@NonNull final String leaseKey) {
@@ -238,7 +281,7 @@ public class Lease {
 
     /**
      * Sets leaseCounter.
-     * 
+     *
      * @param leaseCounter may not be null
      */
     public void leaseCounter(@NonNull final Long leaseCounter) {
@@ -314,7 +357,7 @@ public class Lease {
 
     /**
      * Sets leaseOwner.
-     * 
+     *
      * @param leaseOwner may be null.
      */
     public void leaseOwner(String leaseOwner) {
@@ -323,11 +366,10 @@ public class Lease {
 
     /**
      * Returns a deep copy of this object. Type-unsafe - there aren't good mechanisms for copy-constructing generics.
-     * 
+     *
      * @return A deep copy of this object.
      */
     public Lease copy() {
         return new Lease(this);
     }
-
 }

@@ -37,17 +37,17 @@ public class ProcessRecordsMessage extends Message {
      * The records that the client's process needs to handle.
      */
     private List<JsonFriendlyRecord> records;
+
     private Long millisBehindLatest;
 
     /**
      * Default constructor.
      */
-    public ProcessRecordsMessage() {
-    }
+    public ProcessRecordsMessage() {}
 
     /**
      * Convenience constructor.
-     * 
+     *
      * @param processRecordsInput
      *            the process records input to be sent to the child
      */

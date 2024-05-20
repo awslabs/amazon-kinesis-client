@@ -14,8 +14,8 @@
  */
 package software.amazon.kinesis.processor;
 
-import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.checkpoint.Checkpoint;
+import software.amazon.kinesis.exceptions.KinesisClientLibException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 /**
@@ -24,18 +24,18 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 public interface Checkpointer {
 
     /**
-     * Record a checkpoint for a shard (e.g. sequence and subsequence numbers of last record processed 
+     * Record a checkpoint for a shard (e.g. sequence and subsequence numbers of last record processed
      * by application). Upon failover, record processing is resumed from this point.
-     * 
+     *
      * @param leaseKey Checkpoint is specified for this shard.
      * @param checkpointValue Value of the checkpoint (e.g. Kinesis sequence number and subsequence number)
      * @param concurrencyToken Used with conditional writes to prevent stale updates
-     *        (e.g. if there was a fail over to a different record processor, we don't want to 
+     *        (e.g. if there was a fail over to a different record processor, we don't want to
      *        overwrite it's checkpoint)
      * @throws KinesisClientLibException Thrown if we were unable to save the checkpoint
      */
     void setCheckpoint(String leaseKey, ExtendedSequenceNumber checkpointValue, String concurrencyToken)
-        throws KinesisClientLibException;
+            throws KinesisClientLibException;
 
     /**
      * Get the current checkpoint stored for the specified shard. Useful for checking that the parent shard
@@ -58,7 +58,6 @@ public interface Checkpointer {
      */
     Checkpoint getCheckpointObject(String leaseKey) throws KinesisClientLibException;
 
-
     /**
      * Record intent to checkpoint for a shard. Upon failover, the pendingCheckpointValue will be passed to the new
      * ShardRecordProcessor's initialize() method.
@@ -71,7 +70,7 @@ public interface Checkpointer {
      * @throws KinesisClientLibException Thrown if we were unable to save the checkpoint
      */
     void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
-        throws KinesisClientLibException;
+            throws KinesisClientLibException;
 
     /**
      * Record intent to checkpoint for a shard. Upon failover, the pendingCheckpoint and pendingCheckpointState will be
@@ -86,11 +85,14 @@ public interface Checkpointer {
      *
      * @throws KinesisClientLibException Thrown if we were unable to save the checkpoint
      */
-    void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken, byte[] pendingCheckpointState)
+    void prepareCheckpoint(
+            String leaseKey,
+            ExtendedSequenceNumber pendingCheckpoint,
+            String concurrencyToken,
+            byte[] pendingCheckpointState)
             throws KinesisClientLibException;
 
     void operation(String operation);
 
     String operation();
-
 }

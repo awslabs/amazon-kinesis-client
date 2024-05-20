@@ -34,11 +34,20 @@ public class ShardSyncer {
      * @throws KinesisClientLibIOException
      */
     @Deprecated
-    public static synchronized void checkAndCreateLeasesForNewShards(@NonNull final ShardDetector shardDetector,
-            final LeaseRefresher leaseRefresher, final InitialPositionInStreamExtended initialPosition,
-            final boolean ignoreUnexpectedChildShards, final MetricsScope scope)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException, KinesisClientLibIOException, InterruptedException {
-            HIERARCHICAL_SHARD_SYNCER.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher, initialPosition,
-                    scope, ignoreUnexpectedChildShards, leaseRefresher.isLeaseTableEmpty());
+    public static synchronized void checkAndCreateLeasesForNewShards(
+            @NonNull final ShardDetector shardDetector,
+            final LeaseRefresher leaseRefresher,
+            final InitialPositionInStreamExtended initialPosition,
+            final boolean ignoreUnexpectedChildShards,
+            final MetricsScope scope)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException,
+                    KinesisClientLibIOException, InterruptedException {
+        HIERARCHICAL_SHARD_SYNCER.checkAndCreateLeaseForNewShards(
+                shardDetector,
+                leaseRefresher,
+                initialPosition,
+                scope,
+                ignoreUnexpectedChildShards,
+                leaseRefresher.isLeaseTableEmpty());
     }
 }

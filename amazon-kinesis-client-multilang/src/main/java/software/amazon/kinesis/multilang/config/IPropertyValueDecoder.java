@@ -18,13 +18,13 @@ import java.util.List;
 
 /**
  * This class captures the concept of decoding a property value to a particular Java type.
- * 
+ *
  * @param <T>
  */
 interface IPropertyValueDecoder<T> {
     /**
      * Get the value that was read from a configuration file and convert it to some type.
-     * 
+     *
      * @param propertyValue property string value that needs to be decoded.
      * @return property value in type T
      */
@@ -32,7 +32,7 @@ interface IPropertyValueDecoder<T> {
 
     /**
      * Get a list of supported types for this class.
-     * 
+     *
      * @return list of supported classes.
      */
     List<Class<T>> getSupportedTypes();

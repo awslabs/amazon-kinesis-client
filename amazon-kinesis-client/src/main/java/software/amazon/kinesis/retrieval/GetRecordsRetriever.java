@@ -17,7 +17,7 @@ package software.amazon.kinesis.retrieval;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 
 /**
- * This class uses the GetRecordsRetrievalStrategy class to retrieve the next set of records and update the cache. 
+ * This class uses the GetRecordsRetrievalStrategy class to retrieve the next set of records and update the cache.
  */
 public interface GetRecordsRetriever {
     GetRecordsResponse getNextRecords(int maxRecords);

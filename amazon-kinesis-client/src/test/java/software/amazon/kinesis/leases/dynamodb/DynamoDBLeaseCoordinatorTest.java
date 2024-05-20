@@ -1,5 +1,7 @@
 package software.amazon.kinesis.leases.dynamodb;
 
+import java.util.UUID;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -8,8 +10,6 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.MetricsFactory;
-
-import java.util.UUID;
 
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
@@ -32,6 +32,7 @@ public class DynamoDBLeaseCoordinatorTest {
 
     @Mock
     private LeaseRefresher leaseRefresher;
+
     @Mock
     private MetricsFactory metricsFactory;
 
@@ -39,16 +40,25 @@ public class DynamoDBLeaseCoordinatorTest {
 
     @Before
     public void setup() {
-        this.leaseCoordinator = new DynamoDBLeaseCoordinator(leaseRefresher, WORKER_ID, LEASE_DURATION_MILLIS,
-                ENABLE_PRIORITY_LEASE_ASSIGNMENT, EPSILON_MILLIS, MAX_LEASES_FOR_WORKER,
-                MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
-                INITIAL_LEASE_TABLE_READ_CAPACITY, INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
+        this.leaseCoordinator = new DynamoDBLeaseCoordinator(
+                leaseRefresher,
+                WORKER_ID,
+                LEASE_DURATION_MILLIS,
+                ENABLE_PRIORITY_LEASE_ASSIGNMENT,
+                EPSILON_MILLIS,
+                MAX_LEASES_FOR_WORKER,
+                MAX_LEASES_TO_STEAL_AT_ONE_TIME,
+                MAX_LEASE_RENEWER_THREAD_COUNT,
+                INITIAL_LEASE_TABLE_READ_CAPACITY,
+                INITIAL_LEASE_TABLE_WRITE_CAPACITY,
+                metricsFactory);
     }
 
     @Test
     public void testInitialize_tableCreationSucceeds() throws Exception {
         when(leaseRefresher.createLeaseTableIfNotExists()).thenReturn(true);
-        when(leaseRefresher.waitUntilLeaseTableExists(SECONDS_BETWEEN_POLLS, TIMEOUT_SECONDS)).thenReturn(true);
+        when(leaseRefresher.waitUntilLeaseTableExists(SECONDS_BETWEEN_POLLS, TIMEOUT_SECONDS))
+                .thenReturn(true);
 
         leaseCoordinator.initialize();
 
@@ -59,7 +69,8 @@ public class DynamoDBLeaseCoordinatorTest {
     @Test(expected = DependencyException.class)
     public void testInitialize_tableCreationFails() throws Exception {
         when(leaseRefresher.createLeaseTableIfNotExists()).thenReturn(false);
-        when(leaseRefresher.waitUntilLeaseTableExists(SECONDS_BETWEEN_POLLS, TIMEOUT_SECONDS)).thenReturn(false);
+        when(leaseRefresher.waitUntilLeaseTableExists(SECONDS_BETWEEN_POLLS, TIMEOUT_SECONDS))
+                .thenReturn(false);
 
         try {
             leaseCoordinator.initialize();
@@ -81,5 +92,4 @@ public class DynamoDBLeaseCoordinatorTest {
         leaseCoordinator.stopLeaseTaker();
         assertTrue(leaseCoordinator.getAssignments().isEmpty());
     }
-
 }

@@ -14,25 +14,24 @@
  */
 package software.amazon.kinesis.multilang;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.mockito.Mockito.when;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
-import software.amazon.awssdk.regions.Region;
+import junit.framework.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.runners.MockitoJUnitRunner;
-
-import junit.framework.Assert;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.kinesis.multilang.config.KinesisClientLibConfigurator;
 import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MultiLangDaemonConfigTest {
@@ -49,6 +48,7 @@ public class MultiLangDaemonConfigTest {
 
     @Mock
     private AwsCredentialsProvider credentialsProvider;
+
     @Mock
     private AwsCredentials creds;
 
@@ -62,14 +62,13 @@ public class MultiLangDaemonConfigTest {
      * @throws IOException
      */
     public void setup(String streamName, String streamArn) throws IOException {
-        String properties = String.format("executableName = %s\n"
+        String properties = String.format(
+                "executableName = %s\n"
                         + "applicationName = %s\n"
                         + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
                         + "processingLanguage = malbolge\n"
                         + "regionName = %s\n",
-                EXE,
-                APPLICATION_NAME,
-                "us-east-1");
+                EXE, APPLICATION_NAME, "us-east-1");
 
         if (streamName != null) {
             properties += String.format("streamName = %s\n", streamName);
@@ -79,7 +78,8 @@ public class MultiLangDaemonConfigTest {
         }
         classLoader = Mockito.mock(ClassLoader.class);
 
-        Mockito.doReturn(new ByteArrayInputStream(properties.getBytes())).when(classLoader)
+        Mockito.doReturn(new ByteArrayInputStream(properties.getBytes()))
+                .when(classLoader)
                 .getResourceAsStream(FILENAME);
 
         when(credentialsProvider.resolveCredentials()).thenReturn(creds);
@@ -185,7 +185,8 @@ public class MultiLangDaemonConfigTest {
                 + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n" + "processingLanguage = malbolge";
         ClassLoader classLoader = Mockito.mock(ClassLoader.class);
 
-        Mockito.doReturn(new ByteArrayInputStream(propertiesNoExecutableName.getBytes())).when(classLoader)
+        Mockito.doReturn(new ByteArrayInputStream(propertiesNoExecutableName.getBytes()))
+                .when(classLoader)
                 .getResourceAsStream(FILENAME);
 
         try {
@@ -207,5 +208,4 @@ public class MultiLangDaemonConfigTest {
     public void testActualPropertiesFile() throws Exception {
         new MultiLangDaemonConfig(FILENAME);
     }
-
 }

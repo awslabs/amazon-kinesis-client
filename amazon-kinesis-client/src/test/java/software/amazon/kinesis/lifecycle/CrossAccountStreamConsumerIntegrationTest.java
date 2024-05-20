@@ -1,13 +1,12 @@
 package software.amazon.kinesis.lifecycle;
 
+import org.junit.Test;
 import software.amazon.kinesis.application.TestConsumer;
 import software.amazon.kinesis.config.KCLAppConfig;
 import software.amazon.kinesis.config.crossaccount.ReleaseCanaryCrossAccountMultiStreamPollingH2TestConfig;
 import software.amazon.kinesis.config.crossaccount.ReleaseCanaryCrossAccountMultiStreamStreamingTestConfig;
 import software.amazon.kinesis.config.crossaccount.ReleaseCanaryCrossAccountPollingH2TestConfig;
 import software.amazon.kinesis.config.crossaccount.ReleaseCanaryCrossAccountStreamingTestConfig;
-
-import org.junit.Test;
 
 public class CrossAccountStreamConsumerIntegrationTest {
 
@@ -43,5 +42,4 @@ public class CrossAccountStreamConsumerIntegrationTest {
         TestConsumer consumer = new TestConsumer(consumerConfig);
         consumer.run();
     }
-
 }

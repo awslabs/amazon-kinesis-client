@@ -30,7 +30,7 @@ public interface ShardRecordProcessor {
      * Invoked by the Amazon Kinesis Client Library before data records are delivered to the ShardRecordProcessor instance
      * (via processRecords).
      *
-     * @param initializationInput Provides information related to initialization 
+     * @param initializationInput Provides information related to initialization
      */
     void initialize(InitializationInput initializationInput);
 
@@ -48,7 +48,7 @@ public interface ShardRecordProcessor {
     /**
      * Called when the lease that tied to this record processor has been lost. Once the lease has been lost the record
      * processor can no longer checkpoint.
-     * 
+     *
      * @param leaseLostInput
      *            access to functions and data related to the loss of the lease. Currently this has no functionality.
      */
@@ -60,7 +60,7 @@ public interface ShardRecordProcessor {
      *
      * When this is called the record processor <b>must</b> call {@link RecordProcessorCheckpointer#checkpoint()},
      * otherwise an exception will be thrown and the all child shards of this shard will not make progress.
-     * 
+     *
      * @param shardEndedInput
      *            provides access to a checkpointer method for completing processing of the shard.
      */
@@ -76,5 +76,4 @@ public interface ShardRecordProcessor {
      *            completed.
      */
     void shutdownRequested(ShutdownRequestedInput shutdownRequestedInput);
-
 }

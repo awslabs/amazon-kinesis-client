@@ -14,10 +14,10 @@
  */
 package software.amazon.kinesis.retrieval.kpl;
 
-import static org.junit.Assert.assertTrue;
-
 import org.junit.Test;
 import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
+
+import static org.junit.Assert.assertTrue;
 
 public class ExtendedSequenceNumberTest {
 
@@ -32,5 +32,4 @@ public class ExtendedSequenceNumberTest {
             assertTrue(sentinel.name(), esnWithSubsequence.isSentinelCheckpoint());
         }
     }
-
 }

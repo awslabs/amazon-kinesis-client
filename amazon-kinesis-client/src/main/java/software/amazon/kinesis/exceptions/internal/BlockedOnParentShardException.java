@@ -27,7 +27,7 @@ public class BlockedOnParentShardException extends KinesisClientLibRetryableExce
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Error message.
      */
     public BlockedOnParentShardException(String message) {
@@ -36,12 +36,11 @@ public class BlockedOnParentShardException extends KinesisClientLibRetryableExce
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Error message.
      * @param e Cause of the exception.
      */
     public BlockedOnParentShardException(String message, Exception e) {
         super(message, e);
     }
-
 }

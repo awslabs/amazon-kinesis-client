@@ -15,6 +15,10 @@
 package software.amazon.kinesis.multilang;
 
 import com.amazonaws.regions.Regions;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
@@ -23,11 +27,6 @@ import static software.amazon.kinesis.multilang.NestedPropertyKey.ENDPOINT;
 import static software.amazon.kinesis.multilang.NestedPropertyKey.ENDPOINT_REGION;
 import static software.amazon.kinesis.multilang.NestedPropertyKey.EXTERNAL_ID;
 import static software.amazon.kinesis.multilang.NestedPropertyKey.parse;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
 public class NestedPropertyKeyTest {
@@ -95,11 +94,11 @@ public class NestedPropertyKeyTest {
     @Test
     public void testNonmatchingParameters() {
         final String[] params = new String[] {
-                null,
-                "",
-                "hello world", // no nested key
-                "foo=bar", // nested key, but is not a recognized key
-                createKey(EXTERNAL_ID, "eid") + "=extra", // valid key made invalid by second '='
+            null,
+            "",
+            "hello world", // no nested key
+            "foo=bar", // nested key, but is not a recognized key
+            createKey(EXTERNAL_ID, "eid") + "=extra", // valid key made invalid by second '='
         };
         parse(mockProcessor, params);
         verifyZeroInteractions(mockProcessor);
@@ -108,5 +107,4 @@ public class NestedPropertyKeyTest {
     private static String createKey(final NestedPropertyKey key, final String value) {
         return key.getNestedKey() + "=" + value;
     }
-
 }

@@ -37,5 +37,4 @@ public class ProcessorConfig {
      * <p>Default value: false</p>
      */
     private boolean callProcessRecordsEvenForEmptyRecordList = false;
-
 }

@@ -15,6 +15,12 @@
 
 package software.amazon.kinesis.retrieval.fanout;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+import javax.annotation.Nullable;
+
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -25,12 +31,6 @@ import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
-
-import javax.annotation.Nullable;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.Function;
 
 @RequiredArgsConstructor
 @KinesisClientInternalApi
@@ -44,22 +44,29 @@ public class FanOutRetrievalFactory implements RetrievalFactory {
     private final Map<StreamIdentifier, String> implicitConsumerArnTracker = new HashMap<>();
 
     @Override
-    public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
+    public RecordsPublisher createGetRecordsCache(
+            @NonNull final ShardInfo shardInfo,
             @NonNull final StreamConfig streamConfig,
             @Nullable final MetricsFactory metricsFactory) {
         final Optional<String> streamIdentifierStr = shardInfo.streamIdentifierSerOpt();
         if (streamIdentifierStr.isPresent()) {
-            return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
+            return new FanOutRecordsPublisher(
+                    kinesisClient,
+                    shardInfo.shardId(),
                     getOrCreateConsumerArn(streamConfig.streamIdentifier(), streamConfig.consumerArn()),
                     streamIdentifierStr.get());
         } else {
-            return new FanOutRecordsPublisher(kinesisClient, shardInfo.shardId(),
+            return new FanOutRecordsPublisher(
+                    kinesisClient,
+                    shardInfo.shardId(),
                     getOrCreateConsumerArn(streamConfig.streamIdentifier(), defaultConsumerArn));
         }
     }
 
     private String getOrCreateConsumerArn(StreamIdentifier streamIdentifier, String consumerArn) {
-        return consumerArn != null ? consumerArn : implicitConsumerArnTracker
-                    .computeIfAbsent(streamIdentifier, sId -> consumerArnCreator.apply(sId.streamName()));
+        return consumerArn != null
+                ? consumerArn
+                : implicitConsumerArnTracker.computeIfAbsent(
+                        streamIdentifier, sId -> consumerArnCreator.apply(sId.streamName()));
     }
 }

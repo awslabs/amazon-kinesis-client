@@ -1,11 +1,11 @@
 package software.amazon.kinesis.config;
 
-import software.amazon.awssdk.arns.Arn;
-import software.amazon.awssdk.http.Protocol;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+
+import software.amazon.awssdk.arns.Arn;
+import software.amazon.awssdk.http.Protocol;
 
 /**
  * Config for a polling consumer with HTTP protocol of HTTP2

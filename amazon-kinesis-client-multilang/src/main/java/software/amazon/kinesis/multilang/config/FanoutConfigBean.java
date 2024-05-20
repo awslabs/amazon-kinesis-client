@@ -26,21 +26,28 @@ public class FanoutConfigBean implements RetrievalConfigBuilder {
 
     @ConfigurationSettable(configurationClass = FanOutConfig.class)
     private int maxDescribeStreamSummaryRetries;
+
     @ConfigurationSettable(configurationClass = FanOutConfig.class)
     private String consumerArn;
+
     @ConfigurationSettable(configurationClass = FanOutConfig.class)
     private String consumerName;
+
     @ConfigurationSettable(configurationClass = FanOutConfig.class)
     private int maxDescribeStreamConsumerRetries;
+
     @ConfigurationSettable(configurationClass = FanOutConfig.class)
     private int registerStreamConsumerRetries;
+
     @ConfigurationSettable(configurationClass = FanOutConfig.class)
     private long retryBackoffMillis;
 
     @Override
     public FanOutConfig build(KinesisAsyncClient kinesisAsyncClient, MultiLangDaemonConfiguration parent) {
-        return ConfigurationSettableUtils.resolveFields(this, new FanOutConfig(kinesisAsyncClient).applicationName(parent.getApplicationName())
-                .streamName(parent.getStreamName()));
+        return ConfigurationSettableUtils.resolveFields(
+                this,
+                new FanOutConfig(kinesisAsyncClient)
+                        .applicationName(parent.getApplicationName())
+                        .streamName(parent.getStreamName()));
     }
-
 }

@@ -15,13 +15,13 @@
 
 package software.amazon.kinesis.common;
 
+import java.math.BigInteger;
+
 import lombok.NonNull;
 import lombok.Value;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
-
-import java.math.BigInteger;
 
 /**
  * Lease POJO to hold the starting hashkey range and ending hashkey range of kinesis shards.
@@ -34,8 +34,11 @@ public class HashKeyRangeForLease {
     private final BigInteger endingHashKey;
 
     public HashKeyRangeForLease(BigInteger startingHashKey, BigInteger endingHashKey) {
-        Validate.isTrue(startingHashKey.compareTo(endingHashKey) < 0,
-                "StartingHashKey %s must be less than EndingHashKey %s ", startingHashKey, endingHashKey);
+        Validate.isTrue(
+                startingHashKey.compareTo(endingHashKey) < 0,
+                "StartingHashKey %s must be less than EndingHashKey %s ",
+                startingHashKey,
+                endingHashKey);
         this.startingHashKey = startingHashKey;
         this.endingHashKey = endingHashKey;
     }
@@ -65,11 +68,15 @@ public class HashKeyRangeForLease {
      * @param endingHashKeyStr
      * @return HashKeyRangeForLease
      */
-    public static HashKeyRangeForLease deserialize(@NonNull String startingHashKeyStr, @NonNull String endingHashKeyStr) {
+    public static HashKeyRangeForLease deserialize(
+            @NonNull String startingHashKeyStr, @NonNull String endingHashKeyStr) {
         final BigInteger startingHashKey = new BigInteger(startingHashKeyStr);
         final BigInteger endingHashKey = new BigInteger(endingHashKeyStr);
-        Validate.isTrue(startingHashKey.compareTo(endingHashKey) < 0,
-                "StartingHashKey %s must be less than EndingHashKey %s ", startingHashKeyStr, endingHashKeyStr);
+        Validate.isTrue(
+                startingHashKey.compareTo(endingHashKey) < 0,
+                "StartingHashKey %s must be less than EndingHashKey %s ",
+                startingHashKeyStr,
+                endingHashKeyStr);
         return new HashKeyRangeForLease(startingHashKey, endingHashKey);
     }
 

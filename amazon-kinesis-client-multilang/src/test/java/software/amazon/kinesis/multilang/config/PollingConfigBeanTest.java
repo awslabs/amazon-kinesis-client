@@ -15,6 +15,8 @@
 
 package software.amazon.kinesis.multilang.config;
 
+import java.util.Optional;
+
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 import org.junit.Test;
@@ -23,8 +25,6 @@ import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.retrieval.polling.PollingConfig;
-
-import java.util.Optional;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
@@ -46,17 +46,23 @@ public class PollingConfigBeanTest {
         ConvertUtilsBean convertUtilsBean = new ConvertUtilsBean();
         BeanUtilsBean utilsBean = new BeanUtilsBean(convertUtilsBean);
 
-        MultiLangDaemonConfiguration multiLangDaemonConfiguration = new MultiLangDaemonConfiguration(utilsBean, convertUtilsBean);
+        MultiLangDaemonConfiguration multiLangDaemonConfiguration =
+                new MultiLangDaemonConfiguration(utilsBean, convertUtilsBean);
         multiLangDaemonConfiguration.setStreamName("test-stream");
 
         PollingConfig pollingConfig = pollingConfigBean.build(kinesisAsyncClient, multiLangDaemonConfiguration);
 
         assertThat(pollingConfig.kinesisClient(), equalTo(kinesisAsyncClient));
         assertThat(pollingConfig.streamName(), equalTo(multiLangDaemonConfiguration.getStreamName()));
-        assertThat(pollingConfig.idleTimeBetweenReadsInMillis(), equalTo(pollingConfigBean.getIdleTimeBetweenReadsInMillis()));
-        assertThat(pollingConfig.maxGetRecordsThreadPool(), equalTo(Optional.of(pollingConfigBean.getMaxGetRecordsThreadPool())));
+        assertThat(
+                pollingConfig.idleTimeBetweenReadsInMillis(),
+                equalTo(pollingConfigBean.getIdleTimeBetweenReadsInMillis()));
+        assertThat(
+                pollingConfig.maxGetRecordsThreadPool(),
+                equalTo(Optional.of(pollingConfigBean.getMaxGetRecordsThreadPool())));
         assertThat(pollingConfig.maxRecords(), equalTo(pollingConfigBean.getMaxRecords()));
-        assertThat(pollingConfig.retryGetRecordsInSeconds(), equalTo(Optional.of(pollingConfigBean.getRetryGetRecordsInSeconds())));
+        assertThat(
+                pollingConfig.retryGetRecordsInSeconds(),
+                equalTo(Optional.of(pollingConfigBean.getRetryGetRecordsInSeconds())));
     }
-
 }

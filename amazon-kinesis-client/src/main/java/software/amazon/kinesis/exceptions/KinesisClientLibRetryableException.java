@@ -22,7 +22,7 @@ public abstract class KinesisClientLibRetryableException extends RuntimeExceptio
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Message with details about the exception.
      */
     public KinesisClientLibRetryableException(String message) {
@@ -31,7 +31,7 @@ public abstract class KinesisClientLibRetryableException extends RuntimeExceptio
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Message with details about the exception.
      * @param e Cause.
      */

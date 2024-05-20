@@ -1,11 +1,23 @@
 package software.amazon.kinesis.application;
 
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
-import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.arns.Arn;
+import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -31,18 +43,6 @@ import software.amazon.kinesis.utils.LeaseTableManager;
 import software.amazon.kinesis.utils.RecordValidationStatus;
 import software.amazon.kinesis.utils.ReshardOptions;
 import software.amazon.kinesis.utils.StreamExistenceManager;
-
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assume.assumeTrue;
 
@@ -104,7 +104,9 @@ public class TestConsumer {
 
             // Sleep to allow the producer/consumer to run and then end the test case.
             // If non-reshard sleep 3 minutes, else sleep 4 minutes per scale.
-            final int sleepMinutes = (consumerConfig.getReshardFactorList() == null) ? 3 : (4 * consumerConfig.getReshardFactorList().size());
+            final int sleepMinutes = (consumerConfig.getReshardFactorList() == null)
+                    ? 3
+                    : (4 * consumerConfig.getReshardFactorList().size());
             Thread.sleep(TimeUnit.MINUTES.toMillis(sleepMinutes));
 
             // Stops sending dummy data.
@@ -129,7 +131,8 @@ public class TestConsumer {
         }
     }
 
-    private void cleanTestResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager) throws Exception {
+    private void cleanTestResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager)
+            throws Exception {
         log.info("----------Before starting, Cleaning test environment----------");
         log.info("----------Deleting all lease tables in account----------");
         leaseTableManager.deleteAllResource();
@@ -149,12 +152,11 @@ public class TestConsumer {
             log.info("----Reshard Config found: {}", consumerConfig.getReshardFactorList());
 
             for (String streamName : consumerConfig.getStreamNames()) {
-                final StreamScaler streamScaler = new StreamScaler(kinesisClientForStreamOwner, streamName,
-                        consumerConfig.getReshardFactorList(), consumerConfig);
+                final StreamScaler streamScaler = new StreamScaler(
+                        kinesisClientForStreamOwner, streamName, consumerConfig.getReshardFactorList(), consumerConfig);
 
                 // Schedule the stream scales 4 minutes apart with 2 minute starting delay
-                for (int i = 0; i < consumerConfig.getReshardFactorList()
-                                                  .size(); i++) {
+                for (int i = 0; i < consumerConfig.getReshardFactorList().size(); i++) {
                     producerExecutor.schedule(streamScaler, (4 * i) + 2, TimeUnit.MINUTES);
                 }
             }
@@ -171,19 +173,19 @@ public class TestConsumer {
         if (consumerConfig.getRetrievalMode().equals(RetrievalMode.POLLING)) {
             retrievalConfig = consumerConfig.getRetrievalConfig(configsBuilder, null);
         } else if (consumerConfig.isCrossAccount()) {
-            retrievalConfig = consumerConfig.getRetrievalConfig(configsBuilder,
-                    streamToConsumerArnsMap);
+            retrievalConfig = consumerConfig.getRetrievalConfig(configsBuilder, streamToConsumerArnsMap);
         } else {
             retrievalConfig = configsBuilder.retrievalConfig();
         }
 
         checkpointConfig = configsBuilder.checkpointConfig();
         coordinatorConfig = configsBuilder.coordinatorConfig();
-        leaseManagementConfig = configsBuilder.leaseManagementConfig()
+        leaseManagementConfig = configsBuilder
+                .leaseManagementConfig()
                 .initialPositionInStream(
-                    InitialPositionInStreamExtended.newInitialPosition(consumerConfig.getInitialPosition())
-                )
-                .initialLeaseTableReadCapacity(50).initialLeaseTableWriteCapacity(50);
+                        InitialPositionInStreamExtended.newInitialPosition(consumerConfig.getInitialPosition()))
+                .initialLeaseTableReadCapacity(50)
+                .initialLeaseTableWriteCapacity(50);
         lifecycleConfig = configsBuilder.lifecycleConfig();
         processorConfig = configsBuilder.processorConfig();
         metricsConfig = configsBuilder.metricsConfig();
@@ -196,8 +198,7 @@ public class TestConsumer {
                 lifecycleConfig,
                 metricsConfig,
                 processorConfig,
-                retrievalConfig
-        );
+                retrievalConfig);
     }
 
     private void startConsumer() {
@@ -220,19 +221,20 @@ public class TestConsumer {
         for (String streamName : consumerConfig.getStreamNames()) {
             try {
                 final PutRecordRequest request = PutRecordRequest.builder()
-                                          .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
-                                          .streamName(streamName)
-                                          .data(SdkBytes.fromByteBuffer(wrapWithCounter(5, payloadCounter))) // 1024
-                                          // is 1 KB
-                                          .build();
-                kinesisClientForStreamOwner.putRecord(request)
-                                           .get();
+                        .partitionKey(RandomStringUtils.randomAlphabetic(5, 20))
+                        .streamName(streamName)
+                        .data(SdkBytes.fromByteBuffer(wrapWithCounter(5, payloadCounter))) // 1024
+                        // is 1 KB
+                        .build();
+                kinesisClientForStreamOwner.putRecord(request).get();
 
                 // Increment the payload counter if the putRecord call was successful
                 payloadCounter = payloadCounter.add(new BigInteger("1"));
                 successfulPutRecords += 1;
-                log.info("---------Record published for stream {}, successfulPutRecords is now: {}",
-                        streamName, successfulPutRecords);
+                log.info(
+                        "---------Record published for stream {}, successfulPutRecords is now: {}",
+                        streamName,
+                        successfulPutRecords);
             } catch (InterruptedException e) {
                 log.info("Interrupted, assuming shutdown. ", e);
             } catch (ExecutionException | RuntimeException e) {
@@ -267,14 +269,17 @@ public class TestConsumer {
 
     private void validateRecordProcessor() throws Exception {
         log.info("The number of expected records is: {}", successfulPutRecords);
-        final RecordValidationStatus errorVal = consumerConfig.getRecordValidator().validateRecords(successfulPutRecords);
+        final RecordValidationStatus errorVal =
+                consumerConfig.getRecordValidator().validateRecords(successfulPutRecords);
         if (errorVal != RecordValidationStatus.NO_ERROR) {
-            throw new RuntimeException("There was an error validating the records that were processed: " + errorVal.toString());
+            throw new RuntimeException(
+                    "There was an error validating the records that were processed: " + errorVal.toString());
         }
         log.info("---------Completed validation of processed records.---------");
     }
 
-    private void deleteResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager) throws Exception {
+    private void deleteResources(StreamExistenceManager streamExistenceManager, LeaseTableManager leaseTableManager)
+            throws Exception {
         log.info("-------------Start deleting streams.---------");
         for (String streamName : consumerConfig.getStreamNames()) {
             log.info("Deleting stream {}", streamName);
@@ -295,17 +300,26 @@ public class TestConsumer {
         private DescribeStreamSummaryRequest describeStreamSummaryRequest;
 
         private synchronized void scaleStream() throws InterruptedException, ExecutionException {
-            final DescribeStreamSummaryResponse response = client.describeStreamSummary(describeStreamSummaryRequest).get();
+            final DescribeStreamSummaryResponse response =
+                    client.describeStreamSummary(describeStreamSummaryRequest).get();
 
             final int openShardCount = response.streamDescriptionSummary().openShardCount();
             final int targetShardCount = scalingFactors.get(scalingFactorIdx).calculateShardCount(openShardCount);
 
-            log.info("Scaling stream {} from {} shards to {} shards w/ scaling factor {}",
-                    streamName, openShardCount, targetShardCount, scalingFactors.get(scalingFactorIdx));
+            log.info(
+                    "Scaling stream {} from {} shards to {} shards w/ scaling factor {}",
+                    streamName,
+                    openShardCount,
+                    targetShardCount,
+                    scalingFactors.get(scalingFactorIdx));
 
             final UpdateShardCountRequest updateShardCountRequest = UpdateShardCountRequest.builder()
-                    .streamName(streamName).targetShardCount(targetShardCount).scalingType(ScalingType.UNIFORM_SCALING).build();
-            final UpdateShardCountResponse shardCountResponse = client.updateShardCount(updateShardCountRequest).get();
+                    .streamName(streamName)
+                    .targetShardCount(targetShardCount)
+                    .scalingType(ScalingType.UNIFORM_SCALING)
+                    .build();
+            final UpdateShardCountResponse shardCountResponse =
+                    client.updateShardCount(updateShardCountRequest).get();
             log.info("Executed shard scaling request. Response Details : {}", shardCountResponse.toString());
 
             scalingFactorIdx++;
@@ -320,7 +334,9 @@ public class TestConsumer {
             log.info("Starting stream scaling with params : {}", this);
 
             if (describeStreamSummaryRequest == null) {
-                describeStreamSummaryRequest = DescribeStreamSummaryRequest.builder().streamName(streamName).build();
+                describeStreamSummaryRequest = DescribeStreamSummaryRequest.builder()
+                        .streamName(streamName)
+                        .build();
             }
             try {
                 scaleStream();

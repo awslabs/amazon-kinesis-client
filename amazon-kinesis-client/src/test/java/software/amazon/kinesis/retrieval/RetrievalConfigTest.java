@@ -3,15 +3,6 @@ package software.amazon.kinesis.retrieval;
 import java.util.Arrays;
 import java.util.Optional;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-import static software.amazon.kinesis.common.InitialPositionInStream.LATEST;
-import static software.amazon.kinesis.common.InitialPositionInStream.TRIM_HORIZON;
-
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -26,6 +17,15 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.common.InitialPositionInStream.LATEST;
+import static software.amazon.kinesis.common.InitialPositionInStream.TRIM_HORIZON;
 
 @RunWith(MockitoJUnitRunner.class)
 public class RetrievalConfigTest {
@@ -54,7 +54,13 @@ public class RetrievalConfigTest {
                 createConfig(streamArn),
                 createConfig(new SingleStreamTracker(streamArn)))) {
             assertEquals(Optional.empty(), rc.appStreamTracker().left());
-            assertEquals(streamName, rc.streamTracker().streamConfigList().get(0).streamIdentifier().streamName());
+            assertEquals(
+                    streamName,
+                    rc.streamTracker()
+                            .streamConfigList()
+                            .get(0)
+                            .streamIdentifier()
+                            .streamName());
             assertEquals(1, rc.streamTracker().streamConfigList().size());
             assertFalse(rc.streamTracker().isMultiStream());
         }
@@ -65,7 +71,9 @@ public class RetrievalConfigTest {
         final StreamTracker mockMultiStreamTracker = mock(MultiStreamTracker.class);
         final RetrievalConfig configByMultiTracker = createConfig(mockMultiStreamTracker);
         assertEquals(Optional.empty(), configByMultiTracker.appStreamTracker().right());
-        assertEquals(mockMultiStreamTracker, configByMultiTracker.appStreamTracker().left().get());
+        assertEquals(
+                mockMultiStreamTracker,
+                configByMultiTracker.appStreamTracker().left().get());
         assertEquals(mockMultiStreamTracker, configByMultiTracker.streamTracker());
     }
 
@@ -76,8 +84,7 @@ public class RetrievalConfigTest {
         for (final StreamConfig sc : config.streamTracker().streamConfigList()) {
             assertEquals(LATEST, sc.initialPositionInStreamExtended().getInitialPositionInStream());
         }
-        config.initialPositionInStreamExtended(
-                InitialPositionInStreamExtended.newInitialPosition(TRIM_HORIZON));
+        config.initialPositionInStreamExtended(InitialPositionInStreamExtended.newInitialPosition(TRIM_HORIZON));
         for (final StreamConfig sc : config.streamTracker().streamConfigList()) {
             assertEquals(TRIM_HORIZON, sc.initialPositionInStreamExtended().getInitialPositionInStream());
         }
@@ -85,8 +92,8 @@ public class RetrievalConfigTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testUpdateInitialPositionInMultiStream() {
-        createConfig(mockMultiStreamTracker).initialPositionInStreamExtended(
-                InitialPositionInStreamExtended.newInitialPosition(TRIM_HORIZON));
+        createConfig(mockMultiStreamTracker)
+                .initialPositionInStreamExtended(InitialPositionInStreamExtended.newInitialPosition(TRIM_HORIZON));
     }
 
     /**
@@ -133,5 +140,4 @@ public class RetrievalConfigTest {
                 .resource("stream/" + streamName)
                 .build();
     }
-
 }

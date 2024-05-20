@@ -19,8 +19,8 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 
 import software.amazon.kinesis.leases.ShardSequenceVerifier;
-import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
+import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 
 /**
  * Factory for TestStreamlet record processors.
@@ -31,7 +31,7 @@ public class TestStreamletFactory implements ShardRecordProcessorFactory {
     private Semaphore semaphore;
     private ShardSequenceVerifier shardSequenceVerifier;
     List<TestStreamlet> testStreamlets = new ArrayList<>();
-    
+
     /**
      *  Constructor.
      */
@@ -61,5 +61,4 @@ public class TestStreamletFactory implements ShardRecordProcessorFactory {
     public List<TestStreamlet> getTestStreamlets() {
         return testStreamlets;
     }
-
 }

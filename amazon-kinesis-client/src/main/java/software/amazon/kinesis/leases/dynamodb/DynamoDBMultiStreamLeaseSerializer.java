@@ -15,14 +15,14 @@
 
 package software.amazon.kinesis.leases.dynamodb;
 
+import java.util.Map;
+
 import lombok.NoArgsConstructor;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValueUpdate;
 import software.amazon.kinesis.leases.DynamoUtils;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.MultiStreamLease;
-
-import java.util.Map;
 
 import static software.amazon.kinesis.leases.MultiStreamLease.validateAndCast;
 
@@ -44,13 +44,12 @@ public class DynamoDBMultiStreamLeaseSerializer extends DynamoDBLeaseSerializer 
 
     @Override
     public MultiStreamLease fromDynamoRecord(Map<String, AttributeValue> dynamoRecord) {
-        final MultiStreamLease multiStreamLease = (MultiStreamLease) super
-                .fromDynamoRecord(dynamoRecord, new MultiStreamLease());
+        final MultiStreamLease multiStreamLease =
+                (MultiStreamLease) super.fromDynamoRecord(dynamoRecord, new MultiStreamLease());
         multiStreamLease.streamIdentifier(DynamoUtils.safeGetString(dynamoRecord, STREAM_ID_KEY));
         multiStreamLease.shardId(DynamoUtils.safeGetString(dynamoRecord, SHARD_ID_KEY));
         return multiStreamLease;
     }
-
 
     @Override
     public Map<String, AttributeValueUpdate> getDynamoUpdateLeaseUpdate(Lease lease) {

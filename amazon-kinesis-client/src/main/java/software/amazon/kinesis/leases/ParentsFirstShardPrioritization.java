@@ -25,8 +25,7 @@ import java.util.Map;
  * It also limits number of shards that will be available for initialization based on their depth.
  * It doesn't make a lot of sense to work on a shard that has too many unfinished parents.
  */
-public class ParentsFirstShardPrioritization implements
-        ShardPrioritization {
+public class ParentsFirstShardPrioritization implements ShardPrioritization {
     private static final SortingNode PROCESSING_NODE = new SortingNode(null, Integer.MIN_VALUE);
 
     private final int maxDepth;
@@ -34,13 +33,13 @@ public class ParentsFirstShardPrioritization implements
     /**
      * Creates ParentFirst prioritization with filtering based on depth of the shard.
      * Shards that have depth > maxDepth will be ignored and will not be returned by this prioritization.
-     * 
+     *
      * @param maxDepth any shard that is deeper than max depth, will be excluded from processing
      */
     public ParentsFirstShardPrioritization(int maxDepth) {
         /* Depth 0 means that shard is completed or cannot be found,
-        * it is impossible to process such shards.
-        */
+         * it is impossible to process such shards.
+         */
         if (maxDepth <= 0) {
             throw new IllegalArgumentException("Max depth cannot be negative or zero. Provided value: " + maxDepth);
         }
@@ -51,16 +50,13 @@ public class ParentsFirstShardPrioritization implements
     public List<ShardInfo> prioritize(List<ShardInfo> original) {
         Map<String, ShardInfo> shards = new HashMap<>();
         for (ShardInfo shardInfo : original) {
-            shards.put(shardInfo.shardId(),
-                    shardInfo);
+            shards.put(shardInfo.shardId(), shardInfo);
         }
 
         Map<String, SortingNode> processedNodes = new HashMap<>();
 
         for (ShardInfo shardInfo : original) {
-            populateDepth(shardInfo.shardId(),
-                    shards,
-                    processedNodes);
+            populateDepth(shardInfo.shardId(), shards, processedNodes);
         }
 
         List<ShardInfo> orderedInfos = new ArrayList<>(original.size());
@@ -77,14 +73,12 @@ public class ParentsFirstShardPrioritization implements
         return orderedInfos;
     }
 
-    private int populateDepth(String shardId,
-            Map<String, ShardInfo> shards,
-            Map<String, SortingNode> processedNodes) {
+    private int populateDepth(String shardId, Map<String, ShardInfo> shards, Map<String, SortingNode> processedNodes) {
         SortingNode processed = processedNodes.get(shardId);
         if (processed != null) {
             if (processed == PROCESSING_NODE) {
-                throw new IllegalArgumentException("Circular dependency detected. Shard Id "
-                    + shardId + " is processed twice");
+                throw new IllegalArgumentException(
+                        "Circular dependency detected. Shard Id " + shardId + " is processed twice");
             }
             return processed.getDepth();
         }
@@ -105,16 +99,11 @@ public class ParentsFirstShardPrioritization implements
 
         int maxParentDepth = 0;
         for (String parentId : shardInfo.parentShardIds()) {
-            maxParentDepth = Math.max(maxParentDepth,
-                    populateDepth(parentId,
-                            shards,
-                            processedNodes));
+            maxParentDepth = Math.max(maxParentDepth, populateDepth(parentId, shards, processedNodes));
         }
 
         int currentNodeLevel = maxParentDepth + 1;
-        SortingNode previousValue = processedNodes.put(shardId,
-                new SortingNode(shardInfo,
-                        currentNodeLevel));
+        SortingNode previousValue = processedNodes.put(shardId, new SortingNode(shardInfo, currentNodeLevel));
         if (previousValue != PROCESSING_NODE) {
             throw new IllegalStateException("Validation failed. Depth for shardId " + shardId + " was populated twice");
         }
@@ -125,13 +114,11 @@ public class ParentsFirstShardPrioritization implements
     /**
      * Class to store depth of shards during prioritization.
      */
-    private static class SortingNode implements
-            Comparable<SortingNode> {
+    private static class SortingNode implements Comparable<SortingNode> {
         private final ShardInfo shardInfo;
         private final int depth;
 
-        public SortingNode(ShardInfo shardInfo,
-                int depth) {
+        public SortingNode(ShardInfo shardInfo, int depth) {
             this.shardInfo = shardInfo;
             this.depth = depth;
         }
@@ -142,8 +129,7 @@ public class ParentsFirstShardPrioritization implements
 
         @Override
         public int compareTo(SortingNode o) {
-            return Integer.compare(depth,
-                    o.depth);
+            return Integer.compare(depth, o.depth);
         }
     }
 }

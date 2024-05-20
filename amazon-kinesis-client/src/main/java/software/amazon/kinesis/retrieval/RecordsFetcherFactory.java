@@ -27,11 +27,14 @@ public interface RecordsFetcherFactory {
      * @param shardId ShardId of the shard that the fetcher will retrieve records for
      * @param metricsFactory MetricsFactory used to create metricScope
      * @param maxRecords Max number of records to be returned in a single get call
-     *                
+     *
      * @return RecordsPublisher used to get records from Kinesis.
      */
-    RecordsPublisher createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId,
-                                          MetricsFactory metricsFactory, int maxRecords);
+    RecordsPublisher createRecordsFetcher(
+            GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+            String shardId,
+            MetricsFactory metricsFactory,
+            int maxRecords);
 
     /**
      * Sets the maximum number of ProcessRecordsInput objects the RecordsPublisher can hold, before further requests are
@@ -82,5 +85,4 @@ public interface RecordsFetcherFactory {
     void idleMillisBetweenCalls(long idleMillisBetweenCalls);
 
     long idleMillisBetweenCalls();
-
 }

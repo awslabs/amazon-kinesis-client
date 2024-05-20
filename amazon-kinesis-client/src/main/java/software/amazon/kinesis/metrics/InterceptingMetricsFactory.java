@@ -14,7 +14,6 @@
  */
 package software.amazon.kinesis.metrics;
 
-
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 
 public abstract class InterceptingMetricsFactory implements MetricsFactory {
@@ -40,7 +39,8 @@ public abstract class InterceptingMetricsFactory implements MetricsFactory {
         scope.addData(name, value, unit);
     }
 
-    protected void interceptAddData(String name, double value, StandardUnit unit, MetricsLevel level, MetricsScope scope) {
+    protected void interceptAddData(
+            String name, double value, StandardUnit unit, MetricsLevel level, MetricsScope scope) {
         scope.addData(name, value, unit, level);
     }
 
@@ -79,7 +79,5 @@ public abstract class InterceptingMetricsFactory implements MetricsFactory {
         public void end() {
             interceptEnd(other);
         }
-
     }
-
 }

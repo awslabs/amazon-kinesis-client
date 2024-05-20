@@ -41,16 +41,21 @@ public class ShardSyncTask implements ConsumerTask {
 
     @NonNull
     private final ShardDetector shardDetector;
+
     @NonNull
     private final LeaseRefresher leaseRefresher;
+
     @NonNull
     private final InitialPositionInStreamExtended initialPosition;
+
     private final boolean cleanupLeasesUponShardCompletion;
     private final boolean garbageCollectLeases;
     private final boolean ignoreUnexpectedChildShards;
     private final long shardSyncTaskIdleTimeMillis;
+
     @NonNull
     private final HierarchicalShardSyncer hierarchicalShardSyncer;
+
     @NonNull
     private final MetricsFactory metricsFactory;
 
@@ -67,8 +72,12 @@ public class ShardSyncTask implements ConsumerTask {
         boolean shardSyncSuccess = true;
 
         try {
-            boolean didPerformShardSync = hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(shardDetector, leaseRefresher,
-                    initialPosition, scope, ignoreUnexpectedChildShards,
+            boolean didPerformShardSync = hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(
+                    shardDetector,
+                    leaseRefresher,
+                    initialPosition,
+                    scope,
+                    ignoreUnexpectedChildShards,
                     leaseRefresher.isLeaseTableEmpty());
 
             if (didPerformShardSync && shardSyncTaskIdleTimeMillis > 0) {
@@ -80,7 +89,8 @@ public class ShardSyncTask implements ConsumerTask {
             shardSyncSuccess = false;
         } finally {
             // NOTE: This metric is reflecting if a shard sync task succeeds. Customer can use this metric to monitor if
-            // their application encounter any shard sync failures. This metric can help to detect potential shard stuck issues
+            // their application encounter any shard sync failures. This metric can help to detect potential shard stuck
+            // issues
             // that are due to shard sync failures.
             MetricsUtil.addSuccess(scope, "SyncShards", shardSyncSuccess, MetricsLevel.DETAILED);
             MetricsUtil.endScope(scope);
@@ -97,5 +107,4 @@ public class ShardSyncTask implements ConsumerTask {
     public TaskType taskType() {
         return taskType;
     }
-
 }

@@ -33,14 +33,16 @@ public class ShutdownNotificationTask implements ConsumerTask {
     private final ShardRecordProcessor shardRecordProcessor;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ShutdownNotification shutdownNotification;
-//    TODO: remove if not used
+    //    TODO: remove if not used
     private final ShardInfo shardInfo;
 
     @Override
     public TaskResult call() {
         try {
             try {
-                shardRecordProcessor.shutdownRequested(ShutdownRequestedInput.builder().checkpointer(recordProcessorCheckpointer).build());
+                shardRecordProcessor.shutdownRequested(ShutdownRequestedInput.builder()
+                        .checkpointer(recordProcessorCheckpointer)
+                        .build());
             } catch (Exception ex) {
                 return new TaskResult(ex);
             }
@@ -55,5 +57,4 @@ public class ShutdownNotificationTask implements ConsumerTask {
     public TaskType taskType() {
         return TaskType.SHUTDOWN_NOTIFICATION;
     }
-
 }

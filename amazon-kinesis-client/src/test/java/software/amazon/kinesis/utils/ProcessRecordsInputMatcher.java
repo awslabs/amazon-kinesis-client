@@ -15,15 +15,15 @@
 
 package software.amazon.kinesis.utils;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
 import lombok.Data;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Function;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -38,11 +38,11 @@ public class ProcessRecordsInputMatcher extends TypeSafeDiagnosingMatcher<Proces
     }
 
     public ProcessRecordsInputMatcher(ProcessRecordsInput template) {
-        matchers.put("cacheEntryTime",
-                nullOrEquals(template.cacheEntryTime(), ProcessRecordsInput::cacheEntryTime));
+        matchers.put("cacheEntryTime", nullOrEquals(template.cacheEntryTime(), ProcessRecordsInput::cacheEntryTime));
         matchers.put("checkpointer", nullOrEquals(template.checkpointer(), ProcessRecordsInput::checkpointer));
         matchers.put("isAtShardEnd", nullOrEquals(template.isAtShardEnd(), ProcessRecordsInput::isAtShardEnd));
-        matchers.put("millisBehindLatest",
+        matchers.put(
+                "millisBehindLatest",
                 nullOrEquals(template.millisBehindLatest(), ProcessRecordsInput::millisBehindLatest));
         matchers.put("records", nullOrEquals(template.records(), ProcessRecordsInput::records));
         matchers.put("childShards", nullOrEquals(template.childShards(), ProcessRecordsInput::childShards));
@@ -60,7 +60,8 @@ public class ProcessRecordsInputMatcher extends TypeSafeDiagnosingMatcher<Proces
     @Override
     protected boolean matchesSafely(ProcessRecordsInput item, Description mismatchDescription) {
         return matchers.entrySet().stream()
-                .filter(e -> e.getValue().matcher.matches(e.getValue().accessor.apply(item))).anyMatch(e -> {
+                .filter(e -> e.getValue().matcher.matches(e.getValue().accessor.apply(item)))
+                .anyMatch(e -> {
                     mismatchDescription.appendText(e.getKey()).appendText(" ");
                     e.getValue().matcher.describeMismatch(e.getValue().accessor.apply(item), mismatchDescription);
                     return true;

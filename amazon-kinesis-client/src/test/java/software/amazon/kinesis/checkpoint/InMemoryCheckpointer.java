@@ -17,10 +17,9 @@ package software.amazon.kinesis.checkpoint;
 import java.util.HashMap;
 import java.util.Map;
 
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Everything is stored in memory and there is no fault-tolerance.
@@ -65,7 +64,10 @@ public class InMemoryCheckpointer implements Checkpointer {
     }
 
     @Override
-    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken,
+    public void prepareCheckpoint(
+            String leaseKey,
+            ExtendedSequenceNumber pendingCheckpoint,
+            String concurrencyToken,
             byte[] pendingCheckpointState) {
         pendingCheckpoints.put(leaseKey, pendingCheckpoint);
         pendingCheckpointStates.put(leaseKey, pendingCheckpointState);

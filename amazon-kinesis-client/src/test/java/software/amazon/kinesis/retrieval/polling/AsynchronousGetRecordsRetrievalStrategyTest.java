@@ -14,18 +14,6 @@
  */
 package software.amazon.kinesis.retrieval.polling;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -39,10 +27,21 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  *
@@ -52,18 +51,25 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
 
     private static final long RETRY_GET_RECORDS_IN_SECONDS = 5;
     private static final String SHARD_ID = "ShardId-0001";
+
     @Mock
     private KinesisDataFetcher dataFetcher;
+
     @Mock
     private ExecutorService executorService;
+
     @Mock
     private Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
+
     @Mock
     private CompletionService<DataFetcherResult> completionService;
+
     @Mock
     private Future<DataFetcherResult> successfulFuture;
+
     @Mock
     private Future<DataFetcherResult> blockedFuture;
+
     @Mock
     private DataFetcherResult dataFetcherResult;
 
@@ -80,8 +86,8 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
 
     @Test
     public void testSingleSuccessfulRequestFuture() throws Exception {
-        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
-                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
+        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(
+                dataFetcher, executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
         when(executorService.isShutdown()).thenReturn(false);
         when(completionService.submit(any())).thenReturn(successfulFuture);
@@ -101,8 +107,8 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
 
     @Test
     public void testBlockedAndSuccessfulFuture() throws Exception {
-        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
-                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
+        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(
+                dataFetcher, executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
         when(executorService.isShutdown()).thenReturn(false);
         when(completionService.submit(any())).thenReturn(blockedFuture).thenReturn(successfulFuture);
@@ -127,8 +133,8 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
 
     @Test(expected = IllegalStateException.class)
     public void testStrategyIsShutdown() {
-        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
-                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
+        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(
+                dataFetcher, executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
         when(executorService.isShutdown()).thenReturn(true);
 
@@ -137,13 +143,18 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
 
     @Test
     public void testPoolOutOfResources() throws Exception {
-        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
-                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
+        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(
+                dataFetcher, executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
 
         when(executorService.isShutdown()).thenReturn(false);
-        when(completionService.submit(any())).thenReturn(blockedFuture)
-                .thenThrow(new RejectedExecutionException("Rejected!")).thenReturn(successfulFuture);
-        when(completionService.poll(anyLong(), any())).thenReturn(null).thenReturn(null).thenReturn(successfulFuture);
+        when(completionService.submit(any()))
+                .thenReturn(blockedFuture)
+                .thenThrow(new RejectedExecutionException("Rejected!"))
+                .thenReturn(successfulFuture);
+        when(completionService.poll(anyLong(), any()))
+                .thenReturn(null)
+                .thenReturn(null)
+                .thenReturn(successfulFuture);
         when(successfulFuture.get()).thenReturn(dataFetcherResult);
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
@@ -159,18 +170,21 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
 
         assertThat(actualResult, equalTo(expectedResponses));
     }
-    
-    @Test (expected = ExpiredIteratorException.class)
+
+    @Test(expected = ExpiredIteratorException.class)
     public void testExpiredIteratorExceptionCase() throws Exception {
-        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(dataFetcher,
-                executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
+        AsynchronousGetRecordsRetrievalStrategy strategy = new AsynchronousGetRecordsRetrievalStrategy(
+                dataFetcher, executorService, (int) RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, SHARD_ID);
         Future<DataFetcherResult> successfulFuture2 = mock(Future.class);
 
         when(executorService.isShutdown()).thenReturn(false);
         when(completionService.submit(any())).thenReturn(successfulFuture, successfulFuture2);
         when(completionService.poll(anyLong(), any())).thenReturn(null).thenReturn(successfulFuture);
-        when(successfulFuture.get()).thenThrow(new ExecutionException(ExpiredIteratorException.builder().message("ExpiredException").build()));
-        
+        when(successfulFuture.get())
+                .thenThrow(new ExecutionException(ExpiredIteratorException.builder()
+                        .message("ExpiredException")
+                        .build()));
+
         try {
             strategy.getRecords(10);
         } finally {
@@ -181,5 +195,4 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
             verify(successfulFuture2).cancel(eq(true));
         }
     }
-
 }

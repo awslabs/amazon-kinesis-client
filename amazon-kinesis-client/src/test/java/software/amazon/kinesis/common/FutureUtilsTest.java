@@ -14,16 +14,16 @@
  */
 package software.amazon.kinesis.common;
 
+import java.time.Duration;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeoutException;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-
-import java.time.Duration;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeoutException;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;

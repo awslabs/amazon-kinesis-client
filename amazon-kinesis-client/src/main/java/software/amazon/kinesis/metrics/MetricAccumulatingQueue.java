@@ -24,13 +24,12 @@ import java.util.concurrent.LinkedBlockingQueue;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 import software.amazon.awssdk.services.cloudwatch.model.StatisticSet;
 
-
 /**
  * Helper class for accumulating MetricDatums with the same name and dimensions.
- * 
+ *
  * @param <KeyType> can be a class or object defined by the user that stores information about a MetricDatum needed
  *        by the user.
- * 
+ *
  *        The following is a example of what a KeyType class might look like:
  *        class SampleKeyType {
  *              private long timeKeyCreated;
@@ -75,7 +74,7 @@ public class MetricAccumulatingQueue<KeyType> {
     /**
      * We use a queue and a map in this method. The reason for this is because, the queue will keep our metrics in
      * FIFO order and the map will provide us with constant time lookup to get the appropriate MetricDatum.
-     * 
+     *
      * @param key metric key to be inserted into queue
      * @param datum metric to be inserted into queue
      * @return a boolean depending on whether the datum was inserted into the queue
@@ -106,10 +105,12 @@ public class MetricAccumulatingQueue<KeyType> {
         StatisticSet oldStats = oldDatum.statisticValues();
         StatisticSet newStats = newDatum.statisticValues();
 
-        StatisticSet statisticSet = oldStats.toBuilder().sum(oldStats.sum() + newStats.sum())
+        StatisticSet statisticSet = oldStats.toBuilder()
+                .sum(oldStats.sum() + newStats.sum())
                 .minimum(Math.min(oldStats.minimum(), newStats.minimum()))
                 .maximum(Math.max(oldStats.maximum(), newStats.maximum()))
-                .sampleCount(oldStats.sampleCount() + newStats.sampleCount()).build();
+                .sampleCount(oldStats.sampleCount() + newStats.sampleCount())
+                .build();
 
         MetricDatum datum = oldDatum.toBuilder().statisticValues(statisticSet).build();
         metricDatumWithKey.datum(datum);

@@ -19,7 +19,6 @@ import java.util.Objects;
 import java.util.UUID;
 
 import com.google.common.annotations.VisibleForTesting;
-
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,14 +47,16 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 public class DynamoDBCheckpointer implements Checkpointer {
     @NonNull
     private final LeaseCoordinator leaseCoordinator;
+
     @NonNull
     private final LeaseRefresher leaseRefresher;
 
     private String operation;
 
     @Override
-    public void setCheckpoint(final String leaseKey, final ExtendedSequenceNumber checkpointValue,
-            final String concurrencyToken) throws KinesisClientLibException {
+    public void setCheckpoint(
+            final String leaseKey, final ExtendedSequenceNumber checkpointValue, final String concurrencyToken)
+            throws KinesisClientLibException {
         try {
             boolean wasSuccessful = setCheckpoint(leaseKey, checkpointValue, UUID.fromString(concurrencyToken));
             if (!wasSuccessful) {
@@ -97,17 +98,22 @@ public class DynamoDBCheckpointer implements Checkpointer {
     }
 
     @Override
-    public void prepareCheckpoint(final String leaseKey, final ExtendedSequenceNumber pendingCheckpoint,
-            final String concurrencyToken) throws KinesisClientLibException {
+    public void prepareCheckpoint(
+            final String leaseKey, final ExtendedSequenceNumber pendingCheckpoint, final String concurrencyToken)
+            throws KinesisClientLibException {
         prepareCheckpoint(leaseKey, pendingCheckpoint, concurrencyToken, null);
     }
 
     @Override
-    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken,
-            byte[] pendingCheckpointState) throws KinesisClientLibException {
+    public void prepareCheckpoint(
+            String leaseKey,
+            ExtendedSequenceNumber pendingCheckpoint,
+            String concurrencyToken,
+            byte[] pendingCheckpointState)
+            throws KinesisClientLibException {
         try {
-            boolean wasSuccessful =
-                    prepareCheckpoint(leaseKey, pendingCheckpoint, UUID.fromString(concurrencyToken), pendingCheckpointState);
+            boolean wasSuccessful = prepareCheckpoint(
+                    leaseKey, pendingCheckpoint, UUID.fromString(concurrencyToken), pendingCheckpointState);
             if (!wasSuccessful) {
                 throw new ShutdownException(
                         "Can't prepare checkpoint - instance doesn't hold the lease for this shard");
@@ -128,8 +134,10 @@ public class DynamoDBCheckpointer implements Checkpointer {
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         Lease lease = leaseCoordinator.getCurrentlyHeldLease(leaseKey);
         if (lease == null) {
-            log.info("Worker {} could not update checkpoint for shard {} because it does not hold the lease",
-                    leaseCoordinator.workerIdentifier(), leaseKey);
+            log.info(
+                    "Worker {} could not update checkpoint for shard {} because it does not hold the lease",
+                    leaseCoordinator.workerIdentifier(),
+                    leaseKey);
             return false;
         }
 
@@ -141,12 +149,18 @@ public class DynamoDBCheckpointer implements Checkpointer {
         return leaseCoordinator.updateLease(lease, concurrencyToken, operation, leaseKey);
     }
 
-    boolean prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, UUID concurrencyToken, byte[] pendingCheckpointState)
+    boolean prepareCheckpoint(
+            String leaseKey,
+            ExtendedSequenceNumber pendingCheckpoint,
+            UUID concurrencyToken,
+            byte[] pendingCheckpointState)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         Lease lease = leaseCoordinator.getCurrentlyHeldLease(leaseKey);
         if (lease == null) {
-            log.info("Worker {} could not prepare checkpoint for shard {} because it does not hold the lease",
-                    leaseCoordinator.workerIdentifier(), leaseKey);
+            log.info(
+                    "Worker {} could not prepare checkpoint for shard {} because it does not hold the lease",
+                    leaseCoordinator.workerIdentifier(),
+                    leaseKey);
             return false;
         }
 

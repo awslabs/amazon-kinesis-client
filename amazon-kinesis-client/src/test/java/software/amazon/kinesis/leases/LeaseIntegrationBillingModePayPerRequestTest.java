@@ -22,7 +22,14 @@ import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 public class LeaseIntegrationBillingModePayPerRequestTest extends LeaseIntegrationTest {
     @Override
     protected DynamoDBLeaseRefresher getLeaseRefresher() {
-        return new DynamoDBLeaseRefresher(tableName+"Per-Request", ddbClient, leaseSerializer, true,
-                tableCreatorCallback, LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT, BillingMode.PAY_PER_REQUEST, false);
+        return new DynamoDBLeaseRefresher(
+                tableName + "Per-Request",
+                ddbClient,
+                leaseSerializer,
+                true,
+                tableCreatorCallback,
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
+                BillingMode.PAY_PER_REQUEST,
+                false);
     }
 }

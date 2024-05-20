@@ -24,12 +24,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import org.apache.commons.lang3.StringUtils;
-
 import com.google.protobuf.InvalidProtocolBufferException;
-
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import software.amazon.kinesis.retrieval.kpl.Messages;
 
 /**
@@ -37,7 +35,7 @@ import software.amazon.kinesis.retrieval.kpl.Messages;
  */
 @Slf4j
 public class AggregatorUtil {
-    public static final byte[] AGGREGATED_RECORD_MAGIC = new byte[]{-13, -119, -102, -62};
+    public static final byte[] AGGREGATED_RECORD_MAGIC = new byte[] {-13, -119, -102, -62};
     private static final int DIGEST_SIZE = 16;
     private static final BigInteger STARTING_HASH_KEY = new BigInteger("0");
     // largest hash key = 2^128-1
@@ -58,7 +56,7 @@ public class AggregatorUtil {
     /**
      * Deaggregate any KPL records found. This method converts the starting and ending hash keys to {@link BigInteger}s
      * before passing them on to {@link #deaggregate(List, BigInteger, BigInteger)}
-     * 
+     *
      * @param records
      *            the records to potentially deaggreate
      * @param startingHashKey
@@ -67,8 +65,8 @@ public class AggregatorUtil {
      *            the ending hash key of the shard
      * @return A list of records with any aggregate records deaggregated
      */
-    public List<KinesisClientRecord> deaggregate(List<KinesisClientRecord> records, String startingHashKey,
-            String endingHashKey) {
+    public List<KinesisClientRecord> deaggregate(
+            List<KinesisClientRecord> records, String startingHashKey, String endingHashKey) {
         return deaggregate(records, new BigInteger(startingHashKey), new BigInteger(endingHashKey));
     }
 
@@ -91,9 +89,8 @@ public class AggregatorUtil {
      * the endingHashKey.
      */
     // CHECKSTYLE:OFF NPathComplexity
-    public List<KinesisClientRecord> deaggregate(List<KinesisClientRecord> records,
-                                                        BigInteger startingHashKey,
-                                                        BigInteger endingHashKey) {
+    public List<KinesisClientRecord> deaggregate(
+            List<KinesisClientRecord> records, BigInteger startingHashKey, BigInteger endingHashKey) {
         List<KinesisClientRecord> result = new ArrayList<>();
         byte[] magic = new byte[AGGREGATED_RECORD_MAGIC.length];
         byte[] digest = new byte[DIGEST_SIZE];
@@ -130,7 +127,8 @@ public class AggregatorUtil {
                         List<String> pks = ar.getPartitionKeyTableList();
                         List<String> ehks = ar.getExplicitHashKeyTableList();
                         long aat = r.approximateArrivalTimestamp() == null
-                                ? -1 : r.approximateArrivalTimestamp().toEpochMilli();
+                                ? -1
+                                : r.approximateArrivalTimestamp().toEpochMilli();
                         try {
                             int recordsInCurrRecord = 0;
                             for (Messages.Record mr : ar.getRecordsList()) {
@@ -157,7 +155,8 @@ public class AggregatorUtil {
                                         .partitionKey(partitionKey)
                                         .explicitHashKey(explicitHashKey)
                                         .build();
-                                result.add(convertRecordToKinesisClientRecord(record, true, subSeqNum++, explicitHashKey));
+                                result.add(
+                                        convertRecordToKinesisClientRecord(record, true, subSeqNum++, explicitHashKey));
                             }
                         } catch (Exception e) {
                             StringBuilder sb = new StringBuilder();
@@ -171,14 +170,25 @@ public class AggregatorUtil {
                                 sb.append(s).append("\n");
                             }
                             for (Messages.Record mr : ar.getRecordsList()) {
-                                sb.append("Record: [hasEhk=").append(mr.hasExplicitHashKeyIndex()).append(", ")
-                                        .append("ehkIdx=").append(mr.getExplicitHashKeyIndex()).append(", ")
-                                        .append("pkIdx=").append(mr.getPartitionKeyIndex()).append(", ")
-                                        .append("dataLen=").append(mr.getData().toByteArray().length).append("]\n");
+                                sb.append("Record: [hasEhk=")
+                                        .append(mr.hasExplicitHashKeyIndex())
+                                        .append(", ")
+                                        .append("ehkIdx=")
+                                        .append(mr.getExplicitHashKeyIndex())
+                                        .append(", ")
+                                        .append("pkIdx=")
+                                        .append(mr.getPartitionKeyIndex())
+                                        .append(", ")
+                                        .append("dataLen=")
+                                        .append(mr.getData().toByteArray().length)
+                                        .append("]\n");
                             }
-                            sb.append("Sequence number: ").append(r.sequenceNumber()).append("\n")
+                            sb.append("Sequence number: ")
+                                    .append(r.sequenceNumber())
+                                    .append("\n")
                                     .append("Raw data: ")
-                                    .append(javax.xml.bind.DatatypeConverter.printBase64Binary(messageData)).append("\n");
+                                    .append(javax.xml.bind.DatatypeConverter.printBase64Binary(messageData))
+                                    .append("\n");
                             log.error(sb.toString(), e);
                         }
                     } catch (InvalidProtocolBufferException e) {
@@ -199,7 +209,8 @@ public class AggregatorUtil {
         return md5(data);
     }
 
-    protected BigInteger effectiveHashKey(String partitionKey, String explicitHashKey) throws UnsupportedEncodingException {
+    protected BigInteger effectiveHashKey(String partitionKey, String explicitHashKey)
+            throws UnsupportedEncodingException {
         if (explicitHashKey == null) {
             return new BigInteger(1, md5(partitionKey.getBytes("UTF-8")));
         }
@@ -215,10 +226,11 @@ public class AggregatorUtil {
         }
     }
 
-    public KinesisClientRecord convertRecordToKinesisClientRecord(@NonNull final KinesisClientRecord record,
-                                                                  final boolean aggregated,
-                                                                  final long subSequenceNumber,
-                                                                  final String explicitHashKey) {
+    public KinesisClientRecord convertRecordToKinesisClientRecord(
+            @NonNull final KinesisClientRecord record,
+            final boolean aggregated,
+            final long subSequenceNumber,
+            final String explicitHashKey) {
         return KinesisClientRecord.builder()
                 .data(record.data())
                 .partitionKey(record.partitionKey())

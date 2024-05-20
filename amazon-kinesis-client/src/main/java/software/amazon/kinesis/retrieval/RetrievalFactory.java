@@ -51,7 +51,8 @@ public interface RetrievalFactory {
      * @param metricsFactory The {@link MetricsFactory} for recording metrics.
      * @return A {@link RecordsPublisher} instance for retrieving records from the shard.
      */
-    default RecordsPublisher createGetRecordsCache(ShardInfo shardInfo, StreamConfig streamConfig, MetricsFactory metricsFactory) {
+    default RecordsPublisher createGetRecordsCache(
+            ShardInfo shardInfo, StreamConfig streamConfig, MetricsFactory metricsFactory) {
         return createGetRecordsCache(shardInfo, metricsFactory);
     }
 }

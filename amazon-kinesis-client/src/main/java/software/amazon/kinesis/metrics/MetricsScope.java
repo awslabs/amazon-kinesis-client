@@ -30,7 +30,7 @@ public interface MetricsScope {
     /**
      * Adds a data point to this IMetricsScope. Multiple calls against the same IMetricsScope with the same name
      * parameter will result in accumulation.
-     * 
+     *
      * @param name data point name
      * @param value data point value
      * @param unit unit of data point
@@ -40,7 +40,7 @@ public interface MetricsScope {
     /**
      * Adds a data point to this IMetricsScope if given metrics level is enabled. Multiple calls against the same
      * IMetricsScope with the same name parameter will result in accumulation.
-     * 
+     *
      * @param name data point name
      * @param value data point value
      * @param unit unit of data point
@@ -50,7 +50,7 @@ public interface MetricsScope {
 
     /**
      * Adds a dimension that applies to all metrics in this IMetricsScope.
-     * 
+     *
      * @param name dimension name
      * @param value dimension value
      */

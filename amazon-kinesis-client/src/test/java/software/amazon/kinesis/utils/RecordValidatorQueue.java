@@ -1,13 +1,13 @@
 package software.amazon.kinesis.utils;
 
-import lombok.extern.slf4j.Slf4j;
-
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Class that maintains a dictionary that maps shard IDs to a list of records
@@ -35,7 +35,8 @@ public class RecordValidatorQueue {
             for (String record : recordsPerShard) {
                 int nextVal = Integer.parseInt(record);
                 if (prevVal > nextVal) {
-                    log.error("The records are not in increasing order. Saw record data {} before {}.", prevVal, nextVal);
+                    log.error(
+                            "The records are not in increasing order. Saw record data {} before {}.", prevVal, nextVal);
                     return RecordValidationStatus.OUT_OF_ORDER;
                 }
                 prevVal = nextVal;
@@ -52,12 +53,14 @@ public class RecordValidatorQueue {
 
         // If this is true, then there was some record that was missed during processing.
         if (actualRecordCount != expectedRecordCount) {
-            log.error("Failed to get correct number of records processed. Should be {} but was {}", expectedRecordCount, actualRecordCount);
+            log.error(
+                    "Failed to get correct number of records processed. Should be {} but was {}",
+                    expectedRecordCount,
+                    actualRecordCount);
             return RecordValidationStatus.MISSING_RECORD;
         }
 
         // Record validation succeeded.
         return RecordValidationStatus.NO_ERROR;
     }
-
 }

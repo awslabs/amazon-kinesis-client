@@ -14,15 +14,6 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -36,7 +27,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-
 import software.amazon.kinesis.common.HashKeyRangeForLease;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -44,6 +34,15 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseRenewerTest {
@@ -56,15 +55,30 @@ public class DynamoDBLeaseRenewerTest {
     private LeaseRefresher leaseRefresher;
 
     private static Lease newLease(String leaseKey) {
-        return new Lease(leaseKey, "LeaseOwner", 0L, UUID.randomUUID(), System.nanoTime(), null, null, null,
-                new HashSet<>(), new HashSet<>(), null, HashKeyRangeForLease.deserialize("1", "2"));
+        return new Lease(
+                leaseKey,
+                "LeaseOwner",
+                0L,
+                UUID.randomUUID(),
+                System.nanoTime(),
+                null,
+                null,
+                null,
+                new HashSet<>(),
+                new HashSet<>(),
+                null,
+                HashKeyRangeForLease.deserialize("1", "2"));
     }
 
     @Before
     public void before() {
         leasesToRenew = null;
-        renewer = new DynamoDBLeaseRenewer(leaseRefresher, workerIdentifier, leaseDurationMillis,
-                Executors.newCachedThreadPool(), new NullMetricsFactory());
+        renewer = new DynamoDBLeaseRenewer(
+                leaseRefresher,
+                workerIdentifier,
+                leaseDurationMillis,
+                Executors.newCachedThreadPool(),
+                new NullMetricsFactory());
     }
 
     @After
@@ -79,7 +93,7 @@ public class DynamoDBLeaseRenewerTest {
 
     @Test
     public void testLeaseRenewerHoldsGoodLeases()
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         /*
          * Prepare leases to be renewed
          * 2 Good
@@ -98,7 +112,8 @@ public class DynamoDBLeaseRenewerTest {
     }
 
     @Test
-    public void testLeaseRenewerDoesNotRenewExpiredLease() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public void testLeaseRenewerDoesNotRenewExpiredLease()
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         String leaseKey = "expiredLease";
         long initialCounterIncrementNanos = 5L; // "expired" time.
         Lease lease1 = newLease(leaseKey);

@@ -25,7 +25,7 @@ public abstract class KinesisClientLibException extends Exception {
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Message of with details of the exception.
      */
     public KinesisClientLibException(String message) {
@@ -34,12 +34,11 @@ public abstract class KinesisClientLibException extends Exception {
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Message with details of the exception.
      * @param cause Cause.
      */
     public KinesisClientLibException(String message, Throwable cause) {
         super(message, cause);
     }
-
 }

@@ -17,11 +17,10 @@ package software.amazon.kinesis.multilang;
 import java.util.concurrent.ExecutorService;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
-import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
+import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 
 /**
  * Creates {@link MultiLangShardRecordProcessor}'s.
@@ -43,8 +42,8 @@ public class MultiLangRecordProcessorFactory implements ShardRecordProcessorFact
      * @param command The command that will do processing for this factory's record processors.
      * @param executorService An executor service to use while processing inputs and outputs of the child process.
      */
-    public MultiLangRecordProcessorFactory(String command, ExecutorService executorService,
-                                           MultiLangDaemonConfiguration configuration) {
+    public MultiLangRecordProcessorFactory(
+            String command, ExecutorService executorService, MultiLangDaemonConfiguration configuration) {
         this(command, executorService, new ObjectMapper(), configuration);
     }
 
@@ -53,8 +52,11 @@ public class MultiLangRecordProcessorFactory implements ShardRecordProcessorFact
      * @param executorService An executor service to use while processing inputs and outputs of the child process.
      * @param objectMapper An object mapper used to convert messages to json to be written to the child process
      */
-    public MultiLangRecordProcessorFactory(String command, ExecutorService executorService, ObjectMapper objectMapper,
-                                           MultiLangDaemonConfiguration configuration) {
+    public MultiLangRecordProcessorFactory(
+            String command,
+            ExecutorService executorService,
+            ObjectMapper objectMapper,
+            MultiLangDaemonConfiguration configuration) {
         this.command = command;
         this.commandArray = command.split(COMMAND_DELIMETER_REGEX);
         this.executorService = executorService;
@@ -68,8 +70,8 @@ public class MultiLangRecordProcessorFactory implements ShardRecordProcessorFact
         /*
          * Giving ProcessBuilder the command as an array of Strings allows users to specify command line arguments.
          */
-        return new MultiLangShardRecordProcessor(new ProcessBuilder(commandArray), executorService, this.objectMapper,
-                this.configuration);
+        return new MultiLangShardRecordProcessor(
+                new ProcessBuilder(commandArray), executorService, this.objectMapper, this.configuration);
     }
 
     String[] getCommandArray() {

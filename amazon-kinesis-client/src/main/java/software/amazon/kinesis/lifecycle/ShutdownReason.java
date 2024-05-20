@@ -21,7 +21,6 @@ import software.amazon.kinesis.processor.ShardRecordProcessor;
 
 import static software.amazon.kinesis.lifecycle.ConsumerStates.ShardConsumerState;
 
-
 /**
  * Reason the ShardRecordProcessor is being shutdown.
  * Used to distinguish between a fail-over vs. a termination (shard is closed and all records have been delivered).
@@ -55,6 +54,7 @@ public enum ShutdownReason {
     REQUESTED(1, ShardConsumerState.SHUTDOWN_REQUESTED.consumerState());
 
     private final int rank;
+
     @Getter(AccessLevel.PACKAGE)
     @Accessors(fluent = true)
     private final ConsumerState shutdownState;
@@ -66,7 +66,7 @@ public enum ShutdownReason {
 
     /**
      * Indicates whether the given reason can override the current reason.
-     * 
+     *
      * @param reason the reason to transition to
      * @return true if the transition is allowed, false if it's not.
      */

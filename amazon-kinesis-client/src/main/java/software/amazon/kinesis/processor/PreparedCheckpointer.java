@@ -50,6 +50,5 @@ public interface PreparedCheckpointer {
      */
     void checkpoint()
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
-            IllegalArgumentException;
-
+                    IllegalArgumentException;
 }

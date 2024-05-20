@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListSet;
 
-
 import junit.framework.Assert;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.Shard;
@@ -46,14 +45,14 @@ public class ShardSequenceVerifier {
             shardIdToShards.put(shard.shardId(), shard);
         }
     }
-    
+
     public void registerInitialization(String shardId) {
         List<String> parentShardIds = ShardObjectHelper.getParentShardIds(shardIdToShards.get(shardId));
         for (String parentShardId : parentShardIds) {
             if (initializedShards.contains(parentShardId)) {
                 if (!shutdownShards.contains(parentShardId)) {
-                    String message = "Parent shard " + parentShardId + " was not shutdown before shard "
-                            + shardId + " was initialized.";
+                    String message = "Parent shard " + parentShardId + " was not shutdown before shard " + shardId
+                            + " was initialized.";
                     log.error(message);
                     validationFailures.add(message);
                 }
@@ -61,18 +60,17 @@ public class ShardSequenceVerifier {
         }
         initializedShards.add(shardId);
     }
-    
+
     public void registerShutdown(String shardId, ShutdownReason reason) {
         if (reason.equals(ShutdownReason.SHARD_END)) {
             shutdownShards.add(shardId);
         }
     }
-    
+
     public void verify() {
         for (String message : validationFailures) {
             log.error(message);
         }
         Assert.assertTrue(validationFailures.isEmpty());
     }
-
 }

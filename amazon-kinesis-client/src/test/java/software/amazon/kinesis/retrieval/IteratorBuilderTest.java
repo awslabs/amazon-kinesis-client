@@ -1,8 +1,5 @@
 package software.amazon.kinesis.retrieval;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-
 import java.time.Instant;
 import java.util.Date;
 import java.util.function.Consumer;
@@ -10,13 +7,15 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.junit.Test;
-
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.ShardIteratorType;
 import software.amazon.awssdk.services.kinesis.model.SubscribeToShardRequest;
 import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class IteratorBuilderTest {
 
@@ -53,7 +52,11 @@ public class IteratorBuilderTest {
 
     @Test
     public void subscribeReconnectTest() {
-        sequenceNumber(this::stsBase, this::verifyStsBase, IteratorBuilder::reconnectRequest, WrappedRequest::wrapped,
+        sequenceNumber(
+                this::stsBase,
+                this::verifyStsBase,
+                IteratorBuilder::reconnectRequest,
+                WrappedRequest::wrapped,
                 ShardIteratorType.AFTER_SEQUENCE_NUMBER);
     }
 
@@ -64,7 +67,11 @@ public class IteratorBuilderTest {
 
     @Test
     public void getShardIteratorReconnectTest() {
-        sequenceNumber(this::gsiBase, this::verifyGsiBase, IteratorBuilder::reconnectRequest, WrappedRequest::wrapped,
+        sequenceNumber(
+                this::gsiBase,
+                this::verifyGsiBase,
+                IteratorBuilder::reconnectRequest,
+                WrappedRequest::wrapped,
                 ShardIteratorType.AFTER_SEQUENCE_NUMBER);
     }
 
@@ -78,55 +85,108 @@ public class IteratorBuilderTest {
         timeStampTest(this::gsiBase, this::verifyGsiBase, IteratorBuilder::request, WrappedRequest::wrapped);
     }
 
-
     private interface IteratorApply<T> {
         T apply(T base, String sequenceNumber, InitialPositionInStreamExtended initialPositionInStreamExtended);
     }
 
-    private <T, R> void latestTest(Supplier<T> supplier, Consumer<R> baseVerifier, IteratorApply<T> iteratorRequest,
+    private <T, R> void latestTest(
+            Supplier<T> supplier,
+            Consumer<R> baseVerifier,
+            IteratorApply<T> iteratorRequest,
             Function<T, WrappedRequest<R>> toRequest) {
         String sequenceNumber = SentinelCheckpoint.LATEST.name();
-        InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
-                .newInitialPosition(InitialPositionInStream.LATEST);
-        updateTest(supplier, baseVerifier, iteratorRequest, toRequest, sequenceNumber, initialPosition,
-                ShardIteratorType.LATEST, null, null);
+        InitialPositionInStreamExtended initialPosition =
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
+        updateTest(
+                supplier,
+                baseVerifier,
+                iteratorRequest,
+                toRequest,
+                sequenceNumber,
+                initialPosition,
+                ShardIteratorType.LATEST,
+                null,
+                null);
     }
 
-    private <T, R> void trimHorizonTest(Supplier<T> supplier, Consumer<R> baseVerifier,
-            IteratorApply<T> iteratorRequest, Function<T, WrappedRequest<R>> toRequest) {
+    private <T, R> void trimHorizonTest(
+            Supplier<T> supplier,
+            Consumer<R> baseVerifier,
+            IteratorApply<T> iteratorRequest,
+            Function<T, WrappedRequest<R>> toRequest) {
         String sequenceNumber = SentinelCheckpoint.TRIM_HORIZON.name();
-        InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
-                .newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
-        updateTest(supplier, baseVerifier, iteratorRequest, toRequest, sequenceNumber, initialPosition,
-                ShardIteratorType.TRIM_HORIZON, null, null);
+        InitialPositionInStreamExtended initialPosition =
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+        updateTest(
+                supplier,
+                baseVerifier,
+                iteratorRequest,
+                toRequest,
+                sequenceNumber,
+                initialPosition,
+                ShardIteratorType.TRIM_HORIZON,
+                null,
+                null);
     }
 
-    private <T, R> void sequenceNumber(Supplier<T> supplier, Consumer<R> baseVerifier, IteratorApply<T> iteratorRequest,
+    private <T, R> void sequenceNumber(
+            Supplier<T> supplier,
+            Consumer<R> baseVerifier,
+            IteratorApply<T> iteratorRequest,
             Function<T, WrappedRequest<R>> toRequest) {
         sequenceNumber(supplier, baseVerifier, iteratorRequest, toRequest, ShardIteratorType.AT_SEQUENCE_NUMBER);
     }
 
-    private <T, R> void sequenceNumber(Supplier<T> supplier, Consumer<R> baseVerifier, IteratorApply<T> iteratorRequest,
-            Function<T, WrappedRequest<R>> toRequest, ShardIteratorType shardIteratorType) {
-        InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
-                .newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
-        updateTest(supplier, baseVerifier, iteratorRequest, toRequest, SEQUENCE_NUMBER, initialPosition,
-                shardIteratorType, "1234", null);
+    private <T, R> void sequenceNumber(
+            Supplier<T> supplier,
+            Consumer<R> baseVerifier,
+            IteratorApply<T> iteratorRequest,
+            Function<T, WrappedRequest<R>> toRequest,
+            ShardIteratorType shardIteratorType) {
+        InitialPositionInStreamExtended initialPosition =
+                InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+        updateTest(
+                supplier,
+                baseVerifier,
+                iteratorRequest,
+                toRequest,
+                SEQUENCE_NUMBER,
+                initialPosition,
+                shardIteratorType,
+                "1234",
+                null);
     }
 
-    private <T, R> void timeStampTest(Supplier<T> supplier, Consumer<R> baseVerifier, IteratorApply<T> iteratorRequest,
+    private <T, R> void timeStampTest(
+            Supplier<T> supplier,
+            Consumer<R> baseVerifier,
+            IteratorApply<T> iteratorRequest,
             Function<T, WrappedRequest<R>> toRequest) {
         String sequenceNumber = SentinelCheckpoint.AT_TIMESTAMP.name();
-        InitialPositionInStreamExtended initialPosition = InitialPositionInStreamExtended
-                .newInitialPositionAtTimestamp(new Date(TIMESTAMP.toEpochMilli()));
-        updateTest(supplier, baseVerifier, iteratorRequest, toRequest, sequenceNumber, initialPosition,
-                ShardIteratorType.AT_TIMESTAMP, null, TIMESTAMP);
+        InitialPositionInStreamExtended initialPosition =
+                InitialPositionInStreamExtended.newInitialPositionAtTimestamp(new Date(TIMESTAMP.toEpochMilli()));
+        updateTest(
+                supplier,
+                baseVerifier,
+                iteratorRequest,
+                toRequest,
+                sequenceNumber,
+                initialPosition,
+                ShardIteratorType.AT_TIMESTAMP,
+                null,
+                TIMESTAMP);
     }
 
-    private <T, R> void updateTest(Supplier<T> supplier, Consumer<R> baseVerifier, IteratorApply<T> iteratorRequest,
-            Function<T, WrappedRequest<R>> toRequest, String sequenceNumber,
-            InitialPositionInStreamExtended initialPositionInStream, ShardIteratorType expectedShardIteratorType,
-            String expectedSequenceNumber, Instant expectedTimestamp) {
+    private <T, R> void updateTest(
+            Supplier<T> supplier,
+            Consumer<R> baseVerifier,
+            IteratorApply<T> iteratorRequest,
+            Function<T, WrappedRequest<R>> toRequest,
+            String sequenceNumber,
+            InitialPositionInStreamExtended initialPositionInStream,
+            ShardIteratorType expectedShardIteratorType,
+            String expectedSequenceNumber,
+            Instant expectedTimestamp) {
         T base = supplier.get();
         T updated = iteratorRequest.apply(base, sequenceNumber, initialPositionInStream);
         WrappedRequest<R> request = toRequest.apply(updated);
@@ -134,7 +194,6 @@ public class IteratorBuilderTest {
         assertThat(request.shardIteratorType(), equalTo(expectedShardIteratorType));
         assertThat(request.sequenceNumber(), equalTo(expectedSequenceNumber));
         assertThat(request.timestamp(), equalTo(expectedTimestamp));
-
     }
 
     private interface WrappedRequest<R> {
@@ -214,5 +273,4 @@ public class IteratorBuilderTest {
     private GetShardIteratorRequest.Builder gsiBase() {
         return GetShardIteratorRequest.builder().shardId(SHARD_ID).streamName(STREAM_NAME);
     }
-
 }

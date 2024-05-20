@@ -31,7 +31,7 @@ import org.apache.commons.lang3.StringUtils;
 
 public class BuilderDynaBean implements DynaBean {
 
-    private static final String[] CLASS_NAME_JOINERS = { ClassUtils.PACKAGE_SEPARATOR, ClassUtils.INNER_CLASS_SEPARATOR };
+    private static final String[] CLASS_NAME_JOINERS = {ClassUtils.PACKAGE_SEPARATOR, ClassUtils.INNER_CLASS_SEPARATOR};
     static final String NO_MAP_ACCESS_SUPPORT = "Map access isn't supported";
 
     private Class<?> destinedClass;
@@ -51,13 +51,19 @@ public class BuilderDynaBean implements DynaBean {
         this(destinedClass, convertUtilsBean, null, Arrays.asList(classPrefixSearchList));
     }
 
-    public BuilderDynaBean(Class<?> destinedClass, ConvertUtilsBean convertUtilsBean,
-            Function<String, ?> emptyPropertyHandler, String... classPrefixSearchList) {
+    public BuilderDynaBean(
+            Class<?> destinedClass,
+            ConvertUtilsBean convertUtilsBean,
+            Function<String, ?> emptyPropertyHandler,
+            String... classPrefixSearchList) {
         this(destinedClass, convertUtilsBean, emptyPropertyHandler, Arrays.asList(classPrefixSearchList));
     }
 
-    public BuilderDynaBean(Class<?> destinedClass, ConvertUtilsBean convertUtilsBean,
-            Function<String, ?> emptyPropertyHandler, List<String> classPrefixSearchList) {
+    public BuilderDynaBean(
+            Class<?> destinedClass,
+            ConvertUtilsBean convertUtilsBean,
+            Function<String, ?> emptyPropertyHandler,
+            List<String> classPrefixSearchList) {
         this.convertUtilsBean = convertUtilsBean;
         this.classPrefixSearchList = classPrefixSearchList;
         this.emptyPropertyHandler = emptyPropertyHandler;
@@ -102,7 +108,6 @@ public class BuilderDynaBean implements DynaBean {
                         // Ignored
                         //
                     }
-
                 }
             }
         }
@@ -214,8 +219,10 @@ public class BuilderDynaBean implements DynaBean {
                 validateCanBuildOrCreate();
                 List<TypeTag> types = dynaBeanBuilderSupport.getProperty(name);
                 if (types.size() > 1) {
-                    Optional<TypeTag> arrayType = types.stream().filter(t -> t.type.isArray()).findFirst();
-                    return arrayType.map(t -> new DynaProperty(name, t.type, t.type.getComponentType()))
+                    Optional<TypeTag> arrayType =
+                            types.stream().filter(t -> t.type.isArray()).findFirst();
+                    return arrayType
+                            .map(t -> new DynaProperty(name, t.type, t.type.getComponentType()))
                             .orElseGet(() -> new DynaProperty(name));
                 } else {
                     TypeTag type = types.get(0);
@@ -232,7 +239,8 @@ public class BuilderDynaBean implements DynaBean {
             @Override
             public DynaProperty[] getDynaProperties() {
                 validateCanBuildOrCreate();
-                return dynaBeanBuilderSupport.getPropertyNames().stream().map(this::getDynaProperty)
+                return dynaBeanBuilderSupport.getPropertyNames().stream()
+                        .map(this::getDynaProperty)
                         .toArray(DynaProperty[]::new);
             }
 

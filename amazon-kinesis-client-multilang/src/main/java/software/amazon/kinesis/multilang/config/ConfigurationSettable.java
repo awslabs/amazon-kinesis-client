@@ -28,21 +28,21 @@ public @interface ConfigurationSettable {
 
     /**
      * Which builder this option applies to
-     * 
+     *
      * @return the class of the builder to use
      */
     Class<?> configurationClass();
 
     /**
      * The method name on the builder, defaults to the fieldName
-     * 
+     *
      * @return the name of the method or null to use the default
      */
     String methodName() default "";
 
     /**
      * If the type is actually an optional value this will enable conversions
-     * 
+     *
      * @return true if the value should be wrapped by an optional
      */
     boolean convertToOptional() default false;

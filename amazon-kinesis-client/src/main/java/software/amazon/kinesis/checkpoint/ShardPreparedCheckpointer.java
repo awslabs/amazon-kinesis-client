@@ -38,8 +38,8 @@ public class ShardPreparedCheckpointer implements PreparedCheckpointer {
      * @param pendingCheckpointSequenceNumber sequence number to checkpoint at
      * @param checkpointer checkpointer to use
      */
-    public ShardPreparedCheckpointer(ExtendedSequenceNumber pendingCheckpointSequenceNumber,
-                                     RecordProcessorCheckpointer checkpointer) {
+    public ShardPreparedCheckpointer(
+            ExtendedSequenceNumber pendingCheckpointSequenceNumber, RecordProcessorCheckpointer checkpointer) {
         this.pendingCheckpointSequenceNumber = pendingCheckpointSequenceNumber;
         this.checkpointer = checkpointer;
     }
@@ -58,8 +58,8 @@ public class ShardPreparedCheckpointer implements PreparedCheckpointer {
     @Override
     public void checkpoint()
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
-            IllegalArgumentException {
-        checkpointer.checkpoint(pendingCheckpointSequenceNumber.sequenceNumber(),
-                pendingCheckpointSequenceNumber.subSequenceNumber());
+                    IllegalArgumentException {
+        checkpointer.checkpoint(
+                pendingCheckpointSequenceNumber.sequenceNumber(), pendingCheckpointSequenceNumber.subSequenceNumber());
     }
 }

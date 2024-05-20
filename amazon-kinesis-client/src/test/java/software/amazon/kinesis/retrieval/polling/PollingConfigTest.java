@@ -1,14 +1,14 @@
 package software.amazon.kinesis.retrieval.polling;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 @RunWith(MockitoJUnitRunner.class)
 public class PollingConfigTest {
@@ -48,5 +48,4 @@ public class PollingConfigTest {
     public void testInvalidRecordLimit() {
         config.maxRecords(PollingConfig.DEFAULT_MAX_RECORDS + 1);
     }
-
 }

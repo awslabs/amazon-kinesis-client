@@ -14,8 +14,6 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
-import com.google.common.collect.ImmutableList;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.ImmutableList;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,14 +55,17 @@ public class DynamoDBLeaseTakerTest {
 
     @Mock
     private LeaseRefresher leaseRefresher;
+
     @Mock
     private MetricsFactory metricsFactory;
+
     @Mock
     private Callable<Long> timeProvider;
 
     @Before
     public void setup() {
-        this.dynamoDBLeaseTaker = new DynamoDBLeaseTaker(leaseRefresher, WORKER_IDENTIFIER, LEASE_DURATION_MILLIS, metricsFactory);
+        this.dynamoDBLeaseTaker =
+                new DynamoDBLeaseTaker(leaseRefresher, WORKER_IDENTIFIER, LEASE_DURATION_MILLIS, metricsFactory);
     }
 
     /**
@@ -72,10 +74,10 @@ public class DynamoDBLeaseTakerTest {
     @Test
     public final void testStringJoin() {
         List<String> strings = new ArrayList<>();
-        
+
         strings.add("foo");
         Assert.assertEquals("foo", DynamoDBLeaseTaker.stringJoin(strings, ", "));
-        
+
         strings.add("bar");
         Assert.assertEquals("foo, bar", DynamoDBLeaseTaker.stringJoin(strings, ", "));
     }
@@ -128,11 +130,11 @@ public class DynamoDBLeaseTakerTest {
 
     @Test
     public void test_veryOldLeaseDurationNanosMultiplierGetsCorrectLeases() throws Exception {
-        long veryOldThreshold = MOCK_CURRENT_TIME -
-                (TimeUnit.MILLISECONDS.toNanos(LEASE_DURATION_MILLIS) * VERY_OLD_LEASE_DURATION_MULTIPLIER);
-        DynamoDBLeaseTaker dynamoDBLeaseTakerWithCustomMultiplier =
-                new DynamoDBLeaseTaker(leaseRefresher, WORKER_IDENTIFIER, LEASE_DURATION_MILLIS, metricsFactory)
-                        .withVeryOldLeaseDurationNanosMultiplier(VERY_OLD_LEASE_DURATION_MULTIPLIER);
+        long veryOldThreshold = MOCK_CURRENT_TIME
+                - (TimeUnit.MILLISECONDS.toNanos(LEASE_DURATION_MILLIS) * VERY_OLD_LEASE_DURATION_MULTIPLIER);
+        DynamoDBLeaseTaker dynamoDBLeaseTakerWithCustomMultiplier = new DynamoDBLeaseTaker(
+                        leaseRefresher, WORKER_IDENTIFIER, LEASE_DURATION_MILLIS, metricsFactory)
+                .withVeryOldLeaseDurationNanosMultiplier(VERY_OLD_LEASE_DURATION_MULTIPLIER);
         final List<Lease> allLeases = new ImmutableList.Builder<Lease>()
                 .add(createLease("foo", "2", MOCK_CURRENT_TIME))
                 .add(createLease("bar", "3", veryOldThreshold - 1))
@@ -154,11 +156,11 @@ public class DynamoDBLeaseTakerTest {
 
     @Test
     public void test_disableEnablePriorityLeaseAssignmentGetsCorrectLeases() throws Exception {
-        long veryOldThreshold = MOCK_CURRENT_TIME -
-                (TimeUnit.MILLISECONDS.toNanos(LEASE_DURATION_MILLIS) * DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER);
-        DynamoDBLeaseTaker dynamoDBLeaseTakerWithDisabledPriorityLeaseAssignment =
-                new DynamoDBLeaseTaker(leaseRefresher, WORKER_IDENTIFIER, LEASE_DURATION_MILLIS, metricsFactory)
-                        .withEnablePriorityLeaseAssignment(false);
+        long veryOldThreshold = MOCK_CURRENT_TIME
+                - (TimeUnit.MILLISECONDS.toNanos(LEASE_DURATION_MILLIS) * DEFAULT_VERY_OLD_LEASE_DURATION_MULTIPLIER);
+        DynamoDBLeaseTaker dynamoDBLeaseTakerWithDisabledPriorityLeaseAssignment = new DynamoDBLeaseTaker(
+                        leaseRefresher, WORKER_IDENTIFIER, LEASE_DURATION_MILLIS, metricsFactory)
+                .withEnablePriorityLeaseAssignment(false);
         final List<Lease> allLeases = new ArrayList<>();
         allLeases.add(createLease("bar", "2", MOCK_CURRENT_TIME));
         allLeases.add(createLease("bar", "3", MOCK_CURRENT_TIME));
@@ -174,7 +176,8 @@ public class DynamoDBLeaseTakerTest {
         when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
         when(timeProvider.call()).thenReturn(MOCK_CURRENT_TIME);
 
-        Set<Lease> output = dynamoDBLeaseTakerWithDisabledPriorityLeaseAssignment.computeLeasesToTake(expiredLeases, timeProvider);
+        Set<Lease> output =
+                dynamoDBLeaseTakerWithDisabledPriorityLeaseAssignment.computeLeasesToTake(expiredLeases, timeProvider);
         final Set<Lease> expectedOutput = new HashSet<>();
         expectedOutput.add(createLease("baz", "5", veryOldThreshold - 1));
         expectedOutput.add(createLease("baz", "6", veryOldThreshold + 1));

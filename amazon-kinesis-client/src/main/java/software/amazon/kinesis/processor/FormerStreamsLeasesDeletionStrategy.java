@@ -15,10 +15,10 @@
 
 package software.amazon.kinesis.processor;
 
-import software.amazon.kinesis.common.StreamIdentifier;
-
 import java.time.Duration;
 import java.util.List;
+
+import software.amazon.kinesis.common.StreamIdentifier;
 
 /**
  * Strategy for cleaning up the leases for former streams.
@@ -101,9 +101,4 @@ public interface FormerStreamsLeasesDeletionStrategy {
             return StreamsLeasesDeletionType.PROVIDED_STREAMS_DEFERRED_DELETION;
         }
     }
-
 }
-
-
-
-

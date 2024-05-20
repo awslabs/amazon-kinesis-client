@@ -24,7 +24,6 @@ import org.mockito.Mockito;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 
-
 public class CloudWatchPublisherRunnableTest {
 
     private static final int MAX_QUEUE_SIZE = 5;
@@ -36,7 +35,8 @@ public class CloudWatchPublisherRunnableTest {
     private static final int FLUSH_SIZE = 2;
 
     private static class TestHarness {
-        private List<MetricDatumWithKey<CloudWatchMetricKey>> data = new ArrayList<MetricDatumWithKey<CloudWatchMetricKey>>();
+        private List<MetricDatumWithKey<CloudWatchMetricKey>> data =
+                new ArrayList<MetricDatumWithKey<CloudWatchMetricKey>>();
         private int counter = 0;
         private CloudWatchMetricsPublisher publisher;
         private CloudWatchPublisherRunnable runnable;
@@ -44,16 +44,12 @@ public class CloudWatchPublisherRunnableTest {
 
         TestHarness() {
             publisher = Mockito.mock(CloudWatchMetricsPublisher.class);
-            runnable = new CloudWatchPublisherRunnable(publisher,
-                    MAX_BUFFER_TIME_MILLIS,
-                    MAX_QUEUE_SIZE,
-                    FLUSH_SIZE) {
+            runnable = new CloudWatchPublisherRunnable(publisher, MAX_BUFFER_TIME_MILLIS, MAX_QUEUE_SIZE, FLUSH_SIZE) {
 
                 @Override
                 protected long getTime() {
                     return time;
                 }
-
             };
         }
 
@@ -67,12 +63,8 @@ public class CloudWatchPublisherRunnableTest {
         }
 
         private MetricDatumWithKey<CloudWatchMetricKey> constructDatum(int value) {
-            MetricDatum datum = TestHelper.constructDatum("datum-" + Integer.toString(value),
-                    StandardUnit.COUNT,
-                    value,
-                    value,
-                    value,
-                    1);
+            MetricDatum datum = TestHelper.constructDatum(
+                    "datum-" + Integer.toString(value), StandardUnit.COUNT, value, value, value, 1);
 
             return new MetricDatumWithKey<CloudWatchMetricKey>(new CloudWatchMetricKey(datum), datum);
         }
@@ -80,7 +72,7 @@ public class CloudWatchPublisherRunnableTest {
         /**
          * Run one iteration of the runnable and assert that it called CloudWatch with count records beginning with
          * record startIndex, and no more than that.
-         * 
+         *
          * @param startIndex
          * @param count
          */

@@ -24,7 +24,7 @@ import lombok.experimental.Accessors;
  */
 @Builder
 @Getter
-@Accessors(fluent=true)
+@Accessors(fluent = true)
 public class LeaseCleanupConfig {
     /**
      * Interval at which to run lease cleanup thread.
