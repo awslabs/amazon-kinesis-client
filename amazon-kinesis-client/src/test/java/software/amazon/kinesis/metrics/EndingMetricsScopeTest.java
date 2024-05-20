@@ -15,14 +15,11 @@
 package software.amazon.kinesis.metrics;
 
 import org.junit.Test;
-
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 
 public class EndingMetricsScopeTest {
 
-    private static class TestScope extends EndingMetricsScope {
-
-    }
+    private static class TestScope extends EndingMetricsScope {}
 
     @Test
     public void testAddDataNotEnded() {

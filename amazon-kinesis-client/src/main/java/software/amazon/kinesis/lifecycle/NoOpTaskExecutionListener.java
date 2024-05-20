@@ -21,11 +21,8 @@ import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
  */
 public class NoOpTaskExecutionListener implements TaskExecutionListener {
     @Override
-    public void beforeTaskExecution(TaskExecutionListenerInput input) {
-    }
+    public void beforeTaskExecution(TaskExecutionListenerInput input) {}
 
     @Override
-    public void afterTaskExecution(TaskExecutionListenerInput input) {
-    }
+    public void afterTaskExecution(TaskExecutionListenerInput input) {}
 }
-

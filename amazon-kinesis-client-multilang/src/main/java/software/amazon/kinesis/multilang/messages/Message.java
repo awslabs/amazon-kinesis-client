@@ -23,15 +23,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Abstract class for all messages that are sent to the client's process.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "action")
-@JsonSubTypes({ 
-        @Type(value = CheckpointMessage.class, name = CheckpointMessage.ACTION),
-        @Type(value = InitializeMessage.class, name = InitializeMessage.ACTION),
-        @Type(value = ProcessRecordsMessage.class, name = ProcessRecordsMessage.ACTION),
-        @Type(value = ShutdownMessage.class, name = ShutdownMessage.ACTION),
-        @Type(value = StatusMessage.class, name = StatusMessage.ACTION),
-        @Type(value = ShutdownRequestedMessage.class, name = ShutdownRequestedMessage.ACTION),
-        @Type(value = LeaseLostMessage.class, name = LeaseLostMessage.ACTION),
-        @Type(value = ShardEndedMessage.class, name = ShardEndedMessage.ACTION),
+@JsonSubTypes({
+    @Type(value = CheckpointMessage.class, name = CheckpointMessage.ACTION),
+    @Type(value = InitializeMessage.class, name = InitializeMessage.ACTION),
+    @Type(value = ProcessRecordsMessage.class, name = ProcessRecordsMessage.ACTION),
+    @Type(value = ShutdownMessage.class, name = ShutdownMessage.ACTION),
+    @Type(value = StatusMessage.class, name = StatusMessage.ACTION),
+    @Type(value = ShutdownRequestedMessage.class, name = ShutdownRequestedMessage.ACTION),
+    @Type(value = LeaseLostMessage.class, name = LeaseLostMessage.ACTION),
+    @Type(value = ShardEndedMessage.class, name = ShardEndedMessage.ACTION),
 })
 public abstract class Message {
 
@@ -40,11 +40,10 @@ public abstract class Message {
     /**
      * Default constructor.
      */
-    public Message() {
-    }
+    public Message() {}
 
     /**
-     * 
+     *
      * @param objectMapper An object mapper.
      * @return this
      */
@@ -54,7 +53,7 @@ public abstract class Message {
     }
 
     /**
-     * 
+     *
      * @return A JSON representation of this object.
      */
     public String toString() {

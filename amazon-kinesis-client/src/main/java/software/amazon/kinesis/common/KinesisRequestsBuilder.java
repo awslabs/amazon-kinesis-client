@@ -63,12 +63,11 @@ public class KinesisRequestsBuilder {
 
     @SuppressWarnings("unchecked")
     private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder) {
-        return (T) builder
-                .overrideConfiguration(
-                        AwsRequestOverrideConfiguration.builder()
-                .addApiName(ApiName.builder().name(RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT)
-                        .version(RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT_VERSION).build())
+        return (T) builder.overrideConfiguration(AwsRequestOverrideConfiguration.builder()
+                .addApiName(ApiName.builder()
+                        .name(RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT)
+                        .version(RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT_VERSION)
+                        .build())
                 .build());
     }
-
 }

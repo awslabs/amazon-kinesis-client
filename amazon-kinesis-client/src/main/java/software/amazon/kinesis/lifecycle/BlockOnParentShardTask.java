@@ -40,6 +40,7 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 public class BlockOnParentShardTask implements ConsumerTask {
     @NonNull
     private final ShardInfo shardInfo;
+
     private final LeaseRefresher leaseRefresher;
     // Sleep for this duration if the parent shards have not completed processing, or we encounter an exception.
     private final long parentShardPollIntervalMillis;
@@ -48,7 +49,7 @@ public class BlockOnParentShardTask implements ConsumerTask {
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerTask#call()
      */
     @Override
@@ -94,12 +95,11 @@ public class BlockOnParentShardTask implements ConsumerTask {
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see com.amazonaws.services.kinesis.clientlibrary.lib.worker.ConsumerTask#taskType()
      */
     @Override
     public TaskType taskType() {
         return taskType;
     }
-
 }

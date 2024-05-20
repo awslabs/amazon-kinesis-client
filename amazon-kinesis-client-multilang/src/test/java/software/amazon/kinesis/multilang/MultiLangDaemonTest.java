@@ -14,6 +14,28 @@
  */
 package software.amazon.kinesis.multilang;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.joran.JoranConfigurator;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+import org.slf4j.LoggerFactory;
+import software.amazon.kinesis.coordinator.Scheduler;
+import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
@@ -27,46 +49,29 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-import org.slf4j.LoggerFactory;
-
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.joran.JoranConfigurator;
-import software.amazon.kinesis.coordinator.Scheduler;
-import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
-
 @RunWith(MockitoJUnitRunner.class)
 public class MultiLangDaemonTest {
     @Mock
     private Scheduler scheduler;
+
     @Mock
     private MultiLangDaemonConfig config;
+
     @Mock
     private ExecutorService executorService;
+
     @Mock
     private Future<Integer> futureInteger;
+
     @Mock
     private MultiLangDaemonConfiguration multiLangDaemonConfiguration;
+
     @Mock
     private Runtime runtime;
 
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
+
     @Rule
     public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
@@ -86,7 +91,7 @@ public class MultiLangDaemonTest {
     public void testSuccessfulNoOptionsJCommanderBuild() {
         String testPropertiesFile = "/test/properties/file";
         MultiLangDaemon.MultiLangDaemonArguments arguments = new MultiLangDaemon.MultiLangDaemonArguments();
-        daemon.buildJCommanderAndParseArgs(arguments, new String[] { testPropertiesFile });
+        daemon.buildJCommanderAndParseArgs(arguments, new String[] {testPropertiesFile});
 
         assertThat(arguments.propertiesFile, nullValue());
         assertThat(arguments.logConfiguration, nullValue());
@@ -98,7 +103,7 @@ public class MultiLangDaemonTest {
     public void testSuccessfulOptionsJCommanderBuild() {
         String propertiesOption = "/test/properties/file/option";
         String propertiesFileArgs = "/test/properties/args";
-        String[] args = new String[] { "-p", propertiesOption, propertiesFileArgs };
+        String[] args = new String[] {"-p", propertiesOption, propertiesFileArgs};
         MultiLangDaemon.MultiLangDaemonArguments arguments = new MultiLangDaemon.MultiLangDaemonArguments();
         daemon.buildJCommanderAndParseArgs(arguments, args);
 
@@ -124,7 +129,8 @@ public class MultiLangDaemonTest {
         LoggerContext loggerContext = spy((LoggerContext) LoggerFactory.getILoggerFactory());
         JoranConfigurator configurator = spy(new JoranConfigurator());
 
-        String logConfiguration = this.getClass().getClassLoader().getResource("logback.xml").getPath();
+        String logConfiguration =
+                this.getClass().getClassLoader().getResource("logback.xml").getPath();
         daemon.configureLogging(logConfiguration, loggerContext, configurator);
 
         verify(loggerContext).reset();

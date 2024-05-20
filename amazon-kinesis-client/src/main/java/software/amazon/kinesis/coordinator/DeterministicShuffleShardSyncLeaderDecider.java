@@ -26,6 +26,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
+
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.leases.Lease;
@@ -45,8 +46,7 @@ import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
  * This ensures redundancy for shard-sync during host failures.
  */
 @Slf4j
-class DeterministicShuffleShardSyncLeaderDecider
-        implements LeaderDecider {
+class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
     // Fixed seed so that the shuffle order is preserved across workers
     static final int DETERMINISTIC_SHUFFLE_SEED = 1947;
 
@@ -67,13 +67,11 @@ class DeterministicShuffleShardSyncLeaderDecider
      * @param leaderElectionThreadPool    Thread-pool to be used for leaderElection.
      * @param numPeriodicShardSyncWorkers Number of leaders that will be elected to perform periodic shard syncs.
      */
-    DeterministicShuffleShardSyncLeaderDecider(LeaseRefresher leaseRefresher,
-                                               ScheduledExecutorService leaderElectionThreadPool,
-                                               int numPeriodicShardSyncWorkers) {
-        this(leaseRefresher,
-                leaderElectionThreadPool,
-                numPeriodicShardSyncWorkers,
-                new ReentrantReadWriteLock());
+    DeterministicShuffleShardSyncLeaderDecider(
+            LeaseRefresher leaseRefresher,
+            ScheduledExecutorService leaderElectionThreadPool,
+            int numPeriodicShardSyncWorkers) {
+        this(leaseRefresher, leaderElectionThreadPool, numPeriodicShardSyncWorkers, new ReentrantReadWriteLock());
     }
 
     /**
@@ -82,10 +80,11 @@ class DeterministicShuffleShardSyncLeaderDecider
      * @param numPeriodicShardSyncWorkers Number of leaders that will be elected to perform periodic shard syncs.
      * @param readWriteLock               Mechanism to lock for reading and writing of critical components
      */
-    DeterministicShuffleShardSyncLeaderDecider(LeaseRefresher leaseRefresher,
-                                               ScheduledExecutorService leaderElectionThreadPool,
-                                               int numPeriodicShardSyncWorkers,
-                                               ReadWriteLock readWriteLock) {
+    DeterministicShuffleShardSyncLeaderDecider(
+            LeaseRefresher leaseRefresher,
+            ScheduledExecutorService leaderElectionThreadPool,
+            int numPeriodicShardSyncWorkers,
+            ReadWriteLock readWriteLock) {
         this.leaseRefresher = leaseRefresher;
         this.leaderElectionThreadPool = leaderElectionThreadPool;
         this.numPeriodicShardSyncWorkers = numPeriodicShardSyncWorkers;
@@ -101,8 +100,12 @@ class DeterministicShuffleShardSyncLeaderDecider
         try {
             log.debug("Started leader election at: " + Instant.now());
             List<Lease> leases = leaseRefresher.listLeases();
-            List<String> uniqueHosts = leases.stream().map(Lease::leaseOwner)
-                    .filter(owner -> owner != null).distinct().sorted().collect(Collectors.toList());
+            List<String> uniqueHosts = leases.stream()
+                    .map(Lease::leaseOwner)
+                    .filter(owner -> owner != null)
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.toList());
 
             Collections.shuffle(uniqueHosts, new Random(DETERMINISTIC_SHUFFLE_SEED));
             int numShardSyncWorkers = Math.min(uniqueHosts.size(), numPeriodicShardSyncWorkers);
@@ -137,8 +140,11 @@ class DeterministicShuffleShardSyncLeaderDecider
             // The first run will be after a minute.
             // We don't need jitter since it is scheduled with a fixed delay and time taken to scan leases
             // will be different at different times and on different hosts/workers.
-            leaderElectionThreadPool.scheduleWithFixedDelay(this::electLeaders, ELECTION_INITIAL_DELAY_MILLIS,
-                    ELECTION_SCHEDULING_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
+            leaderElectionThreadPool.scheduleWithFixedDelay(
+                    this::electLeaders,
+                    ELECTION_INITIAL_DELAY_MILLIS,
+                    ELECTION_SCHEDULING_INTERVAL_MILLIS,
+                    TimeUnit.MILLISECONDS);
         }
 
         return executeConditionCheckWithReadLock(() -> isWorkerLeaderForShardSync(workerId));
@@ -152,7 +158,8 @@ class DeterministicShuffleShardSyncLeaderDecider
                 log.info("Successfully stopped leader election on the worker");
             } else {
                 leaderElectionThreadPool.shutdownNow();
-                log.info(String.format("Stopped leader election thread after awaiting termination for %d milliseconds",
+                log.info(String.format(
+                        "Stopped leader election thread after awaiting termination for %d milliseconds",
                         AWAIT_TERMINATION_MILLIS));
             }
 

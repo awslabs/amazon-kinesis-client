@@ -16,12 +16,11 @@ package software.amazon.kinesis.multilang;
 
 import org.junit.Assert;
 import org.junit.Test;
-
-import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
-import software.amazon.kinesis.processor.ShardRecordProcessor;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
+import software.amazon.kinesis.processor.ShardRecordProcessor;
 
 @RunWith(MockitoJUnitRunner.class)
 public class StreamingShardRecordProcessorFactoryTest {
@@ -31,10 +30,13 @@ public class StreamingShardRecordProcessorFactoryTest {
 
     @Test
     public void createProcessorTest() {
-        MultiLangRecordProcessorFactory factory = new MultiLangRecordProcessorFactory("somecommand", null, configuration);
+        MultiLangRecordProcessorFactory factory =
+                new MultiLangRecordProcessorFactory("somecommand", null, configuration);
         ShardRecordProcessor processor = factory.shardRecordProcessor();
 
-        Assert.assertEquals("Should have constructed a StreamingRecordProcessor", MultiLangShardRecordProcessor.class,
+        Assert.assertEquals(
+                "Should have constructed a StreamingRecordProcessor",
+                MultiLangShardRecordProcessor.class,
                 processor.getClass());
     }
 }

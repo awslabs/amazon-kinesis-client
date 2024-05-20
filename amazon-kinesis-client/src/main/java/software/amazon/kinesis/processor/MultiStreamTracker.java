@@ -24,5 +24,4 @@ public interface MultiStreamTracker extends StreamTracker {
     default boolean isMultiStream() {
         return true;
     }
-
 }

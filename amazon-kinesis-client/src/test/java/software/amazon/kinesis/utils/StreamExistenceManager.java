@@ -1,9 +1,20 @@
 package software.amazon.kinesis.utils;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.awssdk.services.kinesis.model.ConsumerStatus;
 import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.DeleteStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerRequest;
@@ -17,20 +28,9 @@ import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerReque
 import software.amazon.awssdk.services.kinesis.model.RegisterStreamConsumerResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.StreamStatus;
-import software.amazon.awssdk.services.kinesis.model.ConsumerStatus;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.config.KCLAppConfig;
 import software.amazon.kinesis.config.RetrievalMode;
-
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 @Value
 @Slf4j
@@ -46,11 +46,13 @@ public class StreamExistenceManager extends AWSResourceManager {
     }
 
     public boolean isResourceActive(String streamName) {
-        final DescribeStreamSummaryRequest request = DescribeStreamSummaryRequest.builder().streamName(streamName).build();
+        final DescribeStreamSummaryRequest request =
+                DescribeStreamSummaryRequest.builder().streamName(streamName).build();
         try {
             final DescribeStreamSummaryResponse response =
                     FutureUtils.resolveOrCancelFuture(client.describeStreamSummary(request), Duration.ofSeconds(60));
-            final boolean isActive = response.streamDescriptionSummary().streamStatus().equals(StreamStatus.ACTIVE);
+            final boolean isActive =
+                    response.streamDescriptionSummary().streamStatus().equals(StreamStatus.ACTIVE);
             return isActive;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof ResourceNotFoundException) {
@@ -64,11 +66,14 @@ public class StreamExistenceManager extends AWSResourceManager {
     }
 
     private boolean isConsumerActive(Arn consumerArn) {
-        final DescribeStreamConsumerRequest request = DescribeStreamConsumerRequest.builder().consumerARN(consumerArn.toString()).build();
+        final DescribeStreamConsumerRequest request = DescribeStreamConsumerRequest.builder()
+                .consumerARN(consumerArn.toString())
+                .build();
         try {
             final DescribeStreamConsumerResponse response =
                     FutureUtils.resolveOrCancelFuture(client.describeStreamConsumer(request), Duration.ofSeconds(60));
-            final boolean isActive = response.consumerDescription().consumerStatus().equals(ConsumerStatus.ACTIVE);
+            final boolean isActive =
+                    response.consumerDescription().consumerStatus().equals(ConsumerStatus.ACTIVE);
             return isActive;
         } catch (ExecutionException e) {
             if (e.getCause() instanceof ResourceNotFoundException) {
@@ -82,7 +87,10 @@ public class StreamExistenceManager extends AWSResourceManager {
     }
 
     public void deleteResourceCall(String streamName) throws Exception {
-        final DeleteStreamRequest request = DeleteStreamRequest.builder().streamName(streamName).enforceConsumerDeletion(true).build();
+        final DeleteStreamRequest request = DeleteStreamRequest.builder()
+                .streamName(streamName)
+                .enforceConsumerDeletion(true)
+                .build();
         client.deleteStream(request).get(30, TimeUnit.SECONDS);
     }
 
@@ -93,7 +101,9 @@ public class StreamExistenceManager extends AWSResourceManager {
         do {
             result = FutureUtils.resolveOrCancelFuture(client.listStreams(listStreamRequest), Duration.ofSeconds(60));
             allStreamNames.addAll(result.streamNames());
-            listStreamRequest = ListStreamsRequest.builder().exclusiveStartStreamName(result.nextToken()).build();
+            listStreamRequest = ListStreamsRequest.builder()
+                    .exclusiveStartStreamName(result.nextToken())
+                    .build();
         } while (result.hasMoreStreams());
         return allStreamNames;
     }
@@ -109,7 +119,8 @@ public class StreamExistenceManager extends AWSResourceManager {
         if (testConfig.isCrossAccount()) {
             for (Arn streamArn : testConfig.getStreamArns()) {
                 log.info("Putting cross account stream resource policy for stream {}", streamArn);
-                putResourcePolicyForCrossAccount(streamArn,
+                putResourcePolicyForCrossAccount(
+                        streamArn,
                         getCrossAccountStreamResourcePolicy(testConfig.getAccountIdForConsumer(), streamArn));
             }
         }
@@ -122,9 +133,10 @@ public class StreamExistenceManager extends AWSResourceManager {
         if (testConfig.isCrossAccount() && testConfig.getRetrievalMode().equals(RetrievalMode.STREAMING)) {
             final Map<Arn, Arn> streamToConsumerArnsMap = new HashMap<>();
             for (Arn streamArn : testConfig.getStreamArns()) {
-                final Arn consumerArn = registerConsumerAndWaitForActive(streamArn,
-                        KCLAppConfig.CROSS_ACCOUNT_CONSUMER_NAME);
-                putResourcePolicyForCrossAccount(consumerArn,
+                final Arn consumerArn =
+                        registerConsumerAndWaitForActive(streamArn, KCLAppConfig.CROSS_ACCOUNT_CONSUMER_NAME);
+                putResourcePolicyForCrossAccount(
+                        consumerArn,
                         getCrossAccountConsumerResourcePolicy(testConfig.getAccountIdForConsumer(), consumerArn));
                 streamToConsumerArnsMap.put(streamArn, consumerArn);
             }
@@ -139,9 +151,10 @@ public class StreamExistenceManager extends AWSResourceManager {
                     .resourceARN(resourceArn.toString())
                     .policy(policy)
                     .build();
-            FutureUtils.resolveOrCancelFuture(client.putResourcePolicy(putResourcePolicyRequest), Duration.ofSeconds(60));
+            FutureUtils.resolveOrCancelFuture(
+                    client.putResourcePolicy(putResourcePolicyRequest), Duration.ofSeconds(60));
         } catch (Exception e) {
-            throw new RuntimeException("Failed to PutResourcePolicy "  + policy + " on resource " + resourceArn, e);
+            throw new RuntimeException("Failed to PutResourcePolicy " + policy + " on resource " + resourceArn, e);
         }
     }
 
@@ -173,9 +186,8 @@ public class StreamExistenceManager extends AWSResourceManager {
                 .streamARN(streamArn.toString())
                 .consumerName(consumerName)
                 .build();
-        final RegisterStreamConsumerResponse response =
-                FutureUtils.resolveOrCancelFuture(client.registerStreamConsumer(registerStreamConsumerRequest),
-                        Duration.ofSeconds(60));
+        final RegisterStreamConsumerResponse response = FutureUtils.resolveOrCancelFuture(
+                client.registerStreamConsumer(registerStreamConsumerRequest), Duration.ofSeconds(60));
         final Arn consumerArn = Arn.fromString(response.consumer().consumerARN());
 
         int retries = 0;
@@ -196,7 +208,10 @@ public class StreamExistenceManager extends AWSResourceManager {
     }
 
     private void createStream(String streamName, int shardCount) {
-        final CreateStreamRequest request = CreateStreamRequest.builder().streamName(streamName).shardCount(shardCount).build();
+        final CreateStreamRequest request = CreateStreamRequest.builder()
+                .streamName(streamName)
+                .shardCount(shardCount)
+                .build();
         try {
             client.createStream(request).get(30, TimeUnit.SECONDS);
         } catch (Exception e) {

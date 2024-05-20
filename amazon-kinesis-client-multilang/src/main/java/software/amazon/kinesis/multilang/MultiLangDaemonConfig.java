@@ -26,10 +26,9 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import software.amazon.kinesis.multilang.config.KinesisClientLibConfigurator;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.multilang.config.KinesisClientLibConfigurator;
 import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 
@@ -53,7 +52,7 @@ public class MultiLangDaemonConfig {
 
     /**
      * Constructor.
-     * 
+     *
      * @param propertiesFile
      *            The location of the properties file.
      * @throws IOException
@@ -66,7 +65,7 @@ public class MultiLangDaemonConfig {
     }
 
     /**
-     * 
+     *
      * @param propertiesFile
      *            The location of the properties file.
      * @param classLoader
@@ -82,7 +81,7 @@ public class MultiLangDaemonConfig {
     }
 
     /**
-     * 
+     *
      * @param propertiesFile
      *            The location of the properties file.
      * @param classLoader
@@ -94,8 +93,9 @@ public class MultiLangDaemonConfig {
      * @throws IllegalArgumentException
      *             Thrown when the contents of the properties file are not as expected.
      */
-    public MultiLangDaemonConfig(String propertiesFile, ClassLoader classLoader,
-            KinesisClientLibConfigurator configurator) throws IOException, IllegalArgumentException {
+    public MultiLangDaemonConfig(
+            String propertiesFile, ClassLoader classLoader, KinesisClientLibConfigurator configurator)
+            throws IOException, IllegalArgumentException {
         Properties properties = loadProperties(classLoader, propertiesFile);
         if (!validateProperties(properties)) {
             throw new IllegalArgumentException(
@@ -107,11 +107,14 @@ public class MultiLangDaemonConfig {
 
         multiLangDaemonConfiguration = configurator.getConfiguration(properties);
         executorService = buildExecutorService(properties);
-        recordProcessorFactory = new MultiLangRecordProcessorFactory(executableName, executorService,
-                multiLangDaemonConfiguration);
+        recordProcessorFactory =
+                new MultiLangRecordProcessorFactory(executableName, executorService, multiLangDaemonConfiguration);
 
-        log.info("Running {} to process stream {} with executable {}", multiLangDaemonConfiguration.getApplicationName(),
-                multiLangDaemonConfiguration.getStreamName(), executableName);
+        log.info(
+                "Running {} to process stream {} with executable {}",
+                multiLangDaemonConfiguration.getApplicationName(),
+                multiLangDaemonConfiguration.getStreamName(),
+                executableName);
         prepare(processingLanguage);
     }
 
@@ -138,7 +141,7 @@ public class MultiLangDaemonConfig {
         }
 
         log.info("MultiLangDaemon is adding the following fields to the User Agent: {}", userAgent.toString());
-//        multiLangDaemonConfiguration.withUserAgent(userAgent.toString());
+        //        multiLangDaemonConfiguration.withUserAgent(userAgent.toString());
     }
 
     private static Properties loadProperties(ClassLoader classLoader, String propertiesFileName) throws IOException {
@@ -181,17 +184,22 @@ public class MultiLangDaemonConfig {
         log.debug("Value for {} property is {}", PROP_MAX_ACTIVE_THREADS, maxActiveThreads);
         if (maxActiveThreads <= 0) {
             log.info("Using a cached thread pool.");
-            return new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(),
-                    builder.build());
+            return new ThreadPoolExecutor(
+                    0, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), builder.build());
         } else {
             log.info("Using a fixed thread pool with {} max active threads.", maxActiveThreads);
-            return new ThreadPoolExecutor(maxActiveThreads, maxActiveThreads, 0L, TimeUnit.MILLISECONDS,
-                    new LinkedBlockingQueue<>(), builder.build());
+            return new ThreadPoolExecutor(
+                    maxActiveThreads,
+                    maxActiveThreads,
+                    0L,
+                    TimeUnit.MILLISECONDS,
+                    new LinkedBlockingQueue<>(),
+                    builder.build());
         }
     }
 
     /**
-     * 
+     *
      * @return A KinesisClientLibConfiguration object based on the properties file provided.
      */
     public MultiLangDaemonConfiguration getMultiLangDaemonConfiguration() {
@@ -199,7 +207,7 @@ public class MultiLangDaemonConfig {
     }
 
     /**
-     * 
+     *
      * @return An executor service based on the properties file provided.
      */
     public ExecutorService getExecutorService() {
@@ -207,7 +215,7 @@ public class MultiLangDaemonConfig {
     }
 
     /**
-     * 
+     *
      * @return A MultiLangRecordProcessorFactory based on the properties file provided.
      */
     public MultiLangRecordProcessorFactory getRecordProcessorFactory() {

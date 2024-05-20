@@ -29,9 +29,8 @@ import software.amazon.kinesis.processor.Checkpointer;
 @KinesisClientInternalApi
 public class DynamoDBCheckpointFactory implements CheckpointFactory {
     @Override
-    public Checkpointer createCheckpointer(final LeaseCoordinator leaseLeaseCoordinator,
-                                           final LeaseRefresher leaseRefresher) {
+    public Checkpointer createCheckpointer(
+            final LeaseCoordinator leaseLeaseCoordinator, final LeaseRefresher leaseRefresher) {
         return new DynamoDBCheckpointer(leaseLeaseCoordinator, leaseRefresher);
     }
-
 }

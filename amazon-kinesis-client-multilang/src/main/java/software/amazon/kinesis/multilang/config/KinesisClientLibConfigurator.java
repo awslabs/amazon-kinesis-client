@@ -19,10 +19,9 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
-
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -71,16 +70,21 @@ public class KinesisClientLibConfigurator {
 
         Validate.notBlank(configuration.getApplicationName(), "Application name is required");
 
-        if (configuration.getStreamArn() != null && !configuration.getStreamArn().trim().isEmpty()) {
+        if (configuration.getStreamArn() != null
+                && !configuration.getStreamArn().trim().isEmpty()) {
             final Arn streamArnObj = Arn.fromString(configuration.getStreamArn());
             StreamIdentifier.validateArn(streamArnObj);
-            //Parse out the stream Name from the Arn (and/or override existing value for Stream Name)
+            // Parse out the stream Name from the Arn (and/or override existing value for Stream Name)
             final String streamNameFromArn = streamArnObj.resource().resource();
             configuration.setStreamName(streamNameFromArn);
         }
 
-        Validate.notBlank(configuration.getStreamName(), "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
-        Validate.isTrue(configuration.getKinesisCredentialsProvider().isDirty(), "A basic set of AWS credentials must be provided");
+        Validate.notBlank(
+                configuration.getStreamName(),
+                "Stream name or Stream Arn is required. Stream Arn takes precedence if both are passed in.");
+        Validate.isTrue(
+                configuration.getKinesisCredentialsProvider().isDirty(),
+                "A basic set of AWS credentials must be provided");
 
         return configuration;
     }
@@ -106,5 +110,4 @@ public class KinesisClientLibConfigurator {
         }
         return getConfiguration(properties);
     }
-
 }

@@ -17,6 +17,7 @@ package software.amazon.kinesis.retrieval.polling;
 
 import java.time.Duration;
 import java.util.function.Function;
+
 import lombok.Data;
 import lombok.NonNull;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -41,8 +42,10 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
 
     @NonNull
     private final String streamName;
+
     @NonNull
     private final KinesisAsyncClient kinesisClient;
+
     @NonNull
     private final RecordsFetcherFactory recordsFetcherFactory;
 
@@ -51,19 +54,20 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
 
     private final Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider;
 
-    public SynchronousBlockingRetrievalFactory(String streamName,
-                                               KinesisAsyncClient kinesisClient,
-                                               RecordsFetcherFactory recordsFetcherFactory,
-                                               int maxRecords,
-                                               Duration kinesisRequestTimeout,
-                                               Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider) {
+    public SynchronousBlockingRetrievalFactory(
+            String streamName,
+            KinesisAsyncClient kinesisClient,
+            RecordsFetcherFactory recordsFetcherFactory,
+            int maxRecords,
+            Duration kinesisRequestTimeout,
+            Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider) {
         this.streamName = streamName;
         this.kinesisClient = kinesisClient;
         this.recordsFetcherFactory = recordsFetcherFactory;
         this.maxRecords = maxRecords;
         this.kinesisRequestTimeout = kinesisRequestTimeout;
-        this.dataFetcherProvider = dataFetcherProvider == null ?
-                defaultDataFetcherProvider(kinesisClient) : dataFetcherProvider;
+        this.dataFetcherProvider =
+                dataFetcherProvider == null ? defaultDataFetcherProvider(kinesisClient) : dataFetcherProvider;
     }
 
     private static Function<DataFetcherProviderConfig, DataFetcher> defaultDataFetcherProvider(
@@ -71,15 +75,12 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
         return dataFetcherProviderConfig -> new KinesisDataFetcher(kinesisClient, dataFetcherProviderConfig);
     }
 
-    private GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(@NonNull final ShardInfo shardInfo,
+    private GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(
+            @NonNull final ShardInfo shardInfo,
             @NonNull final StreamIdentifier streamIdentifier,
             @NonNull final MetricsFactory metricsFactory) {
         final DataFetcherProviderConfig kinesisDataFetcherProviderConfig = new KinesisDataFetcherProviderConfig(
-                streamIdentifier,
-                shardInfo.shardId(),
-                metricsFactory,
-                maxRecords,
-                kinesisRequestTimeout);
+                streamIdentifier, shardInfo.shardId(), metricsFactory, maxRecords, kinesisRequestTimeout);
 
         final DataFetcher dataFetcher = this.dataFetcherProvider.apply(kinesisDataFetcherProviderConfig);
 
@@ -87,7 +88,8 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
     }
 
     @Override
-    public RecordsPublisher createGetRecordsCache(@NonNull final ShardInfo shardInfo,
+    public RecordsPublisher createGetRecordsCache(
+            @NonNull final ShardInfo shardInfo,
             @NonNull final StreamConfig streamConfig,
             @NonNull final MetricsFactory metricsFactory) {
         return recordsFetcherFactory.createRecordsFetcher(

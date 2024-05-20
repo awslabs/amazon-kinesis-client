@@ -16,19 +16,20 @@
 package software.amazon.kinesis.retrieval;
 
 import java.time.Duration;
+
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.metrics.MetricsFactory;
 
 public interface DataFetcherProviderConfig {
 
     /**
-    * Gets stream identifier for dataFetcher.
-    */
+     * Gets stream identifier for dataFetcher.
+     */
     StreamIdentifier getStreamIdentifier();
 
     /**
-    * Gets shard id.
-    */
+     * Gets shard id.
+     */
     String getShardId();
 
     /**

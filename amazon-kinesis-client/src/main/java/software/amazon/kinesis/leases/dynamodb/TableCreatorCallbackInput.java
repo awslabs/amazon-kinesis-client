@@ -34,6 +34,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 public class TableCreatorCallbackInput {
     @NonNull
     private final DynamoDbAsyncClient dynamoDbClient;
+
     @NonNull
     private final String tableName;
 }

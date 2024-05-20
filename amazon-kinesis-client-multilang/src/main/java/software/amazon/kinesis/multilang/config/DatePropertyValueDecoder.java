@@ -26,8 +26,7 @@ public class DatePropertyValueDecoder implements IPropertyValueDecoder<Date> {
     /**
      * Constructor.
      */
-    DatePropertyValueDecoder() {
-    }
+    DatePropertyValueDecoder() {}
 
     /**
      * @param value property value as String
@@ -49,5 +48,4 @@ public class DatePropertyValueDecoder implements IPropertyValueDecoder<Date> {
     public List<Class<Date>> getSupportedTypes() {
         return Arrays.asList(Date.class);
     }
-
 }

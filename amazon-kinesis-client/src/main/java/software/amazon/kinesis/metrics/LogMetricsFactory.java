@@ -23,5 +23,4 @@ public class LogMetricsFactory implements MetricsFactory {
     public LogMetricsScope createMetrics() {
         return new LogMetricsScope();
     }
-
 }

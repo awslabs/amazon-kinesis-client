@@ -15,9 +15,7 @@
 
 package software.amazon.kinesis.common;
 
-
 public class CommonCalculations {
-
 
     /**
      * Convenience method for calculating renewer intervals in milliseconds.

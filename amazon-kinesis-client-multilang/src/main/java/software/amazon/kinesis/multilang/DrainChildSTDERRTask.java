@@ -23,8 +23,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 class DrainChildSTDERRTask extends LineReaderTask<Boolean> {
-    DrainChildSTDERRTask() {
-    }
+    DrainChildSTDERRTask() {}
 
     @Override
     protected HandleLineResult<Boolean> handleLine(String line) {

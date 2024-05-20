@@ -17,6 +17,7 @@ package software.amazon.kinesis.retrieval.polling;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+
 import lombok.NonNull;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
@@ -40,8 +41,7 @@ public interface DataFetcher {
      * @param initialCheckpoint       Current checkpoint sequence number for this shard.
      * @param initialPositionInStream The initialPositionInStream.
      */
-    void initialize(String initialCheckpoint,
-                    InitialPositionInStreamExtended initialPositionInStream);
+    void initialize(String initialCheckpoint, InitialPositionInStreamExtended initialPositionInStream);
 
     /**
      * Initializes this KinesisDataFetcher's iterator based on the checkpointed sequence number as an
@@ -50,8 +50,7 @@ public interface DataFetcher {
      * @param initialCheckpoint       Current checkpoint sequence number for this shard.
      * @param initialPositionInStream The initialPositionInStream.
      */
-    void initialize(ExtendedSequenceNumber initialCheckpoint,
-                    InitialPositionInStreamExtended initialPositionInStream);
+    void initialize(ExtendedSequenceNumber initialCheckpoint, InitialPositionInStreamExtended initialPositionInStream);
 
     /**
      * Advances this KinesisDataFetcher's internal iterator to be at the passed-in sequence number.
@@ -59,8 +58,7 @@ public interface DataFetcher {
      * @param sequenceNumber          advance the iterator to the record at this sequence number.
      * @param initialPositionInStream The initialPositionInStream.
      */
-    void advanceIteratorTo(String sequenceNumber,
-                           InitialPositionInStreamExtended initialPositionInStream);
+    void advanceIteratorTo(String sequenceNumber, InitialPositionInStreamExtended initialPositionInStream);
 
     /**
      * Gets a new iterator from the last known sequence number i.e. the sequence number of the last record from the last
@@ -75,7 +73,8 @@ public interface DataFetcher {
      * @param sequenceNumber          reset the iterator to the record at this sequence number.
      * @param initialPositionInStream the current position in the stream to reset the iterator to.
      */
-    void resetIterator(String shardIterator, String sequenceNumber, InitialPositionInStreamExtended initialPositionInStream);
+    void resetIterator(
+            String shardIterator, String sequenceNumber, InitialPositionInStreamExtended initialPositionInStream);
 
     /**
      * Retrieves the response based on the request.
@@ -99,7 +98,8 @@ public interface DataFetcher {
      * @param request used to obtain the next shard iterator
      * @return next iterator string
      */
-    String getNextIterator(GetShardIteratorRequest request) throws ExecutionException, InterruptedException, TimeoutException;
+    String getNextIterator(GetShardIteratorRequest request)
+            throws ExecutionException, InterruptedException, TimeoutException;
 
     /**
      * Gets the next set of records based on the iterator.

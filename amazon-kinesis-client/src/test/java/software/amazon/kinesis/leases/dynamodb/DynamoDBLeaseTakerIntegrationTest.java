@@ -16,6 +16,7 @@ package software.amazon.kinesis.leases.dynamodb;
 
 import java.util.Collection;
 import java.util.Map;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,6 +26,7 @@ import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
@@ -159,10 +161,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
     @Test
     public void testSlowGetAllLeases() throws LeasingException {
         long leaseDurationMillis = 0;
-        taker = new DynamoDBLeaseTaker(leaseRefresher,
-                "foo",
-                leaseDurationMillis,
-                new NullMetricsFactory());
+        taker = new DynamoDBLeaseTaker(leaseRefresher, "foo", leaseDurationMillis, new NullMetricsFactory());
         TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         Map<String, Lease> addedLeases = builder.withLease("1", "bar")
@@ -201,7 +200,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
     /**
      * Verify that one activity is stolen from the highest loaded server when a server needs more than one lease and no
      * expired leases are available. Setup: 4 leases, server foo holds 0, bar holds 1, baz holds 5.
-     * 
+     *
      * Foo should steal from baz.
      */
     @Test

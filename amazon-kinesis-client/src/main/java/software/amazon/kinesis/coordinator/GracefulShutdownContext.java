@@ -14,11 +14,11 @@
  */
 package software.amazon.kinesis.coordinator;
 
+import java.util.concurrent.CountDownLatch;
+
 import lombok.Builder;
 import lombok.Data;
 import lombok.experimental.Accessors;
-
-import java.util.concurrent.CountDownLatch;
 
 @Data
 @Builder

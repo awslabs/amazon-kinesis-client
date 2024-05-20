@@ -14,9 +14,6 @@
  */
 package software.amazon.kinesis.leases;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -24,8 +21,10 @@ import java.util.List;
 import java.util.Random;
 
 import org.junit.Test;
-
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class ParentsFirstShardPrioritizationUnitTest {
 
@@ -169,8 +168,7 @@ public class ParentsFirstShardPrioritizationUnitTest {
         private List<String> parentShardIds = Collections.emptyList();
         private ExtendedSequenceNumber checkpoint = ExtendedSequenceNumber.LATEST;
 
-        ShardInfoBuilder() {
-        }
+        ShardInfoBuilder() {}
 
         ShardInfoBuilder withShardId(String shardId) {
             this.shardId = shardId;

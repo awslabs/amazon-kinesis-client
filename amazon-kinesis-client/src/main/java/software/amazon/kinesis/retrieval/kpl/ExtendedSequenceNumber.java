@@ -26,7 +26,7 @@ import software.amazon.kinesis.checkpoint.SentinelCheckpoint;
 /**
  * Represents a two-part sequence number for records aggregated by the Kinesis
  * Producer Library.
- * 
+ *
  * <p>
  * The KPL combines multiple user records into a single Kinesis record. Each
  * user record therefore has an integer sub-sequence number, in addition to the
@@ -48,17 +48,17 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
      */
     public static final ExtendedSequenceNumber LATEST =
             new ExtendedSequenceNumber(SentinelCheckpoint.LATEST.toString());
-    
+
     /**
      * Special value for SHARD_END.
      */
-    public static final ExtendedSequenceNumber SHARD_END = 
-        new ExtendedSequenceNumber(SentinelCheckpoint.SHARD_END.toString());
+    public static final ExtendedSequenceNumber SHARD_END =
+            new ExtendedSequenceNumber(SentinelCheckpoint.SHARD_END.toString());
     /**
-     * 
+     *
      * Special value for TRIM_HORIZON.
      */
-    public static final ExtendedSequenceNumber TRIM_HORIZON = 
+    public static final ExtendedSequenceNumber TRIM_HORIZON =
             new ExtendedSequenceNumber(SentinelCheckpoint.TRIM_HORIZON.toString());
 
     /**
@@ -73,13 +73,15 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
      *
      * @see #isSentinelCheckpoint()
      */
-    private static final Set<String> SENTINEL_VALUES = Collections.unmodifiableSet(
-            Arrays.stream(SentinelCheckpoint.values()).map(SentinelCheckpoint::name).collect(Collectors.toSet()));
+    private static final Set<String> SENTINEL_VALUES =
+            Collections.unmodifiableSet(Arrays.stream(SentinelCheckpoint.values())
+                    .map(SentinelCheckpoint::name)
+                    .collect(Collectors.toSet()));
 
     /**
      * Construct an ExtendedSequenceNumber. The sub-sequence number defaults to
      * 0.
-     * 
+     *
      * @param sequenceNumber
      *            Sequence number of the Kinesis record
      */
@@ -89,7 +91,7 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
 
     /**
      * Construct an ExtendedSequenceNumber.
-     * 
+     *
      * @param sequenceNumber
      *            Sequence number of the Kinesis record
      * @param subSequenceNumber
@@ -103,11 +105,11 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
 
     /**
      * Compares this with another ExtendedSequenceNumber using these rules.
-     * 
+     *
      * SHARD_END is considered greatest
      * TRIM_HORIZON, LATEST and AT_TIMESTAMP are considered less than sequence numbers
      * sequence numbers are given their big integer value
-     * 
+     *
      * @param extendedSequenceNumber The ExtendedSequenceNumber to compare against
      * @return returns negative/0/positive if this is less than/equal to/greater than extendedSequenceNumber
      */
@@ -119,7 +121,7 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
             throw new IllegalArgumentException("Expected a sequence number or a sentinel checkpoint value but "
                     + "received: first=" + sequenceNumber + " and second=" + secondSequenceNumber);
         }
-        
+
         // SHARD_END is the greatest
         if (SentinelCheckpoint.SHARD_END.toString().equals(sequenceNumber)
                 && SentinelCheckpoint.SHARD_END.toString().equals(secondSequenceNumber)) {
@@ -134,17 +136,17 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
         int result = bigIntegerValue(sequenceNumber).compareTo(bigIntegerValue(secondSequenceNumber));
         return result == 0 ? Long.compare(subSequenceNumber, extendedSequenceNumber.subSequenceNumber) : result;
     }
-    
+
     /**
-     * 
+     *
      * @return The sequence number of the Kinesis record.
      */
     public String sequenceNumber() {
         return sequenceNumber;
     }
-    
+
     /**
-     * 
+     *
      * @return The sub-sequence number of the user record within the enclosing
      *         Kinesis record.
      */
@@ -169,13 +171,13 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
         sb.append('}');
         return sb.toString();
     }
-    
+
     /**
      * Sequence numbers are converted, sentinels are given a value of -1. Note this method is only used after special
      * logic associated with SHARD_END and the case of comparing two sentinel values has already passed, so we map
      * sentinel values LATEST, TRIM_HORIZON and AT_TIMESTAMP to negative numbers so that they are considered less than
      * sequence numbers.
-     * 
+     *
      * @param sequenceNumber The string to convert to big integer value
      * @return a BigInteger value representation of the sequenceNumber
      */
@@ -196,7 +198,7 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
 
     /**
      * Checks if a sequence number is all digits or a {@link SentinelCheckpoint}.
-     * 
+     *
      * @param esn {@code ExtendedSequenceNumber} to validate its sequence number
      * @return true if and only if the string is all digits or one of the SentinelCheckpoint values
      */
@@ -214,10 +216,10 @@ public class ExtendedSequenceNumber implements Comparable<ExtendedSequenceNumber
 
     /**
      * Checks if the string is composed of only digits.
-     * 
+     *
      * @param string
      * @return true for a string of all digits, false otherwise (including false for null and empty string)
-     */    
+     */
     private static boolean isDigits(String string) {
         if (string == null || string.length() == 0) {
             return false;

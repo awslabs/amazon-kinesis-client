@@ -19,8 +19,8 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
-import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
+import software.amazon.kinesis.processor.ShardRecordProcessor;
 
 /**
  * Container for the parameters to the IRecordProcessor's
@@ -50,5 +50,4 @@ public class ShutdownInput {
      * @return The checkpointer object that the record processor should use to checkpoint
      */
     private final RecordProcessorCheckpointer checkpointer;
-
 }

@@ -25,8 +25,8 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 @Slf4j
 @KinesisClientInternalApi
 class RejectedTaskEvent implements DiagnosticEvent {
-    private static final String MESSAGE = "Review your thread configuration to prevent task rejections. " +
-            "Task rejections will slow down your application and some shards may stop processing. ";
+    private static final String MESSAGE = "Review your thread configuration to prevent task rejections. "
+            + "Task rejections will slow down your application and some shards may stop processing. ";
 
     private ExecutorStateEvent executorStateEvent;
     private Throwable throwable;

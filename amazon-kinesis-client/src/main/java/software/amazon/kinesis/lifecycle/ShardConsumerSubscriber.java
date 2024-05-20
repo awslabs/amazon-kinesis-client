@@ -14,6 +14,10 @@
  */
 package software.amazon.kinesis.lifecycle;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.ExecutorService;
+
 import com.google.common.annotations.VisibleForTesting;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Scheduler;
@@ -29,10 +33,6 @@ import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.concurrent.ExecutorService;
-
 @Slf4j
 @Accessors(fluent = true)
 class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
@@ -43,6 +43,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     private final int readTimeoutsToIgnoreBeforeWarning;
     private final String shardInfoId;
     private volatile int readTimeoutSinceLastRead = 0;
+
     @VisibleForTesting
     final Object lockObject = new Object();
     // This holds the last time an attempt of request to upstream service was made including the first try to
@@ -51,21 +52,36 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     private RecordsRetrieved lastAccepted = null;
 
     private Subscription subscription;
+
     @Getter
     private volatile Instant lastDataArrival;
+
     @Getter
     private volatile Throwable dispatchFailure;
+
     @Getter(AccessLevel.PACKAGE)
     private volatile Throwable retrievalFailure;
 
     @Deprecated
-    ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
-                            ShardConsumer shardConsumer) {
-        this(recordsPublisher, executorService, bufferSize, shardConsumer, LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
+    ShardConsumerSubscriber(
+            RecordsPublisher recordsPublisher,
+            ExecutorService executorService,
+            int bufferSize,
+            ShardConsumer shardConsumer) {
+        this(
+                recordsPublisher,
+                executorService,
+                bufferSize,
+                shardConsumer,
+                LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
     }
 
-    ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
-            ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
+    ShardConsumerSubscriber(
+            RecordsPublisher recordsPublisher,
+            ExecutorService executorService,
+            int bufferSize,
+            ShardConsumer shardConsumer,
+            int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.scheduler = Schedulers.from(executorService);
         this.bufferSize = bufferSize;
@@ -82,7 +98,9 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
             if (lastAccepted != null) {
                 recordsPublisher.restartFrom(lastAccepted);
             }
-            Flowable.fromPublisher(recordsPublisher).subscribeOn(scheduler).observeOn(scheduler, true, bufferSize)
+            Flowable.fromPublisher(recordsPublisher)
+                    .subscribeOn(scheduler)
+                    .observeOn(scheduler, true, bufferSize)
                     .subscribe(new ShardConsumerNotifyingSubscriber(this, recordsPublisher));
         }
     }
@@ -107,8 +125,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         Throwable oldFailure = null;
         if (retrievalFailure != null) {
             synchronized (lockObject) {
-                String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests",
-                        shardInfoId);
+                String logMessage =
+                        String.format("%s: Failure occurred in retrieval.  Restarting data requests", shardInfoId);
                 if (retrievalFailure instanceof RetryableRetrievalException) {
                     log.debug(logMessage, retrievalFailure.getCause());
                 } else {
@@ -133,7 +151,11 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                             // CHECKSTYLE.OFF: LineLength
                             "{}: Last request was dispatched at {}, but no response as of {} ({}).  Cancelling subscription, and restarting. Last successful request details -- {}",
                             // CHECKSTYLE.ON: LineLength
-                            shardInfoId, lastRequestTime, now, timeSinceLastResponse, recordsPublisher.getLastSuccessfulRequestDetails());
+                            shardInfoId,
+                            lastRequestTime,
+                            now,
+                            timeSinceLastResponse,
+                            recordsPublisher.getLastSuccessfulRequestDetails());
                     cancel();
 
                     // Start the subscription again which will update the lastRequestTime as well.
@@ -156,7 +178,10 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
                 lastRequestTime = null;
             }
             lastDataArrival = Instant.now();
-            shardConsumer.handleInput(input.processRecordsInput().toBuilder().cacheExitTime(Instant.now()).build(),
+            shardConsumer.handleInput(
+                    input.processRecordsInput().toBuilder()
+                            .cacheExitTime(Instant.now())
+                            .build(),
                     subscription);
 
         } catch (Throwable t) {
@@ -196,23 +221,27 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         log.warn(
                 "{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
                         + "recreate the subscription as necessary to continue processing. Last successful request details -- {}",
-                shardInfoId, recordsPublisher.getLastSuccessfulRequestDetails(), t);
+                shardInfoId,
+                recordsPublisher.getLastSuccessfulRequestDetails(),
+                t);
     }
 
     protected void logOnErrorReadTimeoutWarning(Throwable t) {
-        log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will"
-                + " recreate the subscription as necessary to continue processing. If you"
-                + " are seeing this warning frequently consider increasing the SDK timeouts"
-                + " by providing an OverrideConfiguration to the kinesis client. Alternatively you"
-                + " can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
-                + " intermittent ReadTimeout warnings. Last successful request details -- {}",
-                shardInfoId, recordsPublisher.getLastSuccessfulRequestDetails(), t);
+        log.warn(
+                "{}: onError().  Cancelling subscription, and marking self as failed. KCL will"
+                        + " recreate the subscription as necessary to continue processing. If you"
+                        + " are seeing this warning frequently consider increasing the SDK timeouts"
+                        + " by providing an OverrideConfiguration to the kinesis client. Alternatively you"
+                        + " can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
+                        + " intermittent ReadTimeout warnings. Last successful request details -- {}",
+                shardInfoId,
+                recordsPublisher.getLastSuccessfulRequestDetails(),
+                t);
     }
 
     @Override
     public void onComplete() {
-        log.debug("{}: onComplete(): Received onComplete.  Activity should be triggered externally",
-                shardInfoId);
+        log.debug("{}: onComplete(): Received onComplete.  Activity should be triggered externally", shardInfoId);
     }
 
     public void cancel() {
@@ -220,5 +249,4 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
             subscription.cancel();
         }
     }
-
 }

@@ -19,22 +19,14 @@ import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 public class NullMetricsScope implements MetricsScope {
 
     @Override
-    public void addData(String name, double value, StandardUnit unit) {
-
-    }
+    public void addData(String name, double value, StandardUnit unit) {}
 
     @Override
-    public void addData(String name, double value, StandardUnit unit, MetricsLevel level) {
-
-    }
+    public void addData(String name, double value, StandardUnit unit, MetricsLevel level) {}
 
     @Override
-    public void addDimension(String name, String value) {
-
-    }
+    public void addDimension(String name, String value) {}
 
     @Override
-    public void end() {
-
-    }
+    public void end() {}
 }

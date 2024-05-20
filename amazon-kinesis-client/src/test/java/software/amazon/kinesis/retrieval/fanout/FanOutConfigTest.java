@@ -15,6 +15,22 @@
 
 package software.amazon.kinesis.retrieval.fanout;
 
+import java.util.Optional;
+
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.retrieval.RetrievalFactory;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -28,23 +44,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
-import software.amazon.kinesis.common.StreamConfig;
-import software.amazon.kinesis.common.StreamIdentifier;
-import software.amazon.kinesis.leases.ShardInfo;
-import software.amazon.kinesis.leases.exceptions.DependencyException;
-import software.amazon.kinesis.metrics.MetricsFactory;
-import software.amazon.kinesis.retrieval.RetrievalFactory;
-
-import java.util.Optional;
-
 @RunWith(MockitoJUnitRunner.class)
 public class FanOutConfigTest {
 
@@ -55,10 +54,13 @@ public class FanOutConfigTest {
 
     @Mock
     private FanOutConsumerRegistration consumerRegistration;
+
     @Mock
     private KinesisAsyncClient kinesisClient;
+
     @Mock
     private StreamConfig streamConfig;
+
     @Mock
     private StreamIdentifier streamIdentifier;
 
@@ -70,7 +72,8 @@ public class FanOutConfigTest {
                 // DRY: set the most commonly-used parameters
                 .applicationName(TEST_APPLICATION_NAME)
                 .streamName(TEST_STREAM_NAME);
-        doReturn(consumerRegistration).when(config)
+        doReturn(consumerRegistration)
+                .when(config)
                 .createConsumerRegistration(eq(kinesisClient), anyString(), anyString());
         when(streamConfig.streamIdentifier()).thenReturn(streamIdentifier);
         when(streamIdentifier.streamName()).thenReturn(TEST_STREAM_NAME);
@@ -80,7 +83,8 @@ public class FanOutConfigTest {
     public void testNoRegisterIfConsumerArnSet() {
         config.consumerArn(TEST_CONSUMER_ARN)
                 // unset common parameters
-                .applicationName(null).streamName(null);
+                .applicationName(null)
+                .streamName(null);
 
         RetrievalFactory retrievalFactory = config.retrievalFactory();
 
@@ -209,5 +213,4 @@ public class FanOutConfigTest {
         final RetrievalFactory factory = config.retrievalFactory();
         factory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
     }
-
 }

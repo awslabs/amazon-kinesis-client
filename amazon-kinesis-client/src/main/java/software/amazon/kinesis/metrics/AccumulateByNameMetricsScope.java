@@ -18,12 +18,10 @@ package software.amazon.kinesis.metrics;
  * This is a MetricScope with a KeyType of String. It provides the implementation of
  * getting the key based off of the String KeyType.
  */
-
 public abstract class AccumulateByNameMetricsScope extends AccumulatingMetricsScope<String> {
 
     @Override
     protected String getKey(String name) {
         return name;
     }
-
 }

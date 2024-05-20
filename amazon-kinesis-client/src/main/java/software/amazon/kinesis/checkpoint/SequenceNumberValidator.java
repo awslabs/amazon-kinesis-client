@@ -20,10 +20,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import org.apache.commons.lang3.StringUtils;
-
 import lombok.Data;
 import lombok.experimental.Accessors;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * This supports extracting the shardId from a sequence number.
@@ -98,11 +97,15 @@ public class SequenceNumberValidator {
         }
     }
 
-    private static final List<SequenceNumberReader> SEQUENCE_NUMBER_READERS = Collections
-            .singletonList(new V2SequenceNumberReader());
+    private static final List<SequenceNumberReader> SEQUENCE_NUMBER_READERS =
+            Collections.singletonList(new V2SequenceNumberReader());
 
     private Optional<SequenceNumberComponents> retrieveComponentsFor(String sequenceNumber) {
-        return SEQUENCE_NUMBER_READERS.stream().map(r -> r.read(sequenceNumber)).filter(Optional::isPresent).map(Optional::get).findFirst();
+        return SEQUENCE_NUMBER_READERS.stream()
+                .map(r -> r.read(sequenceNumber))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .findFirst();
     }
 
     /**
@@ -118,7 +121,7 @@ public class SequenceNumberValidator {
      * </ul>
      * </strong>
      * </p>
-     * 
+     *
      * @param sequenceNumber
      *            the sequence number to extract the version from
      * @return an Optional containing the version if a compatible sequence number reader can be found, an empty Optional
@@ -184,5 +187,4 @@ public class SequenceNumberValidator {
     public Optional<Boolean> validateSequenceNumberForShard(String sequenceNumber, String shardId) {
         return shardIdFor(sequenceNumber).map(s -> StringUtils.equalsIgnoreCase(s, shardId));
     }
-
 }

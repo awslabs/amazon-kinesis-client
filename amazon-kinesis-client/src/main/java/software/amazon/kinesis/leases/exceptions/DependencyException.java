@@ -30,5 +30,4 @@ public class DependencyException extends LeasingException {
     public DependencyException(String message, Throwable e) {
         super(message, e);
     }
-
 }

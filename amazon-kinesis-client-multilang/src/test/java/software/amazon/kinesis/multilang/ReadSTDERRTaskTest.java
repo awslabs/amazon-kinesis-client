@@ -72,7 +72,8 @@ public class ReadSTDERRTaskTest {
         try {
             finishedCleanly = result.get();
         } catch (InterruptedException | ExecutionException e) {
-            Assert.fail("Should have been able to get a result. The error should be handled during the call and result in false.");
+            Assert.fail(
+                    "Should have been able to get a result. The error should be handled during the call and result in false.");
         }
         Assert.assertFalse("Reading a line should have thrown an exception", finishedCleanly);
     }

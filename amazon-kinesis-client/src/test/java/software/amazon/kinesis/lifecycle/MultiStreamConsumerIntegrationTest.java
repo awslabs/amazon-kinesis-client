@@ -1,7 +1,6 @@
 package software.amazon.kinesis.lifecycle;
 
 import org.junit.Test;
-
 import software.amazon.kinesis.application.TestConsumer;
 import software.amazon.kinesis.config.KCLAppConfig;
 import software.amazon.kinesis.config.ReleaseCanaryMultiStreamPollingH2TestConfig;

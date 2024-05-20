@@ -15,10 +15,10 @@
 
 package software.amazon.kinesis.leases;
 
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-
 import java.util.Collection;
 import java.util.Collections;
+
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 public class LeaseHelper {
 
@@ -26,12 +26,17 @@ public class LeaseHelper {
         return createLease(leaseKey, leaseOwner, parentShardIds, Collections.emptySet(), ExtendedSequenceNumber.LATEST);
     }
 
-    public static Lease createLease(String leaseKey, String leaseOwner, Collection<String> parentShardIds, Collection<String> childShardIds) {
+    public static Lease createLease(
+            String leaseKey, String leaseOwner, Collection<String> parentShardIds, Collection<String> childShardIds) {
         return createLease(leaseKey, leaseOwner, parentShardIds, childShardIds, ExtendedSequenceNumber.LATEST);
     }
 
-    public static Lease createLease(String leaseKey, String leaseOwner, Collection<String> parentShardIds,
-                              Collection<String> childShardIds, ExtendedSequenceNumber extendedSequenceNumber) {
+    public static Lease createLease(
+            String leaseKey,
+            String leaseOwner,
+            Collection<String> parentShardIds,
+            Collection<String> childShardIds,
+            ExtendedSequenceNumber extendedSequenceNumber) {
         Lease lease = new Lease();
         lease.leaseKey(leaseKey);
         lease.leaseOwner(leaseOwner);

@@ -14,24 +14,6 @@
  */
 package software.amazon.kinesis.lifecycle;
 
-import static org.hamcrest.CoreMatchers.allOf;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.beans.HasPropertyWithValue.hasProperty;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -52,6 +34,9 @@ import java.util.concurrent.TimeUnit;
 import com.amazonaws.services.schemaregistry.common.Schema;
 import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDeserializer;
 import com.google.common.collect.ImmutableList;
+import com.google.protobuf.ByteString;
+import lombok.Data;
+import lombok.Getter;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
@@ -61,11 +46,6 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-
-import com.google.protobuf.ByteString;
-
-import lombok.Data;
-import lombok.Getter;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -83,6 +63,24 @@ import software.amazon.kinesis.retrieval.kpl.Messages;
 import software.amazon.kinesis.retrieval.kpl.Messages.AggregatedRecord;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
+import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.beans.HasPropertyWithValue.hasProperty;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 @RunWith(MockitoJUnitRunner.class)
 public class ProcessTaskTest {
     private static final long IDLE_TIME_IN_MILLISECONDS = 100L;
@@ -95,21 +93,24 @@ public class ProcessTaskTest {
 
     @Mock
     private ProcessRecordsInput processRecordsInput;
+
     @Mock
     private ShardDetector shardDetector;
 
     @Mock
     private GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer;
 
-    private static final byte[] TEST_DATA = new byte[] { 1, 2, 3, 4 };
+    private static final byte[] TEST_DATA = new byte[] {1, 2, 3, 4};
 
     private final String shardId = "shard-test";
     private final long taskBackoffTimeMillis = 1L;
 
     @Mock
     private ShardRecordProcessor shardRecordProcessor;
+
     @Mock
     private ShardRecordProcessorCheckpointer checkpointer;
+
     @Mock
     private ThrottlingReporter throttlingReporter;
 
@@ -123,29 +124,43 @@ public class ProcessTaskTest {
     }
 
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput) {
-        return makeProcessTask(processRecordsInput, new AggregatorUtil(),
-                skipShardSyncAtWorkerInitializationIfLeasesExist);
+        return makeProcessTask(
+                processRecordsInput, new AggregatorUtil(), skipShardSyncAtWorkerInitializationIfLeasesExist);
     }
 
-    private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, GlueSchemaRegistryDeserializer deserializer) {
-        return makeProcessTask(processRecordsInput, new AggregatorUtil(), skipShardSyncAtWorkerInitializationIfLeasesExist,
+    private ProcessTask makeProcessTask(
+            ProcessRecordsInput processRecordsInput, GlueSchemaRegistryDeserializer deserializer) {
+        return makeProcessTask(
+                processRecordsInput,
+                new AggregatorUtil(),
+                skipShardSyncAtWorkerInitializationIfLeasesExist,
                 new SchemaRegistryDecoder(deserializer));
     }
 
-    private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil,
-            boolean skipShardSync) {
+    private ProcessTask makeProcessTask(
+            ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil, boolean skipShardSync) {
         return makeProcessTask(processRecordsInput, aggregatorUtil, skipShardSync, null);
     }
 
-    private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput, AggregatorUtil aggregatorUtil, boolean skipShardSync,
-        SchemaRegistryDecoder schemaRegistryDecoder) {
-        return new ProcessTask(shardInfo, shardRecordProcessor, checkpointer, taskBackoffTimeMillis,
-            skipShardSync, shardDetector, throttlingReporter,
-            processRecordsInput, shouldCallProcessRecordsEvenForEmptyRecordList, IDLE_TIME_IN_MILLISECONDS,
-            aggregatorUtil,
-            new NullMetricsFactory(),
-            schemaRegistryDecoder
-        );
+    private ProcessTask makeProcessTask(
+            ProcessRecordsInput processRecordsInput,
+            AggregatorUtil aggregatorUtil,
+            boolean skipShardSync,
+            SchemaRegistryDecoder schemaRegistryDecoder) {
+        return new ProcessTask(
+                shardInfo,
+                shardRecordProcessor,
+                checkpointer,
+                taskBackoffTimeMillis,
+                skipShardSync,
+                shardDetector,
+                throttlingReporter,
+                processRecordsInput,
+                shouldCallProcessRecordsEvenForEmptyRecordList,
+                IDLE_TIME_IN_MILLISECONDS,
+                aggregatorUtil,
+                new NullMetricsFactory(),
+                schemaRegistryDecoder);
     }
 
     @Test
@@ -158,13 +173,23 @@ public class ProcessTaskTest {
     }
 
     private KinesisClientRecord makeKinesisClientRecord(String partitionKey, String sequenceNumber, Instant arrival) {
-        return KinesisClientRecord.builder().partitionKey(partitionKey).sequenceNumber(sequenceNumber)
-                .approximateArrivalTimestamp(arrival).data(ByteBuffer.wrap(TEST_DATA)).build();
+        return KinesisClientRecord.builder()
+                .partitionKey(partitionKey)
+                .sequenceNumber(sequenceNumber)
+                .approximateArrivalTimestamp(arrival)
+                .data(ByteBuffer.wrap(TEST_DATA))
+                .build();
     }
 
-    private KinesisClientRecord makeKinesisClientRecord(String partitionKey, String sequenceNumber, Instant arrival, ByteBuffer data, Schema schema) {
-        return KinesisClientRecord.builder().partitionKey(partitionKey).sequenceNumber(sequenceNumber)
-            .approximateArrivalTimestamp(arrival).data(data).schema(schema).build();
+    private KinesisClientRecord makeKinesisClientRecord(
+            String partitionKey, String sequenceNumber, Instant arrival, ByteBuffer data, Schema schema) {
+        return KinesisClientRecord.builder()
+                .partitionKey(partitionKey)
+                .sequenceNumber(sequenceNumber)
+                .approximateArrivalTimestamp(arrival)
+                .data(data)
+                .schema(schema)
+                .build();
     }
 
     @Test
@@ -199,13 +224,18 @@ public class ProcessTaskTest {
         final String sqn = new BigInteger(128, new Random()).toString();
         final String pk = UUID.randomUUID().toString();
         final Instant ts = Instant.now().minus(4, ChronoUnit.HOURS);
-        KinesisClientRecord record = KinesisClientRecord.builder().partitionKey("-").data(generateAggregatedRecord(pk))
-                .sequenceNumber(sqn).approximateArrivalTimestamp(ts).build();
+        KinesisClientRecord record = KinesisClientRecord.builder()
+                .partitionKey("-")
+                .data(generateAggregatedRecord(pk))
+                .sequenceNumber(sqn)
+                .approximateArrivalTimestamp(ts)
+                .build();
 
         processTask = makeProcessTask(processRecordsInput);
         ShardRecordProcessorOutcome outcome = testWithRecord(record);
 
-        List<KinesisClientRecord> actualRecords = outcome.getProcessRecordsCall().records();
+        List<KinesisClientRecord> actualRecords =
+                outcome.getProcessRecordsCall().records();
 
         assertEquals(3, actualRecords.size());
         for (KinesisClientRecord pr : actualRecords) {
@@ -227,13 +257,17 @@ public class ProcessTaskTest {
         final String sqn = new BigInteger(128, new Random()).toString();
         final String pk = UUID.randomUUID().toString();
 
-        KinesisClientRecord record = KinesisClientRecord.builder().partitionKey("-").data(generateAggregatedRecord(pk))
-                .sequenceNumber(sqn).build();
+        KinesisClientRecord record = KinesisClientRecord.builder()
+                .partitionKey("-")
+                .data(generateAggregatedRecord(pk))
+                .sequenceNumber(sqn)
+                .build();
 
         processTask = makeProcessTask(processRecordsInput);
         ShardRecordProcessorOutcome outcome = testWithRecord(record);
 
-        List<KinesisClientRecord> actualRecords = outcome.getProcessRecordsCall().records();
+        List<KinesisClientRecord> actualRecords =
+                outcome.getProcessRecordsCall().records();
 
         assertEquals(3, actualRecords.size());
         for (KinesisClientRecord actualRecord : actualRecords) {
@@ -251,11 +285,12 @@ public class ProcessTaskTest {
         final int numberOfRecords = 104;
         // Start these batch of records's sequence number that is greater than previous checkpoint value.
         final BigInteger startingSqn = previousCheckpointSqn.add(BigInteger.valueOf(10));
-        final List<KinesisClientRecord> records = generateConsecutiveRecords(numberOfRecords, "-", ByteBuffer.wrap(TEST_DATA),
-                new Date(), startingSqn);
+        final List<KinesisClientRecord> records =
+                generateConsecutiveRecords(numberOfRecords, "-", ByteBuffer.wrap(TEST_DATA), new Date(), startingSqn);
 
         processTask = makeProcessTask(processRecordsInput);
-        ShardRecordProcessorOutcome outcome = testWithRecords(records,
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                records,
                 new ExtendedSequenceNumber(previousCheckpointSqn.toString()),
                 new ExtendedSequenceNumber(previousCheckpointSqn.toString()));
 
@@ -269,12 +304,12 @@ public class ProcessTaskTest {
         // Some sequence number value from previous processRecords call.
         final BigInteger baseSqn = new BigInteger(128, new Random());
         final ExtendedSequenceNumber lastCheckpointEspn = new ExtendedSequenceNumber(baseSqn.toString());
-        final ExtendedSequenceNumber largestPermittedEsqn = new ExtendedSequenceNumber(
-                baseSqn.add(BigInteger.valueOf(100)).toString());
+        final ExtendedSequenceNumber largestPermittedEsqn =
+                new ExtendedSequenceNumber(baseSqn.add(BigInteger.valueOf(100)).toString());
 
         processTask = makeProcessTask(processRecordsInput);
-        ShardRecordProcessorOutcome outcome = testWithRecords(Collections.emptyList(), lastCheckpointEspn,
-                largestPermittedEsqn);
+        ShardRecordProcessorOutcome outcome =
+                testWithRecords(Collections.emptyList(), lastCheckpointEspn, largestPermittedEsqn);
 
         // Make sure that even with empty records, largest permitted sequence number does not change.
         assertEquals(largestPermittedEsqn, outcome.getCheckpointCall());
@@ -295,15 +330,20 @@ public class ProcessTaskTest {
         // Values for this processRecords call.
         String startingSqn = previousCheckpointSqn.toString();
         String pk = UUID.randomUUID().toString();
-        KinesisClientRecord record = KinesisClientRecord.builder().partitionKey("-").data(generateAggregatedRecord(pk))
-                .sequenceNumber(startingSqn).build();
+        KinesisClientRecord record = KinesisClientRecord.builder()
+                .partitionKey("-")
+                .data(generateAggregatedRecord(pk))
+                .sequenceNumber(startingSqn)
+                .build();
 
         processTask = makeProcessTask(processRecordsInput);
-        ShardRecordProcessorOutcome outcome = testWithRecords(Collections.singletonList(record),
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                Collections.singletonList(record),
                 new ExtendedSequenceNumber(previousCheckpointSqn.toString(), previousCheckpointSsqn),
                 new ExtendedSequenceNumber(previousCheckpointSqn.toString(), previousCheckpointSsqn));
 
-        List<KinesisClientRecord> actualRecords = outcome.getProcessRecordsCall().records();
+        List<KinesisClientRecord> actualRecords =
+                outcome.getProcessRecordsCall().records();
 
         // First two records should be dropped - and only 1 remaining records should be there.
         assertThat(actualRecords.size(), equalTo(1));
@@ -316,8 +356,8 @@ public class ProcessTaskTest {
         assertThat(actualRecord.approximateArrivalTimestamp(), nullValue());
 
         // Expected largest permitted sequence number will be last sub-record sequence number.
-        final ExtendedSequenceNumber expectedLargestPermittedEsqn = new ExtendedSequenceNumber(
-                previousCheckpointSqn.toString(), 2L);
+        final ExtendedSequenceNumber expectedLargestPermittedEsqn =
+                new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 2L);
         assertEquals(expectedLargestPermittedEsqn, outcome.getCheckpointCall());
     }
 
@@ -334,48 +374,58 @@ public class ProcessTaskTest {
         int recordIndex = 0;
         sequenceNumber = sequenceNumber.add(BigInteger.ONE);
         for (int i = 0; i < 5; ++i) {
-            KinesisClientRecord expectedRecord = createAndRegisterAggregatedRecord(sequenceNumber, aggregatedRecord,
-                    recordIndex, approximateArrivalTime);
+            KinesisClientRecord expectedRecord = createAndRegisterAggregatedRecord(
+                    sequenceNumber, aggregatedRecord, recordIndex, approximateArrivalTime);
             aggregatorUtil.addInRange(expectedRecord);
             recordIndex++;
         }
 
         sequenceNumber = sequenceNumber.add(BigInteger.ONE);
         for (int i = 0; i < 5; ++i) {
-            KinesisClientRecord expectedRecord = createAndRegisterAggregatedRecord(sequenceNumber, aggregatedRecord,
-                    recordIndex, approximateArrivalTime);
+            KinesisClientRecord expectedRecord = createAndRegisterAggregatedRecord(
+                    sequenceNumber, aggregatedRecord, recordIndex, approximateArrivalTime);
             aggregatorUtil.addBelowRange(expectedRecord);
             recordIndex++;
         }
 
         sequenceNumber = sequenceNumber.add(BigInteger.ONE);
         for (int i = 0; i < 5; ++i) {
-            KinesisClientRecord expectedRecord = createAndRegisterAggregatedRecord(sequenceNumber, aggregatedRecord,
-                    recordIndex, approximateArrivalTime);
+            KinesisClientRecord expectedRecord = createAndRegisterAggregatedRecord(
+                    sequenceNumber, aggregatedRecord, recordIndex, approximateArrivalTime);
             aggregatorUtil.addAboveRange(expectedRecord);
             recordIndex++;
         }
 
         byte[] payload = aggregatedRecord.build().toByteArray();
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        bos.write(new byte[] { -13, -119, -102, -62 });
+        bos.write(new byte[] {-13, -119, -102, -62});
         bos.write(payload);
         bos.write(md5(payload));
 
         ByteBuffer rawRecordData = ByteBuffer.wrap(bos.toByteArray());
 
-        KinesisClientRecord rawRecord = KinesisClientRecord.builder().data(rawRecordData)
-                .approximateArrivalTimestamp(approximateArrivalTime).partitionKey("p-01")
-                .sequenceNumber(sequenceNumber.toString()).build();
+        KinesisClientRecord rawRecord = KinesisClientRecord.builder()
+                .data(rawRecordData)
+                .approximateArrivalTimestamp(approximateArrivalTime)
+                .partitionKey("p-01")
+                .sequenceNumber(sequenceNumber.toString())
+                .build();
 
-        when(shardDetector.shard(any())).thenReturn(Shard.builder().shardId("Shard-01")
-                .hashKeyRange(HashKeyRange.builder().startingHashKey(lowHashKey).endingHashKey(highHashKey).build())
-                .build());
+        when(shardDetector.shard(any()))
+                .thenReturn(Shard.builder()
+                        .shardId("Shard-01")
+                        .hashKeyRange(HashKeyRange.builder()
+                                .startingHashKey(lowHashKey)
+                                .endingHashKey(highHashKey)
+                                .build())
+                        .build());
 
         when(processRecordsInput.records()).thenReturn(Collections.singletonList(rawRecord));
         ProcessTask processTask = makeProcessTask(processRecordsInput, aggregatorUtil, false);
-        ShardRecordProcessorOutcome outcome = testWithRecords(processTask,
-                new ExtendedSequenceNumber(sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                processTask,
+                new ExtendedSequenceNumber(
+                        sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
                 new ExtendedSequenceNumber(sequenceNumber.toString(), recordIndex + 1L));
 
         assertThat(outcome.processRecordsCall.records().size(), equalTo(0));
@@ -398,8 +448,8 @@ public class ProcessTaskTest {
             Instant approximateArrivalTime = Instant.now().minus(i + 4, ChronoUnit.SECONDS);
             sequenceNumber = sequenceNumber.add(BigInteger.ONE);
             for (int j = 0; j < 2; ++j) {
-                KinesisClientRecord expectedRecord = createAndRegisterAggregatedRecord(sequenceNumber, aggregatedRecord,
-                        j, approximateArrivalTime);
+                KinesisClientRecord expectedRecord =
+                        createAndRegisterAggregatedRecord(sequenceNumber, aggregatedRecord, j, approximateArrivalTime);
                 aggregatorUtil.addInRange(expectedRecord);
                 expectedRecords.add(expectedRecord);
             }
@@ -412,21 +462,31 @@ public class ProcessTaskTest {
 
             ByteBuffer rawRecordData = ByteBuffer.wrap(bos.toByteArray());
 
-            KinesisClientRecord rawRecord = KinesisClientRecord.builder().data(rawRecordData)
-                    .approximateArrivalTimestamp(approximateArrivalTime).partitionKey("pa-" + i)
-                    .sequenceNumber(sequenceNumber.toString()).build();
+            KinesisClientRecord rawRecord = KinesisClientRecord.builder()
+                    .data(rawRecordData)
+                    .approximateArrivalTimestamp(approximateArrivalTime)
+                    .partitionKey("pa-" + i)
+                    .sequenceNumber(sequenceNumber.toString())
+                    .build();
 
             rawRecords.add(rawRecord);
         }
 
-        when(shardDetector.shard(any())).thenReturn(Shard.builder().shardId("Shard-01")
-                .hashKeyRange(HashKeyRange.builder().startingHashKey(lowHashKey).endingHashKey(highHashKey).build())
-                .build());
+        when(shardDetector.shard(any()))
+                .thenReturn(Shard.builder()
+                        .shardId("Shard-01")
+                        .hashKeyRange(HashKeyRange.builder()
+                                .startingHashKey(lowHashKey)
+                                .endingHashKey(highHashKey)
+                                .build())
+                        .build());
 
         when(processRecordsInput.records()).thenReturn(rawRecords);
         ProcessTask processTask = makeProcessTask(processRecordsInput, aggregatorUtil, false);
-        ShardRecordProcessorOutcome outcome = testWithRecords(processTask,
-                new ExtendedSequenceNumber(sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                processTask,
+                new ExtendedSequenceNumber(
+                        sequenceNumber.subtract(BigInteger.valueOf(100)).toString(), 0L),
                 new ExtendedSequenceNumber(sequenceNumber.toString(), 0L));
 
         assertThat(outcome.processRecordsCall.records(), equalTo(expectedRecords));
@@ -440,38 +500,32 @@ public class ProcessTaskTest {
         final String pk = UUID.randomUUID().toString();
         final Date ts = new Date(System.currentTimeMillis() - TimeUnit.MILLISECONDS.convert(4, TimeUnit.HOURS));
 
-        //Payload set to SchemaRegistry encoded data and schema to null
-        //to mimic Schema Registry encoded message from Kinesis stream.
-        final KinesisClientRecord schemaRegistryRecord =
-            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(SCHEMA_REGISTRY_PAYLOAD), null);
+        // Payload set to SchemaRegistry encoded data and schema to null
+        // to mimic Schema Registry encoded message from Kinesis stream.
+        final KinesisClientRecord schemaRegistryRecord = makeKinesisClientRecord(
+                pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(SCHEMA_REGISTRY_PAYLOAD), null);
 
-        final KinesisClientRecord nonSchemaRegistryRecord =
-            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
+        final KinesisClientRecord nonSchemaRegistryRecord = makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
 
-        when(processRecordsInput.records())
-            .thenReturn(
-                ImmutableList.of(
-                    schemaRegistryRecord,
-                    nonSchemaRegistryRecord
-                )
-            );
+        when(processRecordsInput.records()).thenReturn(ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord));
 
         doReturn(true).when(glueSchemaRegistryDeserializer).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
         doReturn(TEST_DATA).when(glueSchemaRegistryDeserializer).getData(SCHEMA_REGISTRY_PAYLOAD);
         doReturn(SCHEMA_REGISTRY_SCHEMA).when(glueSchemaRegistryDeserializer).getSchema(SCHEMA_REGISTRY_PAYLOAD);
 
-        ShardRecordProcessorOutcome outcome = testWithRecords(processTask, new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 0L),
-            new ExtendedSequenceNumber(previousCheckpointSqn.add(previousCheckpointSqn).toString(),  1L));
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                processTask,
+                new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 0L),
+                new ExtendedSequenceNumber(
+                        previousCheckpointSqn.add(previousCheckpointSqn).toString(), 1L));
 
-        KinesisClientRecord decodedSchemaRegistryRecord =
-            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(TEST_DATA), SCHEMA_REGISTRY_SCHEMA);
+        KinesisClientRecord decodedSchemaRegistryRecord = makeKinesisClientRecord(
+                pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(TEST_DATA), SCHEMA_REGISTRY_SCHEMA);
         List<KinesisClientRecord> expectedRecords =
-            ImmutableList.of(
-                decodedSchemaRegistryRecord,
-                nonSchemaRegistryRecord
-            );
+                ImmutableList.of(decodedSchemaRegistryRecord, nonSchemaRegistryRecord);
 
-        List<KinesisClientRecord> actualRecords = outcome.getProcessRecordsCall().records();
+        List<KinesisClientRecord> actualRecords =
+                outcome.getProcessRecordsCall().records();
 
         assertEquals(expectedRecords, actualRecords);
 
@@ -488,35 +542,29 @@ public class ProcessTaskTest {
         final String pk = UUID.randomUUID().toString();
         final Date ts = new Date(System.currentTimeMillis() - TimeUnit.MILLISECONDS.convert(4, TimeUnit.HOURS));
 
-        //Payload set to SchemaRegistry encoded data and schema to null
-        //to mimic Schema Registry encoded message from Kinesis stream.
-        final KinesisClientRecord schemaRegistryRecord =
-            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(SCHEMA_REGISTRY_PAYLOAD), null);
+        // Payload set to SchemaRegistry encoded data and schema to null
+        // to mimic Schema Registry encoded message from Kinesis stream.
+        final KinesisClientRecord schemaRegistryRecord = makeKinesisClientRecord(
+                pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(SCHEMA_REGISTRY_PAYLOAD), null);
 
-        final KinesisClientRecord nonSchemaRegistryRecord =
-            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
+        final KinesisClientRecord nonSchemaRegistryRecord = makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
 
-        when(processRecordsInput.records())
-            .thenReturn(
-                ImmutableList.of(
-                    schemaRegistryRecord,
-                    nonSchemaRegistryRecord
-                )
-            );
+        when(processRecordsInput.records()).thenReturn(ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord));
 
         doThrow(new RuntimeException("Invalid data"))
-            .when(glueSchemaRegistryDeserializer).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
+                .when(glueSchemaRegistryDeserializer)
+                .canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
 
-        ShardRecordProcessorOutcome outcome = testWithRecords(processTask, new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 0L),
-            new ExtendedSequenceNumber(previousCheckpointSqn.add(previousCheckpointSqn).toString(),  1L));
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                processTask,
+                new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 0L),
+                new ExtendedSequenceNumber(
+                        previousCheckpointSqn.add(previousCheckpointSqn).toString(), 1L));
 
-        List<KinesisClientRecord> expectedRecords =
-            ImmutableList.of(
-                schemaRegistryRecord,
-                nonSchemaRegistryRecord
-            );
+        List<KinesisClientRecord> expectedRecords = ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord);
 
-        List<KinesisClientRecord> actualRecords = outcome.getProcessRecordsCall().records();
+        List<KinesisClientRecord> actualRecords =
+                outcome.getProcessRecordsCall().records();
 
         assertEquals(expectedRecords, actualRecords);
     }
@@ -529,61 +577,66 @@ public class ProcessTaskTest {
         final String pk = UUID.randomUUID().toString();
         final Date ts = new Date(System.currentTimeMillis() - TimeUnit.MILLISECONDS.convert(4, TimeUnit.HOURS));
 
-        //Payload set to SchemaRegistry encoded data and schema to null
-        //to mimic Schema Registry encoded message from Kinesis stream.
-        final KinesisClientRecord schemaRegistryRecord =
-            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(SCHEMA_REGISTRY_PAYLOAD), null);
+        // Payload set to SchemaRegistry encoded data and schema to null
+        // to mimic Schema Registry encoded message from Kinesis stream.
+        final KinesisClientRecord schemaRegistryRecord = makeKinesisClientRecord(
+                pk, sqn.toString(), ts.toInstant(), ByteBuffer.wrap(SCHEMA_REGISTRY_PAYLOAD), null);
 
-        final KinesisClientRecord nonSchemaRegistryRecord =
-            makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
+        final KinesisClientRecord nonSchemaRegistryRecord = makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
 
-        when(processRecordsInput.records())
-            .thenReturn(
-                ImmutableList.of(
-                    schemaRegistryRecord,
-                    nonSchemaRegistryRecord
-                )
-            );
+        when(processRecordsInput.records()).thenReturn(ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord));
 
-        doReturn(true)
-            .when(glueSchemaRegistryDeserializer).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
+        doReturn(true).when(glueSchemaRegistryDeserializer).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
 
         doThrow(new RuntimeException("Cannot decode data"))
-            .when(glueSchemaRegistryDeserializer).getData(SCHEMA_REGISTRY_PAYLOAD);
+                .when(glueSchemaRegistryDeserializer)
+                .getData(SCHEMA_REGISTRY_PAYLOAD);
 
-        ShardRecordProcessorOutcome outcome = testWithRecords(processTask, new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 0L),
-            new ExtendedSequenceNumber(previousCheckpointSqn.add(previousCheckpointSqn).toString(),  1L));
+        ShardRecordProcessorOutcome outcome = testWithRecords(
+                processTask,
+                new ExtendedSequenceNumber(previousCheckpointSqn.toString(), 0L),
+                new ExtendedSequenceNumber(
+                        previousCheckpointSqn.add(previousCheckpointSqn).toString(), 1L));
 
-        List<KinesisClientRecord> expectedRecords =
-            ImmutableList.of(
-                schemaRegistryRecord,
-                nonSchemaRegistryRecord
-            );
+        List<KinesisClientRecord> expectedRecords = ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord);
 
-        List<KinesisClientRecord> actualRecords = outcome.getProcessRecordsCall().records();
+        List<KinesisClientRecord> actualRecords =
+                outcome.getProcessRecordsCall().records();
 
         assertEquals(expectedRecords, actualRecords);
     }
 
-    private KinesisClientRecord createAndRegisterAggregatedRecord(BigInteger sequenceNumber,
-            AggregatedRecord.Builder aggregatedRecord, int i, Instant approximateArrivalTime) {
+    private KinesisClientRecord createAndRegisterAggregatedRecord(
+            BigInteger sequenceNumber,
+            AggregatedRecord.Builder aggregatedRecord,
+            int i,
+            Instant approximateArrivalTime) {
         byte[] dataArray = new byte[1024];
         ThreadLocalRandom.current().nextBytes(dataArray);
         ByteBuffer data = ByteBuffer.wrap(dataArray);
 
-        KinesisClientRecord expectedRecord = KinesisClientRecord.builder().partitionKey("p-" + i)
-                .sequenceNumber(sequenceNumber.toString()).approximateArrivalTimestamp(approximateArrivalTime)
-                .data(data).subSequenceNumber(i).aggregated(true).build();
+        KinesisClientRecord expectedRecord = KinesisClientRecord.builder()
+                .partitionKey("p-" + i)
+                .sequenceNumber(sequenceNumber.toString())
+                .approximateArrivalTimestamp(approximateArrivalTime)
+                .data(data)
+                .subSequenceNumber(i)
+                .aggregated(true)
+                .build();
 
-        Messages.Record kplRecord = Messages.Record.newBuilder().setData(ByteString.copyFrom(dataArray))
-                .setPartitionKeyIndex(i).build();
+        Messages.Record kplRecord = Messages.Record.newBuilder()
+                .setData(ByteString.copyFrom(dataArray))
+                .setPartitionKeyIndex(i)
+                .build();
         aggregatedRecord.addPartitionKeyTable(expectedRecord.partitionKey()).addRecords(kplRecord);
 
         return expectedRecord;
     }
 
     private enum RecordRangeState {
-        BELOW_RANGE, IN_RANGE, ABOVE_RANGE
+        BELOW_RANGE,
+        IN_RANGE,
+        ABOVE_RANGE
     }
 
     @Getter
@@ -597,7 +650,10 @@ public class ProcessTaskTest {
         ControlledHashAggregatorUtil(String lowHashKey, String highHashKey) {
             this.lowHashKey = new BigInteger(lowHashKey);
             this.highHashKey = new BigInteger(highHashKey);
-            this.width = this.highHashKey.subtract(this.lowHashKey).mod(BigInteger.valueOf(Long.MAX_VALUE)).longValue()
+            this.width = this.highHashKey
+                            .subtract(this.lowHashKey)
+                            .mod(BigInteger.valueOf(Long.MAX_VALUE))
+                            .longValue()
                     - 1;
         }
 
@@ -623,38 +679,53 @@ public class ProcessTaskTest {
             assertThat(rangeState, not(nullValue()));
 
             switch (rangeState) {
-            case BELOW_RANGE:
-                return lowHashKey.subtract(BigInteger.valueOf(ThreadLocalRandom.current().nextInt()).abs());
-            case IN_RANGE:
-                return lowHashKey.add(BigInteger.valueOf(ThreadLocalRandom.current().nextLong(width)));
-            case ABOVE_RANGE:
-                return highHashKey.add(BigInteger.ONE)
-                        .add(BigInteger.valueOf(ThreadLocalRandom.current().nextInt()).abs());
-            default:
-                throw new IllegalStateException("Unknown range state: " + rangeState);
+                case BELOW_RANGE:
+                    return lowHashKey.subtract(
+                            BigInteger.valueOf(ThreadLocalRandom.current().nextInt())
+                                    .abs());
+                case IN_RANGE:
+                    return lowHashKey.add(
+                            BigInteger.valueOf(ThreadLocalRandom.current().nextLong(width)));
+                case ABOVE_RANGE:
+                    return highHashKey
+                            .add(BigInteger.ONE)
+                            .add(BigInteger.valueOf(ThreadLocalRandom.current().nextInt())
+                                    .abs());
+                default:
+                    throw new IllegalStateException("Unknown range state: " + rangeState);
             }
         }
     }
 
     private ShardRecordProcessorOutcome testWithRecord(KinesisClientRecord record) {
-        return testWithRecords(Collections.singletonList(record), ExtendedSequenceNumber.TRIM_HORIZON,
+        return testWithRecords(
+                Collections.singletonList(record),
+                ExtendedSequenceNumber.TRIM_HORIZON,
                 ExtendedSequenceNumber.TRIM_HORIZON);
     }
 
-    private ShardRecordProcessorOutcome testWithRecords(List<KinesisClientRecord> records,
-            ExtendedSequenceNumber lastCheckpointValue, ExtendedSequenceNumber largestPermittedCheckpointValue) {
+    private ShardRecordProcessorOutcome testWithRecords(
+            List<KinesisClientRecord> records,
+            ExtendedSequenceNumber lastCheckpointValue,
+            ExtendedSequenceNumber largestPermittedCheckpointValue) {
         return testWithRecords(records, lastCheckpointValue, largestPermittedCheckpointValue, new AggregatorUtil());
     }
 
-    private ShardRecordProcessorOutcome testWithRecords(List<KinesisClientRecord> records, ExtendedSequenceNumber lastCheckpointValue,
-            ExtendedSequenceNumber largestPermittedCheckpointValue, AggregatorUtil aggregatorUtil) {
+    private ShardRecordProcessorOutcome testWithRecords(
+            List<KinesisClientRecord> records,
+            ExtendedSequenceNumber lastCheckpointValue,
+            ExtendedSequenceNumber largestPermittedCheckpointValue,
+            AggregatorUtil aggregatorUtil) {
         when(processRecordsInput.records()).thenReturn(records);
         return testWithRecords(
                 makeProcessTask(processRecordsInput, aggregatorUtil, skipShardSyncAtWorkerInitializationIfLeasesExist),
-                lastCheckpointValue, largestPermittedCheckpointValue);
+                lastCheckpointValue,
+                largestPermittedCheckpointValue);
     }
 
-    private ShardRecordProcessorOutcome testWithRecords(ProcessTask processTask, ExtendedSequenceNumber lastCheckpointValue,
+    private ShardRecordProcessorOutcome testWithRecords(
+            ProcessTask processTask,
+            ExtendedSequenceNumber lastCheckpointValue,
             ExtendedSequenceNumber largestPermittedCheckpointValue) {
         when(checkpointer.lastCheckpointValue()).thenReturn(lastCheckpointValue);
         when(checkpointer.largestPermittedCheckpointValue()).thenReturn(largestPermittedCheckpointValue);
@@ -668,12 +739,11 @@ public class ProcessTaskTest {
         verify(checkpointer).largestPermittedCheckpointValue(esnCaptor.capture());
 
         return new ShardRecordProcessorOutcome(recordsCaptor.getValue(), esnCaptor.getValue());
-
     }
 
     /**
      * See the KPL documentation on GitHub for more details about the binary format.
-     * 
+     *
      * @param pk
      *            Partition key to use. All the records will have the same partition key.
      * @return ByteBuffer containing the serialized form of the aggregated record, along with the necessary header and
@@ -681,13 +751,20 @@ public class ProcessTaskTest {
      */
     private static ByteBuffer generateAggregatedRecord(String pk) {
         ByteBuffer bb = ByteBuffer.allocate(1024);
-        bb.put(new byte[] { -13, -119, -102, -62 });
+        bb.put(new byte[] {-13, -119, -102, -62});
 
-        Messages.Record r = Messages.Record.newBuilder().setData(ByteString.copyFrom(TEST_DATA)).setPartitionKeyIndex(0)
+        Messages.Record r = Messages.Record.newBuilder()
+                .setData(ByteString.copyFrom(TEST_DATA))
+                .setPartitionKeyIndex(0)
                 .build();
 
-        byte[] payload = AggregatedRecord.newBuilder().addPartitionKeyTable(pk).addRecords(r).addRecords(r)
-                .addRecords(r).build().toByteArray();
+        byte[] payload = AggregatedRecord.newBuilder()
+                .addPartitionKeyTable(pk)
+                .addRecords(r)
+                .addRecords(r)
+                .addRecords(r)
+                .build()
+                .toByteArray();
 
         bb.put(payload);
         bb.put(md5(payload));
@@ -696,13 +773,21 @@ public class ProcessTaskTest {
         return bb;
     }
 
-    private static List<KinesisClientRecord> generateConsecutiveRecords(int numberOfRecords, String partitionKey, ByteBuffer data,
-            Date arrivalTimestamp, BigInteger startSequenceNumber) {
+    private static List<KinesisClientRecord> generateConsecutiveRecords(
+            int numberOfRecords,
+            String partitionKey,
+            ByteBuffer data,
+            Date arrivalTimestamp,
+            BigInteger startSequenceNumber) {
         List<KinesisClientRecord> records = new ArrayList<>();
         for (int i = 0; i < numberOfRecords; ++i) {
             String seqNum = startSequenceNumber.add(BigInteger.valueOf(i)).toString();
-            KinesisClientRecord record = KinesisClientRecord.builder().partitionKey(partitionKey).data(data)
-                    .sequenceNumber(seqNum).approximateArrivalTimestamp(arrivalTimestamp.toInstant()).build();
+            KinesisClientRecord record = KinesisClientRecord.builder()
+                    .partitionKey(partitionKey)
+                    .data(data)
+                    .sequenceNumber(seqNum)
+                    .approximateArrivalTimestamp(arrivalTimestamp.toInstant())
+                    .build();
             records.add(record);
         }
         return records;
@@ -739,11 +824,11 @@ public class ProcessTaskTest {
             if (expected == null) {
                 matchers = nullValue(TaskResult.class);
             } else {
-                matchers = allOf(notNullValue(TaskResult.class),
+                matchers = allOf(
+                        notNullValue(TaskResult.class),
                         hasProperty("shardEndReached", equalTo(expected.isShardEndReached())),
                         hasProperty("exception", equalTo(expected.getException())));
             }
-
         }
 
         @Override

@@ -24,7 +24,6 @@ import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
-
 import software.amazon.kinesis.multilang.NestedPropertyKey;
 import software.amazon.kinesis.multilang.NestedPropertyProcessor;
 
@@ -47,8 +46,8 @@ public class KclSTSAssumeRoleSessionCredentialsProvider
         this(params[0], params[1], Arrays.copyOfRange(params, 2, params.length));
     }
 
-    public KclSTSAssumeRoleSessionCredentialsProvider(final String roleArn, final String roleSessionName,
-            final String... params) {
+    public KclSTSAssumeRoleSessionCredentialsProvider(
+            final String roleArn, final String roleSessionName, final String... params) {
         builder = new Builder(roleArn, roleSessionName);
         NestedPropertyKey.parse(this, params);
         provider = builder.build();
@@ -75,9 +74,8 @@ public class KclSTSAssumeRoleSessionCredentialsProvider
 
     @Override
     public void acceptEndpointRegion(final Regions region) {
-        final AWSSecurityTokenService stsClient = AWSSecurityTokenServiceClient.builder()
-                .withRegion(region)
-                .build();
+        final AWSSecurityTokenService stsClient =
+                AWSSecurityTokenServiceClient.builder().withRegion(region).build();
         builder.withStsClient(stsClient);
     }
 
@@ -85,5 +83,4 @@ public class KclSTSAssumeRoleSessionCredentialsProvider
     public void acceptExternalId(final String externalId) {
         builder.withExternalId(externalId);
     }
-
 }

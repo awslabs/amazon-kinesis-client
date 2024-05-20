@@ -15,6 +15,62 @@
 
 package software.amazon.kinesis.retrieval.polling;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import io.reactivex.rxjava3.core.Flowable;
+import io.reactivex.rxjava3.schedulers.Schedulers;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
+import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.services.kinesis.model.ChildShard;
+import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
+import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
+import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.leases.ShardObjectHelper;
+import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
+import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RecordsPublisher;
+import software.amazon.kinesis.retrieval.RecordsRetrieved;
+import software.amazon.kinesis.retrieval.RetryableRetrievalException;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+import software.amazon.kinesis.utils.BlockingUtils;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -41,63 +97,6 @@ import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.utils.BlockingUtils.blockUntilConditionSatisfied;
 import static software.amazon.kinesis.utils.ProcessRecordsInputMatcher.eqProcessRecordsInput;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
-
-import org.apache.commons.lang3.StringUtils;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.runners.MockitoJUnitRunner;
-import org.mockito.stubbing.Answer;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
-
-import io.reactivex.rxjava3.core.Flowable;
-import io.reactivex.rxjava3.schedulers.Schedulers;
-import lombok.extern.slf4j.Slf4j;
-import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.awssdk.core.exception.SdkException;
-import software.amazon.awssdk.services.kinesis.model.ChildShard;
-import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
-import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
-import software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
-import software.amazon.awssdk.services.kinesis.model.Record;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-import software.amazon.kinesis.leases.ShardObjectHelper;
-import software.amazon.kinesis.common.StreamIdentifier;
-import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
-import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.metrics.NullMetricsFactory;
-import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
-import software.amazon.kinesis.retrieval.KinesisClientRecord;
-import software.amazon.kinesis.retrieval.RecordsPublisher;
-import software.amazon.kinesis.retrieval.RecordsRetrieved;
-import software.amazon.kinesis.retrieval.RetryableRetrievalException;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-import software.amazon.kinesis.utils.BlockingUtils;
-
 /**
  * Test class for the PrefetchRecordsPublisher class.
  */
@@ -115,10 +114,13 @@ public class PrefetchRecordsPublisherTest {
 
     @Mock
     private GetRecordsRetrievalStrategy getRecordsRetrievalStrategy;
+
     @Mock
     private DataFetcher dataFetcher;
+
     @Mock
     private InitialPositionInStreamExtended initialPosition;
+
     @Mock
     private ExtendedSequenceNumber sequenceNumber;
 
@@ -137,8 +139,11 @@ public class PrefetchRecordsPublisherTest {
         getRecordsCache = createPrefetchRecordsPublisher(0L);
         spyQueue = spy(getRecordsCache.getPublisherSession().prefetchRecordsQueue());
         records = spy(new ArrayList<>());
-        getRecordsResponse = GetRecordsResponse.builder().records(records).nextShardIterator(NEXT_SHARD_ITERATOR)
-                .childShards(Collections.emptyList()).build();
+        getRecordsResponse = GetRecordsResponse.builder()
+                .records(records)
+                .nextShardIterator(NEXT_SHARD_ITERATOR)
+                .childShards(Collections.emptyList())
+                .build();
 
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(getRecordsResponse);
     }
@@ -153,19 +158,40 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testPrefetchPublisherInternalStateNotModifiedWhenPrefetcherThreadStartFails() {
-        doThrow(new RejectedExecutionException()).doThrow(new RejectedExecutionException()).doCallRealMethod()
-                .when(executorService).execute(any());
+        doThrow(new RejectedExecutionException())
+                .doThrow(new RejectedExecutionException())
+                .doCallRealMethod()
+                .when(executorService)
+                .execute(any());
         // Initialize try 1
         tryPrefetchCacheStart();
-        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+        blockUntilConditionSatisfied(
+                () -> getRecordsCache
+                                .getPublisherSession()
+                                .prefetchRecordsQueue()
+                                .size()
+                        == MAX_SIZE,
+                300);
         verifyInternalState(0);
         // Initialize try 2
         tryPrefetchCacheStart();
-        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+        blockUntilConditionSatisfied(
+                () -> getRecordsCache
+                                .getPublisherSession()
+                                .prefetchRecordsQueue()
+                                .size()
+                        == MAX_SIZE,
+                300);
         verifyInternalState(0);
         // Initialize try 3
         tryPrefetchCacheStart();
-        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+        blockUntilConditionSatisfied(
+                () -> getRecordsCache
+                                .getPublisherSession()
+                                .prefetchRecordsQueue()
+                                .size()
+                        == MAX_SIZE,
+                300);
         verifyInternalState(MAX_SIZE);
         verify(dataFetcher, times(3)).initialize(any(ExtendedSequenceNumber.class), any());
     }
@@ -179,7 +205,9 @@ public class PrefetchRecordsPublisherTest {
     }
 
     private void verifyInternalState(int queueSize) {
-        assertEquals(queueSize, getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
+        assertEquals(
+                queueSize,
+                getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
     }
 
     @Test
@@ -188,8 +216,8 @@ public class PrefetchRecordsPublisherTest {
 
         when(records.size()).thenReturn(1000);
 
-        final List<KinesisClientRecord> expectedRecords = records.stream()
-                .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
+        final List<KinesisClientRecord> expectedRecords =
+                records.stream().map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
         ProcessRecordsInput result = blockUntilRecordsAvailable().processRecordsInput();
@@ -205,9 +233,10 @@ public class PrefetchRecordsPublisherTest {
     public void testGetRecordsWithInitialFailures_LessThanRequiredWait_Throws() {
         getRecordsCache = createPrefetchRecordsPublisher(Duration.ofSeconds(1).toMillis());
         // Setup the retrieval strategy to fail initial calls before succeeding
-        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenThrow(new
-                RetryableRetrievalException("Timed out")).thenThrow(new
-                RetryableRetrievalException("Timed out again")).thenReturn(getRecordsResponse);
+        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL)))
+                .thenThrow(new RetryableRetrievalException("Timed out"))
+                .thenThrow(new RetryableRetrievalException("Timed out again"))
+                .thenReturn(getRecordsResponse);
         record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
 
         when(records.size()).thenReturn(1000);
@@ -222,15 +251,16 @@ public class PrefetchRecordsPublisherTest {
     public void testGetRecordsWithInitialFailures_AdequateWait_Success() {
         getRecordsCache = createPrefetchRecordsPublisher(Duration.ofSeconds(1).toMillis());
         // Setup the retrieval strategy to fail initial calls before succeeding
-        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenThrow(new
-                RetryableRetrievalException("Timed out")).thenThrow(new
-                RetryableRetrievalException("Timed out again")).thenReturn(getRecordsResponse);
+        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL)))
+                .thenThrow(new RetryableRetrievalException("Timed out"))
+                .thenThrow(new RetryableRetrievalException("Timed out again"))
+                .thenReturn(getRecordsResponse);
         record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
 
         when(records.size()).thenReturn(1000);
 
-        final List<KinesisClientRecord> expectedRecords = records.stream()
-                .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
+        final List<KinesisClientRecord> expectedRecords =
+                records.stream().map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
         ProcessRecordsInput result = null;
@@ -253,7 +283,8 @@ public class PrefetchRecordsPublisherTest {
 
         when(records.size()).thenReturn(1000);
 
-        GetRecordsResponse response = GetRecordsResponse.builder().records(records).build();
+        GetRecordsResponse response =
+                GetRecordsResponse.builder().records(records).build();
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(response);
         when(dataFetcher.isShardEndReached()).thenReturn(false);
 
@@ -288,7 +319,10 @@ public class PrefetchRecordsPublisherTest {
         childShards.add(leftChild);
         childShards.add(rightChild);
 
-        GetRecordsResponse response = GetRecordsResponse.builder().records(records).childShards(childShards).build();
+        GetRecordsResponse response = GetRecordsResponse.builder()
+                .records(records)
+                .childShards(childShards)
+                .build();
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(response);
         when(dataFetcher.isShardEndReached()).thenReturn(true);
 
@@ -328,7 +362,7 @@ public class PrefetchRecordsPublisherTest {
 
         sleep(2000);
 
-        int callRate = (int) Math.ceil((double) MAX_RECORDS_COUNT/recordsSize);
+        int callRate = (int) Math.ceil((double) MAX_RECORDS_COUNT / recordsSize);
         //        TODO: fix this verification
         //        verify(getRecordsRetrievalStrategy, times(callRate)).getRecords(MAX_RECORDS_PER_CALL);
         //        assertEquals(spyQueue.size(), callRate);
@@ -357,8 +391,8 @@ public class PrefetchRecordsPublisherTest {
         record = Record.builder().data(createByteBufferWithSize(1024)).build();
 
         IntStream.range(0, recordsSize).forEach(i -> records.add(record));
-        final List<KinesisClientRecord> expectedRecords = records.stream()
-                .map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
+        final List<KinesisClientRecord> expectedRecords =
+                records.stream().map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
         ProcessRecordsInput processRecordsInput = evictPublishedEvent().processRecordsInput();
@@ -387,9 +421,13 @@ public class PrefetchRecordsPublisherTest {
 
     @Test(expected = IllegalStateException.class)
     public void testRequestRecordsOnSubscriptionAfterShutdown() {
-        GetRecordsResponse response = GetRecordsResponse.builder().records(
-                        Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
-                .nextShardIterator(NEXT_SHARD_ITERATOR).build();
+        GetRecordsResponse response = GetRecordsResponse.builder()
+                .records(Record.builder()
+                        .data(SdkBytes.fromByteArray(new byte[] {1, 2, 3}))
+                        .sequenceNumber("123")
+                        .build())
+                .nextShardIterator(NEXT_SHARD_ITERATOR)
+                .build();
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
@@ -406,7 +444,8 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testExpiredIteratorException() {
-        when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL)).thenThrow(ExpiredIteratorException.class)
+        when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL))
+                .thenThrow(ExpiredIteratorException.class)
                 .thenReturn(getRecordsResponse);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
@@ -433,7 +472,13 @@ public class PrefetchRecordsPublisherTest {
         doThrow(new IllegalStateException()).when(dataFetcher).restartIterator();
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+        blockUntilConditionSatisfied(
+                () -> getRecordsCache
+                                .getPublisherSession()
+                                .prefetchRecordsQueue()
+                                .size()
+                        == MAX_SIZE,
+                300);
 
         // verify restartIterator was called
         verify(dataFetcher, times(2)).restartIterator();
@@ -441,10 +486,14 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testRetryableRetrievalExceptionContinues() {
-        GetRecordsResponse response = GetRecordsResponse.builder().millisBehindLatest(100L)
-                .records(Collections.emptyList()).nextShardIterator(NEXT_SHARD_ITERATOR).build();
+        GetRecordsResponse response = GetRecordsResponse.builder()
+                .millisBehindLatest(100L)
+                .records(Collections.emptyList())
+                .nextShardIterator(NEXT_SHARD_ITERATOR)
+                .build();
         when(getRecordsRetrievalStrategy.getRecords(anyInt()))
-                .thenThrow(new RetryableRetrievalException("Timeout", new TimeoutException("Timeout"))).thenReturn(response);
+                .thenThrow(new RetryableRetrievalException("Timeout", new TimeoutException("Timeout")))
+                .thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -459,7 +508,13 @@ public class PrefetchRecordsPublisherTest {
                 .thenReturn(getRecordsResponse);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
-        blockUntilConditionSatisfied(() -> getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 300);
+        blockUntilConditionSatisfied(
+                () -> getRecordsCache
+                                .getPublisherSession()
+                                .prefetchRecordsQueue()
+                                .size()
+                        == MAX_SIZE,
+                300);
 
         verify(dataFetcher, times(1)).restartIterator();
     }
@@ -473,11 +528,15 @@ public class PrefetchRecordsPublisherTest {
         // If the test times out before starting the subscriber it means something went wrong while filling the queue.
         // After the subscriber is started one of the things that can trigger a timeout is a deadlock.
         //
-        final int[] sequenceNumberInResponse = { 0 };
+        final int[] sequenceNumberInResponse = {0};
 
-        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenAnswer( i -> GetRecordsResponse.builder().records(
-                Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber(++sequenceNumberInResponse[0] + "").build())
-                .nextShardIterator(NEXT_SHARD_ITERATOR).build());
+        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenAnswer(i -> GetRecordsResponse.builder()
+                .records(Record.builder()
+                        .data(SdkBytes.fromByteArray(new byte[] {1, 2, 3}))
+                        .sequenceNumber(++sequenceNumberInResponse[0] + "")
+                        .build())
+                .nextShardIterator(NEXT_SHARD_ITERATOR)
+                .build());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -489,15 +548,17 @@ public class PrefetchRecordsPublisherTest {
             Thread.yield();
         }
 
-        log.info("Queue is currently at {} starting subscriber", getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
+        log.info(
+                "Queue is currently at {} starting subscriber",
+                getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
         AtomicInteger receivedItems = new AtomicInteger(0);
 
         final int expectedItems = MAX_SIZE * 10;
 
         Object lock = new Object();
 
-        final boolean[] isRecordNotInorder = { false };
-        final String[] recordNotInOrderMessage = { "" };
+        final boolean[] isRecordNotInorder = {false};
+        final String[] recordNotInOrderMessage = {""};
 
         Subscriber<RecordsRetrieved> delegateSubscriber = new Subscriber<RecordsRetrieved>() {
             Subscription sub;
@@ -513,11 +574,12 @@ public class PrefetchRecordsPublisherTest {
             public void onNext(RecordsRetrieved recordsRetrieved) {
                 receivedItems.incrementAndGet();
                 if (Integer.parseInt(((PrefetchRecordsPublisher.PrefetchRecordsRetrieved) recordsRetrieved)
-                        .lastBatchSequenceNumber()) != ++receivedSeqNum) {
+                                .lastBatchSequenceNumber())
+                        != ++receivedSeqNum) {
                     isRecordNotInorder[0] = true;
                     recordNotInOrderMessage[0] = "Expected : " + receivedSeqNum + " Actual : "
                             + ((PrefetchRecordsPublisher.PrefetchRecordsRetrieved) recordsRetrieved)
-                            .lastBatchSequenceNumber();
+                                    .lastBatchSequenceNumber();
                 }
                 if (receivedItems.get() >= expectedItems) {
                     synchronized (lock) {
@@ -542,12 +604,15 @@ public class PrefetchRecordsPublisherTest {
             }
         };
 
-        Subscriber<RecordsRetrieved> subscriber = new ShardConsumerNotifyingSubscriber(delegateSubscriber, getRecordsCache);
+        Subscriber<RecordsRetrieved> subscriber =
+                new ShardConsumerNotifyingSubscriber(delegateSubscriber, getRecordsCache);
 
         synchronized (lock) {
             log.info("Awaiting notification");
-            Flowable.fromPublisher(getRecordsCache).subscribeOn(Schedulers.computation())
-                    .observeOn(Schedulers.computation(), true, 8).subscribe(subscriber);
+            Flowable.fromPublisher(getRecordsCache)
+                    .subscribeOn(Schedulers.computation())
+                    .observeOn(Schedulers.computation(), true, 8)
+                    .subscribe(subscriber);
             try {
                 lock.wait();
             } catch (InterruptedException e) {
@@ -566,9 +631,13 @@ public class PrefetchRecordsPublisherTest {
         //
         // This test is to verify that the data consumption is not stuck in the case of an failed event delivery
         // to the subscriber.
-        GetRecordsResponse response = GetRecordsResponse.builder().records(
-                Record.builder().data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).sequenceNumber("123").build())
-                .nextShardIterator(NEXT_SHARD_ITERATOR).build();
+        GetRecordsResponse response = GetRecordsResponse.builder()
+                .records(Record.builder()
+                        .data(SdkBytes.fromByteArray(new byte[] {1, 2, 3}))
+                        .sequenceNumber("123")
+                        .build())
+                .nextShardIterator(NEXT_SHARD_ITERATOR)
+                .build();
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
@@ -581,7 +650,9 @@ public class PrefetchRecordsPublisherTest {
             Thread.yield();
         }
 
-        log.info("Queue is currently at {} starting subscriber", getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
+        log.info(
+                "Queue is currently at {} starting subscriber",
+                getRecordsCache.getPublisherSession().prefetchRecordsQueue().size());
         AtomicInteger receivedItems = new AtomicInteger(0);
 
         final int expectedItems = MAX_SIZE * 20;
@@ -627,8 +698,10 @@ public class PrefetchRecordsPublisherTest {
 
         synchronized (lock) {
             log.info("Awaiting notification");
-            Flowable.fromPublisher(getRecordsCache).subscribeOn(Schedulers.computation())
-                    .observeOn(Schedulers.computation(), true, 8).subscribe(subscriber);
+            Flowable.fromPublisher(getRecordsCache)
+                    .subscribeOn(Schedulers.computation())
+                    .observeOn(Schedulers.computation(), true, 8)
+                    .subscribe(subscriber);
             try {
                 lock.wait();
             } catch (InterruptedException e) {
@@ -641,22 +714,33 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testResetClearsRemainingData() {
-        List<GetRecordsResponse> responses = Stream.iterate(0, i -> i + 1).limit(10).map(i -> {
-            Record record = Record.builder().partitionKey("record-" + i).sequenceNumber("seq-" + i)
-                    .data(SdkBytes.fromByteArray(new byte[] { 1, 2, 3 })).approximateArrivalTimestamp(Instant.now())
-                    .build();
-            String nextIterator = "shard-iter-" + (i + 1);
-            return GetRecordsResponse.builder().records(record).nextShardIterator(nextIterator).build();
-        }).collect(Collectors.toList());
+        List<GetRecordsResponse> responses = Stream.iterate(0, i -> i + 1)
+                .limit(10)
+                .map(i -> {
+                    Record record = Record.builder()
+                            .partitionKey("record-" + i)
+                            .sequenceNumber("seq-" + i)
+                            .data(SdkBytes.fromByteArray(new byte[] {1, 2, 3}))
+                            .approximateArrivalTimestamp(Instant.now())
+                            .build();
+                    String nextIterator = "shard-iter-" + (i + 1);
+                    return GetRecordsResponse.builder()
+                            .records(record)
+                            .nextShardIterator(nextIterator)
+                            .build();
+                })
+                .collect(Collectors.toList());
 
         RetrieverAnswer retrieverAnswer = new RetrieverAnswer(responses);
 
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenAnswer(retrieverAnswer);
         doAnswer(a -> {
-            String resetTo = a.getArgumentAt(0, String.class);
-            retrieverAnswer.resetIteratorTo(resetTo);
-            return null;
-        }).when(dataFetcher).resetIterator(anyString(), anyString(), any());
+                    String resetTo = a.getArgumentAt(0, String.class);
+                    retrieverAnswer.resetIteratorTo(resetTo);
+                    return null;
+                })
+                .when(dataFetcher)
+                .resetIterator(anyString(), anyString(), any());
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -679,8 +763,11 @@ public class PrefetchRecordsPublisherTest {
         RecordsRetrieved postRestart = blockUntilRecordsAvailable();
 
         assertThat(postRestart.processRecordsInput(), eqProcessRecordsInput(expected.processRecordsInput()));
-        verify(dataFetcher).resetIterator(eq(responses.get(0).nextShardIterator()),
-                eq(responses.get(0).records().get(0).sequenceNumber()), any());
+        verify(dataFetcher)
+                .resetIterator(
+                        eq(responses.get(0).nextShardIterator()),
+                        eq(responses.get(0).records().get(0).sequenceNumber()),
+                        any());
     }
 
     /**
@@ -694,7 +781,8 @@ public class PrefetchRecordsPublisherTest {
 
         try {
             // return a valid response to cause `lastSuccessfulCall` to initialize
-            when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(GetRecordsResponse.builder().build());
+            when(getRecordsRetrievalStrategy.getRecords(anyInt()))
+                    .thenReturn(GetRecordsResponse.builder().build());
             blockUntilRecordsAvailable();
         } catch (RuntimeException re) {
             Assert.fail("first call should succeed");
@@ -702,7 +790,9 @@ public class PrefetchRecordsPublisherTest {
 
         try {
             when(getRecordsRetrievalStrategy.getRecords(anyInt()))
-                    .thenThrow(SdkException.builder().message("lose yourself to dance").build());
+                    .thenThrow(SdkException.builder()
+                            .message("lose yourself to dance")
+                            .build());
             blockUntilRecordsAvailable();
         } finally {
             // the successful call is the +1
@@ -771,15 +861,21 @@ public class PrefetchRecordsPublisherTest {
                 getDelegateSubscriber().onNext(recordsRetrieved);
             } else {
                 log.info("Record Loss Triggered");
-                CONSUMER_HEALTH_CHECKER.schedule(() ->  {
-                    getRecordsPublisher().restartFrom(recordsRetrieved);
-                    Flowable.fromPublisher(getRecordsPublisher()).subscribeOn(Schedulers.computation())
-                            .observeOn(Schedulers.computation(), true, 8).subscribe(this);
-                }, 1000, TimeUnit.MILLISECONDS);
+                CONSUMER_HEALTH_CHECKER.schedule(
+                        () -> {
+                            getRecordsPublisher().restartFrom(recordsRetrieved);
+                            Flowable.fromPublisher(getRecordsPublisher())
+                                    .subscribeOn(Schedulers.computation())
+                                    .observeOn(Schedulers.computation(), true, 8)
+                                    .subscribe(this);
+                        },
+                        1000,
+                        TimeUnit.MILLISECONDS);
             }
             recordCounter++;
         }
     }
+
     @After
     public void shutdown() {
         getRecordsCache.shutdown();
@@ -789,7 +885,8 @@ public class PrefetchRecordsPublisherTest {
     private void sleep(long millis) {
         try {
             Thread.sleep(millis);
-        } catch (InterruptedException e) {}
+        } catch (InterruptedException e) {
+        }
     }
 
     private SdkBytes createByteBufferWithSize(int size) {
@@ -810,5 +907,4 @@ public class PrefetchRecordsPublisherTest {
                 "shardId",
                 1L);
     }
-
 }

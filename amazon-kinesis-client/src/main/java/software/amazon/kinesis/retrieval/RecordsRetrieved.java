@@ -20,7 +20,7 @@ public interface RecordsRetrieved {
 
     /**
      * Retrieves the records that have been received via one of the publishers
-     * 
+     *
      * @return the processRecordsInput received
      */
     ProcessRecordsInput processRecordsInput();

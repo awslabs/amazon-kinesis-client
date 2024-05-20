@@ -16,11 +16,11 @@
 package software.amazon.kinesis.retrieval;
 
 import java.time.Duration;
+
 import lombok.Data;
 import lombok.NonNull;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.metrics.MetricsFactory;
-
 
 /**
  * Configuration needed for custom data fetchers

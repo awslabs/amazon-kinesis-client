@@ -14,9 +14,6 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -32,6 +29,9 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
 public class TestHarnessBuilder {
 
     private long currentTimeNanos;
@@ -46,7 +46,6 @@ public class TestHarnessBuilder {
         public Long call() throws Exception {
             return currentTimeNanos;
         }
-
     };
 
     public TestHarnessBuilder(final DynamoDBLeaseRefresher leaseRefresher) {
@@ -96,8 +95,7 @@ public class TestHarnessBuilder {
         currentTimeNanos += millis * 1000000;
     }
 
-    public Map<String, Lease> takeMutateAssert(DynamoDBLeaseTaker taker, int numToTake)
-        throws LeasingException {
+    public Map<String, Lease> takeMutateAssert(DynamoDBLeaseTaker taker, int numToTake) throws LeasingException {
         Map<String, Lease> result = taker.takeLeases(timeProvider);
         assertEquals(numToTake, result.size());
 
@@ -111,8 +109,7 @@ public class TestHarnessBuilder {
         return result;
     }
 
-    public Map<String, Lease> stealMutateAssert(DynamoDBLeaseTaker taker, int numToTake)
-            throws LeasingException {
+    public Map<String, Lease> stealMutateAssert(DynamoDBLeaseTaker taker, int numToTake) throws LeasingException {
         Map<String, Lease> result = taker.takeLeases(timeProvider);
         assertEquals(numToTake, result.size());
 
@@ -120,8 +117,7 @@ public class TestHarnessBuilder {
             Lease original = leases.get(actual.leaseKey());
             assertNotNull(original);
 
-            original.isMarkedForLeaseSteal(true)
-                    .lastCounterIncrementNanos(actual.lastCounterIncrementNanos());
+            original.isMarkedForLeaseSteal(true).lastCounterIncrementNanos(actual.lastCounterIncrementNanos());
             mutateAssert(taker.getWorkerIdentifier(), original, actual);
         }
 
@@ -129,7 +125,7 @@ public class TestHarnessBuilder {
     }
 
     public Map<String, Lease> takeMutateAssert(DynamoDBLeaseTaker taker, String... takenShardIds)
-        throws LeasingException {
+            throws LeasingException {
         Map<String, Lease> result = taker.takeLeases(timeProvider);
         assertEquals(takenShardIds.length, result.size());
 
@@ -157,7 +153,7 @@ public class TestHarnessBuilder {
     }
 
     public void addLeasesToRenew(LeaseRenewer renewer, String... shardIds)
-        throws DependencyException, InvalidStateException {
+            throws DependencyException, InvalidStateException {
         List<Lease> leasesToRenew = new ArrayList<Lease>();
 
         for (String shardId : shardIds) {
@@ -170,7 +166,7 @@ public class TestHarnessBuilder {
     }
 
     public Map<String, Lease> renewMutateAssert(LeaseRenewer renewer, String... renewedShardIds)
-        throws DependencyException, InvalidStateException {
+            throws DependencyException, InvalidStateException {
         renewer.renewLeases();
 
         Map<String, Lease> heldLeases = renewer.getCurrentlyHeldLeases();

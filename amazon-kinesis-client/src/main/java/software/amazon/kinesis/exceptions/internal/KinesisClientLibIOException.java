@@ -25,7 +25,7 @@ public class KinesisClientLibIOException extends KinesisClientLibRetryableExcept
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Error message.
      */
     public KinesisClientLibIOException(String message) {
@@ -34,7 +34,7 @@ public class KinesisClientLibIOException extends KinesisClientLibRetryableExcept
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Error message.
      * @param e Cause.
      */

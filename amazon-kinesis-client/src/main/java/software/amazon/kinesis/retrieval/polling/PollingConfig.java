@@ -148,8 +148,8 @@ public class PollingConfig implements RetrievalSpecificConfig {
 
     public PollingConfig maxRecords(int maxRecords) {
         if (maxRecords > DEFAULT_MAX_RECORDS) {
-            throw new IllegalArgumentException(
-                    "maxRecords must be less than or equal to " +  DEFAULT_MAX_RECORDS + " but current value is " + maxRecords());
+            throw new IllegalArgumentException("maxRecords must be less than or equal to " + DEFAULT_MAX_RECORDS
+                    + " but current value is " + maxRecords());
         }
         this.maxRecords = maxRecords;
         return this;
@@ -166,8 +166,13 @@ public class PollingConfig implements RetrievalSpecificConfig {
         if (usePollingConfigIdleTimeValue) {
             recordsFetcherFactory.idleMillisBetweenCalls(idleTimeBetweenReadsInMillis);
         }
-        return new SynchronousBlockingRetrievalFactory(streamName(), kinesisClient(), recordsFetcherFactory,
-                maxRecords(), kinesisRequestTimeout, dataFetcherProvider);
+        return new SynchronousBlockingRetrievalFactory(
+                streamName(),
+                kinesisClient(),
+                recordsFetcherFactory,
+                maxRecords(),
+                kinesisRequestTimeout,
+                dataFetcherProvider);
     }
 
     @Override

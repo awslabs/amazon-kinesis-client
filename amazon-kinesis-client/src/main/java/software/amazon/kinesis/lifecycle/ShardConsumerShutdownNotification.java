@@ -38,7 +38,7 @@ public class ShardConsumerShutdownNotification implements ShutdownNotification {
 
     /**
      * Creates a new shutdown request object.
-     * 
+     *
      * @param leaseCoordinator
      *            the lease coordinator used to drop leases from once the initial shutdown request is completed.
      * @param lease
@@ -50,10 +50,11 @@ public class ShardConsumerShutdownNotification implements ShutdownNotification {
      * @param shutdownCompleteLatch
      *            used to inform the caller once the record processor is fully shutdown
      */
-    public ShardConsumerShutdownNotification(final LeaseCoordinator leaseCoordinator,
-                                             final Lease lease,
-                                             final CountDownLatch notificationCompleteLatch,
-                                             final CountDownLatch shutdownCompleteLatch) {
+    public ShardConsumerShutdownNotification(
+            final LeaseCoordinator leaseCoordinator,
+            final Lease lease,
+            final CountDownLatch notificationCompleteLatch,
+            final CountDownLatch shutdownCompleteLatch) {
         this.leaseCoordinator = leaseCoordinator;
         this.lease = lease;
         this.notificationCompleteLatch = notificationCompleteLatch;
@@ -85,5 +86,4 @@ public class ShardConsumerShutdownNotification implements ShutdownNotification {
         shutdownCompleteLatch.countDown();
         allNotificationCompleted = true;
     }
-
 }

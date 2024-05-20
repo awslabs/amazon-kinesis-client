@@ -17,7 +17,10 @@ public abstract class KCLCrossAccountAppConfig extends KCLAppConfig {
     @Override
     public AwsCredentialsProvider getCrossAccountCredentialsProvider() {
         final String awsCrossAccountProfile = System.getProperty(KCLAppConfig.CROSS_ACCOUNT_PROFILE_PROPERTY);
-        return (awsCrossAccountProfile != null) ?
-                ProfileCredentialsProvider.builder().profileName(awsCrossAccountProfile).build() : null;
+        return (awsCrossAccountProfile != null)
+                ? ProfileCredentialsProvider.builder()
+                        .profileName(awsCrossAccountProfile)
+                        .build()
+                : null;
     }
 }

@@ -15,15 +15,6 @@
 
 package software.amazon.kinesis.retrieval.fanout;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.commons.lang3.StringUtils;
@@ -32,7 +23,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.Consumer;
 import software.amazon.awssdk.services.kinesis.model.ConsumerDescription;
@@ -48,6 +38,15 @@ import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.StreamDescriptionSummary;
 import software.amazon.awssdk.services.kinesis.model.StreamStatus;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.junit.Assert.assertThat;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  *
@@ -70,19 +69,21 @@ public class FanOutConsumerRegistrationTest {
 
     @Before
     public void setup() {
-        consumerRegistration = new FanOutConsumerRegistration(client, STREAM_NAME, CONSUMER_NAME, MAX_DSS_RETRIES,
-                MAX_DSC_RETRIES, RSC_RETRIES, BACKOFF_MILLIS);
+        consumerRegistration = new FanOutConsumerRegistration(
+                client, STREAM_NAME, CONSUMER_NAME, MAX_DSS_RETRIES, MAX_DSC_RETRIES, RSC_RETRIES, BACKOFF_MILLIS);
     }
 
     @Test
     public void testConsumerAlreadyExists() throws Exception {
-        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture = CompletableFuture
-                .completedFuture(createDescribeStreamSummaryResponse());
-        final CompletableFuture<DescribeStreamConsumerResponse> dscFuture = CompletableFuture
-                .completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.ACTIVE));
+        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture =
+                CompletableFuture.completedFuture(createDescribeStreamSummaryResponse());
+        final CompletableFuture<DescribeStreamConsumerResponse> dscFuture =
+                CompletableFuture.completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.ACTIVE));
 
-        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class))).thenReturn(dssFuture);
-        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class))).thenReturn(dscFuture);
+        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class)))
+                .thenReturn(dssFuture);
+        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class)))
+                .thenReturn(dscFuture);
 
         final String consumerArn = consumerRegistration.getOrCreateStreamConsumerArn();
 
@@ -93,13 +94,15 @@ public class FanOutConsumerRegistrationTest {
 
     @Test
     public void testConsumerAlreadyExistsMultipleCalls() throws Exception {
-        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture = CompletableFuture
-                .completedFuture(createDescribeStreamSummaryResponse());
-        final CompletableFuture<DescribeStreamConsumerResponse> dscFuture = CompletableFuture
-                .completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.ACTIVE));
+        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture =
+                CompletableFuture.completedFuture(createDescribeStreamSummaryResponse());
+        final CompletableFuture<DescribeStreamConsumerResponse> dscFuture =
+                CompletableFuture.completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.ACTIVE));
 
-        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class))).thenReturn(dssFuture);
-        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class))).thenReturn(dscFuture);
+        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class)))
+                .thenReturn(dssFuture);
+        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class)))
+                .thenReturn(dscFuture);
 
         final String firstCall = consumerRegistration.getOrCreateStreamConsumerArn();
 
@@ -113,27 +116,28 @@ public class FanOutConsumerRegistrationTest {
 
     @Test(expected = LimitExceededException.class)
     public void testDescribeStreamConsumerThrottled() throws Exception {
-        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture = CompletableFuture
-                .completedFuture(createDescribeStreamSummaryResponse());
+        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture =
+                CompletableFuture.completedFuture(createDescribeStreamSummaryResponse());
         final CompletableFuture<DescribeStreamConsumerResponse> dscFuture = CompletableFuture.supplyAsync(() -> {
             throw LimitExceededException.builder().build();
         });
 
-        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class))).thenReturn(dssFuture);
-        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class))).thenReturn(dscFuture);
+        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class)))
+                .thenReturn(dssFuture);
+        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class)))
+                .thenReturn(dscFuture);
 
         try {
             consumerRegistration.getOrCreateStreamConsumerArn();
         } finally {
-            verify(client, times(MAX_DSC_RETRIES))
-                    .describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
+            verify(client, times(MAX_DSC_RETRIES)).describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
         }
     }
 
     @Test(expected = DependencyException.class)
     public void testRegisterStreamConsumerThrottled() throws Exception {
-        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture = CompletableFuture
-                .completedFuture(createDescribeStreamSummaryResponse());
+        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture =
+                CompletableFuture.completedFuture(createDescribeStreamSummaryResponse());
         final CompletableFuture<DescribeStreamConsumerResponse> dscFuture = CompletableFuture.supplyAsync(() -> {
             throw ResourceNotFoundException.builder().build();
         });
@@ -141,36 +145,42 @@ public class FanOutConsumerRegistrationTest {
             throw LimitExceededException.builder().build();
         });
 
-        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class))).thenReturn(dssFuture);
-        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class))).thenReturn(dscFuture);
-        when(client.registerStreamConsumer(any(RegisterStreamConsumerRequest.class))).thenReturn(rscFuture);
+        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class)))
+                .thenReturn(dssFuture);
+        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class)))
+                .thenReturn(dscFuture);
+        when(client.registerStreamConsumer(any(RegisterStreamConsumerRequest.class)))
+                .thenReturn(rscFuture);
 
         try {
             consumerRegistration.getOrCreateStreamConsumerArn();
         } finally {
-            verify(client, times(RSC_RETRIES))
-                    .registerStreamConsumer(any(RegisterStreamConsumerRequest.class));
+            verify(client, times(RSC_RETRIES)).registerStreamConsumer(any(RegisterStreamConsumerRequest.class));
         }
     }
 
     @Test
     public void testNewRegisterStreamConsumer() throws Exception {
-        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture = CompletableFuture
-                .completedFuture(createDescribeStreamSummaryResponse());
+        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture =
+                CompletableFuture.completedFuture(createDescribeStreamSummaryResponse());
         final CompletableFuture<DescribeStreamConsumerResponse> failureResponse = CompletableFuture.supplyAsync(() -> {
             throw ResourceNotFoundException.builder().build();
         });
-        final CompletableFuture<DescribeStreamConsumerResponse> intermidateResponse = CompletableFuture
-                .completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.CREATING));
-        final CompletableFuture<DescribeStreamConsumerResponse> successResponse = CompletableFuture
-                .completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.ACTIVE));
-        final CompletableFuture<RegisterStreamConsumerResponse> rscFuture = CompletableFuture
-                .completedFuture(createRegisterStreamConsumerResponse());
+        final CompletableFuture<DescribeStreamConsumerResponse> intermidateResponse =
+                CompletableFuture.completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.CREATING));
+        final CompletableFuture<DescribeStreamConsumerResponse> successResponse =
+                CompletableFuture.completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.ACTIVE));
+        final CompletableFuture<RegisterStreamConsumerResponse> rscFuture =
+                CompletableFuture.completedFuture(createRegisterStreamConsumerResponse());
 
-        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class))).thenReturn(dssFuture);
-        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class))).thenReturn(failureResponse)
-                .thenReturn(intermidateResponse).thenReturn(successResponse);
-        when(client.registerStreamConsumer(any(RegisterStreamConsumerRequest.class))).thenReturn(rscFuture);
+        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class)))
+                .thenReturn(dssFuture);
+        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class)))
+                .thenReturn(failureResponse)
+                .thenReturn(intermidateResponse)
+                .thenReturn(successResponse);
+        when(client.registerStreamConsumer(any(RegisterStreamConsumerRequest.class)))
+                .thenReturn(rscFuture);
 
         final long startTime = System.currentTimeMillis();
         final String consumerArn = consumerRegistration.getOrCreateStreamConsumerArn();
@@ -184,23 +194,23 @@ public class FanOutConsumerRegistrationTest {
 
     @Test(expected = IllegalStateException.class)
     public void testStreamConsumerStuckInCreating() throws Exception {
-        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture = CompletableFuture.completedFuture(
-                createDescribeStreamSummaryResponse());
-        final CompletableFuture<DescribeStreamConsumerResponse> dscFuture = CompletableFuture
-                .completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.CREATING));
+        final CompletableFuture<DescribeStreamSummaryResponse> dssFuture =
+                CompletableFuture.completedFuture(createDescribeStreamSummaryResponse());
+        final CompletableFuture<DescribeStreamConsumerResponse> dscFuture =
+                CompletableFuture.completedFuture(createDescribeStreamConsumerResponse(ConsumerStatus.CREATING));
 
-        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class))).thenReturn(dssFuture);
-        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class))).thenReturn(dscFuture);
+        when(client.describeStreamSummary(any(DescribeStreamSummaryRequest.class)))
+                .thenReturn(dssFuture);
+        when(client.describeStreamConsumer(any(DescribeStreamConsumerRequest.class)))
+                .thenReturn(dscFuture);
 
         try {
             consumerRegistration.getOrCreateStreamConsumerArn();
         } finally {
             // Verify that the call to DSC was made for the max retry attempts and one for the initial response object.
-            verify(client, times(MAX_DSC_RETRIES + 1))
-                    .describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
+            verify(client, times(MAX_DSC_RETRIES + 1)).describeStreamConsumer(any(DescribeStreamConsumerRequest.class));
             verify(client, never()).registerStreamConsumer(any(RegisterStreamConsumerRequest.class));
         }
-
     }
 
     private DescribeStreamSummaryRequest createDescribeStreamSummaryRequest() {
@@ -208,29 +218,49 @@ public class FanOutConsumerRegistrationTest {
     }
 
     private DescribeStreamSummaryResponse createDescribeStreamSummaryResponse() {
-        return DescribeStreamSummaryResponse.builder().streamDescriptionSummary(StreamDescriptionSummary.builder()
-                .streamName(STREAM_NAME).streamARN(STREAM_ARN).streamStatus(StreamStatus.ACTIVE).build()).build();
+        return DescribeStreamSummaryResponse.builder()
+                .streamDescriptionSummary(StreamDescriptionSummary.builder()
+                        .streamName(STREAM_NAME)
+                        .streamARN(STREAM_ARN)
+                        .streamStatus(StreamStatus.ACTIVE)
+                        .build())
+                .build();
     }
 
     private DescribeStreamConsumerRequest createDescribeStreamConsumerRequest(final String consumerArn) {
         if (StringUtils.isEmpty(consumerArn)) {
-            return DescribeStreamConsumerRequest.builder().streamARN(STREAM_ARN).consumerName(CONSUMER_NAME).build();
+            return DescribeStreamConsumerRequest.builder()
+                    .streamARN(STREAM_ARN)
+                    .consumerName(CONSUMER_NAME)
+                    .build();
         }
         return DescribeStreamConsumerRequest.builder().consumerARN(consumerArn).build();
     }
 
     private DescribeStreamConsumerResponse createDescribeStreamConsumerResponse(final ConsumerStatus status) {
-        return DescribeStreamConsumerResponse.builder().consumerDescription(ConsumerDescription.builder()
-                .consumerStatus(status).consumerARN(CONSUMER_ARN).consumerName(CONSUMER_NAME).build()).build();
+        return DescribeStreamConsumerResponse.builder()
+                .consumerDescription(ConsumerDescription.builder()
+                        .consumerStatus(status)
+                        .consumerARN(CONSUMER_ARN)
+                        .consumerName(CONSUMER_NAME)
+                        .build())
+                .build();
     }
 
     private RegisterStreamConsumerRequest createRegisterStreamConsumerRequest() {
-        return RegisterStreamConsumerRequest.builder().streamARN(STREAM_ARN).consumerName(CONSUMER_NAME).build();
+        return RegisterStreamConsumerRequest.builder()
+                .streamARN(STREAM_ARN)
+                .consumerName(CONSUMER_NAME)
+                .build();
     }
 
     private RegisterStreamConsumerResponse createRegisterStreamConsumerResponse() {
-        return RegisterStreamConsumerResponse.builder().consumer(Consumer.builder().consumerName(CONSUMER_NAME)
-                .consumerARN(CONSUMER_ARN).consumerStatus(ConsumerStatus.CREATING).build()).build();
+        return RegisterStreamConsumerResponse.builder()
+                .consumer(Consumer.builder()
+                        .consumerName(CONSUMER_NAME)
+                        .consumerARN(CONSUMER_ARN)
+                        .consumerStatus(ConsumerStatus.CREATING)
+                        .build())
+                .build();
     }
-
 }

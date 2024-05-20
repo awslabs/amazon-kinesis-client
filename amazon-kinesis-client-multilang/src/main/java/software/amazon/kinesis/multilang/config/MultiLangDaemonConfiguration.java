@@ -27,17 +27,16 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
-import org.apache.commons.beanutils.BeanUtilsBean;
-import org.apache.commons.beanutils.ConvertUtilsBean;
-import org.apache.commons.beanutils.Converter;
-import org.apache.commons.beanutils.converters.ArrayConverter;
-import org.apache.commons.beanutils.converters.StringConverter;
-
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.beanutils.BeanUtilsBean;
+import org.apache.commons.beanutils.ConvertUtilsBean;
+import org.apache.commons.beanutils.Converter;
+import org.apache.commons.beanutils.converters.ArrayConverter;
+import org.apache.commons.beanutils.converters.StringConverter;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
@@ -74,7 +73,6 @@ public class MultiLangDaemonConfiguration {
     private String streamName;
     private String streamArn;
 
-
     @ConfigurationSettable(configurationClass = ConfigsBuilder.class)
     private String tableName;
 
@@ -86,22 +84,31 @@ public class MultiLangDaemonConfiguration {
 
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private long failoverTimeMillis;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private Boolean enablePriorityLeaseAssignment;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private long shardSyncIntervalMillis;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private boolean cleanupLeasesUponShardCompletion;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private boolean ignoreUnexpectedChildShards;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private int maxLeasesForWorker;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private int maxLeasesToStealAtOneTime;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private int initialLeaseTableReadCapacity;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private int initialLeaseTableWriteCapacity;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class, methodName = "initialPositionInStream")
     @ConfigurationSettable(configurationClass = RetrievalConfig.class)
     private InitialPositionInStreamExtended initialPositionInStreamExtended;
@@ -114,14 +121,16 @@ public class MultiLangDaemonConfiguration {
     }
 
     public void setInitialPositionInStream(InitialPositionInStream initialPositionInStream) {
-        this.initialPositionInStreamExtended = InitialPositionInStreamExtended
-                .newInitialPosition(initialPositionInStream);
+        this.initialPositionInStreamExtended =
+                InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
     }
 
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private int maxLeaseRenewalThreads;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private long listShardsBackoffTimeInMillis;
+
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private int maxListShardsRetryAttempts;
 
@@ -131,10 +140,13 @@ public class MultiLangDaemonConfiguration {
 
     @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
     private long parentShardPollIntervalMillis;
+
     @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
     private ShardPrioritization shardPrioritization;
+
     @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist;
+
     @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
     private long schedulerInitializationBackoffTimeMillis;
 
@@ -143,12 +155,16 @@ public class MultiLangDaemonConfiguration {
 
     @ConfigurationSettable(configurationClass = MetricsConfig.class)
     private long metricsBufferTimeMillis;
+
     @ConfigurationSettable(configurationClass = MetricsConfig.class)
     private int metricsMaxQueueSize;
+
     @ConfigurationSettable(configurationClass = MetricsConfig.class)
     private MetricsLevel metricsLevel;
+
     @ConfigurationSettable(configurationClass = LifecycleConfig.class, convertToOptional = true)
     private Long logWarningForTaskAfterMillis;
+
     @ConfigurationSettable(configurationClass = MetricsConfig.class)
     private Set<String> metricsEnabledDimensions;
 
@@ -163,6 +179,7 @@ public class MultiLangDaemonConfiguration {
     private RetrievalMode retrievalMode = RetrievalMode.DEFAULT;
 
     private final FanoutConfigBean fanoutConfig = new FanoutConfigBean();
+
     @Delegate(types = PollingConfigBean.PollingConfigBeanDelegate.class)
     private final PollingConfigBean pollingConfig = new PollingConfigBean();
 
@@ -200,61 +217,75 @@ public class MultiLangDaemonConfiguration {
         this.utilsBean = utilsBean;
         this.convertUtilsBean = convertUtilsBean;
 
-        convertUtilsBean.register(new Converter() {
-            @Override
-            public <T> T convert(Class<T> type, Object value) {
-                Date date = new Date(Long.parseLong(value.toString()) * 1000L);
-                return type.cast(InitialPositionInStreamExtended.newInitialPositionAtTimestamp(date));
-            }
-        }, InitialPositionInStreamExtended.class);
+        convertUtilsBean.register(
+                new Converter() {
+                    @Override
+                    public <T> T convert(Class<T> type, Object value) {
+                        Date date = new Date(Long.parseLong(value.toString()) * 1000L);
+                        return type.cast(InitialPositionInStreamExtended.newInitialPositionAtTimestamp(date));
+                    }
+                },
+                InitialPositionInStreamExtended.class);
 
-        convertUtilsBean.register(new Converter() {
-            @Override
-            public <T> T convert(Class<T> type, Object value) {
-                return type.cast(MetricsLevel.valueOf(value.toString().toUpperCase()));
-            }
-        }, MetricsLevel.class);
+        convertUtilsBean.register(
+                new Converter() {
+                    @Override
+                    public <T> T convert(Class<T> type, Object value) {
+                        return type.cast(MetricsLevel.valueOf(value.toString().toUpperCase()));
+                    }
+                },
+                MetricsLevel.class);
 
-        convertUtilsBean.register(new Converter() {
-            @Override
-            public <T> T convert(Class<T> type, Object value) {
-                return type.cast(InitialPositionInStream.valueOf(value.toString().toUpperCase()));
-            }
-        }, InitialPositionInStream.class);
+        convertUtilsBean.register(
+                new Converter() {
+                    @Override
+                    public <T> T convert(Class<T> type, Object value) {
+                        return type.cast(
+                                InitialPositionInStream.valueOf(value.toString().toUpperCase()));
+                    }
+                },
+                InitialPositionInStream.class);
 
-        convertUtilsBean.register(new Converter() {
-            @Override
-            public <T> T convert(Class<T> type, Object value) {
-                return type.cast(URI.create(value.toString()));
-            }
-        }, URI.class);
+        convertUtilsBean.register(
+                new Converter() {
+                    @Override
+                    public <T> T convert(Class<T> type, Object value) {
+                        return type.cast(URI.create(value.toString()));
+                    }
+                },
+                URI.class);
 
-        convertUtilsBean.register(new Converter() {
-            @Override
-            public <T> T convert(Class<T> type, Object value) {
-                return type.cast(RetrievalMode.from(value.toString()));
-            }
-        }, RetrievalMode.class);
+        convertUtilsBean.register(
+                new Converter() {
+                    @Override
+                    public <T> T convert(Class<T> type, Object value) {
+                        return type.cast(RetrievalMode.from(value.toString()));
+                    }
+                },
+                RetrievalMode.class);
 
-        convertUtilsBean.register(new Converter() {
-            @Override
-            public <T> T convert(final Class<T> type, final Object value) {
-                return type.cast(Region.of(value.toString()));
-            }
-        }, Region.class);
+        convertUtilsBean.register(
+                new Converter() {
+                    @Override
+                    public <T> T convert(final Class<T> type, final Object value) {
+                        return type.cast(Region.of(value.toString()));
+                    }
+                },
+                Region.class);
 
         ArrayConverter arrayConverter = new ArrayConverter(String[].class, new StringConverter());
         arrayConverter.setDelimiter(',');
         convertUtilsBean.register(arrayConverter, String[].class);
-        AWSCredentialsProviderPropertyValueDecoder oldCredentialsDecoder = new AWSCredentialsProviderPropertyValueDecoder();
+        AWSCredentialsProviderPropertyValueDecoder oldCredentialsDecoder =
+                new AWSCredentialsProviderPropertyValueDecoder();
         Function<String, ?> converter = s -> new V2CredentialWrapper(oldCredentialsDecoder.decodeValue(s));
 
-        this.kinesisCredentialsProvider = new BuilderDynaBean(AwsCredentialsProvider.class, convertUtilsBean,
-                converter, CREDENTIALS_DEFAULT_SEARCH_PATH);
-        this.dynamoDBCredentialsProvider = new BuilderDynaBean(AwsCredentialsProvider.class, convertUtilsBean,
-                converter, CREDENTIALS_DEFAULT_SEARCH_PATH);
-        this.cloudWatchCredentialsProvider = new BuilderDynaBean(AwsCredentialsProvider.class, convertUtilsBean,
-                converter, CREDENTIALS_DEFAULT_SEARCH_PATH);
+        this.kinesisCredentialsProvider = new BuilderDynaBean(
+                AwsCredentialsProvider.class, convertUtilsBean, converter, CREDENTIALS_DEFAULT_SEARCH_PATH);
+        this.dynamoDBCredentialsProvider = new BuilderDynaBean(
+                AwsCredentialsProvider.class, convertUtilsBean, converter, CREDENTIALS_DEFAULT_SEARCH_PATH);
+        this.cloudWatchCredentialsProvider = new BuilderDynaBean(
+                AwsCredentialsProvider.class, convertUtilsBean, converter, CREDENTIALS_DEFAULT_SEARCH_PATH);
 
         this.kinesisClient = new BuilderDynaBean(KinesisAsyncClient.class, convertUtilsBean);
         this.dynamoDbClient = new BuilderDynaBean(DynamoDbAsyncClient.class, convertUtilsBean);
@@ -300,8 +331,8 @@ public class MultiLangDaemonConfiguration {
         return credsBuilder.build(AwsCredentialsProvider.class);
     }
 
-    private void updateCredentials(BuilderDynaBean toUpdate, AwsCredentialsProvider primary,
-            AwsCredentialsProvider secondary) {
+    private void updateCredentials(
+            BuilderDynaBean toUpdate, AwsCredentialsProvider primary, AwsCredentialsProvider secondary) {
 
         if (toUpdate.hasValue("credentialsProvider")) {
             return;
@@ -329,8 +360,8 @@ public class MultiLangDaemonConfiguration {
     }
 
     private void handleRetrievalConfig(RetrievalConfig retrievalConfig, ConfigsBuilder configsBuilder) {
-        retrievalConfig
-                .retrievalSpecificConfig(retrievalMode.builder(this).build(configsBuilder.kinesisClient(), this));
+        retrievalConfig.retrievalSpecificConfig(
+                retrievalMode.builder(this).build(configsBuilder.kinesisClient(), this));
     }
 
     private Object adjustKinesisHttpConfiguration(Object builderObj) {
@@ -353,8 +384,14 @@ public class MultiLangDaemonConfiguration {
         final RetrievalConfig retrievalConfig;
 
         public Scheduler build() {
-            return new Scheduler(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig,
-                    metricsConfig, processorConfig, retrievalConfig);
+            return new Scheduler(
+                    checkpointConfig,
+                    coordinatorConfig,
+                    leaseManagementConfig,
+                    lifecycleConfig,
+                    metricsConfig,
+                    processorConfig,
+                    retrievalConfig);
         }
     }
 
@@ -367,19 +404,25 @@ public class MultiLangDaemonConfiguration {
         updateCredentials(dynamoDbClient, dynamoDbCreds, kinesisCreds);
         updateCredentials(cloudWatchClient, cloudwatchCreds, kinesisCreds);
 
-        KinesisAsyncClient kinesisAsyncClient = kinesisClient.build(KinesisAsyncClient.class,
-                this::adjustKinesisHttpConfiguration);
+        KinesisAsyncClient kinesisAsyncClient =
+                kinesisClient.build(KinesisAsyncClient.class, this::adjustKinesisHttpConfiguration);
         DynamoDbAsyncClient dynamoDbAsyncClient = dynamoDbClient.build(DynamoDbAsyncClient.class);
         CloudWatchAsyncClient cloudWatchAsyncClient = cloudWatchClient.build(CloudWatchAsyncClient.class);
 
-        ConfigsBuilder configsBuilder = new ConfigsBuilder(streamName, applicationName, kinesisAsyncClient,
-                dynamoDbAsyncClient, cloudWatchAsyncClient, workerIdentifier, shardRecordProcessorFactory);
+        ConfigsBuilder configsBuilder = new ConfigsBuilder(
+                streamName,
+                applicationName,
+                kinesisAsyncClient,
+                dynamoDbAsyncClient,
+                cloudWatchAsyncClient,
+                workerIdentifier,
+                shardRecordProcessorFactory);
 
         Map<Class<?>, Object> configObjects = new HashMap<>();
         addConfigObjects(configObjects, configsBuilder);
 
-        resolveFields(configObjects, Collections.singleton(ConfigsBuilder.class),
-                Collections.singleton(PollingConfig.class));
+        resolveFields(
+                configObjects, Collections.singleton(ConfigsBuilder.class), Collections.singleton(PollingConfig.class));
 
         CoordinatorConfig coordinatorConfig = configsBuilder.coordinatorConfig();
         CheckpointConfig checkpointConfig = configsBuilder.checkpointConfig();
@@ -389,19 +432,31 @@ public class MultiLangDaemonConfiguration {
         ProcessorConfig processorConfig = configsBuilder.processorConfig();
         RetrievalConfig retrievalConfig = configsBuilder.retrievalConfig();
 
-        addConfigObjects(configObjects, coordinatorConfig, checkpointConfig, leaseManagementConfig, lifecycleConfig,
-                metricsConfig, processorConfig, retrievalConfig);
+        addConfigObjects(
+                configObjects,
+                coordinatorConfig,
+                checkpointConfig,
+                leaseManagementConfig,
+                lifecycleConfig,
+                metricsConfig,
+                processorConfig,
+                retrievalConfig);
 
         handleRetrievalConfig(retrievalConfig, configsBuilder);
 
         resolveFields(configObjects, null, new HashSet<>(Arrays.asList(ConfigsBuilder.class, PollingConfig.class)));
 
-        return new ResolvedConfiguration(coordinatorConfig, checkpointConfig, leaseManagementConfig, lifecycleConfig,
-                metricsConfig, processorConfig, retrievalConfig);
+        return new ResolvedConfiguration(
+                coordinatorConfig,
+                checkpointConfig,
+                leaseManagementConfig,
+                lifecycleConfig,
+                metricsConfig,
+                processorConfig,
+                retrievalConfig);
     }
 
     public Scheduler build(ShardRecordProcessorFactory shardRecordProcessorFactory) {
         return resolvedConfiguration(shardRecordProcessorFactory).build();
     }
-
 }

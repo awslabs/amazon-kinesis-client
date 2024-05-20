@@ -142,7 +142,6 @@
  * Jackson doc for more details)</a> MIME is the basis of most base64 encoding variants including <a
  * href="http://tools.ietf.org/html/rfc3548.html">RFC 3548</a> which is the standard used by Python's <a
  * href="https://docs.python.org/2/library/base64.html">base64</a> module.
- * 
+ *
  */
 package software.amazon.kinesis.multilang;
-

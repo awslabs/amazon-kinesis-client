@@ -47,8 +47,12 @@ public class KinesisClientRecord {
     private final Schema schema;
 
     public static KinesisClientRecord fromRecord(Record record) {
-        return KinesisClientRecord.builder().sequenceNumber(record.sequenceNumber())
-                .approximateArrivalTimestamp(record.approximateArrivalTimestamp()).data(record.data().asByteBuffer())
-                .partitionKey(record.partitionKey()).encryptionType(record.encryptionType()).build();
+        return KinesisClientRecord.builder()
+                .sequenceNumber(record.sequenceNumber())
+                .approximateArrivalTimestamp(record.approximateArrivalTimestamp())
+                .data(record.data().asByteBuffer())
+                .partitionKey(record.partitionKey())
+                .encryptionType(record.encryptionType())
+                .build();
     }
 }

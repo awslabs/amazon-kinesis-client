@@ -21,7 +21,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
 
@@ -50,18 +49,22 @@ public class FanoutConfigBeanTest {
         MultiLangDaemonConfiguration configuration = new MultiLangDaemonConfiguration(utilsBean, convertUtilsBean);
         configuration.setStreamName("test-stream");
         configuration.setApplicationName("test-application");
-        FanOutConfig fanOutConfig =fanoutConfigBean.build(kinesisAsyncClient, configuration);
+        FanOutConfig fanOutConfig = fanoutConfigBean.build(kinesisAsyncClient, configuration);
 
         assertThat(fanOutConfig.kinesisClient(), equalTo(kinesisAsyncClient));
         assertThat(fanOutConfig.streamName(), equalTo(configuration.getStreamName()));
         assertThat(fanOutConfig.applicationName(), equalTo(configuration.getApplicationName()));
         assertThat(fanOutConfig.consumerArn(), equalTo(fanoutConfigBean.getConsumerArn()));
         assertThat(fanOutConfig.consumerName(), equalTo(fanoutConfigBean.getConsumerName()));
-        assertThat(fanOutConfig.maxDescribeStreamConsumerRetries(), equalTo(fanoutConfigBean.getMaxDescribeStreamConsumerRetries()));
-        assertThat(fanOutConfig.maxDescribeStreamSummaryRetries(), equalTo(fanoutConfigBean.getMaxDescribeStreamSummaryRetries()));
-        assertThat(fanOutConfig.registerStreamConsumerRetries(), equalTo(fanoutConfigBean.getRegisterStreamConsumerRetries()));
+        assertThat(
+                fanOutConfig.maxDescribeStreamConsumerRetries(),
+                equalTo(fanoutConfigBean.getMaxDescribeStreamConsumerRetries()));
+        assertThat(
+                fanOutConfig.maxDescribeStreamSummaryRetries(),
+                equalTo(fanoutConfigBean.getMaxDescribeStreamSummaryRetries()));
+        assertThat(
+                fanOutConfig.registerStreamConsumerRetries(),
+                equalTo(fanoutConfigBean.getRegisterStreamConsumerRetries()));
         assertThat(fanOutConfig.retryBackoffMillis(), equalTo(fanoutConfigBean.getRetryBackoffMillis()));
-
     }
-
 }

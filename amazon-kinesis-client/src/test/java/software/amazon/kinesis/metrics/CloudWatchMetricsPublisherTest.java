@@ -28,7 +28,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.runners.MockitoJUnitRunner;
-
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
@@ -63,7 +62,7 @@ public class CloudWatchMetricsPublisherTest {
         List<MetricDatumWithKey<CloudWatchMetricKey>> dataToPublish = constructMetricDatumWithKeyList(25);
         List<Map<String, MetricDatum>> expectedData = constructMetricDatumListMap(dataToPublish);
         publisher.publishMetrics(dataToPublish);
-        
+
         ArgumentCaptor<PutMetricDataRequest> argument = ArgumentCaptor.forClass(PutMetricDataRequest.class);
         Mockito.verify(cloudWatchClient, Mockito.atLeastOnce()).putMetricData(argument.capture());
 
@@ -73,7 +72,6 @@ public class CloudWatchMetricsPublisherTest {
         for (int i = 0; i < requests.size(); i++) {
             assertMetricData(expectedData.get(i), requests.get(i));
         }
-
     }
 
     public static List<MetricDatumWithKey<CloudWatchMetricKey>> constructMetricDatumWithKeyList(int value) {
@@ -89,7 +87,8 @@ public class CloudWatchMetricsPublisherTest {
 
     // batchSize is the number of metrics sent in a single request.
     // In CloudWatchMetricsPublisher this number is set to 20.
-    public List<Map<String, MetricDatum>> constructMetricDatumListMap(List<MetricDatumWithKey<CloudWatchMetricKey>> data) {
+    public List<Map<String, MetricDatum>> constructMetricDatumListMap(
+            List<MetricDatumWithKey<CloudWatchMetricKey>> data) {
         int batchSize = 20;
         List<Map<String, MetricDatum>> dataList = new ArrayList<Map<String, MetricDatum>>();
 

@@ -1,14 +1,13 @@
 package software.amazon.kinesis.config.crossaccount;
 
-import software.amazon.awssdk.arns.Arn;
-import software.amazon.awssdk.http.Protocol;
-import software.amazon.kinesis.config.RetrievalMode;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.arns.Arn;
+import software.amazon.awssdk.http.Protocol;
+import software.amazon.kinesis.config.RetrievalMode;
 
 /**
  * Config for a cross account polling consumer with HTTP protocol of HTTP2

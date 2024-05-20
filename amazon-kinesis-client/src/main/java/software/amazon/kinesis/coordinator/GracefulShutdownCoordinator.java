@@ -14,12 +14,11 @@
  */
 package software.amazon.kinesis.coordinator;
 
-
-import lombok.extern.slf4j.Slf4j;
-
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+
+import lombok.extern.slf4j.Slf4j;
 
 class GracefulShutdownCoordinator {
 
@@ -31,8 +30,11 @@ class GracefulShutdownCoordinator {
     CompletableFuture<Boolean> startGracefulShutdown(Callable<Boolean> shutdownCallable) {
         CompletableFuture<Boolean> cf = new CompletableFuture<>();
         CompletableFuture.runAsync(() -> {
-            try { cf.complete(shutdownCallable.call()); }
-            catch(Throwable ex) { cf.completeExceptionally(ex); }
+            try {
+                cf.complete(shutdownCallable.call());
+            } catch (Throwable ex) {
+                cf.completeExceptionally(ex);
+            }
         });
         return cf;
     }
@@ -50,7 +52,8 @@ class GracefulShutdownCoordinator {
         }
 
         private boolean isWorkerShutdownComplete(GracefulShutdownContext context) {
-            return context.scheduler().shutdownComplete() || context.scheduler().shardInfoShardConsumerMap().isEmpty();
+            return context.scheduler().shutdownComplete()
+                    || context.scheduler().shardInfoShardConsumerMap().isEmpty();
         }
 
         private String awaitingLogMessage(GracefulShutdownContext context) {
@@ -92,12 +95,14 @@ class GracefulShutdownCoordinator {
                         throw new InterruptedException();
                     }
                     log.info(awaitingLogMessage(context));
-                    if (workerShutdownWithRemaining(context.shutdownCompleteLatch().getCount(), context)) {
+                    if (workerShutdownWithRemaining(
+                            context.shutdownCompleteLatch().getCount(), context)) {
                         return false;
                     }
                 }
             } catch (InterruptedException ie) {
-                log.warn("Interrupted while waiting for notification complete, terminating shutdown. {}",
+                log.warn(
+                        "Interrupted while waiting for notification complete, terminating shutdown. {}",
                         awaitingLogMessage(context));
                 return false;
             }
@@ -129,12 +134,14 @@ class GracefulShutdownCoordinator {
                         throw new InterruptedException();
                     }
                     log.info(awaitingFinalShutdownMessage(context));
-                    if (workerShutdownWithRemaining(context.shutdownCompleteLatch().getCount(), context)) {
+                    if (workerShutdownWithRemaining(
+                            context.shutdownCompleteLatch().getCount(), context)) {
                         return false;
                     }
                 }
             } catch (InterruptedException ie) {
-                log.warn("Interrupted while waiting for shutdown completion, terminating shutdown. {}",
+                log.warn(
+                        "Interrupted while waiting for shutdown completion, terminating shutdown. {}",
                         awaitingFinalShutdownMessage(context));
                 return false;
             }
@@ -152,9 +159,12 @@ class GracefulShutdownCoordinator {
         private boolean workerShutdownWithRemaining(long outstanding, GracefulShutdownContext context) {
             if (isWorkerShutdownComplete(context)) {
                 if (outstanding != 0) {
-                    log.info("Shutdown completed, but shutdownCompleteLatch still had outstanding {} with a current"
-                            + " value of {}. shutdownComplete: {} -- Consumer Map: {}", outstanding,
-                            context.shutdownCompleteLatch().getCount(), context.scheduler().shutdownComplete(),
+                    log.info(
+                            "Shutdown completed, but shutdownCompleteLatch still had outstanding {} with a current"
+                                    + " value of {}. shutdownComplete: {} -- Consumer Map: {}",
+                            outstanding,
+                            context.shutdownCompleteLatch().getCount(),
+                            context.scheduler().shutdownComplete(),
                             context.scheduler().shardInfoShardConsumerMap().size());
                     return true;
                 }

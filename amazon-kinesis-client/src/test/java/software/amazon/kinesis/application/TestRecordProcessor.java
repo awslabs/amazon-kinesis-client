@@ -1,20 +1,20 @@
 package software.amazon.kinesis.application;
 
+import java.nio.ByteBuffer;
+
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.exceptions.InvalidStateException;
 import software.amazon.kinesis.exceptions.ShutdownException;
+import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
-import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.utils.RecordValidatorQueue;
-
-import java.nio.ByteBuffer;
 
 /**
  * Implement initialization and deletion of shards and shard record processing
@@ -45,7 +45,6 @@ public class TestRecordProcessor implements ShardRecordProcessor {
             MDC.remove(SHARD_ID_MDC_KEY);
         }
     }
-
 
     @Override
     public void processRecords(ProcessRecordsInput processRecordsInput) {
@@ -109,6 +108,4 @@ public class TestRecordProcessor implements ShardRecordProcessor {
             MDC.remove(SHARD_ID_MDC_KEY);
         }
     }
-
-
 }

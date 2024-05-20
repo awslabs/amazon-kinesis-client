@@ -14,8 +14,6 @@
  */
 package software.amazon.kinesis.metrics;
 
-
-
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.Dimension;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
@@ -41,7 +39,8 @@ public class LogMetricsScope extends AccumulateByNameMetricsScope {
 
         for (MetricDatum datum : data.values()) {
             StatisticSet statistics = datum.statisticValues();
-            output.append(String.format("Name=%25s\tMin=%.2f\tMax=%.2f\tCount=%.2f\tSum=%.2f\tAvg=%.2f\tUnit=%s\n",
+            output.append(String.format(
+                    "Name=%25s\tMin=%.2f\tMax=%.2f\tCount=%.2f\tSum=%.2f\tAvg=%.2f\tUnit=%s\n",
                     datum.metricName(),
                     statistics.minimum(),
                     statistics.maximum(),

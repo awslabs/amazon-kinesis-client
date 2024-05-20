@@ -17,7 +17,6 @@ package software.amazon.kinesis.retrieval.polling;
 import java.util.concurrent.Executors;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.metrics.MetricsFactory;
@@ -36,26 +35,37 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
 
     @Override
-    public RecordsPublisher createRecordsFetcher(GetRecordsRetrievalStrategy getRecordsRetrievalStrategy, String shardId,
-                                                 MetricsFactory metricsFactory, int maxRecords) {
+    public RecordsPublisher createRecordsFetcher(
+            GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+            String shardId,
+            MetricsFactory metricsFactory,
+            int maxRecords) {
 
-        return new PrefetchRecordsPublisher(maxPendingProcessRecordsInput, maxByteSize, maxRecordsCount, maxRecords,
+        return new PrefetchRecordsPublisher(
+                maxPendingProcessRecordsInput,
+                maxByteSize,
+                maxRecordsCount,
+                maxRecords,
                 getRecordsRetrievalStrategy,
-                Executors
-                        .newFixedThreadPool(1,
-                                new ThreadFactoryBuilder().setDaemon(true)
-                                        .setNameFormat("prefetch-cache-" + shardId + "-%04d").build()),
-                idleMillisBetweenCalls, metricsFactory, "ProcessTask", shardId);
-
+                Executors.newFixedThreadPool(
+                        1,
+                        new ThreadFactoryBuilder()
+                                .setDaemon(true)
+                                .setNameFormat("prefetch-cache-" + shardId + "-%04d")
+                                .build()),
+                idleMillisBetweenCalls,
+                metricsFactory,
+                "ProcessTask",
+                shardId);
     }
 
     @Override
-    public void maxPendingProcessRecordsInput(int maxPendingProcessRecordsInput){
+    public void maxPendingProcessRecordsInput(int maxPendingProcessRecordsInput) {
         this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
     }
 
     @Override
-    public void maxByteSize(int maxByteSize){
+    public void maxByteSize(int maxByteSize) {
         this.maxByteSize = maxByteSize;
     }
 
@@ -65,7 +75,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     }
 
     @Override
-    public void dataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy){
+    public void dataFetchingStrategy(DataFetchingStrategy dataFetchingStrategy) {
         this.dataFetchingStrategy = dataFetchingStrategy;
     }
 

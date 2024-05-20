@@ -1,11 +1,11 @@
 package software.amazon.kinesis.lifecycle;
 
 import org.junit.Test;
-import software.amazon.kinesis.config.KCLAppConfig;
-import software.amazon.kinesis.config.ReleaseCanaryPollingH2TestConfig;
-import software.amazon.kinesis.config.ReleaseCanaryPollingH1TestConfig;
-import software.amazon.kinesis.config.ReleaseCanaryStreamingTestConfig;
 import software.amazon.kinesis.application.TestConsumer;
+import software.amazon.kinesis.config.KCLAppConfig;
+import software.amazon.kinesis.config.ReleaseCanaryPollingH1TestConfig;
+import software.amazon.kinesis.config.ReleaseCanaryPollingH2TestConfig;
+import software.amazon.kinesis.config.ReleaseCanaryStreamingTestConfig;
 
 public class BasicStreamConsumerIntegrationTest {
 

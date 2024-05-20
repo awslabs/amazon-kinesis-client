@@ -23,12 +23,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import com.google.common.base.Defaults;
+import lombok.NonNull;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.StringUtils;
-
-import com.google.common.base.Defaults;
-
-import lombok.NonNull;
 
 public class ConfigurationSettableUtils {
 
@@ -40,8 +38,8 @@ public class ConfigurationSettableUtils {
         return configObject;
     }
 
-    public static void resolveFields(Object source, Map<Class<?>, Object> configObjects, Set<Class<?>> restrictTo,
-            Set<Class<?>> skipIf) {
+    public static void resolveFields(
+            Object source, Map<Class<?>, Object> configObjects, Set<Class<?>> restrictTo, Set<Class<?>> skipIf) {
         for (Field field : source.getClass().getDeclaredFields()) {
             for (ConfigurationSettable b : field.getAnnotationsByType(ConfigurationSettable.class)) {
                 if (restrictTo != null && !restrictTo.contains(b.configurationClass())) {
@@ -70,9 +68,11 @@ public class ConfigurationSettableUtils {
                             value = Optional.of(value);
                         }
                         if (ClassUtils.isPrimitiveOrWrapper(value.getClass())) {
-                            Class<?> primitiveType = field.getType().isPrimitive() ? field.getType()
+                            Class<?> primitiveType = field.getType().isPrimitive()
+                                    ? field.getType()
                                     : ClassUtils.wrapperToPrimitive(field.getType());
-                            Class<?> wrapperType = !field.getType().isPrimitive() ? field.getType()
+                            Class<?> wrapperType = !field.getType().isPrimitive()
+                                    ? field.getType()
                                     : ClassUtils.primitiveToWrapper(field.getType());
 
                             try {

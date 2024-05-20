@@ -1,12 +1,11 @@
 package software.amazon.kinesis.utils;
 
-import software.amazon.kinesis.config.KCLAppConfig;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.List;
-import java.util.concurrent.TimeUnit;
+import software.amazon.kinesis.config.KCLAppConfig;
 
 @Slf4j
 @NoArgsConstructor
@@ -55,7 +54,8 @@ public abstract class AWSResourceManager {
             } catch (Exception e) {
                 try {
                     Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-                } catch (InterruptedException e1) {}
+                } catch (InterruptedException e1) {
+                }
                 log.info("Resource {} is not deleted yet, exception: ", resourceName);
             }
         }

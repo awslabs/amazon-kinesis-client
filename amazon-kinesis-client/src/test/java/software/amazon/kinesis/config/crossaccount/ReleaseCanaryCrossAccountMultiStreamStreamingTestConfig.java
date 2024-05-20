@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.UUID;
 
 import lombok.extern.slf4j.Slf4j;
-
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.http.Protocol;
 import software.amazon.kinesis.config.RetrievalMode;

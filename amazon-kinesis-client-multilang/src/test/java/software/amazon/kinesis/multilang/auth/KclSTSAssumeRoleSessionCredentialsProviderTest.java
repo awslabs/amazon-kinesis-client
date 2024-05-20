@@ -16,9 +16,9 @@ package software.amazon.kinesis.multilang.auth;
 
 import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
-
 import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
 
 public class KclSTSAssumeRoleSessionCredentialsProviderTest {
 
@@ -31,7 +31,7 @@ public class KclSTSAssumeRoleSessionCredentialsProviderTest {
      */
     @Test
     public void testConstructorWithoutOptionalParams() {
-        new KclSTSAssumeRoleSessionCredentialsProvider(new String[] { ARN, SESSION_NAME });
+        new KclSTSAssumeRoleSessionCredentialsProvider(new String[] {ARN, SESSION_NAME});
     }
 
     @Test
@@ -46,9 +46,8 @@ public class KclSTSAssumeRoleSessionCredentialsProviderTest {
     @Test
     public void testVarArgs() {
         for (final String[] varargs : Arrays.asList(
-                new String[] { ARN, SESSION_NAME, "externalId=eid", "foo"},
-                new String[] { ARN, SESSION_NAME, "foo", "externalId=eid"}
-        )) {
+                new String[] {ARN, SESSION_NAME, "externalId=eid", "foo"},
+                new String[] {ARN, SESSION_NAME, "foo", "externalId=eid"})) {
             final VarArgsSpy provider = new VarArgsSpy(varargs);
             assertEquals("eid", provider.externalId);
         }

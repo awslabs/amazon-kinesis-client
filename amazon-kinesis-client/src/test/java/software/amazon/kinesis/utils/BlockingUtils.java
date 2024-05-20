@@ -21,7 +21,7 @@ public class BlockingUtils {
 
     public static <Records> Records blockUntilRecordsAvailable(Supplier<Records> recordsSupplier, long timeoutMillis) {
         Records recordsRetrieved;
-        while ((recordsRetrieved = recordsSupplier.get()) == null && timeoutMillis > 0 ) {
+        while ((recordsRetrieved = recordsSupplier.get()) == null && timeoutMillis > 0) {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
@@ -37,7 +37,7 @@ public class BlockingUtils {
     }
 
     public static boolean blockUntilConditionSatisfied(Supplier<Boolean> conditionSupplier, long timeoutMillis) {
-        while (!conditionSupplier.get() && timeoutMillis > 0 ) {
+        while (!conditionSupplier.get() && timeoutMillis > 0) {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
@@ -47,5 +47,4 @@ public class BlockingUtils {
         }
         return conditionSupplier.get();
     }
-
 }

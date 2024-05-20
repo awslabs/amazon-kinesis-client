@@ -15,21 +15,21 @@
 package software.amazon.kinesis.exceptions;
 
 /**
- *  This is thrown when the Amazon Kinesis Client Library encounters issues talking to its dependencies 
+ *  This is thrown when the Amazon Kinesis Client Library encounters issues talking to its dependencies
  *  (e.g. fetching data from Kinesis, DynamoDB table reads/writes, emitting metrics to CloudWatch).
- *  
+ *
  */
 public class KinesisClientLibDependencyException extends KinesisClientLibRetryableException {
-    
+
     private static final long serialVersionUID = 1L;
-    
+
     /**
      * @param message provides more details about the cause and potential ways to debug/address.
      */
     public KinesisClientLibDependencyException(String message) {
         super(message);
     }
-    
+
     /**
      * @param message provides more details about the cause and potential ways to debug/address.
      * @param e Cause of the exception
@@ -37,5 +37,4 @@ public class KinesisClientLibDependencyException extends KinesisClientLibRetryab
     public KinesisClientLibDependencyException(String message, Exception e) {
         super(message, e);
     }
-
 }

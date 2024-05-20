@@ -15,13 +15,11 @@
 
 package software.amazon.kinesis.retrieval.fanout;
 
-import org.apache.commons.lang3.ObjectUtils;
-
 import com.google.common.base.Preconditions;
-
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
+import org.apache.commons.lang3.ObjectUtils;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
@@ -106,17 +104,22 @@ public class FanOutConfig implements RetrievalSpecificConfig {
 
     private FanOutConsumerRegistration createConsumerRegistration(String streamName) {
         String consumerToCreate = ObjectUtils.firstNonNull(consumerName(), applicationName());
-        return createConsumerRegistration(kinesisClient(),
+        return createConsumerRegistration(
+                kinesisClient(),
                 Preconditions.checkNotNull(streamName, "streamName must be set for consumer creation"),
-                Preconditions.checkNotNull(consumerToCreate,
-                        "applicationName or consumerName must be set for consumer creation"));
-
+                Preconditions.checkNotNull(
+                        consumerToCreate, "applicationName or consumerName must be set for consumer creation"));
     }
 
-    protected FanOutConsumerRegistration createConsumerRegistration(KinesisAsyncClient client, String stream,
-                                                                    String consumerToCreate) {
-        return new FanOutConsumerRegistration(client, stream, consumerToCreate, maxDescribeStreamSummaryRetries(),
-                maxDescribeStreamConsumerRetries(), registerStreamConsumerRetries(), retryBackoffMillis());
+    protected FanOutConsumerRegistration createConsumerRegistration(
+            KinesisAsyncClient client, String stream, String consumerToCreate) {
+        return new FanOutConsumerRegistration(
+                client,
+                stream,
+                consumerToCreate,
+                maxDescribeStreamSummaryRetries(),
+                maxDescribeStreamConsumerRetries(),
+                registerStreamConsumerRetries(),
+                retryBackoffMillis());
     }
-
 }
