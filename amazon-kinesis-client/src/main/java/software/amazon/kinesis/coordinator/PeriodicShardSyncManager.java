@@ -435,7 +435,8 @@ class PeriodicShardSyncManager {
                                 leaseRefresher.updateLeaseWithMetaInfo(lease, UpdateField.HASH_KEY_RANGE);
                             } catch (Exception e) {
                                 log.warn(
-                                        "Unable to update hash range key information for lease {} of stream {}. This may result in explicit lease sync.",
+                                        "Unable to update hash range key information for lease {} of stream {}."
+                                                + "This may result in explicit lease sync.",
                                         lease.leaseKey(),
                                         streamIdentifier);
                             }

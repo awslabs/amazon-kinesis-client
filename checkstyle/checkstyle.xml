@@ -22,7 +22,6 @@
     </module>
 
     <module name="TreeWalker">
-        <module name="ArrayTrailingComma"/>
         <module name="AvoidStarImport"/>
         <module name="ConstantName"/>
         <module name="CovariantEquals"/>
