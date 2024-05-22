@@ -34,6 +34,7 @@
 
   <properties>
     <awssdk.version>2.25.64</awssdk.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
   <licenses>
