@@ -134,6 +134,7 @@
           <configuration>
             <release>8</release>
             <encoding>UTF-8</encoding>
+            <failOnWarning>true</failOnWarning>
           </configuration>
         </plugin>
       </plugins>
