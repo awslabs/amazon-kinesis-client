@@ -98,7 +98,7 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                 provider = constructProvider(providerName, () -> {
                     Class<?>[] argTypes = new Class<?>[nameAndArgs.length - 1];
                     Arrays.fill(argTypes, String.class);
-                    return clazz.getConstructor(argTypes).newInstance(varargs);
+                    return clazz.getConstructor(argTypes).newInstance((Object[]) varargs);
                 });
 
                 if (provider == null) {
