@@ -966,13 +966,6 @@ public class KinesisClientLibConfiguration {
         return shutdownGraceMillis;
     }
 
-    /**
-     * @return Interval in milliseconds between retrying the scheduler initialization.
-     */
-    public long getSchedulerInitializationBackoffTimeMillis() {
-        return schedulerInitializationBackoffTimeMillis;
-    }
-
     /*
      * // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 190 LINES
      * /**
