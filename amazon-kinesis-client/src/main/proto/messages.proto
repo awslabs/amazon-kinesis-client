@@ -1,3 +1,6 @@
+// Copied from amazon-kinesis-producer/aws/kinesis/protobuf/messages.proto with
+// subset of messages that KCL needs
+
 syntax = "proto2";
 package software.amazon.kinesis.retrieval.kpl;
 
