@@ -322,6 +322,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
 
         long startTime = System.currentTimeMillis();
         boolean success = false;
+        Lease authoritativeLeaseCopy = authoritativeLease.copy();
         try {
             log.info("Updating lease from {} to {}", authoritativeLease, lease);
             synchronized (authoritativeLease) {
@@ -358,6 +359,10 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
                 success = true;
                 return updatedLease;
             }
+        } catch (ProvisionedThroughputException | InvalidStateException | DependencyException e) {
+            // On failure in updating DDB, revert changes to in memory lease
+            authoritativeLease.update(authoritativeLeaseCopy);
+            throw e;
         } finally {
             MetricsUtil.addSuccessAndLatency(scope, "UpdateLease", success, startTime, MetricsLevel.DETAILED);
             MetricsUtil.endScope(scope);
