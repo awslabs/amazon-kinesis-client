@@ -60,6 +60,13 @@ ignore_abstract_changes_in_interfaces() {
   fi
 }
 
+is_proto_class() {
+  local current_class="$1"
+  local class_definition=$(javap -classpath "$LATEST_JAR" "$current_class" | head -2 | tail -1)
+  [[ "$class_definition" == *"software.amazon.kinesis.retrieval.kpl.Messages"* ]]
+  return $?
+}
+
 # Checks if there are any methods in the latest version that were removed in the current version.
 find_removed_methods() {
   echo "Checking if methods in current version (v$CURRENT_VERSION) were removed from latest version (v$LATEST_VERSION)"
@@ -70,7 +77,7 @@ find_removed_methods() {
   local latest_classes=$(jar tf $LATEST_JAR | grep .class | tr / . |  sed 's/\.class$//')
   for class in $latest_classes
   do
-    if (is_kinesis_client_internal_api "$class" && is_new_minor_release) || is_non_public_class "$class"
+    if (is_kinesis_client_internal_api "$class" && is_new_minor_release) || is_non_public_class "$class" || is_proto_class $class
     then
       continue
     fi
