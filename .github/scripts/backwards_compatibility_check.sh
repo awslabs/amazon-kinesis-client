@@ -67,7 +67,12 @@ find_removed_methods() {
   then
     echo "New minor release is being performed. Ignoring changes in classes marked with @KinesisClientInternalApi annotation."
   fi
-  local latest_classes=$(jar tf $LATEST_JAR | grep .class | tr / . |  sed 's/\.class$//')
+  local latest_classes=$(
+    jar tf $LATEST_JAR |
+    grep .class |
+    tr / . |  sed 's/\.class$//' |
+    # skip generated proto classes since these have a lot of inherited methods that are not outputted by javap.
+    grep -v 'software\.amazon\.kinesis\.retrieval\.kpl\.Messages')
   for class in $latest_classes
   do
     if (is_kinesis_client_internal_api "$class" && is_new_minor_release) || is_non_public_class "$class"
@@ -83,7 +88,7 @@ find_removed_methods() {
     local removed_methods=$(diff <(echo "$LATEST_METHODS") <(echo "$CURRENT_METHODS") | grep '^<')
 
     # ignore synthetic access methods - these are not available to users and will not break backwards compatibility
-    removed_methods=$(echo "$removed_methods" | grep -v "access\$[0-9]00")
+    removed_methods=$(echo "$removed_methods" | grep -v "access\$[0-9]+")
 
     if [[ "$removed_methods" != "" ]]
     then
