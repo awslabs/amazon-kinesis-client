@@ -767,7 +767,7 @@ public class Scheduler implements Runnable {
     }
 
     /**
-     * Requests a graceful shutdown of the worker, notifying record processors,
+     * Requests a graceful shutdown of the worker, notifying record processors
      * of the impending shutdown. This gives the record processor a final chance to
      * checkpoint.
      *
