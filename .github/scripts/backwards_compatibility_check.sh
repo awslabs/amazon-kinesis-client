@@ -21,7 +21,7 @@ get_latest_jar() {
 
 # Get the JAR with the changes that need to be verified.
 get_current_jar() {
-  mvn -B install -DskipTests
+  mvn -B install -Dmaven.test.skip=true
   CURRENT_VERSION=$(mvn -q  -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)
   CURRENT_JAR=$KCL_MAVEN_DIR/$CURRENT_VERSION/amazon-kinesis-client-$CURRENT_VERSION.jar
 }
