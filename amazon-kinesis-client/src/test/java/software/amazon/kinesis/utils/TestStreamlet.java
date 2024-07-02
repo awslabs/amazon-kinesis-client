@@ -36,14 +36,13 @@ import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
-import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 /**
  * Streamlet that tracks records it's seen - useful for testing.
  */
 @Slf4j
-public class TestStreamlet implements ShardRecordProcessor, ShutdownNotificationAware {
+public class TestStreamlet implements ShardRecordProcessor {
     private List<KinesisClientRecord> records = new ArrayList<>();
 
     private Set<String> processedSeqNums = new HashSet<String>(); // used for deduping
@@ -139,7 +138,10 @@ public class TestStreamlet implements ShardRecordProcessor, ShutdownNotification
     }
 
     @Override
-    public void shutdownRequested(ShutdownRequestedInput shutdownRequestedInput) {}
+    public void shutdownRequested(ShutdownRequestedInput shutdownRequestedInput) {
+        shutdownNotificationCalled = true;
+        notifyShutdownLatch.countDown();
+    }
 
     /**
      * @return the shardId
@@ -164,12 +166,6 @@ public class TestStreamlet implements ShardRecordProcessor, ShutdownNotification
 
     public boolean isShutdownNotificationCalled() {
         return shutdownNotificationCalled;
-    }
-
-    @Override
-    public void shutdownRequested(RecordProcessorCheckpointer checkpointer) {
-        shutdownNotificationCalled = true;
-        notifyShutdownLatch.countDown();
     }
 
     public CountDownLatch getInitializeLatch() {

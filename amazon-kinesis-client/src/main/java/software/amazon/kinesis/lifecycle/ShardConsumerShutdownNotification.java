@@ -19,7 +19,7 @@ import java.util.concurrent.CountDownLatch;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
-import software.amazon.kinesis.processor.ShutdownNotificationAware;
+import software.amazon.kinesis.processor.ShardRecordProcessor;
 
 /**
  * Contains callbacks for completion of stages in a requested record processor shutdown.
@@ -45,7 +45,7 @@ public class ShardConsumerShutdownNotification implements ShutdownNotification {
      *            the lease that this shutdown request will free once initial shutdown is complete
      * @param notificationCompleteLatch
      *            used to inform the caller once the
-     *            {@link ShutdownNotificationAware} object has been
+     *            {@link ShardRecordProcessor} object has been
      *            notified of the shutdown request.
      * @param shutdownCompleteLatch
      *            used to inform the caller once the record processor is fully shutdown
