@@ -88,7 +88,7 @@ find_removed_methods() {
     local removed_methods=$(diff <(echo "$LATEST_METHODS") <(echo "$CURRENT_METHODS") | grep '^<')
 
     # ignore synthetic access methods - these are not available to users and will not break backwards compatibility
-    removed_methods=$(echo "$removed_methods" | grep -v "access\$[0-9]+")
+    removed_methods=$(echo "$removed_methods" | grep -v "access\$[0-9]\+")
 
     if [[ "$removed_methods" != "" ]]
     then
