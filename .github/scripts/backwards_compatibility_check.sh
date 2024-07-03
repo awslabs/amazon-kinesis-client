@@ -71,7 +71,10 @@ find_removed_methods() {
     jar tf $LATEST_JAR |
     grep .class |
     tr / . |  sed 's/\.class$//' |
-    # skip generated proto classes since these have a lot of inherited methods that are not outputted by javap.
+    # skip generated proto classes since these have a lot of inherited methods
+    # that are not outputted by javap. besides, generated java code is not a
+    # good indicator of proto compatibility- it will not capture reserved
+    # tags or deprecated fields.
     grep -v 'software\.amazon\.kinesis\.retrieval\.kpl\.Messages')
   for class in $latest_classes
   do
