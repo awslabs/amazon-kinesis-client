@@ -70,7 +70,8 @@ find_removed_methods() {
   local latest_classes=$(
     jar tf $LATEST_JAR |
     grep .class |
-    tr / . |  sed 's/\.class$//' |
+    tr / . |
+    sed 's/\.class$//' |
     # skip generated proto classes since these have a lot of inherited methods
     # that are not outputted by javap. besides, generated java code is not a
     # good indicator of proto compatibility- it will not capture reserved
