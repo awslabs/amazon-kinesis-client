@@ -228,16 +228,10 @@
           <excludes>
             <exclude>**/*IntegrationTest.java</exclude>
           </excludes>
-          <systemProperties>
-            <property>
-              <name>sqlite4java.library.path</name>
-              <value>${sqlite4java.libpath}</value>
-            </property>
-            <property>
-              <name>awsProfile</name>
-              <value>${awsProfile}</value>
-            </property>
-          </systemProperties>
+          <systemPropertyVariables>
+            <sqlite4java.library.path>${sqlite4java.libpath}</sqlite4java.library.path>
+            <awsProfile>${awsProfile}</awsProfile>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <plugin>
