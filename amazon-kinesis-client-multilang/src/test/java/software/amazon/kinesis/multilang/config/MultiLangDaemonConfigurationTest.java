@@ -100,6 +100,28 @@ public class MultiLangDaemonConfigurationTest {
     }
 
     @Test
+    public void testSetLeaseTableDeletionProtectionEnabled() {
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setLeaseTableDeletionProtectionEnabled(true);
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        assertThat(resolvedConfiguration.leaseManagementConfig.leaseTableDeletionProtectionEnabled(), equalTo(true));
+    }
+
+    @Test
+    public void testSetLeaseTablePitrEnabled() {
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setLeaseTablePitrEnabled(true);
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        assertThat(resolvedConfiguration.leaseManagementConfig.leaseTablePitrEnabled(), equalTo(true));
+    }
+
+    @Test
     public void testDefaultRetrievalConfig() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
 

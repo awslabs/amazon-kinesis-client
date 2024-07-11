@@ -218,6 +218,8 @@ public class KinesisClientLibConfiguration {
     private AwsCredentialsProvider cloudWatchCredentialsProvider;
     private long failoverTimeMillis;
     private boolean enablePriorityLeaseAssignment;
+    private boolean leaseTableDeletionProtectionEnabled;
+    private boolean leaseTablePitrEnabled;
     private String workerIdentifier;
     private long shardSyncIntervalMillis;
     private int maxRecords;

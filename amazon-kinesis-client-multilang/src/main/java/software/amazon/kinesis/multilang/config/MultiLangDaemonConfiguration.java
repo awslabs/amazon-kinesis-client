@@ -89,6 +89,12 @@ public class MultiLangDaemonConfiguration {
     private Boolean enablePriorityLeaseAssignment;
 
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
+    private Boolean leaseTableDeletionProtectionEnabled;
+
+    @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
+    private Boolean leaseTablePitrEnabled;
+
+    @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private long shardSyncIntervalMillis;
 
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
