@@ -1,0 +1,78 @@
+{
+  "definitions": [
+    {
+      "protopath": "messages.proto",
+      "def": {
+        "messages": [
+          {
+            "name": "Tag",
+            "fields": [
+              {
+                "id": 1,
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "id": 2,
+                "name": "value",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "name": "Record",
+            "fields": [
+              {
+                "id": 1,
+                "name": "partition_key_index",
+                "type": "uint64"
+              },
+              {
+                "id": 2,
+                "name": "explicit_hash_key_index",
+                "type": "uint64"
+              },
+              {
+                "id": 3,
+                "name": "data",
+                "type": "bytes"
+              },
+              {
+                "id": 4,
+                "name": "tags",
+                "type": "Tag",
+                "is_repeated": true
+              }
+            ]
+          },
+          {
+            "name": "AggregatedRecord",
+            "fields": [
+              {
+                "id": 1,
+                "name": "partition_key_table",
+                "type": "string",
+                "is_repeated": true
+              },
+              {
+                "id": 2,
+                "name": "explicit_hash_key_table",
+                "type": "string",
+                "is_repeated": true
+              },
+              {
+                "id": 3,
+                "name": "records",
+                "type": "Record",
+                "is_repeated": true
+              }
+            ]
+          }
+        ],
+        "package": {
+          "name": "software.amazon.kinesis.retrieval.kpl"
+        }
+      }
+    }
+  ]
+}
