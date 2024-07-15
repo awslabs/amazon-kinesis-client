@@ -31,6 +31,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
@@ -54,6 +55,8 @@ import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 import software.amazon.awssdk.services.dynamodb.model.Tag;
+import software.amazon.awssdk.services.dynamodb.model.UpdateContinuousBackupsRequest;
+import software.amazon.awssdk.services.dynamodb.model.UpdateContinuousBackupsResponse;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
 import software.amazon.kinesis.leases.Lease;
@@ -80,6 +83,10 @@ public class DynamoDBLeaseRefresherTest {
     private static final String TABLE_NAME = "test";
     private static final boolean CONSISTENT_READS = true;
     private static final boolean DELETION_PROTECTION_ENABLED = false;
+    private static final boolean PITR_ENABLED = true;
+    private static final Collection<Tag> EMPTY_TAGS = DefaultSdkAutoConstructList.getInstance();
+    private static final Collection<Tag> TAGS =
+            Collections.singletonList(Tag.builder().key("foo").value("bar").build());
 
     @Mock
     private DynamoDbAsyncClient dynamoDbClient;
@@ -112,6 +119,9 @@ public class DynamoDBLeaseRefresherTest {
     private CompletableFuture<CreateTableResponse> mockCreateTableFuture;
 
     @Mock
+    private CompletableFuture<UpdateContinuousBackupsResponse> mockUpdateContinuousBackupsFuture;
+
+    @Mock
     private Lease lease;
 
     @Rule
@@ -120,8 +130,7 @@ public class DynamoDBLeaseRefresherTest {
     private DynamoDBLeaseRefresher leaseRefresher;
     private DescribeTableRequest describeTableRequest;
     private CreateTableRequest createTableRequest;
-    private Collection<Tag> tags;
-
+    private UpdateContinuousBackupsRequest updateContinuousBackupsRequest;
     private Map<String, AttributeValue> serializedLease;
 
     @Before
@@ -138,6 +147,10 @@ public class DynamoDBLeaseRefresherTest {
                 .attributeDefinitions(leaseSerializer.getAttributeDefinitions())
                 .billingMode(BillingMode.PAY_PER_REQUEST)
                 .deletionProtectionEnabled(DELETION_PROTECTION_ENABLED)
+                .build();
+        updateContinuousBackupsRequest = UpdateContinuousBackupsRequest.builder()
+                .tableName(TABLE_NAME)
+                .pointInTimeRecoverySpecification(builder -> builder.pointInTimeRecoveryEnabled(PITR_ENABLED))
                 .build();
     }
 
@@ -353,7 +366,6 @@ public class DynamoDBLeaseRefresherTest {
 
     @Test
     public void testCreateLeaseTableWithTagsIfNotExists() throws Exception {
-        tags = Collections.singletonList(Tag.builder().key("foo").value("bar").build());
         leaseRefresher = new DynamoDBLeaseRefresher(
                 TABLE_NAME,
                 dynamoDbClient,
@@ -363,7 +375,7 @@ public class DynamoDBLeaseRefresherTest {
                 LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
                 BillingMode.PROVISIONED,
                 DELETION_PROTECTION_ENABLED,
-                tags);
+                TAGS);
 
         when(dynamoDbClient.describeTable(describeTableRequest)).thenReturn(mockDescribeTableFuture);
         when(mockDescribeTableFuture.get(
@@ -382,7 +394,7 @@ public class DynamoDBLeaseRefresherTest {
                 .attributeDefinitions(leaseSerializer.getAttributeDefinitions())
                 .provisionedThroughput(throughput)
                 .deletionProtectionEnabled(DELETION_PROTECTION_ENABLED)
-                .tags(tags)
+                .tags(TAGS)
                 .build();
         when(dynamoDbClient.createTable(createTableRequest)).thenReturn(mockCreateTableFuture);
         when(mockCreateTableFuture.get(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS))
@@ -424,8 +436,48 @@ public class DynamoDBLeaseRefresherTest {
     }
 
     @Test
+    public void testCreateLeaseTableIfNotExistsWithPitrEnabled() throws Exception {
+        DynamoDBLeaseRefresher leaseRefresherWithEnabledPitr = new DynamoDBLeaseRefresher(
+                TABLE_NAME,
+                dynamoDbClient,
+                leaseSerializer,
+                CONSISTENT_READS,
+                tableCreatorCallback,
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
+                BillingMode.PAY_PER_REQUEST,
+                DELETION_PROTECTION_ENABLED,
+                PITR_ENABLED,
+                EMPTY_TAGS);
+        when(dynamoDbClient.describeTable(describeTableRequest)).thenReturn(mockDescribeTableFuture);
+        when(mockDescribeTableFuture.get(
+                        eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
+                .thenThrow(ResourceNotFoundException.builder()
+                        .message("Table doesn't exist")
+                        .build());
+        when(dynamoDbClient.createTable(createTableRequest)).thenReturn(mockCreateTableFuture);
+        when(mockCreateTableFuture.get(
+                        eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
+                .thenReturn(null);
+        when(dynamoDbClient.updateContinuousBackups(updateContinuousBackupsRequest))
+                .thenReturn(mockUpdateContinuousBackupsFuture);
+        when(mockUpdateContinuousBackupsFuture.get(
+                        eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
+                .thenReturn(null);
+        final boolean result = leaseRefresherWithEnabledPitr.createLeaseTableIfNotExists();
+
+        verify(dynamoDbClient, times(1)).describeTable(describeTableRequest);
+        verify(dynamoDbClient, times(1)).createTable(createTableRequest);
+        verify(dynamoDbClient, times(1)).updateContinuousBackups(updateContinuousBackupsRequest);
+        verify(mockDescribeTableFuture, times(1))
+                .get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS));
+        verify(mockCreateTableFuture, times(1))
+                .get(eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS));
+        Assert.assertTrue(result);
+    }
+
+    @Test
     public void testCreateLeaseTableProvisionedWithDeletionProtectionIfNotExists() throws Exception {
-        leaseRefresher = new DynamoDBLeaseRefresher(
+        DynamoDBLeaseRefresher leaseRefresherWithEnabledDeletionProtection = new DynamoDBLeaseRefresher(
                 TABLE_NAME,
                 dynamoDbClient,
                 leaseSerializer,
@@ -458,7 +510,7 @@ public class DynamoDBLeaseRefresherTest {
                         eq(LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT.toMillis()), eq(TimeUnit.MILLISECONDS)))
                 .thenReturn(null);
 
-        final boolean result = leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
+        final boolean result = leaseRefresherWithEnabledDeletionProtection.createLeaseTableIfNotExists(10L, 10L);
 
         verify(dynamoDbClient, times(1)).describeTable(describeTableRequest);
         verify(dynamoDbClient, times(1)).createTable(createTableRequest);
