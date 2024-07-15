@@ -45,7 +45,6 @@ import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.LimitExceededException;
-import software.amazon.awssdk.services.dynamodb.model.PointInTimeRecoverySpecification;
 import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.PutItemResponse;
@@ -151,9 +150,7 @@ public class DynamoDBLeaseRefresherTest {
                 .build();
         updateContinuousBackupsRequest = UpdateContinuousBackupsRequest.builder()
                 .tableName(TABLE_NAME)
-                .pointInTimeRecoverySpecification(PointInTimeRecoverySpecification.builder()
-                        .pointInTimeRecoveryEnabled(PITR_ENABLED)
-                        .build())
+                .pointInTimeRecoverySpecification(builder -> builder.pointInTimeRecoveryEnabled(PITR_ENABLED))
                 .build();
     }
 

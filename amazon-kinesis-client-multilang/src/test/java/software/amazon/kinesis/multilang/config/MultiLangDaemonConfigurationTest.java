@@ -33,6 +33,7 @@ import software.amazon.kinesis.retrieval.polling.PollingConfig;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
@@ -100,25 +101,47 @@ public class MultiLangDaemonConfigurationTest {
     }
 
     @Test
-    public void testSetLeaseTableDeletionProtectionEnabled() {
+    public void testSetLeaseTableDeletionProtectionEnabledToTrue() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
         configuration.setLeaseTableDeletionProtectionEnabled(true);
 
         MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
                 configuration.resolvedConfiguration(shardRecordProcessorFactory);
 
-        assertThat(resolvedConfiguration.leaseManagementConfig.leaseTableDeletionProtectionEnabled(), equalTo(true));
+        assertTrue(resolvedConfiguration.leaseManagementConfig.leaseTableDeletionProtectionEnabled());
     }
 
     @Test
-    public void testSetLeaseTablePitrEnabled() {
+    public void testSetLeaseTablePitrEnabledToTrue() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
         configuration.setLeaseTablePitrEnabled(true);
 
         MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
                 configuration.resolvedConfiguration(shardRecordProcessorFactory);
 
-        assertThat(resolvedConfiguration.leaseManagementConfig.leaseTablePitrEnabled(), equalTo(true));
+        assertTrue(resolvedConfiguration.leaseManagementConfig.leaseTablePitrEnabled());
+    }
+
+    @Test
+    public void testSetLeaseTableDeletionProtectionEnabledToFalse() {
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setLeaseTableDeletionProtectionEnabled(false);
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        assertFalse(resolvedConfiguration.leaseManagementConfig.leaseTableDeletionProtectionEnabled());
+    }
+
+    @Test
+    public void testSetLeaseTablePitrEnabledToFalse() {
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setLeaseTablePitrEnabled(false);
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        assertFalse(resolvedConfiguration.leaseManagementConfig.leaseTablePitrEnabled());
     }
 
     @Test
