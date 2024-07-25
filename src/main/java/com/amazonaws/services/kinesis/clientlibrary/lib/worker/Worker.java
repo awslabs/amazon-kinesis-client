@@ -1205,7 +1205,7 @@ public class Worker implements Runnable {
 
         private void resetInfoLogging() {
             if (infoReporting) {
-                // We just logged at minimum INFO level for a pass through worker loop
+                // We just logged at INFO level for a pass through worker loop
                 if (!LOG.isDebugEnabled() || !LOG.isTraceEnabled()) {
                     infoReporting = false;
                     nextReportTime = System.currentTimeMillis() + reportIntervalMillis;
