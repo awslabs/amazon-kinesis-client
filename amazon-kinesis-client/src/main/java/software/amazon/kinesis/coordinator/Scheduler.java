@@ -1214,7 +1214,7 @@ public class Scheduler implements Runnable {
         private void resetInfoLogging() {
             if (infoReporting) {
                 // We just logged at INFO level for a pass through worker loop
-                if (log.isInfoEnabled()) {
+                if (!log.isDebugEnabled() && !log.isTraceEnabled()) {
                     infoReporting = false;
                     nextReportTime = System.currentTimeMillis() + reportIntervalMillis;
                 } // else is DEBUG or TRACE so leave reporting true
