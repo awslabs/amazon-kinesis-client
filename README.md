@@ -34,7 +34,25 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.15.1 - Feb 5, 2023)
+### Latest Release (1.15.2 - Aug 14, 2024)
+* [#1371](https://github.com/awslabs/amazon-kinesis-client/pull/1371) Fix a bug in debug and trace logging levels for worker
+* [#1224](https://github.com/awslabs/amazon-kinesis-client/pull/1224) Modify RecordProcessorCheckpointer#advancePosition Metrics usage to ensure proper closure
+* [#1345](https://github.com/awslabs/amazon-kinesis-client/pull/1345) Generate wrappers from proto files instead of shipping them directly
+* [#1346](https://github.com/awslabs/amazon-kinesis-client/pull/1346) Upgrade com.google.protobuf:protobuf-java from 3.23.4 to 4.27.1
+* [#1338](https://github.com/awslabs/amazon-kinesis-client/pull/1338) Upgrade org.apache.logging.log4j:log4j-api from 2.20.0 to 2.23.1
+* [#1327](https://github.com/awslabs/amazon-kinesis-client/pull/1327) Upgrade com.google.guava:guava from 33.0.0-jre to 33.2.0-jre
+* [#1283](https://github.com/awslabs/amazon-kinesis-client/pull/1283) Upgrade com.fasterxml.jackson.core:jackson-core from 2.15.2 to 2.17.0
+* [#1284](https://github.com/awslabs/amazon-kinesis-client/pull/1284) Upgrade aws-java-sdk.version from 1.12.647 to 1.12.681
+* [#1288](https://github.com/awslabs/amazon-kinesis-client/pull/1288) Upgrade commons-logging:commons-logging from 1.2 to 1.3.1
+* [#1289](https://github.com/awslabs/amazon-kinesis-client/pull/1289) Upgrade org.projectlombok:lombok from 1.18.22 to 1.18.32
+* [#1248](https://github.com/awslabs/amazon-kinesis-client/pull/1248) Upgrade org.apache.maven.plugins:maven-surefire-plugin from 2.22.2 to 3.2.5
+* [#1234](https://github.com/awslabs/amazon-kinesis-client/pull/1234) Upgrade org.apache.maven.plugins:maven-javadoc-plugin from 3.4.1 to 3.6.3
+* [#1137](https://github.com/awslabs/amazon-kinesis-client/pull/1137) Upgrade maven-failsafe-plugin from 2.22.2 to 3.1.2
+* [#1134](https://github.com/awslabs/amazon-kinesis-client/pull/1134) Upgrade jackson-core from 2.15.0 to 2.15.2
+* [#1119](https://github.com/awslabs/amazon-kinesis-client/pull/1119) Upgrade maven-source-plugin from 3.2.1 to 3.3.0
+* [#1165](https://github.com/awslabs/amazon-kinesis-client/pull/1165) Upgrade protobuf-java from 3.19.6 to 3.23.4
+
+### Release (1.15.1 - Feb 5, 2023)
 * [#1214](https://github.com/awslabs/amazon-kinesis-client/pull/1214) Added backoff logic for ShardSyncTaskIntegrationTest
 * [#1214](https://github.com/awslabs/amazon-kinesis-client/pull/1214) Upgrade Guava version from 31.0.1 to 32.1.1
 * [#1252](https://github.com/awslabs/amazon-kinesis-client/pull/1252) Upgrade aws-java-sdk from 1.12.406 to 1.12.647
