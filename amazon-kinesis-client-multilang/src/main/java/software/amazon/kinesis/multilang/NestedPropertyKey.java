@@ -17,11 +17,11 @@ package software.amazon.kinesis.multilang;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.amazonaws.regions.Regions;
 import com.google.common.base.CaseFormat;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.regions.Region;
 
 /**
  * Key-Value pairs which may be nested in, and extracted from, a property value
@@ -74,7 +74,7 @@ public enum NestedPropertyKey {
      */
     ENDPOINT_REGION {
         void visit(final NestedPropertyProcessor processor, final String region) {
-            processor.acceptEndpointRegion(Regions.fromName(region));
+            processor.acceptEndpointRegion(Region.of(region));
         }
     },
 
