@@ -22,15 +22,14 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
 import com.google.common.collect.ImmutableSet;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.metrics.MetricsLevel;
@@ -526,71 +525,52 @@ public class KinesisClientLibConfiguratorTest {
     /**
      * This credentials provider will always succeed
      */
-    public static class AlwaysSucceedCredentialsProvider implements AWSCredentialsProvider {
-
+    public static class AlwaysSucceedCredentialsProvider implements AwsCredentialsProvider {
         @Override
-        public AWSCredentials getCredentials() {
-            return new BasicAWSCredentials("a", "b");
+        public AwsCredentials resolveCredentials() {
+            return AwsBasicCredentials.create("a", "b");
         }
-
-        @Override
-        public void refresh() {}
     }
 
     /**
      * This credentials provider will always succeed
      */
-    public static class AlwaysSucceedCredentialsProviderKinesis implements AWSCredentialsProvider {
-
+    public static class AlwaysSucceedCredentialsProviderKinesis implements AwsCredentialsProvider {
         @Override
-        public AWSCredentials getCredentials() {
-            return new BasicAWSCredentials("", "");
+        public AwsCredentials resolveCredentials() {
+            return AwsBasicCredentials.create("", "");
         }
-
-        @Override
-        public void refresh() {}
     }
 
     /**
      * This credentials provider will always succeed
      */
-    public static class AlwaysSucceedCredentialsProviderDynamoDB implements AWSCredentialsProvider {
-
+    public static class AlwaysSucceedCredentialsProviderDynamoDB implements AwsCredentialsProvider {
         @Override
-        public AWSCredentials getCredentials() {
-            return new BasicAWSCredentials("", "");
+        public AwsCredentials resolveCredentials() {
+            return AwsBasicCredentials.create("", "");
         }
-
-        @Override
-        public void refresh() {}
     }
 
     /**
      * This credentials provider will always succeed
      */
-    public static class AlwaysSucceedCredentialsProviderCloudWatch implements AWSCredentialsProvider {
-
+    public static class AlwaysSucceedCredentialsProviderCloudWatch implements AwsCredentialsProvider {
         @Override
-        public AWSCredentials getCredentials() {
-            return new BasicAWSCredentials("", "");
+        public AwsCredentials resolveCredentials() {
+            return AwsBasicCredentials.create("", "");
         }
-
-        @Override
-        public void refresh() {}
     }
 
     /**
      * This credentials provider will always fail
      */
-    public static class AlwaysFailCredentialsProvider implements AWSCredentialsProvider {
+    public static class AlwaysFailCredentialsProvider implements AwsCredentialsProvider {
 
         @Override
-        public AWSCredentials getCredentials() {
+        public AwsCredentials resolveCredentials() {
             throw new IllegalArgumentException();
         }
-
-        @Override
-        public void refresh() {}
     }
 
     private MultiLangDaemonConfiguration getConfiguration(String configString) {

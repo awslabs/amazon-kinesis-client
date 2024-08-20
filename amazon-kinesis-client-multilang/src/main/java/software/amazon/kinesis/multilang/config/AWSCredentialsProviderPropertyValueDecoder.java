@@ -22,15 +22,15 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSCredentialsProviderChain;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 
 /**
  * Get AWSCredentialsProvider property.
  */
 @Slf4j
-class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecoder<AWSCredentialsProvider> {
+class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecoder<AwsCredentialsProvider> {
     private static final String LIST_DELIMITER = ",";
     private static final String ARG_DELIMITER = "|";
 
@@ -47,13 +47,15 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
      * @return corresponding variable in correct type
      */
     @Override
-    public AWSCredentialsProvider decodeValue(String value) {
+    public AwsCredentialsProvider decodeValue(String value) {
         if (value != null) {
             List<String> providerNames = getProviderNames(value);
-            List<AWSCredentialsProvider> providers = getValidCredentialsProviders(providerNames);
-            AWSCredentialsProvider[] ps = new AWSCredentialsProvider[providers.size()];
+            List<AwsCredentialsProvider> providers = getValidCredentialsProviders(providerNames);
+            AwsCredentialsProvider[] ps = new AwsCredentialsProvider[providers.size()];
             providers.toArray(ps);
-            return new AWSCredentialsProviderChain(providers);
+            return AwsCredentialsProviderChain.builder()
+                    .credentialsProviders(providers)
+                    .build();
         } else {
             throw new IllegalArgumentException("Property AWSCredentialsProvider is missing.");
         }
@@ -63,25 +65,25 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
      * @return list of supported types
      */
     @Override
-    public List<Class<AWSCredentialsProvider>> getSupportedTypes() {
-        return Collections.singletonList(AWSCredentialsProvider.class);
+    public List<Class<AwsCredentialsProvider>> getSupportedTypes() {
+        return Collections.singletonList(AwsCredentialsProvider.class);
     }
 
     /**
      * Convert string list to a list of valid credentials providers.
      */
-    private static List<AWSCredentialsProvider> getValidCredentialsProviders(List<String> providerNames) {
-        List<AWSCredentialsProvider> credentialsProviders = new ArrayList<>();
+    private static List<AwsCredentialsProvider> getValidCredentialsProviders(List<String> providerNames) {
+        List<AwsCredentialsProvider> credentialsProviders = new ArrayList<>();
 
         for (String providerName : providerNames) {
             final String[] nameAndArgs = providerName.split("\\" + ARG_DELIMITER);
-            final Class<? extends AWSCredentialsProvider> clazz;
+            final Class<? extends AwsCredentialsProvider> clazz;
             try {
                 final Class<?> c = Class.forName(nameAndArgs[0]);
-                if (!AWSCredentialsProvider.class.isAssignableFrom(c)) {
+                if (!AwsCredentialsProvider.class.isAssignableFrom(c)) {
                     continue;
                 }
-                clazz = (Class<? extends AWSCredentialsProvider>) c;
+                clazz = (Class<? extends AwsCredentialsProvider>) c;
             } catch (ClassNotFoundException cnfe) {
                 // Providers are a product of prefixed Strings to cover multiple
                 // namespaces (e.g., "Foo" -> { "some.auth.Foo", "kcl.auth.Foo" }).
@@ -90,7 +92,7 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
             }
             log.info("Attempting to construct {}", clazz);
 
-            AWSCredentialsProvider provider = null;
+            AwsCredentialsProvider provider = null;
             if (nameAndArgs.length > 1) {
                 final String[] varargs = Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length);
 
@@ -153,13 +155,13 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
     }
 
     @FunctionalInterface
-    private interface CredentialsProviderConstructor<T extends AWSCredentialsProvider> {
+    private interface CredentialsProviderConstructor<T extends AwsCredentialsProvider> {
         T construct()
                 throws IllegalAccessException, InstantiationException, InvocationTargetException, NoSuchMethodException;
     }
 
     /**
-     * Attempts to construct an {@link AWSCredentialsProvider}.
+     * Attempts to construct an {@link AwsCredentialsProvider}.
      *
      * @param providerName Raw, unmodified provider name. Should there be an
      *      Exeception during construction, this parameter will be logged.
@@ -168,7 +170,7 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
      *
      * @param <T> type of the CredentialsProvider to construct
      */
-    private static <T extends AWSCredentialsProvider> T constructProvider(
+    private static <T extends AwsCredentialsProvider> T constructProvider(
             final String providerName, final CredentialsProviderConstructor<T> constructor) {
         try {
             return constructor.construct();
