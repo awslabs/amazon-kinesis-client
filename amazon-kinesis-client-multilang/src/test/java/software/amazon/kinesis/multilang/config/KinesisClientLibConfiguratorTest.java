@@ -538,7 +538,7 @@ public class KinesisClientLibConfiguratorTest {
     public static class AlwaysSucceedCredentialsProviderKinesis implements AwsCredentialsProvider {
         @Override
         public AwsCredentials resolveCredentials() {
-            return AwsBasicCredentials.create("", "");
+            return AwsBasicCredentials.create("DUMMY_ACCESS_KEY_ID", "DUMMY_SECRET_ACCESS_KEY");
         }
     }
 
@@ -548,7 +548,7 @@ public class KinesisClientLibConfiguratorTest {
     public static class AlwaysSucceedCredentialsProviderDynamoDB implements AwsCredentialsProvider {
         @Override
         public AwsCredentials resolveCredentials() {
-            return AwsBasicCredentials.create("", "");
+            return AwsBasicCredentials.create("DUMMY_ACCESS_KEY_ID", "DUMMY_SECRET_ACCESS_KEY");
         }
     }
 
@@ -558,7 +558,7 @@ public class KinesisClientLibConfiguratorTest {
     public static class AlwaysSucceedCredentialsProviderCloudWatch implements AwsCredentialsProvider {
         @Override
         public AwsCredentials resolveCredentials() {
-            return AwsBasicCredentials.create("", "");
+            return AwsBasicCredentials.create("DUMMY_ACCESS_KEY_ID", "DUMMY_SECRET_ACCESS_KEY");
         }
     }
 
