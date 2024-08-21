@@ -15,6 +15,7 @@
 package software.amazon.kinesis.multilang;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.google.common.base.CaseFormat;
@@ -73,8 +74,13 @@ public enum NestedPropertyKey {
      * @see <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-regions">Available Regions</a>
      */
     ENDPOINT_REGION {
-        void visit(final NestedPropertyProcessor processor, final String region) {
-            processor.acceptEndpointRegion(Region.of(region));
+        void visit(final NestedPropertyProcessor processor, final String regionName) {
+            List<Region> validRegions = Region.regions();
+            Region region = Region.of(regionName);
+            if (!validRegions.contains(region)) {
+                throw new IllegalArgumentException("Invalid region name: " + regionName);
+            }
+            processor.acceptEndpointRegion(region);
         }
     },
 

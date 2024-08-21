@@ -70,10 +70,7 @@ public class NestedPropertyKeyTest {
         verify(mockProcessor).acceptEndpointRegion(expectedRegion);
     }
 
-    //    Region.of(), which is invoked in this test, no longer throws an IllegalArgumentException when given an invalid
-    // region
-    //    We would need to implement our own region validation to maintain this test
-    //    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testInvalidEndpointRegion() {
         parse(mockProcessor, createKey(ENDPOINT_REGION, "snuffleupagus"));
     }
