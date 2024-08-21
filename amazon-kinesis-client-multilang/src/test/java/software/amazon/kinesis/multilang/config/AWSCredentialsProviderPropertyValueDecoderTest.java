@@ -40,7 +40,7 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
 
     private final String credentialName1 = AlwaysSucceedCredentialsProvider.class.getName();
     private final String credentialName2 = ConstructorCredentialsProvider.class.getName();
-    private final AWSCredentialsProviderPropertyValueDecoder decoder = new AWSCredentialsProviderPropertyValueDecoder();
+    private final AwsCredentialsProviderPropertyValueDecoder decoder = new AwsCredentialsProviderPropertyValueDecoder();
 
     @ToString
     private static class AWSCredentialsMatcher extends TypeSafeDiagnosingMatcher<AwsCredentialsProvider> {

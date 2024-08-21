@@ -15,6 +15,8 @@
 package software.amazon.kinesis.multilang.config;
 
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,14 +32,14 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
  * Get AWSCredentialsProvider property.
  */
 @Slf4j
-class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecoder<AwsCredentialsProvider> {
+class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecoder<AwsCredentialsProvider> {
     private static final String LIST_DELIMITER = ",";
     private static final String ARG_DELIMITER = "|";
 
     /**
      * Constructor.
      */
-    AWSCredentialsProviderPropertyValueDecoder() {}
+    AwsCredentialsProviderPropertyValueDecoder() {}
 
     /**
      * Get AWSCredentialsProvider property.
@@ -97,22 +99,27 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                 final String[] varargs = Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length);
 
                 // attempt to invoke an explicit N-arg constructor of FooClass(String, String, ...)
-                provider = constructProvider(providerName, () -> {
-                    Class<?>[] argTypes = new Class<?>[nameAndArgs.length - 1];
-                    Arrays.fill(argTypes, String.class);
-                    return clazz.getConstructor(argTypes).newInstance(varargs);
-                });
+                provider = constructProvider(
+                        providerName,
+                        () -> {
+                            Class<?>[] argTypes = new Class<?>[nameAndArgs.length - 1];
+                            Arrays.fill(argTypes, String.class);
+                            return clazz.getConstructor(argTypes).newInstance(varargs);
+                        },
+                        clazz);
 
                 if (provider == null) {
                     // attempt to invoke a public varargs/array constructor of FooClass(String[])
-                    provider = constructProvider(providerName, () -> clazz.getConstructor(String[].class)
-                            .newInstance((Object) varargs));
+                    provider = constructProvider(
+                            providerName,
+                            () -> clazz.getConstructor(String[].class).newInstance((Object) varargs),
+                            clazz);
                 }
             }
 
             if (provider == null) {
                 // regardless of parameters, fallback to invoke a public no-arg constructor
-                provider = constructProvider(providerName, clazz::newInstance);
+                provider = constructProvider(providerName, clazz::newInstance, clazz);
             }
 
             if (provider != null) {
@@ -146,7 +153,7 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
 
                         // Customer provides a short name of a provider offered by this multi-lang package
                         "software.amazon.kinesis.multilang.auth.",
-
+                        "software.amazon.awssdk.auth.credentials.",
                         // Customer provides a fully-qualified provider name, or a custom credentials provider
                         // (e.g., com.amazonaws.auth.ClasspathFileCredentialsProvider, org.mycompany.FooProvider)
                         "")
@@ -171,12 +178,28 @@ class AWSCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
      * @param <T> type of the CredentialsProvider to construct
      */
     private static <T extends AwsCredentialsProvider> T constructProvider(
-            final String providerName, final CredentialsProviderConstructor<T> constructor) {
+            final String providerName,
+            final CredentialsProviderConstructor<T> constructor,
+            Class<? extends AwsCredentialsProvider> clazz) {
         try {
+            // Try to create an instance using the given constructor
             return constructor.construct();
+        } catch (InstantiationException e) {
+            try {
+                Method createMethod = clazz.getDeclaredMethod("create");
+                if (Modifier.isStatic(createMethod.getModifiers())) {
+                    return (T) createMethod.invoke(null);
+                } else {
+                    log.warn("Found non-static create() method in {}", providerName);
+                }
+            } catch (NoSuchMethodException ignored) {
+                // Ignore if create() method is not found
+            } catch (IllegalAccessException | InvocationTargetException e1) {
+                log.warn("Exception thrown by create() method in {}", providerName, e1.getCause());
+            }
         } catch (NoSuchMethodException ignored) {
             // ignore
-        } catch (IllegalAccessException | InstantiationException | InvocationTargetException | RuntimeException e) {
+        } catch (IllegalAccessException | InvocationTargetException | RuntimeException e) {
             log.warn("Failed to construct {}", providerName, e);
         }
         return null;

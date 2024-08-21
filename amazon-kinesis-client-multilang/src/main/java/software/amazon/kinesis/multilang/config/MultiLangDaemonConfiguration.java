@@ -280,8 +280,9 @@ public class MultiLangDaemonConfiguration {
 
         ArrayConverter arrayConverter = new ArrayConverter(String[].class, new StringConverter());
         arrayConverter.setDelimiter(',');
-        convertUtilsBean.register(arrayConverter, String[].class);
-        Function<String, ?> converter = s -> s;
+        convertUtilsBean.register(arrayConverter, String[].class);AwsCredentialsProviderPropertyValueDecoder credentialsDecoder =
+                new AwsCredentialsProviderPropertyValueDecoder();
+        Function<String, ?> converter = credentialsDecoder::decodeValue;
 
         this.kinesisCredentialsProvider = new BuilderDynaBean(
                 AwsCredentialsProvider.class, convertUtilsBean, converter, CREDENTIALS_DEFAULT_SEARCH_PATH);
