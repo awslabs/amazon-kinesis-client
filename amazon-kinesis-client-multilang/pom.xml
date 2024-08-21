@@ -27,10 +27,6 @@
 
   <artifactId>amazon-kinesis-client-multilang</artifactId>
 
-  <properties>
-    <aws-java-sdk.version>1.12.668</aws-java-sdk.version>
-  </properties>
-
   <dependencies>
     <dependency>
       <groupId>software.amazon.kinesis</groupId>
