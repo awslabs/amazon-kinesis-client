@@ -171,8 +171,9 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
      * Attempts to construct an {@link AwsCredentialsProvider}.
      *
      * @param providerName Raw, unmodified provider name. Should there be an
-     *      Exeception during construction, this parameter will be logged.
+     *      Exception during construction, this parameter will be logged.
      * @param constructor supplier-like function that will perform the construction
+     * @param clazz the class to attempt to construct
      * @return the constructed provider, if successful; otherwise, null
      *
      * @param <T> type of the CredentialsProvider to construct
@@ -192,9 +193,7 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                 } else {
                     log.warn("Found non-static create() method in {}", providerName);
                 }
-            } catch (NoSuchMethodException ignored) {
-                // Ignore if create() method is not found
-            } catch (IllegalAccessException | InvocationTargetException e1) {
+            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e1) {
                 log.warn("Exception thrown by create() method in {}", providerName, e1.getCause());
             }
         } catch (NoSuchMethodException ignored) {

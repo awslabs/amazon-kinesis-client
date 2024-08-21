@@ -280,7 +280,8 @@ public class MultiLangDaemonConfiguration {
 
         ArrayConverter arrayConverter = new ArrayConverter(String[].class, new StringConverter());
         arrayConverter.setDelimiter(',');
-        convertUtilsBean.register(arrayConverter, String[].class);AwsCredentialsProviderPropertyValueDecoder credentialsDecoder =
+        convertUtilsBean.register(arrayConverter, String[].class);
+        AwsCredentialsProviderPropertyValueDecoder credentialsDecoder =
                 new AwsCredentialsProviderPropertyValueDecoder();
         Function<String, ?> converter = credentialsDecoder::decodeValue;
 
