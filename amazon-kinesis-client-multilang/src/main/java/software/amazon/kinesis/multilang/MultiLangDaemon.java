@@ -26,20 +26,18 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.joran.JoranConfigurator;
+import ch.qos.logback.core.joran.spi.JoranException;
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import lombok.Data;
+import lombok.experimental.Accessors;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.LoggerFactory;
-
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
-
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.joran.JoranConfigurator;
-import ch.qos.logback.core.joran.spi.JoranException;
-import lombok.Data;
-import lombok.experimental.Accessors;
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.coordinator.Scheduler;
 
 /**
@@ -75,11 +73,14 @@ public class MultiLangDaemon {
         @Parameter
         List<String> parameters = new ArrayList<>();
 
-        @Parameter(names = { "-p", "--properties-file" }, description = "Properties file to be used with the KCL")
+        @Parameter(
+                names = {"-p", "--properties-file"},
+                description = "Properties file to be used with the KCL")
         String propertiesFile;
 
-        @Parameter(names = { "-l",
-                "--log-configuration" }, description = "File location of logback.xml to be override the default")
+        @Parameter(
+                names = {"-l", "--log-configuration"},
+                description = "File location of logback.xml to be override the default")
         String logConfiguration;
     }
 
@@ -102,7 +103,8 @@ public class MultiLangDaemon {
     }
 
     JCommander buildJCommanderAndParseArgs(final MultiLangDaemonArguments arguments, final String[] args) {
-        JCommander jCommander = JCommander.newBuilder().programName("amazon-kinesis-client MultiLangDaemon")
+        JCommander jCommander = JCommander.newBuilder()
+                .programName("amazon-kinesis-client MultiLangDaemon")
                 .addObject(arguments)
                 .build();
         jCommander.parse(args);
@@ -128,8 +130,8 @@ public class MultiLangDaemon {
         }
     }
 
-    void configureLogging(final String logConfiguration, final LoggerContext loggerContext,
-            final JoranConfigurator configurator) {
+    void configureLogging(
+            final String logConfiguration, final LoggerContext loggerContext, final JoranConfigurator configurator) {
         loggerContext.reset();
         try (InputStream inputStream = FileUtils.openInputStream(new File(logConfiguration))) {
             configurator.setContext(loggerContext);
@@ -146,9 +148,8 @@ public class MultiLangDaemon {
             if (arguments.parameters.size() == 1) {
                 propertiesFile = arguments.parameters.get(0);
             } else {
-                throw new RuntimeException(
-                        "Expected a single argument, but found multiple arguments.  Arguments: "
-                                + String.join(", ", arguments.parameters));
+                throw new RuntimeException("Expected a single argument, but found multiple arguments.  Arguments: "
+                        + String.join(", ", arguments.parameters));
             }
         }
 

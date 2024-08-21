@@ -29,11 +29,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.lang3.StringUtils;
-
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -78,8 +77,11 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
      * @param executorService
      *            ExecutorService to use for renewing leases in parallel
      */
-    public DynamoDBLeaseRenewer(final LeaseRefresher leaseRefresher, final String workerIdentifier,
-            final long leaseDurationMillis, final ExecutorService executorService,
+    public DynamoDBLeaseRenewer(
+            final LeaseRefresher leaseRefresher,
+            final String workerIdentifier,
+            final long leaseDurationMillis,
+            final ExecutorService executorService,
             final MetricsFactory metricsFactory) {
         this.leaseRefresher = leaseRefresher;
         this.workerIdentifier = workerIdentifier;
@@ -108,10 +110,10 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         boolean success = false;
 
         try {
-        /*
-         * We iterate in descending order here so that the synchronized(lease) inside renewLease doesn't "lead" calls
-         * to getCurrentlyHeldLeases. They'll still cross paths, but they won't interleave their executions.
-         */
+            /*
+             * We iterate in descending order here so that the synchronized(lease) inside renewLease doesn't "lead" calls
+             * to getCurrentlyHeldLeases. They'll still cross paths, but they won't interleave their executions.
+             */
             int lostLeases = 0;
             List<Future<Boolean>> renewLeaseTasks = new ArrayList<>();
             for (Lease lease : ownedLeases.descendingMap().values()) {
@@ -139,8 +141,10 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
             scope.addData("CurrentLeases", ownedLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
             if (leasesInUnknownState > 0) {
                 throw new DependencyException(
-                        String.format("Encountered an exception while renewing leases. The number"
-                                + " of leases which might not have been renewed is %d", leasesInUnknownState),
+                        String.format(
+                                "Encountered an exception while renewing leases. The number"
+                                        + " of leases which might not have been renewed is %d",
+                                leasesInUnknownState),
                         lastException);
             }
             success = true;
@@ -165,7 +169,8 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         return renewLease(lease, false);
     }
 
-    private boolean renewLease(Lease lease, boolean renewEvenIfExpired) throws DependencyException, InvalidStateException {
+    private boolean renewLease(Lease lease, boolean renewEvenIfExpired)
+            throws DependencyException, InvalidStateException {
         String leaseKey = lease.leaseKey();
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, RENEW_ALL_LEASES_DIMENSION);
@@ -201,8 +206,12 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
                     success = true;
                     break;
                 } catch (ProvisionedThroughputException e) {
-                    log.info("Worker {} could not renew lease with key {} on try {} out of {} due to capacity",
-                            workerIdentifier, leaseKey, i, RENEWAL_RETRIES);
+                    log.info(
+                            "Worker {} could not renew lease with key {} on try {} out of {} due to capacity",
+                            workerIdentifier,
+                            leaseKey,
+                            i,
+                            RENEWAL_RETRIES);
                 }
             }
         } finally {
@@ -258,8 +267,8 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
             }
 
             if (copy.isExpired(leaseDurationNanos, now)) {
-                log.info("getCurrentlyHeldLease not returning lease with key {} because it is expired",
-                        copy.leaseKey());
+                log.info(
+                        "getCurrentlyHeldLease not returning lease with key {} because it is expired", copy.leaseKey());
                 return null;
             } else {
                 return copy;
@@ -271,8 +280,9 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
      * {@inheritDoc}
      */
     @Override
-    public boolean updateLease(Lease lease, UUID concurrencyToken, @NonNull String operation, String singleStreamShardId)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public boolean updateLease(
+            Lease lease, UUID concurrencyToken, @NonNull String operation, String singleStreamShardId)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         verifyNotNull(lease, "lease cannot be null");
         verifyNotNull(lease.leaseKey(), "leaseKey cannot be null");
         verifyNotNull(concurrencyToken, "concurrencyToken cannot be null");
@@ -281,7 +291,9 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
         Lease authoritativeLease = ownedLeases.get(leaseKey);
 
         if (authoritativeLease == null) {
-            log.info("Worker {} could not update lease with key {} because it does not hold it", workerIdentifier,
+            log.info(
+                    "Worker {} could not update lease with key {} because it does not hold it",
+                    workerIdentifier,
                     leaseKey);
             return false;
         }
@@ -292,15 +304,17 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
          * called update.
          */
         if (!authoritativeLease.concurrencyToken().equals(concurrencyToken)) {
-            log.info("Worker {} refusing to update lease with key {} because concurrency tokens don't match",
-                    workerIdentifier, leaseKey);
+            log.info(
+                    "Worker {} refusing to update lease with key {} because concurrency tokens don't match",
+                    workerIdentifier,
+                    leaseKey);
             return false;
         }
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, operation);
         if (lease instanceof MultiStreamLease) {
-            MetricsUtil.addStreamId(scope,
-                    StreamIdentifier.multiStreamInstance(((MultiStreamLease) lease).streamIdentifier()));
+            MetricsUtil.addStreamId(
+                    scope, StreamIdentifier.multiStreamInstance(((MultiStreamLease) lease).streamIdentifier()));
             MetricsUtil.addShardId(scope, ((MultiStreamLease) lease).shardId());
         } else if (StringUtils.isNotEmpty(singleStreamShardId)) {
             MetricsUtil.addShardId(scope, singleStreamShardId);
@@ -308,6 +322,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
 
         long startTime = System.currentTimeMillis();
         boolean success = false;
+        Lease authoritativeLeaseCopy = authoritativeLease.copy();
         try {
             log.info("Updating lease from {} to {}", authoritativeLease, lease);
             synchronized (authoritativeLease) {
@@ -344,6 +359,10 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
                 success = true;
                 return updatedLease;
             }
+        } catch (ProvisionedThroughputException | InvalidStateException | DependencyException e) {
+            // On failure in updating DDB, revert changes to in memory lease
+            authoritativeLease.update(authoritativeLeaseCopy);
+            throw e;
         } finally {
             MetricsUtil.addSuccessAndLatency(scope, "UpdateLease", success, startTime, MetricsLevel.DETAILED);
             MetricsUtil.endScope(scope);
@@ -359,7 +378,8 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
 
         for (Lease lease : newLeases) {
             if (lease.lastCounterIncrementNanos() == null) {
-                log.info("addLeasesToRenew ignoring lease with key {} because it does not have lastRenewalNanos set",
+                log.info(
+                        "addLeasesToRenew ignoring lease with key {} because it does not have lastRenewalNanos set",
                         lease.leaseKey());
                 continue;
             }
@@ -424,5 +444,4 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
             throw new IllegalArgumentException(message);
         }
     }
-
 }

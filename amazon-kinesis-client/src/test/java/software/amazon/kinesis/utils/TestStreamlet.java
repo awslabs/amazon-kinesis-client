@@ -21,30 +21,28 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.exceptions.InvalidStateException;
 import software.amazon.kinesis.exceptions.KinesisClientLibDependencyException;
 import software.amazon.kinesis.exceptions.KinesisClientLibNonRetryableException;
 import software.amazon.kinesis.exceptions.ShutdownException;
 import software.amazon.kinesis.exceptions.ThrottlingException;
-
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.leases.ShardSequenceVerifier;
+import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
 import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
-import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 /**
  * Streamlet that tracks records it's seen - useful for testing.
  */
 @Slf4j
-public class TestStreamlet implements ShardRecordProcessor, ShutdownNotificationAware {
+public class TestStreamlet implements ShardRecordProcessor {
     private List<KinesisClientRecord> records = new ArrayList<>();
 
     private Set<String> processedSeqNums = new HashSet<String>(); // used for deduping
@@ -63,9 +61,7 @@ public class TestStreamlet implements ShardRecordProcessor, ShutdownNotification
     private final CountDownLatch notifyShutdownLatch = new CountDownLatch(1);
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-    public TestStreamlet() {
-
-    }
+    public TestStreamlet() {}
 
     public TestStreamlet(Semaphore sem, ShardSequenceVerifier shardSequenceVerifier) {
         this();
@@ -105,8 +101,10 @@ public class TestStreamlet implements ShardRecordProcessor, ShutdownNotification
         }
         try {
             checkpointer.checkpoint();
-        } catch (ThrottlingException | ShutdownException
-                | KinesisClientLibDependencyException | InvalidStateException e) {
+        } catch (ThrottlingException
+                | ShutdownException
+                | KinesisClientLibDependencyException
+                | InvalidStateException e) {
             // Continue processing records and checkpoint next time if we get a transient error.
             // Don't checkpoint if the processor has been shutdown.
             log.debug("Caught exception while checkpointing: ", e);
@@ -141,7 +139,8 @@ public class TestStreamlet implements ShardRecordProcessor, ShutdownNotification
 
     @Override
     public void shutdownRequested(ShutdownRequestedInput shutdownRequestedInput) {
-
+        shutdownNotificationCalled = true;
+        notifyShutdownLatch.countDown();
     }
 
     /**
@@ -167,12 +166,6 @@ public class TestStreamlet implements ShardRecordProcessor, ShutdownNotification
 
     public boolean isShutdownNotificationCalled() {
         return shutdownNotificationCalled;
-    }
-
-    @Override
-    public void shutdownRequested(RecordProcessorCheckpointer checkpointer) {
-        shutdownNotificationCalled = true;
-        notifyShutdownLatch.countDown();
     }
 
     public CountDownLatch getInitializeLatch() {

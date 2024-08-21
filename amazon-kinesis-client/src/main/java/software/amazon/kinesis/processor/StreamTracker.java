@@ -15,12 +15,12 @@
 
 package software.amazon.kinesis.processor;
 
+import java.util.List;
+
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
-
-import java.util.List;
 
 /**
  * Interface for stream trackers.
@@ -81,5 +81,4 @@ public interface StreamTracker {
      * </p>
      */
     boolean isMultiStream();
-
 }

@@ -15,9 +15,6 @@
 
 package software.amazon.kinesis.retrieval;
 
-import java.util.function.Function;
-import software.amazon.kinesis.retrieval.polling.DataFetcher;
-
 public interface RetrievalSpecificConfig {
     /**
      * Creates and returns a retrieval factory for the specific configuration
@@ -25,4 +22,22 @@ public interface RetrievalSpecificConfig {
      * @return a retrieval factory that can create an appropriate retriever
      */
     RetrievalFactory retrievalFactory();
+
+    /**
+     * Validates this instance is configured properly. For example, this
+     * method may validate that the stream name, if one is required, is
+     * non-null.
+     * <br/><br/>
+     * If not in a valid state, an informative unchecked Exception -- for
+     * example, an {@link IllegalArgumentException} -- should be thrown so
+     * the caller may rectify the misconfiguration.
+     *
+     * @param isMultiStream whether state should be validated for multi-stream
+     *
+     * @deprecated remove keyword `default` to force implementation-specific behavior
+     */
+    @Deprecated
+    default void validateState(boolean isMultiStream) {
+        // TODO convert this to a non-default implementation in a "major" release
+    }
 }

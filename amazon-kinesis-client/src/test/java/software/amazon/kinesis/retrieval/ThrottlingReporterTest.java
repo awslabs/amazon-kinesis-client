@@ -14,17 +14,16 @@
  */
 package software.amazon.kinesis.retrieval;
 
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.slf4j.Logger;
-import software.amazon.kinesis.retrieval.ThrottlingReporter;
+
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ThrottlingReporterTest {
@@ -40,7 +39,6 @@ public class ThrottlingReporterTest {
         reporter.throttled();
         verify(throttleLog).warn(anyString());
         verify(throttleLog, never()).error(anyString());
-
     }
 
     @Test
@@ -63,7 +61,6 @@ public class ThrottlingReporterTest {
         reporter.throttled();
         verify(throttleLog, times(2)).warn(anyString());
         verify(throttleLog, times(3)).error(anyString());
-
     }
 
     private class LogTestingThrottingReporter extends ThrottlingReporter {
@@ -77,5 +74,4 @@ public class ThrottlingReporterTest {
             return throttleLog;
         }
     }
-
 }

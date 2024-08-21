@@ -35,5 +35,4 @@ public class ThrottlingException extends KinesisClientLibRetryableException {
     public ThrottlingException(String message, Exception e) {
         super(message, e);
     }
-
 }

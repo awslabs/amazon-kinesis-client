@@ -28,8 +28,8 @@ import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
-import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
@@ -66,19 +66,20 @@ public class ProcessTask implements ConsumerTask {
     private final String shardInfoId;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
 
-    public ProcessTask(@NonNull ShardInfo shardInfo,
-                       @NonNull ShardRecordProcessor shardRecordProcessor,
-                       @NonNull ShardRecordProcessorCheckpointer recordProcessorCheckpointer,
-                       long backoffTimeMillis,
-                       boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
-                       ShardDetector shardDetector,
-                       @NonNull ThrottlingReporter throttlingReporter,
-                       ProcessRecordsInput processRecordsInput,
-                       boolean shouldCallProcessRecordsEvenForEmptyRecordList,
-                       long idleTimeInMilliseconds,
-                       @NonNull AggregatorUtil aggregatorUtil,
-                       @NonNull MetricsFactory metricsFactory,
-                       SchemaRegistryDecoder schemaRegistryDecoder) {
+    public ProcessTask(
+            @NonNull ShardInfo shardInfo,
+            @NonNull ShardRecordProcessor shardRecordProcessor,
+            @NonNull ShardRecordProcessorCheckpointer recordProcessorCheckpointer,
+            long backoffTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+            ShardDetector shardDetector,
+            @NonNull ThrottlingReporter throttlingReporter,
+            ProcessRecordsInput processRecordsInput,
+            boolean shouldCallProcessRecordsEvenForEmptyRecordList,
+            long idleTimeInMilliseconds,
+            @NonNull AggregatorUtil aggregatorUtil,
+            @NonNull MetricsFactory metricsFactory,
+            SchemaRegistryDecoder schemaRegistryDecoder) {
         this.shardInfo = shardInfo;
         this.shardInfoId = ShardInfo.getLeaseKey(shardInfo);
         this.shardRecordProcessor = shardRecordProcessor;
@@ -113,15 +114,18 @@ public class ProcessTask implements ConsumerTask {
      */
     @Override
     public TaskResult call() {
-        /**
+        /*
          * NOTE: the difference between appScope and shardScope is, appScope doesn't have shardId as a dimension,
          * therefore all data added to appScope, although from different shard consumer, will be sent to the same metric,
          * which is the app-level MillsBehindLatest metric.
          */
-        final MetricsScope appScope = MetricsUtil.createMetricsWithOperation(metricsFactory, APPLICATION_TRACKER_OPERATION);
+        final MetricsScope appScope =
+                MetricsUtil.createMetricsWithOperation(metricsFactory, APPLICATION_TRACKER_OPERATION);
         final MetricsScope shardScope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
-        shardInfo.streamIdentifierSerOpt()
-                .ifPresent(streamId -> MetricsUtil.addStreamId(shardScope, StreamIdentifier.multiStreamInstance(streamId)));
+        shardInfo
+                .streamIdentifierSerOpt()
+                .ifPresent(streamId ->
+                        MetricsUtil.addStreamId(shardScope, StreamIdentifier.multiStreamInstance(streamId)));
         MetricsUtil.addShardId(shardScope, shardInfo.shardId());
         long startTimeMillis = System.currentTimeMillis();
         boolean success = false;
@@ -132,13 +136,20 @@ public class ProcessTask implements ConsumerTask {
 
             try {
                 if (processRecordsInput.millisBehindLatest() != null) {
-                    shardScope.addData(MILLIS_BEHIND_LATEST_METRIC, processRecordsInput.millisBehindLatest(),
-                            StandardUnit.MILLISECONDS, MetricsLevel.SUMMARY);
-                    appScope.addData(MILLIS_BEHIND_LATEST_METRIC, processRecordsInput.millisBehindLatest(),
-                            StandardUnit.MILLISECONDS, MetricsLevel.SUMMARY);
+                    shardScope.addData(
+                            MILLIS_BEHIND_LATEST_METRIC,
+                            processRecordsInput.millisBehindLatest(),
+                            StandardUnit.MILLISECONDS,
+                            MetricsLevel.SUMMARY);
+                    appScope.addData(
+                            MILLIS_BEHIND_LATEST_METRIC,
+                            processRecordsInput.millisBehindLatest(),
+                            StandardUnit.MILLISECONDS,
+                            MetricsLevel.SUMMARY);
                 }
 
-                if (processRecordsInput.isAtShardEnd() && processRecordsInput.records().isEmpty()) {
+                if (processRecordsInput.isAtShardEnd()
+                        && processRecordsInput.records().isEmpty()) {
                     log.info("Reached end of shard {} and have no records to process", shardInfoId);
                     return new TaskResult(null, true);
                 }
@@ -151,11 +162,14 @@ public class ProcessTask implements ConsumerTask {
                 }
 
                 if (!records.isEmpty()) {
-                    shardScope.addData(RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+                    shardScope.addData(
+                            RECORDS_PROCESSED_METRIC, records.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
                 }
 
                 recordProcessorCheckpointer.largestPermittedCheckpointValue(filterAndGetMaxExtendedSequenceNumber(
-                        shardScope, records, recordProcessorCheckpointer.lastCheckpointValue(),
+                        shardScope,
+                        records,
+                        recordProcessorCheckpointer.lastCheckpointValue(),
                         recordProcessorCheckpointer.largestPermittedCheckpointValue()));
 
                 if (shouldCallProcessRecords(records)) {
@@ -169,7 +183,10 @@ public class ProcessTask implements ConsumerTask {
             }
 
             if (processRecordsInput.isAtShardEnd()) {
-                log.info("Reached end of shard {}, and processed {} records", shardInfoId, processRecordsInput.records().size());
+                log.info(
+                        "Reached end of shard {}, and processed {} records",
+                        shardInfoId,
+                        processRecordsInput.records().size());
                 return new TaskResult(null, true);
             }
             return new TaskResult(exception);
@@ -180,13 +197,14 @@ public class ProcessTask implements ConsumerTask {
         }
     }
 
-
-
     private List<KinesisClientRecord> deaggregateAnyKplRecords(List<KinesisClientRecord> records) {
         if (shard == null) {
             return aggregatorUtil.deaggregate(records);
         } else {
-            return aggregatorUtil.deaggregate(records, shard.hashKeyRange().startingHashKey(), shard.hashKeyRange().endingHashKey());
+            return aggregatorUtil.deaggregate(
+                    records,
+                    shard.hashKeyRange().startingHashKey(),
+                    shard.hashKeyRange().endingHashKey());
         }
     }
 
@@ -211,22 +229,30 @@ public class ProcessTask implements ConsumerTask {
      *            the records to be dispatched. It's possible the records have been adjusted by KPL deaggregation.
      */
     private void callProcessRecords(ProcessRecordsInput input, List<KinesisClientRecord> records) {
-        log.debug("Calling application processRecords() with {} records from {}", records.size(),
-                shardInfoId);
+        log.debug("Calling application processRecords() with {} records from {}", records.size(), shardInfoId);
 
-        final ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder().records(records).cacheExitTime(input.cacheExitTime()).cacheEntryTime(input.cacheEntryTime())
-                .isAtShardEnd(input.isAtShardEnd()).checkpointer(recordProcessorCheckpointer).millisBehindLatest(input.millisBehindLatest()).build();
+        final ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder()
+                .records(records)
+                .cacheExitTime(input.cacheExitTime())
+                .cacheEntryTime(input.cacheEntryTime())
+                .isAtShardEnd(input.isAtShardEnd())
+                .checkpointer(recordProcessorCheckpointer)
+                .millisBehindLatest(input.millisBehindLatest())
+                .build();
 
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, PROCESS_TASK_OPERATION);
-        shardInfo.streamIdentifierSerOpt()
+        shardInfo
+                .streamIdentifierSerOpt()
                 .ifPresent(streamId -> MetricsUtil.addStreamId(scope, StreamIdentifier.multiStreamInstance(streamId)));
         MetricsUtil.addShardId(scope, shardInfo.shardId());
         final long startTime = System.currentTimeMillis();
         try {
             shardRecordProcessor.processRecords(processRecordsInput);
         } catch (Exception e) {
-            log.error("ShardId {}: Application processRecords() threw an exception when processing shard ",
-                    shardInfoId, e);
+            log.error(
+                    "ShardId {}: Application processRecords() threw an exception when processing shard ",
+                    shardInfoId,
+                    e);
             log.error("ShardId {}: Skipping over the following data records: {}", shardInfoId, records);
         } finally {
             MetricsUtil.addLatency(scope, RECORD_PROCESSOR_PROCESS_RECORDS_METRIC, startTime, MetricsLevel.SUMMARY);
@@ -243,28 +269,6 @@ public class ProcessTask implements ConsumerTask {
      */
     private boolean shouldCallProcessRecords(List<KinesisClientRecord> records) {
         return (!records.isEmpty()) || shouldCallProcessRecordsEvenForEmptyRecordList;
-    }
-
-    /**
-     * Emits metrics, and sleeps if there are no records available
-     *
-     * @param startTimeMillis
-     *            the time when the task started
-     */
-    private void handleNoRecords(long startTimeMillis) {
-        log.debug("Kinesis didn't return any records for shard {}", shardInfoId);
-
-        long sleepTimeMillis = idleTimeInMilliseconds - (System.currentTimeMillis() - startTimeMillis);
-        if (sleepTimeMillis > 0) {
-            sleepTimeMillis = Math.max(sleepTimeMillis, idleTimeInMilliseconds);
-            try {
-                log.debug("Sleeping for {} ms since there were no new records in shard {}", sleepTimeMillis,
-                        shardInfoId);
-                Thread.sleep(sleepTimeMillis);
-            } catch (InterruptedException e) {
-                log.debug("ShardId {}: Sleep was interrupted", shardInfoId);
-            }
-        }
     }
 
     @Override
@@ -286,21 +290,25 @@ public class ProcessTask implements ConsumerTask {
      *            previous largest permitted checkpoint value
      * @return the largest extended sequence number among the retained records
      */
-    private ExtendedSequenceNumber filterAndGetMaxExtendedSequenceNumber(final MetricsScope scope,
-                                                                         final List<KinesisClientRecord> records,
-                                                                         final ExtendedSequenceNumber lastCheckpointValue,
-                                                                         final ExtendedSequenceNumber lastLargestPermittedCheckpointValue) {
+    private ExtendedSequenceNumber filterAndGetMaxExtendedSequenceNumber(
+            final MetricsScope scope,
+            final List<KinesisClientRecord> records,
+            final ExtendedSequenceNumber lastCheckpointValue,
+            final ExtendedSequenceNumber lastLargestPermittedCheckpointValue) {
         ExtendedSequenceNumber largestExtendedSequenceNumber = lastLargestPermittedCheckpointValue;
         ListIterator<KinesisClientRecord> recordIterator = records.listIterator();
         while (recordIterator.hasNext()) {
             KinesisClientRecord record = recordIterator.next();
-            ExtendedSequenceNumber extendedSequenceNumber = new ExtendedSequenceNumber(record.sequenceNumber(),
-                    record.subSequenceNumber());
+            ExtendedSequenceNumber extendedSequenceNumber =
+                    new ExtendedSequenceNumber(record.sequenceNumber(), record.subSequenceNumber());
 
             if (extendedSequenceNumber.compareTo(lastCheckpointValue) <= 0) {
                 recordIterator.remove();
-                log.debug("{} : removing record with ESN {} because the ESN is <= checkpoint ({})", shardInfoId,
-                        extendedSequenceNumber, lastCheckpointValue);
+                log.debug(
+                        "{} : removing record with ESN {} because the ESN is <= checkpoint ({})",
+                        shardInfoId,
+                        extendedSequenceNumber,
+                        lastCheckpointValue);
                 continue;
             }
 
@@ -309,10 +317,8 @@ public class ProcessTask implements ConsumerTask {
                 largestExtendedSequenceNumber = extendedSequenceNumber;
             }
 
-            scope.addData(DATA_BYTES_PROCESSED_METRIC, record.data().limit(), StandardUnit.BYTES,
-                    MetricsLevel.SUMMARY);
+            scope.addData(DATA_BYTES_PROCESSED_METRIC, record.data().limit(), StandardUnit.BYTES, MetricsLevel.SUMMARY);
         }
         return largestExtendedSequenceNumber;
     }
-
 }

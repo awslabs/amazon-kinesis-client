@@ -23,8 +23,6 @@ import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
 
-import java.util.Objects;
-
 import static com.google.common.base.Verify.verifyNotNull;
 
 @Setter
@@ -34,8 +32,11 @@ import static com.google.common.base.Verify.verifyNotNull;
 @EqualsAndHashCode(callSuper = true)
 public class MultiStreamLease extends Lease {
 
-    @NonNull private String streamIdentifier;
-    @NonNull private String shardId;
+    @NonNull
+    private String streamIdentifier;
+
+    @NonNull
+    private String shardId;
 
     public MultiStreamLease(MultiStreamLease other) {
         super(other);
@@ -76,5 +77,4 @@ public class MultiStreamLease extends Lease {
         Validate.isInstanceOf(MultiStreamLease.class, lease);
         return (MultiStreamLease) lease;
     }
-
 }

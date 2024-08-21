@@ -17,11 +17,9 @@ package software.amazon.kinesis.checkpoint;
 import java.util.HashMap;
 import java.util.Map;
 
-import software.amazon.kinesis.exceptions.KinesisClientLibException;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
-
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Everything is stored in memory and there is no fault-tolerance.
@@ -39,8 +37,7 @@ public class InMemoryCheckpointer implements Checkpointer {
      * {@inheritDoc}
      */
     @Override
-    public void setCheckpoint(String leaseKey, ExtendedSequenceNumber checkpointValue, String concurrencyToken)
-        throws KinesisClientLibException {
+    public void setCheckpoint(String leaseKey, ExtendedSequenceNumber checkpointValue, String concurrencyToken) {
         checkpoints.put(leaseKey, checkpointValue);
         flushpoints.put(leaseKey, checkpointValue);
         pendingCheckpoints.remove(leaseKey);
@@ -49,33 +46,35 @@ public class InMemoryCheckpointer implements Checkpointer {
         if (log.isDebugEnabled()) {
             log.debug("shardId: {} checkpoint: {}", leaseKey, checkpointValue);
         }
-
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public ExtendedSequenceNumber getCheckpoint(String leaseKey) throws KinesisClientLibException {
+    public ExtendedSequenceNumber getCheckpoint(String leaseKey) {
         ExtendedSequenceNumber checkpoint = flushpoints.get(leaseKey);
         log.debug("checkpoint shardId: {} checkpoint: {}", leaseKey, checkpoint);
         return checkpoint;
     }
 
     @Override
-    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken)
-            throws KinesisClientLibException {
+    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken) {
         prepareCheckpoint(leaseKey, pendingCheckpoint, concurrencyToken, null);
     }
 
     @Override
-    public void prepareCheckpoint(String leaseKey, ExtendedSequenceNumber pendingCheckpoint, String concurrencyToken, byte[] pendingCheckpointState) throws KinesisClientLibException {
+    public void prepareCheckpoint(
+            String leaseKey,
+            ExtendedSequenceNumber pendingCheckpoint,
+            String concurrencyToken,
+            byte[] pendingCheckpointState) {
         pendingCheckpoints.put(leaseKey, pendingCheckpoint);
         pendingCheckpointStates.put(leaseKey, pendingCheckpointState);
     }
 
     @Override
-    public Checkpoint getCheckpointObject(String leaseKey) throws KinesisClientLibException {
+    public Checkpoint getCheckpointObject(String leaseKey) {
         ExtendedSequenceNumber checkpoint = flushpoints.get(leaseKey);
         ExtendedSequenceNumber pendingCheckpoint = pendingCheckpoints.get(leaseKey);
         byte[] pendingCheckpointState = pendingCheckpointStates.get(leaseKey);

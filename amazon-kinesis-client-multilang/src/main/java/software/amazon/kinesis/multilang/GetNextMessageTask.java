@@ -17,10 +17,9 @@ package software.amazon.kinesis.multilang;
 import java.io.BufferedReader;
 import java.io.IOException;
 
-import software.amazon.kinesis.multilang.messages.Message;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.kinesis.multilang.messages.Message;
 
 /**
  * Gets the next message off the STDOUT of the child process. Throws an exception if a message is not found before the
@@ -34,7 +33,7 @@ class GetNextMessageTask extends LineReaderTask<Message> {
 
     /**
      * Constructor.
-     * 
+     *
      * @param objectMapper An object mapper for decoding json messages from the input stream.
      */
     GetNextMessageTask(ObjectMapper objectMapper) {
@@ -43,7 +42,7 @@ class GetNextMessageTask extends LineReaderTask<Message> {
 
     /**
      * Checks if a line is an empty line.
-     * 
+     *
      * @param line A string
      * @return True if the line is an empty string, i.e. "", false otherwise.
      */
@@ -71,8 +70,10 @@ class GetNextMessageTask extends LineReaderTask<Message> {
 
     @Override
     protected Message returnAfterException(Exception e) {
-        throw new RuntimeException("Encountered an error while reading a line from STDIN for shard " + getShardId()
-                + " so won't be able to return a message.", e);
+        throw new RuntimeException(
+                "Encountered an error while reading a line from STDIN for shard " + getShardId()
+                        + " so won't be able to return a message.",
+                e);
     }
 
     @Override

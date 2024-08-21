@@ -28,5 +28,4 @@ public class ProvisionedThroughputException extends LeasingException {
     public ProvisionedThroughputException(String message, Throwable e) {
         super(message, e);
     }
-
 }

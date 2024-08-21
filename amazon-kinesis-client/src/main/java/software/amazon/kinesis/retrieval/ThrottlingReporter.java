@@ -14,10 +14,9 @@
  */
 package software.amazon.kinesis.retrieval;
 
-import org.slf4j.Logger;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
 @RequiredArgsConstructor
 @Slf4j
@@ -30,15 +29,13 @@ public class ThrottlingReporter {
 
     public void throttled() {
         consecutiveThrottles++;
-        String message = "Shard '" + shardId + "' has been throttled "
-                + consecutiveThrottles + " consecutively";
+        String message = "Shard '" + shardId + "' has been throttled " + consecutiveThrottles + " consecutively";
 
         if (consecutiveThrottles > maxConsecutiveWarnThrottles) {
             getLog().error(message);
         } else {
             getLog().warn(message);
         }
-
     }
 
     public void success() {
@@ -48,5 +45,4 @@ public class ThrottlingReporter {
     protected Logger getLog() {
         return log;
     }
-
 }

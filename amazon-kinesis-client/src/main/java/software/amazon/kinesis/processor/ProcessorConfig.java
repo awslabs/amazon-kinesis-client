@@ -15,9 +15,9 @@
 
 package software.amazon.kinesis.processor;
 
-        import lombok.Data;
-        import lombok.NonNull;
-        import lombok.experimental.Accessors;
+import lombok.Data;
+import lombok.NonNull;
+import lombok.experimental.Accessors;
 
 /**
  * Used by the KCL to configure the processor for processing the records.
@@ -37,5 +37,4 @@ public class ProcessorConfig {
      * <p>Default value: false</p>
      */
     private boolean callProcessRecordsEvenForEmptyRecordList = false;
-
 }

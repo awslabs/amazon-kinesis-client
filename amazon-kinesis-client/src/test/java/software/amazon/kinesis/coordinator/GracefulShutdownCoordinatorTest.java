@@ -14,18 +14,6 @@
  */
 package software.amazon.kinesis.coordinator;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
@@ -39,17 +27,34 @@ import org.mockito.verification.VerificationMode;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertThat;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 @RunWith(MockitoJUnitRunner.class)
 public class GracefulShutdownCoordinatorTest {
 
     @Mock
     private CountDownLatch shutdownCompleteLatch;
+
     @Mock
     private CountDownLatch notificationCompleteLatch;
+
+    @Mock
+    private CountDownLatch finalShutdownLatch;
+
     @Mock
     private Scheduler scheduler;
+
     @Mock
     private Callable<GracefulShutdownContext> contextCallable;
+
     @Mock
     private ConcurrentMap<ShardInfo, ShardConsumer> shardInfoConsumerMap;
 
@@ -59,6 +64,7 @@ public class GracefulShutdownCoordinatorTest {
 
         when(shutdownCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
         when(notificationCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(finalShutdownLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
 
         assertThat(requestedShutdownCallable.call(), equalTo(true));
         verify(shutdownCompleteLatch).await(anyLong(), any(TimeUnit.class));
@@ -74,6 +80,7 @@ public class GracefulShutdownCoordinatorTest {
         when(notificationCompleteLatch.getCount()).thenReturn(1L, 0L);
         mockLatchAwait(shutdownCompleteLatch, true);
         when(shutdownCompleteLatch.getCount()).thenReturn(1L, 1L, 0L);
+        when(finalShutdownLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
 
         when(scheduler.shutdownComplete()).thenReturn(false, true);
         mockShardInfoConsumerMap(1, 0);
@@ -95,6 +102,7 @@ public class GracefulShutdownCoordinatorTest {
         mockLatchAwait(notificationCompleteLatch, true);
         mockLatchAwait(shutdownCompleteLatch, false, true);
         when(shutdownCompleteLatch.getCount()).thenReturn(1L, 0L);
+        when(finalShutdownLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
 
         when(scheduler.shutdownComplete()).thenReturn(false, true);
         mockShardInfoConsumerMap(1, 0);
@@ -118,6 +126,8 @@ public class GracefulShutdownCoordinatorTest {
 
         mockLatchAwait(shutdownCompleteLatch, true);
         when(shutdownCompleteLatch.getCount()).thenReturn(2L, 2L, 1L, 1L, 0L);
+
+        when(finalShutdownLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
 
         when(scheduler.shutdownComplete()).thenReturn(false, false, false, true);
         mockShardInfoConsumerMap(2, 1, 0);
@@ -226,9 +236,11 @@ public class GracefulShutdownCoordinatorTest {
         when(notificationCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
 
         doAnswer(invocation -> {
-            Thread.currentThread().interrupt();
-            return true;
-        }).when(scheduler).shutdown();
+                    Thread.currentThread().interrupt();
+                    return true;
+                })
+                .when(scheduler)
+                .shutdown();
 
         assertThat(requestedShutdownCallable.call(), equalTo(false));
         verifyLatchAwait(notificationCompleteLatch);
@@ -282,10 +294,49 @@ public class GracefulShutdownCoordinatorTest {
 
     @Test(expected = IllegalStateException.class)
     public void testWorkerShutdownCallableThrows() throws Exception {
-        Callable<Boolean> requestedShutdownCallable = new GracefulShutdownCoordinator().createGracefulShutdownCallable(contextCallable);
+        Callable<Boolean> requestedShutdownCallable =
+                new GracefulShutdownCoordinator().createGracefulShutdownCallable(contextCallable);
         when(contextCallable.call()).thenThrow(new IllegalStateException("Bad Shutdown"));
 
         requestedShutdownCallable.call();
+    }
+
+    @Test
+    public void testShutdownFailsDueToRecordProcessors() throws Exception {
+        Callable<Boolean> requestedShutdownCallable = buildRequestedShutdownCallable();
+
+        when(notificationCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(shutdownCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(false);
+        when(shutdownCompleteLatch.getCount()).thenReturn(1L);
+        when(scheduler.shutdownComplete()).thenReturn(true);
+        mockShardInfoConsumerMap(1);
+
+        assertThat(requestedShutdownCallable.call(), equalTo(false));
+        verifyLatchAwait(shutdownCompleteLatch);
+    }
+
+    @Test
+    public void testShutdownFailsDueToWorker() throws Exception {
+        Callable<Boolean> requestedShutdownCallable = buildRequestedShutdownCallable();
+
+        when(notificationCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(shutdownCompleteLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(finalShutdownLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(false);
+
+        assertThat(requestedShutdownCallable.call(), equalTo(false));
+        verifyLatchAwait(finalShutdownLatch);
+    }
+
+    /**
+     * tests that shutdown still succeeds in the case where there are no leases returned by the lease coordinator
+     */
+    @Test
+    public void testShutdownSuccessWithNoLeases() throws Exception {
+        Callable<Boolean> requestedShutdownCallable = buildRequestedShutdownCallableWithNullLatches();
+        when(finalShutdownLatch.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+
+        assertThat(requestedShutdownCallable.call(), equalTo(true));
+        verifyLatchAwait(finalShutdownLatch);
     }
 
     private void verifyLatchAwait(CountDownLatch latch) throws Exception {
@@ -305,8 +356,24 @@ public class GracefulShutdownCoordinatorTest {
     }
 
     private Callable<Boolean> buildRequestedShutdownCallable() throws Exception {
-        GracefulShutdownContext context = new GracefulShutdownContext(shutdownCompleteLatch,
-                notificationCompleteLatch, scheduler);
+        GracefulShutdownContext context = GracefulShutdownContext.builder()
+                .shutdownCompleteLatch(shutdownCompleteLatch)
+                .notificationCompleteLatch(notificationCompleteLatch)
+                .finalShutdownLatch(finalShutdownLatch)
+                .scheduler(scheduler)
+                .build();
+        when(contextCallable.call()).thenReturn(context);
+        return new GracefulShutdownCoordinator().createGracefulShutdownCallable(contextCallable);
+    }
+
+    /**
+     * finalShutdownLatch will always be initialized, but shutdownCompleteLatch and notificationCompleteLatch are not
+     * initialized in the case where there are no leases returned by the lease coordinator
+     */
+    private Callable<Boolean> buildRequestedShutdownCallableWithNullLatches() throws Exception {
+        GracefulShutdownContext context = GracefulShutdownContext.builder()
+                .finalShutdownLatch(finalShutdownLatch)
+                .build();
         when(contextCallable.call()).thenReturn(context);
         return new GracefulShutdownCoordinator().createGracefulShutdownCallable(contextCallable);
     }
@@ -320,5 +387,4 @@ public class GracefulShutdownCoordinatorTest {
         when(shardInfoConsumerMap.size()).thenReturn(initialItemCount, additionalItemCounts);
         when(shardInfoConsumerMap.isEmpty()).thenReturn(initialItemCount == 0, additionalEmptyStates);
     }
-
 }

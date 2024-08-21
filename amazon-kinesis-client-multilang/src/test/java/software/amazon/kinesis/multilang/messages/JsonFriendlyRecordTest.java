@@ -15,11 +15,6 @@
 
 package software.amazon.kinesis.multilang.messages;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.CoreMatchers.sameInstance;
-import static org.junit.Assert.assertThat;
-
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Arrays;
@@ -31,8 +26,12 @@ import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.Test;
-
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.sameInstance;
+import static org.junit.Assert.assertThat;
 
 public class JsonFriendlyRecordTest {
 
@@ -48,7 +47,7 @@ public class JsonFriendlyRecordTest {
 
     @Test
     public void testRecordHandlesNoByteArrayBuffer() {
-        byte[] expected = new byte[] { 1, 2, 3, 4 };
+        byte[] expected = new byte[] {1, 2, 3, 4};
 
         ByteBuffer expectedBuffer = ByteBuffer.allocateDirect(expected.length);
 
@@ -64,7 +63,7 @@ public class JsonFriendlyRecordTest {
 
     @Test
     public void testRecordHandlesArrayByteBuffer() {
-        ByteBuffer expected = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
+        ByteBuffer expected = ByteBuffer.wrap(new byte[] {1, 2, 3, 4});
         kinesisClientRecord = defaultRecord().data(expected).build();
         JsonFriendlyRecord jsonFriendlyRecord = JsonFriendlyRecord.fromKinesisClientRecord(kinesisClientRecord);
 
@@ -82,14 +81,15 @@ public class JsonFriendlyRecordTest {
 
         private RecordMatcher(KinesisClientRecord expected) {
             this.matchers = Arrays.asList(
-                    new FieldMatcher<>("approximateArrivalTimestamp",
+                    new FieldMatcher<>(
+                            "approximateArrivalTimestamp",
                             equalTo(expected.approximateArrivalTimestamp().toEpochMilli()),
                             JsonFriendlyRecord::getApproximateArrivalTimestamp),
                     new FieldMatcher<>("partitionKey", expected::partitionKey, JsonFriendlyRecord::getPartitionKey),
-                    new FieldMatcher<>("sequenceNumber", expected::sequenceNumber,
-                            JsonFriendlyRecord::getSequenceNumber),
-                    new FieldMatcher<>("subSequenceNumber", expected::subSequenceNumber,
-                            JsonFriendlyRecord::getSubSequenceNumber),
+                    new FieldMatcher<>(
+                            "sequenceNumber", expected::sequenceNumber, JsonFriendlyRecord::getSequenceNumber),
+                    new FieldMatcher<>(
+                            "subSequenceNumber", expected::subSequenceNumber, JsonFriendlyRecord::getSubSequenceNumber),
                     new FieldMatcher<>("data", dataEquivalentTo(expected.data()), JsonFriendlyRecord::getData));
 
             this.expected = expected;
@@ -97,13 +97,16 @@ public class JsonFriendlyRecordTest {
 
         @Override
         protected boolean matchesSafely(JsonFriendlyRecord item, Description mismatchDescription) {
-            return matchers.stream().map(m -> {
-                if (!m.matches(item)) {
-                    m.describeMismatch(item, mismatchDescription);
-                    return false;
-                }
-                return true;
-            }).reduce((l, r) -> l && r).orElse(true);
+            return matchers.stream()
+                    .map(m -> {
+                        if (!m.matches(item)) {
+                            m.describeMismatch(item, mismatchDescription);
+                            return false;
+                        }
+                        return true;
+                    })
+                    .reduce((l, r) -> l && r)
+                    .orElse(true);
         }
 
         @Override
@@ -160,8 +163,9 @@ public class JsonFriendlyRecordTest {
     }
 
     private KinesisClientRecord.KinesisClientRecordBuilder defaultRecord() {
-        return KinesisClientRecord.builder().partitionKey("test-partition").sequenceNumber("123")
+        return KinesisClientRecord.builder()
+                .partitionKey("test-partition")
+                .sequenceNumber("123")
                 .approximateArrivalTimestamp(Instant.now());
     }
-
 }

@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
  * <li> {@link #returnAfterEndOfInput()}</li>
  * <li> {@link #returnAfterException(Exception)}</li>
  * </ol>
- * 
+ *
  * @param <T>
  */
 @Slf4j
@@ -41,8 +41,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
 
     private String shardId;
 
-    LineReaderTask() {
-    }
+    LineReaderTask() {}
 
     /**
      * Reads lines off the input stream until a return value is set, or an exception is encountered, or the end of the
@@ -72,7 +71,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
      * return from the {@link #call()} function by having a value, indicating that value should be returned immediately
      * without reading further, or not having a value, indicating that more lines of input need to be read before
      * returning.
-     * 
+     *
      * @param line A line read from the input stream.
      * @return HandleLineResult<T> which may or may not have a has return value, indicating to return or not return yet
      *         respectively.
@@ -83,7 +82,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
      * This method will be called if there is an error while reading from the input stream. The return value of this
      * method will be returned as the result of this Callable unless an Exception is thrown. If an Exception is thrown
      * then that exception will be thrown by the Callable.
-     * 
+     *
      * @param e An exception that occurred while reading from the input stream.
      * @return What to return.
      */
@@ -93,7 +92,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
      * This method will be called once the end of the input stream is reached. The return value of this method will be
      * returned as the result of this Callable. Implementations of this method are welcome to throw a runtime exception
      * to indicate that the task was unsuccessful.
-     * 
+     *
      * @return What to return.
      */
     protected abstract T returnAfterEndOfInput();
@@ -101,7 +100,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
     /**
      * Allows subclasses to provide more detailed logs. Specifically, this allows the drain tasks and GetNextMessageTask
      * to log which shard they're working on.
-     * 
+     *
      * @return The shard id
      */
     public String getShardId() {
@@ -110,7 +109,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
 
     /**
      * The description should be a string explaining what this particular LineReader class does.
-     * 
+     *
      * @return The description.
      */
     public String getDescription() {
@@ -121,7 +120,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
      * The result of a call to {@link LineReaderTask#handleLine(String)}. Allows implementations of that method to
      * indicate whether a particular invocation of that method produced a return for this task or not. If a return value
      * doesn't exist the {@link #call()} method will continue to the next line.
-     * 
+     *
      * @param <V>
      */
     protected class HandleLineResult<V> {
@@ -158,7 +157,7 @@ abstract class LineReaderTask<T> implements Callable<T> {
      * {@link MultiLangShardRecordProcessor#initialize(String)} is called. So we follow a pattern where the attributes are
      * set inside this method instead of the constructor so that this object will be initialized when all its attributes
      * are known to the record processor.
-     * 
+     *
      * @param stream
      * @param shardId
      * @param description
@@ -180,5 +179,4 @@ abstract class LineReaderTask<T> implements Callable<T> {
         this.description = description;
         return this;
     }
-
 }

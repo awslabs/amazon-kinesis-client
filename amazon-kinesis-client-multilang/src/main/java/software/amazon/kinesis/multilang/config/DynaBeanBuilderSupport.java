@@ -29,11 +29,10 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.apache.commons.beanutils.ConvertUtilsBean;
-import org.apache.commons.lang3.ClassUtils;
-
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
+import org.apache.commons.beanutils.ConvertUtilsBean;
+import org.apache.commons.lang3.ClassUtils;
 
 class DynaBeanBuilderSupport {
 
@@ -48,8 +47,8 @@ class DynaBeanBuilderSupport {
     private final Multimap<String, TypeTag> properties = HashMultimap.create();
     private final Map<String, Object> values = new HashMap<>();
 
-    DynaBeanBuilderSupport(Class<?> destinedClass, ConvertUtilsBean convertUtilsBean,
-            List<String> classPrefixSearchList) {
+    DynaBeanBuilderSupport(
+            Class<?> destinedClass, ConvertUtilsBean convertUtilsBean, List<String> classPrefixSearchList) {
         this.destinedClass = destinedClass;
         this.convertUtilsBean = convertUtilsBean;
         this.classPrefixSearchList = classPrefixSearchList;
@@ -103,11 +102,12 @@ class DynaBeanBuilderSupport {
     private Object createForProperty(String name) {
         Optional<TypeTag> type = properties.get(name).stream().findFirst();
         return type.map(t -> {
-            if (DynaBeanBuilderUtils.isBuilderOrCreate(t.type) || !t.hasConverter) {
-                return new BuilderDynaBean(t.type, convertUtilsBean, null, classPrefixSearchList);
-            }
-            return null;
-        }).orElse(null);
+                    if (DynaBeanBuilderUtils.isBuilderOrCreate(t.type) || !t.hasConverter) {
+                        return new BuilderDynaBean(t.type, convertUtilsBean, null, classPrefixSearchList);
+                    }
+                    return null;
+                })
+                .orElse(null);
     }
 
     boolean hasValue(String name) {
@@ -157,8 +157,11 @@ class DynaBeanBuilderSupport {
 
     void set(String name, Object value) {
         if (value instanceof String && properties.get(name).stream().anyMatch(t -> t.type.isEnum())) {
-            TypeTag typeTag = properties.get(name).stream().filter(t -> t.type.isEnum()).findFirst().orElseThrow(
-                    () -> new IllegalStateException("Expected enum type for " + name + ", but couldn't find it."));
+            TypeTag typeTag = properties.get(name).stream()
+                    .filter(t -> t.type.isEnum())
+                    .findFirst()
+                    .orElseThrow(() ->
+                            new IllegalStateException("Expected enum type for " + name + ", but couldn't find it."));
             Class<? extends Enum> enumClass = (Class<? extends Enum>) typeTag.type;
             values.put(name, Enum.valueOf(enumClass, value.toString()));
         } else {
@@ -174,9 +177,11 @@ class DynaBeanBuilderSupport {
     private Object getArgument(Map.Entry<String, Object> setValue) {
         Object argument = setValue.getValue();
         if (argument instanceof Object[]) {
-            TypeTag arrayType = properties.get(setValue.getKey()).stream().filter(t -> t.type.isArray()).findFirst()
-                    .orElseThrow(() -> new IllegalStateException(String
-                            .format("Received Object[] for %s but can't find corresponding type", setValue.getKey())));
+            TypeTag arrayType = properties.get(setValue.getKey()).stream()
+                    .filter(t -> t.type.isArray())
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException(String.format(
+                            "Received Object[] for %s but can't find corresponding type", setValue.getKey())));
             Object[] arrayValues = (Object[]) argument;
             Object[] destination = (Object[]) Array.newInstance(arrayType.type.getComponentType(), arrayValues.length);
 
@@ -212,10 +217,12 @@ class DynaBeanBuilderSupport {
         for (Map.Entry<String, Object> setValue : values.entrySet()) {
             Object argument = getArgument(setValue);
             Method mutator = properties.get(setValue.getKey()).stream()
-                    .filter(t -> ClassUtils.isAssignable(argument.getClass(), t.type)).findFirst()
-                    .map(a -> a.builderMethod).orElseThrow(
-                            () -> new IllegalStateException(String.format("Unable to find mutator for %s of type %s",
-                                    setValue.getKey(), argument.getClass().getName())));
+                    .filter(t -> ClassUtils.isAssignable(argument.getClass(), t.type))
+                    .findFirst()
+                    .map(a -> a.builderMethod)
+                    .orElseThrow(() -> new IllegalStateException(String.format(
+                            "Unable to find mutator for %s of type %s",
+                            setValue.getKey(), argument.getClass().getName())));
             try {
                 source = mutator.invoke(source, argument);
             } catch (IllegalAccessException | InvocationTargetException e) {
@@ -236,7 +243,6 @@ class DynaBeanBuilderSupport {
         } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
-
     }
 
     Collection<String> getPropertyNames() {
@@ -249,5 +255,4 @@ class DynaBeanBuilderSupport {
         }
         return new ArrayList<>(properties.get(name));
     }
-
 }

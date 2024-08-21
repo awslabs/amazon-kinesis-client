@@ -33,5 +33,4 @@ public class InvalidStateException extends LeasingException {
     public InvalidStateException(String message) {
         super(message);
     }
-
 }

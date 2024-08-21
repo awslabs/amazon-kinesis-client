@@ -19,14 +19,14 @@ import java.util.Arrays;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.apache.commons.lang3.Validate;
-
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.Validate;
 
 @Slf4j
 public enum RetrievalMode {
-    FANOUT(MultiLangDaemonConfiguration::getFanoutConfig), POLLING(
-            MultiLangDaemonConfiguration::getPollingConfig), DEFAULT(RetrievalMode::decideForDefault);
+    FANOUT(MultiLangDaemonConfiguration::getFanoutConfig),
+    POLLING(MultiLangDaemonConfiguration::getPollingConfig),
+    DEFAULT(RetrievalMode::decideForDefault);
 
     private final Function<MultiLangDaemonConfiguration, RetrievalConfigBuilder> builderFor;
 

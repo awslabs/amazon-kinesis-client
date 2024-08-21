@@ -15,24 +15,6 @@
 
 package software.amazon.kinesis.retrieval.polling;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static software.amazon.kinesis.utils.BlockingUtils.blockUntilConditionSatisfied;
-import static software.amazon.kinesis.utils.BlockingUtils.blockUntilRecordsAvailable;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -40,6 +22,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -51,17 +34,14 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
-
 import software.amazon.awssdk.core.SdkBytes;
-import software.amazon.kinesis.common.InitialPositionInStreamExtended;
-
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.awssdk.services.kinesis.model.GetShardIteratorResponse;
 import software.amazon.awssdk.services.kinesis.model.Record;
+import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
@@ -69,6 +49,23 @@ import software.amazon.kinesis.retrieval.DataFetcherResult;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.utils.BlockingUtils.blockUntilConditionSatisfied;
+import static software.amazon.kinesis.utils.BlockingUtils.blockUntilRecordsAvailable;
 
 /**
  * These are the integration tests for the PrefetchRecordsPublisher class.
@@ -96,8 +93,10 @@ public class PrefetchRecordsPublisherIntegrationTest {
 
     @Mock
     private KinesisAsyncClient kinesisClient;
+
     @Mock
     private ExtendedSequenceNumber extendedSequenceNumber;
+
     @Mock
     private InitialPositionInStreamExtended initialPosition;
 
@@ -110,10 +109,14 @@ public class PrefetchRecordsPublisherIntegrationTest {
         CompletableFuture<GetShardIteratorResponse> future = mock(CompletableFuture.class);
 
         when(extendedSequenceNumber.sequenceNumber()).thenReturn("LATEST");
-        when(future.get(anyLong(), any(TimeUnit.class))).thenReturn(GetShardIteratorResponse.builder().shardIterator("TestIterator").build());
+        when(future.get(anyLong(), any(TimeUnit.class)))
+                .thenReturn(GetShardIteratorResponse.builder()
+                        .shardIterator("TestIterator")
+                        .build());
         when(kinesisClient.getShardIterator(any(GetShardIteratorRequest.class))).thenReturn(future);
 
-        getRecordsCache = new PrefetchRecordsPublisher(MAX_SIZE,
+        getRecordsCache = new PrefetchRecordsPublisher(
+                MAX_SIZE,
                 MAX_BYTE_SIZE,
                 MAX_RECORDS_COUNT,
                 MAX_RECORDS_PER_CALL,
@@ -131,14 +134,16 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
+        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(
+                        () -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertTrue(processRecordsInput1.records().isEmpty());
         assertEquals(processRecordsInput1.millisBehindLatest(), new Long(1000));
         assertNotNull(processRecordsInput1.cacheEntryTime());
 
-        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
+        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(
+                        () -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertNotEquals(processRecordsInput1, processRecordsInput2);
@@ -149,11 +154,14 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(MAX_SIZE * IDLE_MILLIS_BETWEEN_CALLS);
 
-        assertEquals(getRecordsCache.getPublisherSession().prefetchRecordsQueue().size(), MAX_SIZE);
+        assertEquals(
+                getRecordsCache.getPublisherSession().prefetchRecordsQueue().size(), MAX_SIZE);
 
-        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
+        ProcessRecordsInput processRecordsInput1 = blockUntilRecordsAvailable(
+                        () -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
-        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
+        ProcessRecordsInput processRecordsInput2 = blockUntilRecordsAvailable(
+                        () -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertNotEquals(processRecordsInput1, processRecordsInput2);
@@ -163,9 +171,10 @@ public class PrefetchRecordsPublisherIntegrationTest {
     @Test
     public void testDifferentShardCaches() {
         final ExecutorService executorService2 = spy(Executors.newFixedThreadPool(1));
-        final KinesisDataFetcher kinesisDataFetcher = spy(new KinesisDataFetcher(kinesisClient, streamName, shardId, MAX_RECORDS_PER_CALL, NULL_METRICS_FACTORY));
+        final KinesisDataFetcher kinesisDataFetcher = spy(
+                new KinesisDataFetcher(kinesisClient, streamName, shardId, MAX_RECORDS_PER_CALL, NULL_METRICS_FACTORY));
         final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy2 =
-                spy(new AsynchronousGetRecordsRetrievalStrategy(kinesisDataFetcher, 5 , 5, shardId));
+                spy(new AsynchronousGetRecordsRetrievalStrategy(kinesisDataFetcher, 5, 5, shardId));
         final PrefetchRecordsPublisher recordsPublisher2 = new PrefetchRecordsPublisher(
                 MAX_SIZE,
                 MAX_BYTE_SIZE,
@@ -206,23 +215,28 @@ public class PrefetchRecordsPublisherIntegrationTest {
         recordsPublisher2.shutdown();
         sleep(100L);
         verify(executorService2).shutdownNow();
-//        verify(getRecordsRetrievalStrategy2).shutdown();
+        //        verify(getRecordsRetrievalStrategy2).shutdown();
     }
 
     @Test
     public void testExpiredIteratorException() {
-        when(dataFetcher.getRecords()).thenAnswer(new Answer<DataFetcherResult>() {
-            @Override
-            public DataFetcherResult answer(final InvocationOnMock invocationOnMock) throws Throwable {
-                throw ExpiredIteratorException.builder().message("ExpiredIterator").build();
-            }
-        }).thenCallRealMethod();
+        when(dataFetcher.getRecords())
+                .thenAnswer(new Answer<DataFetcherResult>() {
+                    @Override
+                    public DataFetcherResult answer(final InvocationOnMock invocationOnMock) throws Throwable {
+                        throw ExpiredIteratorException.builder()
+                                .message("ExpiredIterator")
+                                .build();
+                    }
+                })
+                .thenCallRealMethod();
         doNothing().when(dataFetcher).restartIterator();
 
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);
 
-        ProcessRecordsInput processRecordsInput = blockUntilRecordsAvailable(() -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
+        ProcessRecordsInput processRecordsInput = blockUntilRecordsAvailable(
+                        () -> evictPublishedEvent(getRecordsCache, "shardId"), 1000L)
                 .processRecordsInput();
 
         assertNotNull(processRecordsInput);
@@ -233,17 +247,26 @@ public class PrefetchRecordsPublisherIntegrationTest {
     @Test
     public void testExpiredIteratorExceptionWithInnerRestartIteratorException() {
         when(dataFetcher.getRecords())
-                .thenThrow(ExpiredIteratorException.builder().message("ExpiredIterator").build())
+                .thenThrow(ExpiredIteratorException.builder()
+                        .message("ExpiredIterator")
+                        .build())
                 .thenCallRealMethod()
-                .thenThrow(ExpiredIteratorException.builder().message("ExpiredIterator").build())
+                .thenThrow(ExpiredIteratorException.builder()
+                        .message("ExpiredIterator")
+                        .build())
                 .thenCallRealMethod();
 
         doThrow(IllegalStateException.class).when(dataFetcher).restartIterator();
 
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
 
-        final boolean conditionSatisfied = blockUntilConditionSatisfied(() ->
-                getRecordsCache.getPublisherSession().prefetchRecordsQueue().size() == MAX_SIZE, 5000);
+        final boolean conditionSatisfied = blockUntilConditionSatisfied(
+                () -> getRecordsCache
+                                .getPublisherSession()
+                                .prefetchRecordsQueue()
+                                .size()
+                        == MAX_SIZE,
+                5000);
         Assert.assertTrue(conditionSatisfied);
         // Asserts the exception was only thrown once for restartIterator
         verify(dataFetcher, times(2)).restartIterator();
@@ -258,26 +281,32 @@ public class PrefetchRecordsPublisherIntegrationTest {
         getRecordsCache.shutdown();
         sleep(100L);
         verify(executorService).shutdown();
-//        verify(getRecordsRetrievalStrategy).shutdown();
+        //        verify(getRecordsRetrievalStrategy).shutdown();
     }
 
     private void sleep(long millis) {
         try {
             Thread.sleep(millis);
-        } catch (InterruptedException e) {}
+        } catch (InterruptedException e) {
+        }
     }
 
     private class KinesisDataFetcherForTest extends KinesisDataFetcher {
-        public KinesisDataFetcherForTest(final KinesisAsyncClient kinesisClient,
-                                         final String streamName,
-                                         final String shardId,
-                                         final int maxRecords) {
+        public KinesisDataFetcherForTest(
+                final KinesisAsyncClient kinesisClient,
+                final String streamName,
+                final String shardId,
+                final int maxRecords) {
             super(kinesisClient, streamName, shardId, maxRecords, NULL_METRICS_FACTORY);
         }
 
         @Override
         public DataFetcherResult getRecords() {
-            GetRecordsResponse getRecordsResult = GetRecordsResponse.builder().records(new ArrayList<>(records)).nextShardIterator(nextShardIterator).millisBehindLatest(1000L).build();
+            GetRecordsResponse getRecordsResult = GetRecordsResponse.builder()
+                    .records(new ArrayList<>(records))
+                    .nextShardIterator(nextShardIterator)
+                    .millisBehindLatest(1000L)
+                    .build();
 
             return new AdvancingResult(getRecordsResult);
         }

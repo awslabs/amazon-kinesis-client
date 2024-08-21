@@ -32,14 +32,15 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
  */
 @KinesisClientInternalApi
 public class AWSExceptionManager {
-    private final Map<Class<? extends Throwable>, Function<? extends Throwable, RuntimeException>> map = new HashMap<>();
+    private final Map<Class<? extends Throwable>, Function<? extends Throwable, RuntimeException>> map =
+            new HashMap<>();
 
     @Setter
     @Accessors(fluent = true)
     private Function<Throwable, RuntimeException> defaultFunction = RuntimeException::new;
 
-    public <T extends Throwable> void add(@NonNull final Class<T> clazz,
-            @NonNull final Function<T, RuntimeException> function) {
+    public <T extends Throwable> void add(
+            @NonNull final Class<T> clazz, @NonNull final Function<T, RuntimeException> function) {
         map.put(clazz, function);
     }
 
@@ -66,5 +67,4 @@ public class AWSExceptionManager {
                 (Function<Throwable, ? extends RuntimeException>) handleFor(t);
         return f.apply(t);
     }
-
 }

@@ -21,7 +21,7 @@ import software.amazon.kinesis.retrieval.RetrievalSpecificConfig;
 public interface RetrievalConfigBuilder {
     /**
      * Creates a retrieval specific configuration using the supplied parameters, and internal class parameters
-     * 
+     *
      * @param kinesisAsyncClient
      *            the client that will be provided to the RetrievalSpecificConfig constructor
      * @param parent

@@ -17,14 +17,13 @@ package software.amazon.kinesis.retrieval.fanout;
 
 import java.util.concurrent.ExecutionException;
 
-import org.apache.commons.lang3.StringUtils;
-
 import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.model.ConsumerStatus;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamConsumerRequest;
@@ -52,15 +51,19 @@ import software.amazon.kinesis.retrieval.ConsumerRegistration;
 public class FanOutConsumerRegistration implements ConsumerRegistration {
     @NonNull
     private final KinesisAsyncClient kinesisClient;
+
     private final String streamName;
+
     @NonNull
     private final String streamConsumerName;
+
     private final int maxDescribeStreamSummaryRetries;
     private final int maxDescribeStreamConsumerRetries;
     private final int registerStreamConsumerRetries;
     private final long retryBackoffMillis;
 
     private String streamArn;
+
     @Setter(AccessLevel.PRIVATE)
     private String streamConsumerArn;
 
@@ -104,7 +107,9 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
                     }
                 } catch (ResourceInUseException e) {
                     // Consumer is present, call DescribeStreamConsumer
-                    log.debug("{} : Got ResourceInUseException consumer exists, will call DescribeStreamConsumer again.", streamName);
+                    log.debug(
+                            "{} : Got ResourceInUseException consumer exists, will call DescribeStreamConsumer again.",
+                            streamName);
                     response = describeStreamConsumer();
                 }
             }
@@ -123,9 +128,10 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
     private RegisterStreamConsumerResponse registerStreamConsumer() throws DependencyException {
         final AWSExceptionManager exceptionManager = createExceptionManager();
         try {
-            final RegisterStreamConsumerRequest request = KinesisRequestsBuilder
-                    .registerStreamConsumerRequestBuilder().streamARN(streamArn())
-                    .consumerName(streamConsumerName).build();
+            final RegisterStreamConsumerRequest request = KinesisRequestsBuilder.registerStreamConsumerRequestBuilder()
+                    .streamARN(streamArn())
+                    .consumerName(streamConsumerName)
+                    .build();
             return kinesisClient.registerStreamConsumer(request).get();
         } catch (ExecutionException e) {
             throw exceptionManager.apply(e.getCause());
@@ -135,18 +141,21 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
     }
 
     private DescribeStreamConsumerResponse describeStreamConsumer() throws DependencyException {
-        final DescribeStreamConsumerRequest.Builder requestBuilder = KinesisRequestsBuilder
-                .describeStreamConsumerRequestBuilder();
+        final DescribeStreamConsumerRequest.Builder requestBuilder =
+                KinesisRequestsBuilder.describeStreamConsumerRequestBuilder();
         final DescribeStreamConsumerRequest request;
 
         if (StringUtils.isEmpty(streamConsumerArn)) {
-            request = requestBuilder.streamARN(streamArn()).consumerName(streamConsumerName).build();
+            request = requestBuilder
+                    .streamARN(streamArn())
+                    .consumerName(streamConsumerName)
+                    .build();
         } else {
             request = requestBuilder.consumerARN(streamConsumerArn).build();
         }
 
-        final ServiceCallerSupplier<DescribeStreamConsumerResponse> dsc = () -> kinesisClient
-                .describeStreamConsumer(request).get();
+        final ServiceCallerSupplier<DescribeStreamConsumerResponse> dsc =
+                () -> kinesisClient.describeStreamConsumer(request).get();
 
         return retryWhenThrottled(dsc, maxDescribeStreamConsumerRetries, "DescribeStreamConsumer");
     }
@@ -178,10 +187,14 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
 
     private String streamArn() throws DependencyException {
         if (StringUtils.isEmpty(streamArn)) {
-            final DescribeStreamSummaryRequest request = KinesisRequestsBuilder
-                    .describeStreamSummaryRequestBuilder().streamName(streamName).build();
-            final ServiceCallerSupplier<String> dss = () -> kinesisClient.describeStreamSummary(request).get()
-                    .streamDescriptionSummary().streamARN();
+            final DescribeStreamSummaryRequest request = KinesisRequestsBuilder.describeStreamSummaryRequestBuilder()
+                    .streamName(streamName)
+                    .build();
+            final ServiceCallerSupplier<String> dss = () -> kinesisClient
+                    .describeStreamSummary(request)
+                    .get()
+                    .streamDescriptionSummary()
+                    .streamARN();
 
             streamArn = retryWhenThrottled(dss, maxDescribeStreamSummaryRetries, "DescribeStreamSummary");
         }
@@ -194,8 +207,9 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
         T get() throws ExecutionException, InterruptedException;
     }
 
-    private <T> T retryWhenThrottled(@NonNull final ServiceCallerSupplier<T> retriever, final int maxRetries,
-            @NonNull final String apiName) throws DependencyException {
+    private <T> T retryWhenThrottled(
+            @NonNull final ServiceCallerSupplier<T> retriever, final int maxRetries, @NonNull final String apiName)
+            throws DependencyException {
         final AWSExceptionManager exceptionManager = createExceptionManager();
 
         LimitExceededException finalException = null;
@@ -223,8 +237,8 @@ public class FanOutConsumerRegistration implements ConsumerRegistration {
         }
 
         if (finalException == null) {
-            throw new IllegalStateException(
-                    String.format("%s : Finished all retries and no exception was caught while calling %s", streamName, apiName));
+            throw new IllegalStateException(String.format(
+                    "%s : Finished all retries and no exception was caught while calling %s", streamName, apiName));
         }
 
         throw finalException;

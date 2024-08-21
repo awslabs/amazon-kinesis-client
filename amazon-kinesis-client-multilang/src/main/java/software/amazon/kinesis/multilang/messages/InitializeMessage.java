@@ -33,29 +33,29 @@ public class InitializeMessage extends Message {
      * The shard id that this processor is getting initialized for.
      */
     private String shardId;
+
     private String sequenceNumber;
     private Long subSequenceNumber;
 
     /**
      * Default constructor.
      */
-    public InitializeMessage() {
-    }
+    public InitializeMessage() {}
 
     /**
      * Convenience constructor.
-     * 
+     *
      * @param initializationInput {@link InitializationInput}
      */
     public InitializeMessage(InitializationInput initializationInput) {
         this.shardId = initializationInput.shardId();
         if (initializationInput.extendedSequenceNumber() != null) {
             this.sequenceNumber = initializationInput.extendedSequenceNumber().sequenceNumber();
-            this.subSequenceNumber = initializationInput.extendedSequenceNumber().subSequenceNumber();
+            this.subSequenceNumber =
+                    initializationInput.extendedSequenceNumber().subSequenceNumber();
         } else {
             this.sequenceNumber = null;
             this.subSequenceNumber = null;
         }
     }
-
 }

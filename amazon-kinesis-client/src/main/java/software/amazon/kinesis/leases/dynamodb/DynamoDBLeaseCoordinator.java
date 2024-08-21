@@ -14,8 +14,6 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -30,10 +28,13 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseRenewer;
 import software.amazon.kinesis.leases.LeaseTaker;
@@ -62,9 +63,13 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     // Time to wait for in-flight Runnables to finish when calling .stop();
     private static final long STOP_WAIT_TIME_MILLIS = 2000L;
     private static final ThreadFactory LEASE_COORDINATOR_THREAD_FACTORY = new ThreadFactoryBuilder()
-            .setNameFormat("LeaseCoordinator-%04d").setDaemon(true).build();
+            .setNameFormat("LeaseCoordinator-%04d")
+            .setDaemon(true)
+            .build();
     private static final ThreadFactory LEASE_RENEWAL_THREAD_FACTORY = new ThreadFactoryBuilder()
-            .setNameFormat("LeaseRenewer-%04d").setDaemon(true).build();
+            .setNameFormat("LeaseRenewer-%04d")
+            .setDaemon(true)
+            .build();
 
     private final LeaseRenewer leaseRenewer;
     private final LeaseTaker leaseTaker;
@@ -104,18 +109,26 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      *            Used to publish metrics about lease operations
      */
     @Deprecated
-    public DynamoDBLeaseCoordinator(final LeaseRefresher leaseRefresher,
-                                    final String workerIdentifier,
-                                    final long leaseDurationMillis,
-                                    final long epsilonMillis,
-                                    final int maxLeasesForWorker,
-                                    final int maxLeasesToStealAtOneTime,
-                                    final int maxLeaseRenewerThreadCount,
-                                    final MetricsFactory metricsFactory) {
-        this(leaseRefresher, workerIdentifier, leaseDurationMillis, epsilonMillis, maxLeasesForWorker,
-                maxLeasesToStealAtOneTime, maxLeaseRenewerThreadCount,
+    public DynamoDBLeaseCoordinator(
+            final LeaseRefresher leaseRefresher,
+            final String workerIdentifier,
+            final long leaseDurationMillis,
+            final long epsilonMillis,
+            final int maxLeasesForWorker,
+            final int maxLeasesToStealAtOneTime,
+            final int maxLeaseRenewerThreadCount,
+            final MetricsFactory metricsFactory) {
+        this(
+                leaseRefresher,
+                workerIdentifier,
+                leaseDurationMillis,
+                epsilonMillis,
+                maxLeasesForWorker,
+                maxLeasesToStealAtOneTime,
+                maxLeaseRenewerThreadCount,
                 TableConstants.DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY,
-                TableConstants.DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
+                TableConstants.DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY,
+                metricsFactory);
     }
 
     /**
@@ -140,21 +153,74 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      * @param metricsFactory
      *            Used to publish metrics about lease operations
      */
-    public DynamoDBLeaseCoordinator(final LeaseRefresher leaseRefresher,
-                                    final String workerIdentifier,
-                                    final long leaseDurationMillis,
-                                    final long epsilonMillis,
-                                    final int maxLeasesForWorker,
-                                    final int maxLeasesToStealAtOneTime,
-                                    final int maxLeaseRenewerThreadCount,
-                                    final long initialLeaseTableReadCapacity,
-                                    final long initialLeaseTableWriteCapacity,
-                                    final MetricsFactory metricsFactory) {
+    @Deprecated
+    public DynamoDBLeaseCoordinator(
+            final LeaseRefresher leaseRefresher,
+            final String workerIdentifier,
+            final long leaseDurationMillis,
+            final long epsilonMillis,
+            final int maxLeasesForWorker,
+            final int maxLeasesToStealAtOneTime,
+            final int maxLeaseRenewerThreadCount,
+            final long initialLeaseTableReadCapacity,
+            final long initialLeaseTableWriteCapacity,
+            final MetricsFactory metricsFactory) {
+        this(
+                leaseRefresher,
+                workerIdentifier,
+                leaseDurationMillis,
+                LeaseManagementConfig.DEFAULT_ENABLE_PRIORITY_LEASE_ASSIGNMENT,
+                epsilonMillis,
+                maxLeasesForWorker,
+                maxLeasesToStealAtOneTime,
+                maxLeaseRenewerThreadCount,
+                TableConstants.DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY,
+                TableConstants.DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY,
+                metricsFactory);
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param leaseRefresher
+     *            LeaseRefresher instance to use
+     * @param workerIdentifier
+     *            Identifies the worker (e.g. useful to track lease ownership)
+     * @param leaseDurationMillis
+     *            Duration of a lease
+     * @param enablePriorityLeaseAssignment
+     *            Whether to enable priority lease assignment for very expired leases
+     * @param epsilonMillis
+     *            Allow for some variance when calculating lease expirations
+     * @param maxLeasesForWorker
+     *            Max leases this Worker can handle at a time
+     * @param maxLeasesToStealAtOneTime
+     *            Steal up to these many leases at a time (for load balancing)
+     * @param initialLeaseTableReadCapacity
+     *            Initial dynamodb lease table read iops if creating the lease table
+     * @param initialLeaseTableWriteCapacity
+     *            Initial dynamodb lease table write iops if creating the lease table
+     * @param metricsFactory
+     *            Used to publish metrics about lease operations
+     */
+    public DynamoDBLeaseCoordinator(
+            final LeaseRefresher leaseRefresher,
+            final String workerIdentifier,
+            final long leaseDurationMillis,
+            final boolean enablePriorityLeaseAssignment,
+            final long epsilonMillis,
+            final int maxLeasesForWorker,
+            final int maxLeasesToStealAtOneTime,
+            final int maxLeaseRenewerThreadCount,
+            final long initialLeaseTableReadCapacity,
+            final long initialLeaseTableWriteCapacity,
+            final MetricsFactory metricsFactory) {
         this.leaseRefresher = leaseRefresher;
         this.leaseRenewalThreadpool = getLeaseRenewalExecutorService(maxLeaseRenewerThreadCount);
         this.leaseTaker = new DynamoDBLeaseTaker(leaseRefresher, workerIdentifier, leaseDurationMillis, metricsFactory)
                 .withMaxLeasesForWorker(maxLeasesForWorker)
-                .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime);
+                .withMaxLeasesToStealAtOneTime(maxLeasesToStealAtOneTime)
+                .withEnablePriorityLeaseAssignment(enablePriorityLeaseAssignment);
         this.leaseRenewer = new DynamoDBLeaseRenewer(
                 leaseRefresher, workerIdentifier, leaseDurationMillis, leaseRenewalThreadpool, metricsFactory);
         this.renewerIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, epsilonMillis);
@@ -169,7 +235,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         this.initialLeaseTableWriteCapacity = initialLeaseTableWriteCapacity;
         this.metricsFactory = metricsFactory;
 
-        log.info("With failover time {} ms and epsilon {} ms, LeaseCoordinator will renew leases every {} ms, take"
+        log.info(
+                "With failover time {} ms and epsilon {} ms, LeaseCoordinator will renew leases every {} ms, take"
                         + "leases every {} ms, process maximum of {} leases and steal {} lease(s) at a time.",
                 leaseDurationMillis,
                 epsilonMillis,
@@ -191,7 +258,6 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 log.error("Throwable encountered in lease taking thread", t);
             }
         }
-
     }
 
     private class RenewerRunnable implements Runnable {
@@ -206,13 +272,11 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 log.error("Throwable encountered in lease renewing thread", t);
             }
         }
-
     }
 
     @Override
     public void initialize() throws ProvisionedThroughputException, DependencyException, IllegalStateException {
-        final boolean newTableCreated =
-                leaseRefresher.createLeaseTableIfNotExists();
+        final boolean newTableCreated = leaseRefresher.createLeaseTableIfNotExists();
         if (newTableCreated) {
             log.info("Created new lease table for coordinator with pay per request billing mode.");
         }
@@ -233,15 +297,11 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         leaseCoordinatorThreadPool = Executors.newScheduledThreadPool(2, LEASE_COORDINATOR_THREAD_FACTORY);
 
         // Taker runs with fixed DELAY because we want it to run slower in the event of performance degredation.
-        takerFuture = leaseCoordinatorThreadPool.scheduleWithFixedDelay(new TakerRunnable(),
-                0L,
-                takerIntervalMillis,
-                TimeUnit.MILLISECONDS);
+        takerFuture = leaseCoordinatorThreadPool.scheduleWithFixedDelay(
+                new TakerRunnable(), 0L, takerIntervalMillis, TimeUnit.MILLISECONDS);
         // Renewer runs at fixed INTERVAL because we want it to run at the same rate in the event of degredation.
-        leaseCoordinatorThreadPool.scheduleAtFixedRate(new RenewerRunnable(),
-                0L,
-                renewerIntervalMillis,
-                TimeUnit.MILLISECONDS);
+        leaseCoordinatorThreadPool.scheduleAtFixedRate(
+                new RenewerRunnable(), 0L, renewerIntervalMillis, TimeUnit.MILLISECONDS);
         running = true;
     }
 
@@ -305,11 +365,13 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
             leaseCoordinatorThreadPool.shutdown();
             try {
                 if (leaseCoordinatorThreadPool.awaitTermination(STOP_WAIT_TIME_MILLIS, TimeUnit.MILLISECONDS)) {
-                    log.info("Worker {} has successfully stopped lease-tracking threads",
+                    log.info(
+                            "Worker {} has successfully stopped lease-tracking threads",
                             leaseTaker.getWorkerIdentifier());
                 } else {
                     leaseCoordinatorThreadPool.shutdownNow();
-                    log.info("Worker {} stopped lease-tracking threads {} ms after stop",
+                    log.info(
+                            "Worker {} stopped lease-tracking threads {} ms after stop",
                             leaseTaker.getWorkerIdentifier(),
                             STOP_WAIT_TIME_MILLIS);
                 }
@@ -329,8 +391,9 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
 
     @Override
     public void stopLeaseTaker() {
-        takerFuture.cancel(false);
-
+        if (takerFuture != null) {
+            takerFuture.cancel(false);
+        }
     }
 
     @Override
@@ -348,8 +411,9 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     }
 
     @Override
-    public boolean updateLease(final Lease lease, final UUID concurrencyToken, final String operation,
-            final String singleStreamShardId) throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+    public boolean updateLease(
+            final Lease lease, final UUID concurrencyToken, final String operation, final String singleStreamShardId)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         return leaseRenewer.updateLease(lease, concurrencyToken, operation, singleStreamShardId);
     }
 
@@ -361,8 +425,13 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     private static ExecutorService getLeaseRenewalExecutorService(int maximumPoolSize) {
         int coreLeaseCount = Math.max(maximumPoolSize / 4, 2);
 
-        return new ThreadPoolExecutor(coreLeaseCount, maximumPoolSize, 60, TimeUnit.SECONDS,
-                new LinkedTransferQueue<>(), LEASE_RENEWAL_THREAD_FACTORY);
+        return new ThreadPoolExecutor(
+                coreLeaseCount,
+                maximumPoolSize,
+                60,
+                TimeUnit.SECONDS,
+                new LinkedTransferQueue<>(),
+                LEASE_RENEWAL_THREAD_FACTORY);
     }
 
     @Override
@@ -375,7 +444,9 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         if (leases == null) {
             return Collections.emptyList();
         }
-        return leases.stream().map(DynamoDBLeaseCoordinator::convertLeaseToAssignment).collect(Collectors.toList());
+        return leases.stream()
+                .map(DynamoDBLeaseCoordinator::convertLeaseToAssignment)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -385,11 +456,15 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      */
     public static ShardInfo convertLeaseToAssignment(final Lease lease) {
         if (lease instanceof MultiStreamLease) {
-            return new ShardInfo(((MultiStreamLease) lease).shardId(), lease.concurrencyToken().toString(), lease.parentShardIds(),
-                    lease.checkpoint(), ((MultiStreamLease) lease).streamIdentifier());
+            return new ShardInfo(
+                    ((MultiStreamLease) lease).shardId(),
+                    lease.concurrencyToken().toString(),
+                    lease.parentShardIds(),
+                    lease.checkpoint(),
+                    ((MultiStreamLease) lease).streamIdentifier());
         } else {
-            return new ShardInfo(lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(),
-                    lease.checkpoint());
+            return new ShardInfo(
+                    lease.leaseKey(), lease.concurrencyToken().toString(), lease.parentShardIds(), lease.checkpoint());
         }
     }
 

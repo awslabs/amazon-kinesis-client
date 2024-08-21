@@ -23,15 +23,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 
-import org.reactivestreams.Subscription;
-
 import com.google.common.annotations.VisibleForTesting;
-
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import org.reactivestreams.Subscription;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException;
 import software.amazon.kinesis.leases.ShardInfo;
@@ -57,9 +55,16 @@ public class ShardConsumer {
     private final ExecutorService executorService;
     private final ShardInfo shardInfo;
     private final ShardConsumerArgument shardConsumerArgument;
+
     @NonNull
     private final Optional<Long> logWarningForTaskAfterMillis;
+
+    /**
+     * @deprecated unused; to be removed in a "major" version bump
+     */
+    @Deprecated
     private final Function<ConsumerTask, ConsumerTask> taskMetricsDecorator;
+
     private final int bufferSize;
     private final TaskExecutionListener taskExecutionListener;
     private final String streamIdentifier;
@@ -80,8 +85,10 @@ public class ShardConsumer {
     private ConsumerState currentState;
 
     private final Object shutdownLock = new Object();
+
     @Getter(AccessLevel.PUBLIC)
     private volatile ShutdownReason shutdownReason;
+
     private volatile ShutdownNotification shutdownNotification;
 
     private final ShardConsumerSubscriber subscriber;
@@ -89,41 +96,85 @@ public class ShardConsumer {
     private ProcessRecordsInput shardEndProcessRecordsInput;
 
     @Deprecated
-    public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
-            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
+    public ShardConsumer(
+            RecordsPublisher recordsPublisher,
+            ExecutorService executorService,
+            ShardInfo shardInfo,
+            Optional<Long> logWarningForTaskAfterMillis,
+            ShardConsumerArgument shardConsumerArgument,
             TaskExecutionListener taskExecutionListener) {
-        this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
+        this(
+                recordsPublisher,
+                executorService,
+                shardInfo,
+                logWarningForTaskAfterMillis,
+                shardConsumerArgument,
                 ConsumerStates.INITIAL_STATE,
-                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener,
+                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()),
+                8,
+                taskExecutionListener,
                 LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
     }
 
-    public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
-            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-            TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
-        this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
+    public ShardConsumer(
+            RecordsPublisher recordsPublisher,
+            ExecutorService executorService,
+            ShardInfo shardInfo,
+            Optional<Long> logWarningForTaskAfterMillis,
+            ShardConsumerArgument shardConsumerArgument,
+            TaskExecutionListener taskExecutionListener,
+            int readTimeoutsToIgnoreBeforeWarning) {
+        this(
+                recordsPublisher,
+                executorService,
+                shardInfo,
+                logWarningForTaskAfterMillis,
+                shardConsumerArgument,
                 ConsumerStates.INITIAL_STATE,
-                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()), 8, taskExecutionListener,
+                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()),
+                8,
+                taskExecutionListener,
                 readTimeoutsToIgnoreBeforeWarning);
     }
 
     @Deprecated
-    public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
-            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-            ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator, int bufferSize,
+    public ShardConsumer(
+            RecordsPublisher recordsPublisher,
+            ExecutorService executorService,
+            ShardInfo shardInfo,
+            Optional<Long> logWarningForTaskAfterMillis,
+            ShardConsumerArgument shardConsumerArgument,
+            ConsumerState initialState,
+            Function<ConsumerTask, ConsumerTask> taskMetricsDecorator,
+            int bufferSize,
             TaskExecutionListener taskExecutionListener) {
-        this(recordsPublisher, executorService, shardInfo, logWarningForTaskAfterMillis, shardConsumerArgument,
-                initialState, taskMetricsDecorator, bufferSize, taskExecutionListener,
+        this(
+                recordsPublisher,
+                executorService,
+                shardInfo,
+                logWarningForTaskAfterMillis,
+                shardConsumerArgument,
+                initialState,
+                taskMetricsDecorator,
+                bufferSize,
+                taskExecutionListener,
                 LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
     }
 
     //
     // TODO: Make bufferSize configurable
     //
-    public ShardConsumer(RecordsPublisher recordsPublisher, ExecutorService executorService, ShardInfo shardInfo,
-            Optional<Long> logWarningForTaskAfterMillis, ShardConsumerArgument shardConsumerArgument,
-            ConsumerState initialState, Function<ConsumerTask, ConsumerTask> taskMetricsDecorator, int bufferSize,
-            TaskExecutionListener taskExecutionListener, int readTimeoutsToIgnoreBeforeWarning) {
+    public ShardConsumer(
+            RecordsPublisher recordsPublisher,
+            ExecutorService executorService,
+            ShardInfo shardInfo,
+            Optional<Long> logWarningForTaskAfterMillis,
+            ShardConsumerArgument shardConsumerArgument,
+            ConsumerState initialState,
+            Function<ConsumerTask, ConsumerTask> taskMetricsDecorator,
+            int bufferSize,
+            TaskExecutionListener taskExecutionListener,
+            int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.executorService = executorService;
         this.shardInfo = shardInfo;
@@ -133,8 +184,8 @@ public class ShardConsumer {
         this.taskExecutionListener = taskExecutionListener;
         this.currentState = initialState;
         this.taskMetricsDecorator = taskMetricsDecorator;
-        subscriber = new ShardConsumerSubscriber(recordsPublisher, executorService, bufferSize, this,
-                readTimeoutsToIgnoreBeforeWarning);
+        subscriber = new ShardConsumerSubscriber(
+                recordsPublisher, executorService, bufferSize, this, readTimeoutsToIgnoreBeforeWarning);
         this.bufferSize = bufferSize;
 
         if (this.shardInfo.isCompleted()) {
@@ -173,13 +224,16 @@ public class ShardConsumer {
                         // Task rejection during the subscribe() call will not be propagated back as it not executed
                         // in the context of the Scheduler thread. Hence we should not assume the subscription will
                         // always be successful.
+                        // But if subscription was not successful, then it will recover
+                        // during healthCheck which will restart subscription.
+                        // From Shardconsumer point of view, initialization after the below subscribe call
+                        // is complete
                         subscribe();
                         needsInitialization = false;
                     }
                 }
                 stateChangeFuture = initializeComplete();
             }
-
         } catch (InterruptedException e) {
             //
             // Ignored should be handled by scheduler
@@ -199,7 +253,6 @@ public class ShardConsumer {
                 throw (Error) t;
             }
         }
-
     }
 
     @VisibleForTesting
@@ -213,8 +266,10 @@ public class ShardConsumer {
         }
         Throwable dispatchFailure = subscriber.getAndResetDispatchFailure();
         if (dispatchFailure != null) {
-            log.warn("{} : Exception occurred while dispatching incoming data.  The incoming data has been skipped",
-                    streamIdentifier, dispatchFailure);
+            log.warn(
+                    "{} : Exception occurred while dispatching incoming data.  The incoming data has been skipped",
+                    streamIdentifier,
+                    dispatchFailure);
             return dispatchFailure;
         }
 
@@ -230,8 +285,9 @@ public class ShardConsumer {
 
     String longRunningTaskMessage(Duration taken) {
         if (taken != null) {
-            return String.format("Previous %s task still pending for shard %s since %s ago. ", currentTask.taskType(),
-                    shardInfo.shardId(), taken);
+            return String.format(
+                    "Previous %s task still pending for shard %s since %s ago. ",
+                    currentTask.taskType(), shardInfo.shardId(), taken);
         }
         return null;
     }
@@ -272,46 +328,68 @@ public class ShardConsumer {
 
     @VisibleForTesting
     synchronized CompletableFuture<Boolean> initializeComplete() {
+        if (!needsInitialization) {
+            // initialization already complete, this must be a no-op.
+            // ShardConsumer must be in ProcessingState and
+            // any further activity will be driven by publisher pushing data to subscriber
+            // which invokes handleInput and that triggers ProcessTask.
+            // Scheduler is only meant to do health-checks to ensure the consumer
+            // is not stuck for any reason and to do shutdown handling.
+            return CompletableFuture.completedFuture(true);
+        }
+
         if (taskOutcome != null) {
             updateState(taskOutcome);
         }
         if (currentState.state() == ConsumerStates.ShardConsumerState.PROCESSING) {
             return CompletableFuture.completedFuture(true);
         }
-        return CompletableFuture.supplyAsync(() -> {
-            if (isShutdownRequested()) {
-                throw new IllegalStateException("Shutdown requested while initializing");
-            }
-            executeTask(null);
-            if (isShutdownRequested()) {
-                throw new IllegalStateException("Shutdown requested while initializing");
-            }
-            return false;
-        }, executorService);
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    if (isShutdownRequested()) {
+                        throw new IllegalStateException("Shutdown requested while initializing");
+                    }
+                    executeTask(null);
+                    if (isShutdownRequested()) {
+                        throw new IllegalStateException("Shutdown requested while initializing");
+                    }
+                    return false;
+                },
+                executorService);
     }
 
     @VisibleForTesting
     CompletableFuture<Boolean> shutdownComplete() {
-        return CompletableFuture.supplyAsync(() -> {
-            synchronized (this) {
-                if (taskOutcome != null) {
-                    updateState(taskOutcome);
-                } else {
-                    //
-                    // ShardConsumer has been asked to shutdown before the first task even had a chance to run.
-                    // In this case generate a successful task outcome, and allow the shutdown to continue.
-                    // This should only happen if the lease was lost before the initial state had a chance to run.
-                    //
-                    updateState(TaskOutcome.SUCCESSFUL);
-                }
-                if (isShutdown()) {
-                    return true;
-                }
+        return CompletableFuture.supplyAsync(
+                () -> {
+                    synchronized (this) {
+                        if (taskOutcome != null) {
+                            updateState(taskOutcome);
+                        } else {
+                            //
+                            // ShardConsumer has been asked to shutdown before the first task even had a chance to run.
+                            // In this case generate a successful task outcome, and allow the shutdown to continue.
+                            // This should only happen if the lease was lost before the initial state had a chance to
+                            // run.
+                            //
+                            updateState(TaskOutcome.SUCCESSFUL);
+                        }
+                        if (isShutdown()) {
+                            return true;
+                        }
 
-                executeTask(shardEndProcessRecordsInput);
-                return false;
-            }
-        }, executorService);
+                        executeTask(shardEndProcessRecordsInput);
+
+                        // call shutdownNotification.shutdownComplete() if shutting down as part of gracefulShutdown
+                        if (currentState.state() == ConsumerStates.ShardConsumerState.SHUTTING_DOWN
+                                && taskOutcome == TaskOutcome.SUCCESSFUL
+                                && shutdownNotification != null) {
+                            shutdownNotification.shutdownComplete();
+                        }
+                        return false;
+                    }
+                },
+                executorService);
     }
 
     private synchronized void processData(ProcessRecordsInput input) {
@@ -320,7 +398,9 @@ public class ShardConsumer {
 
     private synchronized void executeTask(ProcessRecordsInput input) {
         TaskExecutionListenerInput taskExecutionListenerInput = TaskExecutionListenerInput.builder()
-                .shardInfo(shardInfo).taskType(currentState.taskType()).build();
+                .shardInfo(shardInfo)
+                .taskType(currentState.taskType())
+                .build();
         taskExecutionListener.beforeTaskExecution(taskExecutionListenerInput);
         ConsumerTask task = currentState.createTask(shardConsumerArgument, ShardConsumer.this, input);
         if (task != null) {
@@ -334,7 +414,9 @@ public class ShardConsumer {
                 taskIsRunning = false;
             }
             taskOutcome = resultToOutcome(result);
-            taskExecutionListenerInput = taskExecutionListenerInput.toBuilder().taskOutcome(taskOutcome).build();
+            taskExecutionListenerInput = taskExecutionListenerInput.toBuilder()
+                    .taskOutcome(taskOutcome)
+                    .build();
         }
         taskExecutionListener.afterTaskExecution(taskExecutionListenerInput);
     }
@@ -353,19 +435,19 @@ public class ShardConsumer {
     private synchronized void updateState(TaskOutcome outcome) {
         ConsumerState nextState = currentState;
         switch (outcome) {
-        case SUCCESSFUL:
-            nextState = currentState.successTransition();
-            break;
-        case END_OF_SHARD:
-            markForShutdown(ShutdownReason.SHARD_END);
-            break;
-        case FAILURE:
-            nextState = currentState.failureTransition();
-            break;
-        default:
-            log.error("{} : No handler for outcome of {}", streamIdentifier, outcome.name());
-            nextState = currentState.failureTransition();
-            break;
+            case SUCCESSFUL:
+                nextState = currentState.successTransition();
+                break;
+            case END_OF_SHARD:
+                markForShutdown(ShutdownReason.SHARD_END);
+                break;
+            case FAILURE:
+                nextState = currentState.failureTransition();
+                break;
+            default:
+                log.error("{} : No handler for outcome of {}", streamIdentifier, outcome.name());
+                nextState = currentState.failureTransition();
+                break;
         }
 
         nextState = handleShutdownTransition(outcome, nextState);
@@ -387,9 +469,16 @@ public class ShardConsumer {
             Exception taskException = taskResult.getException();
             if (taskException instanceof BlockedOnParentShardException) {
                 // No need to log the stack trace for this exception (it is very specific).
-                log.debug("{} : Shard {} is blocked on completion of parent shard.", streamIdentifier, shardInfo.shardId());
+                log.debug(
+                        "{} : Shard {} is blocked on completion of parent shard.",
+                        streamIdentifier,
+                        shardInfo.shardId());
             } else {
-                log.debug("{} : Caught exception running {} task: ", streamIdentifier, currentTask.taskType(), taskResult.getException());
+                log.debug(
+                        "{} : Caught exception running {} task: ",
+                        streamIdentifier,
+                        currentTask.taskType(),
+                        taskResult.getException());
             }
         }
     }
@@ -470,5 +559,4 @@ public class ShardConsumer {
             }
         };
     }
-
 }

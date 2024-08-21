@@ -15,21 +15,24 @@
 
 package software.amazon.kinesis.leases;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import java.time.Duration;
+import java.util.Collection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.awssdk.services.dynamodb.model.Tag;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
@@ -49,12 +52,17 @@ public class LeaseManagementConfig {
 
     public static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofMinutes(1);
 
-    public static final long DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(1).toMillis();
-    public static final long DEFAULT_COMPLETED_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(5).toMillis();
-    public static final long DEFAULT_GARBAGE_LEASE_CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(30).toMillis();
+    public static final long DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS =
+            Duration.ofMinutes(1).toMillis();
+    public static final long DEFAULT_COMPLETED_LEASE_CLEANUP_INTERVAL_MILLIS =
+            Duration.ofMinutes(5).toMillis();
+    public static final long DEFAULT_GARBAGE_LEASE_CLEANUP_INTERVAL_MILLIS =
+            Duration.ofMinutes(30).toMillis();
     public static final long DEFAULT_PERIODIC_SHARD_SYNC_INTERVAL_MILLIS = 2 * 60 * 1000L;
+    public static final boolean DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED = false;
+    public static final boolean DEFAULT_LEASE_TABLE_PITR_ENABLED = false;
+    public static final boolean DEFAULT_ENABLE_PRIORITY_LEASE_ASSIGNMENT = true;
     public static final int DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY = 3;
-
 
     public static final LeaseCleanupConfig DEFAULT_LEASE_CLEANUP_CONFIG = LeaseCleanupConfig.builder()
             .leaseCleanupIntervalMillis(DEFAULT_LEASE_CLEANUP_INTERVAL_MILLIS)
@@ -97,6 +105,17 @@ public class LeaseManagementConfig {
      * <p>Default value: 10000L</p>
      */
     private long failoverTimeMillis = 10000L;
+
+    /**
+     * Whether workers should take very expired leases at priority. A very expired lease is when a worker does not
+     * renew its lease in 3 * {@link LeaseManagementConfig#failoverTimeMillis}. Very expired leases will be taken at
+     * priority for a worker which disregards the target leases for the worker but obeys
+     * {@link LeaseManagementConfig#maxLeasesForWorker}. New leases for new shards due to shard mutation are
+     * considered to be very expired and taken with priority.
+     *
+     * <p>Default value: true </p>
+     */
+    private boolean enablePriorityLeaseAssignment = DEFAULT_ENABLE_PRIORITY_LEASE_ASSIGNMENT;
 
     /**
      * Shard sync interval in milliseconds - e.g. wait for this long between shard sync tasks.
@@ -191,6 +210,29 @@ public class LeaseManagementConfig {
     private BillingMode billingMode = BillingMode.PAY_PER_REQUEST;
 
     /**
+     * Whether to enable deletion protection on the DynamoDB lease table created by KCL. This does not update
+     * already existing tables.
+     *
+     * <p>Default value: false
+     */
+    private boolean leaseTableDeletionProtectionEnabled = DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED;
+
+    /**
+     * Whether to enable PITR (point in time recovery) on the DynamoDB lease table created by KCL. If true, this can
+     * update existing table's PITR.
+     *
+     * <p>Default value: false
+     */
+    private boolean leaseTablePitrEnabled = DEFAULT_LEASE_TABLE_PITR_ENABLED;
+
+    /**
+     * The list of tags to be applied to the DynamoDB table created for lease management.
+     *
+     * <p>Default value: {@link DefaultSdkAutoConstructList}
+     */
+    private Collection<Tag> tags = DefaultSdkAutoConstructList.getInstance();
+
+    /**
      * Frequency (in millis) of the auditor job to scan for partial leases in the lease table.
      * If the auditor detects any hole in the leases for a stream, then it would trigger shard sync based on
      * {@link #leasesRecoveryAuditorInconsistencyConfidenceThreshold}
@@ -202,7 +244,8 @@ public class LeaseManagementConfig {
      * is inconsistent. If the auditor finds same set of inconsistencies consecutively for a stream for this many times,
      * then it would trigger a shard sync.
      */
-    private int leasesRecoveryAuditorInconsistencyConfidenceThreshold = DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY;
+    private int leasesRecoveryAuditorInconsistencyConfidenceThreshold =
+            DEFAULT_CONSECUTIVE_HOLES_FOR_TRIGGERING_LEASE_RECOVERY;
 
     /**
      * The initial position for getting records from Kinesis streams.
@@ -219,8 +262,12 @@ public class LeaseManagementConfig {
     private MetricsFactory metricsFactory = new NullMetricsFactory();
 
     @Deprecated
-    public LeaseManagementConfig(String tableName, DynamoDbAsyncClient dynamoDBClient, KinesisAsyncClient kinesisClient,
-            String streamName, String workerIdentifier) {
+    public LeaseManagementConfig(
+            String tableName,
+            DynamoDbAsyncClient dynamoDBClient,
+            KinesisAsyncClient kinesisClient,
+            String streamName,
+            String workerIdentifier) {
         this.tableName = tableName;
         this.dynamoDBClient = dynamoDBClient;
         this.kinesisClient = kinesisClient;
@@ -228,7 +275,10 @@ public class LeaseManagementConfig {
         this.workerIdentifier = workerIdentifier;
     }
 
-    public LeaseManagementConfig(String tableName, DynamoDbAsyncClient dynamoDBClient, KinesisAsyncClient kinesisClient,
+    public LeaseManagementConfig(
+            String tableName,
+            DynamoDbAsyncClient dynamoDBClient,
+            KinesisAsyncClient kinesisClient,
             String workerIdentifier) {
         this.tableName = tableName;
         this.dynamoDBClient = dynamoDBClient;
@@ -272,14 +322,20 @@ public class LeaseManagementConfig {
      *
      * <p>Default value: {@link LeaseManagementThreadPool}</p>
      */
-    private ExecutorService executorService = new LeaseManagementThreadPool(
-            new ThreadFactoryBuilder().setNameFormat("ShardSyncTaskManager-%04d").build());
+    private ExecutorService executorService = new LeaseManagementThreadPool(new ThreadFactoryBuilder()
+            .setNameFormat("ShardSyncTaskManager-%04d")
+            .build());
 
     static class LeaseManagementThreadPool extends ThreadPoolExecutor {
         private static final long DEFAULT_KEEP_ALIVE_TIME = 60L;
 
         LeaseManagementThreadPool(ThreadFactory threadFactory) {
-            super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE_TIME, TimeUnit.SECONDS, new SynchronousQueue<>(),
+            super(
+                    0,
+                    Integer.MAX_VALUE,
+                    DEFAULT_KEEP_ALIVE_TIME,
+                    TimeUnit.SECONDS,
+                    new SynchronousQueue<>(),
                     threadFactory);
         }
     }
@@ -299,7 +355,7 @@ public class LeaseManagementConfig {
     private LeaseManagementFactory leaseManagementFactory;
 
     public HierarchicalShardSyncer hierarchicalShardSyncer() {
-        if(hierarchicalShardSyncer == null) {
+        if (hierarchicalShardSyncer == null) {
             hierarchicalShardSyncer = new HierarchicalShardSyncer();
         }
         return hierarchicalShardSyncer;
@@ -309,7 +365,8 @@ public class LeaseManagementConfig {
     public LeaseManagementFactory leaseManagementFactory() {
         if (leaseManagementFactory == null) {
             Validate.notEmpty(streamName(), "Stream name is empty");
-            leaseManagementFactory = new DynamoDBLeaseManagementFactory(kinesisClient(),
+            leaseManagementFactory = new DynamoDBLeaseManagementFactory(
+                    kinesisClient(),
                     streamName(),
                     dynamoDBClient(),
                     tableName(),
@@ -333,7 +390,10 @@ public class LeaseManagementConfig {
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
                     hierarchicalShardSyncer(),
-                    tableCreatorCallback(), dynamoDbRequestTimeout(), billingMode());
+                    tableCreatorCallback(),
+                    dynamoDbRequestTimeout(),
+                    billingMode(),
+                    tags());
         }
         return leaseManagementFactory;
     }
@@ -344,14 +404,17 @@ public class LeaseManagementConfig {
      * @param isMultiStreamingMode
      * @return LeaseManagementFactory
      */
-    public LeaseManagementFactory leaseManagementFactory(final LeaseSerializer leaseSerializer, boolean isMultiStreamingMode) {
-        if(leaseManagementFactory == null) {
-            leaseManagementFactory = new DynamoDBLeaseManagementFactory(kinesisClient(),
+    public LeaseManagementFactory leaseManagementFactory(
+            final LeaseSerializer leaseSerializer, boolean isMultiStreamingMode) {
+        if (leaseManagementFactory == null) {
+            leaseManagementFactory = new DynamoDBLeaseManagementFactory(
+                    kinesisClient(),
                     dynamoDBClient(),
                     tableName(),
                     workerIdentifier(),
                     executorService(),
                     failoverTimeMillis(),
+                    enablePriorityLeaseAssignment(),
                     epsilonMillis(),
                     maxLeasesForWorker(),
                     maxLeasesToStealAtOneTime(),
@@ -371,6 +434,9 @@ public class LeaseManagementConfig {
                     tableCreatorCallback(),
                     dynamoDbRequestTimeout(),
                     billingMode(),
+                    leaseTableDeletionProtectionEnabled(),
+                    leaseTablePitrEnabled(),
+                    tags(),
                     leaseSerializer,
                     customShardDetectorProvider(),
                     isMultiStreamingMode,

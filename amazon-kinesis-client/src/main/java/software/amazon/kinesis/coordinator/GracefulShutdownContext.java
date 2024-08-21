@@ -14,22 +14,22 @@
  */
 package software.amazon.kinesis.coordinator;
 
+import java.util.concurrent.CountDownLatch;
+
+import lombok.Builder;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
-import java.util.concurrent.CountDownLatch;
-
 @Data
+@Builder
 @Accessors(fluent = true)
 class GracefulShutdownContext {
     private final CountDownLatch shutdownCompleteLatch;
     private final CountDownLatch notificationCompleteLatch;
+    private final CountDownLatch finalShutdownLatch;
     private final Scheduler scheduler;
 
-    static GracefulShutdownContext SHUTDOWN_ALREADY_COMPLETED = new GracefulShutdownContext(null, null, null);
-
-    boolean isShutdownAlreadyCompleted() {
+    boolean isRecordProcessorShutdownComplete() {
         return shutdownCompleteLatch == null && notificationCompleteLatch == null && scheduler == null;
     }
-
 }

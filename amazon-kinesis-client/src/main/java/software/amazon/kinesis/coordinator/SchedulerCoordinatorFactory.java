@@ -22,7 +22,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import lombok.Data;
 import lombok.NonNull;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -41,15 +40,16 @@ public class SchedulerCoordinatorFactory implements CoordinatorFactory {
      */
     @Override
     public ExecutorService createExecutorService() {
-        return new SchedulerThreadPoolExecutor(
-                new ThreadFactoryBuilder().setNameFormat("ShardRecordProcessor-%04d").build());
+        return new SchedulerThreadPoolExecutor(new ThreadFactoryBuilder()
+                .setNameFormat("ShardRecordProcessor-%04d")
+                .build());
     }
 
     static class SchedulerThreadPoolExecutor extends ThreadPoolExecutor {
         private static final long DEFAULT_KEEP_ALIVE = 60L;
+
         SchedulerThreadPoolExecutor(ThreadFactory threadFactory) {
-            super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE, TimeUnit.SECONDS, new SynchronousQueue<>(),
-                    threadFactory);
+            super(0, Integer.MAX_VALUE, DEFAULT_KEEP_ALIVE, TimeUnit.SECONDS, new SynchronousQueue<>(), threadFactory);
         }
     }
 
@@ -57,8 +57,8 @@ public class SchedulerCoordinatorFactory implements CoordinatorFactory {
      * {@inheritDoc}
      */
     @Override
-    public ShardRecordProcessorCheckpointer createRecordProcessorCheckpointer(@NonNull final ShardInfo shardInfo,
-                                                                              @NonNull final Checkpointer checkpoint) {
+    public ShardRecordProcessorCheckpointer createRecordProcessorCheckpointer(
+            @NonNull final ShardInfo shardInfo, @NonNull final Checkpointer checkpoint) {
         return new ShardRecordProcessorCheckpointer(shardInfo, checkpoint);
     }
 }

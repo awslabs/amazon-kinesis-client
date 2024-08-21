@@ -14,37 +14,33 @@
  */
 package software.amazon.kinesis.multilang.config;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
-
 import java.util.Arrays;
 
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.AWSCredentialsProviderChain;
 import com.amazonaws.auth.BasicAWSCredentials;
 import lombok.ToString;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.Test;
+import software.amazon.kinesis.multilang.auth.KclSTSAssumeRoleSessionCredentialsProvider;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSCredentialsProviderChain;
-
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
 
 public class AWSCredentialsProviderPropertyValueDecoderTest {
 
     private static final String TEST_ACCESS_KEY_ID = "123";
     private static final String TEST_SECRET_KEY = "456";
 
-    private String credentialName1 = "software.amazon.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$AlwaysSucceedCredentialsProvider";
-    private String credentialName2 = "software.amazon.kinesis.multilang.config.AWSCredentialsProviderPropertyValueDecoderTest$ConstructorCredentialsProvider";
-    private AWSCredentialsProviderPropertyValueDecoder decoder = new AWSCredentialsProviderPropertyValueDecoder();
+    private final String credentialName1 = AlwaysSucceedCredentialsProvider.class.getName();
+    private final String credentialName2 = ConstructorCredentialsProvider.class.getName();
+    private final AWSCredentialsProviderPropertyValueDecoder decoder = new AWSCredentialsProviderPropertyValueDecoder();
 
     @ToString
     private static class AWSCredentialsMatcher extends TypeSafeDiagnosingMatcher<AWSCredentialsProvider> {
@@ -57,10 +53,6 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
             this.akidMatcher = equalTo(akid);
             this.secretMatcher = equalTo(secret);
             this.classMatcher = instanceOf(AWSCredentialsProviderChain.class);
-        }
-
-        private AWSCredentialsMatcher(AWSCredentials expected) {
-            this(expected.getAWSAccessKeyId(), expected.getAWSSecretKey());
         }
 
         @Override
@@ -86,10 +78,10 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
 
         @Override
         public void describeTo(Description description) {
-            description.appendText("An AWSCredentialsProvider that provides an AWSCredential matching: ")
+            description
+                    .appendText("An AWSCredentialsProvider that provides an AWSCredential matching: ")
                     .appendList("(", ", ", ")", Arrays.asList(classMatcher, akidMatcher, secretMatcher));
         }
-
     }
 
     private static AWSCredentialsMatcher hasCredentials(String akid, String secret) {
@@ -121,6 +113,33 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
     }
 
     /**
+     * Test that providers in the multi-lang auth package can be resolved and instantiated.
+     */
+    @Test
+    public void testKclAuthProvider() {
+        for (final String className : Arrays.asList(
+                KclSTSAssumeRoleSessionCredentialsProvider.class.getName(), // fully-qualified name
+                KclSTSAssumeRoleSessionCredentialsProvider.class.getSimpleName() // name-only; needs prefix
+                )) {
+            final AWSCredentialsProvider provider = decoder.decodeValue(className + "|arn|sessionName");
+            assertNotNull(className, provider);
+        }
+    }
+
+    /**
+     * Test that a provider can be instantiated by its varargs constructor.
+     */
+    @Test
+    public void testVarArgAuthProvider() {
+        final String[] args = new String[] {"arg1", "arg2", "arg3"};
+        final String className = VarArgCredentialsProvider.class.getName();
+        final String encodedValue = className + "|" + String.join("|", args);
+
+        final AWSCredentialsProvider provider = decoder.decodeValue(encodedValue);
+        assertEquals(Arrays.toString(args), provider.getCredentials().getAWSAccessKeyId());
+    }
+
+    /**
      * This credentials provider will always succeed
      */
     public static class AlwaysSucceedCredentialsProvider implements AWSCredentialsProvider {
@@ -131,9 +150,7 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
         }
 
         @Override
-        public void refresh() {
-
-        }
+        public void refresh() {}
     }
 
     /**
@@ -144,9 +161,9 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
         private String arg1;
         private String arg2;
 
+        @SuppressWarnings("unused")
         public ConstructorCredentialsProvider(String arg1) {
-            this.arg1 = arg1;
-            this.arg2 = "blank";
+            this(arg1, "blank");
         }
 
         public ConstructorCredentialsProvider(String arg1, String arg2) {
@@ -160,8 +177,25 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
         }
 
         @Override
-        public void refresh() {
+        public void refresh() {}
+    }
 
+    private static class VarArgCredentialsProvider implements AWSCredentialsProvider {
+
+        private final String[] args;
+
+        public VarArgCredentialsProvider(final String[] args) {
+            this.args = args;
         }
+
+        @Override
+        public AWSCredentials getCredentials() {
+            // KISS solution to surface the constructor args
+            final String flattenedArgs = Arrays.toString(args);
+            return new BasicAWSCredentials(flattenedArgs, flattenedArgs);
+        }
+
+        @Override
+        public void refresh() {}
     }
 }

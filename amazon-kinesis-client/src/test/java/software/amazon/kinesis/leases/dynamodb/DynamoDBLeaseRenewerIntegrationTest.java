@@ -14,18 +14,12 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertThat;
-
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.Executors;
 
 import org.junit.Before;
 import org.junit.Test;
-
 import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.leases.Lease;
@@ -34,9 +28,15 @@ import software.amazon.kinesis.leases.LeaseRenewer;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.junit.Assert.assertThat;
+
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
-    private final String TEST_METRIC = "TestOperation";
+    private static final String TEST_METRIC = "TestOperation";
 
     // This test case's leases last 2 seconds
     private static final long LEASE_DURATION_MILLIS = 2000L;
@@ -45,8 +45,12 @@ public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
 
     @Before
     public void setup() {
-        renewer = new DynamoDBLeaseRenewer(leaseRefresher, "foo", LEASE_DURATION_MILLIS,
-                Executors.newCachedThreadPool(), new NullMetricsFactory());
+        renewer = new DynamoDBLeaseRenewer(
+                leaseRefresher,
+                "foo",
+                LEASE_DURATION_MILLIS,
+                Executors.newCachedThreadPool(),
+                new NullMetricsFactory());
     }
 
     @Test
@@ -110,7 +114,7 @@ public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
 
         builder.withLease("1", "foo").withLease("2", "foo").build();
         builder.addLeasesToRenew(renewer, "1", "2");
-        Lease lease2 =  builder.renewMutateAssert(renewer, "1", "2").get("2");
+        Lease lease2 = builder.renewMutateAssert(renewer, "1", "2").get("2");
 
         // This should be a copy that doesn't get updated
         Map<String, Lease> heldLeases = renewer.getCurrentlyHeldLeases();
@@ -140,7 +144,8 @@ public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
 
         Lease expected = renewer.getCurrentlyHeldLease("1");
         expected.checkpoint(new ExtendedSequenceNumber("new checkpoint"));
-        assertThat(renewer.updateLease(expected, expected.concurrencyToken(), TEST_METRIC, expected.leaseKey()),
+        assertThat(
+                renewer.updateLease(expected, expected.concurrencyToken(), TEST_METRIC, expected.leaseKey()),
                 equalTo(true));
 
         // Assert that the counter and data have changed immediately after the update...
@@ -255,8 +260,8 @@ public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
         builder.withLease(shardId, owner);
         Map<String, Lease> leases = builder.build();
-        DynamoDBLeaseRenewer renewer = new DynamoDBLeaseRenewer(leaseRefresher, owner, 30000L,
-                Executors.newCachedThreadPool(), new NullMetricsFactory());
+        DynamoDBLeaseRenewer renewer = new DynamoDBLeaseRenewer(
+                leaseRefresher, owner, 30000L, Executors.newCachedThreadPool(), new NullMetricsFactory());
         renewer.initialize();
         Map<String, Lease> heldLeases = renewer.getCurrentlyHeldLeases();
         assertThat(heldLeases.size(), equalTo(leases.size()));
@@ -270,8 +275,8 @@ public class DynamoDBLeaseRenewerIntegrationTest extends LeaseIntegrationTest {
         TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
         builder.withLease(shardId, owner);
         Map<String, Lease> leases = builder.build();
-        DynamoDBLeaseRenewer renewer = new DynamoDBLeaseRenewer(leaseRefresher, owner, 30000L,
-                Executors.newCachedThreadPool(), new NullMetricsFactory());
+        DynamoDBLeaseRenewer renewer = new DynamoDBLeaseRenewer(
+                leaseRefresher, owner, 30000L, Executors.newCachedThreadPool(), new NullMetricsFactory());
         renewer.initialize();
         Map<String, Lease> heldLeases = renewer.getCurrentlyHeldLeases();
         assertThat(heldLeases.size(), equalTo(leases.size()));

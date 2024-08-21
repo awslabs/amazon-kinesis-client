@@ -14,20 +14,27 @@
  */
 package software.amazon.kinesis.coordinator;
 
-
-import lombok.extern.slf4j.Slf4j;
-
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import lombok.extern.slf4j.Slf4j;
+
 class GracefulShutdownCoordinator {
+
+    /**
+     * arbitrary wait time for worker's finalShutdown
+     */
+    private static final long FINAL_SHUTDOWN_WAIT_TIME_SECONDS = 60L;
 
     CompletableFuture<Boolean> startGracefulShutdown(Callable<Boolean> shutdownCallable) {
         CompletableFuture<Boolean> cf = new CompletableFuture<>();
         CompletableFuture.runAsync(() -> {
-            try { cf.complete(shutdownCallable.call()); }
-            catch(Throwable ex) { cf.completeExceptionally(ex); }
+            try {
+                cf.complete(shutdownCallable.call());
+            } catch (Throwable ex) {
+                cf.completeExceptionally(ex);
+            }
         });
         return cf;
     }
@@ -45,7 +52,8 @@ class GracefulShutdownCoordinator {
         }
 
         private boolean isWorkerShutdownComplete(GracefulShutdownContext context) {
-            return context.scheduler().shutdownComplete() || context.scheduler().shardInfoShardConsumerMap().isEmpty();
+            return context.scheduler().shutdownComplete()
+                    || context.scheduler().shardInfoShardConsumerMap().isEmpty();
         }
 
         private String awaitingLogMessage(GracefulShutdownContext context) {
@@ -62,7 +70,18 @@ class GracefulShutdownCoordinator {
             return String.format("Waiting for %d record processors to complete final shutdown", outstanding);
         }
 
+        /**
+         * used to wait for the worker's final shutdown to complete before returning the future for graceful shutdown
+         * @return true if the final shutdown is successful, false otherwise.
+         */
+        private boolean waitForFinalShutdown(GracefulShutdownContext context) throws InterruptedException {
+            return context.finalShutdownLatch().await(FINAL_SHUTDOWN_WAIT_TIME_SECONDS, TimeUnit.SECONDS);
+        }
+
         private boolean waitForRecordProcessors(GracefulShutdownContext context) {
+            if (context.isRecordProcessorShutdownComplete()) {
+                return true;
+            }
 
             //
             // Awaiting for all ShardConsumer/RecordProcessors to be notified that a shutdown has been requested.
@@ -76,12 +95,14 @@ class GracefulShutdownCoordinator {
                         throw new InterruptedException();
                     }
                     log.info(awaitingLogMessage(context));
-                    if (workerShutdownWithRemaining(context.shutdownCompleteLatch().getCount(), context)) {
+                    if (workerShutdownWithRemaining(
+                            context.shutdownCompleteLatch().getCount(), context)) {
                         return false;
                     }
                 }
             } catch (InterruptedException ie) {
-                log.warn("Interrupted while waiting for notification complete, terminating shutdown. {}",
+                log.warn(
+                        "Interrupted while waiting for notification complete, terminating shutdown. {}",
                         awaitingLogMessage(context));
                 return false;
             }
@@ -113,12 +134,14 @@ class GracefulShutdownCoordinator {
                         throw new InterruptedException();
                     }
                     log.info(awaitingFinalShutdownMessage(context));
-                    if (workerShutdownWithRemaining(context.shutdownCompleteLatch().getCount(), context)) {
+                    if (workerShutdownWithRemaining(
+                            context.shutdownCompleteLatch().getCount(), context)) {
                         return false;
                     }
                 }
             } catch (InterruptedException ie) {
-                log.warn("Interrupted while waiting for shutdown completion, terminating shutdown. {}",
+                log.warn(
+                        "Interrupted while waiting for shutdown completion, terminating shutdown. {}",
                         awaitingFinalShutdownMessage(context));
                 return false;
             }
@@ -136,9 +159,12 @@ class GracefulShutdownCoordinator {
         private boolean workerShutdownWithRemaining(long outstanding, GracefulShutdownContext context) {
             if (isWorkerShutdownComplete(context)) {
                 if (outstanding != 0) {
-                    log.info("Shutdown completed, but shutdownCompleteLatch still had outstanding {} with a current"
-                            + " value of {}. shutdownComplete: {} -- Consumer Map: {}", outstanding,
-                            context.shutdownCompleteLatch().getCount(), context.scheduler().shutdownComplete(),
+                    log.info(
+                            "Shutdown completed, but shutdownCompleteLatch still had outstanding {} with a current"
+                                    + " value of {}. shutdownComplete: {} -- Consumer Map: {}",
+                            outstanding,
+                            context.shutdownCompleteLatch().getCount(),
+                            context.scheduler().shutdownComplete(),
                             context.scheduler().shardInfoShardConsumerMap().size());
                     return true;
                 }
@@ -148,14 +174,13 @@ class GracefulShutdownCoordinator {
 
         @Override
         public Boolean call() throws Exception {
-            GracefulShutdownContext context;
             try {
-                context = startWorkerShutdown.call();
+                final GracefulShutdownContext context = startWorkerShutdown.call();
+                return waitForRecordProcessors(context) && waitForFinalShutdown(context);
             } catch (Exception ex) {
                 log.warn("Caught exception while requesting initial worker shutdown.", ex);
                 throw ex;
             }
-            return context.isShutdownAlreadyCompleted() || waitForRecordProcessors(context);
         }
     }
 }

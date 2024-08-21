@@ -96,5 +96,4 @@ public class CoordinatorConfig {
      * <p>Default value: 1000L</p>
      */
     private long schedulerInitializationBackoffTimeMillis = 1000L;
-
 }

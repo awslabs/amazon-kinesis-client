@@ -1,0 +1,23 @@
+// Copied from amazon-kinesis-producer/aws/kinesis/protobuf/messages.proto with
+// subset of messages that KCL needs
+
+syntax = "proto2";
+package software.amazon.kinesis.retrieval.kpl;
+
+message Tag {
+  required string key = 1;
+  optional string value = 2;
+}
+
+message Record {
+  required uint64 partition_key_index = 1;
+  optional uint64 explicit_hash_key_index = 2;
+  required bytes data = 3;
+  repeated Tag tags = 4;
+}
+
+message AggregatedRecord {
+  repeated string partition_key_table = 1;
+  repeated string explicit_hash_key_table = 2;
+  repeated Record records = 3;
+}

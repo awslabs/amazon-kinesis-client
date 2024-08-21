@@ -14,16 +14,17 @@
  */
 package software.amazon.kinesis.common;
 
+import java.util.Date;
+
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
-
-import java.util.Date;
 
 /**
  * Class that houses the entities needed to specify the position in the stream from where a new application should
  * start.
  */
-@ToString @EqualsAndHashCode
+@ToString
+@EqualsAndHashCode
 public class InitialPositionInStreamExtended {
 
     private final InitialPositionInStream position;

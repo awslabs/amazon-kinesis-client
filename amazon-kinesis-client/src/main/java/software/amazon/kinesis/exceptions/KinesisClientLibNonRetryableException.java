@@ -16,7 +16,7 @@ package software.amazon.kinesis.exceptions;
 
 /**
  * Non-retryable exceptions. Simply retrying the same request/operation is not expected to succeed.
- * 
+ *
  */
 public abstract class KinesisClientLibNonRetryableException extends KinesisClientLibException {
 
@@ -24,7 +24,7 @@ public abstract class KinesisClientLibNonRetryableException extends KinesisClien
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Message.
      */
     public KinesisClientLibNonRetryableException(String message) {
@@ -33,7 +33,7 @@ public abstract class KinesisClientLibNonRetryableException extends KinesisClien
 
     /**
      * Constructor.
-     * 
+     *
      * @param message Message.
      * @param e Cause.
      */

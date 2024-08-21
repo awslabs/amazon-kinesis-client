@@ -1,14 +1,14 @@
 package software.amazon.kinesis.schemaregistry;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+
 import com.amazonaws.services.schemaregistry.common.Schema;
 import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDeserializer;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.common.KinesisClientLibraryPackage;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  *  Identifies and decodes Glue Schema Registry data from incoming KinesisClientRecords.
@@ -18,8 +18,7 @@ public class SchemaRegistryDecoder {
     private static final String USER_AGENT_APP_NAME = "kcl" + "-" + KinesisClientLibraryPackage.VERSION;
     private final GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer;
 
-    public SchemaRegistryDecoder(
-        GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer) {
+    public SchemaRegistryDecoder(GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer) {
         this.glueSchemaRegistryDeserializer = glueSchemaRegistryDeserializer;
         this.glueSchemaRegistryDeserializer.overrideUserAgentApp(USER_AGENT_APP_NAME);
     }
@@ -29,8 +28,7 @@ public class SchemaRegistryDecoder {
      * @param records List<KinesisClientRecord>
      * @return List<KinesisClientRecord>
      */
-    public List<KinesisClientRecord> decode(
-        final List<KinesisClientRecord> records) {
+    public List<KinesisClientRecord> decode(final List<KinesisClientRecord> records) {
         final List<KinesisClientRecord> decodedRecords = new ArrayList<>();
 
         for (final KinesisClientRecord record : records) {
@@ -58,15 +56,10 @@ public class SchemaRegistryDecoder {
             final Schema schema = glueSchemaRegistryDeserializer.getSchema(data);
             final ByteBuffer recordData = ByteBuffer.wrap(glueSchemaRegistryDeserializer.getData(data));
 
-            return
-                record.toBuilder()
-                    .schema(schema)
-                    .data(recordData)
-                    .build();
+            return record.toBuilder().schema(schema).data(recordData).build();
         } catch (Exception e) {
-            log.warn("Unable to decode Glue Schema Registry information from record {}: ",
-                record.sequenceNumber(), e);
-            //We ignore Glue Schema Registry failures and return the record.
+            log.warn("Unable to decode Glue Schema Registry information from record {}: ", record.sequenceNumber(), e);
+            // We ignore Glue Schema Registry failures and return the record.
             return record;
         }
     }

@@ -28,18 +28,18 @@ import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
  * that worker.
  */
 public interface LeaseRenewer {
-    
+
     /**
      * Bootstrap initial set of leases from the {@link LeaseRefresher} (e.g. upon process restart, pick up leases we own)
      * @throws DependencyException on unexpected DynamoDB failures
      * @throws InvalidStateException if lease table doesn't exist
      * @throws ProvisionedThroughputException if DynamoDB reads fail due to insufficient capacity
      */
-    void initialize() throws DependencyException, InvalidStateException, ProvisionedThroughputException;   
+    void initialize() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
      * Attempt to renew all currently held leases.
-     * 
+     *
      * @throws DependencyException on unexpected DynamoDB failures
      * @throws InvalidStateException if lease table does not exist
      */
@@ -54,7 +54,7 @@ public interface LeaseRenewer {
 
     /**
      * @param leaseKey key of the lease to retrieve
-     * 
+     *
      * @return a deep copy of a currently held lease, or null if we don't hold the lease
      */
     Lease getCurrentlyHeldLease(String leaseKey);
@@ -62,7 +62,7 @@ public interface LeaseRenewer {
     /**
      * Adds leases to this LeaseRenewer's set of currently held leases. Leases must have lastRenewalNanos set to the
      * last time the lease counter was incremented before being passed to this method.
-     * 
+     *
      * @param newLeases new leases.
      */
     void addLeasesToRenew(Collection<Lease> newLeases);
@@ -74,7 +74,7 @@ public interface LeaseRenewer {
 
     /**
      * Stops the lease renewer from continunig to maintain the given lease.
-     * 
+     *
      * @param lease the lease to drop.
      */
     void dropLease(Lease lease);
@@ -83,20 +83,19 @@ public interface LeaseRenewer {
      * Update application-specific fields in a currently held lease. Cannot be used to update internal fields such as
      * leaseCounter, leaseOwner, etc. Fails if we do not hold the lease, or if the concurrency token does not match
      * the concurrency token on the internal authoritative copy of the lease (ie, if we lost and re-acquired the lease).
-     * 
+     *
      * @param lease lease object containing updated data
      * @param concurrencyToken obtained by calling Lease.concurrencyToken for a currently held lease
      * @param operation that performs updateLease
      * @param singleStreamShardId shardId for metrics emission in single stream mode. MultiStream mode will get the
      *                            shardId from the lease object
-     * 
+     *
      * @return true if update succeeds, false otherwise
-     * 
+     *
      * @throws InvalidStateException if lease table does not exist
      * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
      * @throws DependencyException if DynamoDB update fails in an unexpected way
      */
     boolean updateLease(Lease lease, UUID concurrencyToken, String operation, String singleStreamShardId)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException;
-
 }

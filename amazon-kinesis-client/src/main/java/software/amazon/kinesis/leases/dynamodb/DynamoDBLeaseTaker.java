@@ -14,8 +14,6 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -28,6 +26,8 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -69,11 +69,14 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     // TODO: Remove these defaults and use the defaults in the config
     private int maxLeasesForWorker = Integer.MAX_VALUE;
     private int maxLeasesToStealAtOneTime = 1;
-
-    private long veryOldLeaseDurationNanosMultiplier = 3;
+    private boolean enablePriorityLeaseAssignment = true;
+    private int veryOldLeaseDurationNanosMultiplier = 3;
     private long lastScanTimeNanos = 0L;
 
-    public DynamoDBLeaseTaker(LeaseRefresher leaseRefresher, String workerIdentifier, long leaseDurationMillis,
+    public DynamoDBLeaseTaker(
+            LeaseRefresher leaseRefresher,
+            String workerIdentifier,
+            long leaseDurationMillis,
             final MetricsFactory metricsFactory) {
         this.leaseRefresher = leaseRefresher;
         this.workerIdentifier = workerIdentifier;
@@ -104,14 +107,28 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     }
 
     /**
+     * @deprecated Misspelled method, use {@link DynamoDBLeaseTaker#withVeryOldLeaseDurationNanosMultiplier(int)}
+     */
+    @Deprecated
+    public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultipler(long veryOldLeaseDurationNanosMultipler) {
+        this.veryOldLeaseDurationNanosMultiplier = (int) veryOldLeaseDurationNanosMultipler;
+        return this;
+    }
+
+    /**
      * Overrides the default very old lease duration nanos multiplier to increase the threshold for taking very old leases.
      * Setting this to a higher value than 3 will increase the threshold for very old lease taking.
      *
-     * @param veryOldLeaseDurationNanosMultipler Very old lease duration multiplier for adjusting very old lease taking.
+     * @param veryOldLeaseDurationNanosMultiplier Very old lease duration multiplier for adjusting very old lease taking.
      * @return LeaseTaker
      */
-    public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultipler(long veryOldLeaseDurationNanosMultipler) {
-        this.veryOldLeaseDurationNanosMultiplier = veryOldLeaseDurationNanosMultipler;
+    public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultiplier(int veryOldLeaseDurationNanosMultiplier) {
+        this.veryOldLeaseDurationNanosMultiplier = veryOldLeaseDurationNanosMultiplier;
+        return this;
+    }
+
+    public DynamoDBLeaseTaker withEnablePriorityLeaseAssignment(boolean enablePriorityLeaseAssignment) {
+        this.enablePriorityLeaseAssignment = enablePriorityLeaseAssignment;
         return this;
     }
 
@@ -153,7 +170,7 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * @throws InvalidStateException
      */
     synchronized Map<String, Lease> takeLeases(Callable<Long> timeProvider)
-        throws DependencyException, InvalidStateException {
+            throws DependencyException, InvalidStateException {
         // Key is leaseKey
         Map<String, Lease> takenLeases = new HashMap<>();
 
@@ -172,7 +189,10 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                         updateAllLeases(timeProvider);
                         success = true;
                     } catch (ProvisionedThroughputException e) {
-                        log.info("Worker {} could not find expired leases on try {} out of {}", workerIdentifier, i,
+                        log.info(
+                                "Worker {} could not find available leases on try {} out of {}",
+                                workerIdentifier,
+                                i,
                                 TAKE_RETRIES);
                         lastException = e;
                     }
@@ -184,14 +204,17 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             }
 
             if (lastException != null) {
-                log.error("Worker {} could not scan leases table, aborting TAKE_LEASES_DIMENSION. Exception caught by"
-                        + " last retry:", workerIdentifier, lastException);
+                log.error(
+                        "Worker {} could not scan leases table, aborting TAKE_LEASES_DIMENSION. Exception caught by"
+                                + " last retry:",
+                        workerIdentifier,
+                        lastException);
                 return takenLeases;
             }
 
-            List<Lease> expiredLeases = getExpiredLeases();
+            List<Lease> availableLeases = getAvailableLeases();
 
-            Set<Lease> leasesToTake = computeLeasesToTake(expiredLeases);
+            Set<Lease> leasesToTake = computeLeasesToTake(availableLeases, timeProvider);
             leasesToTake = updateStaleLeasesWithLatestState(updateAllLeasesTotalTimeMillis, leasesToTake);
 
             Set<String> untakenLeaseKeys = new HashSet<>();
@@ -214,8 +237,13 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                             success = true;
                             break;
                         } catch (ProvisionedThroughputException e) {
-                            log.info("Could not take lease with key {} for worker {} on try {} out of {} due to"
-                                            + " capacity", leaseKey, workerIdentifier, i, TAKE_RETRIES);
+                            log.info(
+                                    "Could not take lease with key {} for worker {} on try {} out of {} due to"
+                                            + " capacity",
+                                    leaseKey,
+                                    workerIdentifier,
+                                    i,
+                                    TAKE_RETRIES);
                         }
                     }
                 } finally {
@@ -224,12 +252,18 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             }
 
             if (takenLeases.size() > 0) {
-                log.info("Worker {} successfully took {} leases: {}", workerIdentifier, takenLeases.size(),
+                log.info(
+                        "Worker {} successfully took {} leases: {}",
+                        workerIdentifier,
+                        takenLeases.size(),
                         stringJoin(takenLeases.keySet(), ", "));
             }
 
             if (untakenLeaseKeys.size() > 0) {
-                log.info("Worker {} failed to take {} leases: {}", workerIdentifier, untakenLeaseKeys.size(),
+                log.info(
+                        "Worker {} failed to take {} leases: {}",
+                        workerIdentifier,
+                        untakenLeaseKeys.size(),
                         stringJoin(untakenLeaseKeys, ", "));
             }
 
@@ -251,21 +285,25 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * @param updateAllLeasesEndTime How long it takes for update all leases to complete
      * @return set of leases to take.
      */
-    private Set<Lease> updateStaleLeasesWithLatestState(long updateAllLeasesEndTime,
-                                                        Set<Lease> leasesToTake) {
+    private Set<Lease> updateStaleLeasesWithLatestState(long updateAllLeasesEndTime, Set<Lease> leasesToTake) {
         if (updateAllLeasesEndTime > leaseRenewalIntervalMillis * RENEWAL_SLACK_PERCENTAGE) {
-            leasesToTake = leasesToTake.stream().map(lease -> {
-                if (lease.isMarkedForLeaseSteal()) {
-                    try {
-                        log.debug("Updating stale lease {}.", lease.leaseKey());
-                        return leaseRefresher.getLease(lease.leaseKey());
-                    } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
-                        log.warn("Failed to fetch latest state of the lease {} that needs to be stolen, "
-                                 + "defaulting to existing lease", lease.leaseKey(), e);
-                    }
-                }
-                return lease;
-            }).collect(Collectors.toSet());
+            leasesToTake = leasesToTake.stream()
+                    .map(lease -> {
+                        if (lease.isMarkedForLeaseSteal()) {
+                            try {
+                                log.debug("Updating stale lease {}.", lease.leaseKey());
+                                return leaseRefresher.getLease(lease.leaseKey());
+                            } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
+                                log.warn(
+                                        "Failed to fetch latest state of the lease {} that needs to be stolen, "
+                                                + "defaulting to existing lease",
+                                        lease.leaseKey(),
+                                        e);
+                            }
+                        }
+                        return lease;
+                    })
+                    .collect(Collectors.toSet());
         }
         return leasesToTake;
     }
@@ -295,14 +333,14 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      *
      * @param timeProvider callable that supplies the current time
      *
-     * @return list of expired leases, possibly empty, never null.
+     * @return list of available leases, possibly empty, never null.
      *
      * @throws ProvisionedThroughputException if listLeases fails due to lack of provisioned throughput
      * @throws InvalidStateException if the lease table does not exist
      * @throws DependencyException if listLeases fails in an unexpected way
      */
     private void updateAllLeases(Callable<Long> timeProvider)
-        throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         List<Lease> freshList = leaseRefresher.listLeases();
         try {
             lastScanTimeNanos = timeProvider.call();
@@ -335,14 +373,16 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                     lease.lastCounterIncrementNanos(0L);
 
                     if (log.isDebugEnabled()) {
-                        log.debug("Treating new lease with key {} as never renewed because it is new and unowned.",
+                        log.debug(
+                                "Treating new lease with key {} as never renewed because it is new and unowned.",
                                 leaseKey);
                     }
                 } else {
                     // if this new lease is owned, treat it as renewed as of the scan
                     lease.lastCounterIncrementNanos(lastScanTimeNanos);
                     if (log.isDebugEnabled()) {
-                        log.debug("Treating new lease with key {} as recently renewed because it is new and owned.",
+                        log.debug(
+                                "Treating new lease with key {} as recently renewed because it is new and owned.",
                                 leaseKey);
                     }
                 }
@@ -356,43 +396,37 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     }
 
     /**
-     * @return list of leases that were expired as of our last scan.
+     * @return list of leases that available as of our last scan.
      */
-    private List<Lease> getExpiredLeases() {
-        List<Lease> expiredLeases = new ArrayList<>();
-
-        for (Lease lease : allLeases.values()) {
-            if (lease.isExpired(leaseDurationNanos, lastScanTimeNanos)) {
-                expiredLeases.add(lease);
-            }
-        }
-
-        return expiredLeases;
+    private List<Lease> getAvailableLeases() {
+        return allLeases.values().stream()
+                .filter(lease -> lease.isAvailable(leaseDurationNanos, lastScanTimeNanos))
+                .collect(Collectors.toList());
     }
 
     /**
      * Compute the number of leases I should try to take based on the state of the system.
      *
-     * @param expiredLeases list of leases we determined to be expired
+     * @param availableLeases list of leases we determined to be available
+     * @param timeProvider callable which returns the current time in nanos
      * @return set of leases to take.
      */
-    private Set<Lease> computeLeasesToTake(List<Lease> expiredLeases) {
-        Map<String, Integer> leaseCounts = computeLeaseCounts(expiredLeases);
+    @VisibleForTesting
+    Set<Lease> computeLeasesToTake(List<Lease> availableLeases, Callable<Long> timeProvider)
+            throws DependencyException {
+        Map<String, Integer> leaseCounts = computeLeaseCounts(availableLeases);
         Set<Lease> leasesToTake = new HashSet<>();
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, TAKE_LEASES_DIMENSION);
         MetricsUtil.addWorkerIdentifier(scope, workerIdentifier);
 
-        final int numAvailableLeases = expiredLeases.size();
-        int numLeases = 0;
-        int numWorkers = 0;
+        final int numAvailableLeases = availableLeases.size();
+        final int numLeases = allLeases.size();
+        final int numWorkers = leaseCounts.size();
         int numLeasesToReachTarget = 0;
         int leaseSpillover = 0;
         int veryOldLeaseCount = 0;
 
         try {
-            numLeases = allLeases.size();
-            numWorkers = leaseCounts.size();
-
             if (numLeases == 0) {
                 // If there are no leases, I shouldn't try to take any.
                 return leasesToTake;
@@ -418,7 +452,11 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                             "Worker {} target is {} leases and maxLeasesForWorker is {}. Resetting target to {},"
                                     + " lease spillover is {}. Note that some shards may not be processed if no other "
                                     + "workers are able to pick them up.",
-                            workerIdentifier, target, maxLeasesForWorker, maxLeasesForWorker, leaseSpillover);
+                            workerIdentifier,
+                            target,
+                            maxLeasesForWorker,
+                            maxLeasesForWorker,
+                            leaseSpillover);
                     target = maxLeasesForWorker;
                 }
             }
@@ -430,19 +468,28 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
             // If there are leases that have been expired for an extended period of
             // time, take them with priority, disregarding the target (computed
             // later) but obeying the maximum limit per worker.
-            final long nanoThreshold = System.nanoTime() - (veryOldLeaseDurationNanosMultiplier * leaseDurationNanos);
-            final List<Lease> veryOldLeases = allLeases.values().stream()
-                    .filter(lease -> nanoThreshold > lease.lastCounterIncrementNanos())
-                    .collect(Collectors.toList());
-
-            if (!veryOldLeases.isEmpty()) {
-                Collections.shuffle(veryOldLeases);
-                veryOldLeaseCount = Math.max(0, Math.min(maxLeasesForWorker - currentLeaseCount, veryOldLeases.size()));
-                HashSet<Lease> result = new HashSet<>(veryOldLeases.subList(0, veryOldLeaseCount));
-                if (veryOldLeaseCount > 0) {
-                    log.info("Taking leases that have been expired for a long time: {}", result);
+            if (enablePriorityLeaseAssignment) {
+                long currentNanoTime;
+                try {
+                    currentNanoTime = timeProvider.call();
+                } catch (Exception e) {
+                    throw new DependencyException("Exception caught from timeProvider", e);
                 }
-                return result;
+                final long nanoThreshold = currentNanoTime - (veryOldLeaseDurationNanosMultiplier * leaseDurationNanos);
+                final List<Lease> veryOldLeases = allLeases.values().stream()
+                        .filter(lease -> nanoThreshold > lease.lastCounterIncrementNanos())
+                        .collect(Collectors.toList());
+
+                if (!veryOldLeases.isEmpty()) {
+                    Collections.shuffle(veryOldLeases);
+                    veryOldLeaseCount =
+                            Math.max(0, Math.min(maxLeasesForWorker - currentLeaseCount, veryOldLeases.size()));
+                    HashSet<Lease> result = new HashSet<>(veryOldLeases.subList(0, veryOldLeaseCount));
+                    if (veryOldLeaseCount > 0) {
+                        log.info("Taking leases that have been expired for a long time: {}", result);
+                    }
+                    return result;
+                }
             }
 
             if (numLeasesToReachTarget <= 0) {
@@ -450,20 +497,23 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                 return leasesToTake;
             }
 
-            // Shuffle expiredLeases so workers don't all try to contend for the same leases.
-            Collections.shuffle(expiredLeases);
+            // Shuffle availableLeases so workers don't all try to contend for the same leases.
+            Collections.shuffle(availableLeases);
 
-            if (expiredLeases.size() > 0) {
-                // If we have expired leases, get up to <needed> leases from expiredLeases
-                for (; numLeasesToReachTarget > 0 && expiredLeases.size() > 0; numLeasesToReachTarget--) {
-                    leasesToTake.add(expiredLeases.remove(0));
+            if (availableLeases.size() > 0) {
+                // If we have available leases, get up to <needed> leases from availableLeases
+                for (; numLeasesToReachTarget > 0 && availableLeases.size() > 0; numLeasesToReachTarget--) {
+                    leasesToTake.add(availableLeases.remove(0));
                 }
             } else {
-                // If there are no expired leases and we need a lease, consider stealing.
+                // If there are no available leases and we need a lease, consider stealing.
                 List<Lease> leasesToSteal = chooseLeasesToSteal(leaseCounts, numLeasesToReachTarget, target);
                 for (Lease leaseToSteal : leasesToSteal) {
-                    log.info("Worker {} needed {} leases but none were expired, so it will steal lease {} from {}",
-                            workerIdentifier, numLeasesToReachTarget, leaseToSteal.leaseKey(),
+                    log.info(
+                            "Worker {} needed {} leases but none were available, so it will steal lease {} from {}",
+                            workerIdentifier,
+                            numLeasesToReachTarget,
+                            leaseToSteal.leaseKey(),
                             leaseToSteal.leaseOwner());
                     leasesToTake.add(leaseToSteal);
                 }
@@ -473,14 +523,20 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
                 log.info(
                         "Worker {} saw {} total leases, {} available leases, {} "
                                 + "workers. Target is {} leases, I have {} leases, I will take {} leases",
-                        workerIdentifier, numLeases, numAvailableLeases, numWorkers, target, myCount,
+                        workerIdentifier,
+                        numLeases,
+                        numAvailableLeases,
+                        numWorkers,
+                        target,
+                        myCount,
                         leasesToTake.size());
             }
         } finally {
-            scope.addData("ExpiredLeases", expiredLeases.size(), StandardUnit.COUNT, MetricsLevel.SUMMARY);
+            scope.addData("ExpiredLeases", numAvailableLeases, StandardUnit.COUNT, MetricsLevel.SUMMARY);
             scope.addData("LeaseSpillover", leaseSpillover, StandardUnit.COUNT, MetricsLevel.SUMMARY);
             scope.addData("LeasesToTake", leasesToTake.size(), StandardUnit.COUNT, MetricsLevel.DETAILED);
-            scope.addData("NeededLeases", Math.max(numLeasesToReachTarget, 0), StandardUnit.COUNT, MetricsLevel.DETAILED);
+            scope.addData(
+                    "NeededLeases", Math.max(numLeasesToReachTarget, 0), StandardUnit.COUNT, MetricsLevel.DETAILED);
             scope.addData("NumWorkers", numWorkers, StandardUnit.COUNT, MetricsLevel.SUMMARY);
             scope.addData("TotalLeases", numLeases, StandardUnit.COUNT, MetricsLevel.DETAILED);
             scope.addData("VeryOldLeases", veryOldLeaseCount, StandardUnit.COUNT, MetricsLevel.SUMMARY);
@@ -528,19 +584,17 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
 
         if (numLeasesToSteal <= 0) {
             if (log.isDebugEnabled()) {
-                log.debug(String.format("Worker %s not stealing from most loaded worker %s.  He has %d,"
-                        + " target is %d, and I need %d",
-                        workerIdentifier,
-                        mostLoadedWorker.getKey(),
-                        mostLoadedWorker.getValue(),
-                        target,
-                        needed));
+                log.debug(String.format(
+                        "Worker %s not stealing from most loaded worker %s.  He has %d,"
+                                + " target is %d, and I need %d",
+                        workerIdentifier, mostLoadedWorker.getKey(), mostLoadedWorker.getValue(), target, needed));
             }
             return leasesToSteal;
         } else {
             if (log.isDebugEnabled()) {
-                log.debug("Worker {} will attempt to steal {} leases from most loaded worker {}. "
-                        + " He has {} leases, target is {}, I need {}, maxLeasesToStealAtOneTime is {}.",
+                log.debug(
+                        "Worker {} will attempt to steal {} leases from most loaded worker {}. "
+                                + " He has {} leases, target is {}, I need {}, maxLeasesToStealAtOneTime is {}.",
                         workerIdentifier,
                         numLeasesToSteal,
                         mostLoadedWorker.getKey(),
@@ -573,19 +627,19 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
      * Count leases by host. Always includes myself, but otherwise only includes hosts that are currently holding
      * leases.
      *
-     * @param expiredLeases list of leases that are currently expired
+     * @param availableLeases list of leases that are currently available
      * @return map of workerIdentifier to lease count
      */
     @VisibleForTesting
-    Map<String, Integer> computeLeaseCounts(List<Lease> expiredLeases) {
+    Map<String, Integer> computeLeaseCounts(List<Lease> availableLeases) {
         Map<String, Integer> leaseCounts = new HashMap<>();
         // The set will give much faster lookup than the original list, an
         // important optimization when the list is large
-        Set<Lease> expiredLeasesSet = new HashSet<>(expiredLeases);
+        Set<Lease> availableLeasesSet = new HashSet<>(availableLeases);
 
-        // Compute the number of leases per worker by looking through allLeases and ignoring leases that have expired.
+        // Compute the number of leases per worker by looking through allLeases and ignoring leases that are available.
         for (Lease lease : allLeases.values()) {
-            if (!expiredLeasesSet.contains(lease)) {
+            if (!availableLeasesSet.contains(lease)) {
                 String leaseOwner = lease.leaseOwner();
                 Integer oldCount = leaseCounts.get(leaseOwner);
                 if (oldCount == null) {

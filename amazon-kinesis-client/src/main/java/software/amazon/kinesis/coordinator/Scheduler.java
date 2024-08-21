@@ -15,10 +15,6 @@
 
 package software.amazon.kinesis.coordinator;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Stopwatch;
-
-import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,15 +37,23 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Stopwatch;
+import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.arns.Arn;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.utils.Validate;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
@@ -89,14 +93,15 @@ import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
-import software.amazon.kinesis.processor.ShutdownNotificationAware;
 import software.amazon.kinesis.processor.StreamTracker;
 import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
+import static software.amazon.kinesis.common.ArnUtil.constructStreamArn;
 import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType;
+import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION;
 
 /**
  *
@@ -116,6 +121,7 @@ public class Scheduler implements Runnable {
     private static final String ACTIVE_STREAMS_COUNT = "ActiveStreams.Count";
     private static final String PENDING_STREAMS_DELETION_COUNT = "StreamsPendingDeletion.Count";
     private static final String DELETED_STREAMS_COUNT = "DeletedStreams.Count";
+    private static final String NON_EXISTING_STREAM_DELETE_COUNT = "NonExistingStreamDelete.Count";
 
     private final SchedulerLog slog = new SchedulerLog();
 
@@ -139,7 +145,7 @@ public class Scheduler implements Runnable {
     private final DiagnosticEventHandler diagnosticEventHandler;
     private final LeaseCoordinator leaseCoordinator;
     private final Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider;
-    private final Map<StreamConfig, ShardSyncTaskManager> streamToShardSyncTaskManagerMap = new HashMap<>();
+    private final Map<StreamConfig, ShardSyncTaskManager> streamToShardSyncTaskManagerMap = new ConcurrentHashMap<>();
     private final PeriodicShardSyncManager leaderElectedPeriodicShardSyncManager;
     private final ShardPrioritization shardPrioritization;
     private final boolean cleanupLeasesUponShardCompletion;
@@ -150,7 +156,7 @@ public class Scheduler implements Runnable {
     private final long failoverTimeMillis;
     private final long taskBackoffTimeMillis;
     private final boolean isMultiStreamMode;
-    private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap = new ConcurrentHashMap<>();
+    private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap = new StreamConfigMap();
     private final StreamTracker streamTracker;
     private final FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy;
     private final long listShardsBackoffTimeMillis;
@@ -166,6 +172,8 @@ public class Scheduler implements Runnable {
     private final LeaseCleanupManager leaseCleanupManager;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
 
+    private final DeletedStreamListProvider deletedStreamListProvider;
+
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
     private final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap = new ConcurrentHashMap<>();
@@ -177,24 +185,44 @@ public class Scheduler implements Runnable {
     private final Object lock = new Object();
 
     private final Stopwatch streamSyncWatch = Stopwatch.createUnstarted();
+
     private boolean leasesSyncedOnAppInit = false;
+
+    @Getter(AccessLevel.NONE)
+    private final AtomicBoolean leaderSynced = new AtomicBoolean(false);
 
     /**
      * Used to ensure that only one requestedShutdown is in progress at a time.
      */
     private CompletableFuture<Boolean> gracefulShutdownFuture;
+
+    /**
+     * CountDownLatch used by the GracefulShutdownCoordinator. Reaching zero means that
+     * the scheduler's finalShutdown() call has completed.
+     */
+    @Getter(AccessLevel.NONE)
+    private final CountDownLatch finalShutdownLatch = new CountDownLatch(1);
+
     @VisibleForTesting
     protected boolean gracefuleShutdownStarted = false;
 
-    public Scheduler(@NonNull final CheckpointConfig checkpointConfig,
-                     @NonNull final CoordinatorConfig coordinatorConfig,
-                     @NonNull final LeaseManagementConfig leaseManagementConfig,
-                     @NonNull final LifecycleConfig lifecycleConfig,
-                     @NonNull final MetricsConfig metricsConfig,
-                     @NonNull final ProcessorConfig processorConfig,
-                     @NonNull final RetrievalConfig retrievalConfig) {
-        this(checkpointConfig, coordinatorConfig, leaseManagementConfig, lifecycleConfig, metricsConfig,
-                processorConfig, retrievalConfig, new DiagnosticEventFactory());
+    public Scheduler(
+            @NonNull final CheckpointConfig checkpointConfig,
+            @NonNull final CoordinatorConfig coordinatorConfig,
+            @NonNull final LeaseManagementConfig leaseManagementConfig,
+            @NonNull final LifecycleConfig lifecycleConfig,
+            @NonNull final MetricsConfig metricsConfig,
+            @NonNull final ProcessorConfig processorConfig,
+            @NonNull final RetrievalConfig retrievalConfig) {
+        this(
+                checkpointConfig,
+                coordinatorConfig,
+                leaseManagementConfig,
+                lifecycleConfig,
+                metricsConfig,
+                processorConfig,
+                retrievalConfig,
+                new DiagnosticEventFactory());
     }
 
     /**
@@ -202,14 +230,15 @@ public class Scheduler implements Runnable {
      * is desired for testing. This constructor is only used for testing to provide a mock DiagnosticEventFactory.
      */
     @VisibleForTesting
-    protected Scheduler(@NonNull final CheckpointConfig checkpointConfig,
-                        @NonNull final CoordinatorConfig coordinatorConfig,
-                        @NonNull final LeaseManagementConfig leaseManagementConfig,
-                        @NonNull final LifecycleConfig lifecycleConfig,
-                        @NonNull final MetricsConfig metricsConfig,
-                        @NonNull final ProcessorConfig processorConfig,
-                        @NonNull final RetrievalConfig retrievalConfig,
-                        @NonNull final DiagnosticEventFactory diagnosticEventFactory) {
+    protected Scheduler(
+            @NonNull final CheckpointConfig checkpointConfig,
+            @NonNull final CoordinatorConfig coordinatorConfig,
+            @NonNull final LeaseManagementConfig leaseManagementConfig,
+            @NonNull final LifecycleConfig lifecycleConfig,
+            @NonNull final MetricsConfig metricsConfig,
+            @NonNull final ProcessorConfig processorConfig,
+            @NonNull final RetrievalConfig retrievalConfig,
+            @NonNull final DiagnosticEventFactory diagnosticEventFactory) {
         this.checkpointConfig = checkpointConfig;
         this.coordinatorConfig = coordinatorConfig;
         this.leaseManagementConfig = leaseManagementConfig;
@@ -222,15 +251,14 @@ public class Scheduler implements Runnable {
         this.streamTracker = retrievalConfig.streamTracker();
         this.isMultiStreamMode = streamTracker.isMultiStream();
         this.formerStreamsLeasesDeletionStrategy = streamTracker.formerStreamsLeasesDeletionStrategy();
-        streamTracker.streamConfigList().forEach(
-                sc -> currentStreamConfigMap.put(sc.streamIdentifier(), sc));
+        streamTracker.streamConfigList().forEach(sc -> currentStreamConfigMap.put(sc.streamIdentifier(), sc));
+        log.info("Initial state: {}", currentStreamConfigMap.values());
 
         this.maxInitializationAttempts = this.coordinatorConfig.maxInitializationAttempts();
         this.metricsFactory = this.metricsConfig.metricsFactory();
         // Determine leaseSerializer based on availability of MultiStreamTracker.
-        final LeaseSerializer leaseSerializer = isMultiStreamMode ?
-                new DynamoDBMultiStreamLeaseSerializer() :
-                new DynamoDBLeaseSerializer();
+        final LeaseSerializer leaseSerializer =
+                isMultiStreamMode ? new DynamoDBMultiStreamLeaseSerializer() : new DynamoDBLeaseSerializer();
         this.leaseCoordinator = this.leaseManagementConfig
                 .leaseManagementFactory(leaseSerializer, isMultiStreamMode)
                 .createLeaseCoordinator(this.metricsFactory);
@@ -239,8 +267,9 @@ public class Scheduler implements Runnable {
         //
         // TODO: Figure out what to do with lease manage <=> checkpoint relationship
         //
-        this.checkpoint = this.checkpointConfig.checkpointFactory().createCheckpointer(this.leaseCoordinator,
-                this.leaseRefresher);
+        this.checkpoint = this.checkpointConfig
+                .checkpointFactory()
+                .createCheckpointer(this.leaseCoordinator, this.leaseRefresher);
 
         //
         // TODO: Move this configuration to lifecycle
@@ -250,9 +279,10 @@ public class Scheduler implements Runnable {
         this.executorService = this.coordinatorConfig.coordinatorFactory().createExecutorService();
         this.diagnosticEventFactory = diagnosticEventFactory;
         this.diagnosticEventHandler = new DiagnosticEventLogger();
+        this.deletedStreamListProvider = new DeletedStreamListProvider();
         this.shardSyncTaskManagerProvider = streamConfig -> this.leaseManagementConfig
                 .leaseManagementFactory(leaseSerializer, isMultiStreamMode)
-                .createShardSyncTaskManager(this.metricsFactory, streamConfig);
+                .createShardSyncTaskManager(this.metricsFactory, streamConfig, this.deletedStreamListProvider);
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
@@ -260,39 +290,46 @@ public class Scheduler implements Runnable {
         if (coordinatorConfig.gracefulShutdownCoordinator() != null) {
             this.gracefulShutdownCoordinator = coordinatorConfig.gracefulShutdownCoordinator();
         } else {
-            this.gracefulShutdownCoordinator = this.coordinatorConfig.coordinatorFactory()
-                    .createGracefulShutdownCoordinator();
+            this.gracefulShutdownCoordinator =
+                    this.coordinatorConfig.coordinatorFactory().createGracefulShutdownCoordinator();
         }
         if (coordinatorConfig.workerStateChangeListener() != null) {
             this.workerStateChangeListener = coordinatorConfig.workerStateChangeListener();
         } else {
-            this.workerStateChangeListener = this.coordinatorConfig.coordinatorFactory()
-                    .createWorkerStateChangeListener();
+            this.workerStateChangeListener =
+                    this.coordinatorConfig.coordinatorFactory().createWorkerStateChangeListener();
         }
-        this.leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher,
-                Executors.newSingleThreadScheduledExecutor(),
-                PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
+        this.leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(
+                leaseRefresher, Executors.newSingleThreadScheduledExecutor(), PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
-//        this.retryGetRecordsInSeconds = this.retrievalConfig.retryGetRecordsInSeconds();
-//        this.maxGetRecordsThreadPool = this.retrievalConfig.maxGetRecordsThreadPool();
         this.listShardsBackoffTimeMillis = this.retrievalConfig.listShardsBackoffTimeInMillis();
         this.maxListShardsRetryAttempts = this.retrievalConfig.maxListShardsRetryAttempts();
-        this.shardDetectorProvider = streamConfig -> createOrGetShardSyncTaskManager(streamConfig).shardDetector();
+        this.shardDetectorProvider =
+                streamConfig -> createOrGetShardSyncTaskManager(streamConfig).shardDetector();
         this.ignoreUnexpetedChildShards = this.leaseManagementConfig.ignoreUnexpectedChildShards();
         this.aggregatorUtil = this.lifecycleConfig.aggregatorUtil();
-        this.hierarchicalShardSyncerProvider = streamConfig -> createOrGetShardSyncTaskManager(streamConfig).hierarchicalShardSyncer();
-        this.schedulerInitializationBackoffTimeMillis = this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
+        this.hierarchicalShardSyncerProvider =
+                streamConfig -> createOrGetShardSyncTaskManager(streamConfig).hierarchicalShardSyncer();
+        this.schedulerInitializationBackoffTimeMillis =
+                this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
         this.leaderElectedPeriodicShardSyncManager = new PeriodicShardSyncManager(
-                leaseManagementConfig.workerIdentifier(), leaderDecider, leaseRefresher, currentStreamConfigMap,
-                shardSyncTaskManagerProvider, isMultiStreamMode, metricsFactory,
+                leaseManagementConfig.workerIdentifier(),
+                leaderDecider,
+                leaseRefresher,
+                currentStreamConfigMap,
+                shardSyncTaskManagerProvider,
+                streamToShardSyncTaskManagerMap,
+                isMultiStreamMode,
+                metricsFactory,
                 leaseManagementConfig.leasesRecoveryAuditorExecutionFrequencyMillis(),
-                leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold());
-        this.leaseCleanupManager = this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode)
+                leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold(),
+                leaderSynced);
+        this.leaseCleanupManager = this.leaseManagementConfig
+                .leaseManagementFactory(leaseSerializer, isMultiStreamMode)
                 .createLeaseCleanupManager(metricsFactory);
-        this.schemaRegistryDecoder =
-            this.retrievalConfig.glueSchemaRegistryDeserializer() == null ?
-                null
+        this.schemaRegistryDecoder = this.retrievalConfig.glueSchemaRegistryDeserializer() == null
+                ? null
                 : new SchemaRegistryDecoder(this.retrievalConfig.glueSchemaRegistryDeserializer());
     }
 
@@ -336,9 +373,10 @@ public class Scheduler implements Runnable {
 
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
                         if (shouldInitiateLeaseSync()) {
-                            log.info("Worker {} is initiating the lease sync.", leaseManagementConfig.workerIdentifier());
+                            log.info(
+                                    "Worker {} is initiating the lease sync.",
+                                    leaseManagementConfig.workerIdentifier());
                             leaderElectedPeriodicShardSyncManager.syncShardsOnce();
-
                         }
                     } else {
                         log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
@@ -381,13 +419,15 @@ public class Scheduler implements Runnable {
     }
 
     @VisibleForTesting
-    boolean shouldInitiateLeaseSync() throws InterruptedException,
-            DependencyException, ProvisionedThroughputException, InvalidStateException {
-        long waitTime = ThreadLocalRandom.current().nextLong(MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS, MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
+    boolean shouldInitiateLeaseSync()
+            throws InterruptedException, DependencyException, ProvisionedThroughputException, InvalidStateException {
+        long waitTime = ThreadLocalRandom.current()
+                .nextLong(MIN_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS, MAX_WAIT_TIME_FOR_LEASE_TABLE_CHECK_MILLIS);
         long waitUntil = System.currentTimeMillis() + waitTime;
 
         boolean shouldInitiateLeaseSync = true;
-        while (System.currentTimeMillis() < waitUntil && (shouldInitiateLeaseSync = leaseRefresher.isLeaseTableEmpty())) {
+        while (System.currentTimeMillis() < waitUntil
+                && (shouldInitiateLeaseSync = leaseRefresher.isLeaseTableEmpty())) {
             // check every 3 seconds if lease table is still empty,
             // to minimize contention between all workers bootstrapping at the same time
             log.info("Lease table is still empty. Checking again in {} ms", LEASE_TABLE_CHECK_FREQUENCY_MILLIS);
@@ -401,8 +441,8 @@ public class Scheduler implements Runnable {
         try {
             Set<ShardInfo> assignedShards = new HashSet<>();
             for (ShardInfo shardInfo : getShardInfoForAssignments()) {
-                ShardConsumer shardConsumer = createOrGetShardConsumer(shardInfo,
-                        processorConfig.shardRecordProcessorFactory(), leaseCleanupManager);
+                ShardConsumer shardConsumer = createOrGetShardConsumer(
+                        shardInfo, processorConfig.shardRecordProcessorFactory(), leaseCleanupManager);
 
                 shardConsumer.executeLifecycle();
                 assignedShards.add(shardInfo);
@@ -414,14 +454,19 @@ public class Scheduler implements Runnable {
             // check for new streams and sync with the scheduler state
             if (isLeader()) {
                 checkAndSyncStreamShardsAndLeases();
+                leaderSynced.set(true);
+            } else {
+                leaderSynced.set(false);
             }
 
             logExecutorState();
             slog.info("Sleeping ...");
             Thread.sleep(shardConsumerDispatchPollIntervalMillis);
         } catch (Exception e) {
-            log.error("Worker.run caught exception, sleeping for {} milli seconds!",
-                    String.valueOf(shardConsumerDispatchPollIntervalMillis), e);
+            log.error(
+                    "Worker.run caught exception, sleeping for {} milli seconds!",
+                    shardConsumerDispatchPollIntervalMillis,
+                    e);
             try {
                 Thread.sleep(shardConsumerDispatchPollIntervalMillis);
             } catch (InterruptedException ex) {
@@ -446,20 +491,40 @@ public class Scheduler implements Runnable {
         final Set<StreamIdentifier> streamsSynced = new HashSet<>();
 
         if (shouldSyncStreamsNow()) {
-            final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, MULTI_STREAM_TRACKER);
+            final MetricsScope metricsScope =
+                    MetricsUtil.createMetricsWithOperation(metricsFactory, MULTI_STREAM_TRACKER);
 
             try {
-                final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = streamTracker.streamConfigList()
-                        .stream().collect(Collectors.toMap(StreamConfig::streamIdentifier, Function.identity()));
-
-                List<MultiStreamLease> leases;
-
+                final Map<StreamIdentifier, StreamConfig> newStreamConfigMap = streamTracker.streamConfigList().stream()
+                        .collect(Collectors.toMap(StreamConfig::streamIdentifier, Function.identity()));
                 // This is done to ensure that we clean up the stale streams lingering in the lease table.
-                if (!leasesSyncedOnAppInit && isMultiStreamMode) {
-                    leases = fetchMultiStreamLeases();
-                    syncStreamsFromLeaseTableOnAppInit(leases);
-                    leasesSyncedOnAppInit = true;
+                // Only sync from lease table again if the currentStreamConfigMap and newStreamConfigMap contain
+                // different set of streams and Leader has not synced the leases yet
+                // or this is the first app bootstrap.
+                if ((!leaderSynced.get() && !newStreamConfigMap.keySet().equals(currentStreamConfigMap.keySet()))
+                        || !leasesSyncedOnAppInit) {
+                    log.info("Syncing leases for leader to catch up");
+                    final List<MultiStreamLease> leaseTableLeases = fetchMultiStreamLeases();
+                    syncStreamsFromLeaseTableOnAppInit(leaseTableLeases);
+                    final Set<StreamIdentifier> streamsFromLeaseTable = leaseTableLeases.stream()
+                            .map(lease -> StreamIdentifier.multiStreamInstance(lease.streamIdentifier()))
+                            .collect(Collectors.toSet());
+                    // Remove stream from currentStreamConfigMap if this stream in not in the lease table and
+                    // newStreamConfigMap.
+                    // This means that the leases have already been deleted by the last leader.
+                    currentStreamConfigMap.keySet().stream()
+                            .filter(streamIdentifier -> !newStreamConfigMap.containsKey(streamIdentifier)
+                                    && !streamsFromLeaseTable.contains(streamIdentifier))
+                            .forEach(stream -> {
+                                log.info(
+                                        "Removing stream {} from currentStreamConfigMap due to not being active",
+                                        stream);
+                                currentStreamConfigMap.remove(stream);
+                                staleStreamDeletionMap.remove(stream);
+                                streamsSynced.add(stream);
+                            });
                 }
+                leasesSyncedOnAppInit = true;
 
                 // For new streams discovered, do a shard sync and update the currentStreamConfigMap
                 for (StreamIdentifier streamIdentifier : newStreamConfigMap.keySet()) {
@@ -471,9 +536,7 @@ public class Scheduler implements Runnable {
                         currentStreamConfigMap.put(streamIdentifier, streamConfig);
                         streamsSynced.add(streamIdentifier);
                     } else {
-                        if (log.isDebugEnabled()) {
-                            log.debug(streamIdentifier + " is already being processed - skipping shard sync.");
-                        }
+                        log.debug("{} is already being processed - skipping shard sync.", streamIdentifier);
                     }
                 }
 
@@ -482,19 +545,21 @@ public class Scheduler implements Runnable {
                         staleStreamDeletionMap.putIfAbsent(streamIdentifier, Instant.now());
                     }
                 };
-
-                if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == StreamsLeasesDeletionType.FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION) {
+                if (formerStreamsLeasesDeletionStrategy.leaseDeletionType()
+                        == FORMER_STREAMS_AUTO_DETECTION_DEFERRED_DELETION) {
                     // Now, we are identifying the stale/old streams and enqueuing it for deferred deletion.
                     // It is assumed that all the workers will always have the latest and consistent snapshot of streams
                     // from the multiStreamTracker.
                     //
-                    // The following streams transition state among two workers are NOT considered safe, where Worker 2, on
+                    // The following streams transition state among two workers are NOT considered safe, where Worker 2,
+                    // on
                     // initialization learn about D from lease table and delete the leases for D, as it is not available
                     // in its latest MultiStreamTracker.
                     // Worker 1 : A,B,C -> A,B,C,D (latest)
                     // Worker 2 : BOOTS_UP -> A,B,C (stale)
                     //
-                    // The following streams transition state among two workers are NOT considered safe, where Worker 2 might
+                    // The following streams transition state among two workers are NOT considered safe, where Worker 2
+                    // might
                     // end up deleting the leases for A and D and lose progress made so far.
                     // Worker 1 : A,B,C -> A,B,C,D (latest)
                     // Worker 2 : A,B,C -> B,C (stale/partial)
@@ -503,26 +568,31 @@ public class Scheduler implements Runnable {
                     // before attempting to delete it, we will be deferring the leases deletion based on the
                     // defer time period.
                     currentStreamConfigMap.keySet().forEach(enqueueStreamLeaseDeletionOperation);
-                } else if (formerStreamsLeasesDeletionStrategy.leaseDeletionType() == StreamsLeasesDeletionType.PROVIDED_STREAMS_DEFERRED_DELETION) {
-                    Optional.ofNullable(formerStreamsLeasesDeletionStrategy.streamIdentifiersForLeaseCleanup()).ifPresent(
-                            streamIdentifiers -> streamIdentifiers.forEach(enqueueStreamLeaseDeletionOperation));
+                } else if (formerStreamsLeasesDeletionStrategy.leaseDeletionType()
+                        == StreamsLeasesDeletionType.PROVIDED_STREAMS_DEFERRED_DELETION) {
+                    Optional.ofNullable(formerStreamsLeasesDeletionStrategy.streamIdentifiersForLeaseCleanup())
+                            .ifPresent(streamIdentifiers ->
+                                    streamIdentifiers.forEach(enqueueStreamLeaseDeletionOperation));
                 } else {
                     // Remove the old/stale streams identified through the new and existing streams list, without
                     // cleaning up their leases. Disabling deprecated shard sync + lease cleanup through a flag.
-                    Iterator<StreamIdentifier> currentSetOfStreamsIter = currentStreamConfigMap.keySet().iterator();
+                    Iterator<StreamIdentifier> currentSetOfStreamsIter =
+                            currentStreamConfigMap.keySet().iterator();
                     while (currentSetOfStreamsIter.hasNext()) {
                         StreamIdentifier streamIdentifier = currentSetOfStreamsIter.next();
                         if (!newStreamConfigMap.containsKey(streamIdentifier)) {
                             if (SHOULD_DO_LEASE_SYNC_FOR_OLD_STREAMS) {
                                 log.info(
-                                        "Found old/deleted stream : {}. Triggering shard sync. Removing from tracked active streams.", streamIdentifier);
-                                ShardSyncTaskManager shardSyncTaskManager = createOrGetShardSyncTaskManager(
-                                        currentStreamConfigMap.get(streamIdentifier));
+                                        "Found old/deleted stream : {}. Triggering shard sync. Removing from tracked active streams.",
+                                        streamIdentifier);
+                                ShardSyncTaskManager shardSyncTaskManager =
+                                        createOrGetShardSyncTaskManager(currentStreamConfigMap.get(streamIdentifier));
                                 shardSyncTaskManager.submitShardSyncTask();
                             } else {
                                 log.info(
                                         "Found old/deleted stream : {}. Removing from tracked active streams, but not cleaning up leases,"
-                                                + " as part of this workflow", streamIdentifier);
+                                                + " as part of this workflow",
+                                        streamIdentifier);
                             }
                             currentSetOfStreamsIter.remove();
                             streamsSynced.add(streamIdentifier);
@@ -535,10 +605,29 @@ public class Scheduler implements Runnable {
                 // Now let's scan the streamIdentifiersForLeaseCleanup eligible for deferred deletion and delete them.
                 // StreamIdentifiers are eligible for deletion only when the deferment period has elapsed and
                 // the streamIdentifiersForLeaseCleanup are not present in the latest snapshot.
-                final Map<Boolean, Set<StreamIdentifier>> staleStreamIdDeletionDecisionMap = staleStreamDeletionMap.keySet().stream().collect(Collectors
-                        .partitioningBy(streamIdentifier -> newStreamConfigMap.containsKey(streamIdentifier), Collectors.toSet()));
-                final Set<StreamIdentifier> staleStreamIdsToBeDeleted = staleStreamIdDeletionDecisionMap.get(false).stream().filter(streamIdentifier ->
-                        Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now()).toMillis() >= waitPeriodToDeleteOldStreams.toMillis()).collect(Collectors.toSet());
+                final Map<Boolean, Set<StreamIdentifier>> staleStreamIdDeletionDecisionMap =
+                        staleStreamDeletionMap.keySet().stream()
+                                .collect(
+                                        Collectors.partitioningBy(newStreamConfigMap::containsKey, Collectors.toSet()));
+                final Set<StreamIdentifier> staleStreamIdsToBeDeleted =
+                        staleStreamIdDeletionDecisionMap.get(false).stream()
+                                .filter(streamIdentifier ->
+                                        Duration.between(staleStreamDeletionMap.get(streamIdentifier), Instant.now())
+                                                        .toMillis()
+                                                >= waitPeriodToDeleteOldStreams.toMillis())
+                                .collect(Collectors.toSet());
+                // These are the streams which are deleted in Kinesis and we encounter resource not found during
+                // shardSyncTask. This is applicable in MultiStreamMode only, in case of SingleStreamMode, store will
+                // not have any data.
+                // Filter streams based on newStreamConfigMap so that we don't override input to KCL in any case.
+                final Set<StreamIdentifier> deletedStreamSet =
+                        this.deletedStreamListProvider.purgeAllDeletedStream().stream()
+                                .filter(streamIdentifier -> !newStreamConfigMap.containsKey(streamIdentifier))
+                                .collect(Collectors.toSet());
+                if (deletedStreamSet.size() > 0) {
+                    log.info("Stale streams to delete: {}", deletedStreamSet);
+                    staleStreamIdsToBeDeleted.addAll(deletedStreamSet);
+                }
                 final Set<StreamIdentifier> deletedStreamsLeases = deleteMultiStreamLeases(staleStreamIdsToBeDeleted);
                 streamsSynced.addAll(deletedStreamsLeases);
 
@@ -549,16 +638,24 @@ public class Scheduler implements Runnable {
                 if (!staleStreamDeletionMap.isEmpty()) {
                     log.warn(
                             "Streams enqueued for deletion for lease table cleanup along with their scheduled time for deletion: {} ",
-                            staleStreamDeletionMap.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
-                                    entry -> entry.getValue().plus(waitPeriodToDeleteOldStreams))));
+                            staleStreamDeletionMap.entrySet().stream()
+                                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue()
+                                            .plus(waitPeriodToDeleteOldStreams))));
                 }
 
                 streamSyncWatch.reset().start();
 
-                MetricsUtil.addCount(metricsScope, ACTIVE_STREAMS_COUNT, newStreamConfigMap.size(), MetricsLevel.SUMMARY);
-                MetricsUtil.addCount(metricsScope, PENDING_STREAMS_DELETION_COUNT, staleStreamDeletionMap.size(),
+                MetricsUtil.addCount(
+                        metricsScope, ACTIVE_STREAMS_COUNT, newStreamConfigMap.size(), MetricsLevel.SUMMARY);
+                MetricsUtil.addCount(
+                        metricsScope,
+                        PENDING_STREAMS_DELETION_COUNT,
+                        staleStreamDeletionMap.size(),
                         MetricsLevel.SUMMARY);
-                MetricsUtil.addCount(metricsScope, DELETED_STREAMS_COUNT, deletedStreamsLeases.size(), MetricsLevel.SUMMARY);
+                MetricsUtil.addCount(
+                        metricsScope, NON_EXISTING_STREAM_DELETE_COUNT, deletedStreamSet.size(), MetricsLevel.SUMMARY);
+                MetricsUtil.addCount(
+                        metricsScope, DELETED_STREAMS_COUNT, deletedStreamsLeases.size(), MetricsLevel.SUMMARY);
             } finally {
                 MetricsUtil.endScope(metricsScope);
             }
@@ -566,29 +663,31 @@ public class Scheduler implements Runnable {
         return streamsSynced;
     }
 
-    @VisibleForTesting boolean shouldSyncStreamsNow() {
-        return isMultiStreamMode &&
-                (streamSyncWatch.elapsed(TimeUnit.MILLISECONDS) > NEW_STREAM_CHECK_INTERVAL_MILLIS);
+    @VisibleForTesting
+    boolean shouldSyncStreamsNow() {
+        return isMultiStreamMode && (streamSyncWatch.elapsed(TimeUnit.MILLISECONDS) > NEW_STREAM_CHECK_INTERVAL_MILLIS);
     }
 
-    @VisibleForTesting void syncStreamsFromLeaseTableOnAppInit(List<MultiStreamLease> leases) {
-        final Set<StreamIdentifier> streamIdentifiers = leases.stream()
+    @VisibleForTesting
+    void syncStreamsFromLeaseTableOnAppInit(List<MultiStreamLease> leases) {
+        leases.stream()
                 .map(lease -> StreamIdentifier.multiStreamInstance(lease.streamIdentifier()))
-                .collect(Collectors.toSet());
-        for (StreamIdentifier streamIdentifier : streamIdentifiers) {
-            if (!currentStreamConfigMap.containsKey(streamIdentifier)) {
-                currentStreamConfigMap.put(streamIdentifier, streamTracker.createStreamConfig(streamIdentifier));
-            }
-        }
+                .filter(streamIdentifier -> !currentStreamConfigMap.containsKey(streamIdentifier))
+                .forEach(streamIdentifier -> {
+                    final StreamConfig streamConfig = streamTracker.createStreamConfig(streamIdentifier);
+                    currentStreamConfigMap.put(streamIdentifier, streamConfig);
+                    log.info("Cached {}", streamConfig);
+                });
     }
 
     private List<MultiStreamLease> fetchMultiStreamLeases()
             throws DependencyException, ProvisionedThroughputException, InvalidStateException {
-        return (List<MultiStreamLease>) ((List) leaseCoordinator.leaseRefresher().listLeases());
+        return (List<MultiStreamLease>)
+                ((List) leaseCoordinator.leaseRefresher().listLeases());
     }
 
     private void removeStreamsFromStaleStreamsList(Set<StreamIdentifier> streamIdentifiers) {
-        for(StreamIdentifier streamIdentifier : streamIdentifiers) {
+        for (StreamIdentifier streamIdentifier : streamIdentifiers) {
             staleStreamDeletionMap.remove(streamIdentifier);
         }
     }
@@ -598,16 +697,22 @@ public class Scheduler implements Runnable {
         if (streamIdentifiers.isEmpty()) {
             return Collections.emptySet();
         }
-
+        log.info("Deleting streams: {}", streamIdentifiers);
         final Set<StreamIdentifier> streamsSynced = new HashSet<>();
         final List<MultiStreamLease> leases = fetchMultiStreamLeases();
-        final Map<String, List<MultiStreamLease>> streamIdToShardsMap = leases.stream().collect(
-                Collectors.groupingBy(MultiStreamLease::streamIdentifier, Collectors.toCollection(ArrayList::new)));
+        final Map<String, List<MultiStreamLease>> streamIdToShardsMap = leases.stream()
+                .collect(Collectors.groupingBy(
+                        MultiStreamLease::streamIdentifier, Collectors.toCollection(ArrayList::new)));
         for (StreamIdentifier streamIdentifier : streamIdentifiers) {
+            log.warn("Found old/deleted stream: {}. Directly deleting leases of this stream.", streamIdentifier);
+            // Removing streamIdentifier from this map so PSSM doesn't think there is a hole in the stream while
+            // scheduler attempts to delete the stream if the stream is taking longer to delete. If deletion fails
+            // it will be retried again since stream will still show up in the staleStreamDeletionMap.
+            // It is fine for PSSM to detect holes and it should not do shardsync because it takes few iterations
+            // to breach the hole confidence interval threshold.
+            currentStreamConfigMap.remove(streamIdentifier);
             // Deleting leases will cause the workers to shutdown the record processors for these shards.
             if (deleteMultiStreamLeases(streamIdToShardsMap.get(streamIdentifier.serialize()))) {
-                log.warn("Found old/deleted stream: {}. Directly deleting leases of this stream.", streamIdentifier);
-                currentStreamConfigMap.remove(streamIdentifier);
                 staleStreamDeletionMap.remove(streamIdentifier);
                 streamsSynced.add(streamIdentifier);
             }
@@ -627,7 +732,8 @@ public class Scheduler implements Runnable {
                 } catch (DependencyException | InvalidStateException | ProvisionedThroughputException e) {
                     log.error(
                             "Unable to delete stale stream lease {}. Skipping further deletions for this stream. Will retry later.",
-                            lease.leaseKey(), e);
+                            lease.leaseKey(),
+                            e);
                     return false;
                 }
             }
@@ -661,8 +767,8 @@ public class Scheduler implements Runnable {
     }
 
     /**
-     * Requests a graceful shutdown of the worker, notifying record processors, that implement
-     * {@link ShutdownNotificationAware}, of the impending shutdown. This gives the record processor a final chance to
+     * Requests a graceful shutdown of the worker, notifying record processors
+     * of the impending shutdown. This gives the record processor a final chance to
      * checkpoint.
      *
      * This will only create a single shutdown future. Additional attempts to start a graceful shutdown will return the
@@ -697,8 +803,8 @@ public class Scheduler implements Runnable {
     public CompletableFuture<Boolean> startGracefulShutdown() {
         synchronized (this) {
             if (gracefulShutdownFuture == null) {
-                gracefulShutdownFuture = gracefulShutdownCoordinator
-                        .startGracefulShutdown(createGracefulShutdownCallable());
+                gracefulShutdownFuture =
+                        gracefulShutdownCoordinator.startGracefulShutdown(createGracefulShutdownCallable());
             }
         }
         return gracefulShutdownFuture;
@@ -746,13 +852,15 @@ public class Scheduler implements Runnable {
                 // If there are no leases notification is already completed, but we still need to shutdown the worker.
                 //
                 this.shutdown();
-                return GracefulShutdownContext.SHUTDOWN_ALREADY_COMPLETED;
+                return GracefulShutdownContext.builder()
+                        .finalShutdownLatch(finalShutdownLatch)
+                        .build();
             }
             CountDownLatch shutdownCompleteLatch = new CountDownLatch(leases.size());
             CountDownLatch notificationCompleteLatch = new CountDownLatch(leases.size());
             for (Lease lease : leases) {
-                ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(leaseCoordinator,
-                        lease, notificationCompleteLatch, shutdownCompleteLatch);
+                ShutdownNotification shutdownNotification = new ShardConsumerShutdownNotification(
+                        leaseCoordinator, lease, notificationCompleteLatch, shutdownCompleteLatch);
                 ShardInfo shardInfo = DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease);
                 ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
                 if (consumer != null) {
@@ -767,7 +875,12 @@ public class Scheduler implements Runnable {
                     shutdownCompleteLatch.countDown();
                 }
             }
-            return new GracefulShutdownContext(shutdownCompleteLatch, notificationCompleteLatch, this);
+            return GracefulShutdownContext.builder()
+                    .shutdownCompleteLatch(shutdownCompleteLatch)
+                    .notificationCompleteLatch(notificationCompleteLatch)
+                    .finalShutdownLatch(finalShutdownLatch)
+                    .scheduler(this)
+                    .build();
         };
     }
 
@@ -827,6 +940,7 @@ public class Scheduler implements Runnable {
             ((CloudWatchMetricsFactory) metricsFactory).shutdown();
         }
         shutdownComplete = true;
+        finalShutdownLatch.countDown();
     }
 
     private List<ShardInfo> getShardInfoForAssignments() {
@@ -860,9 +974,10 @@ public class Scheduler implements Runnable {
      *            Kinesis shard info
      * @return ShardConsumer for the shard
      */
-    ShardConsumer createOrGetShardConsumer(@NonNull final ShardInfo shardInfo,
-                                           @NonNull final ShardRecordProcessorFactory shardRecordProcessorFactory,
-                                           @NonNull final LeaseCleanupManager leaseCleanupManager) {
+    ShardConsumer createOrGetShardConsumer(
+            @NonNull final ShardInfo shardInfo,
+            @NonNull final ShardRecordProcessorFactory shardRecordProcessorFactory,
+            @NonNull final LeaseCleanupManager leaseCleanupManager) {
         ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
         // Instantiate a new consumer if we don't have one, or the one we
         // had was from an earlier
@@ -879,28 +994,34 @@ public class Scheduler implements Runnable {
     }
 
     private ShardSyncTaskManager createOrGetShardSyncTaskManager(StreamConfig streamConfig) {
-        return streamToShardSyncTaskManagerMap.computeIfAbsent(streamConfig, s -> shardSyncTaskManagerProvider.apply(s));
+        return streamToShardSyncTaskManagerMap.computeIfAbsent(
+                streamConfig, s -> shardSyncTaskManagerProvider.apply(s));
     }
 
-    protected ShardConsumer buildConsumer(@NonNull final ShardInfo shardInfo,
-                                          @NonNull final ShardRecordProcessorFactory shardRecordProcessorFactory,
-                                          @NonNull final LeaseCleanupManager leaseCleanupManager) {
-        ShardRecordProcessorCheckpointer checkpointer = coordinatorConfig.coordinatorFactory().createRecordProcessorCheckpointer(shardInfo,
-                        checkpoint);
+    protected ShardConsumer buildConsumer(
+            @NonNull final ShardInfo shardInfo,
+            @NonNull final ShardRecordProcessorFactory shardRecordProcessorFactory,
+            @NonNull final LeaseCleanupManager leaseCleanupManager) {
+        ShardRecordProcessorCheckpointer checkpointer =
+                coordinatorConfig.coordinatorFactory().createRecordProcessorCheckpointer(shardInfo, checkpoint);
         // The only case where streamName is not available will be when multistreamtracker not set. In this case,
         // get the default stream name for the single stream application.
         final StreamIdentifier streamIdentifier = getStreamIdentifier(shardInfo.streamIdentifierSerOpt());
 
         // Irrespective of single stream app or multi stream app, streamConfig should always be available.
-        // If we have a shardInfo, that is not present in currentStreamConfigMap for whatever reason, then return default stream config
+        // If we have a shardInfo, that is not present in currentStreamConfigMap for whatever reason, then return
+        // default stream config
         // to gracefully complete the reading.
         StreamConfig streamConfig = currentStreamConfigMap.get(streamIdentifier);
         if (streamConfig == null) {
-            streamConfig = streamTracker.createStreamConfig(streamIdentifier);
+            streamConfig = withStreamArn(streamTracker.createStreamConfig(streamIdentifier), getKinesisRegion());
+            log.info("Created orphan {}", streamConfig);
         }
         Validate.notNull(streamConfig, "StreamConfig should not be null");
-        RecordsPublisher cache = retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, streamConfig, metricsFactory);
-        ShardConsumerArgument argument = new ShardConsumerArgument(shardInfo,
+        RecordsPublisher cache =
+                retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, streamConfig, metricsFactory);
+        ShardConsumerArgument argument = new ShardConsumerArgument(
+                shardInfo,
                 streamConfig.streamIdentifier(),
                 leaseCoordinator,
                 executorService,
@@ -923,10 +1044,15 @@ public class Scheduler implements Runnable {
                 hierarchicalShardSyncerProvider.apply(streamConfig),
                 metricsFactory,
                 leaseCleanupManager,
-                schemaRegistryDecoder
-            );
-        return new ShardConsumer(cache, executorService, shardInfo, lifecycleConfig.logWarningForTaskAfterMillis(),
-                argument, lifecycleConfig.taskExecutionListener(), lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
+                schemaRegistryDecoder);
+        return new ShardConsumer(
+                cache,
+                executorService,
+                shardInfo,
+                lifecycleConfig.logWarningForTaskAfterMillis(),
+                argument,
+                lifecycleConfig.taskExecutionListener(),
+                lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
     }
 
     /**
@@ -960,16 +1086,16 @@ public class Scheduler implements Runnable {
      */
     private void registerErrorHandlerForUndeliverableAsyncTaskExceptions() {
         RxJavaPlugins.setErrorHandler(t -> {
-            ExecutorStateEvent executorStateEvent = diagnosticEventFactory.executorStateEvent(executorService,
-                    leaseCoordinator);
+            ExecutorStateEvent executorStateEvent =
+                    diagnosticEventFactory.executorStateEvent(executorService, leaseCoordinator);
             RejectedTaskEvent rejectedTaskEvent = diagnosticEventFactory.rejectedTaskEvent(executorStateEvent, t);
             rejectedTaskEvent.accept(diagnosticEventHandler);
         });
     }
 
     private void logExecutorState() {
-        ExecutorStateEvent executorStateEvent = diagnosticEventFactory.executorStateEvent(executorService,
-                leaseCoordinator);
+        ExecutorStateEvent executorStateEvent =
+                diagnosticEventFactory.executorStateEvent(executorService, leaseCoordinator);
         executorStateEvent.accept(diagnosticEventHandler);
     }
 
@@ -979,10 +1105,84 @@ public class Scheduler implements Runnable {
             streamIdentifier = StreamIdentifier.multiStreamInstance(streamIdentifierString.get());
         } else {
             Validate.isTrue(!isMultiStreamMode, "Should not be in MultiStream Mode");
-            streamIdentifier = this.currentStreamConfigMap.values().iterator().next().streamIdentifier();
+            streamIdentifier =
+                    this.currentStreamConfigMap.values().iterator().next().streamIdentifier();
         }
         Validate.notNull(streamIdentifier, "Stream identifier should not be empty");
         return streamIdentifier;
+    }
+
+    private Region getKinesisRegion() {
+        return retrievalConfig.kinesisClient().serviceClientConfiguration().region();
+    }
+
+    /**
+     * Create and return a copy of a {@link StreamConfig} object
+     * with {@link StreamIdentifier#streamArnOptional()} populated.
+     * Only to be used in multi-stream mode.
+     *
+     * @param streamConfig The {@link StreamConfig} object to return a copy of.
+     * @param kinesisRegion The {@link Region} the stream exists in, to be used for constructing the {@link Arn}.
+     * @return A copy of the {@link StreamConfig} with {@link StreamIdentifier#streamArnOptional()} populated.
+     */
+    private static StreamConfig withStreamArn(
+            @NonNull final StreamConfig streamConfig, @NonNull final Region kinesisRegion) {
+        Validate.isTrue(
+                streamConfig.streamIdentifier().accountIdOptional().isPresent(), "accountId should not be empty");
+        Validate.isTrue(
+                streamConfig.streamIdentifier().streamCreationEpochOptional().isPresent(),
+                "streamCreationEpoch should not be empty");
+
+        log.info(
+                "Constructing stream ARN for {} using the Kinesis client's configured region - {}.",
+                streamConfig.streamIdentifier(),
+                kinesisRegion);
+
+        final StreamIdentifier streamIdentifierWithArn = StreamIdentifier.multiStreamInstance(
+                constructStreamArn(
+                        kinesisRegion,
+                        streamConfig.streamIdentifier().accountIdOptional().get(),
+                        streamConfig.streamIdentifier().streamName()),
+                streamConfig.streamIdentifier().streamCreationEpochOptional().get());
+
+        return new StreamConfig(
+                streamIdentifierWithArn, streamConfig.initialPositionInStreamExtended(), streamConfig.consumerArn());
+    }
+
+    @RequiredArgsConstructor
+    private class StreamConfigMap extends ConcurrentHashMap<StreamIdentifier, StreamConfig> {
+        /**
+         * If {@link StreamIdentifier#streamArnOptional()} is present for the provided
+         * {@link StreamConfig#streamIdentifier()}, validates that the region in the stream ARN is consistent with the
+         * region that the Kinesis client ({@link RetrievalConfig#kinesisClient()}) is configured with.
+         * <p>
+         * In multi-stream mode, ensures stream ARN is always present by constructing it using the Kinesis client
+         * region when {@link StreamIdentifier#streamArnOptional()} is {@link Optional#empty()}.
+         * <p>
+         * {@inheritDoc}
+         */
+        @Override
+        public StreamConfig put(
+                @NonNull final StreamIdentifier streamIdentifier, @NonNull final StreamConfig streamConfig) {
+            final Region kinesisRegion = getKinesisRegion();
+
+            return super.put(
+                    streamIdentifier,
+                    streamConfig
+                            .streamIdentifier()
+                            .streamArnOptional()
+                            .map(streamArn -> {
+                                Validate.isTrue(
+                                        kinesisRegion
+                                                .id()
+                                                .equals(streamArn.region().get()),
+                                        "The provided streamARN " + streamArn
+                                                + " does not match the Kinesis client's configured region - "
+                                                + kinesisRegion);
+                                return streamConfig;
+                            })
+                            .orElse(isMultiStreamMode ? withStreamArn(streamConfig, kinesisRegion) : streamConfig));
+        }
     }
 
     /**
@@ -993,7 +1193,7 @@ public class Scheduler implements Runnable {
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
     private static class SchedulerLog {
 
-        private long reportIntervalMillis = TimeUnit.MINUTES.toMillis(1);
+        private final long reportIntervalMillis = TimeUnit.MINUTES.toMillis(1);
         private long nextReportTime = System.currentTimeMillis() + reportIntervalMillis;
         private boolean infoReporting;
 
@@ -1014,7 +1214,7 @@ public class Scheduler implements Runnable {
         private void resetInfoLogging() {
             if (infoReporting) {
                 // We just logged at INFO level for a pass through worker loop
-                if (log.isInfoEnabled()) {
+                if (!log.isDebugEnabled() && !log.isTraceEnabled()) {
                     infoReporting = false;
                     nextReportTime = System.currentTimeMillis() + reportIntervalMillis;
                 } // else is DEBUG or TRACE so leave reporting true

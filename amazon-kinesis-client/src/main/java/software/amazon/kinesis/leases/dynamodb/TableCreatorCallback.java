@@ -35,5 +35,4 @@ public interface TableCreatorCallback {
      *            Input object for table creator
      */
     void performAction(TableCreatorCallbackInput tableCreatorCallbackInput);
-
 }

@@ -22,5 +22,4 @@ public class NullMetricsFactory implements MetricsFactory {
     public MetricsScope createMetrics() {
         return SCOPE;
     }
-
 }

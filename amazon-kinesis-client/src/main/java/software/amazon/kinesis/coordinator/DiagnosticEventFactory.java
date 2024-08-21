@@ -15,10 +15,10 @@
 
 package software.amazon.kinesis.coordinator;
 
+import java.util.concurrent.ExecutorService;
+
 import lombok.NoArgsConstructor;
 import software.amazon.kinesis.leases.LeaseCoordinator;
-
-import java.util.concurrent.ExecutorService;
 
 /**
  * Creates {@link DiagnosticEvent}s for logging and visibility

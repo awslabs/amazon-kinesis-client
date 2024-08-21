@@ -1,0 +1,52 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+title KCL Shard Syncing Main Loop (Abridged)
+
+participant PeriodShardSyncManager as PSS
+participant ShardSyncTask as SST
+participant ShardDetector as SD
+participant HierarchicalShardSyncer as HSS
+participant LeaseRefresher as LR
+participant LeaseSynchronizer as LS
+participant "Lease Table\n(DynamoDB)" as DDB
+
+loop every leasesRecoveryAuditorExecutionFrequencyMillis
+  opt if worker is not leader
+    PSS->PSS: go back to sleep
+  end
+
+  PSS->PSS: runShardSync()
+  opt if not required to sync shards
+    PSS->PSS: go back to sleep
+  end
+
+  PSS->SST: call()
+  SST->HSS: checkAndCreateLeasesForNewShards(\n  shardDetector, initialPosition, ...)
+  opt if lease table is empty
+    HSS->HSS: getShardListAtInitialPosition(\n  shardDetector, initialPosition)
+    HSS->SD: listShardsWithFilter(initialPositionFilter)
+  else lease table is non-empty
+    HSS->HSS: getShardList(shardDetector)
+    HSS->SD: listShards(...)
+    note over SD
+      ShardDetector invokes the
+      Kinesis Data Streams ListShards API.
+    end note
+  end
+  HSS->HSS: checkAndCreateLeaseForNewShards(\n  shardDetector, leaseRefresher,\n  initialPosition, ...)
+  HSS->LR: listLeases()
+  LR->DDB: scan(:streamName=streamName)
+  DDB->LR: leases from table
+  LR->HSS: leases from table
+  HSS->LS: determine leases to create
+  LS->HSS: leases that are eligible for processing
+  loop every lease to create
+    HSS->LR: createLeaseIfNotExists(lease)
+    LR->DDB: putItem(lease)
+  end
+end
+
+@enduml

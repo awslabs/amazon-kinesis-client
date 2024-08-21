@@ -14,15 +14,6 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
-
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -33,7 +24,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
-
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.kinesis.checkpoint.dynamodb.DynamoDBCheckpointer;
@@ -46,6 +36,14 @@ import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseCoordinatorIntegrationTest {
@@ -74,9 +72,14 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
         final boolean useConsistentReads = true;
         if (leaseRefresher == null) {
             DynamoDbAsyncClient dynamoDBClient = DynamoDbAsyncClient.builder()
-                    .credentialsProvider(DefaultCredentialsProvider.create()).build();
-            leaseRefresher = new DynamoDBLeaseRefresher(TABLE_NAME, dynamoDBClient, new DynamoDBLeaseSerializer(),
-                    useConsistentReads, TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
+                    .credentialsProvider(DefaultCredentialsProvider.create())
+                    .build();
+            leaseRefresher = new DynamoDBLeaseRefresher(
+                    TABLE_NAME,
+                    dynamoDBClient,
+                    new DynamoDBLeaseSerializer(),
+                    useConsistentReads,
+                    TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
         }
         leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
 
@@ -97,9 +100,17 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
         }
 
         leaseRefresher.deleteAll();
-        coordinator = new DynamoDBLeaseCoordinator(leaseRefresher, WORKER_ID, LEASE_DURATION_MILLIS,
-                EPSILON_MILLIS, MAX_LEASES_FOR_WORKER, MAX_LEASES_TO_STEAL_AT_ONE_TIME, MAX_LEASE_RENEWER_THREAD_COUNT,
-                INITIAL_LEASE_TABLE_READ_CAPACITY, INITIAL_LEASE_TABLE_WRITE_CAPACITY, metricsFactory);
+        coordinator = new DynamoDBLeaseCoordinator(
+                leaseRefresher,
+                WORKER_ID,
+                LEASE_DURATION_MILLIS,
+                EPSILON_MILLIS,
+                MAX_LEASES_FOR_WORKER,
+                MAX_LEASES_TO_STEAL_AT_ONE_TIME,
+                MAX_LEASE_RENEWER_THREAD_COUNT,
+                INITIAL_LEASE_TABLE_READ_CAPACITY,
+                INITIAL_LEASE_TABLE_WRITE_CAPACITY,
+                metricsFactory);
         dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseRefresher);
         dynamoDBCheckpointer.operation(OPERATION);
 
@@ -141,7 +152,8 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
         lease.leaseOwner(coordinator.workerIdentifier());
         assertEquals(lease, leaseFromDDBAtInitialCheckpoint);
 
-        dynamoDBCheckpointer.prepareCheckpoint(lease.leaseKey(), pendingCheckpoint, lease.concurrencyToken().toString(), checkpointState);
+        dynamoDBCheckpointer.prepareCheckpoint(
+                lease.leaseKey(), pendingCheckpoint, lease.concurrencyToken().toString(), checkpointState);
 
         final Lease leaseFromDDBAtPendingCheckpoint = leaseRefresher.getLease(lease.leaseKey());
         lease.leaseCounter(lease.leaseCounter() + 1);
@@ -258,5 +270,4 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
             return leases;
         }
     }
-
 }

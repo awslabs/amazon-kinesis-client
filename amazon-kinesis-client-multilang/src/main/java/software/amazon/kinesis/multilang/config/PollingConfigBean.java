@@ -30,34 +30,44 @@ public class PollingConfigBean implements RetrievalConfigBuilder {
     interface PollingConfigBeanDelegate {
 
         Integer getRetryGetRecordsInSeconds();
+
         void setRetryGetRecordsInSeconds(Integer value);
 
         Integer getMaxGetRecordsThreadPool();
+
         void setMaxGetRecordsThreadPool(Integer value);
 
         long getIdleTimeBetweenReadsInMillis();
+
         void setIdleTimeBetweenReadsInMillis(long value);
 
         int getMaxRecords();
+
         void setMaxRecords(int value);
     }
 
     @ConfigurationSettable(configurationClass = PollingConfig.class, convertToOptional = true)
     private Integer retryGetRecordsInSeconds;
+
     @ConfigurationSettable(configurationClass = PollingConfig.class, convertToOptional = true)
     private Integer maxGetRecordsThreadPool;
+
     @ConfigurationSettable(configurationClass = PollingConfig.class)
     private long idleTimeBetweenReadsInMillis;
+
     @ConfigurationSettable(configurationClass = PollingConfig.class)
     private int maxRecords;
 
     public boolean anyPropertiesSet() {
-        return retryGetRecordsInSeconds != null || maxGetRecordsThreadPool != null || idleTimeBetweenReadsInMillis != 0 || maxRecords != 0;
+        return retryGetRecordsInSeconds != null
+                || maxGetRecordsThreadPool != null
+                || idleTimeBetweenReadsInMillis != 0
+                || maxRecords != 0;
     }
 
     @Override
     public PollingConfig build(KinesisAsyncClient kinesisAsyncClient, MultiLangDaemonConfiguration parent) {
-        return ConfigurationSettableUtils.resolveFields(this, new PollingConfig(parent.getStreamName(), kinesisAsyncClient));
+        return ConfigurationSettableUtils.resolveFields(
+                this, new PollingConfig(parent.getStreamName(), kinesisAsyncClient));
     }
-
 }

@@ -34,14 +34,24 @@ public class LeaseBuilder {
     private ExtendedSequenceNumber checkpoint;
     private ExtendedSequenceNumber pendingCheckpoint;
     private Long ownerSwitchesSinceCheckpoint = 0L;
-    private Set<String> parentShardIds  = new HashSet<>();
+    private Set<String> parentShardIds = new HashSet<>();
     private Set<String> childShardIds = new HashSet<>();
     private byte[] pendingCheckpointState;
     private HashKeyRangeForLease hashKeyRangeForLease;
 
     public Lease build() {
-        return new Lease(leaseKey, leaseOwner, leaseCounter, concurrencyToken, lastCounterIncrementNanos, checkpoint,
-                         pendingCheckpoint, ownerSwitchesSinceCheckpoint, parentShardIds, childShardIds,
-                         pendingCheckpointState, hashKeyRangeForLease);
+        return new Lease(
+                leaseKey,
+                leaseOwner,
+                leaseCounter,
+                concurrencyToken,
+                lastCounterIncrementNanos,
+                checkpoint,
+                pendingCheckpoint,
+                ownerSwitchesSinceCheckpoint,
+                parentShardIds,
+                childShardIds,
+                pendingCheckpointState,
+                hashKeyRangeForLease);
     }
 }

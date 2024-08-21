@@ -23,12 +23,36 @@ import software.amazon.kinesis.metrics.MetricsFactory;
  *
  */
 public interface RetrievalFactory {
-    GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(ShardInfo shardInfo, MetricsFactory metricsFactory);
 
+    /**
+     * @deprecated This method was only used by specific implementations of {@link RetrievalFactory} and should not be
+     *             required to be implemented; will be removed in future versions.
+     */
     @Deprecated
-    RecordsPublisher createGetRecordsCache(ShardInfo shardInfo, MetricsFactory metricsFactory);
+    default GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(
+            ShardInfo shardInfo, MetricsFactory metricsFactory) {
+        throw new UnsupportedOperationException("This method is deprecated and should not be used.");
+    }
 
-    default RecordsPublisher createGetRecordsCache(ShardInfo shardInfo, StreamConfig streamConfig, MetricsFactory metricsFactory) {
+    /**
+     * @deprecated This method is deprecated and will be removed in future versions.
+     *             Please use {@link #createGetRecordsCache(ShardInfo, StreamConfig, MetricsFactory)}.
+     */
+    @Deprecated
+    default RecordsPublisher createGetRecordsCache(ShardInfo shardInfo, MetricsFactory metricsFactory) {
+        throw new UnsupportedOperationException("This method is deprecated and should not be used.");
+    }
+
+    /**
+     * Creates a {@link RecordsPublisher} instance to retrieve records for the specified shard.
+     *
+     * @param shardInfo The {@link ShardInfo} representing the shard for which records are to be retrieved.
+     * @param streamConfig The {@link StreamConfig} containing details for the stream.
+     * @param metricsFactory The {@link MetricsFactory} for recording metrics.
+     * @return A {@link RecordsPublisher} instance for retrieving records from the shard.
+     */
+    default RecordsPublisher createGetRecordsCache(
+            ShardInfo shardInfo, StreamConfig streamConfig, MetricsFactory metricsFactory) {
         return createGetRecordsCache(shardInfo, metricsFactory);
     }
 }

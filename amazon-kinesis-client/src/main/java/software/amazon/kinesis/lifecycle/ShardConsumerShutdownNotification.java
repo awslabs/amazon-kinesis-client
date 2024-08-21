@@ -19,7 +19,7 @@ import java.util.concurrent.CountDownLatch;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
-import software.amazon.kinesis.processor.ShutdownNotificationAware;
+import software.amazon.kinesis.processor.ShardRecordProcessor;
 
 /**
  * Contains callbacks for completion of stages in a requested record processor shutdown.
@@ -38,22 +38,23 @@ public class ShardConsumerShutdownNotification implements ShutdownNotification {
 
     /**
      * Creates a new shutdown request object.
-     * 
+     *
      * @param leaseCoordinator
      *            the lease coordinator used to drop leases from once the initial shutdown request is completed.
      * @param lease
      *            the lease that this shutdown request will free once initial shutdown is complete
      * @param notificationCompleteLatch
      *            used to inform the caller once the
-     *            {@link ShutdownNotificationAware} object has been
+     *            {@link ShardRecordProcessor} object has been
      *            notified of the shutdown request.
      * @param shutdownCompleteLatch
      *            used to inform the caller once the record processor is fully shutdown
      */
-    public ShardConsumerShutdownNotification(final LeaseCoordinator leaseCoordinator,
-                                             final Lease lease,
-                                             final CountDownLatch notificationCompleteLatch,
-                                             final CountDownLatch shutdownCompleteLatch) {
+    public ShardConsumerShutdownNotification(
+            final LeaseCoordinator leaseCoordinator,
+            final Lease lease,
+            final CountDownLatch notificationCompleteLatch,
+            final CountDownLatch shutdownCompleteLatch) {
         this.leaseCoordinator = leaseCoordinator;
         this.lease = lease;
         this.notificationCompleteLatch = notificationCompleteLatch;
@@ -85,5 +86,4 @@ public class ShardConsumerShutdownNotification implements ShutdownNotification {
         shutdownCompleteLatch.countDown();
         allNotificationCompleted = true;
     }
-
 }

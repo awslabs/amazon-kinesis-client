@@ -17,9 +17,9 @@ package software.amazon.kinesis.lifecycle;
 
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
-import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 
 /**
  * Subscriber that notifies its publisher on receipt of the onNext event.

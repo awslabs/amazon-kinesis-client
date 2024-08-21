@@ -14,6 +14,42 @@
  */
 package software.amazon.kinesis.multilang;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import com.google.common.util.concurrent.SettableFuture;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
+import software.amazon.kinesis.exceptions.InvalidStateException;
+import software.amazon.kinesis.exceptions.KinesisClientLibDependencyException;
+import software.amazon.kinesis.exceptions.ShutdownException;
+import software.amazon.kinesis.exceptions.ThrottlingException;
+import software.amazon.kinesis.lifecycle.events.InitializationInput;
+import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
+import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
+import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
+import software.amazon.kinesis.multilang.messages.CheckpointMessage;
+import software.amazon.kinesis.multilang.messages.LeaseLostMessage;
+import software.amazon.kinesis.multilang.messages.Message;
+import software.amazon.kinesis.multilang.messages.ProcessRecordsMessage;
+import software.amazon.kinesis.multilang.messages.ShardEndedMessage;
+import software.amazon.kinesis.multilang.messages.StatusMessage;
+import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -27,68 +63,35 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.runners.MockitoJUnitRunner;
-import org.mockito.stubbing.Answer;
-
-import software.amazon.kinesis.exceptions.InvalidStateException;
-import software.amazon.kinesis.exceptions.KinesisClientLibDependencyException;
-import software.amazon.kinesis.exceptions.ShutdownException;
-import software.amazon.kinesis.exceptions.ThrottlingException;
-import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
-import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
-import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
-import software.amazon.kinesis.multilang.messages.CheckpointMessage;
-import software.amazon.kinesis.multilang.messages.LeaseLostMessage;
-import software.amazon.kinesis.multilang.messages.Message;
-import software.amazon.kinesis.multilang.messages.ProcessRecordsMessage;
-import software.amazon.kinesis.multilang.messages.ShardEndedMessage;
-import software.amazon.kinesis.multilang.messages.StatusMessage;
-import com.google.common.util.concurrent.SettableFuture;
-
-import software.amazon.kinesis.coordinator.KinesisClientLibConfiguration;
-import software.amazon.kinesis.lifecycle.events.InitializationInput;
-import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.lifecycle.ShutdownReason;
-import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
-import software.amazon.kinesis.retrieval.KinesisClientRecord;
-
 @RunWith(MockitoJUnitRunner.class)
 public class MultiLangProtocolTest {
     private static final List<KinesisClientRecord> EMPTY_RECORD_LIST = Collections.emptyList();
 
     @Mock
     private MultiLangProtocol protocol;
+
     @Mock
     private MessageWriter messageWriter;
+
     @Mock
     private MessageReader messageReader;
+
     private String shardId;
+
     @Mock
     private RecordProcessorCheckpointer checkpointer;
+
     @Mock
     private MultiLangDaemonConfiguration configuration;
 
     @Before
     public void setup() {
         this.shardId = "shard-id-123";
-        protocol = new MultiLangProtocolForTesting(messageReader, messageWriter,
-         InitializationInput.builder().shardId(shardId).build(), configuration);
+        protocol = new MultiLangProtocolForTesting(
+                messageReader,
+                messageWriter,
+                InitializationInput.builder().shardId(shardId).build(),
+                configuration);
 
         when(configuration.getTimeoutInSeconds()).thenReturn(null);
     }
@@ -106,38 +109,42 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void initializeTest() throws InterruptedException, ExecutionException {
-        when(messageWriter
-                .writeInitializeMessage(argThat(Matchers.withInit(InitializationInput.builder()
-                        .shardId(shardId).build())))).thenReturn(buildFuture(true));
-        when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(
-                new StatusMessage("initialize"), Message.class));
+    public void testInitialize() {
+        when(messageWriter.writeInitializeMessage(argThat(Matchers.withInit(
+                        InitializationInput.builder().shardId(shardId).build()))))
+                .thenReturn(buildFuture(true));
+        when(messageReader.getNextMessageFromSTDOUT())
+                .thenReturn(buildFuture(new StatusMessage("initialize"), Message.class));
         assertThat(protocol.initialize(), equalTo(true));
     }
 
     @Test
-    public void processRecordsTest() throws InterruptedException, ExecutionException {
-        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
-        when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(
-                new StatusMessage("processRecords"), Message.class));
+    public void testProcessRecords() {
+        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class)))
+                .thenReturn(buildFuture(true));
+        when(messageReader.getNextMessageFromSTDOUT())
+                .thenReturn(buildFuture(new StatusMessage("processRecords"), Message.class));
 
-        assertThat(protocol.processRecords(ProcessRecordsInput.builder().records(EMPTY_RECORD_LIST).build()),
+        assertThat(
+                protocol.processRecords(
+                        ProcessRecordsInput.builder().records(EMPTY_RECORD_LIST).build()),
                 equalTo(true));
     }
 
     @Test
     public void leaseLostTest() {
         when(messageWriter.writeLeaseLossMessage(any(LeaseLostInput.class))).thenReturn(buildFuture(true));
-        when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(new StatusMessage(LeaseLostMessage.ACTION), Message.class));
+        when(messageReader.getNextMessageFromSTDOUT())
+                .thenReturn(buildFuture(new StatusMessage(LeaseLostMessage.ACTION), Message.class));
 
         assertThat(protocol.leaseLost(LeaseLostInput.builder().build()), equalTo(true));
-
     }
 
     @Test
     public void shardEndedTest() {
         when(messageWriter.writeShardEndedMessage(any(ShardEndedInput.class))).thenReturn(buildFuture(true));
-        when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(new StatusMessage(ShardEndedMessage.ACTION)));
+        when(messageReader.getNextMessageFromSTDOUT())
+                .thenReturn(buildFuture(new StatusMessage(ShardEndedMessage.ACTION)));
 
         assertThat(protocol.shardEnded(ShardEndedInput.builder().build()), equalTo(true));
     }
@@ -145,12 +152,12 @@ public class MultiLangProtocolTest {
     @Test
     public void shutdownRequestedTest() {
         when(messageWriter.writeShutdownRequestedMessage()).thenReturn(buildFuture(true));
-        when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(
-                new StatusMessage("shutdownRequested"), Message.class));
-        Mockito.doReturn(buildFuture(true)).when(messageWriter)
-                .writeShutdownRequestedMessage();
+        when(messageReader.getNextMessageFromSTDOUT())
+                .thenReturn(buildFuture(new StatusMessage("shutdownRequested"), Message.class));
+        Mockito.doReturn(buildFuture(true)).when(messageWriter).writeShutdownRequestedMessage();
         Mockito.doReturn(buildFuture(new StatusMessage("shutdownRequested")))
-                .when(messageReader).getNextMessageFromSTDOUT();
+                .when(messageReader)
+                .getNextMessageFromSTDOUT();
         assertThat(protocol.shutdownRequested(null), equalTo(true));
     }
 
@@ -172,16 +179,17 @@ public class MultiLangProtocolTest {
                 }
                 return buildFuture(message);
             }
-
         }.init(messages);
     }
 
     @Test
-    public void processRecordsWithCheckpointsTest() throws InterruptedException, ExecutionException,
-        KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
+    public void testProcessRecordsWithCheckpoints()
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException {
 
-        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
-        when(messageWriter.writeCheckpointMessageWithError(anyString(), anyLong(), any(Throwable.class))).thenReturn(buildFuture(true));
+        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class)))
+                .thenReturn(buildFuture(true));
+        when(messageWriter.writeCheckpointMessageWithError(anyString(), anyLong(), any(Throwable.class)))
+                .thenReturn(buildFuture(true));
         when(messageReader.getNextMessageFromSTDOUT()).thenAnswer(buildMessageAnswers(new ArrayList<Message>() {
             {
                 this.add(new CheckpointMessage("123", 0L, null));
@@ -196,8 +204,10 @@ public class MultiLangProtocolTest {
             }
         }));
 
-        boolean result = protocol.processRecords(ProcessRecordsInput.builder().records(EMPTY_RECORD_LIST)
-                .checkpointer(checkpointer).build());
+        boolean result = protocol.processRecords(ProcessRecordsInput.builder()
+                .records(EMPTY_RECORD_LIST)
+                .checkpointer(checkpointer)
+                .build());
 
         assertThat(result, equalTo(true));
 
@@ -206,42 +216,53 @@ public class MultiLangProtocolTest {
     }
 
     @Test
-    public void processRecordsWithABadCheckpointTest() throws InterruptedException, ExecutionException {
-        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
-        when(messageWriter.writeCheckpointMessageWithError(anyString(), anyLong(), any(Throwable.class))).thenReturn(buildFuture(false));
+    public void testProcessRecordsWithABadCheckpoint() {
+        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class)))
+                .thenReturn(buildFuture(true));
+        when(messageWriter.writeCheckpointMessageWithError(anyString(), anyLong(), any(Throwable.class)))
+                .thenReturn(buildFuture(false));
         when(messageReader.getNextMessageFromSTDOUT()).thenAnswer(buildMessageAnswers(new ArrayList<Message>() {
             {
                 this.add(new CheckpointMessage("456", 0L, null));
                 this.add(new StatusMessage("processRecords"));
             }
         }));
-        assertThat(protocol.processRecords(ProcessRecordsInput.builder().records(EMPTY_RECORD_LIST)
-                .checkpointer(checkpointer).build()), equalTo(false));
+        assertThat(
+                protocol.processRecords(ProcessRecordsInput.builder()
+                        .records(EMPTY_RECORD_LIST)
+                        .checkpointer(checkpointer)
+                        .build()),
+                equalTo(false));
     }
 
     @Test(expected = NullPointerException.class)
     public void waitForStatusMessageTimeoutTest() throws InterruptedException, TimeoutException, ExecutionException {
-        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
+        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class)))
+                .thenReturn(buildFuture(true));
         Future<Message> future = Mockito.mock(Future.class);
         when(messageReader.getNextMessageFromSTDOUT()).thenReturn(future);
         when(configuration.getTimeoutInSeconds()).thenReturn(5);
         when(future.get(anyInt(), eq(TimeUnit.SECONDS))).thenThrow(TimeoutException.class);
-        protocol = new MultiLangProtocolForTesting(messageReader,
+        protocol = new MultiLangProtocolForTesting(
+                messageReader,
                 messageWriter,
                 InitializationInput.builder().shardId(shardId).build(),
                 configuration);
 
-        protocol.processRecords(ProcessRecordsInput.builder().records(EMPTY_RECORD_LIST).build());
+        protocol.processRecords(
+                ProcessRecordsInput.builder().records(EMPTY_RECORD_LIST).build());
     }
 
     @Test
     public void waitForStatusMessageSuccessTest() {
-        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class))).thenReturn(buildFuture(true));
-        when(messageReader.getNextMessageFromSTDOUT()).thenReturn(buildFuture(
-                new StatusMessage("processRecords"), Message.class));
+        when(messageWriter.writeProcessRecordsMessage(any(ProcessRecordsInput.class)))
+                .thenReturn(buildFuture(true));
+        when(messageReader.getNextMessageFromSTDOUT())
+                .thenReturn(buildFuture(new StatusMessage("processRecords"), Message.class));
         when(configuration.getTimeoutInSeconds()).thenReturn(5);
 
-        assertTrue(protocol.processRecords(ProcessRecordsInput.builder().records(EMPTY_RECORD_LIST).build()));
+        assertTrue(protocol.processRecords(
+                ProcessRecordsInput.builder().records(EMPTY_RECORD_LIST).build()));
     }
 
     private class MultiLangProtocolForTesting extends MultiLangProtocol {
@@ -253,10 +274,11 @@ public class MultiLangProtocolTest {
          * @param initializationInput
          * @param configuration
          */
-        MultiLangProtocolForTesting(final MessageReader messageReader,
-                                  final MessageWriter messageWriter,
-                                  final InitializationInput initializationInput,
-                                  final MultiLangDaemonConfiguration configuration) {
+        MultiLangProtocolForTesting(
+                final MessageReader messageReader,
+                final MessageWriter messageWriter,
+                final InitializationInput initializationInput,
+                final MultiLangDaemonConfiguration configuration) {
             super(messageReader, messageWriter, initializationInput, configuration);
         }
 

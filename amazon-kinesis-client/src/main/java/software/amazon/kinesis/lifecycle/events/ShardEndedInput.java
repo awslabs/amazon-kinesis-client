@@ -20,8 +20,8 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
-import software.amazon.kinesis.processor.ShardRecordProcessor;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
+import software.amazon.kinesis.processor.ShardRecordProcessor;
 
 /**
  * Provides a checkpointer that <b>must</b> be used to signal the completion of the shard to the Scheduler.
@@ -41,5 +41,4 @@ public class ShardEndedInput {
      * shutdown until a successful checkpoint occurs.
      */
     private final RecordProcessorCheckpointer checkpointer;
-
 }

@@ -15,30 +15,34 @@
 
 package software.amazon.kinesis.retrieval.fanout;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import java.util.Optional;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
-
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.kinesis.common.StreamConfig;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RetrievalFactory;
 
-import java.util.Optional;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class FanOutConfigTest {
@@ -50,137 +54,163 @@ public class FanOutConfigTest {
 
     @Mock
     private FanOutConsumerRegistration consumerRegistration;
+
     @Mock
     private KinesisAsyncClient kinesisClient;
+
     @Mock
     private StreamConfig streamConfig;
 
+    @Mock
+    private StreamIdentifier streamIdentifier;
+
+    private FanOutConfig config;
+
     @Before
     public void setup() {
-        when(streamConfig.consumerArn()).thenReturn(null);
+        config = spy(new FanOutConfig(kinesisClient))
+                // DRY: set the most commonly-used parameters
+                .applicationName(TEST_APPLICATION_NAME)
+                .streamName(TEST_STREAM_NAME);
+        doReturn(consumerRegistration)
+                .when(config)
+                .createConsumerRegistration(eq(kinesisClient), anyString(), anyString());
+        when(streamConfig.streamIdentifier()).thenReturn(streamIdentifier);
+        when(streamIdentifier.streamName()).thenReturn(TEST_STREAM_NAME);
     }
 
     @Test
-    public void testNoRegisterIfConsumerArnSet() throws Exception {
-        FanOutConfig config = new TestingConfig(kinesisClient).consumerArn(TEST_CONSUMER_ARN);
+    public void testNoRegisterIfConsumerArnSet() {
+        config.consumerArn(TEST_CONSUMER_ARN)
+                // unset common parameters
+                .applicationName(null)
+                .streamName(null);
+
         RetrievalFactory retrievalFactory = config.retrievalFactory();
 
-        assertThat(retrievalFactory, not(nullValue()));
-        verify(consumerRegistration, never()).getOrCreateStreamConsumerArn();
+        assertNotNull(retrievalFactory);
+        verifyZeroInteractions(consumerRegistration);
     }
 
     @Test
     public void testRegisterCalledWhenConsumerArnUnset() throws Exception {
-        FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
-                .streamName(TEST_STREAM_NAME);
-        RetrievalFactory retrievalFactory = config.retrievalFactory();
-        ShardInfo shardInfo = mock(ShardInfo.class);
-//        doReturn(Optional.of(StreamIdentifier.singleStreamInstance(TEST_STREAM_NAME).serialize())).when(shardInfo).streamIdentifier();
-        doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
-        retrievalFactory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
-        assertThat(retrievalFactory, not(nullValue()));
+        getRecordsCache(null);
+
         verify(consumerRegistration).getOrCreateStreamConsumerArn();
     }
 
     @Test
     public void testRegisterNotCalledWhenConsumerArnSetInMultiStreamMode() throws Exception {
         when(streamConfig.consumerArn()).thenReturn("consumerArn");
-        FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
-                .streamName(TEST_STREAM_NAME);
-        RetrievalFactory retrievalFactory = config.retrievalFactory();
-        ShardInfo shardInfo = mock(ShardInfo.class);
-        doReturn(Optional.of("account:stream:12345")).when(shardInfo).streamIdentifierSerOpt();
-        retrievalFactory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
-        assertThat(retrievalFactory, not(nullValue()));
+
+        getRecordsCache("123456789012:stream:12345");
+
         verify(consumerRegistration, never()).getOrCreateStreamConsumerArn();
     }
 
     @Test
     public void testRegisterCalledWhenConsumerArnNotSetInMultiStreamMode() throws Exception {
-        FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
-                .streamName(TEST_STREAM_NAME);
-        RetrievalFactory retrievalFactory = config.retrievalFactory();
-        ShardInfo shardInfo = mock(ShardInfo.class);
-        doReturn(Optional.of("account:stream:12345")).when(shardInfo).streamIdentifierSerOpt();
-        retrievalFactory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
-        assertThat(retrievalFactory, not(nullValue()));
+        getRecordsCache("123456789012:stream:12345");
+
         verify(consumerRegistration).getOrCreateStreamConsumerArn();
     }
 
     @Test
     public void testDependencyExceptionInConsumerCreation() throws Exception {
-        FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
-                .streamName(TEST_STREAM_NAME);
         DependencyException de = new DependencyException("Bad", null);
         when(consumerRegistration.getOrCreateStreamConsumerArn()).thenThrow(de);
+
         try {
-            config.retrievalFactory();
+            getRecordsCache(null);
+            Assert.fail("should throw");
         } catch (RuntimeException e) {
             verify(consumerRegistration).getOrCreateStreamConsumerArn();
-            assertThat(e.getCause(), equalTo(de));
+            assertEquals(de, e.getCause());
         }
     }
 
     @Test
-    public void testCreationWithApplicationName() throws Exception {
-        FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
-                .streamName(TEST_STREAM_NAME);
-        RetrievalFactory factory = config.retrievalFactory();
-        ShardInfo shardInfo = mock(ShardInfo.class);
-        doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
-        factory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
-        assertThat(factory, not(nullValue()));
+    public void testCreationWithApplicationName() {
+        getRecordsCache(null);
 
-        TestingConfig testingConfig = (TestingConfig) config;
-        assertThat(testingConfig.stream, equalTo(TEST_STREAM_NAME));
-        assertThat(testingConfig.consumerToCreate, equalTo(TEST_APPLICATION_NAME));
+        assertEquals(TEST_STREAM_NAME, config.streamName());
+        assertEquals(TEST_APPLICATION_NAME, config.applicationName());
     }
 
     @Test
-    public void testCreationWithConsumerName() throws Exception {
-        FanOutConfig config = new TestingConfig(kinesisClient).consumerName(TEST_CONSUMER_NAME)
-                .streamName(TEST_STREAM_NAME);
-        RetrievalFactory factory = config.retrievalFactory();
-        ShardInfo shardInfo = mock(ShardInfo.class);
-        doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
-        factory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
-        assertThat(factory, not(nullValue()));
-        TestingConfig testingConfig = (TestingConfig) config;
-        assertThat(testingConfig.stream, equalTo(TEST_STREAM_NAME));
-        assertThat(testingConfig.consumerToCreate, equalTo(TEST_CONSUMER_NAME));
+    public void testCreationWithConsumerName() {
+        config.consumerName(TEST_CONSUMER_NAME)
+                // unset common parameters
+                .applicationName(null);
+
+        getRecordsCache(null);
+
+        assertEquals(TEST_STREAM_NAME, config.streamName());
+        assertEquals(TEST_CONSUMER_NAME, config.consumerName());
     }
 
     @Test
-    public void testCreationWithBothConsumerApplication() throws Exception {
-        FanOutConfig config = new TestingConfig(kinesisClient).applicationName(TEST_APPLICATION_NAME)
-                .consumerName(TEST_CONSUMER_NAME).streamName(TEST_STREAM_NAME);
-        RetrievalFactory factory = config.retrievalFactory();
-        ShardInfo shardInfo = mock(ShardInfo.class);
-        doReturn(Optional.empty()).when(shardInfo).streamIdentifierSerOpt();
+    public void testCreationWithBothConsumerApplication() {
+        config = config.consumerName(TEST_CONSUMER_NAME);
+
+        getRecordsCache(null);
+
+        assertEquals(TEST_STREAM_NAME, config.streamName());
+        assertEquals(TEST_CONSUMER_NAME, config.consumerName());
+    }
+
+    @Test
+    public void testValidState() {
+        assertNull(config.consumerArn());
+        assertNotNull(config.streamName());
+
+        config.validateState(false);
+
+        // both streamName and consumerArn are non-null
+        config.consumerArn(TEST_CONSUMER_ARN);
+        config.validateState(false);
+
+        config.consumerArn(null);
+        config.streamName(null);
+        config.validateState(false);
+        config.validateState(true);
+
+        assertNull(config.streamName());
+        assertNull(config.consumerArn());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidStateMultiWithStreamName() {
+        testInvalidState(TEST_STREAM_NAME, null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidStateMultiWithConsumerArn() {
+        testInvalidState(null, TEST_CONSUMER_ARN);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidStateMultiWithStreamNameAndConsumerArn() {
+        testInvalidState(TEST_STREAM_NAME, TEST_CONSUMER_ARN);
+    }
+
+    private void testInvalidState(final String streamName, final String consumerArn) {
+        config.streamName(streamName);
+        config.consumerArn(consumerArn);
+
+        try {
+            config.validateState(true);
+        } finally {
+            assertEquals(streamName, config.streamName());
+            assertEquals(consumerArn, config.consumerArn());
+        }
+    }
+
+    private void getRecordsCache(final String streamIdentifer) {
+        final ShardInfo shardInfo = mock(ShardInfo.class);
+        when(shardInfo.streamIdentifierSerOpt()).thenReturn(Optional.ofNullable(streamIdentifer));
+
+        final RetrievalFactory factory = config.retrievalFactory();
         factory.createGetRecordsCache(shardInfo, streamConfig, mock(MetricsFactory.class));
-        assertThat(factory, not(nullValue()));
-
-        TestingConfig testingConfig = (TestingConfig) config;
-        assertThat(testingConfig.stream, equalTo(TEST_STREAM_NAME));
-        assertThat(testingConfig.consumerToCreate, equalTo(TEST_CONSUMER_NAME));
     }
-
-    private class TestingConfig extends FanOutConfig {
-
-        String stream;
-        String consumerToCreate;
-
-        public TestingConfig(KinesisAsyncClient kinesisClient) {
-            super(kinesisClient);
-        }
-
-        @Override
-        protected FanOutConsumerRegistration createConsumerRegistration(KinesisAsyncClient client, String stream,
-                                                                        String consumerToCreate) {
-            this.stream = stream;
-            this.consumerToCreate = consumerToCreate;
-            return consumerRegistration;
-        }
-    }
-
 }

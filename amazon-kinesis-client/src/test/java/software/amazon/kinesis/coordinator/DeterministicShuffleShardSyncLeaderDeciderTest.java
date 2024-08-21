@@ -24,6 +24,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -33,6 +34,7 @@ import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -63,10 +65,8 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     @Before
     public void setup() {
         numShardSyncWorkers = 1;
-        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher,
-                scheduledExecutorService,
-                numShardSyncWorkers,
-                readWriteLock);
+        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(
+                leaseRefresher, scheduledExecutorService, numShardSyncWorkers, readWriteLock);
 
         when(readWriteLock.readLock()).thenReturn(mock(ReentrantReadWriteLock.ReadLock.class));
         when(readWriteLock.writeLock()).thenReturn(mock(ReentrantReadWriteLock.WriteLock.class));
@@ -103,9 +103,9 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     }
 
     @Test
-    public void testElectedLeadersAsPerExpectedShufflingOrder()
-            throws Exception {
-        List<Lease> leases = getLeases(5, false /*emptyLeaseOwner */,false /* duplicateLeaseOwner */, true /* activeLeases */);
+    public void testElectedLeadersAsPerExpectedShufflingOrder() throws Exception {
+        List<Lease> leases =
+                getLeases(5, false /*emptyLeaseOwner */, false /* duplicateLeaseOwner */, true /* activeLeases */);
         when(leaseRefresher.listLeases()).thenReturn(leases);
         Set<String> expectedLeaders = getExpectedLeaders(leases);
         for (String leader : expectedLeaders) {
@@ -121,11 +121,10 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     @Test
     public void testElectedLeadersAsPerExpectedShufflingOrderWhenUniqueWorkersLessThanMaxLeaders() {
         this.numShardSyncWorkers = 5; // More than number of unique lease owners
-        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(leaseRefresher,
-                scheduledExecutorService,
-                numShardSyncWorkers,
-                readWriteLock);
-        List<Lease> leases = getLeases(3, false /*emptyLeaseOwner */, false /* duplicateLeaseOwner */, true /* activeLeases */);
+        leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(
+                leaseRefresher, scheduledExecutorService, numShardSyncWorkers, readWriteLock);
+        List<Lease> leases =
+                getLeases(3, false /*emptyLeaseOwner */, false /* duplicateLeaseOwner */, true /* activeLeases */);
         Set<String> expectedLeaders = getExpectedLeaders(leases);
         // All lease owners should be present in expected leaders set, and they should all be leaders.
         for (Lease lease : leases) {
@@ -134,7 +133,8 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
         }
     }
 
-    private List<Lease> getLeases(int count, boolean emptyLeaseOwner, boolean duplicateLeaseOwner, boolean activeLeases) {
+    private List<Lease> getLeases(
+            int count, boolean emptyLeaseOwner, boolean duplicateLeaseOwner, boolean activeLeases) {
         List<Lease> leases = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             Lease lease = new Lease();
@@ -150,8 +150,12 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     }
 
     private Set<String> getExpectedLeaders(List<Lease> leases) {
-        List<String> uniqueHosts = leases.stream().filter(lease -> lease.leaseOwner() != null)
-                .map(Lease::leaseOwner).distinct().sorted().collect(Collectors.toList());
+        List<String> uniqueHosts = leases.stream()
+                .filter(lease -> lease.leaseOwner() != null)
+                .map(Lease::leaseOwner)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
 
         Collections.shuffle(uniqueHosts, new Random(DETERMINISTIC_SHUFFLE_SEED));
         int numWorkers = Math.min(uniqueHosts.size(), this.numShardSyncWorkers);

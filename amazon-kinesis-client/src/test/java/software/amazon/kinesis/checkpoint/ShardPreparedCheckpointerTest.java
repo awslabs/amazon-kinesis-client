@@ -14,12 +14,12 @@
  */
 package software.amazon.kinesis.checkpoint;
 
-import software.amazon.kinesis.processor.PreparedCheckpointer;
-import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
+import software.amazon.kinesis.processor.PreparedCheckpointer;
+import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 public class ShardPreparedCheckpointerTest {
 

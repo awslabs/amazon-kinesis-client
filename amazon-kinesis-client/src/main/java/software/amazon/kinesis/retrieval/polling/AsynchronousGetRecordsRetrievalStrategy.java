@@ -29,7 +29,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
@@ -53,19 +52,32 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
     private final String shardId;
     final Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier;
 
-    public AsynchronousGetRecordsRetrievalStrategy(@NonNull final KinesisDataFetcher dataFetcher,
-            final int retryGetRecordsInSeconds, final int maxGetRecordsThreadPool, String shardId) {
+    public AsynchronousGetRecordsRetrievalStrategy(
+            @NonNull final KinesisDataFetcher dataFetcher,
+            final int retryGetRecordsInSeconds,
+            final int maxGetRecordsThreadPool,
+            String shardId) {
         this(dataFetcher, buildExector(maxGetRecordsThreadPool, shardId), retryGetRecordsInSeconds, shardId);
     }
 
-    public AsynchronousGetRecordsRetrievalStrategy(final KinesisDataFetcher dataFetcher,
-            final ExecutorService executorService, final int retryGetRecordsInSeconds, String shardId) {
-        this(dataFetcher, executorService, retryGetRecordsInSeconds, () -> new ExecutorCompletionService<>(executorService),
+    public AsynchronousGetRecordsRetrievalStrategy(
+            final KinesisDataFetcher dataFetcher,
+            final ExecutorService executorService,
+            final int retryGetRecordsInSeconds,
+            String shardId) {
+        this(
+                dataFetcher,
+                executorService,
+                retryGetRecordsInSeconds,
+                () -> new ExecutorCompletionService<>(executorService),
                 shardId);
     }
 
-    AsynchronousGetRecordsRetrievalStrategy(KinesisDataFetcher dataFetcher, ExecutorService executorService,
-            int retryGetRecordsInSeconds, Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier,
+    AsynchronousGetRecordsRetrievalStrategy(
+            KinesisDataFetcher dataFetcher,
+            ExecutorService executorService,
+            int retryGetRecordsInSeconds,
+            Supplier<CompletionService<DataFetcherResult>> completionServiceSupplier,
             String shardId) {
         this.dataFetcher = dataFetcher;
         this.executorService = executorService;
@@ -92,8 +104,8 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
                 }
 
                 try {
-                    Future<DataFetcherResult> resultFuture = completionService.poll(retryGetRecordsInSeconds,
-                            TimeUnit.SECONDS);
+                    Future<DataFetcherResult> resultFuture =
+                            completionService.poll(retryGetRecordsInSeconds, TimeUnit.SECONDS);
                     if (resultFuture != null) {
                         //
                         // Fix to ensure that we only let the shard iterator advance when we intend to return the result
@@ -135,9 +147,16 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
 
     private static ExecutorService buildExector(int maxGetRecordsThreadPool, String shardId) {
         String threadNameFormat = "get-records-worker-" + shardId + "-%d";
-        return new ThreadPoolExecutor(CORE_THREAD_POOL_COUNT, maxGetRecordsThreadPool, TIME_TO_KEEP_ALIVE,
-                TimeUnit.SECONDS, new LinkedBlockingQueue<>(1),
-                new ThreadFactoryBuilder().setDaemon(true).setNameFormat(threadNameFormat).build(),
+        return new ThreadPoolExecutor(
+                CORE_THREAD_POOL_COUNT,
+                maxGetRecordsThreadPool,
+                TIME_TO_KEEP_ALIVE,
+                TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(1),
+                new ThreadFactoryBuilder()
+                        .setDaemon(true)
+                        .setNameFormat(threadNameFormat)
+                        .build(),
                 new ThreadPoolExecutor.AbortPolicy());
     }
 

@@ -17,14 +17,14 @@ package software.amazon.kinesis.common;
 
 import java.util.function.Function;
 
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.mock;
-
 import org.junit.Test;
 import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
+
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
 
 public class DeprecationUtilsTest {
 
@@ -41,5 +41,4 @@ public class DeprecationUtilsTest {
     public void testUnsupportedStreamTrackerConversion() {
         DeprecationUtils.convert(mock(StreamTracker.class), Function.identity());
     }
-
 }

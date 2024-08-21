@@ -54,10 +54,10 @@ public class FilteringMetricsScope extends AccumulateByNameMetricsScope {
      * @param metricsEnabledDimensions Enabled dimensions.
      */
     public FilteringMetricsScope(MetricsLevel metricsLevel, Set<String> metricsEnabledDimensions) {
-          this.metricsLevel = metricsLevel;
-          this.metricsEnabledDimensions = metricsEnabledDimensions;
-          this.metricsEnabledDimensionsAll = (metricsEnabledDimensions != null &&
-                  metricsEnabledDimensions.contains(METRICS_DIMENSIONS_ALL));
+        this.metricsLevel = metricsLevel;
+        this.metricsEnabledDimensions = metricsEnabledDimensions;
+        this.metricsEnabledDimensionsAll =
+                (metricsEnabledDimensions != null && metricsEnabledDimensions.contains(METRICS_DIMENSIONS_ALL));
     }
 
     /**
@@ -95,8 +95,8 @@ public class FilteringMetricsScope extends AccumulateByNameMetricsScope {
      */
     @Override
     public void addDimension(String name, String value) {
-        if (!metricsEnabledDimensionsAll &&
-                (metricsEnabledDimensions == null || !metricsEnabledDimensions.contains(name))) {
+        if (!metricsEnabledDimensionsAll
+                && (metricsEnabledDimensions == null || !metricsEnabledDimensions.contains(name))) {
             // Drop dimension.
             return;
         }

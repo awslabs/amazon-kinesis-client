@@ -47,9 +47,19 @@ public interface ShardDetector {
     List<Shard> listShards();
 
     /**
+     * This method behaves exactly similar to listShards except the fact that this does not consume and throw
+     * ResourceNotFoundException instead of returning empty list.
+     *
+     * @return Shards
+     */
+    default List<Shard> listShardsWithoutConsumingResourceNotFoundException() {
+        throw new UnsupportedOperationException("listShardsWithoutConsumingResourceNotFoundException not implemented");
+    }
+
+    /**
      * List shards with shard filter.
      *
-     * @param  ShardFilter
+     * @param shardFilter
      * @return Shards
      */
     default List<Shard> listShardsWithFilter(ShardFilter shardFilter) {
@@ -83,7 +93,8 @@ public interface ShardDetector {
      * @throws ExecutionException
      * @throws TimeoutException
      */
-    default List<ChildShard> getChildShards(String shardId) throws InterruptedException, ExecutionException, TimeoutException {
+    default List<ChildShard> getChildShards(String shardId)
+            throws InterruptedException, ExecutionException, TimeoutException {
         throw new UnsupportedOperationException("getChildShards not available.");
     }
 }

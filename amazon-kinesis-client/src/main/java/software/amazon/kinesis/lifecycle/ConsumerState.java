@@ -49,7 +49,7 @@ interface ConsumerState {
 
     /**
      * Provides the next state of the consumer if the task failed. This defaults to no state change.
-     * 
+     *
      * @return the state to change to upon a task failure
      */
     default ConsumerState failureTransition() {
@@ -97,12 +97,11 @@ interface ConsumerState {
 
     /**
      * Indicates whether a state requires an external event to re-awaken for processing.
-     * 
+     *
      * @return true if the state is some external event to restart processing, false if events can be immediately
      *         dispatched.
      */
     default boolean requiresAwake() {
         return false;
     }
-
 }

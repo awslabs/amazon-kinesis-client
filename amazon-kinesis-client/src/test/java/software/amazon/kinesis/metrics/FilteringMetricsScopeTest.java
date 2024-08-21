@@ -16,13 +16,11 @@ package software.amazon.kinesis.metrics;
 
 import java.util.Set;
 
+import com.google.common.collect.ImmutableSet;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.junit.Assert;
 import org.junit.Test;
-
-import com.google.common.collect.ImmutableSet;
-
 import software.amazon.awssdk.services.cloudwatch.model.Dimension;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
@@ -49,7 +47,9 @@ public class FilteringMetricsScopeTest {
                 Assert.assertTrue(getDimensions().remove(dimension));
             }
 
-            Assert.assertTrue("Dimensions should be empty at the end of assertDimensions", getDimensions().isEmpty());
+            Assert.assertTrue(
+                    "Dimensions should be empty at the end of assertDimensions",
+                    getDimensions().isEmpty());
         }
     }
 
@@ -106,8 +106,9 @@ public class FilteringMetricsScopeTest {
 
     @Test
     public void testMetricsDimensionsAll() {
-        TestScope scope = new TestScope(MetricsLevel.DETAILED, ImmutableSet.of(
-                "ThisDoesNotMatter", MetricsScope.METRICS_DIMENSIONS_ALL, "ThisAlsoDoesNotMatter"));
+        TestScope scope = new TestScope(
+                MetricsLevel.DETAILED,
+                ImmutableSet.of("ThisDoesNotMatter", MetricsScope.METRICS_DIMENSIONS_ALL, "ThisAlsoDoesNotMatter"));
         scope.addDimension("ShardId", "shard-0001");
         scope.addDimension("Operation", "ProcessRecords");
         scope.addDimension("ShardId", "shard-0001");

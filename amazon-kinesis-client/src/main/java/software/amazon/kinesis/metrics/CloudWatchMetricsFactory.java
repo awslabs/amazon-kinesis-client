@@ -17,7 +17,6 @@ package software.amazon.kinesis.metrics;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
-
 import lombok.NonNull;
 import software.amazon.awssdk.core.exception.AbortedException;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
@@ -33,6 +32,7 @@ public class CloudWatchMetricsFactory implements MetricsFactory {
      * immediately instead of waiting for the next scheduled call.
      */
     private final CloudWatchPublisherRunnable runnable;
+
     private final Thread publicationThread;
 
     /**
@@ -62,16 +62,20 @@ public class CloudWatchMetricsFactory implements MetricsFactory {
      * @param flushSize
      *            size of batch that can be published
      */
-    public CloudWatchMetricsFactory(@NonNull final CloudWatchAsyncClient cloudWatchClient,
-            @NonNull final String namespace, final long bufferTimeMillis, final int maxQueueSize,
-            @NonNull final MetricsLevel metricsLevel, @NonNull final Set<String> metricsEnabledDimensions,
+    public CloudWatchMetricsFactory(
+            @NonNull final CloudWatchAsyncClient cloudWatchClient,
+            @NonNull final String namespace,
+            final long bufferTimeMillis,
+            final int maxQueueSize,
+            @NonNull final MetricsLevel metricsLevel,
+            @NonNull final Set<String> metricsEnabledDimensions,
             final int flushSize) {
         this.metricsLevel = metricsLevel;
-        this.metricsEnabledDimensions = (metricsEnabledDimensions == null ? ImmutableSet.of()
-                : ImmutableSet.copyOf(metricsEnabledDimensions));
+        this.metricsEnabledDimensions =
+                (metricsEnabledDimensions == null ? ImmutableSet.of() : ImmutableSet.copyOf(metricsEnabledDimensions));
 
-        runnable = new CloudWatchPublisherRunnable(new CloudWatchMetricsPublisher(cloudWatchClient, namespace),
-                bufferTimeMillis, maxQueueSize, flushSize);
+        runnable = new CloudWatchPublisherRunnable(
+                new CloudWatchMetricsPublisher(cloudWatchClient, namespace), bufferTimeMillis, maxQueueSize, flushSize);
         publicationThread = new Thread(runnable);
         publicationThread.setName("cw-metrics-publisher");
         publicationThread.start();
@@ -90,5 +94,4 @@ public class CloudWatchMetricsFactory implements MetricsFactory {
             throw AbortedException.builder().message(e.getMessage()).cause(e).build();
         }
     }
-
 }

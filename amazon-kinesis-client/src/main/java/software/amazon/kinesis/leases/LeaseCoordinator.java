@@ -136,7 +136,7 @@ public interface LeaseCoordinator {
      * @return all leases for the application that are in the lease table
      */
     default List<Lease> allLeases() {
-       return Collections.emptyList();
+        return Collections.emptyList();
     }
 
     /**

@@ -40,7 +40,10 @@ public class Checkpoint {
      * @param pendingCheckpoint the pending checkpoint sequence number - can be null.
      * @param pendingCheckpointState the pending checkpoint state - can be null.
      */
-    public Checkpoint(final ExtendedSequenceNumber checkpoint, final ExtendedSequenceNumber pendingCheckpoint, byte[] pendingCheckpointState) {
+    public Checkpoint(
+            final ExtendedSequenceNumber checkpoint,
+            final ExtendedSequenceNumber pendingCheckpoint,
+            byte[] pendingCheckpointState) {
         if (checkpoint == null || checkpoint.sequenceNumber().isEmpty()) {
             throw new IllegalArgumentException("Checkpoint cannot be null or empty");
         }

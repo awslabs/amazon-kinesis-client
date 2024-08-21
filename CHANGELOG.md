@@ -3,6 +3,136 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.6.0 (2024-05-01)
+* [#1317](https://github.com/awslabs/amazon-kinesis-client/pull/1317) Add enablePriorityLeaseAssignment config
+* [#1320](https://github.com/awslabs/amazon-kinesis-client/pull/1320) Update lease taker to get unassigned leases
+* [#1318](https://github.com/awslabs/amazon-kinesis-client/pull/1318) Internally construct and use stream ARNs for all streams in multi-stream mode
+* [#1291](https://github.com/awslabs/amazon-kinesis-client/pull/1291) Update RetrievalFactory implementations to utilize the StreamIdentifier field of StreamConfig
+* [#1308](https://github.com/awslabs/amazon-kinesis-client/pull/1308) Move shutdownComplete call to ShardConsumer
+* [#1313](https://github.com/awslabs/amazon-kinesis-client/pull/1313) Add additional integration tests for multi-stream and cross account access
+* [#1273](https://github.com/awslabs/amazon-kinesis-client/pull/1273) Optimize currentStreamConfigMap by cleaning up lingering streams
+* [#1302](https://github.com/awslabs/amazon-kinesis-client/pull/1302) Fix gracefulShutdown behavior in Scheduler
+
+### Release 2.5.8 (2024-03-27)
+* [#1278](https://github.com/awslabs/amazon-kinesis-client/pull/1278) Upgrade awssdk.version from 2.25.3 to 2.25.11 
+* [#1279](https://github.com/awslabs/amazon-kinesis-client/pull/1279) Upgrade org.apache.maven.plugins:maven-gpg-plugin from 3.1.0 to 3.2.1 
+* [#1280](https://github.com/awslabs/amazon-kinesis-client/pull/1280) Upgrade org.apache.commons:commons-lang3 from 3.12.0 to 3.14.0 
+* [#1282](https://github.com/awslabs/amazon-kinesis-client/pull/1282) Upgrade org.apache.maven.plugins:maven-javadoc-plugin from 3.5.0 to 3.6.3 
+* [#1277](https://github.com/awslabs/amazon-kinesis-client/pull/1277) Reuse 'ShardSyncTaskManager' instance for existing stream to avoid duplicate enqueue of 'ShardSyncTask' 
+
+### Release 2.5.7 (2024-03-19)
+* [#1275](https://github.com/awslabs/amazon-kinesis-client/pull/1275) Update PollingConfig maxRecords method to return PollingConfig 
+* [#1236](https://github.com/awslabs/amazon-kinesis-client/pull/1236) Upgrade commons-io:commons-io from 2.11.0 to 2.15.1 
+* [#1189](https://github.com/awslabs/amazon-kinesis-client/pull/1189) Upgrade org.apache.maven.plugins:maven-resources-plugin from 3.3.0 to 3.3.1 
+* [#1139](https://github.com/awslabs/amazon-kinesis-client/pull/1139) Upgrade maven-surefire-plugin from 2.22.2 to 3.1.2 
+* [#1138](https://github.com/awslabs/amazon-kinesis-client/pull/1138) Upgrade maven-failsafe-plugin from 2.22.2 to 3.1.2 
+* [#1125](https://github.com/awslabs/amazon-kinesis-client/pull/1125) Upgrade maven-gpg-plugin from 3.0.1 to 3.1.0 
+
+### Release 2.5.6 (2024-03-08)
+* [#1271](https://github.com/awslabs/amazon-kinesis-client/pull/1271) Adding snapshot for 2.5.6-SNAPSHOT 
+* [#1268](https://github.com/awslabs/amazon-kinesis-client/pull/1268) Upgrade ch.qos.logback:logback-classic dependency from 1.3.12 to 1.3.14
+* [#1268](https://github.com/awslabs/amazon-kinesis-client/pull/1268) Upgrade awssdk.version from 2.20.43 to 2.25.3
+* [#1268](https://github.com/awslabs/amazon-kinesis-client/pull/1268) Upgrade aws-java-sdk.version from 1.12.405 to 1.12.668
+* [#1268](https://github.com/awslabs/amazon-kinesis-client/pull/1268) Upgrade gsr.version from 1.1.17 to 1.1.19
+
+### Release 2.5.5 (2024-02-22)
+* [#1257](https://github.com/awslabs/amazon-kinesis-client/pull/1257) Prevent improper error logging during worker shutdown 
+* [#1260](https://github.com/awslabs/amazon-kinesis-client/pull/1260) Add Deletion protection config 
+* [#1258](https://github.com/awslabs/amazon-kinesis-client/pull/1258) Fix issue in configuring metricsEnabledDimensions 
+* [#1259](https://github.com/awslabs/amazon-kinesis-client/pull/1259) Add snapshot to version 
+
+### Release 2.5.4 (December 12, 2023)
+* [#1232](https://github.com/awslabs/amazon-kinesis-client/pull/1232) Upgrade ch.qos.logback:logback-classic dependency from 1.3.0 to 1.3.12 in /amazon-kinesis-client
+* [#1233](https://github.com/awslabs/amazon-kinesis-client/pull/1233) Upgrade ch.qos.logback:logback-classic dependency from 1.3.0 to 1.3.12 in /amazon-kinesis-client-multilang
+* [#1230](https://github.com/awslabs/amazon-kinesis-client/pull/1230) Bug fix which now allows MultiLangDaemon to configure idleTimeBetweenReadsInMillis
+* [#1229](https://github.com/awslabs/amazon-kinesis-client/pull/1229) Added link to `javadoc.io`-hosted Javadoc in the README
+* [#1218](https://github.com/awslabs/amazon-kinesis-client/pull/1218) Added doc for leases and the lease lifecycle to help explain lease lifecycle logic.
+* [#1226](https://github.com/awslabs/amazon-kinesis-client/pull/1226) Upgraded KCL from 2.5.3 to 2.5.4-SNAPSHOT
+
+### Release 2.5.3 (November 8, 2023)
+* [#1219](https://github.com/awslabs/amazon-kinesis-client/pull/1219) Provided streamArn in getRecords request
+* [#1216](https://github.com/awslabs/amazon-kinesis-client/pull/1216) Updated AWS Glue Schema Registry from version 1.1.14 to 1.1.17.
+* [#1205](https://github.com/awslabs/amazon-kinesis-client/pull/1205) Updated the FAQ with impact of changing default checkpoint.
+* [#1203](https://github.com/awslabs/amazon-kinesis-client/pull/1203) Added links from README.md to FAQ and doc folder.
+* [#1202](https://github.com/awslabs/amazon-kinesis-client/pull/1202) Introduced a FAQ for Kinesis Client Library
+* [#1200](https://github.com/awslabs/amazon-kinesis-client/pull/1200) Added test case for StreamIdentifier serialization.
+
+### Release 2.5.2 (August 7, 2023)
+* [#1184](https://github.com/awslabs/amazon-kinesis-client/pull/1184) [#367] Enhanced multi-lang `AWSCredentialsProvider=...` decoder and c…
+* [#1186](https://github.com/awslabs/amazon-kinesis-client/pull/1186) Provided documentation for multilang's new NestedPropertyKey enhancement.
+* [#1181](https://github.com/awslabs/amazon-kinesis-client/pull/1181) CVE-2023-2976: Upgrade Google Guava dependency version from `32.0.0-jre` to `32.1.1-jre`
+* [#1159](https://github.com/awslabs/amazon-kinesis-client/pull/1159) Bug fix in lease refresher integration test with occasional failures
+* [#1157](https://github.com/awslabs/amazon-kinesis-client/pull/1157) Fix NPE on graceful shutdown before DDB `LeaseCoordinator` starts.
+* [#1152](https://github.com/awslabs/amazon-kinesis-client/pull/1152) Adding resharding integration tests and changing ITs to not run by default
+* [#1162](https://github.com/awslabs/amazon-kinesis-client/pull/1162) Only deleting resource created by ITs
+* [#1158](https://github.com/awslabs/amazon-kinesis-client/pull/1158) Checkstyle: tightened `LineLength` restriction from 170 to 150.
+* [#1151](https://github.com/awslabs/amazon-kinesis-client/pull/1151) Modified `dependabot.yml` to set the correct `v[1|2].x` label.
+* [#1164](https://github.com/awslabs/amazon-kinesis-client/pull/1164) Upgraded KCL Version from 2.5.1 to 2.5.2-SNAPSHOT
+
+### Release 2.5.1 (June 27, 2023)
+* [#1143](https://github.com/awslabs/amazon-kinesis-client/pull/1143) Upgrade MultiLangDaemon to support StreamARN
+* [#1145](https://github.com/awslabs/amazon-kinesis-client/pull/1145) Introduced GitHub actions to trigger Maven builds during merge/pull requests
+* [#1136](https://github.com/awslabs/amazon-kinesis-client/pull/1136) Added testing architecture and KCL 2.x basic polling/streaming tests
+* [#1153](https://github.com/awslabs/amazon-kinesis-client/pull/1153) Checkstyle: added `UnusedImports` check.
+* [#1150](https://github.com/awslabs/amazon-kinesis-client/pull/1150) Enabled Checkstyle validation of test resources.
+* [#1149](https://github.com/awslabs/amazon-kinesis-client/pull/1149) Bound Checkstyle to `validate` goal for automated enforcement.
+* [#1148](https://github.com/awslabs/amazon-kinesis-client/pull/1148) Code cleanup to faciliate Checkstyle enforcement.
+* [#1142](https://github.com/awslabs/amazon-kinesis-client/pull/1142) Upgrade Google Guava dependency version from 31.1-jre to 32.0.0-jre
+* [#1115](https://github.com/awslabs/amazon-kinesis-client/pull/1115) Update KCL version from 2.5.0 to 2.5.1-SNAPSHOT
+
+### Release 2.5.0 (May 19, 2023)
+* **[#1109](https://github.com/awslabs/amazon-kinesis-client/pull/1109) Add support for stream ARNs**
+* **[#1065](https://github.com/awslabs/amazon-kinesis-client/pull/1065) Allow tags to be added when lease table is created**
+* [#1094](https://github.com/awslabs/amazon-kinesis-client/pull/1094) Code cleanup to introduce better testing
+* [#1088](https://github.com/awslabs/amazon-kinesis-client/pull/1088) Minimize race in PSSM to optimize shard sync calls
+* [#1086](https://github.com/awslabs/amazon-kinesis-client/pull/1086) Add additional SingleStreamTracker constructor with stream position parameter
+* [#1084](https://github.com/awslabs/amazon-kinesis-client/pull/1084) More consistent testing behavior with restartAfterRequestTimerExpires
+* [#1066](https://github.com/awslabs/amazon-kinesis-client/pull/1066) More consistent testing behavior with HashRangesAreAlwaysComplete
+* [#1072](https://github.com/awslabs/amazon-kinesis-client/pull/1072) Upgrade nexus-staging-maven-plugin from 1.6.8 to 1.6.13
+* [#1073](https://github.com/awslabs/amazon-kinesis-client/pull/1073) Upgrade slf4j-api from 2.0.6 to 2.0.7
+* [#1090](https://github.com/awslabs/amazon-kinesis-client/pull/1090) Upgrade awssdk.version from 2.20.8 to 2.20.43
+* [#1071](https://github.com/awslabs/amazon-kinesis-client/pull/1071) Upgrade maven-compiler-plugin from 3.8.1 to 3.11.0
+
+### Release 2.4.8 (March 21, 2023)
+* [#1080](https://github.com/awslabs/amazon-kinesis-client/pull/1080) Added metric in `ShutdownTask` for scenario when parent leases are missing.
+* [#1077](https://github.com/awslabs/amazon-kinesis-client/pull/1077) Reverted changes to pom property
+* [#1069](https://github.com/awslabs/amazon-kinesis-client/pull/1069) Fixed flaky InitializationWaitsWhenLeaseTableIsEmpty test
+
+
+### Release 2.4.7 (March 17, 2023)
+* **NOTE: Due to an issue during the release process, the 2.4.7 published artifacts are incomplete and non-viable. Please use 2.4.8 or later.**
+* [#1063](https://github.com/awslabs/amazon-kinesis-client/pull/1063) Allow leader to learn new leases upon re-election to avoid unnecessary shardSyncs
+* [#1060](https://github.com/awslabs/amazon-kinesis-client/pull/1060) Add new metric to be emitted on lease creation
+* [#1057](https://github.com/awslabs/amazon-kinesis-client/pull/1057) Added more logging in `Scheduler` w.r.t. `StreamConfig`s.
+* [#1059](https://github.com/awslabs/amazon-kinesis-client/pull/1059) DRY: simplification of `HierarchicalShardSyncerTest`.
+* [#1062](https://github.com/awslabs/amazon-kinesis-client/pull/1062) Fixed retry storm in `PrefetchRecordsPublisher`.
+* [#1061](https://github.com/awslabs/amazon-kinesis-client/pull/1061) Fixed NPE in `LeaseCleanupManager`.
+* [#1056](https://github.com/awslabs/amazon-kinesis-client/pull/1056) Clean up in-memory state of deleted kinesis stream in MultiStreamMode
+* [#1058](https://github.com/awslabs/amazon-kinesis-client/pull/1058) Documentation: added `<pre>` tags so fixed-format diagrams aren't garbled.
+* [#1053](https://github.com/awslabs/amazon-kinesis-client/pull/1053) Exposed convenience method of `ExtendedSequenceNumber#isSentinelCheckpoint()`
+* [#1043](https://github.com/awslabs/amazon-kinesis-client/pull/1043) Removed a `.swp` file, and updated `.gitignore`.
+* [#1047](https://github.com/awslabs/amazon-kinesis-client/pull/1047) Upgrade awssdk.version from 2.19.31 to 2.20.8
+* [#1046](https://github.com/awslabs/amazon-kinesis-client/pull/1046) Upgrade maven-javadoc-plugin from 3.3.1 to 3.5.0
+* [#1038](https://github.com/awslabs/amazon-kinesis-client/pull/1038) Upgrade gsr.version from 1.1.13 to 1.1.14
+* [#1037](https://github.com/awslabs/amazon-kinesis-client/pull/1037) Upgrade aws-java-sdk.version from 1.12.370 to 1.12.405
+
+### Release 2.4.6 (February 21, 2023)
+* [#1041](https://github.com/awslabs/amazon-kinesis-client/pull/1041) Minor optimizations (e.g., calculate-once, put instead of get+put)
+* [#1035](https://github.com/awslabs/amazon-kinesis-client/pull/1035) Release Note updates to avoid duplication and bitrot (e.g., 1.x release
+* [#935](https://github.com/awslabs/amazon-kinesis-client/pull/935) Pass isAtShardEnd correctly to processRecords call
+* [#1040](https://github.com/awslabs/amazon-kinesis-client/pull/1040) Increased logging verbosity around lease management
+* [#1024](https://github.com/awslabs/amazon-kinesis-client/pull/1024) Added logging w.r.t. StreamConfig handling.
+* [#1034](https://github.com/awslabs/amazon-kinesis-client/pull/1034) Optimization: 9~15% improvement in KinesisDataFetcher wall-time
+* [#1045](https://github.com/awslabs/amazon-kinesis-client/pull/1045) Fixed duplication of project version in children pom.xml
+* [#956](https://github.com/awslabs/amazon-kinesis-client/pull/956) Fixed warning message typos
+* [#795](https://github.com/awslabs/amazon-kinesis-client/pull/795) Fixed log message spacing
+* [#740](https://github.com/awslabs/amazon-kinesis-client/pull/740) Fixed typo in Comment
+* [#1028](https://github.com/awslabs/amazon-kinesis-client/pull/1028) Refactored MultiStreamTracker to provide and enhance OOP for both
+* [#1027](https://github.com/awslabs/amazon-kinesis-client/pull/1027) Removed CHECKSTYLE:OFF toggles which can invite/obscure sub-par code.
+* [#1032](https://github.com/awslabs/amazon-kinesis-client/pull/1032) Upgrade rxjava from 3.1.5 to 3.1.6
+* [#1030](https://github.com/awslabs/amazon-kinesis-client/pull/1030) Upgrade awssdk.version from 2.19.2 to 2.19.31
+* [#1029](https://github.com/awslabs/amazon-kinesis-client/pull/1029) Upgrade slf4j-api from 2.0.0 to 2.0.6
+* [#1015](https://github.com/awslabs/amazon-kinesis-client/pull/1015) Upgrade protobuf-java from 3.21.5 to 3.21.12
 
 ### Release 2.4.5 (January 04, 2023)
 * [#1014](https://github.com/awslabs/amazon-kinesis-client/pull/1014) Use AFTER_SEQUENCE_NUMBER iterator type for expired iterator request

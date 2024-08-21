@@ -15,9 +15,8 @@
 package software.amazon.kinesis.leases.dynamodb;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -27,6 +26,7 @@ import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseIntegrationTest;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
@@ -104,7 +104,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
         builder.withLease("4", "bar").build();
 
         // setting multiplier to unusually high number to avoid very old lease taking
-        taker.withVeryOldLeaseDurationNanosMultipler(5000000000L);
+        taker.withVeryOldLeaseDurationNanosMultiplier(5000000);
         builder.takeMutateAssert(taker, 2);
     }
 
@@ -143,7 +143,8 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
                 .withLease("5", "foo")
                 .build();
 
-        // In the current DynamoDBLeaseTaker implementation getAllLeases() gets leases from an internal cache that is built during takeLeases() operation
+        // In the current DynamoDBLeaseTaker implementation getAllLeases() gets leases from an internal cache that is
+        // built during takeLeases() operation
         assertThat(taker.allLeases().size(), equalTo(0));
 
         taker.takeLeases();
@@ -153,7 +154,6 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
         assertThat(addedLeases.values().containsAll(allLeases), equalTo(true));
     }
 
-
     /**
      * Sets the leaseDurationMillis to 0, ensuring a get request to update the existing lease after computing
      * leases to take
@@ -161,10 +161,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
     @Test
     public void testSlowGetAllLeases() throws LeasingException {
         long leaseDurationMillis = 0;
-        taker = new DynamoDBLeaseTaker(leaseRefresher,
-                "foo",
-                leaseDurationMillis,
-                new NullMetricsFactory());
+        taker = new DynamoDBLeaseTaker(leaseRefresher, "foo", leaseDurationMillis, new NullMetricsFactory());
         TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         Map<String, Lease> addedLeases = builder.withLease("1", "bar")
@@ -203,7 +200,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
     /**
      * Verify that one activity is stolen from the highest loaded server when a server needs more than one lease and no
      * expired leases are available. Setup: 4 leases, server foo holds 0, bar holds 1, baz holds 5.
-     * 
+     *
      * Foo should steal from baz.
      */
     @Test

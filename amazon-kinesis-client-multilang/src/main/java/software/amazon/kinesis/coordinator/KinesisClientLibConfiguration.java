@@ -18,11 +18,9 @@ import java.util.Date;
 import java.util.Optional;
 import java.util.Set;
 
-import org.apache.commons.lang3.Validate;
-
 import com.google.common.collect.ImmutableSet;
-
 import lombok.Getter;
+import org.apache.commons.lang3.Validate;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.InitialPositionInStream;
@@ -119,14 +117,16 @@ public class KinesisClientLibConfiguration {
     /**
      * Metrics dimensions that always will be enabled regardless of the config provided by user.
      */
-    public static final Set<String> METRICS_ALWAYS_ENABLED_DIMENSIONS = ImmutableSet
-            .of(MetricsUtil.OPERATION_DIMENSION_NAME);
+    public static final Set<String> METRICS_ALWAYS_ENABLED_DIMENSIONS =
+            ImmutableSet.of(MetricsUtil.OPERATION_DIMENSION_NAME);
 
     /**
      * Allowed dimensions for CloudWatch metrics. By default, worker ID dimension will be disabled.
      */
-    public static final Set<String> DEFAULT_METRICS_ENABLED_DIMENSIONS = ImmutableSet.<String> builder()
-            .addAll(METRICS_ALWAYS_ENABLED_DIMENSIONS).add(MetricsUtil.SHARD_ID_DIMENSION_NAME).build();
+    public static final Set<String> DEFAULT_METRICS_ENABLED_DIMENSIONS = ImmutableSet.<String>builder()
+            .addAll(METRICS_ALWAYS_ENABLED_DIMENSIONS)
+            .add(MetricsUtil.SHARD_ID_DIMENSION_NAME)
+            .build();
 
     /**
      * Metrics dimensions that signify all possible dimensions.
@@ -217,6 +217,9 @@ public class KinesisClientLibConfiguration {
     private AwsCredentialsProvider dynamoDBCredentialsProvider;
     private AwsCredentialsProvider cloudWatchCredentialsProvider;
     private long failoverTimeMillis;
+    private boolean enablePriorityLeaseAssignment;
+    private boolean leaseTableDeletionProtectionEnabled;
+    private boolean leaseTablePitrEnabled;
     private String workerIdentifier;
     private long shardSyncIntervalMillis;
     private int maxRecords;
@@ -284,8 +287,8 @@ public class KinesisClientLibConfiguration {
      * @param workerId
      *            Used to distinguish different workers/processes of a Kinesis application
      */
-    public KinesisClientLibConfiguration(String applicationName, String streamName,
-            AwsCredentialsProvider credentialsProvider, String workerId) {
+    public KinesisClientLibConfiguration(
+            String applicationName, String streamName, AwsCredentialsProvider credentialsProvider, String workerId) {
         this(applicationName, streamName, credentialsProvider, credentialsProvider, credentialsProvider, workerId);
     }
 
@@ -307,16 +310,36 @@ public class KinesisClientLibConfiguration {
      * @param workerId
      *            Used to distinguish different workers/processes of a Kinesis application
      */
-    public KinesisClientLibConfiguration(String applicationName, String streamName,
-            AwsCredentialsProvider kinesisCredentialsProvider, AwsCredentialsProvider dynamoDBCredentialsProvider,
-            AwsCredentialsProvider cloudWatchCredentialsProvider, String workerId) {
-        this(applicationName, streamName, null, null, DEFAULT_INITIAL_POSITION_IN_STREAM, kinesisCredentialsProvider,
-                dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, DEFAULT_FAILOVER_TIME_MILLIS, workerId,
-                DEFAULT_MAX_RECORDS, DEFAULT_IDLETIME_BETWEEN_READS_MILLIS,
-                DEFAULT_DONT_CALL_PROCESS_RECORDS_FOR_EMPTY_RECORD_LIST, DEFAULT_PARENT_SHARD_POLL_INTERVAL_MILLIS,
-                DEFAULT_SHARD_SYNC_INTERVAL_MILLIS, DEFAULT_CLEANUP_LEASES_UPON_SHARDS_COMPLETION,
-                DEFAULT_TASK_BACKOFF_TIME_MILLIS, DEFAULT_METRICS_BUFFER_TIME_MILLIS, DEFAULT_METRICS_MAX_QUEUE_SIZE,
-                DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING, null, DEFAULT_SHUTDOWN_GRACE_MILLIS,
+    public KinesisClientLibConfiguration(
+            String applicationName,
+            String streamName,
+            AwsCredentialsProvider kinesisCredentialsProvider,
+            AwsCredentialsProvider dynamoDBCredentialsProvider,
+            AwsCredentialsProvider cloudWatchCredentialsProvider,
+            String workerId) {
+        this(
+                applicationName,
+                streamName,
+                null,
+                null,
+                DEFAULT_INITIAL_POSITION_IN_STREAM,
+                kinesisCredentialsProvider,
+                dynamoDBCredentialsProvider,
+                cloudWatchCredentialsProvider,
+                DEFAULT_FAILOVER_TIME_MILLIS,
+                workerId,
+                DEFAULT_MAX_RECORDS,
+                DEFAULT_IDLETIME_BETWEEN_READS_MILLIS,
+                DEFAULT_DONT_CALL_PROCESS_RECORDS_FOR_EMPTY_RECORD_LIST,
+                DEFAULT_PARENT_SHARD_POLL_INTERVAL_MILLIS,
+                DEFAULT_SHARD_SYNC_INTERVAL_MILLIS,
+                DEFAULT_CLEANUP_LEASES_UPON_SHARDS_COMPLETION,
+                DEFAULT_TASK_BACKOFF_TIME_MILLIS,
+                DEFAULT_METRICS_BUFFER_TIME_MILLIS,
+                DEFAULT_METRICS_MAX_QUEUE_SIZE,
+                DEFAULT_VALIDATE_SEQUENCE_NUMBER_BEFORE_CHECKPOINTING,
+                null,
+                DEFAULT_SHUTDOWN_GRACE_MILLIS,
                 DEFAULT_SCHEDULER_INITIALIZATION_BACKOFF_TIME_MILLIS);
     }
 
@@ -376,20 +399,53 @@ public class KinesisClientLibConfiguration {
      */
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
-    public KinesisClientLibConfiguration(String applicationName, String streamName, String kinesisEndpoint,
-            InitialPositionInStream initialPositionInStream, AwsCredentialsProvider kinesisCredentialsProvider,
-            AwsCredentialsProvider dynamoDBCredentialsProvider, AwsCredentialsProvider cloudWatchCredentialsProvider,
-            long failoverTimeMillis, String workerId, int maxRecords, long idleTimeBetweenReadsInMillis,
-            boolean callProcessRecordsEvenForEmptyRecordList, long parentShardPollIntervalMillis,
-            long shardSyncIntervalMillis, boolean cleanupTerminatedShardsBeforeExpiry, long taskBackoffTimeMillis,
-            long metricsBufferTimeMillis, int metricsMaxQueueSize, boolean validateSequenceNumberBeforeCheckpointing,
-            String regionName, long shutdownGraceMillis, long schedulerInitializationBackoffTimeMillis) {
-        this(applicationName, streamName, kinesisEndpoint, null, initialPositionInStream, kinesisCredentialsProvider,
-                dynamoDBCredentialsProvider, cloudWatchCredentialsProvider, failoverTimeMillis, workerId, maxRecords,
-                idleTimeBetweenReadsInMillis, callProcessRecordsEvenForEmptyRecordList, parentShardPollIntervalMillis,
-                shardSyncIntervalMillis, cleanupTerminatedShardsBeforeExpiry, taskBackoffTimeMillis,
-                metricsBufferTimeMillis, metricsMaxQueueSize, validateSequenceNumberBeforeCheckpointing, regionName,
-                shutdownGraceMillis, schedulerInitializationBackoffTimeMillis);
+    public KinesisClientLibConfiguration(
+            String applicationName,
+            String streamName,
+            String kinesisEndpoint,
+            InitialPositionInStream initialPositionInStream,
+            AwsCredentialsProvider kinesisCredentialsProvider,
+            AwsCredentialsProvider dynamoDBCredentialsProvider,
+            AwsCredentialsProvider cloudWatchCredentialsProvider,
+            long failoverTimeMillis,
+            String workerId,
+            int maxRecords,
+            long idleTimeBetweenReadsInMillis,
+            boolean callProcessRecordsEvenForEmptyRecordList,
+            long parentShardPollIntervalMillis,
+            long shardSyncIntervalMillis,
+            boolean cleanupTerminatedShardsBeforeExpiry,
+            long taskBackoffTimeMillis,
+            long metricsBufferTimeMillis,
+            int metricsMaxQueueSize,
+            boolean validateSequenceNumberBeforeCheckpointing,
+            String regionName,
+            long shutdownGraceMillis,
+            long schedulerInitializationBackoffTimeMillis) {
+        this(
+                applicationName,
+                streamName,
+                kinesisEndpoint,
+                null,
+                initialPositionInStream,
+                kinesisCredentialsProvider,
+                dynamoDBCredentialsProvider,
+                cloudWatchCredentialsProvider,
+                failoverTimeMillis,
+                workerId,
+                maxRecords,
+                idleTimeBetweenReadsInMillis,
+                callProcessRecordsEvenForEmptyRecordList,
+                parentShardPollIntervalMillis,
+                shardSyncIntervalMillis,
+                cleanupTerminatedShardsBeforeExpiry,
+                taskBackoffTimeMillis,
+                metricsBufferTimeMillis,
+                metricsMaxQueueSize,
+                validateSequenceNumberBeforeCheckpointing,
+                regionName,
+                shutdownGraceMillis,
+                schedulerInitializationBackoffTimeMillis);
     }
 
     /**
@@ -448,15 +504,30 @@ public class KinesisClientLibConfiguration {
      */
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
-    public KinesisClientLibConfiguration(String applicationName, String streamName, String kinesisEndpoint,
-            String dynamoDBEndpoint, InitialPositionInStream initialPositionInStream,
-            AwsCredentialsProvider kinesisCredentialsProvider, AwsCredentialsProvider dynamoDBCredentialsProvider,
-            AwsCredentialsProvider cloudWatchCredentialsProvider, long failoverTimeMillis, String workerId,
-            int maxRecords, long idleTimeBetweenReadsInMillis, boolean callProcessRecordsEvenForEmptyRecordList,
-            long parentShardPollIntervalMillis, long shardSyncIntervalMillis,
-            boolean cleanupTerminatedShardsBeforeExpiry, long taskBackoffTimeMillis, long metricsBufferTimeMillis,
-            int metricsMaxQueueSize, boolean validateSequenceNumberBeforeCheckpointing, String regionName,
-            long shutdownGraceMillis, long schedulerInitializationBackoffTimeMillis) {
+    public KinesisClientLibConfiguration(
+            String applicationName,
+            String streamName,
+            String kinesisEndpoint,
+            String dynamoDBEndpoint,
+            InitialPositionInStream initialPositionInStream,
+            AwsCredentialsProvider kinesisCredentialsProvider,
+            AwsCredentialsProvider dynamoDBCredentialsProvider,
+            AwsCredentialsProvider cloudWatchCredentialsProvider,
+            long failoverTimeMillis,
+            String workerId,
+            int maxRecords,
+            long idleTimeBetweenReadsInMillis,
+            boolean callProcessRecordsEvenForEmptyRecordList,
+            long parentShardPollIntervalMillis,
+            long shardSyncIntervalMillis,
+            boolean cleanupTerminatedShardsBeforeExpiry,
+            long taskBackoffTimeMillis,
+            long metricsBufferTimeMillis,
+            int metricsMaxQueueSize,
+            boolean validateSequenceNumberBeforeCheckpointing,
+            String regionName,
+            long shutdownGraceMillis,
+            long schedulerInitializationBackoffTimeMillis) {
         // Check following values are greater than zero
         checkIsValuePositive("FailoverTimeMillis", failoverTimeMillis);
         checkIsValuePositive("IdleTimeBetweenReadsInMillis", idleTimeBetweenReadsInMillis);
@@ -494,8 +565,8 @@ public class KinesisClientLibConfiguration {
         this.maxLeasesToStealAtOneTime = DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME;
         this.initialLeaseTableReadCapacity = DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY;
         this.initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
-        this.initialPositionInStreamExtended = InitialPositionInStreamExtended
-                .newInitialPosition(initialPositionInStream);
+        this.initialPositionInStreamExtended =
+                InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = new SimpleRecordsFetcherFactory();
@@ -558,15 +629,30 @@ public class KinesisClientLibConfiguration {
      */
     // CHECKSTYLE:IGNORE HiddenFieldCheck FOR NEXT 26 LINES
     // CHECKSTYLE:IGNORE ParameterNumber FOR NEXT 26 LINES
-    public KinesisClientLibConfiguration(String applicationName, String streamName, String kinesisEndpoint,
-            String dynamoDBEndpoint, InitialPositionInStream initialPositionInStream,
-            AwsCredentialsProvider kinesisCredentialsProvider, AwsCredentialsProvider dynamoDBCredentialsProvider,
-            AwsCredentialsProvider cloudWatchCredentialsProvider, long failoverTimeMillis, String workerId,
-            int maxRecords, long idleTimeBetweenReadsInMillis, boolean callProcessRecordsEvenForEmptyRecordList,
-            long parentShardPollIntervalMillis, long shardSyncIntervalMillis,
-            boolean cleanupTerminatedShardsBeforeExpiry, long taskBackoffTimeMillis, long metricsBufferTimeMillis,
-            int metricsMaxQueueSize, boolean validateSequenceNumberBeforeCheckpointing, String regionName,
-            RecordsFetcherFactory recordsFetcherFactory, long schedulerInitializationBackoffTimeMillis) {
+    public KinesisClientLibConfiguration(
+            String applicationName,
+            String streamName,
+            String kinesisEndpoint,
+            String dynamoDBEndpoint,
+            InitialPositionInStream initialPositionInStream,
+            AwsCredentialsProvider kinesisCredentialsProvider,
+            AwsCredentialsProvider dynamoDBCredentialsProvider,
+            AwsCredentialsProvider cloudWatchCredentialsProvider,
+            long failoverTimeMillis,
+            String workerId,
+            int maxRecords,
+            long idleTimeBetweenReadsInMillis,
+            boolean callProcessRecordsEvenForEmptyRecordList,
+            long parentShardPollIntervalMillis,
+            long shardSyncIntervalMillis,
+            boolean cleanupTerminatedShardsBeforeExpiry,
+            long taskBackoffTimeMillis,
+            long metricsBufferTimeMillis,
+            int metricsMaxQueueSize,
+            boolean validateSequenceNumberBeforeCheckpointing,
+            String regionName,
+            RecordsFetcherFactory recordsFetcherFactory,
+            long schedulerInitializationBackoffTimeMillis) {
         // Check following values are greater than zero
         checkIsValuePositive("FailoverTimeMillis", failoverTimeMillis);
         checkIsValuePositive("IdleTimeBetweenReadsInMillis", idleTimeBetweenReadsInMillis);
@@ -606,8 +692,8 @@ public class KinesisClientLibConfiguration {
         this.maxLeasesToStealAtOneTime = DEFAULT_MAX_LEASES_TO_STEAL_AT_ONE_TIME;
         this.initialLeaseTableReadCapacity = DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY;
         this.initialLeaseTableWriteCapacity = DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY;
-        this.initialPositionInStreamExtended = InitialPositionInStreamExtended
-                .newInitialPosition(initialPositionInStream);
+        this.initialPositionInStreamExtended =
+                InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         this.skipShardSyncAtWorkerInitializationIfLeasesExist = DEFAULT_SKIP_SHARD_SYNC_AT_STARTUP_IF_LEASES_EXIST;
         this.shardPrioritization = DEFAULT_SHARD_PRIORITIZATION;
         this.recordsFetcherFactory = recordsFetcherFactory;
@@ -932,8 +1018,8 @@ public class KinesisClientLibConfiguration {
      */
     public KinesisClientLibConfiguration withInitialPositionInStream(InitialPositionInStream initialPositionInStream) {
         this.initialPositionInStream = initialPositionInStream;
-        this.initialPositionInStreamExtended = InitialPositionInStreamExtended
-                .newInitialPosition(initialPositionInStream);
+        this.initialPositionInStreamExtended =
+                InitialPositionInStreamExtended.newInitialPosition(initialPositionInStream);
         return this;
     }
 
@@ -959,6 +1045,11 @@ public class KinesisClientLibConfiguration {
         return this;
     }
 
+    public KinesisClientLibConfiguration withEnablePriorityLeaseAssignment(boolean enablePriorityLeaseAssignment) {
+        this.enablePriorityLeaseAssignment = enablePriorityLeaseAssignment;
+        return this;
+    }
+
     /**
      * @param shardSyncIntervalMillis
      *            Time between tasks to sync leases and Kinesis shards
@@ -977,6 +1068,10 @@ public class KinesisClientLibConfiguration {
      */
     public KinesisClientLibConfiguration withMaxRecords(int maxRecords) {
         checkIsValuePositive("MaxRecords", (long) maxRecords);
+        if (maxRecords > DEFAULT_MAX_RECORDS) {
+            throw new IllegalArgumentException("maxRecords must be less than or equal to " + DEFAULT_MAX_RECORDS
+                    + " but current value is " + maxRecords);
+        }
         this.maxRecords = maxRecords;
         return this;
     }
@@ -1135,8 +1230,10 @@ public class KinesisClientLibConfiguration {
         } else if (metricsEnabledDimensions.contains(MetricsScope.METRICS_DIMENSIONS_ALL)) {
             this.metricsEnabledDimensions = METRICS_DIMENSIONS_ALL;
         } else {
-            this.metricsEnabledDimensions = ImmutableSet.<String> builder().addAll(metricsEnabledDimensions)
-                    .addAll(METRICS_ALWAYS_ENABLED_DIMENSIONS).build();
+            this.metricsEnabledDimensions = ImmutableSet.<String>builder()
+                    .addAll(metricsEnabledDimensions)
+                    .addAll(METRICS_ALWAYS_ENABLED_DIMENSIONS)
+                    .build();
         }
         return this;
     }
@@ -1267,7 +1364,8 @@ public class KinesisClientLibConfiguration {
      * @return this configuration object
      */
     public KinesisClientLibConfiguration withMaxLeaseRenewalThreads(int maxLeaseRenewalThreads) {
-        Validate.isTrue(maxLeaseRenewalThreads > 2,
+        Validate.isTrue(
+                maxLeaseRenewalThreads > 2,
                 "The maximum number of lease renewal threads must be greater than or equal to 2.");
         this.maxLeaseRenewalThreads = maxLeaseRenewalThreads;
 
@@ -1327,7 +1425,8 @@ public class KinesisClientLibConfiguration {
      * @return KinesisClientLibConfiguration
      */
     public KinesisClientLibConfiguration withDataFetchingStrategy(String dataFetchingStrategy) {
-        this.recordsFetcherFactory.dataFetchingStrategy(DataFetchingStrategy.valueOf(dataFetchingStrategy.toUpperCase()));
+        this.recordsFetcherFactory.dataFetchingStrategy(
+                DataFetchingStrategy.valueOf(dataFetchingStrategy.toUpperCase()));
         return this;
     }
 
@@ -1413,7 +1512,8 @@ public class KinesisClientLibConfiguration {
      *            Interval in milliseconds between retrying the scheduler initialization.
      * @return
      */
-    public KinesisClientLibConfiguration withSchedulerInitializationBackoffTimeMillis(long schedulerInitializationBackoffTimeMillis) {
+    public KinesisClientLibConfiguration withSchedulerInitializationBackoffTimeMillis(
+            long schedulerInitializationBackoffTimeMillis) {
         checkIsValuePositive("schedulerInitializationBackoffTimeMillis", schedulerInitializationBackoffTimeMillis);
         this.schedulerInitializationBackoffTimeMillis = schedulerInitializationBackoffTimeMillis;
         return this;

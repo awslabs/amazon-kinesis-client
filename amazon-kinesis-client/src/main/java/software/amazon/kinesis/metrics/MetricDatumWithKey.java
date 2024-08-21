@@ -14,29 +14,27 @@
  */
 package software.amazon.kinesis.metrics;
 
+import java.util.Objects;
+
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 
-import java.util.Objects;
-
 /**
  * This class is used to store a MetricDatum as well as KeyType which stores specific information about
  * that particular MetricDatum.
- * 
+ *
  * @param <KeyType> is a class that stores information about a MetricDatum. This is useful
  *        to compare MetricDatums, aggregate similar MetricDatums or store information about a datum
  *        that may be relevant to the user (i.e. MetricName, CustomerId, TimeStamp, etc).
- * 
+ *
  *        Example:
- * 
+ *
  *        Let SampleMetricKey be a KeyType that takes in the time in which the datum was created.
- * 
+ *
  *        MetricDatumWithKey<SampleMetricKey> sampleDatumWithKey = new MetricDatumWithKey<SampleMetricKey>(new
  *        SampleMetricKey(System.currentTimeMillis()), datum)
- *        
  */
 @AllArgsConstructor
 @Setter
@@ -59,14 +57,16 @@ public class MetricDatumWithKey<KeyType> {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
-        if (obj == null)
+        }
+        if (obj == null) {
             return false;
-        if (getClass() != obj.getClass())
+        }
+        if (getClass() != obj.getClass()) {
             return false;
+        }
         MetricDatumWithKey<?> other = (MetricDatumWithKey<?>) obj;
         return Objects.equals(other.key, key) && Objects.equals(other.datum, datum);
     }
-
 }

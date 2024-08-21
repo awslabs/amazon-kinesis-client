@@ -22,6 +22,7 @@ import lombok.NonNull;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.utils.Either;
 import software.amazon.kinesis.common.DeprecationUtils;
@@ -33,7 +34,6 @@ import software.amazon.kinesis.processor.MultiStreamTracker;
 import software.amazon.kinesis.processor.SingleStreamTracker;
 import software.amazon.kinesis.processor.StreamTracker;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
-import software.amazon.kinesis.retrieval.polling.PollingConfig;
 
 /**
  * Used by the KCL to configure the retrieval of records from Kinesis.
@@ -49,7 +49,7 @@ public class RetrievalConfig {
      */
     public static final String KINESIS_CLIENT_LIB_USER_AGENT = "amazon-kinesis-client-library-java";
 
-    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.4.6-SNAPSHOT";
+    public static final String KINESIS_CLIENT_LIB_USER_AGENT_VERSION = "2.6.1-SNAPSHOT";
 
     /**
      * Client used to make calls to Kinesis for records retrieval
@@ -111,28 +111,40 @@ public class RetrievalConfig {
      * @see StreamTracker#createStreamConfig(StreamIdentifier)
      */
     @Deprecated
-    private InitialPositionInStreamExtended initialPositionInStreamExtended = InitialPositionInStreamExtended
-            .newInitialPosition(InitialPositionInStream.LATEST);
+    private InitialPositionInStreamExtended initialPositionInStreamExtended =
+            InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST);
 
     private RetrievalSpecificConfig retrievalSpecificConfig;
 
     private RetrievalFactory retrievalFactory;
 
-    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull String streamName,
-                           @NonNull String applicationName) {
+    public RetrievalConfig(
+            @NonNull KinesisAsyncClient kinesisAsyncClient,
+            @NonNull String streamName,
+            @NonNull String applicationName) {
         this(kinesisAsyncClient, new SingleStreamTracker(streamName), applicationName);
     }
 
-    public RetrievalConfig(@NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull StreamTracker streamTracker,
-                           @NonNull String applicationName) {
+    public RetrievalConfig(
+            @NonNull KinesisAsyncClient kinesisAsyncClient, @NonNull Arn streamArn, @NonNull String applicationName) {
+        this(kinesisAsyncClient, new SingleStreamTracker(streamArn), applicationName);
+    }
+
+    public RetrievalConfig(
+            @NonNull KinesisAsyncClient kinesisAsyncClient,
+            @NonNull StreamTracker streamTracker,
+            @NonNull String applicationName) {
         this.kinesisClient = kinesisAsyncClient;
         this.streamTracker = streamTracker;
         this.applicationName = applicationName;
-        this.appStreamTracker = DeprecationUtils.convert(streamTracker,
+        this.appStreamTracker = DeprecationUtils.convert(
+                streamTracker,
                 singleStreamTracker -> singleStreamTracker.streamConfigList().get(0));
     }
 
     /**
+     * Convenience method to reconfigure the embedded {@link StreamTracker},
+     * but only when <b>not</b> in multi-stream mode.
      *
      * @param initialPositionInStreamExtended
      *
@@ -141,63 +153,46 @@ public class RetrievalConfig {
      * @see StreamTracker#createStreamConfig(StreamIdentifier)
      */
     @Deprecated
-    public RetrievalConfig initialPositionInStreamExtended(InitialPositionInStreamExtended initialPositionInStreamExtended) {
-        this.appStreamTracker.apply(multiStreamTracker -> {
+    public RetrievalConfig initialPositionInStreamExtended(
+            InitialPositionInStreamExtended initialPositionInStreamExtended) {
+        if (streamTracker().isMultiStream()) {
             throw new IllegalArgumentException(
                     "Cannot set initialPositionInStreamExtended when multiStreamTracker is set");
-        }, sc -> {
-            final StreamConfig updatedConfig = new StreamConfig(sc.streamIdentifier(), initialPositionInStreamExtended);
-            streamTracker = new SingleStreamTracker(sc.streamIdentifier(), updatedConfig);
-            appStreamTracker = Either.right(updatedConfig);
-        });
+        }
+
+        final StreamIdentifier streamIdentifier = getSingleStreamIdentifier();
+        final StreamConfig updatedConfig = new StreamConfig(streamIdentifier, initialPositionInStreamExtended);
+        streamTracker = new SingleStreamTracker(streamIdentifier, updatedConfig);
+        appStreamTracker = Either.right(updatedConfig);
         return this;
     }
 
     public RetrievalConfig retrievalSpecificConfig(RetrievalSpecificConfig retrievalSpecificConfig) {
+        retrievalSpecificConfig.validateState(streamTracker.isMultiStream());
         this.retrievalSpecificConfig = retrievalSpecificConfig;
-        validateFanoutConfig();
-        validatePollingConfig();
         return this;
     }
 
     public RetrievalFactory retrievalFactory() {
         if (retrievalFactory == null) {
             if (retrievalSpecificConfig == null) {
-                retrievalSpecificConfig = new FanOutConfig(kinesisClient())
-                        .applicationName(applicationName());
-                retrievalSpecificConfig = appStreamTracker.map(multiStreamTracker -> retrievalSpecificConfig,
-                        streamConfig -> ((FanOutConfig) retrievalSpecificConfig).streamName(streamConfig.streamIdentifier().streamName()));
+                final FanOutConfig fanOutConfig = new FanOutConfig(kinesisClient()).applicationName(applicationName());
+                if (!streamTracker.isMultiStream()) {
+                    final String streamName = getSingleStreamIdentifier().streamName();
+                    fanOutConfig.streamName(streamName);
+                }
+                retrievalSpecificConfig(fanOutConfig);
             }
             retrievalFactory = retrievalSpecificConfig.retrievalFactory();
         }
         return retrievalFactory;
     }
 
-    private void validateFanoutConfig() {
-        // If we are in multistream mode and if retrievalSpecificConfig is an instance of FanOutConfig and if consumerArn is set throw exception.
-        boolean isFanoutConfig = retrievalSpecificConfig instanceof FanOutConfig;
-        boolean isInvalidFanoutConfig = isFanoutConfig && appStreamTracker.map(
-                multiStreamTracker -> ((FanOutConfig) retrievalSpecificConfig).consumerArn() != null
-                                || ((FanOutConfig) retrievalSpecificConfig).streamName() != null,
-                streamConfig -> streamConfig.streamIdentifier() == null
-                                || streamConfig.streamIdentifier().streamName() == null);
-        if(isInvalidFanoutConfig) {
-            throw new IllegalArgumentException(
-                    "Invalid config: Either in multi-stream mode with streamName/consumerArn configured or in single-stream mode with no streamName configured");
-        }
-    }
-
-    private void validatePollingConfig() {
-        boolean isPollingConfig = retrievalSpecificConfig instanceof PollingConfig;
-        boolean isInvalidPollingConfig = isPollingConfig && appStreamTracker.map(
-                multiStreamTracker ->
-                        ((PollingConfig) retrievalSpecificConfig).streamName() != null,
-                streamConfig ->
-                        streamConfig.streamIdentifier() == null || streamConfig.streamIdentifier().streamName() == null);
-
-        if (isInvalidPollingConfig) {
-            throw new IllegalArgumentException(
-                    "Invalid config: Either in multi-stream mode with streamName configured or in single-stream mode with no streamName configured");
-        }
+    /**
+     * Convenience method to return the {@link StreamIdentifier} from a
+     * single-stream tracker.
+     */
+    private StreamIdentifier getSingleStreamIdentifier() {
+        return streamTracker.streamConfigList().get(0).streamIdentifier();
     }
 }

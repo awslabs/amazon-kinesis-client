@@ -21,6 +21,7 @@ import java.util.List;
 import lombok.EqualsAndHashCode;
 import lombok.NonNull;
 import lombok.ToString;
+import software.amazon.awssdk.arns.Arn;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -48,14 +49,21 @@ public class SingleStreamTracker implements StreamTracker {
         this(StreamIdentifier.singleStreamInstance(streamName));
     }
 
+    public SingleStreamTracker(Arn streamArn) {
+        this(StreamIdentifier.singleStreamInstance(streamArn));
+    }
+
     public SingleStreamTracker(StreamIdentifier streamIdentifier) {
         this(streamIdentifier, DEFAULT_POSITION_IN_STREAM);
     }
 
     public SingleStreamTracker(
-            StreamIdentifier streamIdentifier,
-            @NonNull InitialPositionInStreamExtended initialPosition) {
+            StreamIdentifier streamIdentifier, @NonNull InitialPositionInStreamExtended initialPosition) {
         this(streamIdentifier, new StreamConfig(streamIdentifier, initialPosition));
+    }
+
+    public SingleStreamTracker(String streamName, @NonNull InitialPositionInStreamExtended initialPosition) {
+        this(StreamIdentifier.singleStreamInstance(streamName), initialPosition);
     }
 
     public SingleStreamTracker(@NonNull StreamIdentifier streamIdentifier, @NonNull StreamConfig streamConfig) {
@@ -77,5 +85,4 @@ public class SingleStreamTracker implements StreamTracker {
     public boolean isMultiStream() {
         return false;
     }
-
 }

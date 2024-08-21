@@ -22,7 +22,6 @@ import java.util.concurrent.Future;
 import java.util.function.Function;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
@@ -31,7 +30,6 @@ import software.amazon.kinesis.lifecycle.events.ShardEndedInput;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.multilang.config.MultiLangDaemonConfiguration;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
-
 
 /**
  * A record processor that manages creating a child process that implements the multi language protocol and connecting
@@ -50,20 +48,20 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
 
     private Future<?> stderrReadTask;
 
-    private MessageWriter messageWriter;
-    private MessageReader messageReader;
-    private DrainChildSTDERRTask readSTDERRTask;
+    private final MessageWriter messageWriter;
+    private final MessageReader messageReader;
+    private final DrainChildSTDERRTask readSTDERRTask;
 
-    private ProcessBuilder processBuilder;
+    private final ProcessBuilder processBuilder;
     private Process process;
-    private ExecutorService executorService;
+    private final ExecutorService executorService;
     private ProcessState state;
 
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
 
     private MultiLangProtocol protocol;
 
-    private MultiLangDaemonConfiguration configuration;
+    private final MultiLangDaemonConfiguration configuration;
 
     @Override
     public void initialize(InitializationInput initializationInput) {
@@ -157,8 +155,10 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
             if (ProcessState.ACTIVE.equals(this.state)) {
                 stopProcessing("Encountered an error while trying to shutdown child process", t);
             } else {
-                stopProcessing("Encountered an error during shutdown,"
-                        + " but it appears the processor has already been shutdown", t);
+                stopProcessing(
+                        "Encountered an error during shutdown,"
+                                + " but it appears the processor has already been shutdown",
+                        t);
             }
         }
     }
@@ -167,12 +167,13 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
      * Used to tell whether the processor has been shutdown already.
      */
     private enum ProcessState {
-        ACTIVE, SHUTDOWN
+        ACTIVE,
+        SHUTDOWN
     }
 
     /**
      * Constructor.
-     * 
+     *
      * @param processBuilder
      *            Provides process builder functionality.
      * @param executorService
@@ -180,15 +181,24 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
      * @param objectMapper
      *            An obejct mapper.
      */
-    MultiLangShardRecordProcessor(ProcessBuilder processBuilder, ExecutorService executorService,
-                                  ObjectMapper objectMapper, MultiLangDaemonConfiguration configuration) {
-        this(processBuilder, executorService, objectMapper, new MessageWriter(), new MessageReader(),
-                new DrainChildSTDERRTask(), configuration);
+    MultiLangShardRecordProcessor(
+            ProcessBuilder processBuilder,
+            ExecutorService executorService,
+            ObjectMapper objectMapper,
+            MultiLangDaemonConfiguration configuration) {
+        this(
+                processBuilder,
+                executorService,
+                objectMapper,
+                new MessageWriter(),
+                new MessageReader(),
+                new DrainChildSTDERRTask(),
+                configuration);
     }
 
     /**
      * Note: This constructor has package level access solely for testing purposes.
-     * 
+     *
      * @param processBuilder
      *            Provides the child process for this record processor
      * @param executorService
@@ -202,9 +212,14 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
      * @param readSTDERRTask
      *            Error reader to read from child process's stderr
      */
-    MultiLangShardRecordProcessor(ProcessBuilder processBuilder, ExecutorService executorService, ObjectMapper objectMapper,
-                                  MessageWriter messageWriter, MessageReader messageReader, DrainChildSTDERRTask readSTDERRTask,
-                                  MultiLangDaemonConfiguration configuration) {
+    MultiLangShardRecordProcessor(
+            ProcessBuilder processBuilder,
+            ExecutorService executorService,
+            ObjectMapper objectMapper,
+            MessageWriter messageWriter,
+            MessageReader messageReader,
+            DrainChildSTDERRTask readSTDERRTask,
+            MultiLangDaemonConfiguration configuration) {
         this.executorService = executorService;
         this.processBuilder = processBuilder;
         this.objectMapper = objectMapper;
@@ -212,7 +227,6 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
         this.messageReader = messageReader;
         this.readSTDERRTask = readSTDERRTask;
         this.configuration = configuration;
-
 
         this.state = ProcessState.ACTIVE;
     }
@@ -270,7 +284,7 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
     /**
      * Convenience method used by {@link #childProcessShutdownSequence()} to drain the STDIN and STDERR of the child
      * process.
-     * 
+     *
      * @param future A future to wait on.
      * @param whatThisFutureIsDoing What that future is doing while we wait.
      */
@@ -285,7 +299,7 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
     /**
      * Convenience method for logging and safely shutting down so that we don't throw an exception up to the KCL on
      * accident.
-     * 
+     *
      * @param message The reason we are stopping processing.
      * @param reason An exception that caused us to want to stop processing.
      */
@@ -303,8 +317,6 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
 
     /**
      * We provide a package level method for unit testing this call to exit.
-     * 
-     * @param val exit value
      */
     void exit() {
         System.exit(EXIT_VALUE);
@@ -313,7 +325,7 @@ public class MultiLangShardRecordProcessor implements ShardRecordProcessor {
     /**
      * The {@link ProcessBuilder} class is final so not easily mocked. We wrap the only interaction we have with it in
      * this package level method to permit unit testing.
-     * 
+     *
      * @return The process started by processBuilder
      * @throws IOException If the process can't be started.
      */

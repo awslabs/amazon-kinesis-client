@@ -34,7 +34,7 @@ public interface RecordProcessorCheckpointer {
      * In steady state, applications should checkpoint periodically (e.g. once every 5 minutes).
      * Calling this API too frequently can slow down the application (because it puts pressure on the underlying
      * checkpoint storage layer).
-     * 
+     *
      * @throws ThrottlingException Can't store checkpoint. Can be caused by checkpointing too frequently.
      *         Consider increasing the throughput/capacity of the checkpoint store or reducing checkpoint frequency.
      * @throws ShutdownException The record processor instance has been shutdown. Another instance may have
@@ -46,13 +46,13 @@ public interface RecordProcessorCheckpointer {
      *         backoff and retry.
      */
     void checkpoint()
-        throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException;
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException;
 
     /**
      * This method will checkpoint the progress at the provided record. This method is analogous to
      * {@link #checkpoint()} but provides the ability to specify the record at which to
      * checkpoint.
-     * 
+     *
      * @param record A record at which to checkpoint in this shard. Upon failover,
      *        the Kinesis Client Library will start fetching records after this record's sequence number.
      * @throws ThrottlingException Can't store checkpoint. Can be caused by checkpointing too frequently.
@@ -66,13 +66,13 @@ public interface RecordProcessorCheckpointer {
      *         backoff and retry.
      */
     void checkpoint(Record record)
-        throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException;
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException;
 
     /**
      * This method will checkpoint the progress at the provided sequenceNumber. This method is analogous to
      * {@link #checkpoint()} but provides the ability to specify the sequence number at which to
      * checkpoint.
-     * 
+     *
      * @param sequenceNumber A sequence number at which to checkpoint in this shard. Upon failover,
      *        the Kinesis Client Library will start fetching records after this sequence number.
      * @throws ThrottlingException Can't store checkpoint. Can be caused by checkpointing too frequently.
@@ -90,14 +90,14 @@ public interface RecordProcessorCheckpointer {
      *         2.) It is not a valid sequence number for a record in this shard.
      */
     void checkpoint(String sequenceNumber)
-        throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
-        IllegalArgumentException;
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
+                    IllegalArgumentException;
 
     /**
      * This method will checkpoint the progress at the provided sequenceNumber and subSequenceNumber, the latter for
-     * aggregated records produced with the Producer Library. This method is analogous to {@link #checkpoint()} 
+     * aggregated records produced with the Producer Library. This method is analogous to {@link #checkpoint()}
      * but provides the ability to specify the sequence and subsequence numbers at which to checkpoint.
-     * 
+     *
      * @param sequenceNumber A sequence number at which to checkpoint in this shard. Upon failover, the Kinesis
      *        Client Library will start fetching records after the given sequence and subsequence numbers.
      * @param subSequenceNumber A subsequence number at which to checkpoint within this shard. Upon failover, the
@@ -117,8 +117,8 @@ public interface RecordProcessorCheckpointer {
      *         2.) It is not a valid sequence number for a record in this shard.
      */
     void checkpoint(String sequenceNumber, long subSequenceNumber)
-        throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
-        IllegalArgumentException;
+            throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
+                    IllegalArgumentException;
 
     /**
      * This method will record a pending checkpoint at the last data record that was delivered to the record processor.
@@ -236,7 +236,7 @@ public interface RecordProcessorCheckpointer {
      * {@link #prepareCheckpoint()} but provides the ability to specify the sequence number at which to checkpoint.
      *
      * @param sequenceNumber A sequence number at which to prepare checkpoint in this shard.
-
+     *
      * @return an PreparedCheckpointer object that can be called later to persist the checkpoint.
      *
      * @throws ThrottlingException Can't store pending checkpoint. Can be caused by checkpointing too frequently.
@@ -255,7 +255,7 @@ public interface RecordProcessorCheckpointer {
      */
     PreparedCheckpointer prepareCheckpoint(String sequenceNumber)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
-            IllegalArgumentException;
+                    IllegalArgumentException;
 
     /**
      * This method will record a pending checkpoint at the provided sequenceNumber. This method is analogous to
@@ -284,7 +284,7 @@ public interface RecordProcessorCheckpointer {
      */
     PreparedCheckpointer prepareCheckpoint(String sequenceNumber, byte[] applicationState)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
-            IllegalArgumentException;
+                    IllegalArgumentException;
 
     /**
      * This method will record a pending checkpoint at the provided sequenceNumber and subSequenceNumber, the latter for
@@ -312,7 +312,7 @@ public interface RecordProcessorCheckpointer {
      */
     PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
-            IllegalArgumentException;
+                    IllegalArgumentException;
 
     /**
      * This method will record a pending checkpoint at the provided sequenceNumber and subSequenceNumber, the latter for
@@ -343,7 +343,7 @@ public interface RecordProcessorCheckpointer {
      */
     PreparedCheckpointer prepareCheckpoint(String sequenceNumber, long subSequenceNumber, byte[] applicationState)
             throws KinesisClientLibDependencyException, InvalidStateException, ThrottlingException, ShutdownException,
-            IllegalArgumentException;
+                    IllegalArgumentException;
 
     Checkpointer checkpointer();
 }

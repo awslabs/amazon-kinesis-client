@@ -39,8 +39,7 @@ public final class DeprecationUtils {
      */
     @Deprecated
     public static <R> Either<MultiStreamTracker, R> convert(
-            StreamTracker streamTracker,
-            Function<SingleStreamTracker, R> converter) {
+            StreamTracker streamTracker, Function<SingleStreamTracker, R> converter) {
         if (streamTracker instanceof MultiStreamTracker) {
             return Either.left((MultiStreamTracker) streamTracker);
         } else if (streamTracker instanceof SingleStreamTracker) {
@@ -49,5 +48,4 @@ public final class DeprecationUtils {
             throw new IllegalArgumentException("Unhandled StreamTracker: " + streamTracker);
         }
     }
-
 }
