@@ -187,9 +187,16 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
             return constructor.construct();
         } catch (InstantiationException e) {
             try {
+                // Try to create an instance using .create()
                 Method createMethod = clazz.getDeclaredMethod("create");
                 if (Modifier.isStatic(createMethod.getModifiers())) {
-                    return (T) createMethod.invoke(null);
+                    Object provider = createMethod.invoke(null);
+                    if (provider instanceof AwsCredentialsProvider) {
+                        return (T) provider;
+                    } else {
+                        log.warn("Returned provider is not an instance of {}", AwsCredentialsProvider.class.getName());
+                        return null;
+                    }
                 } else {
                     log.warn("Found non-static create() method in {}", providerName);
                 }
