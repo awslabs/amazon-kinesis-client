@@ -40,6 +40,9 @@ public class KclStsAssumeRoleCredentialsProvider implements AwsCredentialsProvid
 
     @Override
     public void acceptEndpoint(String serviceEndpoint, String signingRegion) {
+        if (!serviceEndpoint.startsWith("http://") && !serviceEndpoint.startsWith("https://")) {
+            serviceEndpoint = "https://" + serviceEndpoint;
+        }
         stsClientBuilder.endpointOverride(URI.create(serviceEndpoint));
         stsClientBuilder.region(Region.of(signingRegion));
     }
