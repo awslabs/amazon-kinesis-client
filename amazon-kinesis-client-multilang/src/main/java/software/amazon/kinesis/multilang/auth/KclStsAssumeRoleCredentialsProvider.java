@@ -31,11 +31,9 @@ public class KclStsAssumeRoleCredentialsProvider implements AwsCredentialsProvid
 
     @Override
     public AwsCredentials resolveCredentials() {
-        StsClient stsClient = this.stsClientBuilder.build();
-        AssumeRoleRequest assumeRoleRequest = this.assumeRoleRequestBuilder.build();
         StsAssumeRoleCredentialsProvider provider = StsAssumeRoleCredentialsProvider.builder()
-                .refreshRequest(assumeRoleRequest)
-                .stsClient(stsClient)
+                .refreshRequest(assumeRoleRequestBuilder.build())
+                .stsClient(stsClientBuilder.build())
                 .build();
         return provider.resolveCredentials();
     }
