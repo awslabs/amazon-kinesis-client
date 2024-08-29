@@ -163,9 +163,6 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                         "software.amazon.awssdk.auth.credentials.",
                         // Customer provides a fully-qualified provider name, or a custom credentials provider
                         // (e.g., software.amazon.awssdk.auth.credentials.AwsCredentialsProvider)
-
-                        //  Sts auth provider
-                        "software.amazon.awssdk.services.sts.auth.",
                         "")
                 .map(prefix -> prefix + provider)
                 .collect(Collectors.toList());
