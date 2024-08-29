@@ -29,7 +29,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 
 /**
- * Get AWSCredentialsProvider property.
+ * Get AwsCredentialsProvider property.
  */
 @Slf4j
 class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecoder<AwsCredentialsProvider> {
@@ -42,7 +42,7 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
     AwsCredentialsProviderPropertyValueDecoder() {}
 
     /**
-     * Get AWSCredentialsProvider property.
+     * Get AwsCredentialsProvider property.
      *
      * @param value
      *            property value as String
@@ -59,7 +59,7 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                     .credentialsProviders(providers)
                     .build();
         } else {
-            throw new IllegalArgumentException("Property AWSCredentialsProvider is missing.");
+            throw new IllegalArgumentException("Property AwsCredentialsProvider is missing.");
         }
     }
 
@@ -157,12 +157,12 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                         // Customer provides a short name of a provider offered by this multi-lang package
                         "software.amazon.kinesis.multilang.auth.",
                         // Customer provides a short name of common providers in software.amazon.awssdk.auth.credentials
-                        // package (e.g., any classes implementing the AWSCredentialsProvider interface)
+                        // package (e.g., any classes implementing the AwsCredentialsProvider interface)
                         // @see
                         // https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/auth/credentials/AwsCredentialsProvider.html
                         "software.amazon.awssdk.auth.credentials.",
                         // Customer provides a fully-qualified provider name, or a custom credentials provider
-                        // (e.g., software.amazon.awssdk.auth.credentials.AwsCredentialsProvider)
+                        // (e.g., org.mycompany.FooProvider)
                         "")
                 .map(prefix -> prefix + provider)
                 .collect(Collectors.toList());
