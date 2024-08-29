@@ -113,7 +113,7 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
             }
 
             if (provider == null) {
-                // fallback to invoke a public no-arg constructor
+                // regardless of parameters, fallback to invoke a public no-arg constructor
                 provider = constructProvider(providerName, clazz::newInstance);
             }
 
@@ -123,6 +123,8 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                     Method createMethod = clazz.getDeclaredMethod("create");
                     if (Modifier.isStatic(createMethod.getModifiers())) {
                         provider = constructProvider(providerName, () -> clazz.cast(createMethod.invoke(null)));
+                    } else {
+                        log.warn("Found non-static create() method in {}", providerName);
                     }
                 } catch (NoSuchMethodException e) {
                     // No create() method found for class
@@ -188,11 +190,10 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
     private static <T extends AwsCredentialsProvider> T constructProvider(
             final String providerName, final CredentialsProviderConstructor<T> constructor) {
         try {
-            // Try to create an instance using the given constructor
             return constructor.construct();
         } catch (NoSuchMethodException ignored) {
             // ignore
-        } catch (IllegalAccessException | InvocationTargetException | InstantiationException | RuntimeException e) {
+        } catch (IllegalAccessException | InstantiationException | InvocationTargetException | RuntimeException e) {
             log.warn("Failed to construct {}", providerName, e);
         }
         return null;
