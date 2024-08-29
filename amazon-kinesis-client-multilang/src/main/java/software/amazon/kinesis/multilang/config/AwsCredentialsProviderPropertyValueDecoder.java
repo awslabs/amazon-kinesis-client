@@ -99,27 +99,34 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                 final String[] varargs = Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length);
 
                 // attempt to invoke an explicit N-arg constructor of FooClass(String, String, ...)
-                provider = constructProvider(
-                        providerName,
-                        () -> {
-                            Class<?>[] argTypes = new Class<?>[nameAndArgs.length - 1];
-                            Arrays.fill(argTypes, String.class);
-                            return clazz.getConstructor(argTypes).newInstance(varargs);
-                        },
-                        clazz);
+                provider = constructProvider(providerName, () -> {
+                    Class<?>[] argTypes = new Class<?>[nameAndArgs.length - 1];
+                    Arrays.fill(argTypes, String.class);
+                    return clazz.getConstructor(argTypes).newInstance(varargs);
+                });
 
                 if (provider == null) {
                     // attempt to invoke a public varargs/array constructor of FooClass(String[])
-                    provider = constructProvider(
-                            providerName,
-                            () -> clazz.getConstructor(String[].class).newInstance((Object) varargs),
-                            clazz);
+                    provider = constructProvider(providerName, () -> clazz.getConstructor(String[].class)
+                            .newInstance((Object) varargs));
                 }
             }
 
             if (provider == null) {
-                // regardless of parameters, fallback to invoke a public no-arg constructor
-                provider = constructProvider(providerName, clazz::newInstance, clazz);
+                // fallback to invoke a public no-arg constructor
+                provider = constructProvider(providerName, clazz::newInstance);
+            }
+
+            if (provider == null) {
+                // if still not found, try empty create() method
+                try {
+                    Method createMethod = clazz.getDeclaredMethod("create");
+                    if (Modifier.isStatic(createMethod.getModifiers())) {
+                        provider = constructProvider(providerName, () -> clazz.cast(createMethod.invoke(null)));
+                    }
+                } catch (NoSuchMethodException e) {
+                    // No create() method found for class
+                }
             }
 
             if (provider != null) {
@@ -145,17 +152,18 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
 
     private static List<String> getPossibleFullClassNames(final String provider) {
         return Stream.of(
-                        // Customer provides a short name of common providers in com.amazonaws.auth package
-                        // (e.g., any classes implementing the AWSCredentialsProvider interface)
-                        // @see
-                        // http://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/auth/AWSCredentialsProvider.html
-                        "com.amazonaws.auth.",
-
                         // Customer provides a short name of a provider offered by this multi-lang package
                         "software.amazon.kinesis.multilang.auth.",
+                        // Customer provides a short name of common providers in software.amazon.awssdk.auth.credentials
+                        // package (e.g., any classes implementing the AWSCredentialsProvider interface)
+                        // @see
+                        // https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/auth/credentials/AwsCredentialsProvider.html
                         "software.amazon.awssdk.auth.credentials.",
                         // Customer provides a fully-qualified provider name, or a custom credentials provider
-                        // (e.g., com.amazonaws.auth.ClasspathFileCredentialsProvider, org.mycompany.FooProvider)
+                        // (e.g., software.amazon.awssdk.auth.credentials.AwsCredentialsProvider)
+
+                        //  Sts auth provider
+                        "software.amazon.awssdk.services.sts.auth.",
                         "")
                 .map(prefix -> prefix + provider)
                 .collect(Collectors.toList());
@@ -173,39 +181,18 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
      * @param providerName Raw, unmodified provider name. Should there be an
      *      Exception during construction, this parameter will be logged.
      * @param constructor supplier-like function that will perform the construction
-     * @param clazz the class to attempt to construct
      * @return the constructed provider, if successful; otherwise, null
      *
      * @param <T> type of the CredentialsProvider to construct
      */
     private static <T extends AwsCredentialsProvider> T constructProvider(
-            final String providerName,
-            final CredentialsProviderConstructor<T> constructor,
-            Class<? extends AwsCredentialsProvider> clazz) {
+            final String providerName, final CredentialsProviderConstructor<T> constructor) {
         try {
             // Try to create an instance using the given constructor
             return constructor.construct();
-        } catch (InstantiationException e) {
-            try {
-                // Try to create an instance using .create()
-                Method createMethod = clazz.getDeclaredMethod("create");
-                if (Modifier.isStatic(createMethod.getModifiers())) {
-                    Object provider = createMethod.invoke(null);
-                    if (provider instanceof AwsCredentialsProvider) {
-                        return (T) provider;
-                    } else {
-                        log.warn("Returned provider is not an instance of {}", AwsCredentialsProvider.class.getName());
-                        return null;
-                    }
-                } else {
-                    log.warn("Found non-static create() method in {}", providerName);
-                }
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e1) {
-                log.warn("Exception thrown by create() method in {}", providerName, e1.getCause());
-            }
         } catch (NoSuchMethodException ignored) {
             // ignore
-        } catch (IllegalAccessException | InvocationTargetException | RuntimeException e) {
+        } catch (IllegalAccessException | InvocationTargetException | InstantiationException | RuntimeException e) {
             log.warn("Failed to construct {}", providerName, e);
         }
         return null;
