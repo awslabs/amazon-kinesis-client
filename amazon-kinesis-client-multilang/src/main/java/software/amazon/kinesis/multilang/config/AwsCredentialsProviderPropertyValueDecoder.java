@@ -175,6 +175,14 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
         return null;
     }
 
+    /**
+     * Resolves the class for the given provider name and arguments.
+     *
+     * @param providerName A string containing the provider name.
+     *
+     * @return The Class object representing the resolved AwsCredentialsProvider implementation,
+     * or null if the class cannot be resolved or does not extend AwsCredentialsProvider.
+     */
     private static Class<? extends AwsCredentialsProvider> getClass(String providerName) {
         String className = providerName.replace(
                 "software.amazon.awssdk.auth.credentials.StsAssumeRoleCredentialsProvider",
