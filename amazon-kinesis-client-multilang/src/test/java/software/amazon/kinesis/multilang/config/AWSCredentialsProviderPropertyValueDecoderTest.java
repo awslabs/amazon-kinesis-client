@@ -40,6 +40,7 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
 
     private final String credentialName1 = AlwaysSucceedCredentialsProvider.class.getName();
     private final String credentialName2 = ConstructorCredentialsProvider.class.getName();
+    private final String createCredentialClass = CreateProvider.class.getName();
     private final AwsCredentialsProviderPropertyValueDecoder decoder = new AwsCredentialsProviderPropertyValueDecoder();
 
     @ToString
@@ -119,11 +120,29 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
     public void testKclAuthProvider() {
         for (final String className : Arrays.asList(
                 KclStsAssumeRoleCredentialsProvider.class.getName(), // fully-qualified name
-                KclStsAssumeRoleCredentialsProvider.class.getSimpleName() // name-only; needs prefix
-                )) {
+                KclStsAssumeRoleCredentialsProvider.class.getSimpleName(), // name-only; needs prefix
+                "software.amazon.awssdk.auth.credentials.StsAssumeRoleCredentialsProvider")) {
             final AwsCredentialsProvider provider = decoder.decodeValue(className + "|arn|sessionName");
             assertNotNull(className, provider);
         }
+    }
+
+    /**
+     * Test that OneArgCreateProvider in the SDK v2 can process a create() method
+     */
+    @Test
+    public void testEmptyCreateProvider() {
+        AwsCredentialsProvider provider = decoder.decodeValue(createCredentialClass);
+        assertThat(provider, hasCredentials(TEST_ACCESS_KEY_ID, TEST_SECRET_KEY));
+    }
+
+    /**
+     * Test that OneArgCreateProvider in the SDK v2 can process a create(arg1) method
+     */
+    @Test
+    public void testOneArgCreateProvider() {
+        AwsCredentialsProvider provider = decoder.decodeValue(createCredentialClass + "|testCreateProperty");
+        assertThat(provider, hasCredentials("testCreateProperty", TEST_SECRET_KEY));
     }
 
     /**
@@ -186,6 +205,30 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
             // KISS solution to surface the constructor args
             final String flattenedArgs = Arrays.toString(args);
             return AwsBasicCredentials.create(flattenedArgs, flattenedArgs);
+        }
+    }
+
+    /**
+     * Credentials provider to test AWS SDK v2 create() methods for providers like ProfileCredentialsProvider
+     */
+    public static class CreateProvider implements AwsCredentialsProvider {
+        private String accessKeyId;
+
+        private CreateProvider(String accessKeyId) {
+            this.accessKeyId = accessKeyId;
+        }
+
+        public static CreateProvider create() {
+            return new CreateProvider(TEST_ACCESS_KEY_ID);
+        }
+
+        public static CreateProvider create(String accessKeyId) {
+            return new CreateProvider(accessKeyId);
+        }
+
+        @Override
+        public AwsCredentials resolveCredentials() {
+            return AwsBasicCredentials.create(accessKeyId, TEST_SECRET_KEY);
         }
     }
 }
