@@ -79,63 +79,121 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
 
         for (String providerName : providerNames) {
             final String[] nameAndArgs = providerName.split("\\" + ARG_DELIMITER);
-            final Class<? extends AwsCredentialsProvider> clazz;
-            try {
-                final Class<?> c = Class.forName(nameAndArgs[0]);
-                if (!AwsCredentialsProvider.class.isAssignableFrom(c)) {
-                    continue;
-                }
-                clazz = (Class<? extends AwsCredentialsProvider>) c;
-            } catch (ClassNotFoundException cnfe) {
-                // Providers are a product of prefixed Strings to cover multiple
-                // namespaces (e.g., "Foo" -> { "some.auth.Foo", "kcl.auth.Foo" }).
-                // It's expected that many class names will not resolve.
+            final Class<? extends AwsCredentialsProvider> clazz = getClass(nameAndArgs[0]);
+            if (clazz == null) {
                 continue;
             }
-            log.info("Attempting to construct {}", clazz);
-
             AwsCredentialsProvider provider = null;
             if (nameAndArgs.length > 1) {
                 final String[] varargs = Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length);
-
-                // attempt to invoke an explicit N-arg constructor of FooClass(String, String, ...)
-                provider = constructProvider(providerName, () -> {
-                    Class<?>[] argTypes = new Class<?>[nameAndArgs.length - 1];
-                    Arrays.fill(argTypes, String.class);
-                    return clazz.getConstructor(argTypes).newInstance(varargs);
-                });
-
+                provider = tryConstructorWithArgs(providerName, clazz, varargs);
                 if (provider == null) {
-                    // attempt to invoke a public varargs/array constructor of FooClass(String[])
-                    provider = constructProvider(providerName, () -> clazz.getConstructor(String[].class)
-                            .newInstance((Object) varargs));
+                    provider = tryCreateWithArgs(providerName, clazz, varargs);
                 }
             }
-
             if (provider == null) {
-                // regardless of parameters, fallback to invoke a public no-arg constructor
-                provider = constructProvider(providerName, clazz::newInstance);
+                provider = tryConstructorWithNoArgs(providerName, clazz);
             }
-
             if (provider == null) {
-                // if still not found, try empty create() method
-                try {
-                    Method createMethod = clazz.getDeclaredMethod("create");
-                    if (Modifier.isStatic(createMethod.getModifiers())) {
-                        provider = constructProvider(providerName, () -> clazz.cast(createMethod.invoke(null)));
-                    } else {
-                        log.warn("Found non-static create() method in {}", providerName);
-                    }
-                } catch (NoSuchMethodException e) {
-                    // No create() method found for class
-                }
+                provider = tryCreateWithNoArgs(providerName, clazz);
             }
-
             if (provider != null) {
                 credentialsProviders.add(provider);
             }
         }
         return credentialsProviders;
+    }
+
+    private static AwsCredentialsProvider tryConstructorWithArgs(
+            String providerName, Class<? extends AwsCredentialsProvider> clazz, String[] varargs) {
+        AwsCredentialsProvider provider =
+                constructProvider(providerName, () -> getConstructorWithVarArgs(clazz, varargs));
+        if (provider == null) {
+            provider = constructProvider(providerName, () -> getConstructorWithArgs(clazz, varargs));
+        }
+        return provider;
+    }
+
+    private static AwsCredentialsProvider tryCreateWithArgs(
+            String providerName, Class<? extends AwsCredentialsProvider> clazz, String[] varargs) {
+        AwsCredentialsProvider provider =
+                constructProvider(providerName, () -> getCreateMethod(clazz, (Object) varargs));
+        if (provider == null) {
+            provider = constructProvider(providerName, () -> getCreateMethod(clazz, varargs));
+        }
+        return provider;
+    }
+
+    private static AwsCredentialsProvider tryConstructorWithNoArgs(
+            String providerName, Class<? extends AwsCredentialsProvider> clazz) {
+        return constructProvider(providerName, clazz::newInstance);
+    }
+
+    private static AwsCredentialsProvider tryCreateWithNoArgs(
+            String providerName, Class<? extends AwsCredentialsProvider> clazz) {
+        return constructProvider(providerName, () -> getCreateMethod(clazz));
+    }
+
+    private static AwsCredentialsProvider getConstructorWithVarArgs(
+            Class<? extends AwsCredentialsProvider> clazz, String[] varargs) {
+        try {
+            return clazz.getConstructor(String[].class).newInstance((Object) varargs);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static AwsCredentialsProvider getConstructorWithArgs(
+            Class<? extends AwsCredentialsProvider> clazz, String[] varargs) {
+        try {
+            Class<?>[] argTypes = new Class<?>[varargs.length];
+            Arrays.fill(argTypes, String.class);
+            return clazz.getConstructor(argTypes).newInstance((Object[]) varargs);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static AwsCredentialsProvider getCreateMethod(
+            Class<? extends AwsCredentialsProvider> clazz, Object... args) {
+        try {
+            Class<?>[] argTypes = new Class<?>[args.length];
+            for (int i = 0; i < args.length; i++) {
+                argTypes[i] = args[i].getClass();
+            }
+            Method createMethod = clazz.getDeclaredMethod("create", argTypes);
+            if (Modifier.isStatic(createMethod.getModifiers())) {
+                return clazz.cast(createMethod.invoke(null, args));
+            } else {
+                log.warn("Found non-static create() method in {}", clazz.getName());
+            }
+        } catch (NoSuchMethodException e) {
+            // No matching create method found for class
+        } catch (Exception e) {
+            log.warn("Failed to invoke create() method in {}", clazz.getName(), e);
+        }
+        return null;
+    }
+
+    private static Class<? extends AwsCredentialsProvider> getClass(String providerName) {
+        String className = providerName.replace(
+                "software.amazon.awssdk.auth.credentials.StsAssumeRoleCredentialsProvider",
+                "software.amazon.kinesis.multilang.auth.KclStsAssumeRoleCredentialsProvider");
+        final Class<? extends AwsCredentialsProvider> clazz;
+        try {
+            final Class<?> c = Class.forName(className);
+            if (!AwsCredentialsProvider.class.isAssignableFrom(c)) {
+                return null;
+            }
+            clazz = (Class<? extends AwsCredentialsProvider>) c;
+        } catch (ClassNotFoundException cnfe) {
+            // Providers are a product of prefixed Strings to cover multiple
+            // namespaces (e.g., "Foo" -> { "some.auth.Foo", "kcl.auth.Foo" }).
+            // It's expected that many class names will not resolve.
+            return null;
+        }
+        log.info("Attempting to construct {}", clazz);
+        return clazz;
     }
 
     private static List<String> getProviderNames(String property) {
