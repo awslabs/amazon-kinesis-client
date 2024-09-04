@@ -16,16 +16,16 @@ package software.amazon.kinesis.multilang.config;
 
 import java.util.Arrays;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSCredentialsProviderChain;
-import com.amazonaws.auth.BasicAWSCredentials;
 import lombok.ToString;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.Test;
-import software.amazon.kinesis.multilang.auth.KclSTSAssumeRoleSessionCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
+import software.amazon.kinesis.multilang.auth.KclStsAssumeRoleCredentialsProvider;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -40,10 +40,10 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
 
     private final String credentialName1 = AlwaysSucceedCredentialsProvider.class.getName();
     private final String credentialName2 = ConstructorCredentialsProvider.class.getName();
-    private final AWSCredentialsProviderPropertyValueDecoder decoder = new AWSCredentialsProviderPropertyValueDecoder();
+    private final AwsCredentialsProviderPropertyValueDecoder decoder = new AwsCredentialsProviderPropertyValueDecoder();
 
     @ToString
-    private static class AWSCredentialsMatcher extends TypeSafeDiagnosingMatcher<AWSCredentialsProvider> {
+    private static class AWSCredentialsMatcher extends TypeSafeDiagnosingMatcher<AwsCredentialsProvider> {
 
         private final Matcher<String> akidMatcher;
         private final Matcher<String> secretMatcher;
@@ -52,12 +52,12 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
         public AWSCredentialsMatcher(String akid, String secret) {
             this.akidMatcher = equalTo(akid);
             this.secretMatcher = equalTo(secret);
-            this.classMatcher = instanceOf(AWSCredentialsProviderChain.class);
+            this.classMatcher = instanceOf(AwsCredentialsProviderChain.class);
         }
 
         @Override
-        protected boolean matchesSafely(AWSCredentialsProvider item, Description mismatchDescription) {
-            AWSCredentials actual = item.getCredentials();
+        protected boolean matchesSafely(AwsCredentialsProvider item, Description mismatchDescription) {
+            AwsCredentials actual = item.resolveCredentials();
             boolean matched = true;
 
             if (!classMatcher.matches(item)) {
@@ -65,12 +65,12 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
                 matched = false;
             }
 
-            if (!akidMatcher.matches(actual.getAWSAccessKeyId())) {
-                akidMatcher.describeMismatch(actual.getAWSAccessKeyId(), mismatchDescription);
+            if (!akidMatcher.matches(actual.accessKeyId())) {
+                akidMatcher.describeMismatch(actual.accessKeyId(), mismatchDescription);
                 matched = false;
             }
-            if (!secretMatcher.matches(actual.getAWSSecretKey())) {
-                secretMatcher.describeMismatch(actual.getAWSSecretKey(), mismatchDescription);
+            if (!secretMatcher.matches(actual.secretAccessKey())) {
+                secretMatcher.describeMismatch(actual.secretAccessKey(), mismatchDescription);
                 matched = false;
             }
             return matched;
@@ -90,25 +90,25 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
 
     @Test
     public void testSingleProvider() {
-        AWSCredentialsProvider provider = decoder.decodeValue(credentialName1);
+        AwsCredentialsProvider provider = decoder.decodeValue(credentialName1);
         assertThat(provider, hasCredentials(TEST_ACCESS_KEY_ID, TEST_SECRET_KEY));
     }
 
     @Test
     public void testTwoProviders() {
-        AWSCredentialsProvider provider = decoder.decodeValue(credentialName1 + "," + credentialName1);
+        AwsCredentialsProvider provider = decoder.decodeValue(credentialName1 + "," + credentialName1);
         assertThat(provider, hasCredentials(TEST_ACCESS_KEY_ID, TEST_SECRET_KEY));
     }
 
     @Test
     public void testProfileProviderWithOneArg() {
-        AWSCredentialsProvider provider = decoder.decodeValue(credentialName2 + "|arg");
+        AwsCredentialsProvider provider = decoder.decodeValue(credentialName2 + "|arg");
         assertThat(provider, hasCredentials("arg", "blank"));
     }
 
     @Test
     public void testProfileProviderWithTwoArgs() {
-        AWSCredentialsProvider provider = decoder.decodeValue(credentialName2 + "|arg1|arg2");
+        AwsCredentialsProvider provider = decoder.decodeValue(credentialName2 + "|arg1|arg2");
         assertThat(provider, hasCredentials("arg1", "arg2"));
     }
 
@@ -118,10 +118,10 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
     @Test
     public void testKclAuthProvider() {
         for (final String className : Arrays.asList(
-                KclSTSAssumeRoleSessionCredentialsProvider.class.getName(), // fully-qualified name
-                KclSTSAssumeRoleSessionCredentialsProvider.class.getSimpleName() // name-only; needs prefix
+                KclStsAssumeRoleCredentialsProvider.class.getName(), // fully-qualified name
+                KclStsAssumeRoleCredentialsProvider.class.getSimpleName() // name-only; needs prefix
                 )) {
-            final AWSCredentialsProvider provider = decoder.decodeValue(className + "|arn|sessionName");
+            final AwsCredentialsProvider provider = decoder.decodeValue(className + "|arn|sessionName");
             assertNotNull(className, provider);
         }
     }
@@ -135,28 +135,24 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
         final String className = VarArgCredentialsProvider.class.getName();
         final String encodedValue = className + "|" + String.join("|", args);
 
-        final AWSCredentialsProvider provider = decoder.decodeValue(encodedValue);
-        assertEquals(Arrays.toString(args), provider.getCredentials().getAWSAccessKeyId());
+        final AwsCredentialsProvider provider = decoder.decodeValue(encodedValue);
+        assertEquals(Arrays.toString(args), provider.resolveCredentials().accessKeyId());
     }
 
     /**
      * This credentials provider will always succeed
      */
-    public static class AlwaysSucceedCredentialsProvider implements AWSCredentialsProvider {
-
+    public static class AlwaysSucceedCredentialsProvider implements AwsCredentialsProvider {
         @Override
-        public AWSCredentials getCredentials() {
-            return new BasicAWSCredentials(TEST_ACCESS_KEY_ID, TEST_SECRET_KEY);
+        public AwsCredentials resolveCredentials() {
+            return AwsBasicCredentials.create(TEST_ACCESS_KEY_ID, TEST_SECRET_KEY);
         }
-
-        @Override
-        public void refresh() {}
     }
 
     /**
      * This credentials provider needs a constructor call to instantiate it
      */
-    public static class ConstructorCredentialsProvider implements AWSCredentialsProvider {
+    public static class ConstructorCredentialsProvider implements AwsCredentialsProvider {
 
         private String arg1;
         private String arg2;
@@ -172,15 +168,12 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
         }
 
         @Override
-        public AWSCredentials getCredentials() {
-            return new BasicAWSCredentials(arg1, arg2);
+        public AwsCredentials resolveCredentials() {
+            return AwsBasicCredentials.create(arg1, arg2);
         }
-
-        @Override
-        public void refresh() {}
     }
 
-    private static class VarArgCredentialsProvider implements AWSCredentialsProvider {
+    private static class VarArgCredentialsProvider implements AwsCredentialsProvider {
 
         private final String[] args;
 
@@ -189,13 +182,10 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
         }
 
         @Override
-        public AWSCredentials getCredentials() {
+        public AwsCredentials resolveCredentials() {
             // KISS solution to surface the constructor args
             final String flattenedArgs = Arrays.toString(args);
-            return new BasicAWSCredentials(flattenedArgs, flattenedArgs);
+            return AwsBasicCredentials.create(flattenedArgs, flattenedArgs);
         }
-
-        @Override
-        public void refresh() {}
     }
 }

@@ -31,15 +31,14 @@ public class KclSTSAssumeRoleSessionCredentialsProviderTest {
      */
     @Test
     public void testConstructorWithoutOptionalParams() {
-        new KclSTSAssumeRoleSessionCredentialsProvider(new String[] {ARN, SESSION_NAME});
+        new KclStsAssumeRoleCredentialsProvider(new String[] {ARN, SESSION_NAME});
     }
 
     @Test
     public void testAcceptEndpoint() {
         // discovered exception during e2e testing; therefore, this test is
         // to simply verify the constructed STS client doesn't go *boom*
-        final KclSTSAssumeRoleSessionCredentialsProvider provider =
-                new KclSTSAssumeRoleSessionCredentialsProvider(ARN, SESSION_NAME);
+        final KclStsAssumeRoleCredentialsProvider provider = new KclStsAssumeRoleCredentialsProvider(ARN, SESSION_NAME);
         provider.acceptEndpoint("endpoint", "us-east-1");
     }
 
@@ -53,7 +52,7 @@ public class KclSTSAssumeRoleSessionCredentialsProviderTest {
         }
     }
 
-    private static class VarArgsSpy extends KclSTSAssumeRoleSessionCredentialsProvider {
+    private static class VarArgsSpy extends KclStsAssumeRoleCredentialsProvider {
 
         private String externalId;
 
