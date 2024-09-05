@@ -176,7 +176,7 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
     }
 
     /**
-     * Resolves the class for the given provider name and arguments.
+     * Resolves the class for the given provider name.
      *
      * @param providerName A string containing the provider name.
      *
