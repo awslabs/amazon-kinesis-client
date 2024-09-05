@@ -25,6 +25,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
+import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.kinesis.multilang.auth.KclStsAssumeRoleCredentialsProvider;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -121,7 +122,8 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
         for (final String className : Arrays.asList(
                 KclStsAssumeRoleCredentialsProvider.class.getName(), // fully-qualified name
                 KclStsAssumeRoleCredentialsProvider.class.getSimpleName(), // name-only; needs prefix
-                "software.amazon.awssdk.auth.credentials.StsAssumeRoleCredentialsProvider")) {
+                StsAssumeRoleCredentialsProvider.class.getName(), // user passes full sts package path
+                StsAssumeRoleCredentialsProvider.class.getSimpleName())) {
             final AwsCredentialsProvider provider = decoder.decodeValue(className + "|arn|sessionName");
             assertNotNull(className, provider);
         }

@@ -27,6 +27,8 @@ import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
+import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
+import software.amazon.kinesis.multilang.auth.KclStsAssumeRoleCredentialsProvider;
 
 /**
  * Get AwsCredentialsProvider property.
@@ -184,12 +186,14 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
      * or null if the class cannot be resolved or does not extend AwsCredentialsProvider.
      */
     private static Class<? extends AwsCredentialsProvider> getClass(String providerName) {
-        String className = providerName.replace(
-                "software.amazon.awssdk.auth.credentials.StsAssumeRoleCredentialsProvider",
-                "software.amazon.kinesis.multilang.auth.KclStsAssumeRoleCredentialsProvider");
+        // Convert any form of StsAssumeRoleCredentialsProvider string to KclStsAssumeRoleCredentialsProvider
+        if (providerName.equals(StsAssumeRoleCredentialsProvider.class.getSimpleName())
+                || providerName.equals(StsAssumeRoleCredentialsProvider.class.getName())) {
+            providerName = KclStsAssumeRoleCredentialsProvider.class.getName();
+        }
         final Class<? extends AwsCredentialsProvider> clazz;
         try {
-            final Class<?> c = Class.forName(className);
+            final Class<?> c = Class.forName(providerName);
             if (!AwsCredentialsProvider.class.isAssignableFrom(c)) {
                 return null;
             }
