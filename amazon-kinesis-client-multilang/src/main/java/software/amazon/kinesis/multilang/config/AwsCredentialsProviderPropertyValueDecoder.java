@@ -85,19 +85,12 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
             if (clazz == null) {
                 continue;
             }
-            AwsCredentialsProvider provider = null;
-            if (nameAndArgs.length > 1) {
-                final String[] varargs = Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length);
-                provider = tryConstructorWithArgs(providerName, clazz, varargs);
-                if (provider == null) {
-                    provider = tryCreateWithArgs(providerName, clazz, varargs);
-                }
-            }
+            log.info("Attempting to construct {}", clazz);
+            final String[] varargs =
+                    nameAndArgs.length > 1 ? Arrays.copyOfRange(nameAndArgs, 1, nameAndArgs.length) : new String[0];
+            AwsCredentialsProvider provider = tryConstructor(providerName, clazz, varargs);
             if (provider == null) {
-                provider = tryConstructorWithNoArgs(providerName, clazz);
-            }
-            if (provider == null) {
-                provider = tryCreateWithNoArgs(providerName, clazz);
+                provider = tryCreate(providerName, clazz, varargs);
             }
             if (provider != null) {
                 credentialsProviders.add(provider);
@@ -106,34 +99,30 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
         return credentialsProviders;
     }
 
-    private static AwsCredentialsProvider tryConstructorWithArgs(
+    private static AwsCredentialsProvider tryConstructor(
             String providerName, Class<? extends AwsCredentialsProvider> clazz, String[] varargs) {
         AwsCredentialsProvider provider =
                 constructProvider(providerName, () -> getConstructorWithVarArgs(clazz, varargs));
         if (provider == null) {
             provider = constructProvider(providerName, () -> getConstructorWithArgs(clazz, varargs));
         }
+        if (provider == null) {
+            provider = constructProvider(providerName, clazz::newInstance);
+        }
         return provider;
     }
 
-    private static AwsCredentialsProvider tryCreateWithArgs(
+    private static AwsCredentialsProvider tryCreate(
             String providerName, Class<? extends AwsCredentialsProvider> clazz, String[] varargs) {
         AwsCredentialsProvider provider =
                 constructProvider(providerName, () -> getCreateMethod(clazz, (Object) varargs));
         if (provider == null) {
             provider = constructProvider(providerName, () -> getCreateMethod(clazz, varargs));
         }
+        if (provider == null) {
+            provider = constructProvider(providerName, () -> getCreateMethod(clazz));
+        }
         return provider;
-    }
-
-    private static AwsCredentialsProvider tryConstructorWithNoArgs(
-            String providerName, Class<? extends AwsCredentialsProvider> clazz) {
-        return constructProvider(providerName, clazz::newInstance);
-    }
-
-    private static AwsCredentialsProvider tryCreateWithNoArgs(
-            String providerName, Class<? extends AwsCredentialsProvider> clazz) {
-        return constructProvider(providerName, () -> getCreateMethod(clazz));
     }
 
     private static AwsCredentialsProvider getConstructorWithVarArgs(
@@ -191,21 +180,18 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                 || providerName.equals(StsAssumeRoleCredentialsProvider.class.getName())) {
             providerName = KclStsAssumeRoleCredentialsProvider.class.getName();
         }
-        final Class<? extends AwsCredentialsProvider> clazz;
         try {
             final Class<?> c = Class.forName(providerName);
             if (!AwsCredentialsProvider.class.isAssignableFrom(c)) {
                 return null;
             }
-            clazz = (Class<? extends AwsCredentialsProvider>) c;
+            return (Class<? extends AwsCredentialsProvider>) c;
         } catch (ClassNotFoundException cnfe) {
             // Providers are a product of prefixed Strings to cover multiple
             // namespaces (e.g., "Foo" -> { "some.auth.Foo", "kcl.auth.Foo" }).
             // It's expected that many class names will not resolve.
             return null;
         }
-        log.info("Attempting to construct {}", clazz);
-        return clazz;
     }
 
     private static List<String> getProviderNames(String property) {
