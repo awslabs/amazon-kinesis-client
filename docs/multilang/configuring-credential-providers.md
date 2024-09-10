@@ -8,30 +8,30 @@ This document should help multilang customers configure a suitable `CredentialPr
 
 ## Sample Provider Configuration
 
-In a Properties file, an `AWSCredentialsProperty` configuration might look like:
+In a Properties file, an `AwsCredentialsProperty` configuration might look like:
 ```
-AWSCredentialsProvider = StsAssumeRoleCredentialsProvider|<arn>|<sessionName> 
+AwsCredentialsProvider = StsAssumeRoleCredentialsProvider|<arn>|<sessionName> 
 ```
 This basic configuration creates an [StsAssumeRoleCredentialsProvider][sts-assume-provider] with an ARN and session name.
 
 While functional, this configuration is limited.
 For example, this configuration cannot set a regional endpoint (e.g., VPC use case).
 
-Leveraging nested properties, an `AWSCredentialsProperty` value might change to:
+Leveraging nested properties, an `AwsCredentialsProperty` value might change to:
 ```
-AWSCredentialsProvider = KclSTSAssumeRoleSessionCredentialsProvider|<arn>|<sessionName>\
+AwsCredentialsProvider = KclSTSAssumeRoleSessionCredentialsProvider|<arn>|<sessionName>\
     |endpointRegion=us-east-1|externalId=spartacus
 ```
 N.B. Backslash (`\`) is for multi-line legibility and is not required.
 
 You can create a default [DefaultCredentialsProvider][default-credentials-provider] by passing it in the config like:
 ```
-AWSCredentialsProvider = DefaultCredentialsProvider
+AwsCredentialsProvider = DefaultCredentialsProvider
 ```
 
 ## Nested Properties
 
-KCL multilang supports "nested properties" on the `AWSCredentialsProvider` key in the properties file.
+KCL multilang supports "nested properties" on the `AwsCredentialsProvider` key in the properties file.
 The [Backus-Naur form][bnf] of the value:
 ```
 <property-value> ::= <provider-class> ["|" <required-param>]* ["|" <nested-property>]*
@@ -61,9 +61,9 @@ A backwards-compatible addition might look like:
     }
 ```
 
-Leveraging nested properties, an `AWSCredentialsProperty` value might look like:
+Leveraging nested properties, an `AwsCredentialsProperty` value might look like:
 ```
-AWSCredentialsProvider = KclSTSAssumeRoleSessionCredentialsProvider|<arn>|<sessionName>\
+AwsCredentialsProvider = KclSTSAssumeRoleSessionCredentialsProvider|<arn>|<sessionName>\
     |endpointRegion=us-east-1|externalId=spartacus
 ```
 
@@ -73,7 +73,7 @@ N.B. Backslash (`\`) is for multi-line legibility and is not required.
 KCL multilang includes a [custom nested property processor for `StsAssumeRole`][kcl-sts-provider].
 Multilang configurations that use `StsAssumeRoleSessionCredentialsProvider` need only prefix `Kcl` to exercise this new provider:
 ```
-AWSCredentialsProvider = KclStsAssumeRoleCredentialsProvider|<arn>|<sessionName>
+AwsCredentialsProvider = KclStsAssumeRoleCredentialsProvider|<arn>|<sessionName>
 ```
 
 [aws-credentials-provider]: https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/auth/credentials/AwsCredentialsProvider.html

@@ -195,19 +195,19 @@ public class MultiLangDaemonConfiguration {
 
     private final BuilderDynaBean kinesisCredentialsProvider;
 
-    public void setAWSCredentialsProvider(String providerString) {
+    public void setAwsCredentialsProvider(String providerString) {
         kinesisCredentialsProvider.set("", providerString);
     }
 
     private final BuilderDynaBean dynamoDBCredentialsProvider;
 
-    public void setAWSCredentialsProviderDynamoDB(String providerString) {
+    public void setAwsCredentialsProviderDynamoDB(String providerString) {
         dynamoDBCredentialsProvider.set("", providerString);
     }
 
     private final BuilderDynaBean cloudWatchCredentialsProvider;
 
-    public void setAWSCredentialsProviderCloudWatch(String providerString) {
+    public void setAwsCredentialsProviderCloudWatch(String providerString) {
         cloudWatchCredentialsProvider.set("", providerString);
     }
 

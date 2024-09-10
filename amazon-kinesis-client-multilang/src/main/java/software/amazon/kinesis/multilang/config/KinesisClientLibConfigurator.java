@@ -17,18 +17,21 @@ package software.amazon.kinesis.multilang.config;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Map;
 import java.util.Properties;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 import org.apache.commons.lang3.Validate;
+import org.jetbrains.annotations.NotNull;
+
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.kinesis.common.StreamIdentifier;
 
 /**
  * KinesisClientLibConfigurator constructs a KinesisClientLibConfiguration from java properties file. The following
- * three properties must be provided. 1) "applicationName" 2) "streamName" 3) "AWSCredentialsProvider"
+ * three properties must be provided. 1) "applicationName" 2) "streamName" 3) "AwsCredentialsProvider"
  * KinesisClientLibConfigurator will help to automatically assign the value of "workerId" if this property is not
  * provided. In the specified properties file, any properties, which matches the variable name in
  * KinesisClientLibConfiguration and has a corresponding "with{variableName}" setter method, will be read in, and its
@@ -62,7 +65,8 @@ public class KinesisClientLibConfigurator {
         properties.entrySet().forEach(e -> {
             try {
                 log.info("Processing (key={}, value={})", e.getKey(), e.getValue());
-                utilsBean.setProperty(configuration, (String) e.getKey(), e.getValue());
+                String key = processKey(e);
+                utilsBean.setProperty(configuration, key, e.getValue());
             } catch (IllegalAccessException | InvocationTargetException ex) {
                 throw new RuntimeException(ex);
             }
@@ -87,6 +91,15 @@ public class KinesisClientLibConfigurator {
                 "A basic set of AWS credentials must be provided");
 
         return configuration;
+    }
+
+    private static String processKey(Map.Entry<Object, Object> e) {
+        String key = (String) e.getKey();
+        // utilsBean expects key like 'awsCredentialsProvider' to call setter setAwsCredentialsProvider
+        if (key.toLowerCase().startsWith("awscredentialsprovider")) {
+            key = key.replaceAll("(?i)awscredentialsprovider", "awsCredentialsProvider");
+        }
+        return key;
     }
 
     /**

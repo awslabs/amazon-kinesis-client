@@ -59,7 +59,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = " + credentialName1,
+                    "AwsCredentialsProvider = " + credentialName1,
                     "workerId = 123"
                 },
                 '\n'));
@@ -76,7 +76,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "applicationName = app",
                     "streamName = 123",
-                    "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+                    "AwsCredentialsProvider = " + credentialName1 + ", " + credentialName2,
                     "workerId = 123",
                     "failoverTimeMillis = 100",
                     "shardSyncIntervalMillis = 500"
@@ -97,7 +97,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "applicationName = app",
                     "streamName = 123",
-                    "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+                    "AwsCredentialsProvider = " + credentialName1 + ", " + credentialName2,
                     "initialPositionInStreamExtended = " + epochTimeInSeconds
                 },
                 '\n'));
@@ -115,7 +115,7 @@ public class KinesisClientLibConfiguratorTest {
                     new String[] {
                         "applicationName = app",
                         "streamName = 123",
-                        "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+                        "AwsCredentialsProvider = " + credentialName1 + ", " + credentialName2,
                         "initialPositionInStream = AT_TIMESTAMP"
                     },
                     '\n'));
@@ -135,7 +135,7 @@ public class KinesisClientLibConfiguratorTest {
                     new String[] {
                         "applicationName = app",
                         "streamName = 123",
-                        "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+                        "AwsCredentialsProvider = " + credentialName1 + ", " + credentialName2,
                         "initialPositionInStreamExtended = null"
                     },
                     '\n'));
@@ -150,7 +150,7 @@ public class KinesisClientLibConfiguratorTest {
     public void testWithUnsupportedClientConfigurationVariables() {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(
                 new String[] {
-                    "AWSCredentialsProvider = " + credentialName1 + ", " + credentialName2,
+                    "AwsCredentialsProvider = " + credentialName1 + ", " + credentialName2,
                     "workerId = id",
                     "kinesisClientConfig = {}",
                     "streamName = stream",
@@ -169,7 +169,7 @@ public class KinesisClientLibConfiguratorTest {
         MultiLangDaemonConfiguration config = getConfiguration(StringUtils.join(
                 new String[] {
                     "streamName = kinesis",
-                    "AWSCredentialsProvider = " + credentialName2 + ", " + credentialName1,
+                    "AwsCredentialsProvider = " + credentialName2 + ", " + credentialName1,
                     "workerId = w123",
                     "maxRecords = 10",
                     "metricsMaxQueueSize = 20",
@@ -194,7 +194,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = ABCD, " + credentialName1,
+                    "AwsCredentialsProvider = ABCD, " + credentialName1,
                     "workerId = 0",
                     "cleanupLeasesUponShardCompletion = false",
                     "validateSequenceNumberBeforeCheckpointing = true"
@@ -214,7 +214,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = ABCD," + credentialName1,
+                    "AwsCredentialsProvider = ABCD," + credentialName1,
                     "workerId = 1",
                     "kinesisEndpoint = https://kinesis",
                     "metricsLevel = SUMMARY"
@@ -232,7 +232,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = ABCD," + credentialName1,
+                    "AwsCredentialsProvider = ABCD," + credentialName1,
                     "workerId = 1",
                     "metricsEnabledDimensions = ShardId, WorkerIdentifier"
                 },
@@ -252,7 +252,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = ABCD," + credentialName1,
+                    "AwsCredentialsProvider = ABCD," + credentialName1,
                     "workerId = 123",
                     "initialPositionInStream = TriM_Horizon"
                 },
@@ -267,7 +267,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = ABCD," + credentialName1,
+                    "AwsCredentialsProvider = ABCD," + credentialName1,
                     "workerId = 123",
                     "initialPositionInStream = LateSt"
                 },
@@ -282,7 +282,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = ABCD," + credentialName1,
+                    "AwsCredentialsProvider = ABCD," + credentialName1,
                     "workerId = 123",
                     "initialPositionInStream = TriM_Horizon",
                     "abc = 1"
@@ -301,7 +301,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = ABCD," + credentialName1,
+                    "AwsCredentialsProvider = ABCD," + credentialName1,
                     "workerId = 123",
                     "initialPositionInStream = TriM_Horizon",
                     "maxGetRecordsThreadPool = 1"
@@ -317,7 +317,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = ABCD," + credentialName1,
+                    "AwsCredentialsProvider = ABCD," + credentialName1,
                     "workerId = 123",
                     "initialPositionInStream = TriM_Horizon",
                     "maxGetRecordsThreadPool = 0",
@@ -333,7 +333,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = " + credentialName1,
+                    "AwsCredentialsProvider = " + credentialName1,
                     "workerId = 123",
                     "failoverTimeMillis = 100nf"
                 },
@@ -347,7 +347,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = " + credentialName1,
+                    "AwsCredentialsProvider = " + credentialName1,
                     "workerId = 123",
                     "failoverTimeMillis = -12"
                 },
@@ -379,7 +379,7 @@ public class KinesisClientLibConfiguratorTest {
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = " + credentialName1,
+                    "AwsCredentialsProvider = " + credentialName1,
                     "failoverTimeMillis = 100",
                     "shardSyncIntervalMillis = 500"
                 },
@@ -396,7 +396,7 @@ public class KinesisClientLibConfiguratorTest {
         String test = StringUtils.join(
                 new String[] {
                     "applicationName = b",
-                    "AWSCredentialsProvider = " + credentialName1,
+                    "AwsCredentialsProvider = " + credentialName1,
                     "workerId = 123",
                     "failoverTimeMillis = 100"
                 },
@@ -409,7 +409,7 @@ public class KinesisClientLibConfiguratorTest {
         String test = StringUtils.join(
                 new String[] {
                     "applicationName = b",
-                    "AWSCredentialsProvider = " + credentialName1,
+                    "AwsCredentialsProvider = " + credentialName1,
                     "workerId = 123",
                     "failoverTimeMillis = 100",
                     "streamName = ",
@@ -424,7 +424,7 @@ public class KinesisClientLibConfiguratorTest {
         String test = StringUtils.join(
                 new String[] {
                     "streamName = a",
-                    "AWSCredentialsProvider = " + credentialName1,
+                    "AwsCredentialsProvider = " + credentialName1,
                     "workerId = 123",
                     "failoverTimeMillis = 100"
                 },
@@ -433,12 +433,12 @@ public class KinesisClientLibConfiguratorTest {
     }
 
     @Test
-    public void testWithAWSCredentialsFailed() {
+    public void testWithAwsCredentialsFailed() {
         String test = StringUtils.join(
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = " + credentialName2,
+                    "AwsCredentialsProvider = " + credentialName2,
                     "failoverTimeMillis = 100",
                     "shardSyncIntervalMillis = 500"
                 },
@@ -458,14 +458,14 @@ public class KinesisClientLibConfiguratorTest {
 
     // TODO: fix this test
     @Test
-    public void testWithDifferentAWSCredentialsForDynamoDBAndCloudWatch() {
+    public void testWithDifferentAwsCredentialsForDynamoDBAndCloudWatch() {
         String test = StringUtils.join(
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = " + credentialNameKinesis,
-                    "AWSCredentialsProviderDynamoDB = " + credentialNameDynamoDB,
-                    "AWSCredentialsProviderCloudWatch = " + credentialNameCloudWatch,
+                    "AwsCredentialsProvider = " + credentialNameKinesis,
+                    "AwsCredentialsProviderDynamoDB = " + credentialNameDynamoDB,
+                    "AwsCredentialsProviderCloudWatch = " + credentialNameCloudWatch,
                     "failoverTimeMillis = 100",
                     "shardSyncIntervalMillis = 500"
                 },
@@ -486,14 +486,14 @@ public class KinesisClientLibConfiguratorTest {
 
     // TODO: fix this test
     @Test
-    public void testWithDifferentAWSCredentialsForDynamoDBAndCloudWatchFailed() {
+    public void testWithDifferentAwsCredentialsForDynamoDBAndCloudWatchFailed() {
         String test = StringUtils.join(
                 new String[] {
                     "streamName = a",
                     "applicationName = b",
-                    "AWSCredentialsProvider = " + credentialNameKinesis,
-                    "AWSCredentialsProviderDynamoDB = " + credentialName2,
-                    "AWSCredentialsProviderCloudWatch = " + credentialName2,
+                    "AwsCredentialsProvider = " + credentialNameKinesis,
+                    "AwsCredentialsProviderDynamoDB = " + credentialName2,
+                    "AwsCredentialsProviderCloudWatch = " + credentialName2,
                     "failoverTimeMillis = 100",
                     "shardSyncIntervalMillis = 500"
                 },

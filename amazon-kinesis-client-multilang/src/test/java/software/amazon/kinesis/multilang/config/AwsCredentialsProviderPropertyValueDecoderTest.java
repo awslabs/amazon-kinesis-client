@@ -34,7 +34,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 
-public class AWSCredentialsProviderPropertyValueDecoderTest {
+public class AwsCredentialsProviderPropertyValueDecoderTest {
 
     private static final String TEST_ACCESS_KEY_ID = "123";
     private static final String TEST_SECRET_KEY = "456";
@@ -45,13 +45,13 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
     private final AwsCredentialsProviderPropertyValueDecoder decoder = new AwsCredentialsProviderPropertyValueDecoder();
 
     @ToString
-    private static class AWSCredentialsMatcher extends TypeSafeDiagnosingMatcher<AwsCredentialsProvider> {
+    private static class AwsCredentialsMatcher extends TypeSafeDiagnosingMatcher<AwsCredentialsProvider> {
 
         private final Matcher<String> akidMatcher;
         private final Matcher<String> secretMatcher;
         private final Matcher<Class<?>> classMatcher;
 
-        public AWSCredentialsMatcher(String akid, String secret) {
+        public AwsCredentialsMatcher(String akid, String secret) {
             this.akidMatcher = equalTo(akid);
             this.secretMatcher = equalTo(secret);
             this.classMatcher = instanceOf(AwsCredentialsProviderChain.class);
@@ -81,13 +81,13 @@ public class AWSCredentialsProviderPropertyValueDecoderTest {
         @Override
         public void describeTo(Description description) {
             description
-                    .appendText("An AWSCredentialsProvider that provides an AWSCredential matching: ")
+                    .appendText("An AwsCredentialsProvider that provides an AwsCredential matching: ")
                     .appendList("(", ", ", ")", Arrays.asList(classMatcher, akidMatcher, secretMatcher));
         }
     }
 
-    private static AWSCredentialsMatcher hasCredentials(String akid, String secret) {
-        return new AWSCredentialsMatcher(akid, secret);
+    private static AwsCredentialsMatcher hasCredentials(String akid, String secret) {
+        return new AwsCredentialsMatcher(akid, secret);
     }
 
     @Test
