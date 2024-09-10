@@ -114,7 +114,6 @@ public class KinesisClientLibConfigurator {
 
     private String processKey(Map.Entry<Object, Object> e) {
         String key = (String) e.getKey();
-        // utilsBean expects key like 'awsCredentialsProvider' to call bean setter setAwsCredentialsProvider
         if (key.toLowerCase().startsWith("awscredentialsprovider")) {
             key = key.replaceAll("(?i)awscredentialsprovider", "awsCredentialsProvider");
         }
