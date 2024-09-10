@@ -24,8 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 import org.apache.commons.lang3.Validate;
-import org.jetbrains.annotations.NotNull;
-
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.kinesis.common.StreamIdentifier;
 
@@ -65,8 +63,7 @@ public class KinesisClientLibConfigurator {
         properties.entrySet().forEach(e -> {
             try {
                 log.info("Processing (key={}, value={})", e.getKey(), e.getValue());
-                String key = processKey(e);
-                utilsBean.setProperty(configuration, key, e.getValue());
+                utilsBean.setProperty(configuration, processKey(e), e.getValue());
             } catch (IllegalAccessException | InvocationTargetException ex) {
                 throw new RuntimeException(ex);
             }
@@ -93,15 +90,6 @@ public class KinesisClientLibConfigurator {
         return configuration;
     }
 
-    private static String processKey(Map.Entry<Object, Object> e) {
-        String key = (String) e.getKey();
-        // utilsBean expects key like 'awsCredentialsProvider' to call setter setAwsCredentialsProvider
-        if (key.toLowerCase().startsWith("awscredentialsprovider")) {
-            key = key.replaceAll("(?i)awscredentialsprovider", "awsCredentialsProvider");
-        }
-        return key;
-    }
-
     /**
      * @param configStream the input stream containing the configuration information
      * @return KinesisClientLibConfiguration
@@ -122,5 +110,14 @@ public class KinesisClientLibConfigurator {
             }
         }
         return getConfiguration(properties);
+    }
+
+    private String processKey(Map.Entry<Object, Object> e) {
+        String key = (String) e.getKey();
+        // utilsBean expects key like 'awsCredentialsProvider' to call bean setter setAwsCredentialsProvider
+        if (key.toLowerCase().startsWith("awscredentialsprovider")) {
+            key = key.replaceAll("(?i)awscredentialsprovider", "awsCredentialsProvider");
+        }
+        return key;
     }
 }
