@@ -456,6 +456,34 @@ public class KinesisClientLibConfiguratorTest {
         }
     }
 
+    @Test
+    public void testProcessKeyWithExpectedCasing() {
+        String key = "AwsCredentialsProvider";
+        String result = configurator.processKey(key);
+        assertEquals("awsCredentialsProvider", result);
+    }
+
+    @Test
+    public void testProcessKeyWithOldCasing() {
+        String key = "AWSCredentialsProvider";
+        String result = configurator.processKey(key);
+        assertEquals("awsCredentialsProvider", result);
+    }
+
+    @Test
+    public void testProcessKeyWithMixedCasing() {
+        String key = "AwScReDeNtIaLsPrOvIdEr";
+        String result = configurator.processKey(key);
+        assertEquals("awsCredentialsProvider", result);
+    }
+
+    @Test
+    public void testProcessKeyWithSuffix() {
+        String key = "awscredentialsproviderDynamoDB";
+        String result = configurator.processKey(key);
+        assertEquals("awsCredentialsProviderDynamoDB", result);
+    }
+
     // TODO: fix this test
     @Test
     public void testWithDifferentAwsCredentialsForDynamoDBAndCloudWatch() {
