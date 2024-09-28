@@ -33,8 +33,8 @@ public class DefaultCWMetricsPublisher implements ICWMetricsPublisher<CWMetricKe
 
     private static final Log LOG = LogFactory.getLog(CWPublisherRunnable.class);
 
-    // CloudWatch API has a limit of 20 MetricDatums per request
-    private static final int BATCH_SIZE = 20;
+    // CloudWatch API has a limit of 1000 MetricDatums per request
+    private static final int BATCH_SIZE = 1000;
 
     private final String namespace;
     private final AmazonCloudWatch cloudWatchClient;
