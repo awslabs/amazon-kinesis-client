@@ -107,15 +107,6 @@ public class DynamoDBLeaseTaker implements LeaseTaker {
     }
 
     /**
-     * @deprecated Misspelled method, use {@link DynamoDBLeaseTaker#withVeryOldLeaseDurationNanosMultiplier(int)}
-     */
-    @Deprecated
-    public DynamoDBLeaseTaker withVeryOldLeaseDurationNanosMultipler(long veryOldLeaseDurationNanosMultipler) {
-        this.veryOldLeaseDurationNanosMultiplier = (int) veryOldLeaseDurationNanosMultipler;
-        return this;
-    }
-
-    /**
      * Overrides the default very old lease duration nanos multiplier to increase the threshold for taking very old leases.
      * Setting this to a higher value than 3 will increase the threshold for very old lease taking.
      *

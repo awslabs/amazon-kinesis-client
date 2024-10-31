@@ -19,7 +19,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.Collectors;
 
@@ -82,8 +81,6 @@ public class LeaseCleanupManagerTest {
                 garbageLeaseCleanupIntervalMillis);
 
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
-        when(leaseCoordinator.updateLease(any(Lease.class), any(UUID.class), any(String.class), any(String.class)))
-                .thenReturn(true);
     }
 
     /**
@@ -238,7 +235,6 @@ public class LeaseCleanupManagerTest {
 
     private void testLeaseDeletedWhenShardDoesNotExist(Lease heldLease) throws Exception {
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
-        when(leaseCoordinator.getCurrentlyHeldLease(SHARD_INFO.shardId())).thenReturn(heldLease);
         when(shardDetector.getChildShards(any(String.class))).thenThrow(ResourceNotFoundException.class);
         when(leaseRefresher.getLease(heldLease.leaseKey())).thenReturn(heldLease);
 

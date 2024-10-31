@@ -14,6 +14,8 @@
  */
 package software.amazon.kinesis.leases.dynamodb;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -26,8 +28,10 @@ import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +43,7 @@ import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseRenewer;
+import software.amazon.kinesis.leases.LeaseStatsRecorder;
 import software.amazon.kinesis.leases.MultiStreamLease;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
@@ -48,21 +53,32 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
+import static java.util.Objects.nonNull;
+import static software.amazon.kinesis.leases.LeaseStatsRecorder.BYTES_PER_KB;
+
 /**
  * An implementation of {@link LeaseRenewer} that uses DynamoDB via {@link LeaseRefresher}.
  */
 @Slf4j
 @KinesisClientInternalApi
 public class DynamoDBLeaseRenewer implements LeaseRenewer {
+
+    /**
+     * 6 digit after decimal gives the granularity of 0.001 byte per second.
+     */
+    private static final int DEFAULT_THROUGHPUT_DIGIT_AFTER_DECIMAL = 6;
+
     private static final int RENEWAL_RETRIES = 2;
     private static final String RENEW_ALL_LEASES_DIMENSION = "RenewAllLeases";
+    private static final String LEASE_RENEWER_INITIALIZE = "LeaseRenewerInitialize";
 
     private final LeaseRefresher leaseRefresher;
     private final String workerIdentifier;
     private final long leaseDurationNanos;
     private final ExecutorService executorService;
     private final MetricsFactory metricsFactory;
-
+    private final LeaseStatsRecorder leaseStatsRecorder;
+    private final Consumer<Lease> leaseGracefulShutdownCallback;
     private final ConcurrentNavigableMap<String, Lease> ownedLeases = new ConcurrentSkipListMap<>();
 
     /**
@@ -82,12 +98,16 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
             final String workerIdentifier,
             final long leaseDurationMillis,
             final ExecutorService executorService,
-            final MetricsFactory metricsFactory) {
+            final MetricsFactory metricsFactory,
+            final LeaseStatsRecorder leaseStatsRecorder,
+            final Consumer<Lease> leaseGracefulShutdownCallback) {
         this.leaseRefresher = leaseRefresher;
         this.workerIdentifier = workerIdentifier;
         this.leaseDurationNanos = TimeUnit.MILLISECONDS.toNanos(leaseDurationMillis);
         this.executorService = executorService;
         this.metricsFactory = metricsFactory;
+        this.leaseStatsRecorder = leaseStatsRecorder;
+        this.leaseGracefulShutdownCallback = leaseGracefulShutdownCallback;
     }
 
     /**
@@ -187,10 +207,20 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
                         // ShutdownException).
                         boolean isLeaseExpired = lease.isExpired(leaseDurationNanos, System.nanoTime());
                         if (renewEvenIfExpired || !isLeaseExpired) {
+                            final Double throughputPerKBps = this.leaseStatsRecorder.getThroughputKBps(leaseKey);
+                            if (nonNull(throughputPerKBps)) {
+                                lease.throughputKBps(BigDecimal.valueOf(throughputPerKBps)
+                                        .setScale(DEFAULT_THROUGHPUT_DIGIT_AFTER_DECIMAL, RoundingMode.HALF_UP)
+                                        .doubleValue());
+                            }
                             renewedLease = leaseRefresher.renewLease(lease);
                         }
                         if (renewedLease) {
                             lease.lastCounterIncrementNanos(System.nanoTime());
+                        }
+                        if (lease.shutdownRequested()) {
+                            // the underlying function will dedup
+                            leaseGracefulShutdownCallback.accept(lease.copy());
                         }
                     }
 
@@ -391,6 +421,12 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
              * every time we acquire a lease, it gets a new concurrency token.
              */
             authoritativeLease.concurrencyToken(UUID.randomUUID());
+            if (nonNull(lease.throughputKBps())) {
+                leaseStatsRecorder.recordStats(LeaseStatsRecorder.LeaseStats.builder()
+                        .leaseKey(lease.leaseKey())
+                        .bytes(Math.round(lease.throughputKBps() * BYTES_PER_KB)) // Convert KB to Bytes
+                        .build());
+            }
             ownedLeases.put(authoritativeLease.leaseKey(), authoritativeLease);
         }
     }
@@ -409,6 +445,7 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
      */
     @Override
     public void dropLease(Lease lease) {
+        leaseStatsRecorder.dropLeaseStats(lease.leaseKey());
         ownedLeases.remove(lease.leaseKey());
     }
 
@@ -417,26 +454,48 @@ public class DynamoDBLeaseRenewer implements LeaseRenewer {
      */
     @Override
     public void initialize() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        Collection<Lease> leases = leaseRefresher.listLeases();
-        List<Lease> myLeases = new LinkedList<>();
-        boolean renewEvenIfExpired = true;
+        final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, LEASE_RENEWER_INITIALIZE);
+        final ExecutorService singleThreadExecutorService = Executors.newSingleThreadExecutor();
+        boolean success = false;
+        try {
+            final Map.Entry<List<Lease>, List<String>> response =
+                    leaseRefresher.listLeasesParallely(singleThreadExecutorService, 1);
 
-        for (Lease lease : leases) {
-            if (workerIdentifier.equals(lease.leaseOwner())) {
-                log.info(" Worker {} found lease {}", workerIdentifier, lease);
-                // Okay to renew even if lease is expired, because we start with an empty list and we add the lease to
-                // our list only after a successful renew. So we don't need to worry about the edge case where we could
-                // continue renewing a lease after signaling a lease loss to the application.
-
-                if (renewLease(lease, renewEvenIfExpired)) {
-                    myLeases.add(lease);
-                }
-            } else {
-                log.debug("Worker {} ignoring lease {} ", workerIdentifier, lease);
+            if (!response.getValue().isEmpty()) {
+                log.warn("List of leaseKeys failed to deserialize : {} ", response.getValue());
             }
-        }
 
-        addLeasesToRenew(myLeases);
+            final List<Lease> myLeases = new LinkedList<>();
+            boolean renewEvenIfExpired = true;
+
+            for (Lease lease : response.getKey()) {
+                if (workerIdentifier.equals(lease.leaseOwner())) {
+                    log.info(" Worker {} found lease {}", workerIdentifier, lease);
+                    // Okay to renew even if lease is expired, because we start with an empty list and we add the lease
+                    // to
+                    // our list only after a successful renew. So we don't need to worry about the edge case where we
+                    // could
+                    // continue renewing a lease after signaling a lease loss to the application.
+
+                    if (renewLease(lease, renewEvenIfExpired)) {
+                        myLeases.add(lease);
+                    }
+                } else {
+                    log.debug("Worker {} ignoring lease {} ", workerIdentifier, lease);
+                }
+            }
+
+            addLeasesToRenew(myLeases);
+            success = true;
+        } catch (final Exception e) {
+            // It's ok to swollow exception here fail to discover all leases here, as the assignment logic takes
+            // care of reassignment if some lease is expired.
+            log.warn("LeaseRefresher failed in initialization during renewing of pre assigned leases", e);
+        } finally {
+            singleThreadExecutorService.shutdown();
+            MetricsUtil.addCount(scope, "Fault", success ? 0 : 1, MetricsLevel.DETAILED);
+            MetricsUtil.endScope(scope);
+        }
     }
 
     private void verifyNotNull(Object object, String message) {

@@ -44,11 +44,8 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
  */
 @KinesisClientInternalApi
 public class DynamoDBLeaseSerializer implements LeaseSerializer {
-    private static final String LEASE_KEY_KEY = "leaseKey";
-    private static final String LEASE_OWNER_KEY = "leaseOwner";
     private static final String LEASE_COUNTER_KEY = "leaseCounter";
     private static final String OWNER_SWITCHES_KEY = "ownerSwitchesSinceCheckpoint";
-    private static final String CHECKPOINT_SEQUENCE_NUMBER_KEY = "checkpoint";
     private static final String CHECKPOINT_SUBSEQUENCE_NUMBER_KEY = "checkpointSubSequenceNumber";
     private static final String PENDING_CHECKPOINT_SEQUENCE_KEY = "pendingCheckpoint";
     private static final String PENDING_CHECKPOINT_SUBSEQUENCE_KEY = "pendingCheckpointSubSequenceNumber";
@@ -57,6 +54,11 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String CHILD_SHARD_IDS_KEY = "childShardIds";
     private static final String STARTING_HASH_KEY = "startingHashKey";
     private static final String ENDING_HASH_KEY = "endingHashKey";
+    private static final String THROUGHOUT_PUT_KBPS = "throughputKBps";
+    private static final String CHECKPOINT_SEQUENCE_NUMBER_KEY = "checkpoint";
+    static final String CHECKPOINT_OWNER = "checkpointOwner";
+    static final String LEASE_OWNER_KEY = "leaseOwner";
+    static final String LEASE_KEY_KEY = "leaseKey";
 
     @Override
     public Map<String, AttributeValue> toDynamoRecord(final Lease lease) {
@@ -110,6 +112,13 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
                             lease.hashKeyRangeForLease().serializedEndingHashKey()));
         }
 
+        if (lease.throughputKBps() != null) {
+            result.put(THROUGHOUT_PUT_KBPS, DynamoUtils.createAttributeValue(lease.throughputKBps()));
+        }
+
+        if (lease.checkpointOwner() != null) {
+            result.put(CHECKPOINT_OWNER, DynamoUtils.createAttributeValue(lease.checkpointOwner()));
+        }
         return result;
     }
 
@@ -144,6 +153,14 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
         if (!Strings.isNullOrEmpty(startingHashKey = DynamoUtils.safeGetString(dynamoRecord, STARTING_HASH_KEY))
                 && !Strings.isNullOrEmpty(endingHashKey = DynamoUtils.safeGetString(dynamoRecord, ENDING_HASH_KEY))) {
             leaseToUpdate.hashKeyRange(HashKeyRangeForLease.deserialize(startingHashKey, endingHashKey));
+        }
+
+        if (DynamoUtils.safeGetDouble(dynamoRecord, THROUGHOUT_PUT_KBPS) != null) {
+            leaseToUpdate.throughputKBps(DynamoUtils.safeGetDouble(dynamoRecord, THROUGHOUT_PUT_KBPS));
+        }
+
+        if (DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_OWNER) != null) {
+            leaseToUpdate.checkpointOwner(DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_OWNER));
         }
 
         return leaseToUpdate;
@@ -181,18 +198,9 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
 
     @Override
     public Map<String, ExpectedAttributeValue> getDynamoLeaseOwnerExpectation(final Lease lease) {
-        Map<String, ExpectedAttributeValue> result = new HashMap<>();
-
-        ExpectedAttributeValue.Builder eavBuilder = ExpectedAttributeValue.builder();
-
-        if (lease.leaseOwner() == null) {
-            eavBuilder = eavBuilder.exists(false);
-        } else {
-            eavBuilder = eavBuilder.value(DynamoUtils.createAttributeValue(lease.leaseOwner()));
-        }
-
-        result.put(LEASE_OWNER_KEY, eavBuilder.build());
-
+        final Map<String, ExpectedAttributeValue> result = new HashMap<>();
+        result.put(LEASE_OWNER_KEY, buildExpectedAttributeValueIfExistsOrValue(lease.leaseOwner()));
+        result.put(CHECKPOINT_OWNER, buildExpectedAttributeValueIfExistsOrValue(lease.checkpointOwner()));
         return result;
     }
 
@@ -247,9 +255,17 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
                         .value(DynamoUtils.createAttributeValue(owner))
                         .action(AttributeAction.PUT)
                         .build());
+        // this method is currently used by assignLease and takeLease. In both case we want the checkpoint owner to be
+        // deleted as this is a fresh assignment
+        result.put(
+                CHECKPOINT_OWNER,
+                AttributeValueUpdate.builder().action(AttributeAction.DELETE).build());
 
         String oldOwner = lease.leaseOwner();
-        if (oldOwner != null && !oldOwner.equals(owner)) {
+        String checkpointOwner = lease.checkpointOwner();
+        // if checkpoint owner is not null, this update is supposed to remove the checkpoint owner
+        // and transfer the lease ownership to the leaseOwner so incrementing the owner switch key
+        if (oldOwner != null && !oldOwner.equals(owner) || (checkpointOwner != null && checkpointOwner.equals(owner))) {
             result.put(
                     OWNER_SWITCHES_KEY,
                     AttributeValueUpdate.builder()
@@ -261,18 +277,38 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
         return result;
     }
 
+    /**
+     * AssignLease performs the PUT action on the LeaseOwner and ADD (1) action on the leaseCounter.
+     * @param lease lease that needs to be assigned
+     * @param newOwner newLeaseOwner
+     * @return Map of AttributeName to update operation
+     */
+    @Override
+    public Map<String, AttributeValueUpdate> getDynamoAssignLeaseUpdate(final Lease lease, final String newOwner) {
+        Map<String, AttributeValueUpdate> result = getDynamoTakeLeaseUpdate(lease, newOwner);
+
+        result.put(LEASE_COUNTER_KEY, getAttributeValueUpdateForAdd());
+        return result;
+    }
+
     @Override
     public Map<String, AttributeValueUpdate> getDynamoEvictLeaseUpdate(final Lease lease) {
-        Map<String, AttributeValueUpdate> result = new HashMap<>();
-        AttributeValue value = null;
-
+        final Map<String, AttributeValueUpdate> result = new HashMap<>();
+        // if checkpointOwner is not null, it means lease handoff is initiated. In this case we just remove the
+        // checkpoint owner so the next owner (leaseOwner) can pick up the lease without waiting for assignment.
+        // Otherwise, remove the leaseOwner
+        if (lease.checkpointOwner() == null) {
+            result.put(
+                    LEASE_OWNER_KEY,
+                    AttributeValueUpdate.builder()
+                            .action(AttributeAction.DELETE)
+                            .build());
+        }
+        // We always want to remove checkpointOwner, it's ok even if it's null
         result.put(
-                LEASE_OWNER_KEY,
-                AttributeValueUpdate.builder()
-                        .value(value)
-                        .action(AttributeAction.DELETE)
-                        .build());
-
+                CHECKPOINT_OWNER,
+                AttributeValueUpdate.builder().action(AttributeAction.DELETE).build());
+        result.put(LEASE_COUNTER_KEY, getAttributeValueUpdateForAdd());
         return result;
     }
 
@@ -393,5 +429,59 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
                 .build());
 
         return definitions;
+    }
+
+    @Override
+    public Collection<KeySchemaElement> getWorkerIdToLeaseKeyIndexKeySchema() {
+        final List<KeySchemaElement> keySchema = new ArrayList<>();
+        keySchema.add(KeySchemaElement.builder()
+                .attributeName(LEASE_OWNER_KEY)
+                .keyType(KeyType.HASH)
+                .build());
+        keySchema.add(KeySchemaElement.builder()
+                .attributeName(LEASE_KEY_KEY)
+                .keyType(KeyType.RANGE)
+                .build());
+        return keySchema;
+    }
+
+    @Override
+    public Collection<AttributeDefinition> getWorkerIdToLeaseKeyIndexAttributeDefinitions() {
+        final List<AttributeDefinition> definitions = new ArrayList<>();
+        definitions.add(AttributeDefinition.builder()
+                .attributeName(LEASE_OWNER_KEY)
+                .attributeType(ScalarAttributeType.S)
+                .build());
+        definitions.add(AttributeDefinition.builder()
+                .attributeName(LEASE_KEY_KEY)
+                .attributeType(ScalarAttributeType.S)
+                .build());
+        return definitions;
+    }
+
+    @Override
+    public Map<String, AttributeValueUpdate> getDynamoLeaseThroughputKbpsUpdate(Lease lease) {
+        final Map<String, AttributeValueUpdate> result = new HashMap<>();
+        final AttributeValueUpdate avu = AttributeValueUpdate.builder()
+                .value(DynamoUtils.createAttributeValue(lease.throughputKBps()))
+                .action(AttributeAction.PUT)
+                .build();
+        result.put(THROUGHOUT_PUT_KBPS, avu);
+        return result;
+    }
+
+    private static ExpectedAttributeValue buildExpectedAttributeValueIfExistsOrValue(String value) {
+        return value == null
+                ? ExpectedAttributeValue.builder().exists(false).build()
+                : ExpectedAttributeValue.builder()
+                        .value(DynamoUtils.createAttributeValue(value))
+                        .build();
+    }
+
+    private static AttributeValueUpdate getAttributeValueUpdateForAdd() {
+        return AttributeValueUpdate.builder()
+                .value(DynamoUtils.createAttributeValue(1L))
+                .action(AttributeAction.ADD)
+                .build();
     }
 }

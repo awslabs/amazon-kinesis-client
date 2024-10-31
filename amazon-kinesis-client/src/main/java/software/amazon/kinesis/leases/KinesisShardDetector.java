@@ -103,26 +103,6 @@ public class KinesisShardDetector implements ShardDetector {
 
     private static final Boolean THROW_RESOURCE_NOT_FOUND_EXCEPTION = true;
 
-    @Deprecated
-    public KinesisShardDetector(
-            KinesisAsyncClient kinesisClient,
-            String streamName,
-            long listShardsBackoffTimeInMillis,
-            int maxListShardsRetryAttempts,
-            long listShardsCacheAllowedAgeInSeconds,
-            int maxCacheMissesBeforeReload,
-            int cacheMissWarningModulus) {
-        this(
-                kinesisClient,
-                StreamIdentifier.singleStreamInstance(streamName),
-                listShardsBackoffTimeInMillis,
-                maxListShardsRetryAttempts,
-                listShardsCacheAllowedAgeInSeconds,
-                maxCacheMissesBeforeReload,
-                cacheMissWarningModulus,
-                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT);
-    }
-
     public KinesisShardDetector(
             KinesisAsyncClient kinesisClient,
             StreamIdentifier streamIdentifier,

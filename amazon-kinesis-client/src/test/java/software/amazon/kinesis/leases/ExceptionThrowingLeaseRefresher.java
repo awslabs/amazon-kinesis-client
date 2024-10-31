@@ -56,6 +56,7 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
         DELETEALL(10),
         UPDATELEASE(11),
         LISTLEASESFORSTREAM(12),
+        IS_LEASE_OWNER_TO_LEASE_KEY_INDEX_ACTIVE(13),
         NONE(Integer.MIN_VALUE);
 
         private Integer index;
@@ -228,5 +229,13 @@ public class ExceptionThrowingLeaseRefresher implements LeaseRefresher {
     public ExtendedSequenceNumber getCheckpoint(final String leaseKey)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
         return null;
+    }
+
+    @Override
+    public boolean isLeaseOwnerToLeaseKeyIndexActive() throws DependencyException {
+        throwExceptions(
+                "isLeaseOwnerToLeaseKeyIndexActive",
+                ExceptionThrowingLeaseRefresherMethods.IS_LEASE_OWNER_TO_LEASE_KEY_INDEX_ACTIVE);
+        return false;
     }
 }

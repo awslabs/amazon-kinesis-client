@@ -27,12 +27,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
+import com.amazonaws.services.dynamodbv2.local.shared.access.AmazonDynamoDBLocal;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Sets;
 import io.reactivex.rxjava3.plugins.RxJavaPlugins;
@@ -67,6 +70,8 @@ import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
+import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig;
 import software.amazon.kinesis.leases.LeaseManagementFactory;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.MultiStreamLease;
@@ -79,7 +84,6 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
-import software.amazon.kinesis.lifecycle.TaskResult;
 import software.amazon.kinesis.lifecycle.events.InitializationInput;
 import software.amazon.kinesis.lifecycle.events.LeaseLostInput;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -109,6 +113,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.same;
@@ -157,8 +162,8 @@ public class SchedulerTest {
     @Mock
     private KinesisAsyncClient kinesisClient;
 
-    @Mock
-    private DynamoDbAsyncClient dynamoDBClient;
+    private final AmazonDynamoDBLocal embedded = DynamoDBEmbedded.create();
+    private DynamoDbAsyncClient dynamoDBClient = embedded.dynamoDbAsyncClient();
 
     @Mock
     private CloudWatchAsyncClient cloudWatchClient;
@@ -207,21 +212,23 @@ public class SchedulerTest {
                 .parentShardPollIntervalMillis(100L)
                 .workerStateChangeListener(workerStateChangeListener);
         leaseManagementConfig = new LeaseManagementConfig(
-                        tableName, dynamoDBClient, kinesisClient, streamName, workerIdentifier)
-                .leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, false));
+                        tableName, applicationName, dynamoDBClient, kinesisClient, workerIdentifier)
+                .leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, false))
+                .workerUtilizationAwareAssignmentConfig(new WorkerUtilizationAwareAssignmentConfig()
+                        .disableWorkerMetrics(true)
+                        .workerMetricsTableConfig(new WorkerMetricsTableConfig(applicationName)));
         lifecycleConfig = new LifecycleConfig();
         metricsConfig = new MetricsConfig(cloudWatchClient, namespace);
         processorConfig = new ProcessorConfig(shardRecordProcessorFactory);
         retrievalConfig =
                 new RetrievalConfig(kinesisClient, streamName, applicationName).retrievalFactory(retrievalFactory);
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
-        when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
-        when(shardSyncTaskManager.hierarchicalShardSyncer()).thenReturn(new HierarchicalShardSyncer());
-        when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
+        when(leaseCoordinator.workerIdentifier()).thenReturn(workerIdentifier);
+        when(dynamoDBLeaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(anyLong(), anyLong()))
+                .thenReturn(true);
         when(retrievalFactory.createGetRecordsCache(
                         any(ShardInfo.class), any(StreamConfig.class), any(MetricsFactory.class)))
                 .thenReturn(recordsPublisher);
-        when(shardDetector.streamIdentifier()).thenReturn(mock(StreamIdentifier.class));
         when(kinesisClient.serviceClientConfiguration())
                 .thenReturn(KinesisServiceClientConfiguration.builder()
                         .region(TEST_REGION)
@@ -350,7 +357,7 @@ public class SchedulerTest {
         doNothing().when(leaseCoordinator).initialize();
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenThrow(new RuntimeException());
         leaseManagementConfig = new LeaseManagementConfig(
-                        tableName, dynamoDBClient, kinesisClient, streamName, workerIdentifier)
+                        tableName, applicationName, dynamoDBClient, kinesisClient, workerIdentifier)
                 .leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, true));
         scheduler = new Scheduler(
                 checkpointConfig,
@@ -371,7 +378,7 @@ public class SchedulerTest {
         final int maxInitializationAttempts = 5;
         coordinatorConfig.maxInitializationAttempts(maxInitializationAttempts);
         leaseManagementConfig = new LeaseManagementConfig(
-                        tableName, dynamoDBClient, kinesisClient, streamName, workerIdentifier)
+                        tableName, applicationName, dynamoDBClient, kinesisClient, workerIdentifier)
                 .leaseManagementFactory(new TestKinesisLeaseManagementFactory(false, true));
         scheduler = new Scheduler(
                 checkpointConfig,
@@ -395,7 +402,8 @@ public class SchedulerTest {
     public final void testMultiStreamInitialization() {
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
-        leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, workerIdentifier)
+        leaseManagementConfig = new LeaseManagementConfig(
+                        tableName, applicationName, dynamoDBClient, kinesisClient, workerIdentifier)
                 .leaseManagementFactory(new TestKinesisLeaseManagementFactory(true, true));
         scheduler = new Scheduler(
                 checkpointConfig,
@@ -416,7 +424,8 @@ public class SchedulerTest {
     public final void testMultiStreamInitializationWithFailures() {
         retrievalConfig = new RetrievalConfig(kinesisClient, multiStreamTracker, applicationName)
                 .retrievalFactory(retrievalFactory);
-        leaseManagementConfig = new LeaseManagementConfig(tableName, dynamoDBClient, kinesisClient, workerIdentifier)
+        leaseManagementConfig = new LeaseManagementConfig(
+                        tableName, applicationName, dynamoDBClient, kinesisClient, workerIdentifier)
                 .leaseManagementFactory(new TestKinesisLeaseManagementFactory(true, true));
         scheduler = new Scheduler(
                 checkpointConfig,
@@ -1111,13 +1120,6 @@ public class SchedulerTest {
                 processorConfig,
                 retrievalConfig));
         when(scheduler.shouldSyncStreamsNow()).thenReturn(true);
-        when(multiStreamTracker.formerStreamsLeasesDeletionStrategy())
-                .thenReturn(new AutoDetectionAndDeferredDeletionStrategy() {
-                    @Override
-                    public Duration waitPeriodToDeleteFormerStreams() {
-                        return Duration.ZERO;
-                    }
-                });
         Set<StreamIdentifier> syncedStreams = scheduler.checkAndSyncStreamShardsAndLeases();
         Set<StreamIdentifier> expectedSyncedStreams = IntStream.concat(IntStream.range(1, 3), IntStream.range(5, 7))
                 .mapToObj(streamId -> StreamIdentifier.multiStreamInstance(
@@ -1145,7 +1147,6 @@ public class SchedulerTest {
                 processorConfig,
                 retrievalConfig);
 
-        doNothing().when(leaseCoordinator).initialize();
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(true);
 
         long startTime = System.currentTimeMillis();
@@ -1171,7 +1172,6 @@ public class SchedulerTest {
                 processorConfig,
                 retrievalConfig);
 
-        doNothing().when(leaseCoordinator).initialize();
         when(dynamoDBLeaseRefresher.isLeaseTableEmpty()).thenReturn(false);
 
         long startTime = System.currentTimeMillis();
@@ -1249,6 +1249,7 @@ public class SchedulerTest {
         multiStreamTracker
                 .streamConfigList()
                 .forEach(s -> scheduler.currentStreamConfigMap().put(s.streamIdentifier(), s));
+        scheduler.initialize();
         scheduler.runProcessLoop();
         verify(scheduler).syncStreamsFromLeaseTableOnAppInit(any());
         assertTrue(scheduler.currentStreamConfigMap().size() != 0);
@@ -1257,6 +1258,7 @@ public class SchedulerTest {
     @Test
     public void testNotRefreshForNewStreamAfterLeaderFlippedTheShouldInitialize() {
         prepareMultiStreamScheduler(createDummyStreamConfigList(1, 6));
+        scheduler.initialize();
         // flip the shouldInitialize flag
         scheduler.runProcessLoop();
         verify(scheduler, times(1)).syncStreamsFromLeaseTableOnAppInit(any());
@@ -1683,6 +1685,12 @@ public class SchedulerTest {
         }
 
         @Override
+        public LeaseCoordinator createLeaseCoordinator(
+                MetricsFactory metricsFactory, ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap) {
+            return leaseCoordinator;
+        }
+
+        @Override
         public ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory) {
             return shardSyncTaskManager;
         }
@@ -1702,8 +1710,6 @@ public class SchedulerTest {
             when(shardSyncTaskManager.shardDetector()).thenReturn(shardDetector);
             final HierarchicalShardSyncer hierarchicalShardSyncer = new HierarchicalShardSyncer();
             when(shardSyncTaskManager.hierarchicalShardSyncer()).thenReturn(hierarchicalShardSyncer);
-            when(shardDetector.streamIdentifier()).thenReturn(streamConfig.streamIdentifier());
-            when(shardSyncTaskManager.callShardSyncTask()).thenReturn(new TaskResult(null));
             if (shardSyncFirstAttemptFailure) {
                 when(shardDetector.listShards())
                         .thenThrow(new RuntimeException("Service Exception"))

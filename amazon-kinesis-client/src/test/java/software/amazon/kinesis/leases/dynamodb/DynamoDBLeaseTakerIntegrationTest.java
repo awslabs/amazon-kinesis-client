@@ -52,7 +52,7 @@ public class DynamoDBLeaseTakerIntegrationTest extends LeaseIntegrationTest {
     }
 
     @Test
-    public void testNotTakeUpdatedLease() throws LeasingException {
+    public void testNotTakeUpdatedLease() throws Exception {
         TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         builder.withLease("1", "bar").build();

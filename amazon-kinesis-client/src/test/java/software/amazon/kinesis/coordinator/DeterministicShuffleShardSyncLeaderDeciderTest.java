@@ -33,6 +33,8 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import static org.junit.Assert.assertFalse;
@@ -48,6 +50,7 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     private static final String LEASE_KEY = "lease_key";
     private static final String LEASE_OWNER = "lease_owner";
     private static final String WORKER_ID = "worker-id";
+    private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
 
     private DeterministicShuffleShardSyncLeaderDecider leaderDecider;
 
@@ -66,7 +69,7 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     public void setup() {
         numShardSyncWorkers = 1;
         leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(
-                leaseRefresher, scheduledExecutorService, numShardSyncWorkers, readWriteLock);
+                leaseRefresher, scheduledExecutorService, numShardSyncWorkers, readWriteLock, NULL_METRICS_FACTORY);
 
         when(readWriteLock.readLock()).thenReturn(mock(ReentrantReadWriteLock.ReadLock.class));
         when(readWriteLock.writeLock()).thenReturn(mock(ReentrantReadWriteLock.WriteLock.class));
@@ -122,7 +125,7 @@ public class DeterministicShuffleShardSyncLeaderDeciderTest {
     public void testElectedLeadersAsPerExpectedShufflingOrderWhenUniqueWorkersLessThanMaxLeaders() {
         this.numShardSyncWorkers = 5; // More than number of unique lease owners
         leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(
-                leaseRefresher, scheduledExecutorService, numShardSyncWorkers, readWriteLock);
+                leaseRefresher, scheduledExecutorService, numShardSyncWorkers, readWriteLock, NULL_METRICS_FACTORY);
         List<Lease> leases =
                 getLeases(3, false /*emptyLeaseOwner */, false /* duplicateLeaseOwner */, true /* activeLeases */);
         Set<String> expectedLeaders = getExpectedLeaders(leases);

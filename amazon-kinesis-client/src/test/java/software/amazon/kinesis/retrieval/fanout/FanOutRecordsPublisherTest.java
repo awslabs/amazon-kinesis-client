@@ -1627,8 +1627,6 @@ public class FanOutRecordsPublisherTest {
         ArgumentCaptor<FanOutRecordsPublisher.RecordFlow> flowCaptor =
                 ArgumentCaptor.forClass(FanOutRecordsPublisher.RecordFlow.class);
 
-        doNothing().when(publisher).subscribe(captor.capture());
-
         source.start(
                 ExtendedSequenceNumber.LATEST,
                 InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.LATEST));

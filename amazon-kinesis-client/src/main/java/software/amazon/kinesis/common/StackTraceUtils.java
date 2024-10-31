@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Amazon.com, Inc. or its affiliates.
+ * Copyright 2024 Amazon.com, Inc. or its affiliates.
  * Licensed under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
@@ -12,18 +12,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package software.amazon.kinesis.common;
 
-package software.amazon.kinesis.leases.dynamodb;
+public class StackTraceUtils {
+    public static String getPrintableStackTrace(final StackTraceElement[] stackTrace) {
+        final StringBuilder stackTraceString = new StringBuilder();
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
+        for (final StackTraceElement traceElement : stackTrace) {
+            stackTraceString.append("\tat ").append(traceElement).append("\n");
+        }
 
-/**
- * This class is just a holder for initial lease table IOPs units. This class will be removed in a future release.
- */
-@Deprecated
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class TableConstants {
-    public static final long DEFAULT_INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
-    public static final long DEFAULT_INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
+        return stackTraceString.toString();
+    }
 }

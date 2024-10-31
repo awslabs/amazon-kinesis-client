@@ -44,7 +44,9 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
@@ -56,6 +58,7 @@ import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
+import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.awssdk.services.kinesis.model.Record;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
@@ -68,6 +71,7 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 import software.amazon.kinesis.utils.BlockingUtils;
 
@@ -84,6 +88,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -123,6 +128,9 @@ public class PrefetchRecordsPublisherTest {
 
     @Mock
     private ExtendedSequenceNumber sequenceNumber;
+
+    @Mock
+    private ThrottlingReporter throttlingReporter;
 
     private List<Record> records;
     private ExecutorService executorService;
@@ -214,8 +222,6 @@ public class PrefetchRecordsPublisherTest {
     public void testGetRecords() {
         record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
 
-        when(records.size()).thenReturn(1000);
-
         final List<KinesisClientRecord> expectedRecords =
                 records.stream().map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
 
@@ -239,8 +245,6 @@ public class PrefetchRecordsPublisherTest {
                 .thenReturn(getRecordsResponse);
         record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
 
-        when(records.size()).thenReturn(1000);
-
         getRecordsCache.start(sequenceNumber, initialPosition);
         // Setup timeout to be less than what the PrefetchRecordsPublisher will need based on the idle time between
         // get calls to validate exception is thrown
@@ -256,8 +260,6 @@ public class PrefetchRecordsPublisherTest {
                 .thenThrow(new RetryableRetrievalException("Timed out again"))
                 .thenReturn(getRecordsResponse);
         record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
-
-        when(records.size()).thenReturn(1000);
 
         final List<KinesisClientRecord> expectedRecords =
                 records.stream().map(KinesisClientRecord::fromRecord).collect(Collectors.toList());
@@ -280,8 +282,6 @@ public class PrefetchRecordsPublisherTest {
     @Test
     public void testGetRecordsWithInvalidResponse() {
         record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
-
-        when(records.size()).thenReturn(1000);
 
         GetRecordsResponse response =
                 GetRecordsResponse.builder().records(records).build();
@@ -356,8 +356,6 @@ public class PrefetchRecordsPublisherTest {
     @Test
     public void testFullCacheRecordsCount() {
         int recordsSize = 4500;
-        when(records.size()).thenReturn(recordsSize);
-
         getRecordsCache.start(sequenceNumber, initialPosition);
 
         sleep(2000);
@@ -372,8 +370,6 @@ public class PrefetchRecordsPublisherTest {
     @Test
     public void testFullCacheSize() {
         int recordsSize = 200;
-        when(records.size()).thenReturn(recordsSize);
-
         getRecordsCache.start(sequenceNumber, initialPosition);
 
         // Sleep for a few seconds for the cache to fill up.
@@ -735,7 +731,7 @@ public class PrefetchRecordsPublisherTest {
 
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenAnswer(retrieverAnswer);
         doAnswer(a -> {
-                    String resetTo = a.getArgumentAt(0, String.class);
+                    String resetTo = (String) a.getArgument(0);
                     retrieverAnswer.resetIteratorTo(resetTo);
                     return null;
                 })
@@ -798,6 +794,24 @@ public class PrefetchRecordsPublisherTest {
             // the successful call is the +1
             verify(getRecordsRetrievalStrategy, times(expectedFailedCalls + 1)).getRecords(anyInt());
         }
+    }
+
+    /**
+     * Tests that a thrown {@link ProvisionedThroughputExceededException} writes to throttlingReporter.
+     */
+    @Test
+    public void testProvisionedThroughputExceededExceptionReporter() {
+        when(getRecordsRetrievalStrategy.getRecords(anyInt()))
+                .thenThrow(ProvisionedThroughputExceededException.builder().build())
+                .thenReturn(GetRecordsResponse.builder().build());
+
+        getRecordsCache.start(sequenceNumber, initialPosition);
+
+        BlockingUtils.blockUntilRecordsAvailable(this::evictPublishedEvent, DEFAULT_TIMEOUT_MILLIS);
+        InOrder inOrder = Mockito.inOrder(throttlingReporter);
+        inOrder.verify(throttlingReporter).throttled();
+        inOrder.verify(throttlingReporter, atLeastOnce()).success();
+        inOrder.verifyNoMoreInteractions();
     }
 
     private RecordsRetrieved blockUntilRecordsAvailable() {
@@ -905,6 +919,7 @@ public class PrefetchRecordsPublisherTest {
                 new NullMetricsFactory(),
                 PrefetchRecordsPublisherTest.class.getSimpleName(),
                 "shardId",
+                throttlingReporter,
                 1L);
     }
 }

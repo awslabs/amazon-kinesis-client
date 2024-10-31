@@ -266,7 +266,8 @@ class ConsumerStates {
                     argument.idleTimeInMilliseconds(),
                     argument.aggregatorUtil(),
                     argument.metricsFactory(),
-                    argument.schemaRegistryDecoder());
+                    argument.schemaRegistryDecoder(),
+                    argument.leaseCoordinator().leaseStatsRecorder());
         }
 
         @Override
@@ -336,7 +337,8 @@ class ConsumerStates {
                     argument.shardRecordProcessor(),
                     argument.recordProcessorCheckpointer(),
                     consumer.shutdownNotification(),
-                    argument.shardInfo());
+                    argument.shardInfo(),
+                    consumer.shardConsumerArgument().leaseCoordinator());
         }
 
         @Override

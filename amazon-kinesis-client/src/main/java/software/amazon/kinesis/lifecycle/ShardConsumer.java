@@ -21,7 +21,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.function.Function;
 
 import com.google.common.annotations.VisibleForTesting;
 import lombok.AccessLevel;
@@ -35,8 +34,6 @@ import software.amazon.kinesis.exceptions.internal.BlockedOnParentShardException
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.lifecycle.events.TaskExecutionListenerInput;
-import software.amazon.kinesis.metrics.MetricsCollectingTaskDecorator;
-import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 
 /**
@@ -58,12 +55,6 @@ public class ShardConsumer {
 
     @NonNull
     private final Optional<Long> logWarningForTaskAfterMillis;
-
-    /**
-     * @deprecated unused; to be removed in a "major" version bump
-     */
-    @Deprecated
-    private final Function<ConsumerTask, ConsumerTask> taskMetricsDecorator;
 
     private final int bufferSize;
     private final TaskExecutionListener taskExecutionListener;
@@ -95,27 +86,6 @@ public class ShardConsumer {
 
     private ProcessRecordsInput shardEndProcessRecordsInput;
 
-    @Deprecated
-    public ShardConsumer(
-            RecordsPublisher recordsPublisher,
-            ExecutorService executorService,
-            ShardInfo shardInfo,
-            Optional<Long> logWarningForTaskAfterMillis,
-            ShardConsumerArgument shardConsumerArgument,
-            TaskExecutionListener taskExecutionListener) {
-        this(
-                recordsPublisher,
-                executorService,
-                shardInfo,
-                logWarningForTaskAfterMillis,
-                shardConsumerArgument,
-                ConsumerStates.INITIAL_STATE,
-                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()),
-                8,
-                taskExecutionListener,
-                LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
-    }
-
     public ShardConsumer(
             RecordsPublisher recordsPublisher,
             ExecutorService executorService,
@@ -131,34 +101,9 @@ public class ShardConsumer {
                 logWarningForTaskAfterMillis,
                 shardConsumerArgument,
                 ConsumerStates.INITIAL_STATE,
-                ShardConsumer.metricsWrappingFunction(shardConsumerArgument.metricsFactory()),
                 8,
                 taskExecutionListener,
                 readTimeoutsToIgnoreBeforeWarning);
-    }
-
-    @Deprecated
-    public ShardConsumer(
-            RecordsPublisher recordsPublisher,
-            ExecutorService executorService,
-            ShardInfo shardInfo,
-            Optional<Long> logWarningForTaskAfterMillis,
-            ShardConsumerArgument shardConsumerArgument,
-            ConsumerState initialState,
-            Function<ConsumerTask, ConsumerTask> taskMetricsDecorator,
-            int bufferSize,
-            TaskExecutionListener taskExecutionListener) {
-        this(
-                recordsPublisher,
-                executorService,
-                shardInfo,
-                logWarningForTaskAfterMillis,
-                shardConsumerArgument,
-                initialState,
-                taskMetricsDecorator,
-                bufferSize,
-                taskExecutionListener,
-                LifecycleConfig.DEFAULT_READ_TIMEOUTS_TO_IGNORE);
     }
 
     //
@@ -171,7 +116,6 @@ public class ShardConsumer {
             Optional<Long> logWarningForTaskAfterMillis,
             ShardConsumerArgument shardConsumerArgument,
             ConsumerState initialState,
-            Function<ConsumerTask, ConsumerTask> taskMetricsDecorator,
             int bufferSize,
             TaskExecutionListener taskExecutionListener,
             int readTimeoutsToIgnoreBeforeWarning) {
@@ -183,7 +127,6 @@ public class ShardConsumer {
         this.logWarningForTaskAfterMillis = logWarningForTaskAfterMillis;
         this.taskExecutionListener = taskExecutionListener;
         this.currentState = initialState;
-        this.taskMetricsDecorator = taskMetricsDecorator;
         subscriber = new ShardConsumerSubscriber(
                 recordsPublisher, executorService, bufferSize, this, readTimeoutsToIgnoreBeforeWarning);
         this.bufferSize = bufferSize;
@@ -484,17 +427,18 @@ public class ShardConsumer {
     }
 
     /**
-     * Requests the shutdown of the this ShardConsumer. This should give the record processor a chance to checkpoint
+     * Requests the shutdown of the ShardConsumer. This should give the record processor a chance to checkpoint
      * before being shutdown.
      *
-     * @param shutdownNotification
-     *            used to signal that the record processor has been given the chance to shutdown.
+     * @param shutdownNotification used to signal that the record processor has been given the chance to shut down.
      */
     public void gracefulShutdown(ShutdownNotification shutdownNotification) {
         if (subscriber != null) {
             subscriber.cancel();
         }
-        this.shutdownNotification = shutdownNotification;
+        if (shutdownNotification != null) {
+            this.shutdownNotification = shutdownNotification;
+        }
         markForShutdown(ShutdownReason.REQUESTED);
     }
 
@@ -541,22 +485,5 @@ public class ShardConsumer {
         synchronized (shutdownLock) {
             return shutdownReason != null;
         }
-    }
-
-    /**
-     * Default task wrapping function for metrics
-     *
-     * @param metricsFactory
-     *            the factory used for reporting metrics
-     * @return a function that will wrap the task with a metrics reporter
-     */
-    private static Function<ConsumerTask, ConsumerTask> metricsWrappingFunction(MetricsFactory metricsFactory) {
-        return (task) -> {
-            if (task == null) {
-                return null;
-            } else {
-                return new MetricsCollectingTaskDecorator(task, metricsFactory);
-            }
-        };
     }
 }

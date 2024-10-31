@@ -1,0 +1,56 @@
+{
+    "Cluster": "default",
+    "TaskARN": "arn:aws:ecs:us-west-2:111122223333:task/default/158d1c8083dd49d6b527399fd6414f5c",
+    "Family": "curltest",
+    "ServiceName": "MyService",
+    "Revision": "26",
+    "DesiredStatus": "RUNNING",
+    "KnownStatus": "RUNNING",
+    "Limits": {
+        "CPU": 4,
+        "Memory": 128
+    },
+    "PullStartedAt": "2020-10-02T00:43:06.202617438Z",
+    "PullStoppedAt": "2020-10-02T00:43:06.31288465Z",
+    "AvailabilityZone": "us-west-2d",
+    "VPCID": "vpc-1234567890abcdef0",
+    "LaunchType": "EC2",
+    "Containers": [
+        {
+            "DockerId": "ea32192c8553fbff06c9340478a2ff089b2bb5646fb718b4ee206641c9086d66",
+            "Name": "~internal~ecs~pause",
+            "DockerName": "ecs-curltest-26-internalecspause-e292d586b6f9dade4a00",
+            "Image": "amazon/amazon-ecs-pause:0.1.0",
+            "ImageID": "",
+            "Labels": {
+                "com.amazonaws.ecs.cluster": "default",
+                "com.amazonaws.ecs.container-name": "~internal~ecs~pause",
+                "com.amazonaws.ecs.task-arn": "arn:aws:ecs:us-west-2:111122223333:task/default/158d1c8083dd49d6b527399fd6414f5c",
+                "com.amazonaws.ecs.task-definition-family": "curltest",
+                "com.amazonaws.ecs.task-definition-version": "26"
+            },
+            "DesiredStatus": "RESOURCES_PROVISIONED",
+            "KnownStatus": "RESOURCES_PROVISIONED",
+            "Limits": {
+                "CPU": 50,
+                "Memory": 128
+            },
+            "CreatedAt": "2020-10-02T00:43:05.602352471Z",
+            "StartedAt": "2020-10-02T00:43:06.076707576Z",
+            "Type": "CNI_PAUSE",
+            "Networks": [
+                {
+                    "NetworkMode": "awsvpc",
+                    "IPv4Addresses": [
+                        "10.0.2.61"
+                    ],
+                    "AttachmentIndex": 0,
+                    "MACAddress": "0e:10:e2:01:bd:91",
+                    "IPv4SubnetCIDRBlock": "10.0.2.0/24",
+                    "PrivateDNSName": "ip-10-0-2-61.us-west-2.compute.internal",
+                    "SubnetGatewayIpv4Address": "10.0.2.1/24"
+                }
+            ]
+        }
+    ]
+}
