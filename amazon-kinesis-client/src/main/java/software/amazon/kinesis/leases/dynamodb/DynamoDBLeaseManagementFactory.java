@@ -246,12 +246,14 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      * @param dynamoDbRequestTimeout
      * @param billingMode
      * @param leaseTableDeletionProtectionEnabled
+     * @param leaseTablePitrEnabled
      * @param leaseSerializer
      * @param customShardDetectorProvider
      * @param isMultiStreamMode
      * @param leaseCleanupConfig
+     * @param workerUtilizationAwareAssignmentConfig
+     * @param gracefulLeaseHandoffConfig
      */
-    @Deprecated
     public DynamoDBLeaseManagementFactory(
             final KinesisAsyncClient kinesisClient,
             final DynamoDbAsyncClient dynamoDBClient,
