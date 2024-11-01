@@ -75,8 +75,7 @@ class DynamoDBLeaseRefresherTest {
         when(mockDdbClient.updateContinuousBackups(any(UpdateContinuousBackupsRequest.class)))
                 .thenReturn(future);
 
-        dynamoDBLeaseRefresherWithPitr.createLeaseTableIfNotExists();
-        dynamoDBLeaseRefresherWithPitr.waitUntilLeaseTableExists(1, 30);
+        setupTable(dynamoDBLeaseRefresherWithPitr);
 
         UpdateContinuousBackupsRequest updateContinuousBackupsRequest = UpdateContinuousBackupsRequest.builder()
                 .tableName(TEST_LEASE_TABLE)
@@ -106,8 +105,7 @@ class DynamoDBLeaseRefresherTest {
     @Test
     void createWorkerIdToLeaseKeyIndexIfNotExists_sanity() throws DependencyException, ProvisionedThroughputException {
         DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
-        leaseRefresher.createLeaseTableIfNotExists();
-        leaseRefresher.waitUntilLeaseTableExists(1, 30);
+        setupTable(leaseRefresher);
 
         assertFalse(leaseRefresher.isLeaseOwnerToLeaseKeyIndexActive());
 
@@ -141,8 +139,7 @@ class DynamoDBLeaseRefresherTest {
     void waitUntilLeaseOwnerToLeaseKeyIndexExists_noTransitionToActive_assertFalse()
             throws DependencyException, ProvisionedThroughputException {
         DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
-        leaseRefresher.createLeaseTableIfNotExists();
-        leaseRefresher.waitUntilLeaseTableExists(1, 30);
+        setupTable(leaseRefresher);
 
         dynamoDbAsyncClient.deleteTable(
                 DeleteTableRequest.builder().tableName(TEST_LEASE_TABLE).build());
@@ -155,8 +152,7 @@ class DynamoDBLeaseRefresherTest {
     @Test
     void isLeaseOwnerGsiIndexActive() throws DependencyException, ProvisionedThroughputException {
         DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
-        leaseRefresher.createLeaseTableIfNotExists();
-        leaseRefresher.waitUntilLeaseTableExists(1, 30);
+        setupTable(leaseRefresher);
 
         final DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class, Mockito.RETURNS_MOCKS);
         final LeaseRefresher leaseRefresherForTest = new DynamoDBLeaseRefresher(
@@ -531,11 +527,11 @@ class DynamoDBLeaseRefresherTest {
         assertFalse(leaseRefresher.assignLease(lease, lease.leaseOwner()));
     }
 
+    @Test
     void createLeaseTableIfNotExists_billingModeProvisioned_assertCorrectModeAndCapacity() throws Exception {
         final DynamoDbAsyncClient dbAsyncClient = DynamoDBEmbedded.create().dynamoDbAsyncClient();
         final LeaseRefresher leaseRefresher = createLeaseRefresher(createProvisionedTableConfig(), dbAsyncClient);
-        leaseRefresher.createLeaseTableIfNotExists();
-        leaseRefresher.waitUntilLeaseTableExists(1, 1000);
+        setupTable(leaseRefresher);
 
         final DescribeTableResponse describeTableResponse = dbAsyncClient
                 .describeTable(DescribeTableRequest.builder()
@@ -550,8 +546,7 @@ class DynamoDBLeaseRefresherTest {
     void createLeaseTableIfNotExists_billingModeOnDemand_assertCorrectMode() throws Exception {
         final DynamoDbAsyncClient dbAsyncClient = DynamoDBEmbedded.create().dynamoDbAsyncClient();
         final LeaseRefresher leaseRefresher = createLeaseRefresher(createOnDemandTableConfig(), dbAsyncClient);
-        leaseRefresher.createLeaseTableIfNotExists();
-        leaseRefresher.waitUntilLeaseTableExists(1, 1000);
+        setupTable(leaseRefresher);
 
         final DescribeTableResponse describeTableResponse = dbAsyncClient
                 .describeTable(DescribeTableRequest.builder()

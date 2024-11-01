@@ -31,13 +31,25 @@ public interface LeaseManagementFactory {
 
     default LeaseCoordinator createLeaseCoordinator(
             MetricsFactory metricsFactory, ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Not implemented");
     }
 
-    ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory);
+    /**
+     * @deprecated This method is never invoked, please remove implementation of this method
+     *               as it will be removed in future releases.
+     */
+    @Deprecated
+    default ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory) {
+        throw new UnsupportedOperationException("Deprecated");
+    }
 
+    /**
+     * @deprecated This method is never invoked, please remove implementation of this method
+     *               as it will be removed in future releases.
+     */
+    @Deprecated
     default ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory, StreamConfig streamConfig) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Deprecated");
     }
 
     default ShardSyncTaskManager createShardSyncTaskManager(
@@ -49,10 +61,17 @@ public interface LeaseManagementFactory {
 
     DynamoDBLeaseRefresher createLeaseRefresher();
 
-    ShardDetector createShardDetector();
+    /**
+     * @deprecated This method is never invoked, please remove implementation of this method
+     *               as it will be removed in future releases.
+     */
+    @Deprecated
+    default ShardDetector createShardDetector() {
+        throw new UnsupportedOperationException("Deprecated");
+    }
 
     default ShardDetector createShardDetector(StreamConfig streamConfig) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Not implemented");
     }
 
     LeaseCleanupManager createLeaseCleanupManager(MetricsFactory metricsFactory);

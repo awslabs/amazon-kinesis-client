@@ -43,6 +43,7 @@ import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.LeaseCleanupConfig;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
@@ -361,10 +362,18 @@ public class LeaseManagementConfig {
      */
     private TableCreatorCallback tableCreatorCallback = TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK;
 
+    /**
+     * @deprecated never used and will be removed in future releases
+     */
+    @Deprecated
     private HierarchicalShardSyncer hierarchicalShardSyncer;
 
     private LeaseManagementFactory leaseManagementFactory;
 
+    /**
+     * @deprecated never used and will be removed in future releases
+     */
+    @Deprecated
     public HierarchicalShardSyncer hierarchicalShardSyncer() {
         if (hierarchicalShardSyncer == null) {
             hierarchicalShardSyncer = new HierarchicalShardSyncer();
@@ -419,39 +428,16 @@ public class LeaseManagementConfig {
     private GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig =
             GracefulLeaseHandoffConfig.builder().build();
 
+    /**
+     * @deprecated This is no longer invoked, but {@code leaseManagementFactory(LeaseSerializer, boolean)}
+     *              is invoked instead. Please remove implementation for this method as future
+     *              releases will remove this API.
+     */
     @Deprecated
     public LeaseManagementFactory leaseManagementFactory() {
         if (leaseManagementFactory == null) {
             Validate.notEmpty(streamName(), "Stream name is empty");
-            leaseManagementFactory = new DynamoDBLeaseManagementFactory(
-                    kinesisClient(),
-                    streamName(),
-                    dynamoDBClient(),
-                    tableName(),
-                    workerIdentifier(),
-                    executorService(),
-                    initialPositionInStream(),
-                    failoverTimeMillis(),
-                    epsilonMillis(),
-                    maxLeasesForWorker(),
-                    maxLeasesToStealAtOneTime(),
-                    maxLeaseRenewalThreads(),
-                    cleanupLeasesUponShardCompletion(),
-                    ignoreUnexpectedChildShards(),
-                    shardSyncIntervalMillis(),
-                    consistentReads(),
-                    listShardsBackoffTimeInMillis(),
-                    maxListShardsRetryAttempts(),
-                    maxCacheMissesBeforeReload(),
-                    listShardsCacheAllowedAgeInSeconds(),
-                    cacheMissWarningModulus(),
-                    initialLeaseTableReadCapacity(),
-                    initialLeaseTableWriteCapacity(),
-                    hierarchicalShardSyncer(),
-                    tableCreatorCallback(),
-                    dynamoDbRequestTimeout(),
-                    billingMode(),
-                    tags());
+            leaseManagementFactory(new DynamoDBLeaseSerializer(), false);
         }
         return leaseManagementFactory;
     }
@@ -488,7 +474,6 @@ public class LeaseManagementConfig {
                     cacheMissWarningModulus(),
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
-                    hierarchicalShardSyncer(),
                     tableCreatorCallback(),
                     dynamoDbRequestTimeout(),
                     billingMode(),
