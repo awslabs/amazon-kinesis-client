@@ -107,8 +107,8 @@ public class MigrationStateMachineTest {
 
     @ParameterizedTest
     @CsvSource({
-        "CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2x, CLIENT_VERSION_UPGRADE_FROM_2x",
-        "CLIENT_VERSION_CONFIG_3x, CLIENT_VERSION_3x"
+        "CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X, CLIENT_VERSION_UPGRADE_FROM_2X",
+        "CLIENT_VERSION_CONFIG_3X, CLIENT_VERSION_3X"
     })
     public void testStateMachineInitialization(
             final ClientVersionConfig config, final ClientVersion expectedStateMachineState) throws Exception {
@@ -118,7 +118,7 @@ public class MigrationStateMachineTest {
 
     @Test
     public void testMigrationReadyFlip() throws Exception {
-        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2x);
+        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X);
 
         // After initialization, state machine should start to monitor for upgrade readiness
         final ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -130,7 +130,7 @@ public class MigrationStateMachineTest {
 
     @Test
     public void testRollbackAfterFlip() throws Exception {
-        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2x);
+        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X);
 
         // After initialization, state machine should start to monitor for upgrade readiness
         ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -150,7 +150,7 @@ public class MigrationStateMachineTest {
 
     @Test
     public void testRollForward() throws Exception {
-        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2x);
+        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X);
 
         // After initialization, state machine should start to monitor for upgrade readiness
         ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -177,7 +177,7 @@ public class MigrationStateMachineTest {
 
     @Test
     public void testRollbackBeforeFlip() throws Exception {
-        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2x);
+        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X);
 
         // After initialization, state machine should start to monitor for upgrade readiness
         ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -189,7 +189,7 @@ public class MigrationStateMachineTest {
 
     @Test
     public void successfulUpgradeAfterFlip() throws Exception {
-        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2x);
+        stateMachineUnderTest = getStateMachineUnderTest(ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X);
 
         // After initialization, state machine should start to monitor for upgrade readiness
         ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
@@ -244,15 +244,15 @@ public class MigrationStateMachineTest {
         // Invoke the monitor callbacks so the version flips to 3.x with rollback
         migrationReadyMonitorRunnable.run();
         Assertions.assertEquals(
-                ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK,
+                ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK,
                 stateCaptor.getValue().getClientVersion());
 
         versionChangeMonitorRunnable.run();
         Assertions.assertEquals(
-                ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK, stateMachineUnderTest.getCurrentClientVersion());
+                ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK, stateMachineUnderTest.getCurrentClientVersion());
 
         verify(mockInitializer)
-                .initializeClientVersionFor3xWithRollback(eq(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x));
+                .initializeClientVersionFor3xWithRollback(eq(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X));
         log.info("TestLog ----------- flip done -------------");
     }
 
@@ -263,33 +263,33 @@ public class MigrationStateMachineTest {
                         : runnableCaptor.getAllValues().get(1);
 
         final MigrationState state =
-                new MigrationState(MIGRATION_HASH_KEY, WORKER_ID).update(ClientVersion.CLIENT_VERSION_2x, WORKER_ID);
+                new MigrationState(MIGRATION_HASH_KEY, WORKER_ID).update(ClientVersion.CLIENT_VERSION_2X, WORKER_ID);
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
         reset(mockMigrationStateMachineThreadPool);
         reset(mockInitializer);
         log.info("TestLog ----------- Initiate rollback before flip -------------");
         versionChangeMonitorRunnable.run();
         log.info("TestLog ----------- rollback before flip done -------------");
-        Assertions.assertEquals(ClientVersion.CLIENT_VERSION_2x, stateMachineUnderTest.getCurrentClientVersion());
-        verify(mockInitializer).initializeClientVersionFor2x(eq(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x));
+        Assertions.assertEquals(ClientVersion.CLIENT_VERSION_2X, stateMachineUnderTest.getCurrentClientVersion());
+        verify(mockInitializer).initializeClientVersionFor2x(eq(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X));
     }
 
     private void initiateAndTestRollBack(final Runnable rollbackMonitorRunnable) throws Exception {
         final MigrationState state =
-                new MigrationState(MIGRATION_HASH_KEY, WORKER_ID).update(ClientVersion.CLIENT_VERSION_2x, WORKER_ID);
+                new MigrationState(MIGRATION_HASH_KEY, WORKER_ID).update(ClientVersion.CLIENT_VERSION_2X, WORKER_ID);
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
         reset(mockMigrationStateMachineThreadPool);
         reset(mockInitializer);
         log.info("TestLog ----------- Initiate rollback -------------");
         rollbackMonitorRunnable.run();
         log.info("TestLog ----------- rollback done -------------");
-        Assertions.assertEquals(ClientVersion.CLIENT_VERSION_2x, stateMachineUnderTest.getCurrentClientVersion());
-        verify(mockInitializer).initializeClientVersionFor2x(eq(ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK));
+        Assertions.assertEquals(ClientVersion.CLIENT_VERSION_2X, stateMachineUnderTest.getCurrentClientVersion());
+        verify(mockInitializer).initializeClientVersionFor2x(eq(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK));
     }
 
     private void initiateAndTestRollForward(final Runnable rollforwardMonitorRunnable) throws Exception {
         final MigrationState state = new MigrationState(MIGRATION_HASH_KEY, WORKER_ID)
-                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x, WORKER_ID);
+                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, WORKER_ID);
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
         reset(mockMigrationStateMachineThreadPool);
         reset(mockInitializer);
@@ -297,20 +297,20 @@ public class MigrationStateMachineTest {
         rollforwardMonitorRunnable.run();
         log.info("TestLog ----------- roll-forward done -------------");
         Assertions.assertEquals(
-                ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x, stateMachineUnderTest.getCurrentClientVersion());
-        verify(mockInitializer).initializeClientVersionForUpgradeFrom2x(eq(ClientVersion.CLIENT_VERSION_2x));
+                ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, stateMachineUnderTest.getCurrentClientVersion());
+        verify(mockInitializer).initializeClientVersionForUpgradeFrom2x(eq(ClientVersion.CLIENT_VERSION_2X));
     }
 
     private void initiateAndTestSuccessfulUpgrade(final Runnable successfulUpgradeMonitor) throws Exception {
         final MigrationState state =
-                new MigrationState(MIGRATION_HASH_KEY, WORKER_ID).update(ClientVersion.CLIENT_VERSION_3x, WORKER_ID);
+                new MigrationState(MIGRATION_HASH_KEY, WORKER_ID).update(ClientVersion.CLIENT_VERSION_3X, WORKER_ID);
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
         reset(mockMigrationStateMachineThreadPool);
         reset(mockInitializer);
         log.info("TestLog ----------- Initiate successful upgrade -------------");
         successfulUpgradeMonitor.run();
         log.info("TestLog ----------- successful upgrade done -------------");
-        Assertions.assertEquals(ClientVersion.CLIENT_VERSION_3x, stateMachineUnderTest.getCurrentClientVersion());
-        verify(mockInitializer).initializeClientVersionFor3x(ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK);
+        Assertions.assertEquals(ClientVersion.CLIENT_VERSION_3X, stateMachineUnderTest.getCurrentClientVersion());
+        verify(mockInitializer).initializeClientVersionFor3x(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
     }
 }

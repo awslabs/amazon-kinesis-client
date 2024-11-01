@@ -31,10 +31,10 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2x;
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3x;
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK;
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2X;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X;
 import static software.amazon.kinesis.coordinator.migration.MigrationState.MIGRATION_HASH_KEY;
 
 /**
@@ -44,13 +44,13 @@ import static software.amazon.kinesis.coordinator.migration.MigrationState.MIGRA
  * as follows
  * ClientVersionConfig | MigrationState (DDB)             | initial client version
  * --------------------+---------------------------------+--------------------------------
- * COMPATIBLE_WITH_2x  | Does not exist                  | CLIENT_VERSION_UPGRADE_FROM_2x
- * 3x                  | Does not exist                  | CLIENT_VERSION_3x
- * COMPATIBLE_WITH_2x  | CLIENT_VERSION_3x_WITH_ROLLBACK | CLIENT_VERSION_3x_WITH_ROLLBACK
- * 3x                  | CLIENT_VERSION_3x_WITH_ROLLBACK | CLIENT_VERSION_3x
- * any                 | CLIENT_VERSION_2x               | CLIENT_VERSION_2x
- * any                 | CLIENT_VERSION_UPGRADE_FROM_2x  | CLIENT_VERSION_UPGRADE_FROM_2x
- * any                 | CLIENT_VERSION_3x               | CLIENT_VERSION_3x
+ * COMPATIBLE_WITH_2X  | Does not exist                  | CLIENT_VERSION_UPGRADE_FROM_2X
+ * 3X                  | Does not exist                  | CLIENT_VERSION_3X
+ * COMPATIBLE_WITH_2X  | CLIENT_VERSION_3X_WITH_ROLLBACK | CLIENT_VERSION_3X_WITH_ROLLBACK
+ * 3X                  | CLIENT_VERSION_3X_WITH_ROLLBACK | CLIENT_VERSION_3X
+ * any                 | CLIENT_VERSION_2X               | CLIENT_VERSION_2X
+ * any                 | CLIENT_VERSION_UPGRADE_FROM_2X  | CLIENT_VERSION_UPGRADE_FROM_2X
+ * any                 | CLIENT_VERSION_3X               | CLIENT_VERSION_3X
  */
 @KinesisClientInternalApi
 @RequiredArgsConstructor
@@ -110,26 +110,26 @@ public class MigrationClientVersionStateInitializer {
                 nextClientVersion = getNextClientVersionBasedOnConfigVersion();
                 log.info("Application is starting in {}", nextClientVersion);
                 break;
-            case CLIENT_VERSION_3x_WITH_ROLLBACK:
-                if (clientVersionConfig == ClientVersionConfig.CLIENT_VERSION_CONFIG_3x) {
+            case CLIENT_VERSION_3X_WITH_ROLLBACK:
+                if (clientVersionConfig == ClientVersionConfig.CLIENT_VERSION_CONFIG_3X) {
                     // upgrade successful, allow transition to 3x.
-                    log.info("Application has successfully upgraded, transitioning to {}", CLIENT_VERSION_3x);
-                    nextClientVersion = CLIENT_VERSION_3x;
+                    log.info("Application has successfully upgraded, transitioning to {}", CLIENT_VERSION_3X);
+                    nextClientVersion = CLIENT_VERSION_3X;
                     break;
                 }
-                log.info("Initialize with {}", CLIENT_VERSION_3x_WITH_ROLLBACK);
+                log.info("Initialize with {}", CLIENT_VERSION_3X_WITH_ROLLBACK);
                 nextClientVersion = migrationState.getClientVersion();
                 break;
-            case CLIENT_VERSION_2x:
-                log.info("Application has rolled-back, initialize with {}", CLIENT_VERSION_2x);
+            case CLIENT_VERSION_2X:
+                log.info("Application has rolled-back, initialize with {}", CLIENT_VERSION_2X);
                 nextClientVersion = migrationState.getClientVersion();
                 break;
-            case CLIENT_VERSION_UPGRADE_FROM_2x:
-                log.info("Application is upgrading, initialize with {}", CLIENT_VERSION_UPGRADE_FROM_2x);
+            case CLIENT_VERSION_UPGRADE_FROM_2X:
+                log.info("Application is upgrading, initialize with {}", CLIENT_VERSION_UPGRADE_FROM_2X);
                 nextClientVersion = migrationState.getClientVersion();
                 break;
-            case CLIENT_VERSION_3x:
-                log.info("Initialize with {}", CLIENT_VERSION_3x);
+            case CLIENT_VERSION_3X:
+                log.info("Initialize with {}", CLIENT_VERSION_3X);
                 nextClientVersion = migrationState.getClientVersion();
                 break;
             default:
@@ -180,10 +180,10 @@ public class MigrationClientVersionStateInitializer {
 
     private ClientVersion getNextClientVersionBasedOnConfigVersion() {
         switch (clientVersionConfig) {
-            case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2x:
-                return CLIENT_VERSION_UPGRADE_FROM_2x;
-            case CLIENT_VERSION_CONFIG_3x:
-                return CLIENT_VERSION_3x;
+            case CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X:
+                return CLIENT_VERSION_UPGRADE_FROM_2X;
+            case CLIENT_VERSION_CONFIG_3X:
+                return CLIENT_VERSION_3X;
         }
         throw new IllegalStateException(String.format("Unknown configured Client version %s", clientVersionConfig));
     }

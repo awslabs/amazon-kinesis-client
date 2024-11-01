@@ -31,28 +31,28 @@ public enum ClientVersion {
      * KCL workers will emit WorkerMetricStats and run KCLv2.x algorithms for leader election and lease
      * assignment. KCL will also monitor for upgrade to KCLv3.x readiness of the worker fleet.
      */
-    CLIENT_VERSION_UPGRADE_FROM_2x,
+    CLIENT_VERSION_UPGRADE_FROM_2X,
     /**
-     * This version is used during rollback from CLIENT_VERSION_UPGRADE_FROM_2x or CLIENT_VERSION_3x_WITH_ROLLBACK,
+     * This version is used during rollback from CLIENT_VERSION_UPGRADE_FROM_2X or CLIENT_VERSION_3X_WITH_ROLLBACK,
      * which can only be initiated using a KCL migration tool, when customer wants to revert to KCLv2.x functionality.
      * In this version, KCL will not emit WorkerMetricStats and run KCLv2.x algorithms for leader election
      * and lease assignment. In this version, KCL will monitor for roll-forward scenario where
-     * client version is updated to CLIENT_VERSION_UPGRADE_FROM_2x using the migration tool.
+     * client version is updated to CLIENT_VERSION_UPGRADE_FROM_2X using the migration tool.
      */
-    CLIENT_VERSION_2x,
+    CLIENT_VERSION_2X,
     /**
-     * When workers are operating in CLIENT_VERSION_UPGRADE_FROM_2x and when worker fleet is determined to be
+     * When workers are operating in CLIENT_VERSION_UPGRADE_FROM_2X and when worker fleet is determined to be
      * KCLv3.x ready (when lease table GSI is active and worker-metrics are being emitted by all lease owners)
      * then the leader will initiate the switch to KCLv3.x algorithms for leader election and lease assignment,
      * by using this version and persisting it in the {@link MigrationState} that allows all worker hosts
      * to also flip to KCLv3.x functionality. In this KCL will also monitor for rollback to detect when the
-     * customer updates version to CLIENT_VERSION_2x using migration tool, so that it instantly flips back
-     * to CLIENT_VERSION_2x.
+     * customer updates version to CLIENT_VERSION_2X using migration tool, so that it instantly flips back
+     * to CLIENT_VERSION_2X.
      */
-    CLIENT_VERSION_3x_WITH_ROLLBACK,
+    CLIENT_VERSION_3X_WITH_ROLLBACK,
     /**
      * A new application starting KCLv3.x or an upgraded application from KCLv2.x after upgrade is successful
      * can use this version to default all KCLv3.x algorithms without any monitor to rollback.
      */
-    CLIENT_VERSION_3x;
+    CLIENT_VERSION_3X;
 }

@@ -189,7 +189,7 @@ public class CoordinatorStateDAOTest {
         createCoordinatorState("key1");
 
         final MigrationState migrationState = new MigrationState(MIGRATION_HASH_KEY, WORKER_ID)
-                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x, WORKER_ID);
+                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, WORKER_ID);
         doaUnderTest.createCoordinatorStateIfNotExists(migrationState);
 
         final AmazonDynamoDBLockClient dynamoDBLockClient = new AmazonDynamoDBLockClient(doaUnderTest
@@ -223,7 +223,7 @@ public class CoordinatorStateDAOTest {
                 // Make sure the record has not changed due to using
                 // ddb lock client
                 Assertions.assertEquals(
-                        ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x.toString(),
+                        ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X.toString(),
                         item.get(CLIENT_VERSION_ATTRIBUTE_NAME).s());
             } else if (LEADER_HASH_KEY.equals(key)) {
                 Assertions.assertEquals("TEST_WORKER", item.get("ownerName").s());
@@ -264,7 +264,7 @@ public class CoordinatorStateDAOTest {
             if ("Migration3.0".equals(keyValue)) {
                 Assertions.assertTrue(state instanceof MigrationState);
                 final MigrationState migrationState = (MigrationState) state;
-                Assertions.assertEquals(ClientVersion.CLIENT_VERSION_3x, migrationState.getClientVersion());
+                Assertions.assertEquals(ClientVersion.CLIENT_VERSION_3X, migrationState.getClientVersion());
                 return;
             }
             Assertions.assertEquals(3, state.getAttributes().size());
@@ -379,7 +379,7 @@ public class CoordinatorStateDAOTest {
         final MigrationState state = createMigrationState();
 
         /* Test step - update the state with mismatched condition */
-        final MigrationState updatedState = state.copy().update(ClientVersion.CLIENT_VERSION_2x, WORKER_ID);
+        final MigrationState updatedState = state.copy().update(ClientVersion.CLIENT_VERSION_2X, WORKER_ID);
 
         boolean updated = doaUnderTest.updateCoordinatorStateWithExpectation(
                 updatedState, updatedState.getDynamoClientVersionExpectation());
@@ -403,7 +403,7 @@ public class CoordinatorStateDAOTest {
                         .build())
                 .join();
         Assertions.assertEquals(
-                ClientVersion.CLIENT_VERSION_2x.name(),
+                ClientVersion.CLIENT_VERSION_2X.name(),
                 response.item().get("cv").s());
         Assertions.assertEquals(WORKER_ID, response.item().get("mb").s());
         Assertions.assertEquals(
@@ -433,7 +433,7 @@ public class CoordinatorStateDAOTest {
 
         /* Test step - update with new state object */
         final MigrationState updatedState =
-                new MigrationState("Migration3.0", WORKER_ID).update(ClientVersion.CLIENT_VERSION_2x, WORKER_ID);
+                new MigrationState("Migration3.0", WORKER_ID).update(ClientVersion.CLIENT_VERSION_2X, WORKER_ID);
 
         boolean updated = doaUnderTest.updateCoordinatorStateWithExpectation(updatedState, null);
 
@@ -491,7 +491,7 @@ public class CoordinatorStateDAOTest {
         final HashMap<String, AttributeValue> item = new HashMap<String, AttributeValue>() {
             {
                 put("key", AttributeValue.fromS("Migration3.0"));
-                put("cv", AttributeValue.fromS(ClientVersion.CLIENT_VERSION_3x.toString()));
+                put("cv", AttributeValue.fromS(ClientVersion.CLIENT_VERSION_3X.toString()));
                 put("mb", AttributeValue.fromS("DUMMY_WORKER"));
                 put("mts", AttributeValue.fromN(String.valueOf(System.currentTimeMillis())));
             }

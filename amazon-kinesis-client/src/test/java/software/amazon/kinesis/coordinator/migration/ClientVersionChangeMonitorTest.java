@@ -60,10 +60,10 @@ public class ClientVersionChangeMonitorTest {
 
     @ParameterizedTest
     @CsvSource({
-        "CLIENT_VERSION_2x, CLIENT_VERSION_UPGRADE_FROM_2x",
-        "CLIENT_VERSION_3x_WITH_ROLLBACK, CLIENT_VERSION_2x",
-        "CLIENT_VERSION_UPGRADE_FROM_2x, CLIENT_VERSION_3x_WITH_ROLLBACK",
-        "CLIENT_VERSION_3x_WITH_ROLLBACK, CLIENT_VERSION_3x"
+        "CLIENT_VERSION_2X, CLIENT_VERSION_UPGRADE_FROM_2X",
+        "CLIENT_VERSION_3X_WITH_ROLLBACK, CLIENT_VERSION_2X",
+        "CLIENT_VERSION_UPGRADE_FROM_2X, CLIENT_VERSION_3X_WITH_ROLLBACK",
+        "CLIENT_VERSION_3X_WITH_ROLLBACK, CLIENT_VERSION_3X"
     })
     public void testMonitor(final ClientVersion currentClientVersion, final ClientVersion changedClientVersion)
             throws Exception {
@@ -104,7 +104,7 @@ public class ClientVersionChangeMonitorTest {
                 mockCoordinatorStateDAO,
                 mockScheduler,
                 mockCallback,
-                ClientVersion.CLIENT_VERSION_2x,
+                ClientVersion.CLIENT_VERSION_2X,
                 mockRandom);
 
         monitorUnderTest.startMonitor();
@@ -112,7 +112,7 @@ public class ClientVersionChangeMonitorTest {
         verify(mockScheduler).scheduleWithFixedDelay(argumentCaptor.capture(), anyLong(), anyLong(), anyObject());
 
         final MigrationState state = new MigrationState(MIGRATION_HASH_KEY, "DUMMY_WORKER")
-                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x, "DUMMY_WORKER");
+                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, "DUMMY_WORKER");
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
 
         argumentCaptor.getValue().run();
@@ -130,7 +130,7 @@ public class ClientVersionChangeMonitorTest {
                 mockCoordinatorStateDAO,
                 mockScheduler,
                 mockCallback,
-                ClientVersion.CLIENT_VERSION_2x,
+                ClientVersion.CLIENT_VERSION_2X,
                 mockRandom);
 
         monitorUnderTest.startMonitor();
@@ -138,7 +138,7 @@ public class ClientVersionChangeMonitorTest {
         verify(mockScheduler).scheduleWithFixedDelay(argumentCaptor.capture(), anyLong(), anyLong(), anyObject());
 
         final MigrationState state = new MigrationState(MIGRATION_HASH_KEY, "DUMMY_WORKER")
-                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x, "DUMMY_WORKER");
+                .update(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X, "DUMMY_WORKER");
         when(mockCoordinatorStateDAO.getCoordinatorState(MIGRATION_HASH_KEY)).thenReturn(state);
 
         doThrow(new InvalidStateException("test exception")).when(mockCallback).accept(any());

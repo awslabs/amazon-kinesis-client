@@ -32,23 +32,23 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2x;
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2X;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK;
 import static software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl.FAULT_METRIC;
 import static software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl.METRICS_OPERATION;
 
 /**
- * State for CLIENT_VERSION_UPGRADE_FROM_2x. When state machine enters this state,
+ * State for CLIENT_VERSION_UPGRADE_FROM_2X. When state machine enters this state,
  * KCL is initialized to operate in dual mode for Lease assignment and Leader decider algorithms
  * which initially start in 2.x compatible mode and when all the KCL workers are 3.x compliant,
  * it dynamically switches to the 3.x algorithms. It also monitors for rollback
  * initiated from customer via the KCL migration tool and instantly switches back to the 2.x
  * complaint algorithms.
- * The allowed state transitions are to CLIENT_VERSION_3x_WITH_ROLLBACK when KCL workers are
- * 3.x complaint, and to CLIENT_VERSION_2x when customer has initiated a rollback.
+ * The allowed state transitions are to CLIENT_VERSION_3X_WITH_ROLLBACK when KCL workers are
+ * 3.x complaint, and to CLIENT_VERSION_2X when customer has initiated a rollback.
  * Only the leader KCL worker performs migration ready monitor and notifies all workers (including
  * itself) via a MigrationState update. When all worker's monitor notice the MigrationState change
- * (including itself), it will transition to CLIENT_VERSION_3x_WITH_ROLLBACK.
+ * (including itself), it will transition to CLIENT_VERSION_3X_WITH_ROLLBACK.
  */
 @KinesisClientInternalApi
 @RequiredArgsConstructor
@@ -71,7 +71,7 @@ public class MigrationClientVersionUpgradeFrom2xState implements MigrationClient
 
     @Override
     public ClientVersion clientVersion() {
-        return ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x;
+        return ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X;
     }
 
     @Override
@@ -170,7 +170,7 @@ public class MigrationClientVersionUpgradeFrom2xState implements MigrationClient
 
     /**
      * Callback handler to handle client version changes in MigrationState in DDB.
-     * @param newState  current MigrationState read from DDB where client version is not CLIENT_VERSION_UPGRADE_FROM_2x
+     * @param newState  current MigrationState read from DDB where client version is not CLIENT_VERSION_UPGRADE_FROM_2X
      * @throws InvalidStateException    during transition to the next state based on the new ClientVersion
      *                                  or if the new state in DDB is unexpected.
      */
@@ -184,23 +184,23 @@ public class MigrationClientVersionUpgradeFrom2xState implements MigrationClient
                 MetricsUtil.createMetricsWithOperation(initializer.metricsFactory(), METRICS_OPERATION);
         try {
             switch (newState.getClientVersion()) {
-                case CLIENT_VERSION_2x:
-                    log.info("A rollback has been initiated for the application. Transition to {}", CLIENT_VERSION_2x);
+                case CLIENT_VERSION_2X:
+                    log.info("A rollback has been initiated for the application. Transition to {}", CLIENT_VERSION_2X);
                     // cancel monitor asynchronously
                     cancelMigrationReadyMonitor();
-                    stateMachine.transitionTo(CLIENT_VERSION_2x, newState);
+                    stateMachine.transitionTo(CLIENT_VERSION_2X, newState);
                     break;
-                case CLIENT_VERSION_3x_WITH_ROLLBACK:
-                    log.info("KCL workers are v3.x compliant, transition to {}", CLIENT_VERSION_3x_WITH_ROLLBACK);
+                case CLIENT_VERSION_3X_WITH_ROLLBACK:
+                    log.info("KCL workers are v3.x compliant, transition to {}", CLIENT_VERSION_3X_WITH_ROLLBACK);
                     cancelMigrationReadyMonitor();
-                    stateMachine.transitionTo(CLIENT_VERSION_3x_WITH_ROLLBACK, newState);
+                    stateMachine.transitionTo(CLIENT_VERSION_3X_WITH_ROLLBACK, newState);
                     break;
                 default:
                     // This should not happen, so throw an exception that allows the monitor to continue monitoring
                     // changes, this allows KCL to operate in the current state and keep monitoring until a valid
                     // state transition is possible.
                     // However, there could be a split brain here, new workers will use DDB value as source of truth,
-                    // so we could also write back CLIENT_VERSION_UPGRADE_FROM_2x to DDB to ensure all workers have
+                    // so we could also write back CLIENT_VERSION_UPGRADE_FROM_2X to DDB to ensure all workers have
                     // consistent behavior.
                     // Ideally we don't expect modifications to DDB table out of the KCL migration tool scope,
                     // so keeping it simple and not writing back to DDB, the error log below would help capture
@@ -222,7 +222,7 @@ public class MigrationClientVersionUpgradeFrom2xState implements MigrationClient
         try {
             final MigrationState newMigrationState = currentMigrationState
                     .copy()
-                    .update(CLIENT_VERSION_3x_WITH_ROLLBACK, initializer.workerIdentifier());
+                    .update(CLIENT_VERSION_3X_WITH_ROLLBACK, initializer.workerIdentifier());
             log.info("Updating Migration State in DDB with {} prev state {}", newMigrationState, currentMigrationState);
             return coordinatorStateDAO.updateCoordinatorStateWithExpectation(
                     newMigrationState, currentMigrationState.getDynamoClientVersionExpectation());
@@ -230,7 +230,7 @@ public class MigrationClientVersionUpgradeFrom2xState implements MigrationClient
             log.warn(
                     "Exception occurred when toggling to {}, upgradeReadyMonitor will retry the update"
                             + " if upgrade condition is still true",
-                    CLIENT_VERSION_3x_WITH_ROLLBACK,
+                    CLIENT_VERSION_3X_WITH_ROLLBACK,
                     e);
             scope.addData(FAULT_METRIC, 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
             return false;

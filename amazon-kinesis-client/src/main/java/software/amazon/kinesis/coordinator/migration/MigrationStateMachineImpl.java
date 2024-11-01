@@ -190,7 +190,7 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
 
                 currentMigrationClientVersionState = nextMigrationClientVersionState;
                 log.info("Successfully transitioned to {}", nextMigrationClientVersionState.clientVersion());
-                if (currentMigrationClientVersionState.clientVersion() == ClientVersion.CLIENT_VERSION_3x) {
+                if (currentMigrationClientVersionState.clientVersion() == ClientVersion.CLIENT_VERSION_3X) {
                     terminate();
                 }
                 success = true;
@@ -220,10 +220,10 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
     private MigrationClientVersionState createMigrationClientVersionState(
             final ClientVersion clientVersion, final MigrationState migrationState) {
         switch (clientVersion) {
-            case CLIENT_VERSION_2x:
+            case CLIENT_VERSION_2X:
                 return new MigrationClientVersion2xState(
                         this, coordinatorStateDAO, stateMachineThreadPool, initializer, random);
-            case CLIENT_VERSION_UPGRADE_FROM_2x:
+            case CLIENT_VERSION_UPGRADE_FROM_2X:
                 return new MigrationClientVersionUpgradeFrom2xState(
                         this,
                         timeProvider,
@@ -233,10 +233,10 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
                         random,
                         migrationState,
                         flipTo3XStabilizerTimeInSeconds);
-            case CLIENT_VERSION_3x_WITH_ROLLBACK:
+            case CLIENT_VERSION_3X_WITH_ROLLBACK:
                 return new MigrationClientVersion3xWithRollbackState(
                         this, coordinatorStateDAO, stateMachineThreadPool, initializer, random);
-            case CLIENT_VERSION_3x:
+            case CLIENT_VERSION_3X:
                 return new MigrationClientVersion3xState(this, initializer);
         }
         throw new IllegalStateException(String.format("Unknown client version %s", clientVersion));
@@ -246,7 +246,7 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
         if (currentMigrationClientVersionState != null) {
             return currentMigrationClientVersionState.clientVersion();
         } else if (terminated) {
-            return ClientVersion.CLIENT_VERSION_3x;
+            return ClientVersion.CLIENT_VERSION_3X;
         }
         throw new UnsupportedOperationException(
                 "No current state when state machine is either not initialized" + " or already terminated");

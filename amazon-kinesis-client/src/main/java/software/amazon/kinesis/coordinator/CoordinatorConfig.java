@@ -123,7 +123,7 @@ public class CoordinatorConfig {
          * This version also allows rolling back to the compatible mode from the
          * auto-toggled 3.x mode.
          */
-        CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2x,
+        CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X,
         /**
          * A new application operating with KCLv3.x will use this value. Also, an application
          * that has successfully upgraded to 3.x version and no longer needs the ability
@@ -131,14 +131,14 @@ public class CoordinatorConfig {
          * KCL will operate with new algorithms introduced in 3.x which is not compatible
          * with prior versions. And once in this version, rollback to 2.x is not supported.
          */
-        CLIENT_VERSION_CONFIG_3x,
+        CLIENT_VERSION_CONFIG_3X,
     }
 
     /**
      * Client version KCL must operate in, by default it operates in 3.x version which is not
      * compatible with prior versions.
      */
-    private ClientVersionConfig clientVersionConfig = ClientVersionConfig.CLIENT_VERSION_CONFIG_3x;
+    private ClientVersionConfig clientVersionConfig = ClientVersionConfig.CLIENT_VERSION_CONFIG_3X;
 
     public static class CoordinatorStateTableConfig extends DdbTableConfig {
         private CoordinatorStateTableConfig(final String applicationName) {

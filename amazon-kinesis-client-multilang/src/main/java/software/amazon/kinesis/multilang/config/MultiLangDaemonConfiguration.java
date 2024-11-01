@@ -17,6 +17,7 @@ package software.amazon.kinesis.multilang.config;
 
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -41,6 +42,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClientBuilder;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
@@ -55,6 +57,7 @@ import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.multilang.config.converter.DurationConverter;
 import software.amazon.kinesis.multilang.config.credentials.V2CredentialWrapper;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
@@ -156,6 +159,9 @@ public class MultiLangDaemonConfiguration {
     @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
     private long schedulerInitializationBackoffTimeMillis;
 
+    @ConfigurationSettable(configurationClass = CoordinatorConfig.class)
+    private CoordinatorConfig.ClientVersionConfig clientVersionConfig;
+
     @ConfigurationSettable(configurationClass = LifecycleConfig.class)
     private long taskBackoffTimeMillis;
 
@@ -188,6 +194,20 @@ public class MultiLangDaemonConfiguration {
 
     @Delegate(types = PollingConfigBean.PollingConfigBeanDelegate.class)
     private final PollingConfigBean pollingConfig = new PollingConfigBean();
+
+    @Delegate(types = GracefulLeaseHandoffConfigBean.GracefulLeaseHandoffConfigBeanDelegate.class)
+    private final GracefulLeaseHandoffConfigBean gracefulLeaseHandoffConfigBean = new GracefulLeaseHandoffConfigBean();
+
+    @Delegate(
+            types = WorkerUtilizationAwareAssignmentConfigBean.WorkerUtilizationAwareAssignmentConfigBeanDelegate.class)
+    private final WorkerUtilizationAwareAssignmentConfigBean workerUtilizationAwareAssignmentConfigBean =
+            new WorkerUtilizationAwareAssignmentConfigBean();
+
+    @Delegate(types = WorkerMetricsTableConfigBean.WorkerMetricsTableConfigBeanDelegate.class)
+    private final WorkerMetricsTableConfigBean workerMetricsTableConfigBean = new WorkerMetricsTableConfigBean();
+
+    @Delegate(types = CoordinatorStateConfigBean.CoordinatorStateConfigBeanDelegate.class)
+    private final CoordinatorStateConfigBean coordinatorStateConfigBean = new CoordinatorStateConfigBean();
 
     private boolean validateSequenceNumberBeforeCheckpointing;
 
@@ -256,6 +276,25 @@ public class MultiLangDaemonConfiguration {
                 new Converter() {
                     @Override
                     public <T> T convert(Class<T> type, Object value) {
+                        return type.cast(CoordinatorConfig.ClientVersionConfig.valueOf(
+                                value.toString().toUpperCase()));
+                    }
+                },
+                CoordinatorConfig.ClientVersionConfig.class);
+
+        convertUtilsBean.register(
+                new Converter() {
+                    @Override
+                    public <T> T convert(Class<T> type, Object value) {
+                        return type.cast(BillingMode.valueOf(value.toString().toUpperCase()));
+                    }
+                },
+                BillingMode.class);
+
+        convertUtilsBean.register(
+                new Converter() {
+                    @Override
+                    public <T> T convert(Class<T> type, Object value) {
                         return type.cast(URI.create(value.toString()));
                     }
                 },
@@ -278,6 +317,8 @@ public class MultiLangDaemonConfiguration {
                     }
                 },
                 Region.class);
+
+        convertUtilsBean.register(new DurationConverter(), Duration.class);
 
         ArrayConverter arrayConverter = new ArrayConverter(String[].class, new StringConverter());
         arrayConverter.setDelimiter(',');
@@ -370,6 +411,22 @@ public class MultiLangDaemonConfiguration {
                 retrievalMode.builder(this).build(configsBuilder.kinesisClient(), this));
     }
 
+    private void handleCoordinatorConfig(CoordinatorConfig coordinatorConfig) {
+        ConfigurationSettableUtils.resolveFields(
+                this.coordinatorStateConfigBean, coordinatorConfig.coordinatorStateConfig());
+    }
+
+    private void handleLeaseManagementConfig(LeaseManagementConfig leaseManagementConfig) {
+        ConfigurationSettableUtils.resolveFields(
+                this.gracefulLeaseHandoffConfigBean, leaseManagementConfig.gracefulLeaseHandoffConfig());
+        ConfigurationSettableUtils.resolveFields(
+                this.workerUtilizationAwareAssignmentConfigBean,
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig());
+        ConfigurationSettableUtils.resolveFields(
+                this.workerMetricsTableConfigBean,
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig());
+    }
+
     private Object adjustKinesisHttpConfiguration(Object builderObj) {
         if (builderObj instanceof KinesisAsyncClientBuilder) {
             KinesisAsyncClientBuilder builder = (KinesisAsyncClientBuilder) builderObj;
@@ -448,6 +505,8 @@ public class MultiLangDaemonConfiguration {
                 processorConfig,
                 retrievalConfig);
 
+        handleCoordinatorConfig(coordinatorConfig);
+        handleLeaseManagementConfig(leaseManagementConfig);
         handleRetrievalConfig(retrievalConfig, configsBuilder);
 
         resolveFields(configObjects, null, new HashSet<>(Arrays.asList(ConfigsBuilder.class, PollingConfig.class)));

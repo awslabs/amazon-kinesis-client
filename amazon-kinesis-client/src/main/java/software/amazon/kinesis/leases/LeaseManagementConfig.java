@@ -29,7 +29,6 @@ import java.util.function.Function;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.Builder;
 import lombok.Data;
-import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
 import org.apache.commons.lang3.Validate;
@@ -381,8 +380,8 @@ public class LeaseManagementConfig {
      * to shut down and an option to enable or disable graceful lease handoff.
      * </p>
      */
+    @Data
     @Builder
-    @Getter
     @Accessors(fluent = true)
     public static class GracefulLeaseHandoffConfig {
         /**
@@ -550,7 +549,7 @@ public class LeaseManagementConfig {
         private int dampeningPercentage = 60;
         /**
          * Percentage value used to trigger reBalance. If fleet has workers which are have metrics value more or less
-         * than 20% of fleet level average then reBalance is triggered.
+         * than 10% of fleet level average then reBalance is triggered.
          * Leases are taken from workers with metrics value more than fleet level average. The load to take from these
          * workers is determined by evaluating how far they are with respect to fleet level average.
          */
@@ -565,7 +564,7 @@ public class LeaseManagementConfig {
         private boolean allowThroughputOvershoot = true;
 
         /**
-         * Duration after which workerMetrics entry from WorkerMetricStats table will be cleaned up. When an entry's
+         * Duration after which workerMetricStats entry from WorkerMetricStats table will be cleaned up. When an entry's
          * lastUpdateTime is older than staleWorkerMetricsEntryCleanupDuration from current time, entry will be removed
          * from the table.
          */
@@ -580,15 +579,16 @@ public class LeaseManagementConfig {
         private WorkerMetricsTableConfig workerMetricsTableConfig;
 
         /**
-         * Frequency to perform worker variance balancing frequency. This value is used with respect to the LAM freq,
+         * Frequency to perform worker variance balancing. This value is used with respect to the LAM frequency,
          * that is every third (as default) iteration of LAM the worker variance balancing will be performed.
          * Setting it to 1 will make varianceBalancing run on every iteration of LAM and 2 on every 2nd iteration
          * and so on.
+         * NOTE: LAM frequency = failoverTimeMillis
          */
         private int varianceBalancingFrequency = 3;
 
         /**
-         * Alpha value used for calculating exponential moving average of worker's metrics values. Selecting
+         * Alpha value used for calculating exponential moving average of worker's metricStats. Selecting
          * higher alpha value gives more weightage to recent value and thus low smoothing effect on computed average
          * and selecting smaller alpha values gives more weightage to past value and high smoothing effect.
          */

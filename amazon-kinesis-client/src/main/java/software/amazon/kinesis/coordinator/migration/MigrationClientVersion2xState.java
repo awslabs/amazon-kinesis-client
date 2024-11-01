@@ -32,13 +32,13 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2x;
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2X;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X;
 import static software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl.FAULT_METRIC;
 import static software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl.METRICS_OPERATION;
 
 /**
- * State for CLIENT_VERSION_2x. In this state, the only allowed valid transition is
+ * State for CLIENT_VERSION_2X. In this state, the only allowed valid transition is
  * the roll-forward scenario which can only be performed using the KCL Migration tool.
  * So when the state machine enters this state, a monitor is started to detect the
  * roll-forward scenario.
@@ -60,7 +60,7 @@ public class MigrationClientVersion2xState implements MigrationClientVersionStat
 
     @Override
     public ClientVersion clientVersion() {
-        return CLIENT_VERSION_2x;
+        return CLIENT_VERSION_2X;
     }
 
     @Override
@@ -102,7 +102,7 @@ public class MigrationClientVersion2xState implements MigrationClientVersionStat
 
     /**
      * Callback handler to handle client version changes in MigrationState in DDB.
-     * @param newState  current MigrationState read from DDB where client version is not CLIENT_VERSION_2x
+     * @param newState  current MigrationState read from DDB where client version is not CLIENT_VERSION_2X
      * @throws InvalidStateException    during transition to the next state based on the new ClientVersion
      *                                  or if the new state in DDB is unexpected.
      */
@@ -115,18 +115,18 @@ public class MigrationClientVersion2xState implements MigrationClientVersionStat
         final MetricsScope scope =
                 MetricsUtil.createMetricsWithOperation(initializer.metricsFactory(), METRICS_OPERATION);
         try {
-            if (newState.getClientVersion() == CLIENT_VERSION_UPGRADE_FROM_2x) {
+            if (newState.getClientVersion() == CLIENT_VERSION_UPGRADE_FROM_2X) {
                 log.info(
                         "A roll-forward has been initiated for the application. Transition to {}",
-                        CLIENT_VERSION_UPGRADE_FROM_2x);
+                        CLIENT_VERSION_UPGRADE_FROM_2X);
                 // If this succeeds, the monitor will cancel itself.
-                stateMachine.transitionTo(CLIENT_VERSION_UPGRADE_FROM_2x, newState);
+                stateMachine.transitionTo(CLIENT_VERSION_UPGRADE_FROM_2X, newState);
             } else {
                 // This should not happen, so throw an exception that allows the monitor to continue monitoring
                 // changes, this allows KCL to operate in the current state and keep monitoring until a valid
                 // state transition is possible.
                 // However, there could be a split brain here, new workers will use DDB value as source of truth,
-                // so we could also write back CLIENT_VERSION_2x to DDB to ensure all workers have consistent
+                // so we could also write back CLIENT_VERSION_2X to DDB to ensure all workers have consistent
                 // behavior.
                 // Ideally we don't expect modifications to DDB table out of the KCL migration tool scope,
                 // so keeping it simple and not writing back to DDB, the error log below would help capture
@@ -134,7 +134,7 @@ public class MigrationClientVersion2xState implements MigrationClientVersionStat
                 log.error(
                         "Migration state has invalid client version {}. Transition from {} is not supported",
                         newState,
-                        CLIENT_VERSION_2x);
+                        CLIENT_VERSION_2X);
                 throw new InvalidStateException(String.format("Unexpected new state %s", newState));
             }
         } catch (final InvalidStateException | DependencyException e) {

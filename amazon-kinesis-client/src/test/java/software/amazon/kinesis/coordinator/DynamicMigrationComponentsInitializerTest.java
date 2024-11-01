@@ -112,7 +112,7 @@ public class DynamicMigrationComponentsInitializerTest {
     @Test
     public void testInitialize_ClientVersion3_X() throws DependencyException {
         // Test initializing to verify correct leader decider is created
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3x);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X);
 
         verify(mockWorkerMetricsManager).startManager();
         verify(mockDdbLockBasedLeaderDeciderCreator).get();
@@ -147,7 +147,7 @@ public class DynamicMigrationComponentsInitializerTest {
     @Test
     public void testInitialize_ClientVersion_3_xWithRollback() throws DependencyException {
         // Test initializing to verify correct leader decider is created
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
 
         verify(mockWorkerMetricsManager).startManager();
 
@@ -171,7 +171,7 @@ public class DynamicMigrationComponentsInitializerTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"CLIENT_VERSION_UPGRADE_FROM_2x", "CLIENT_VERSION_2x"})
+    @CsvSource({"CLIENT_VERSION_UPGRADE_FROM_2X", "CLIENT_VERSION_2X"})
     public void testInitialize_ClientVersion_All2_X(final ClientVersion clientVersion) throws DependencyException {
         // Test initializing to verify correct leader decider is created
         migrationInitializer.initialize(clientVersion);
@@ -187,7 +187,7 @@ public class DynamicMigrationComponentsInitializerTest {
         verify(mockConsumer).initialize(eq(true), eq(LeaseAssignmentMode.DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT));
 
         // test initialization from state machine
-        if (clientVersion == ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x) {
+        if (clientVersion == ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X) {
             migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_INIT);
             // start worker stats and create gsi without waiting
             verify(mockWorkerMetricsDAO).initialize();
@@ -211,7 +211,7 @@ public class DynamicMigrationComponentsInitializerTest {
         when(mockLamThreadPool.awaitTermination(anyLong(), any())).thenReturn(true);
         when(mockWorkerMetricsScheduler.awaitTermination(anyLong(), any())).thenReturn(true);
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X);
         migrationInitializer.shutdown();
 
         verify(mockLamThreadPool).shutdown();
@@ -226,7 +226,7 @@ public class DynamicMigrationComponentsInitializerTest {
 
     @Test
     public void initializationFails_WhenGsiIsNotActiveIn3_X() throws DependencyException {
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3x);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X);
         // test initialization from state machine
 
         assertThrows(
@@ -236,7 +236,7 @@ public class DynamicMigrationComponentsInitializerTest {
 
     @Test
     public void initializationDoesNotFail_WhenGsiIsNotActiveIn3_XWithRollback() throws DependencyException {
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
         // test initialization from state machine
 
         assertDoesNotThrow(
@@ -245,11 +245,11 @@ public class DynamicMigrationComponentsInitializerTest {
 
     @Test
     public void testComponentsInitialization_AfterFlip() throws DependencyException {
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X);
         migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_INIT);
 
         // Test flip
-        migrationInitializer.initializeClientVersionFor3xWithRollback(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x);
+        migrationInitializer.initializeClientVersionFor3xWithRollback(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X);
 
         // verify
         verify(mockLam).start();
@@ -266,13 +266,13 @@ public class DynamicMigrationComponentsInitializerTest {
                 .when(mockWorkerMetricsScheduler)
                 .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_2x);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_2X);
         migrationInitializer.initializeClientVersionFor2x(ClientVersion.CLIENT_VERSION_INIT);
 
         // test roll-forward
         reset(mockWorkerMetricsScheduler);
         reset(mockLeaseRefresher);
-        migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_2x);
+        migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_2X);
 
         // verify
         verify(mockWorkerMetricsScheduler)
@@ -288,11 +288,11 @@ public class DynamicMigrationComponentsInitializerTest {
                 .when(mockWorkerMetricsScheduler)
                 .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X);
         migrationInitializer.initializeClientVersionForUpgradeFrom2x(ClientVersion.CLIENT_VERSION_INIT);
 
         // test rollback before flip
-        migrationInitializer.initializeClientVersionFor2x(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x);
+        migrationInitializer.initializeClientVersionFor2x(ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X);
 
         // verify
         verify(mockFuture).cancel(anyBoolean());
@@ -305,11 +305,11 @@ public class DynamicMigrationComponentsInitializerTest {
                 .when(mockWorkerMetricsScheduler)
                 .scheduleAtFixedRate(any(Runnable.class), anyLong(), anyLong(), any(TimeUnit.class));
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
         migrationInitializer.initializeClientVersionFor3xWithRollback(ClientVersion.CLIENT_VERSION_INIT);
 
         // test rollback before flip
-        migrationInitializer.initializeClientVersionFor2x(ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK);
+        migrationInitializer.initializeClientVersionFor2x(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
 
         // verify
         verify(mockFuture).cancel(anyBoolean());
@@ -337,7 +337,7 @@ public class DynamicMigrationComponentsInitializerTest {
             }
         });
 
-        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK);
+        migrationInitializer.initialize(ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK);
         migrationInitializer.initializeClientVersionFor3xWithRollback(ClientVersion.CLIENT_VERSION_INIT);
 
         // run the worker stats reporting thread

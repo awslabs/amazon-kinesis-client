@@ -31,15 +31,15 @@ import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2x;
-import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3x;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_2X;
+import static software.amazon.kinesis.coordinator.migration.ClientVersion.CLIENT_VERSION_3X;
 import static software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl.FAULT_METRIC;
 import static software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl.METRICS_OPERATION;
 
 /**
- * State for CLIENT_VERSION_3x_WITH_ROLLBACK which enables KCL to run its 3.x compliant algorithms
+ * State for CLIENT_VERSION_3X_WITH_ROLLBACK which enables KCL to run its 3.x compliant algorithms
  * during the upgrade process after all KCL workers in the fleet are 3.x complaint. Since this
- * is an instant switch from CLIENT_VERSION_UPGRADE_FROM_2x, it also supports rollback if customers
+ * is an instant switch from CLIENT_VERSION_UPGRADE_FROM_2X, it also supports rollback if customers
  * see regression to allow for instant rollbacks as well. This would be achieved by customers
  * running a KCL migration tool to update MigrationState in DDB. So this state monitors for
  * rollback triggers and performs state transitions accordingly.
@@ -62,7 +62,7 @@ public class MigrationClientVersion3xWithRollbackState implements MigrationClien
 
     @Override
     public ClientVersion clientVersion() {
-        return ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK;
+        return ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK;
     }
 
     @Override
@@ -108,17 +108,17 @@ public class MigrationClientVersion3xWithRollbackState implements MigrationClien
                 MetricsUtil.createMetricsWithOperation(initializer.metricsFactory(), METRICS_OPERATION);
         try {
             switch (newState.getClientVersion()) {
-                case CLIENT_VERSION_2x:
-                    log.info("A rollback has been initiated for the application. Transition to {}", CLIENT_VERSION_2x);
-                    stateMachine.transitionTo(ClientVersion.CLIENT_VERSION_2x, newState);
+                case CLIENT_VERSION_2X:
+                    log.info("A rollback has been initiated for the application. Transition to {}", CLIENT_VERSION_2X);
+                    stateMachine.transitionTo(ClientVersion.CLIENT_VERSION_2X, newState);
                     break;
-                case CLIENT_VERSION_3x:
+                case CLIENT_VERSION_3X:
                     log.info("Customer has switched to 3.x after successful upgrade, state machine will move to a"
                             + "terminal state and stop monitoring. Rollbacks will no longer be supported anymore");
-                    stateMachine.transitionTo(CLIENT_VERSION_3x, newState);
+                    stateMachine.transitionTo(CLIENT_VERSION_3X, newState);
                     // This worker will still be running the migrationAdaptive components in 3.x mode which will
                     // no longer dynamically switch back to 2.x mode, however to directly run 3.x component without
-                    // adaption to migration (i.e. move to CLIENT_VERSION_3x state), it requires this worker to go
+                    // adaption to migration (i.e. move to CLIENT_VERSION_3X state), it requires this worker to go
                     // through the current deployment which initiated the switch to 3.x mode.
                     break;
                 default:
@@ -126,7 +126,7 @@ public class MigrationClientVersion3xWithRollbackState implements MigrationClien
                     // changes, this allows KCL to operate in the current state and keep monitoring until a valid
                     // state transition is possible.
                     // However, there could be a split brain here, new workers will use DDB value as source of truth,
-                    // so we could also write back CLIENT_VERSION_3x_WITH_ROLLBACK to DDB to ensure all workers have
+                    // so we could also write back CLIENT_VERSION_3X_WITH_ROLLBACK to DDB to ensure all workers have
                     // consistent behavior.
                     // Ideally we don't expect modifications to DDB table out of the KCL migration tool scope,
                     // so keeping it simple and not writing back to DDB, the error log below would help capture

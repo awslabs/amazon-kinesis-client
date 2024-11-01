@@ -159,7 +159,7 @@ public final class DynamicMigrationComponentsInitializer {
         // always collect metrics so that when we flip to start reporting we will have accurate historical data.
         log.info("Start collection of WorkerMetricStats");
         workerMetricsManager.startManager();
-        if (migrationStateMachineStartingClientVersion == ClientVersion.CLIENT_VERSION_3x) {
+        if (migrationStateMachineStartingClientVersion == ClientVersion.CLIENT_VERSION_3X) {
             initializeComponentsFor3x();
         } else {
             initializeComponentsForMigration(migrationStateMachineStartingClientVersion);
@@ -187,7 +187,7 @@ public final class DynamicMigrationComponentsInitializer {
         log.info("Initializing for migration to 3x");
         dualMode = true;
         final LeaderDecider initialLeaderDecider;
-        if (migrationStateMachineStartingClientVersion == ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK) {
+        if (migrationStateMachineStartingClientVersion == ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK) {
             currentAssignmentMode = WORKER_UTILIZATION_AWARE_ASSIGNMENT;
             initialLeaderDecider = ddbLockBasedLeaderDeciderCreator.get();
         } else {
@@ -292,8 +292,8 @@ public final class DynamicMigrationComponentsInitializer {
 
     /**
      * Initialize KCL with components and configuration to support upgrade from 2x. This can happen
-     * at KCL Worker startup when MigrationStateMachine starts in ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x.
-     * Or Dynamically during roll-forward from ClientVersion.CLIENT_VERSION_2x.
+     * at KCL Worker startup when MigrationStateMachine starts in ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X.
+     * Or Dynamically during roll-forward from ClientVersion.CLIENT_VERSION_2X.
      */
     public synchronized void initializeClientVersionForUpgradeFrom2x(final ClientVersion fromClientVersion)
             throws DependencyException {
@@ -306,8 +306,8 @@ public final class DynamicMigrationComponentsInitializer {
 
     /**
      * Initialize KCL with components and configuration to run vanilla 3x functionality. This can happen
-     * at KCL Worker startup when MigrationStateMachine starts in ClientVersion.CLIENT_VERSION_3x, or dynamically
-     * during a new deployment when existing worker are in ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK
+     * at KCL Worker startup when MigrationStateMachine starts in ClientVersion.CLIENT_VERSION_3X, or dynamically
+     * during a new deployment when existing worker are in ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK
      */
     public synchronized void initializeClientVersionFor3x(final ClientVersion fromClientVersion)
             throws DependencyException {
@@ -322,14 +322,14 @@ public final class DynamicMigrationComponentsInitializer {
             log.info("Starting LAM");
             leaseAssignmentManager.start();
         }
-        // nothing to do when transitioning from CLIENT_VERSION_3x_WITH_ROLLBACK.
+        // nothing to do when transitioning from CLIENT_VERSION_3X_WITH_ROLLBACK.
     }
 
     /**
      * Initialize KCL with components and configuration to run 2x compatible functionality
      * while allowing roll-forward. This can happen at KCL Worker startup when MigrationStateMachine
-     * starts in ClientVersion.CLIENT_VERSION_2x (after a rollback)
-     * Or Dynamically during rollback from CLIENT_VERSION_UPGRADE_FROM_2x or CLIENT_VERSION_3x_WITH_ROLLBACK.
+     * starts in ClientVersion.CLIENT_VERSION_2X (after a rollback)
+     * Or Dynamically during rollback from CLIENT_VERSION_UPGRADE_FROM_2X or CLIENT_VERSION_3X_WITH_ROLLBACK.
      */
     public synchronized void initializeClientVersionFor2x(final ClientVersion fromClientVersion) {
         log.info("Initializing KCL components for rollback to 2x from {}", fromClientVersion);
@@ -341,7 +341,7 @@ public final class DynamicMigrationComponentsInitializer {
             // and WorkerMetricStats table
         }
 
-        if (fromClientVersion == ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK) {
+        if (fromClientVersion == ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK) {
             // we are rolling back after flip
             currentAssignmentMode = DEFAULT_LEASE_COUNT_BASED_ASSIGNMENT;
             notifyLeaseAssignmentModeChange();
@@ -361,14 +361,14 @@ public final class DynamicMigrationComponentsInitializer {
     /**
      * Initialize KCL with components and configuration to run vanilla 3x functionality
      * while allowing roll-back to 2x functionality. This can happen at KCL Worker startup
-     * when MigrationStateMachine starts in ClientVersion.CLIENT_VERSION_3x_WITH_ROLLBACK (after the flip)
-     * Or Dynamically during flip from CLIENT_VERSION_UPGRADE_FROM_2x.
+     * when MigrationStateMachine starts in ClientVersion.CLIENT_VERSION_3X_WITH_ROLLBACK (after the flip)
+     * Or Dynamically during flip from CLIENT_VERSION_UPGRADE_FROM_2X.
      */
     public synchronized void initializeClientVersionFor3xWithRollback(final ClientVersion fromClientVersion)
             throws DependencyException {
         log.info("Initializing KCL components for 3x with rollback from {}", fromClientVersion);
 
-        if (fromClientVersion == ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2x) {
+        if (fromClientVersion == ClientVersion.CLIENT_VERSION_UPGRADE_FROM_2X) {
             // dynamic flip
             currentAssignmentMode = WORKER_UTILIZATION_AWARE_ASSIGNMENT;
             notifyLeaseAssignmentModeChange();

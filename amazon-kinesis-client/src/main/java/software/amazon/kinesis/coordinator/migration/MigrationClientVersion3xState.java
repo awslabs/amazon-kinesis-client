@@ -22,7 +22,7 @@ import software.amazon.kinesis.coordinator.DynamicMigrationComponentsInitializer
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 
 /**
- * State for CLIENT_VERSION_3x which enables KCL to run 3.x algorithms on new KCLv3.x application
+ * State for CLIENT_VERSION_3X which enables KCL to run 3.x algorithms on new KCLv3.x application
  * or successfully upgraded application which upgraded from v2.x. This is a terminal state of the
  * state machine and no rollbacks are supported in this state.
  */
@@ -38,7 +38,7 @@ public class MigrationClientVersion3xState implements MigrationClientVersionStat
 
     @Override
     public ClientVersion clientVersion() {
-        return ClientVersion.CLIENT_VERSION_3x;
+        return ClientVersion.CLIENT_VERSION_3X;
     }
 
     @Override

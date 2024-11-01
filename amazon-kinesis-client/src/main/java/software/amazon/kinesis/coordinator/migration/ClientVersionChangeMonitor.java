@@ -144,11 +144,11 @@ public class ClientVersionChangeMonitor implements Runnable {
         final MetricsScope scope = MetricsUtil.createMetricsWithOperation(metricsFactory, METRICS_OPERATION);
         try {
             switch (expectedVersion) {
-                case CLIENT_VERSION_3x_WITH_ROLLBACK:
+                case CLIENT_VERSION_3X_WITH_ROLLBACK:
                     scope.addData("CurrentState:3xWorker", 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
                     break;
-                case CLIENT_VERSION_2x:
-                case CLIENT_VERSION_UPGRADE_FROM_2x:
+                case CLIENT_VERSION_2X:
+                case CLIENT_VERSION_UPGRADE_FROM_2X:
                     scope.addData("CurrentState:2xCompatibleWorker", 1, StandardUnit.COUNT, MetricsLevel.SUMMARY);
                     break;
                 default:
