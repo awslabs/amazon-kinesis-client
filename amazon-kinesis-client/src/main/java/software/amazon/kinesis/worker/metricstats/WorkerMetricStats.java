@@ -1,5 +1,6 @@
 package software.amazon.kinesis.worker.metricstats;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,10 @@ import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbAttri
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbIgnore;
 import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbPartitionKey;
+import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
+import software.amazon.awssdk.services.dynamodb.model.KeySchemaElement;
+import software.amazon.awssdk.services.dynamodb.model.KeyType;
+import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 import software.amazon.kinesis.utils.ExponentialMovingAverage;
 import software.amazon.kinesis.worker.metric.WorkerMetricType;
 
@@ -298,5 +303,19 @@ public class WorkerMetricStats {
         return metricStatsMap.containsKey(workerMetricName)
                 && metricStatsMap.get(workerMetricName)
                         > operatingRange.get(workerMetricName).get(0);
+    }
+
+    public static List<KeySchemaElement> getKeySchema() {
+        return Collections.singletonList(KeySchemaElement.builder()
+                .attributeName(KEY_WORKER_ID)
+                .keyType(KeyType.HASH)
+                .build());
+    }
+
+    public static List<AttributeDefinition> getAttributeDefinitions() {
+        return Collections.singletonList(AttributeDefinition.builder()
+                .attributeName(KEY_WORKER_ID)
+                .attributeType(ScalarAttributeType.S)
+                .build());
     }
 }

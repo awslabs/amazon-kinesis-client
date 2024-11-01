@@ -14,10 +14,14 @@
  */
 package software.amazon.kinesis.common;
 
+import java.util.Collection;
+import java.util.Collections;
+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.awssdk.services.dynamodb.model.Tag;
 
 /**
  * Configurations of a DDB table created by KCL for its internal operations.
@@ -54,4 +58,19 @@ public class DdbTableConfig {
      * if billing mode is PROVISIONED.
      */
     private long writeCapacity;
+
+    /**
+     * Flag to enable Point in Time Recovery on the DDB table.
+     */
+    private boolean pointInTimeRecoveryEnabled = false;
+
+    /**
+     * Flag to enable deletion protection on the DDB table.
+     */
+    private boolean deletionProtectionEnabled = false;
+
+    /**
+     * Tags to add to the DDB table.
+     */
+    private Collection<Tag> tags = Collections.emptyList();
 }

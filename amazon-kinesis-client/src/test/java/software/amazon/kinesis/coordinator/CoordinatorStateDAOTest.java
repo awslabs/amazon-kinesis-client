@@ -15,10 +15,13 @@
 package software.amazon.kinesis.coordinator;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 
 import com.amazonaws.services.dynamodbv2.AcquireLockOptions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBLockClient;
@@ -28,9 +31,14 @@ import com.amazonaws.services.dynamodbv2.local.shared.access.AmazonDynamoDBLocal
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import software.amazon.awssdk.core.internal.waiters.DefaultWaiterResponse;
+import software.amazon.awssdk.core.waiters.WaiterResponse;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.CreateTableResponse;
 import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
 import software.amazon.awssdk.services.dynamodb.model.ExpectedAttributeValue;
@@ -38,8 +46,14 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
+import software.amazon.awssdk.services.dynamodb.model.TableDescription;
+import software.amazon.awssdk.services.dynamodb.model.TableStatus;
+import software.amazon.awssdk.services.dynamodb.model.Tag;
+import software.amazon.awssdk.services.dynamodb.model.UpdateContinuousBackupsRequest;
+import software.amazon.awssdk.services.dynamodb.waiters.DynamoDbAsyncWaiter;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.coordinator.CoordinatorConfig.CoordinatorStateTableConfig;
 import software.amazon.kinesis.coordinator.migration.ClientVersion;
@@ -48,6 +62,10 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static software.amazon.kinesis.coordinator.CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
 import static software.amazon.kinesis.coordinator.CoordinatorState.LEADER_HASH_KEY;
 import static software.amazon.kinesis.coordinator.migration.MigrationState.CLIENT_VERSION_ATTRIBUTE_NAME;
@@ -89,6 +107,97 @@ public class CoordinatorStateDAOTest {
         Assertions.assertEquals(
                 30L,
                 response.table().provisionedThroughput().writeCapacityUnits().longValue());
+    }
+
+    @Test
+    public void testTableCreationWithDeletionProtection_assertDeletionProtectionEnabled()
+            throws DependencyException, ExecutionException, InterruptedException {
+
+        final CoordinatorStateTableConfig config = getCoordinatorStateConfig(
+                "testTableCreationWithDeletionProtection",
+                ProvisionedThroughput.builder()
+                        .writeCapacityUnits(30L)
+                        .readCapacityUnits(15L)
+                        .build());
+        config.deletionProtectionEnabled(true);
+        final CoordinatorStateDAO doaUnderTest = new CoordinatorStateDAO(dynamoDbAsyncClient, config);
+
+        doaUnderTest.initialize();
+
+        final DescribeTableResponse response = dynamoDbAsyncClient
+                .describeTable(DescribeTableRequest.builder()
+                        .tableName("testTableCreationWithDeletionProtection-CoordinatorState")
+                        .build())
+                .get();
+
+        Assertions.assertTrue(response.table().deletionProtectionEnabled());
+    }
+
+    /**
+     * DynamoDBLocal does not support PITR and tags and thus this test is using mocks.
+     */
+    @Test
+    public void testTableCreationWithTagsAndPitr_assertTags() throws DependencyException {
+        final DynamoDbAsyncWaiter waiter = mock(DynamoDbAsyncWaiter.class);
+        final WaiterResponse<?> waiterResponse = DefaultWaiterResponse.builder()
+                .response(dummyDescribeTableResponse(TableStatus.ACTIVE))
+                .attemptsExecuted(1)
+                .build();
+        when(waiter.waitUntilTableExists(any(Consumer.class), any(Consumer.class)))
+                .thenReturn(CompletableFuture.completedFuture((WaiterResponse<DescribeTableResponse>) waiterResponse));
+        final DynamoDbAsyncClient dbAsyncClient = mock(DynamoDbAsyncClient.class);
+        when(dbAsyncClient.waiter()).thenReturn(waiter);
+        when(dbAsyncClient.createTable(any(CreateTableRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(CreateTableResponse.builder()
+                        .tableDescription(
+                                dummyDescribeTableResponse(TableStatus.CREATING).table())
+                        .build()));
+        when(dbAsyncClient.updateContinuousBackups(any(UpdateContinuousBackupsRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        when(dbAsyncClient.describeTable(any(DescribeTableRequest.class)))
+                .thenThrow(ResourceNotFoundException.builder().build())
+                .thenReturn(CompletableFuture.completedFuture(dummyDescribeTableResponse(TableStatus.ACTIVE)));
+
+        final ArgumentCaptor<CreateTableRequest> createTableRequestArgumentCaptor =
+                ArgumentCaptor.forClass(CreateTableRequest.class);
+        final ArgumentCaptor<UpdateContinuousBackupsRequest> updateContinuousBackupsRequestArgumentCaptor =
+                ArgumentCaptor.forClass(UpdateContinuousBackupsRequest.class);
+
+        final CoordinatorStateTableConfig config = getCoordinatorStateConfig(
+                "testTableCreationWithTagsAndPitr",
+                ProvisionedThroughput.builder()
+                        .writeCapacityUnits(30L)
+                        .readCapacityUnits(15L)
+                        .build());
+        config.tableName("testTableCreationWithTagsAndPitr");
+        config.pointInTimeRecoveryEnabled(true);
+        config.tags(
+                Collections.singleton(Tag.builder().key("Key").value("Value").build()));
+
+        final CoordinatorStateDAO doaUnderTest = new CoordinatorStateDAO(dbAsyncClient, config);
+        doaUnderTest.initialize();
+
+        verify(dbAsyncClient).createTable(createTableRequestArgumentCaptor.capture());
+        verify(dbAsyncClient).updateContinuousBackups(updateContinuousBackupsRequestArgumentCaptor.capture());
+        Assertions.assertEquals(
+                1, createTableRequestArgumentCaptor.getValue().tags().size());
+
+        Assertions.assertEquals(
+                "Key", createTableRequestArgumentCaptor.getValue().tags().get(0).key());
+        Assertions.assertEquals(
+                "Value",
+                createTableRequestArgumentCaptor.getValue().tags().get(0).value());
+        Assertions.assertTrue(updateContinuousBackupsRequestArgumentCaptor
+                .getAllValues()
+                .get(0)
+                .pointInTimeRecoverySpecification()
+                .pointInTimeRecoveryEnabled());
+    }
+
+    private static DescribeTableResponse dummyDescribeTableResponse(final TableStatus tableStatus) {
+        return DescribeTableResponse.builder()
+                .table(TableDescription.builder().tableStatus(tableStatus).build())
+                .build();
     }
 
     @Test

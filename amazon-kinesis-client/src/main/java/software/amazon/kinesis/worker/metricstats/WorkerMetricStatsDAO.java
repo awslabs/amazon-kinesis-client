@@ -5,15 +5,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
 import software.amazon.awssdk.core.waiters.WaiterResponse;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbAsyncTable;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedAsyncClient;
@@ -24,19 +20,19 @@ import software.amazon.awssdk.enhanced.dynamodb.model.DeleteItemEnhancedRequest;
 import software.amazon.awssdk.enhanced.dynamodb.model.UpdateItemEnhancedRequest;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
 import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
-import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 import software.amazon.awssdk.services.dynamodb.waiters.DynamoDbAsyncWaiter;
 import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableConfig;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.utils.DdbUtil;
 
 import static java.util.Objects.nonNull;
+import static software.amazon.kinesis.common.FutureUtils.unwrappingFuture;
 import static software.amazon.kinesis.worker.metricstats.WorkerMetricStats.KEY_LAST_UPDATE_TIME;
 import static software.amazon.kinesis.worker.metricstats.WorkerMetricStats.KEY_WORKER_ID;
 
@@ -165,7 +161,11 @@ public class WorkerMetricStatsDAO {
     private void createTableIfDoesNotExist() throws DependencyException {
         TableDescription tableDescription = getTableDescription();
         if (tableDescription == null) {
-            unwrappingFuture(getWorkerMetricsDynamoTableCreator());
+            unwrappingFuture(DdbUtil.tableCreator(
+                    WorkerMetricStats::getKeySchema,
+                    WorkerMetricStats::getAttributeDefinitions,
+                    tableConfig,
+                    dynamoDbAsyncClient));
             tableDescription = getTableDescription();
             log.info("Table : {} created.", table.tableName());
         } else {
@@ -184,36 +184,8 @@ public class WorkerMetricStatsDAO {
                                 "Creating WorkerMetricStats table timed out",
                                 response.matched().exception().orElse(null))));
             }
-        }
-    }
 
-    @NotNull
-    private Supplier<CompletableFuture<Void>> getWorkerMetricsDynamoTableCreator() {
-        final Supplier<CompletableFuture<Void>> tableCreator;
-        if (tableConfig.billingMode() == BillingMode.PROVISIONED) {
-            log.info(
-                    "Creating worker metric stats table {} in provisioned mode with {}wcu and {}rcu",
-                    tableConfig.tableName(),
-                    tableConfig.writeCapacity(),
-                    tableConfig.readCapacity());
-            tableCreator = () -> table.createTable(r -> r.provisionedThroughput(ProvisionedThroughput.builder()
-                    .readCapacityUnits(tableConfig.readCapacity())
-                    .writeCapacityUnits(tableConfig.writeCapacity())
-                    .build()));
-        } else {
-            tableCreator = table::createTable;
-        }
-        return tableCreator;
-    }
-
-    static <T> T unwrappingFuture(final Supplier<CompletableFuture<T>> supplier) {
-        try {
-            return supplier.get().join();
-        } catch (final CompletionException e) {
-            if (e.getCause() instanceof RuntimeException) {
-                throw (RuntimeException) e.getCause();
-            }
-            throw e;
+            unwrappingFuture(() -> DdbUtil.pitrEnabler(tableConfig, dynamoDbAsyncClient));
         }
     }
 }

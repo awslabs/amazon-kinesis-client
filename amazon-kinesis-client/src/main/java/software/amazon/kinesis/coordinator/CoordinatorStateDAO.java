@@ -65,7 +65,9 @@ import software.amazon.kinesis.leases.DynamoUtils;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.utils.DdbUtil;
 
+import static java.util.Objects.nonNull;
 import static software.amazon.kinesis.common.FutureUtils.unwrappingFuture;
 import static software.amazon.kinesis.coordinator.CoordinatorState.COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME;
 
@@ -302,6 +304,7 @@ public class CoordinatorStateDAO {
                                 "Creating CoordinatorState table timed out",
                                 response.matched().exception().orElse(null))));
             }
+            unwrappingFuture(() -> DdbUtil.pitrEnabler(config, dynamoDbAsyncClient));
         }
     }
 
@@ -315,7 +318,12 @@ public class CoordinatorStateDAO {
                 .attributeDefinitions(AttributeDefinition.builder()
                         .attributeName(COORDINATOR_STATE_TABLE_HASH_KEY_ATTRIBUTE_NAME)
                         .attributeType(ScalarAttributeType.S)
-                        .build());
+                        .build())
+                .deletionProtectionEnabled(config.deletionProtectionEnabled());
+
+        if (nonNull(config.tags()) && !config.tags().isEmpty()) {
+            requestBuilder.tags(config.tags());
+        }
 
         switch (config.billingMode()) {
             case PAY_PER_REQUEST:
