@@ -33,7 +33,7 @@ public class CoordinatorConfig {
 
     public CoordinatorConfig(final String applicationName) {
         this.applicationName = applicationName;
-        this.coordinatorStateConfig = new CoordinatorStateTableConfig(applicationName);
+        this.coordinatorStateTableConfig = new CoordinatorStateTableConfig(applicationName);
     }
 
     /**
@@ -153,5 +153,5 @@ public class CoordinatorConfig {
      * On-Demand.
      */
     @NonNull
-    private final CoordinatorStateTableConfig coordinatorStateConfig;
+    private final CoordinatorStateTableConfig coordinatorStateTableConfig;
 }

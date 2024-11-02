@@ -295,7 +295,7 @@ public class Scheduler implements Runnable {
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
 
         final CoordinatorStateDAO coordinatorStateDAO = new CoordinatorStateDAO(
-                leaseManagementConfig.dynamoDBClient(), coordinatorConfig().coordinatorStateConfig());
+                leaseManagementConfig.dynamoDBClient(), coordinatorConfig().coordinatorStateTableConfig());
         this.leaseAssignmentModeProvider = new MigrationAdaptiveLeaseAssignmentModeProvider();
         this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer(coordinatorStateDAO);
         this.migrationStateMachine = new MigrationStateMachineImpl(

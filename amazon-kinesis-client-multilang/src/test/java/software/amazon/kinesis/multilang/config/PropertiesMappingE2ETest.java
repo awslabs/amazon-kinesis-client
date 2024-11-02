@@ -32,13 +32,15 @@ public class PropertiesMappingE2ETest {
 
         assertEquals(
                 "MultiLangTest-CoordinatorState-CustomName",
-                kclV3Config.coordinatorConfig.coordinatorStateConfig().tableName());
+                kclV3Config.coordinatorConfig.coordinatorStateTableConfig().tableName());
         assertEquals(
                 BillingMode.PROVISIONED,
-                kclV3Config.coordinatorConfig.coordinatorStateConfig().billingMode());
+                kclV3Config.coordinatorConfig.coordinatorStateTableConfig().billingMode());
         assertEquals(
-                1000, kclV3Config.coordinatorConfig.coordinatorStateConfig().readCapacity());
-        assertEquals(500, kclV3Config.coordinatorConfig.coordinatorStateConfig().writeCapacity());
+                1000,
+                kclV3Config.coordinatorConfig.coordinatorStateTableConfig().readCapacity());
+        assertEquals(
+                500, kclV3Config.coordinatorConfig.coordinatorStateTableConfig().writeCapacity());
 
         assertEquals(
                 10000L,
@@ -150,10 +152,10 @@ public class PropertiesMappingE2ETest {
 
         assertEquals(
                 "MultiLangTest-CoordinatorState",
-                kclV3Config.coordinatorConfig.coordinatorStateConfig().tableName());
+                kclV3Config.coordinatorConfig.coordinatorStateTableConfig().tableName());
         assertEquals(
                 BillingMode.PAY_PER_REQUEST,
-                kclV3Config.coordinatorConfig.coordinatorStateConfig().billingMode());
+                kclV3Config.coordinatorConfig.coordinatorStateTableConfig().billingMode());
 
         assertEquals(
                 30_000L,

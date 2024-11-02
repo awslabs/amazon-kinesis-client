@@ -22,7 +22,7 @@ import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerMetricsTableCo
 
 @Getter
 @Setter
-public class WorkerMetricsTableConfigBean {
+public class WorkerMetricStatsTableConfigBean {
 
     interface WorkerMetricsTableConfigBeanDelegate {
         String getWorkerMetricsTableName();

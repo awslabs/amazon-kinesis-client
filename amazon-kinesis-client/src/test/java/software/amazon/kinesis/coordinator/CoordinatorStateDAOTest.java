@@ -96,10 +96,10 @@ public class CoordinatorStateDAOTest {
             throws ExecutionException, InterruptedException, DependencyException {
         /* Test setup - create class under test **/
         final CoordinatorConfig c = new CoordinatorConfig("testPayPerUseTableCreation");
-        c.coordinatorStateConfig().billingMode(BillingMode.PAY_PER_REQUEST);
+        c.coordinatorStateTableConfig().billingMode(BillingMode.PAY_PER_REQUEST);
 
         final CoordinatorStateDAO doaUnderTest =
-                new CoordinatorStateDAO(dynamoDbAsyncClient, c.coordinatorStateConfig());
+                new CoordinatorStateDAO(dynamoDbAsyncClient, c.coordinatorStateTableConfig());
 
         /* Test step - initialize to create the table **/
         doaUnderTest.initialize();
@@ -456,19 +456,19 @@ public class CoordinatorStateDAOTest {
             final ProvisionedThroughput throughput,
             final String tableName) {
         final CoordinatorConfig c = new CoordinatorConfig(applicationName);
-        c.coordinatorStateConfig().billingMode(mode);
+        c.coordinatorStateTableConfig().billingMode(mode);
         if (tableName != null) {
-            c.coordinatorStateConfig().tableName(tableName);
+            c.coordinatorStateTableConfig().tableName(tableName);
         }
         if (mode == BillingMode.PROVISIONED) {
-            c.coordinatorStateConfig()
+            c.coordinatorStateTableConfig()
                     .writeCapacity(throughput.writeCapacityUnits())
                     .readCapacity(throughput.readCapacityUnits());
         }
 
-        tableNameForTest = c.coordinatorStateConfig().tableName();
+        tableNameForTest = c.coordinatorStateTableConfig().tableName();
 
-        return c.coordinatorStateConfig();
+        return c.coordinatorStateTableConfig();
     }
 
     private void createCoordinatorState(final String keyValue) {

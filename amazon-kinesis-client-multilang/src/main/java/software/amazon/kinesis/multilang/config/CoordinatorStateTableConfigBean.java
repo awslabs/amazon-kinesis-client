@@ -22,7 +22,7 @@ import software.amazon.kinesis.coordinator.CoordinatorConfig.CoordinatorStateTab
 
 @Getter
 @Setter
-public class CoordinatorStateConfigBean {
+public class CoordinatorStateTableConfigBean {
 
     interface CoordinatorStateConfigBeanDelegate {
         String getCoordinatorStateTableName();

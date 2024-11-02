@@ -288,7 +288,7 @@ public class MultiLangDaemonConfigurationTest {
                 configuration.resolvedConfiguration(shardRecordProcessorFactory);
         CoordinatorConfig coordinatorConfig = resolvedConfiguration.getCoordinatorConfig();
         CoordinatorConfig.CoordinatorStateTableConfig coordinatorStateConfig =
-                coordinatorConfig.coordinatorStateConfig();
+                coordinatorConfig.coordinatorStateTableConfig();
         assertEquals(coordinatorStateConfig.tableName(), "testTable");
         assertEquals(coordinatorStateConfig.billingMode(), testWorkerMetricsTableBillingMode);
         assertEquals(coordinatorStateConfig.readCapacity(), 123);
@@ -298,7 +298,7 @@ public class MultiLangDaemonConfigurationTest {
     @Test
     public void testCoordinatorStateTableConfigUsesDefaults() {
         final CoordinatorConfig.CoordinatorStateTableConfig defaultCoordinatorStateTableConfig =
-                getTestConfigsBuilder().coordinatorConfig().coordinatorStateConfig();
+                getTestConfigsBuilder().coordinatorConfig().coordinatorStateTableConfig();
 
         final MultiLangDaemonConfiguration configuration = baseConfiguration();
         configuration.setCoordinatorStateWriteCapacity(defaultCoordinatorStateTableConfig.writeCapacity() + 12345);
@@ -307,7 +307,7 @@ public class MultiLangDaemonConfigurationTest {
                 configuration.resolvedConfiguration(shardRecordProcessorFactory);
 
         final CoordinatorConfig.CoordinatorStateTableConfig resolvedCoordinatorStateTableConfig =
-                resolvedConfiguration.coordinatorConfig.coordinatorStateConfig();
+                resolvedConfiguration.coordinatorConfig.coordinatorStateTableConfig();
 
         assertNotEquals(defaultCoordinatorStateTableConfig, resolvedCoordinatorStateTableConfig);
 

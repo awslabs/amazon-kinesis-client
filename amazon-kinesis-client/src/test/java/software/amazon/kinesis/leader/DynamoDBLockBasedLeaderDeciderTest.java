@@ -41,8 +41,8 @@ class DynamoDBLockBasedLeaderDeciderTest {
     @BeforeEach
     void setup() throws DependencyException {
         final CoordinatorConfig c = new CoordinatorConfig("TestApplication");
-        c.coordinatorStateConfig().tableName(TEST_LOCK_TABLE_NAME);
-        final CoordinatorStateDAO dao = new CoordinatorStateDAO(dynamoDBAsyncClient, c.coordinatorStateConfig());
+        c.coordinatorStateTableConfig().tableName(TEST_LOCK_TABLE_NAME);
+        final CoordinatorStateDAO dao = new CoordinatorStateDAO(dynamoDBAsyncClient, c.coordinatorStateTableConfig());
         dao.initialize();
         IntStream.range(0, 10).sequential().forEach(index -> {
             final String workerId = getWorkerId(index);

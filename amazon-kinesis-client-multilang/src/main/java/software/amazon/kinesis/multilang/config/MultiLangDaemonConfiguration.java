@@ -203,11 +203,13 @@ public class MultiLangDaemonConfiguration {
     private final WorkerUtilizationAwareAssignmentConfigBean workerUtilizationAwareAssignmentConfigBean =
             new WorkerUtilizationAwareAssignmentConfigBean();
 
-    @Delegate(types = WorkerMetricsTableConfigBean.WorkerMetricsTableConfigBeanDelegate.class)
-    private final WorkerMetricsTableConfigBean workerMetricsTableConfigBean = new WorkerMetricsTableConfigBean();
+    @Delegate(types = WorkerMetricStatsTableConfigBean.WorkerMetricsTableConfigBeanDelegate.class)
+    private final WorkerMetricStatsTableConfigBean workerMetricStatsTableConfigBean =
+            new WorkerMetricStatsTableConfigBean();
 
-    @Delegate(types = CoordinatorStateConfigBean.CoordinatorStateConfigBeanDelegate.class)
-    private final CoordinatorStateConfigBean coordinatorStateConfigBean = new CoordinatorStateConfigBean();
+    @Delegate(types = CoordinatorStateTableConfigBean.CoordinatorStateConfigBeanDelegate.class)
+    private final CoordinatorStateTableConfigBean coordinatorStateTableConfigBean =
+            new CoordinatorStateTableConfigBean();
 
     private boolean validateSequenceNumberBeforeCheckpointing;
 
@@ -413,7 +415,7 @@ public class MultiLangDaemonConfiguration {
 
     private void handleCoordinatorConfig(CoordinatorConfig coordinatorConfig) {
         ConfigurationSettableUtils.resolveFields(
-                this.coordinatorStateConfigBean, coordinatorConfig.coordinatorStateConfig());
+                this.coordinatorStateTableConfigBean, coordinatorConfig.coordinatorStateTableConfig());
     }
 
     private void handleLeaseManagementConfig(LeaseManagementConfig leaseManagementConfig) {
@@ -423,7 +425,7 @@ public class MultiLangDaemonConfiguration {
                 this.workerUtilizationAwareAssignmentConfigBean,
                 leaseManagementConfig.workerUtilizationAwareAssignmentConfig());
         ConfigurationSettableUtils.resolveFields(
-                this.workerMetricsTableConfigBean,
+                this.workerMetricStatsTableConfigBean,
                 leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig());
     }
 
