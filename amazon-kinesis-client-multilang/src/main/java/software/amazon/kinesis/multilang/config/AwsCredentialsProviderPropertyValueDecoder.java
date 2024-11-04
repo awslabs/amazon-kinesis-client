@@ -57,6 +57,10 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
             List<AwsCredentialsProvider> providers = getValidCredentialsProviders(providerNames);
             AwsCredentialsProvider[] ps = new AwsCredentialsProvider[providers.size()];
             providers.toArray(ps);
+            if (providers.isEmpty()) {
+                log.warn("Unable to construct any provider with name {}", value);
+                log.warn("Please verify that all AwsCredentialsProvider properties are passed correctly");
+            }
             return AwsCredentialsProviderChain.builder()
                     .credentialsProviders(providers)
                     .build();
@@ -93,6 +97,7 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
                 provider = tryCreate(providerName, clazz, varargs);
             }
             if (provider != null) {
+                log.info("Provider constructed successfully: {}", provider);
                 credentialsProviders.add(provider);
             }
         }
@@ -244,10 +249,12 @@ class AwsCredentialsProviderPropertyValueDecoder implements IPropertyValueDecode
             final String providerName, final CredentialsProviderConstructor<T> constructor) {
         try {
             return constructor.construct();
-        } catch (NoSuchMethodException ignored) {
+        } catch (NoSuchMethodException
+                | IllegalAccessException
+                | InstantiationException
+                | InvocationTargetException
+                | RuntimeException ignored) {
             // ignore
-        } catch (IllegalAccessException | InstantiationException | InvocationTargetException | RuntimeException e) {
-            log.warn("Failed to construct {}", providerName, e);
         }
         return null;
     }
