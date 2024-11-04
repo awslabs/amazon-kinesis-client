@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
@@ -38,11 +39,14 @@ public interface LeaseCoordinator {
 
     /**
      * Start background LeaseHolder and LeaseTaker threads.
+     * @param leaseAssignmentModeProvider provider of Lease Assignment mode to determine whether to start components
+     *                                    for both V2 and V3 functionality or only V3 functionality
      * @throws ProvisionedThroughputException If we can't talk to DynamoDB due to insufficient capacity.
      * @throws InvalidStateException If the lease table doesn't exist
      * @throws DependencyException If we encountered exception taking to DynamoDB
      */
-    void start() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+    void start(final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
      * Runs a single iteration of the lease taker - used by integration tests.
@@ -152,4 +156,9 @@ public interface LeaseCoordinator {
      * @return LeaseCoordinator
      */
     DynamoDBLeaseCoordinator initialLeaseTableReadCapacity(long readCapacity);
+
+    /**
+     * @return instance of {@link LeaseStatsRecorder}
+     */
+    LeaseStatsRecorder leaseStatsRecorder();
 }

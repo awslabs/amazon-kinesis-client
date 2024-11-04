@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.leases;
 
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -24,6 +25,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
@@ -31,8 +33,10 @@ import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.KinesisException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.awssdk.services.kinesis.model.StreamStatus;
+import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
+import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
@@ -53,6 +57,7 @@ public class ShardSyncTaskIntegrationTest {
     private static final int MAX_CACHE_MISSES_BEFORE_RELOAD = 1000;
     private static final long LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS = 30;
     private static final int CACHE_MISS_WARNING_MODULUS = 250;
+    private static final Duration KINESIS_REQUEST_TIMEOUT = Duration.ofSeconds(5);
     private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
     private static KinesisAsyncClient kinesisClient;
 
@@ -98,16 +103,22 @@ public class ShardSyncTaskIntegrationTest {
                 client,
                 new DynamoDBLeaseSerializer(),
                 USE_CONSISTENT_READS,
-                TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
+                TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK,
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
+                new DdbTableConfig(),
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
+                DefaultSdkAutoConstructList.getInstance());
 
         shardDetector = new KinesisShardDetector(
                 kinesisClient,
-                STREAM_NAME,
+                StreamIdentifier.singleStreamInstance(STREAM_NAME),
                 500L,
                 50,
                 LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS,
                 MAX_CACHE_MISSES_BEFORE_RELOAD,
-                CACHE_MISS_WARNING_MODULUS);
+                CACHE_MISS_WARNING_MODULUS,
+                KINESIS_REQUEST_TIMEOUT);
         hierarchicalShardSyncer = new HierarchicalShardSyncer();
     }
 

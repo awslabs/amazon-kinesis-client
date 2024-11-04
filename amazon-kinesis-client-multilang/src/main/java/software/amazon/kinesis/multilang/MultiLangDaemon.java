@@ -141,7 +141,7 @@ public class MultiLangDaemon {
         }
     }
 
-    String propertiesFile(final MultiLangDaemonArguments arguments) {
+    String validateAndGetPropertiesFileName(final MultiLangDaemonArguments arguments) {
         String propertiesFile = "";
 
         if (CollectionUtils.isNotEmpty(arguments.parameters)) {
@@ -216,9 +216,9 @@ public class MultiLangDaemon {
         MultiLangDaemonArguments arguments = new MultiLangDaemonArguments();
         JCommander jCommander = daemon.buildJCommanderAndParseArgs(arguments, args);
         try {
-            String propertiesFile = daemon.propertiesFile(arguments);
+            String propertiesFileName = daemon.validateAndGetPropertiesFileName(arguments);
             daemon.configureLogging(arguments.logConfiguration);
-            MultiLangDaemonConfig config = daemon.buildMultiLangDaemonConfig(propertiesFile);
+            MultiLangDaemonConfig config = daemon.buildMultiLangDaemonConfig(propertiesFileName);
 
             Scheduler scheduler = daemon.buildScheduler(config);
             MultiLangRunner runner = new MultiLangRunner(scheduler);

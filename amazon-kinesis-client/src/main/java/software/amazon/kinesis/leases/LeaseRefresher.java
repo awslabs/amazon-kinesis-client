@@ -15,6 +15,9 @@
 package software.amazon.kinesis.leases;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.stream.Collectors;
 
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
@@ -76,6 +79,37 @@ public interface LeaseRefresher {
     boolean waitUntilLeaseTableExists(long secondsBetweenPolls, long timeoutSeconds) throws DependencyException;
 
     /**
+     * Creates the LeaseOwnerToLeaseKey index on the lease table if it doesn't exist and returns the status of index.
+     *
+     * @return indexStatus status of the index.
+     * @throws DependencyException if storage's describe API fails in an unexpected way
+     */
+    default String createLeaseOwnerToLeaseKeyIndexIfNotExists() throws DependencyException {
+        return null;
+    }
+
+    /**
+     * Blocks until the index exists by polling storage till either the index is ACTIVE or else timeout has
+     * happened.
+     *
+     * @param secondsBetweenPolls time to wait between polls in seconds
+     * @param timeoutSeconds total time to wait in seconds
+     *
+     * @return true if index on the table exists and is ACTIVE, false if timeout was reached
+     */
+    default boolean waitUntilLeaseOwnerToLeaseKeyIndexExists(
+            final long secondsBetweenPolls, final long timeoutSeconds) {
+        return false;
+    }
+
+    /**
+     * Check if leaseOwner GSI is ACTIVE
+     * @return  true if index is active, false otherwise
+     * @throws DependencyException if storage's describe API fails in an unexpected way
+     */
+    boolean isLeaseOwnerToLeaseKeyIndexActive() throws DependencyException;
+
+    /**
      * List all leases for a given stream synchronously.
      *
      * @throws DependencyException if DynamoDB scan fails in an unexpected way
@@ -88,6 +122,24 @@ public interface LeaseRefresher {
             throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
+     * List all leases for a given workerIdentifier synchronously.
+     * Default implementation calls listLeases() and filters the results.
+     *
+     * @throws DependencyException if DynamoDB scan fails in an unexpected way
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
+     *
+     * @return list of leases
+     */
+    default List<String> listLeaseKeysForWorker(final String workerIdentifier)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        return listLeases().stream()
+                .filter(lease -> lease.leaseOwner().equals(workerIdentifier))
+                .map(Lease::leaseKey)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * List all objects in table synchronously.
      *
      * @throws DependencyException if DynamoDB scan fails in an unexpected way
@@ -97,6 +149,23 @@ public interface LeaseRefresher {
      * @return list of leases
      */
     List<Lease> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+
+    /**
+     * List all leases from the storage parallely and deserialize into Lease objects. Returns the list of leaseKey
+     * that failed deserialize separately.
+     *
+     * @param threadPool        threadpool to use for parallel scan
+     * @param parallelismFactor no. of parallel scans
+     * @return Pair of List of leases from the storage and List of items failed to deserialize
+     * @throws DependencyException            if DynamoDB scan fails in an unexpected way
+     * @throws InvalidStateException          if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
+     */
+    default Map.Entry<List<Lease>, List<String>> listLeasesParallely(
+            final ExecutorService threadPool, final int parallelismFactor)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throw new UnsupportedOperationException("listLeasesParallely is not implemented");
+    }
 
     /**
      * Create a new lease. Conditional on a lease not already existing with this shardId.
@@ -153,6 +222,47 @@ public interface LeaseRefresher {
      */
     boolean takeLease(Lease lease, String owner)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException;
+
+    /**
+     * Assigns given lease to newOwner owner by incrementing its leaseCounter and setting its owner field. Conditional
+     * on the leaseOwner in DynamoDB matching the leaseOwner of the input lease. Mutates the leaseCounter and owner of
+     * the passed-in lease object after updating DynamoDB.
+     *
+     * @param lease the lease to be assigned
+     * @param newOwner the new owner
+     *
+     * @return true if lease was successfully assigned, false otherwise
+     *
+     * @throws InvalidStateException if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException if DynamoDB update fails in an unexpected way
+     */
+    default boolean assignLease(final Lease lease, final String newOwner)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+
+        throw new UnsupportedOperationException("assignLease is not implemented");
+    }
+
+    /**
+     * Initiates a graceful handoff of the given lease to the specified new owner, allowing the current owner
+     * to complete its processing before transferring ownership.
+     * <p>
+     * This method updates the lease with the new owner information but ensures that the current owner
+     * is given time to gracefully finish its work (e.g., processing records) before the lease is reassigned.
+     * </p>
+     *
+     * @param lease    the lease to be assigned
+     * @param newOwner the new owner
+     * @return true if a graceful handoff was successfully initiated
+     * @throws InvalidStateException          if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB update fails due to lack of capacity
+     * @throws DependencyException            if DynamoDB update fails in an unexpected way
+     */
+    default boolean initiateGracefulLeaseHandoff(final Lease lease, final String newOwner)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+
+        throw new UnsupportedOperationException("assignLeaseWithWait is not implemented");
+    }
 
     /**
      * Evict the current owner of lease by setting owner to null. Conditional on the owner in DynamoDB matching the owner of

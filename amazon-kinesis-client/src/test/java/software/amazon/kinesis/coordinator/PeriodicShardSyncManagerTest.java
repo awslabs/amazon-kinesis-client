@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -78,21 +79,25 @@ public class PeriodicShardSyncManagerTest {
     @Mock
     Map<StreamConfig, ShardSyncTaskManager> streamToShardSyncTaskManagerMap;
 
+    @Mock
+    ScheduledExecutorService mockScheduledExecutor;
+
     @Before
     public void setup() {
         streamIdentifier = StreamIdentifier.multiStreamInstance("123456789012:stream:456");
         periodicShardSyncManager = new PeriodicShardSyncManager(
                 "worker",
-                leaderDecider,
                 leaseRefresher,
                 currentStreamConfigMap,
                 shardSyncTaskManagerProvider,
                 streamToShardSyncTaskManagerMap,
+                mockScheduledExecutor,
                 true,
                 new NullMetricsFactory(),
                 2 * 60 * 1000,
                 3,
                 new AtomicBoolean(true));
+        periodicShardSyncManager.start(leaderDecider);
     }
 
     @Test

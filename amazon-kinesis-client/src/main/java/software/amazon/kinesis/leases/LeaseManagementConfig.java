@@ -16,7 +16,9 @@
 package software.amazon.kinesis.leases;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
@@ -25,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
@@ -34,14 +37,17 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 import software.amazon.awssdk.services.dynamodb.model.Tag;
 import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.common.InitialPositionInStream;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.LeaseCleanupConfig;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
+import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.worker.metric.WorkerMetric;
 
 /**
  * Used by the KCL to configure lease management.
@@ -209,6 +215,9 @@ public class LeaseManagementConfig {
 
     private BillingMode billingMode = BillingMode.PAY_PER_REQUEST;
 
+    private WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig =
+            new WorkerUtilizationAwareAssignmentConfig();
+
     /**
      * Whether to enable deletion protection on the DynamoDB lease table created by KCL. This does not update
      * already existing tables.
@@ -276,14 +285,17 @@ public class LeaseManagementConfig {
     }
 
     public LeaseManagementConfig(
-            String tableName,
-            DynamoDbAsyncClient dynamoDBClient,
-            KinesisAsyncClient kinesisClient,
-            String workerIdentifier) {
+            final String tableName,
+            final String applicationName,
+            final DynamoDbAsyncClient dynamoDBClient,
+            final KinesisAsyncClient kinesisClient,
+            final String workerIdentifier) {
         this.tableName = tableName;
         this.dynamoDBClient = dynamoDBClient;
         this.kinesisClient = kinesisClient;
         this.workerIdentifier = workerIdentifier;
+        this.workerUtilizationAwareAssignmentConfig.workerMetricsTableConfig =
+                new WorkerMetricsTableConfig(applicationName);
     }
 
     /**
@@ -350,10 +362,18 @@ public class LeaseManagementConfig {
      */
     private TableCreatorCallback tableCreatorCallback = TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK;
 
+    /**
+     * @deprecated never used and will be removed in future releases
+     */
+    @Deprecated
     private HierarchicalShardSyncer hierarchicalShardSyncer;
 
     private LeaseManagementFactory leaseManagementFactory;
 
+    /**
+     * @deprecated never used and will be removed in future releases
+     */
+    @Deprecated
     public HierarchicalShardSyncer hierarchicalShardSyncer() {
         if (hierarchicalShardSyncer == null) {
             hierarchicalShardSyncer = new HierarchicalShardSyncer();
@@ -361,39 +381,63 @@ public class LeaseManagementConfig {
         return hierarchicalShardSyncer;
     }
 
+    /**
+     * Configuration class for controlling the graceful handoff of leases.
+     * This configuration allows tuning of the shutdown behavior during lease transfers.
+     * <p>
+     * It provides settings to control the timeout period for waiting on the record processor
+     * to shut down and an option to enable or disable graceful lease handoff.
+     * </p>
+     */
+    @Data
+    @Builder
+    @Accessors(fluent = true)
+    public static class GracefulLeaseHandoffConfig {
+        /**
+         * The minimum amount of time (in milliseconds) to wait for the current shard's RecordProcessor
+         * to gracefully shut down before forcefully transferring the lease to the next owner.
+         * <p>
+         * If each call to {@code processRecords} is expected to run longer than the default value,
+         * it makes sense to set this to a higher value to ensure the RecordProcessor has enough
+         * time to complete its processing.
+         * </p>
+         * <p>
+         * Default value is 30,000 milliseconds (30 seconds).
+         * </p>
+         */
+        @Builder.Default
+        private long gracefulLeaseHandoffTimeoutMillis = 30_000L;
+        /**
+         * Flag to enable or disable the graceful lease handoff mechanism.
+         * <p>
+         * When set to {@code true}, the KCL will attempt to gracefully transfer leases by
+         * allowing the shard's RecordProcessor sufficient time to complete processing before
+         * handing off the lease to another worker. When {@code false}, the lease will be
+         * handed off without waiting for the RecordProcessor to shut down gracefully. Note
+         * that checkpointing is expected to be implemented inside {@code shutdownRequested}
+         * for this feature to work end to end.
+         * </p>
+         * <p>
+         * Default value is {@code true}.
+         * </p>
+         */
+        @Builder.Default
+        private boolean isGracefulLeaseHandoffEnabled = true;
+    }
+
+    private GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig =
+            GracefulLeaseHandoffConfig.builder().build();
+
+    /**
+     * @deprecated This is no longer invoked, but {@code leaseManagementFactory(LeaseSerializer, boolean)}
+     *              is invoked instead. Please remove implementation for this method as future
+     *              releases will remove this API.
+     */
     @Deprecated
     public LeaseManagementFactory leaseManagementFactory() {
         if (leaseManagementFactory == null) {
             Validate.notEmpty(streamName(), "Stream name is empty");
-            leaseManagementFactory = new DynamoDBLeaseManagementFactory(
-                    kinesisClient(),
-                    streamName(),
-                    dynamoDBClient(),
-                    tableName(),
-                    workerIdentifier(),
-                    executorService(),
-                    initialPositionInStream(),
-                    failoverTimeMillis(),
-                    epsilonMillis(),
-                    maxLeasesForWorker(),
-                    maxLeasesToStealAtOneTime(),
-                    maxLeaseRenewalThreads(),
-                    cleanupLeasesUponShardCompletion(),
-                    ignoreUnexpectedChildShards(),
-                    shardSyncIntervalMillis(),
-                    consistentReads(),
-                    listShardsBackoffTimeInMillis(),
-                    maxListShardsRetryAttempts(),
-                    maxCacheMissesBeforeReload(),
-                    listShardsCacheAllowedAgeInSeconds(),
-                    cacheMissWarningModulus(),
-                    initialLeaseTableReadCapacity(),
-                    initialLeaseTableWriteCapacity(),
-                    hierarchicalShardSyncer(),
-                    tableCreatorCallback(),
-                    dynamoDbRequestTimeout(),
-                    billingMode(),
-                    tags());
+            leaseManagementFactory(new DynamoDBLeaseSerializer(), false);
         }
         return leaseManagementFactory;
     }
@@ -430,7 +474,6 @@ public class LeaseManagementConfig {
                     cacheMissWarningModulus(),
                     initialLeaseTableReadCapacity(),
                     initialLeaseTableWriteCapacity(),
-                    hierarchicalShardSyncer(),
                     tableCreatorCallback(),
                     dynamoDbRequestTimeout(),
                     billingMode(),
@@ -440,7 +483,9 @@ public class LeaseManagementConfig {
                     leaseSerializer,
                     customShardDetectorProvider(),
                     isMultiStreamingMode,
-                    leaseCleanupConfig());
+                    leaseCleanupConfig(),
+                    workerUtilizationAwareAssignmentConfig(),
+                    gracefulLeaseHandoffConfig);
         }
         return leaseManagementFactory;
     }
@@ -453,5 +498,91 @@ public class LeaseManagementConfig {
     public LeaseManagementConfig leaseManagementFactory(final LeaseManagementFactory leaseManagementFactory) {
         this.leaseManagementFactory = leaseManagementFactory;
         return this;
+    }
+
+    @Data
+    @Accessors(fluent = true)
+    public static class WorkerUtilizationAwareAssignmentConfig {
+        /**
+         * This defines the frequency of capturing worker metric stats in memory. Default is 1s
+         */
+        private long inMemoryWorkerMetricsCaptureFrequencyMillis =
+                Duration.ofSeconds(1L).toMillis();
+        /**
+         * This defines the frequency of reporting worker metric stats to storage. Default is 30s
+         */
+        private long workerMetricsReporterFreqInMillis = Duration.ofSeconds(30).toMillis();
+        /**
+         * These are the no. of metrics that are persisted in storage in WorkerMetricStats ddb table.
+         */
+        private int noOfPersistedMetricsPerWorkerMetrics = 10;
+        /**
+         * Option to disable workerMetrics to use in lease balancing.
+         */
+        private boolean disableWorkerMetrics = false;
+        /**
+         * List of workerMetrics for the application.
+         */
+        private List<WorkerMetric> workerMetricList = new ArrayList<>();
+        /**
+         * Max throughput per host KBps, default is unlimited.
+         */
+        private double maxThroughputPerHostKBps = Double.MAX_VALUE;
+        /**
+         * Percentage of value to achieve critical dampening during this case
+         */
+        private int dampeningPercentage = 60;
+        /**
+         * Percentage value used to trigger reBalance. If fleet has workers which are have metrics value more or less
+         * than 10% of fleet level average then reBalance is triggered.
+         * Leases are taken from workers with metrics value more than fleet level average. The load to take from these
+         * workers is determined by evaluating how far they are with respect to fleet level average.
+         */
+        private int reBalanceThresholdPercentage = 10;
+
+        /**
+         * The allowThroughputOvershoot flag determines whether leases should still be taken even if
+         * it causes the total assigned throughput to exceed the desired throughput to take for re-balance.
+         * Enabling this flag provides more flexibility for the LeaseAssignmentManager to explore additional
+         * assignment possibilities, which can lead to faster throughput convergence.
+         */
+        private boolean allowThroughputOvershoot = true;
+
+        /**
+         * Duration after which workerMetricStats entry from WorkerMetricStats table will be cleaned up. When an entry's
+         * lastUpdateTime is older than staleWorkerMetricsEntryCleanupDuration from current time, entry will be removed
+         * from the table.
+         */
+        private Duration staleWorkerMetricsEntryCleanupDuration = Duration.ofDays(1);
+
+        /**
+         * configuration to configure how to create the WorkerMetricStats table, such as table name,
+         * billing mode, provisioned capacity. If no table name is specified, the table name will
+         * default to applicationName-WorkerMetricStats. If no billing more is chosen, default is
+         * On-Demand.
+         */
+        private WorkerMetricsTableConfig workerMetricsTableConfig;
+
+        /**
+         * Frequency to perform worker variance balancing. This value is used with respect to the LAM frequency,
+         * that is every third (as default) iteration of LAM the worker variance balancing will be performed.
+         * Setting it to 1 will make varianceBalancing run on every iteration of LAM and 2 on every 2nd iteration
+         * and so on.
+         * NOTE: LAM frequency = failoverTimeMillis
+         */
+        private int varianceBalancingFrequency = 3;
+
+        /**
+         * Alpha value used for calculating exponential moving average of worker's metricStats. Selecting
+         * higher alpha value gives more weightage to recent value and thus low smoothing effect on computed average
+         * and selecting smaller alpha values gives more weightage to past value and high smoothing effect.
+         */
+        private double workerMetricsEMAAlpha = 0.5;
+    }
+
+    public static class WorkerMetricsTableConfig extends DdbTableConfig {
+        public WorkerMetricsTableConfig(final String applicationName) {
+            super(applicationName, "WorkerMetricStats");
+        }
     }
 }

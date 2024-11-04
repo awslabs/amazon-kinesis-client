@@ -15,7 +15,9 @@
 package software.amazon.kinesis.leases;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 
 @Slf4j
@@ -29,7 +31,9 @@ public class LeaseIntegrationBillingModePayPerRequestTest extends LeaseIntegrati
                 true,
                 tableCreatorCallback,
                 LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
-                BillingMode.PAY_PER_REQUEST,
-                false);
+                new DdbTableConfig().billingMode(BillingMode.PAY_PER_REQUEST),
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
+                DefaultSdkAutoConstructList.getInstance());
     }
 }

@@ -21,6 +21,8 @@ package software.amazon.kinesis.coordinator;
  * worker is one of the leaders designated to execute shard-sync and then acts accordingly.
  */
 public interface LeaderDecider {
+    String METRIC_OPERATION_LEADER_DECIDER = "LeaderDecider";
+    String METRIC_OPERATION_LEADER_DECIDER_IS_LEADER = METRIC_OPERATION_LEADER_DECIDER + ":IsLeader";
 
     /**
      * Method invoked to check the given workerId corresponds to one of the workers
@@ -36,4 +38,32 @@ public interface LeaderDecider {
      * being used in the LeaderDecider implementation.
      */
     void shutdown();
+
+    /**
+     * Performs initialization tasks for decider if any.
+     */
+    default void initialize() {
+        // No-op by default
+    }
+
+    /**
+     * Returns if any ACTIVE leader exists that is elected by the current implementation.
+     * Note: Some implementation (like DeterministicShuffleShardSyncLeaderDecider) will always have a leader and will
+     * return true always.
+     */
+    default boolean isAnyLeaderElected() {
+        return true;
+    }
+
+    /**
+     * If the current worker is the leader, then releases the leadership else does nothing.
+     * This might not be relevant for some implementations, for e.g. DeterministicShuffleShardSyncLeaderDecider does
+     * not have mechanism to release leadership.
+     *
+     * Current worker if leader releases leadership, it's possible that the current worker assume leadership sometime
+     * later again in future elections.
+     */
+    default void releaseLeadershipIfHeld() {
+        // No-op by default
+    }
 }

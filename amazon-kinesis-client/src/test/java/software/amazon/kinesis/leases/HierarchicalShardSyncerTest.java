@@ -70,7 +70,6 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -479,10 +478,6 @@ public class HierarchicalShardSyncerTest {
     @Test
     public void testCheckAndCreateLeasesForShardsWithEmptyShardList() throws Exception {
         final ArgumentCaptor<Lease> leaseCaptor = ArgumentCaptor.forClass(Lease.class);
-        when(shardDetector.listShards()).thenReturn(SHARD_GRAPH_A);
-        when(dynamoDBLeaseRefresher.listLeases()).thenReturn(Collections.emptyList());
-        when(dynamoDBLeaseRefresher.createLeaseIfNotExists(leaseCaptor.capture()))
-                .thenReturn(true);
 
         hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(
                 shardDetector,
@@ -841,7 +836,6 @@ public class HierarchicalShardSyncerTest {
                 .thenReturn(leases);
         when(dynamoDBLeaseRefresher.createLeaseIfNotExists(leaseCreateCaptor.capture()))
                 .thenReturn(true);
-        doNothing().when(dynamoDBLeaseRefresher).deleteLease(leaseDeleteCaptor.capture());
 
         // Initial call: No leases present, create leases.
         hierarchicalShardSyncer.checkAndCreateLeaseForNewShards(

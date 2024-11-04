@@ -87,7 +87,7 @@ class PeriodicShardSyncManager {
     private final Map<StreamIdentifier, HashRangeHoleTracker> hashRangeHoleTrackerMap = new HashMap<>();
 
     private final String workerId;
-    private final LeaderDecider leaderDecider;
+    private LeaderDecider leaderDecider;
     private final LeaseRefresher leaseRefresher;
     private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap;
     private final Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider;
@@ -105,7 +105,6 @@ class PeriodicShardSyncManager {
 
     PeriodicShardSyncManager(
             String workerId,
-            LeaderDecider leaderDecider,
             LeaseRefresher leaseRefresher,
             Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
             Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider,
@@ -117,7 +116,6 @@ class PeriodicShardSyncManager {
             AtomicBoolean leaderSynced) {
         this(
                 workerId,
-                leaderDecider,
                 leaseRefresher,
                 currentStreamConfigMap,
                 shardSyncTaskManagerProvider,
@@ -132,7 +130,6 @@ class PeriodicShardSyncManager {
 
     PeriodicShardSyncManager(
             String workerId,
-            LeaderDecider leaderDecider,
             LeaseRefresher leaseRefresher,
             Map<StreamIdentifier, StreamConfig> currentStreamConfigMap,
             Function<StreamConfig, ShardSyncTaskManager> shardSyncTaskManagerProvider,
@@ -144,9 +141,7 @@ class PeriodicShardSyncManager {
             int leasesRecoveryAuditorInconsistencyConfidenceThreshold,
             AtomicBoolean leaderSynced) {
         Validate.notBlank(workerId, "WorkerID is required to initialize PeriodicShardSyncManager.");
-        Validate.notNull(leaderDecider, "LeaderDecider is required to initialize PeriodicShardSyncManager.");
         this.workerId = workerId;
-        this.leaderDecider = leaderDecider;
         this.leaseRefresher = leaseRefresher;
         this.currentStreamConfigMap = currentStreamConfigMap;
         this.shardSyncTaskManagerProvider = shardSyncTaskManagerProvider;
@@ -160,7 +155,9 @@ class PeriodicShardSyncManager {
         this.leaderSynced = leaderSynced;
     }
 
-    public synchronized TaskResult start() {
+    public synchronized TaskResult start(final LeaderDecider leaderDecider) {
+        Validate.notNull(leaderDecider, "LeaderDecider is required to start PeriodicShardSyncManager.");
+        this.leaderDecider = leaderDecider;
         if (!isRunning) {
             final Runnable periodicShardSyncer = () -> {
                 try {
@@ -435,7 +432,7 @@ class PeriodicShardSyncManager {
                                 leaseRefresher.updateLeaseWithMetaInfo(lease, UpdateField.HASH_KEY_RANGE);
                             } catch (Exception e) {
                                 log.warn(
-                                        "Unable to update hash range key information for lease {} of stream {}."
+                                        "Unable to update hash range key information for lease {} of stream {}. "
                                                 + "This may result in explicit lease sync.",
                                         lease.leaseKey(),
                                         streamIdentifier);

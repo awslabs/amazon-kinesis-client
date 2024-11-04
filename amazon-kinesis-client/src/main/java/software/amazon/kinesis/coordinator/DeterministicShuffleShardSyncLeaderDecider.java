@@ -28,12 +28,17 @@ import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.utils.CollectionUtils;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.metrics.MetricsLevel;
+import software.amazon.kinesis.metrics.MetricsScope;
+import software.amazon.kinesis.metrics.MetricsUtil;
 
 /**
  * An implementation of the {@code LeaderDecider} to elect leader(s) based on workerId.
@@ -46,7 +51,7 @@ import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
  * This ensures redundancy for shard-sync during host failures.
  */
 @Slf4j
-class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
+public class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
     // Fixed seed so that the shuffle order is preserved across workers
     static final int DETERMINISTIC_SHUFFLE_SEED = 1947;
 
@@ -59,6 +64,7 @@ class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
     private final LeaseRefresher leaseRefresher;
     private final int numPeriodicShardSyncWorkers;
     private final ScheduledExecutorService leaderElectionThreadPool;
+    private final MetricsFactory metricsFactory;
 
     private volatile Set<String> leaders;
 
@@ -67,11 +73,17 @@ class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
      * @param leaderElectionThreadPool    Thread-pool to be used for leaderElection.
      * @param numPeriodicShardSyncWorkers Number of leaders that will be elected to perform periodic shard syncs.
      */
-    DeterministicShuffleShardSyncLeaderDecider(
+    public DeterministicShuffleShardSyncLeaderDecider(
             LeaseRefresher leaseRefresher,
             ScheduledExecutorService leaderElectionThreadPool,
-            int numPeriodicShardSyncWorkers) {
-        this(leaseRefresher, leaderElectionThreadPool, numPeriodicShardSyncWorkers, new ReentrantReadWriteLock());
+            int numPeriodicShardSyncWorkers,
+            MetricsFactory metricsFactory) {
+        this(
+                leaseRefresher,
+                leaderElectionThreadPool,
+                numPeriodicShardSyncWorkers,
+                new ReentrantReadWriteLock(),
+                metricsFactory);
     }
 
     /**
@@ -84,11 +96,13 @@ class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
             LeaseRefresher leaseRefresher,
             ScheduledExecutorService leaderElectionThreadPool,
             int numPeriodicShardSyncWorkers,
-            ReadWriteLock readWriteLock) {
+            ReadWriteLock readWriteLock,
+            MetricsFactory metricsFactory) {
         this.leaseRefresher = leaseRefresher;
         this.leaderElectionThreadPool = leaderElectionThreadPool;
         this.numPeriodicShardSyncWorkers = numPeriodicShardSyncWorkers;
         this.readWriteLock = readWriteLock;
+        this.metricsFactory = metricsFactory;
     }
 
     /*
@@ -146,8 +160,13 @@ class DeterministicShuffleShardSyncLeaderDecider implements LeaderDecider {
                     ELECTION_SCHEDULING_INTERVAL_MILLIS,
                     TimeUnit.MILLISECONDS);
         }
-
-        return executeConditionCheckWithReadLock(() -> isWorkerLeaderForShardSync(workerId));
+        final boolean response = executeConditionCheckWithReadLock(() -> isWorkerLeaderForShardSync(workerId));
+        final MetricsScope metricsScope =
+                MetricsUtil.createMetricsWithOperation(metricsFactory, METRIC_OPERATION_LEADER_DECIDER);
+        metricsScope.addData(
+                METRIC_OPERATION_LEADER_DECIDER_IS_LEADER, response ? 1 : 0, StandardUnit.COUNT, MetricsLevel.DETAILED);
+        MetricsUtil.endScope(metricsScope);
+        return response;
     }
 
     @Override

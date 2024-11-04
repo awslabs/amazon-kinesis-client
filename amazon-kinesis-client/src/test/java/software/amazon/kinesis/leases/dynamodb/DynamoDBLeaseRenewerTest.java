@@ -1,171 +1,245 @@
-/*
- * Copyright 2019 Amazon.com, Inc. or its affiliates.
- * Licensed under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package software.amazon.kinesis.leases.dynamodb;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
+import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.function.Consumer;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-import software.amazon.kinesis.common.HashKeyRangeForLease;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.leases.Lease;
-import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.leases.LeaseStatsRecorder;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.leases.dynamodb.TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK;
+import static software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber.LATEST;
+import static software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber.TRIM_HORIZON;
 
-@RunWith(MockitoJUnitRunner.class)
-public class DynamoDBLeaseRenewerTest {
-    private final String workerIdentifier = "WorkerId";
-    private final long leaseDurationMillis = 10000;
-    private DynamoDBLeaseRenewer renewer;
-    private List<Lease> leasesToRenew;
+class DynamoDBLeaseRenewerTest {
+
+    private static final String TEST_NUMBER_VALUE_BELOW_DDB_RANGE =
+            "0.00000000000000000000000000000000000000000000000000000000000000"
+                    + "000000000000000000000000000000000000000000000000000000000000000000001";
+    private static final String TEST_NUMBER_HIGHER_PRECISION = "1.00000000000000000000000000000000000001";
+    private static final String TEST_NUMBER_WITH_HIGH_DECIMAL_VALUES =
+            "0.00000000000000000000000000000000000000000000000000000000000000"
+                    + "000000000000000000000000000000000000000000000000000000000000000000016843473634062791";
+    private static final String TEST_NUMBER_WITH_ALL_ZERO_DECIMAL_VALUES =
+            "0.00000000000000000000000000000000000000000000000000000000000000"
+                    + "000000000000000000000000000000000000000000000000000000000000000000000000000000";
+
+    private static final String WORKER_ID = "WorkerId";
+    private static final String TEST_LEASE_TABLE = "SomeTable";
+    private DynamoDBLeaseRefresher leaseRefresher;
+    private DynamoDBLeaseRenewer leaseRenewer;
+    private LeaseStatsRecorder leaseStatsRecorder;
 
     @Mock
-    private LeaseRefresher leaseRefresher;
+    private Consumer<Lease> mockLeaseGracefulShutdownCallBack;
 
-    private static Lease newLease(String leaseKey) {
-        return new Lease(
-                leaseKey,
-                "LeaseOwner",
-                0L,
-                UUID.randomUUID(),
-                System.nanoTime(),
-                null,
-                null,
-                1L,
-                new HashSet<>(),
-                new HashSet<>(),
-                null,
-                HashKeyRangeForLease.deserialize("1", "2"));
-    }
+    @Mock
+    private ExecutorService mockExecutorService;
 
-    @Before
-    public void before() {
-        leasesToRenew = null;
-        renewer = new DynamoDBLeaseRenewer(
+    @Mock
+    private Future mockFuture;
+
+    private Callable leaseRenewalCallable;
+
+    private final DynamoDbAsyncClient dynamoDbAsyncClient =
+            DynamoDBEmbedded.create().dynamoDbAsyncClient();
+
+    @BeforeEach
+    void setup() throws Exception {
+        MockitoAnnotations.initMocks(this);
+        this.leaseStatsRecorder = Mockito.mock(LeaseStatsRecorder.class);
+        this.leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                dynamoDbAsyncClient,
+                new DynamoDBLeaseSerializer(),
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
+                new DdbTableConfig().billingMode(BillingMode.PAY_PER_REQUEST),
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
+                DefaultSdkAutoConstructList.getInstance());
+        this.leaseRenewer = new DynamoDBLeaseRenewer(
                 leaseRefresher,
-                workerIdentifier,
-                leaseDurationMillis,
-                Executors.newCachedThreadPool(),
-                new NullMetricsFactory());
+                WORKER_ID,
+                Duration.ofHours(1).toMillis(),
+                Executors.newFixedThreadPool(1),
+                new NullMetricsFactory(),
+                leaseStatsRecorder,
+                mockLeaseGracefulShutdownCallBack);
+        this.leaseRefresher.createLeaseTableIfNotExists();
+        this.leaseRefresher.waitUntilLeaseTableExists(1, 30);
     }
 
-    @After
-    public void after() throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        if (leasesToRenew == null) {
-            return;
-        }
-        for (Lease lease : leasesToRenew) {
-            verify(leaseRefresher, times(1)).renewLease(eq(lease));
-        }
-    }
-
-    @Test
-    public void testLeaseRenewerHoldsGoodLeases()
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        /*
-         * Prepare leases to be renewed
-         * 2 Good
-         */
-        Lease lease1 = newLease("1");
-        Lease lease2 = newLease("2");
-        leasesToRenew = Arrays.asList(lease1, lease2);
-        renewer.addLeasesToRenew(leasesToRenew);
-
-        doReturn(true).when(leaseRefresher).renewLease(lease1);
-        doReturn(true).when(leaseRefresher).renewLease(lease2);
-
-        renewer.renewLeases();
-
-        assertEquals(2, renewer.getCurrentlyHeldLeases().size());
+    @ParameterizedTest
+    @CsvSource({
+        TEST_NUMBER_VALUE_BELOW_DDB_RANGE + ",0.0",
+        TEST_NUMBER_HIGHER_PRECISION + ",1.0",
+        "1.024,1.024",
+        "1024.1024, 1024.1024",
+        "1024.102412324, 1024.102412",
+        "1999999.123213213123123213213, 1999999.123213",
+        TEST_NUMBER_WITH_HIGH_DECIMAL_VALUES + ",0.0",
+        TEST_NUMBER_WITH_ALL_ZERO_DECIMAL_VALUES + ",0.0"
+    })
+    void renewLeases_withDifferentInputFromLeaseRecorder_assertNoFailureAndExpectedValue(
+            final String inputNumber, final double expected) throws Exception {
+        when(leaseStatsRecorder.getThroughputKBps("key-1")).thenReturn(Double.parseDouble(inputNumber));
+        final Lease lease = createDummyLease("key-1", WORKER_ID);
+        leaseRefresher.createLeaseIfNotExists(lease);
+        leaseRenewer.addLeasesToRenew(ImmutableList.of(lease));
+        leaseRenewer.renewLeases();
+        assertEquals(expected, leaseRefresher.getLease("key-1").throughputKBps(), "Throughput value is not matching");
     }
 
     @Test
-    public void testLeaseRenewerDoesNotRenewExpiredLease()
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        String leaseKey = "expiredLease";
-        long initialCounterIncrementNanos = 5L; // "expired" time.
-        Lease lease1 = newLease(leaseKey);
-        lease1.lastCounterIncrementNanos(initialCounterIncrementNanos);
+    void renewLeases_enqueueShutdownRequestedLease_sanity() throws Exception {
+        createRenewer(leaseRefresher);
+        final Lease lease = createDummyLease("key-1", WORKER_ID);
+        leaseRefresher.createLeaseIfNotExists(lease);
+        leaseRenewer.addLeasesToRenew(ImmutableList.of(lease));
+        leaseRenewer.renewLeases();
+        leaseRenewalCallable.call();
+        verify(mockLeaseGracefulShutdownCallBack, never()).accept(lease);
 
-        leasesToRenew = new ArrayList<>();
-        leasesToRenew.add(lease1);
-        doReturn(true).when(leaseRefresher).renewLease(lease1);
-        renewer.addLeasesToRenew(leasesToRenew);
+        leaseRefresher.initiateGracefulLeaseHandoff(lease, "newOwner");
+        leaseRenewalCallable.call();
+        verify(mockLeaseGracefulShutdownCallBack, times(1)).accept(any());
 
-        assertTrue(lease1.isExpired(1, System.nanoTime()));
-        assertNull(renewer.getCurrentlyHeldLease(leaseKey));
-        renewer.renewLeases();
-        // Don't renew lease(s) with same key if getCurrentlyHeldLease returned null previously
-        assertNull(renewer.getCurrentlyHeldLease(leaseKey));
-        assertFalse(renewer.getCurrentlyHeldLeases().containsKey(leaseKey));
-
-        // Clear the list to avoid triggering expectation mismatch in after().
-        leasesToRenew.clear();
+        leaseRenewalCallable.call();
+        verify(mockLeaseGracefulShutdownCallBack, times(2)).accept(any());
     }
 
     @Test
-    public void testLeaseRenewerDoesNotUpdateInMemoryLeaseIfDDBFailsUpdate()
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        String leaseKey = "leaseToUpdate";
-        Lease lease = newLease(leaseKey);
-        lease.checkpoint(ExtendedSequenceNumber.LATEST);
-        leasesToRenew = new ArrayList<>();
-        leasesToRenew.add(lease);
-        renewer.addLeasesToRenew(leasesToRenew);
+    void renewLeases_withHighInitialDecimalDigit_assertUpdateWithoutFailureAndNewStats() throws Exception {
+        when(leaseStatsRecorder.getThroughputKBps("key-1")).thenReturn(0.10000000000000000001);
+        final Lease lease = createDummyLease("key-1", WORKER_ID);
+        lease.throughputKBps(
+                0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001);
+        leaseRefresher.createLeaseIfNotExists(lease);
+        leaseRenewer.addLeasesToRenew(ImmutableList.of(lease));
+        leaseRenewer.renewLeases();
+        assertEquals(0.1D, leaseRefresher.getLease("key-1").throughputKBps(), "Throughput value is not matching");
+    }
 
-        doReturn(true).when(leaseRefresher).renewLease(lease);
-        renewer.renewLeases();
+    private Lease createDummyLease(final String leaseKey, final String leaseOwner) {
+        final Lease lease = new Lease();
+        lease.leaseKey(leaseKey);
+        lease.checkpoint(TRIM_HORIZON);
+        lease.leaseOwner(leaseOwner);
+        lease.leaseCounter(123L);
+        lease.throughputKBps(1);
+        lease.lastCounterIncrementNanos(System.nanoTime());
+        return lease;
+    }
 
-        Lease updatedLease = newLease(leaseKey);
-        updatedLease.checkpoint(ExtendedSequenceNumber.TRIM_HORIZON);
+    @Test
+    void initialize_badLeaseInTableExists_assertInitializationWithOtherLeases()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("leaseKey1", WORKER_ID));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("leaseKey2", WORKER_ID));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("leaseKey3", WORKER_ID));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("leaseKey4", WORKER_ID));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("leaseKey5", "leaseOwner2"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("leaseKey6", "leaseOwner2"));
+        createAndPutBadLeaseEntryInTable();
 
-        doThrow(new DependencyException(new RuntimeException()))
-                .when(leaseRefresher)
-                .updateLease(updatedLease);
+        leaseRenewer.initialize();
 
+        final Map<String, Lease> leaseKeyToLeaseMap = leaseRenewer.getCurrentlyHeldLeases();
+
+        assertEquals(4, leaseKeyToLeaseMap.size());
+        assertTrue(leaseKeyToLeaseMap.containsKey("leaseKey1"));
+        assertTrue(leaseKeyToLeaseMap.containsKey("leaseKey2"));
+        assertTrue(leaseKeyToLeaseMap.containsKey("leaseKey3"));
+        assertTrue(leaseKeyToLeaseMap.containsKey("leaseKey4"));
+    }
+
+    @Test
+    void testLeaseRenewerDoesNotUpdateInMemoryLeaseIfDDBFailsUpdate() throws Exception {
+        DynamoDBLeaseRefresher leaseRefresherMock = mock(DynamoDBLeaseRefresher.class, Mockito.RETURNS_MOCKS);
+        createRenewer(leaseRefresherMock);
+
+        final String leaseKey = "leaseToUpdate";
+        final Lease lease = createDummyLease(leaseKey, WORKER_ID);
+        leaseRenewer.addLeasesToRenew(ImmutableList.of(lease));
+        final Lease updatedLease = createDummyLease(leaseKey, WORKER_ID);
+        updatedLease.checkpoint(LATEST);
+
+        when(leaseRefresherMock.updateLease(updatedLease)).thenThrow(new DependencyException(new RuntimeException()));
         try {
-            UUID concurrencyToken = renewer.getCurrentlyHeldLease(leaseKey).concurrencyToken();
-            renewer.updateLease(updatedLease, concurrencyToken, "test", "dummyShardId");
+            final UUID concurrencyToken =
+                    leaseRenewer.getCurrentlyHeldLease(leaseKey).concurrencyToken();
+            leaseRenewer.updateLease(updatedLease, concurrencyToken, "test", "dummyShardId");
             fail();
         } catch (DependencyException e) {
             // expected
         }
-        assertEquals(0L, (long) lease.leaseCounter()); // leaseCounter should not be incremented due to DDB failure
-        assertEquals(ExtendedSequenceNumber.LATEST, lease.checkpoint());
+        final Lease currentLease = leaseRenewer.getCurrentlyHeldLeases().get(leaseKey);
+        assertEquals(123L, currentLease.leaseCounter()); // leaseCounter should not be incremented due to DDB failure
+        assertEquals(TRIM_HORIZON, currentLease.checkpoint());
+    }
+
+    private void createAndPutBadLeaseEntryInTable() {
+        final PutItemRequest putItemRequest = PutItemRequest.builder()
+                .tableName(TEST_LEASE_TABLE)
+                .item(ImmutableMap.of(
+                        "leaseKey", AttributeValue.builder().s("badLeaseKey").build()))
+                .build();
+
+        dynamoDbAsyncClient.putItem(putItemRequest);
+    }
+
+    private void createRenewer(final DynamoDBLeaseRefresher leaseRefresher) throws Exception {
+        when(mockExecutorService.submit(any(Callable.class))).thenAnswer(invocation -> {
+            this.leaseRenewalCallable = (Callable) invocation.getArguments()[0];
+            return mockFuture;
+        });
+        when(mockFuture.get()).thenReturn(false);
+        this.leaseRenewer = new DynamoDBLeaseRenewer(
+                leaseRefresher,
+                WORKER_ID,
+                Duration.ofHours(1).toMillis(),
+                mockExecutorService,
+                new NullMetricsFactory(),
+                leaseStatsRecorder,
+                mockLeaseGracefulShutdownCallBack);
+        leaseRefresher.createLeaseTableIfNotExists();
+        leaseRefresher.waitUntilLeaseTableExists(1, 30);
     }
 }

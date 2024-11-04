@@ -53,6 +53,16 @@ public class ConfigurationSettableUtilsTest {
     }
 
     @Test
+    public void testBoolean() {
+        ConfigResult expected = ConfigResult.builder().bool(false).build();
+
+        ConfigObject configObject = ConfigObject.builder().bool(expected.bool).build();
+        ConfigResult actual = resolve(configObject);
+
+        assertThat(actual, equalTo(expected));
+    }
+
+    @Test
     public void testHeapValuesSet() {
         ConfigResult expected =
                 ConfigResult.builder().name("test").boxedInt(10).boxedLong(15L).build();
@@ -147,6 +157,9 @@ public class ConfigurationSettableUtilsTest {
         private Long boxedLong;
         private ComplexValue complexValue;
 
+        @Builder.Default
+        private Boolean bool = true;
+
         private Optional<String> optionalString;
         private Optional<Integer> optionalInteger;
         private Optional<Long> optionalLong;
@@ -174,6 +187,10 @@ public class ConfigurationSettableUtilsTest {
 
         @ConfigurationSettable(configurationClass = ConfigResult.class)
         private int rawInt;
+
+        @ConfigurationSettable(configurationClass = ConfigResult.class)
+        @Builder.Default
+        private Boolean bool = true;
 
         @ConfigurationSettable(configurationClass = ConfigResult.class)
         private Integer boxedInt;

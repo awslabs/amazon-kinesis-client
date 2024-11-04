@@ -47,7 +47,7 @@ public class ShardShardRecordProcessorCheckpointerTest {
     private String shardId = "shardId-123";
 
     /**
-     * @throws java.lang.Exception
+     * @throws Exception
      */
     @Before
     public void setup() throws Exception {

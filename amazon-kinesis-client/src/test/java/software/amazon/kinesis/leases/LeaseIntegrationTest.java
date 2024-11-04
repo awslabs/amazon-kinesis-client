@@ -20,8 +20,10 @@ import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.mockito.Mock;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
@@ -80,7 +82,9 @@ public class LeaseIntegrationTest {
                 true,
                 tableCreatorCallback,
                 LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
-                BillingMode.PAY_PER_REQUEST,
-                false);
+                new DdbTableConfig().billingMode(BillingMode.PAY_PER_REQUEST),
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
+                DefaultSdkAutoConstructList.getInstance());
     }
 }

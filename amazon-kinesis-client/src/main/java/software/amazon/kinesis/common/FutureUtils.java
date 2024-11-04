@@ -15,10 +15,13 @@
 package software.amazon.kinesis.common;
 
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 public class FutureUtils {
 
@@ -29,6 +32,17 @@ public class FutureUtils {
         } catch (TimeoutException te) {
             future.cancel(true);
             throw te;
+        }
+    }
+
+    public static <T> T unwrappingFuture(final Supplier<CompletableFuture<T>> supplier) {
+        try {
+            return supplier.get().join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof RuntimeException) {
+                throw (RuntimeException) e.getCause();
+            }
+            throw e;
         }
     }
 }
