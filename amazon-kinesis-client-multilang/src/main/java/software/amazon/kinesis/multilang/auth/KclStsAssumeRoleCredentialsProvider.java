@@ -17,6 +17,7 @@ import software.amazon.kinesis.multilang.NestedPropertyProcessor;
 public class KclStsAssumeRoleCredentialsProvider implements AwsCredentialsProvider, NestedPropertyProcessor {
     private final Builder assumeRoleRequestBuilder;
     private final StsClientBuilder stsClientBuilder;
+    private final StsAssumeRoleCredentialsProvider stsAssumeRoleCredentialsProvider;
 
     public KclStsAssumeRoleCredentialsProvider(String[] params) {
         this(params[0], params[1], Arrays.copyOfRange(params, 2, params.length));
@@ -27,15 +28,16 @@ public class KclStsAssumeRoleCredentialsProvider implements AwsCredentialsProvid
                 AssumeRoleRequest.builder().roleArn(roleArn).roleSessionName(roleSessionName);
         this.stsClientBuilder = StsClient.builder();
         NestedPropertyKey.parse(this, params);
+        this.stsAssumeRoleCredentialsProvider = StsAssumeRoleCredentialsProvider.builder()
+                .refreshRequest(assumeRoleRequestBuilder.build())
+                .asyncCredentialUpdateEnabled(true)
+                .stsClient(stsClientBuilder.build())
+                .build();
     }
 
     @Override
     public AwsCredentials resolveCredentials() {
-        StsAssumeRoleCredentialsProvider provider = StsAssumeRoleCredentialsProvider.builder()
-                .refreshRequest(assumeRoleRequestBuilder.build())
-                .stsClient(stsClientBuilder.build())
-                .build();
-        return provider.resolveCredentials();
+        return stsAssumeRoleCredentialsProvider.resolveCredentials();
     }
 
     @Override
