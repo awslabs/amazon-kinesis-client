@@ -15,6 +15,7 @@
 
 package software.amazon.kinesis.leases;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -39,6 +40,7 @@ import software.amazon.awssdk.services.kinesis.model.ListShardsResponse;
 import software.amazon.awssdk.services.kinesis.model.ResourceInUseException;
 import software.amazon.awssdk.services.kinesis.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.kinesis.model.Shard;
+import software.amazon.kinesis.common.StreamIdentifier;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.isA;
@@ -63,6 +65,7 @@ public class KinesisShardDetectorTest {
     private static final long LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS = 10;
     private static final int MAX_CACHE_MISSES_BEFORE_RELOAD = 10;
     private static final int CACHE_MISS_WARNING_MODULUS = 2;
+    private static final Duration KINESIS_REQUEST_TIMEOUT = Duration.ofSeconds(5);
     private static final String SHARD_ID = "shardId-%012d";
 
     private KinesisShardDetector shardDetector;
@@ -80,12 +83,13 @@ public class KinesisShardDetectorTest {
     public void setup() {
         shardDetector = new KinesisShardDetector(
                 client,
-                STREAM_NAME,
+                StreamIdentifier.singleStreamInstance(STREAM_NAME),
                 LIST_SHARDS_BACKOFF_TIME_IN_MILLIS,
                 MAX_LIST_SHARDS_RETRY_ATTEMPTS,
                 LIST_SHARDS_CACHE_ALLOWED_AGE_IN_SECONDS,
                 MAX_CACHE_MISSES_BEFORE_RELOAD,
-                CACHE_MISS_WARNING_MODULUS);
+                CACHE_MISS_WARNING_MODULUS,
+                KINESIS_REQUEST_TIMEOUT);
     }
 
     @Test

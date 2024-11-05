@@ -39,6 +39,7 @@ import lombok.Data;
 import lombok.Getter;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
+import org.hamcrest.Matchers;
 import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.Before;
 import org.junit.Test;
@@ -49,6 +50,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.kinesis.model.HashKeyRange;
 import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
+import software.amazon.kinesis.leases.LeaseStatsRecorder;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -63,7 +65,6 @@ import software.amazon.kinesis.retrieval.kpl.Messages;
 import software.amazon.kinesis.retrieval.kpl.Messages.AggregatedRecord;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
 
-import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.not;
@@ -114,6 +115,9 @@ public class ProcessTaskTest {
     @Mock
     private ThrottlingReporter throttlingReporter;
 
+    @Mock
+    private LeaseStatsRecorder leaseStatsRecorder;
+
     private ProcessTask processTask;
 
     @Before
@@ -160,7 +164,8 @@ public class ProcessTaskTest {
                 IDLE_TIME_IN_MILLISECONDS,
                 aggregatorUtil,
                 new NullMetricsFactory(),
-                schemaRegistryDecoder);
+                schemaRegistryDecoder,
+                leaseStatsRecorder);
     }
 
     @Test
@@ -824,7 +829,7 @@ public class ProcessTaskTest {
             if (expected == null) {
                 matchers = nullValue(TaskResult.class);
             } else {
-                matchers = allOf(
+                matchers = Matchers.allOf(
                         notNullValue(TaskResult.class),
                         hasProperty("shardEndReached", equalTo(expected.isShardEndReached())),
                         hasProperty("exception", equalTo(expected.getException())));

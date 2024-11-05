@@ -14,11 +14,11 @@
  */
 package software.amazon.kinesis.multilang;
 
-import com.amazonaws.regions.Regions;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
+import software.amazon.awssdk.regions.Region;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
@@ -64,9 +64,9 @@ public class NestedPropertyKeyTest {
 
     @Test
     public void testEndpointRegion() {
-        final Regions expectedRegion = Regions.GovCloud;
+        final Region expectedRegion = Region.US_GOV_WEST_1;
 
-        parse(mockProcessor, createKey(ENDPOINT_REGION, expectedRegion.getName()));
+        parse(mockProcessor, createKey(ENDPOINT_REGION, expectedRegion.id()));
         verify(mockProcessor).acceptEndpointRegion(expectedRegion);
     }
 

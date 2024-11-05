@@ -57,7 +57,6 @@ import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import static org.hamcrest.CoreMatchers.isA;
 import static org.junit.Assert.assertEquals;
@@ -178,7 +177,6 @@ public class KinesisDataFetcherTest {
                 .thenReturn(makeGetShardIteratorResponse(iteratorA))
                 .thenReturn(makeGetShardIteratorResponse(iteratorA))
                 .thenReturn(makeGetShardIteratorResponse(iteratorB));
-        when(checkpoint.getCheckpoint(SHARD_ID)).thenReturn(new ExtendedSequenceNumber(seqA));
 
         kinesisDataFetcher.initialize(seqA, null);
         kinesisDataFetcher.advanceIteratorTo(seqA, null);
@@ -594,7 +592,6 @@ public class KinesisDataFetcherTest {
                 .thenReturn(makeGetRecordsResponse(null, expectedRecords));
 
         Checkpointer checkpoint = mock(Checkpointer.class);
-        when(checkpoint.getCheckpoint(SHARD_ID)).thenReturn(new ExtendedSequenceNumber(seqNo));
 
         final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy =
                 new SynchronousGetRecordsRetrievalStrategy(kinesisDataFetcher);

@@ -65,7 +65,7 @@ public class MultiLangDaemonConfigTest {
         String properties = String.format(
                 "executableName = %s\n"
                         + "applicationName = %s\n"
-                        + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n"
+                        + "AwsCredentialsProvider = DefaultCredentialsProvider\n"
                         + "processingLanguage = malbolge\n"
                         + "regionName = %s\n",
                 EXE, APPLICATION_NAME, "us-east-1");
@@ -182,7 +182,7 @@ public class MultiLangDaemonConfigTest {
     @Test
     public void testPropertyValidation() {
         String propertiesNoExecutableName = "applicationName = testApp \n" + "streamName = fakeStream \n"
-                + "AWSCredentialsProvider = DefaultAWSCredentialsProviderChain\n" + "processingLanguage = malbolge";
+                + "AwsCredentialsProvider = DefaultCredentialsProvider\n" + "processingLanguage = malbolge";
         ClassLoader classLoader = Mockito.mock(ClassLoader.class);
 
         Mockito.doReturn(new ByteArrayInputStream(propertiesNoExecutableName.getBytes()))

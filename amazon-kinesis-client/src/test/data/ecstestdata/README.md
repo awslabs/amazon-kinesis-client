@@ -1,0 +1,1 @@
+Sample test ECS metadata for Amazon ECS task metadata v4. For more information, see https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v4-examples.html

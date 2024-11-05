@@ -58,7 +58,6 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -66,6 +65,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.hamcrest.MockitoHamcrest.argThat;
 import static software.amazon.kinesis.utils.ProcessRecordsInputMatcher.eqProcessRecordsInput;
 
 @Slf4j
@@ -257,7 +257,7 @@ public class ShardConsumerSubscriberTest {
 
         List<ProcessRecordsInput> received = new ArrayList<>();
         doAnswer(a -> {
-                    ProcessRecordsInput input = a.getArgumentAt(0, ProcessRecordsInput.class);
+                    ProcessRecordsInput input = (ProcessRecordsInput) a.getArgument(0);
                     received.add(input);
                     if (input.records().stream()
                             .anyMatch(r -> StringUtils.startsWith(r.partitionKey(), TERMINAL_MARKER))) {
@@ -336,7 +336,7 @@ public class ShardConsumerSubscriberTest {
 
         List<ProcessRecordsInput> received = new ArrayList<>();
         doAnswer(a -> {
-                    ProcessRecordsInput input = a.getArgumentAt(0, ProcessRecordsInput.class);
+                    ProcessRecordsInput input = (ProcessRecordsInput) a.getArgument(0);
                     received.add(input);
                     if (input.records().stream()
                             .anyMatch(r -> StringUtils.startsWith(r.partitionKey(), TERMINAL_MARKER))) {
@@ -408,7 +408,7 @@ public class ShardConsumerSubscriberTest {
 
         List<ProcessRecordsInput> received = new ArrayList<>();
         doAnswer(a -> {
-                    ProcessRecordsInput input = a.getArgumentAt(0, ProcessRecordsInput.class);
+                    ProcessRecordsInput input = (ProcessRecordsInput) a.getArgument(0);
                     received.add(input);
                     if (input.records().stream()
                             .anyMatch(r -> StringUtils.startsWith(r.partitionKey(), TERMINAL_MARKER))) {

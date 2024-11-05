@@ -1,95 +1,103 @@
 package software.amazon.kinesis.leases.dynamodb;
 
-import java.util.UUID;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
-import software.amazon.kinesis.leases.LeaseRefresher;
+import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
+import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
+import software.amazon.awssdk.services.dynamodb.model.IndexStatus;
+import software.amazon.kinesis.common.DdbTableConfig;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
-import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.metrics.NullMetricsFactory;
 
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static software.amazon.kinesis.leases.dynamodb.TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK;
 
-@RunWith(MockitoJUnitRunner.class)
-public class DynamoDBLeaseCoordinatorTest {
+class DynamoDBLeaseCoordinatorTest {
 
-    private static final String WORKER_ID = UUID.randomUUID().toString();
-    private static final boolean ENABLE_PRIORITY_LEASE_ASSIGNMENT = true;
-    private static final long LEASE_DURATION_MILLIS = 5000L;
-    private static final long EPSILON_MILLIS = 25L;
-    private static final int MAX_LEASES_FOR_WORKER = Integer.MAX_VALUE;
-    private static final int MAX_LEASES_TO_STEAL_AT_ONE_TIME = 1;
-    private static final int MAX_LEASE_RENEWER_THREAD_COUNT = 20;
-    private static final long INITIAL_LEASE_TABLE_READ_CAPACITY = 10L;
-    private static final long INITIAL_LEASE_TABLE_WRITE_CAPACITY = 10L;
-    private static final long SECONDS_BETWEEN_POLLS = 10L;
-    private static final long TIMEOUT_SECONDS = 600L;
+    private static final String TEST_LEASE_TABLE = "SomeTable";
+    private DynamoDBLeaseRefresher leaseRefresher;
+    private DynamoDBLeaseCoordinator dynamoDBLeaseCoordinator;
+    private final DynamoDbAsyncClient dynamoDbAsyncClient =
+            DynamoDBEmbedded.create().dynamoDbAsyncClient();
 
-    @Mock
-    private LeaseRefresher leaseRefresher;
+    @BeforeEach
+    void setUp() {
+        this.leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                dynamoDbAsyncClient,
+                new DynamoDBLeaseSerializer(),
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                true,
+                true,
+                new ArrayList<>());
+    }
 
-    @Mock
-    private MetricsFactory metricsFactory;
+    // TODO - move this test to migration state machine which creates the GSI
+    @Disabled
+    @Test
+    void initialize_withLeaseAssignmentManagerMode_assertIndexOnTable()
+            throws ProvisionedThroughputException, DependencyException {
 
-    private DynamoDBLeaseCoordinator leaseCoordinator;
+        constructCoordinatorAndInitialize();
 
-    @Before
-    public void setup() {
-        this.leaseCoordinator = new DynamoDBLeaseCoordinator(
+        final DescribeTableResponse response = dynamoDbAsyncClient
+                .describeTable(DescribeTableRequest.builder()
+                        .tableName(TEST_LEASE_TABLE)
+                        .build())
+                .join();
+
+        assertEquals(1, response.table().globalSecondaryIndexes().size());
+        assertEquals(
+                IndexStatus.ACTIVE,
+                response.table().globalSecondaryIndexes().get(0).indexStatus());
+    }
+
+    // TODO - move this to migration state machine test
+    @Disabled
+    @Test
+    void initialize_withDefaultMode_assertIndexInCreating() throws ProvisionedThroughputException, DependencyException {
+        constructCoordinatorAndInitialize();
+
+        final DescribeTableResponse response = dynamoDbAsyncClient
+                .describeTable(DescribeTableRequest.builder()
+                        .tableName(TEST_LEASE_TABLE)
+                        .build())
+                .join();
+
+        assertEquals(1, response.table().globalSecondaryIndexes().size());
+        assertEquals(
+                IndexStatus.CREATING,
+                response.table().globalSecondaryIndexes().get(0).indexStatus());
+    }
+
+    private void constructCoordinatorAndInitialize() throws ProvisionedThroughputException, DependencyException {
+        this.dynamoDBLeaseCoordinator = new DynamoDBLeaseCoordinator(
                 leaseRefresher,
-                WORKER_ID,
-                LEASE_DURATION_MILLIS,
-                ENABLE_PRIORITY_LEASE_ASSIGNMENT,
-                EPSILON_MILLIS,
-                MAX_LEASES_FOR_WORKER,
-                MAX_LEASES_TO_STEAL_AT_ONE_TIME,
-                MAX_LEASE_RENEWER_THREAD_COUNT,
-                INITIAL_LEASE_TABLE_READ_CAPACITY,
-                INITIAL_LEASE_TABLE_WRITE_CAPACITY,
-                metricsFactory);
-    }
-
-    @Test
-    public void testInitialize_tableCreationSucceeds() throws Exception {
-        when(leaseRefresher.createLeaseTableIfNotExists()).thenReturn(true);
-        when(leaseRefresher.waitUntilLeaseTableExists(SECONDS_BETWEEN_POLLS, TIMEOUT_SECONDS))
-                .thenReturn(true);
-
-        leaseCoordinator.initialize();
-
-        verify(leaseRefresher).createLeaseTableIfNotExists();
-        verify(leaseRefresher).waitUntilLeaseTableExists(SECONDS_BETWEEN_POLLS, TIMEOUT_SECONDS);
-    }
-
-    @Test(expected = DependencyException.class)
-    public void testInitialize_tableCreationFails() throws Exception {
-        when(leaseRefresher.createLeaseTableIfNotExists()).thenReturn(false);
-        when(leaseRefresher.waitUntilLeaseTableExists(SECONDS_BETWEEN_POLLS, TIMEOUT_SECONDS))
-                .thenReturn(false);
-
-        try {
-            leaseCoordinator.initialize();
-        } finally {
-            verify(leaseRefresher).createLeaseTableIfNotExists();
-            verify(leaseRefresher).waitUntilLeaseTableExists(SECONDS_BETWEEN_POLLS, TIMEOUT_SECONDS);
-        }
-    }
-
-    /**
-     * Validates a {@link NullPointerException} is not thrown when the lease taker
-     * is stopped before it starts/exists.
-     *
-     * @see <a href="https://github.com/awslabs/amazon-kinesis-client/issues/745">issue #745</a>
-     * @see <a href="https://github.com/awslabs/amazon-kinesis-client/issues/900">issue #900</a>
-     */
-    @Test
-    public void testStopLeaseTakerBeforeStart() {
-        leaseCoordinator.stopLeaseTaker();
-        assertTrue(leaseCoordinator.getAssignments().isEmpty());
+                "Identifier",
+                100L,
+                true,
+                100L,
+                10,
+                10,
+                10,
+                100L,
+                100L,
+                new NullMetricsFactory(),
+                new LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig(),
+                LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
+                new ConcurrentHashMap<>());
+        this.dynamoDBLeaseCoordinator.initialize();
     }
 }

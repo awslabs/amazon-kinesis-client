@@ -69,7 +69,7 @@ public class DynamoDBLeaseTakerTest {
     }
 
     /**
-     * Test method for {@link DynamoDBLeaseTaker#stringJoin(java.util.Collection, java.lang.String)}.
+     * Test method for {@link DynamoDBLeaseTaker#stringJoin(java.util.Collection, String)}.
      */
     @Test
     public final void testStringJoin() {
@@ -93,10 +93,6 @@ public class DynamoDBLeaseTakerTest {
         dynamoDBLeaseTaker.allLeases.putAll(
                 leases.stream().collect(Collectors.toMap(Lease::leaseKey, Function.identity())));
 
-        when(leaseRefresher.listLeases()).thenReturn(leases);
-        when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
-        when(timeProvider.call()).thenReturn(MOCK_CURRENT_TIME);
-
         final Map<String, Integer> actualOutput = dynamoDBLeaseTaker.computeLeaseCounts(ImmutableList.of());
 
         final Map<String, Integer> expectedOutput = new HashMap<>();
@@ -116,10 +112,6 @@ public class DynamoDBLeaseTakerTest {
                 .build();
         dynamoDBLeaseTaker.allLeases.putAll(
                 leases.stream().collect(Collectors.toMap(Lease::leaseKey, Function.identity())));
-
-        when(leaseRefresher.listLeases()).thenReturn(leases);
-        when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
-        when(timeProvider.call()).thenReturn(MOCK_CURRENT_TIME);
 
         final Map<String, Integer> actualOutput = dynamoDBLeaseTaker.computeLeaseCounts(leases);
 
@@ -144,7 +136,6 @@ public class DynamoDBLeaseTakerTest {
 
         dynamoDBLeaseTakerWithCustomMultiplier.allLeases.putAll(
                 allLeases.stream().collect(Collectors.toMap(Lease::leaseKey, Function.identity())));
-        when(leaseRefresher.listLeases()).thenReturn(allLeases);
         when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
         when(timeProvider.call()).thenReturn(MOCK_CURRENT_TIME);
 
@@ -172,9 +163,7 @@ public class DynamoDBLeaseTakerTest {
 
         dynamoDBLeaseTakerWithDisabledPriorityLeaseAssignment.allLeases.putAll(
                 allLeases.stream().collect(Collectors.toMap(Lease::leaseKey, Function.identity())));
-        when(leaseRefresher.listLeases()).thenReturn(allLeases);
         when(metricsFactory.createMetrics()).thenReturn(new NullMetricsScope());
-        when(timeProvider.call()).thenReturn(MOCK_CURRENT_TIME);
 
         Set<Lease> output =
                 dynamoDBLeaseTakerWithDisabledPriorityLeaseAssignment.computeLeasesToTake(expiredLeases, timeProvider);
