@@ -22,7 +22,7 @@
   <artifactId>amazon-kinesis-client-pom</artifactId>
   <packaging>pom</packaging>
   <name>Amazon Kinesis Client Library</name>
-  <version>2.6.1-SNAPSHOT</version>
+  <version>3.0.0</version>
   <description>The Amazon Kinesis Client Library for Java enables Java developers to easily consume and process data
     from Amazon Kinesis.
   </description>

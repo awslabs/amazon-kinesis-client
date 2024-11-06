@@ -48,6 +48,7 @@ import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import static org.junit.Assert.assertEquals;
@@ -126,6 +127,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
                 new NullMetricsFactory(),
                 operation,
                 "test-shard",
+                new ThrottlingReporter(5, "test-shard"),
                 AWAIT_TERMINATION_TIMEOUT);
     }
 
@@ -186,6 +188,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
                 new NullMetricsFactory(),
                 operation,
                 "test-shard-2",
+                new ThrottlingReporter(5, "test-shard"),
                 AWAIT_TERMINATION_TIMEOUT);
 
         getRecordsCache.start(extendedSequenceNumber, initialPosition);

@@ -15,6 +15,9 @@
 
 package software.amazon.kinesis.multilang.config;
 
+import java.util.Arrays;
+import java.util.NoSuchElementException;
+
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.ConvertUtilsBean;
 import org.junit.After;
@@ -24,8 +27,16 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.BillingMode;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.ConfigsBuilder;
+import software.amazon.kinesis.coordinator.CoordinatorConfig;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.retrieval.fanout.FanOutConfig;
 import software.amazon.kinesis.retrieval.polling.PollingConfig;
@@ -34,6 +45,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
@@ -41,6 +53,8 @@ import static org.junit.Assert.assertTrue;
 public class MultiLangDaemonConfigurationTest {
 
     private static final String AWS_REGION_PROPERTY_NAME = "aws.region";
+    private static final String DUMMY_APPLICATION_NAME = "dummyApplicationName";
+    private static final String DUMMY_STREAM_NAME = "dummyStreamName";
 
     private BeanUtilsBean utilsBean;
     private ConvertUtilsBean convertUtilsBean;
@@ -71,8 +85,8 @@ public class MultiLangDaemonConfigurationTest {
 
     public MultiLangDaemonConfiguration baseConfiguration() {
         MultiLangDaemonConfiguration configuration = new MultiLangDaemonConfiguration(utilsBean, convertUtilsBean);
-        configuration.setApplicationName("Test");
-        configuration.setStreamName("Test");
+        configuration.setApplicationName(DUMMY_APPLICATION_NAME);
+        configuration.setStreamName(DUMMY_STREAM_NAME);
         configuration.getKinesisCredentialsProvider().set("class", DefaultCredentialsProvider.class.getName());
 
         return configuration;
@@ -109,6 +123,197 @@ public class MultiLangDaemonConfigurationTest {
                 configuration.resolvedConfiguration(shardRecordProcessorFactory);
 
         assertTrue(resolvedConfiguration.leaseManagementConfig.leaseTableDeletionProtectionEnabled());
+    }
+
+    @Test
+    public void testGracefulLeaseHandoffConfig() {
+        final LeaseManagementConfig.GracefulLeaseHandoffConfig defaultGracefulLeaseHandoffConfig =
+                getTestConfigsBuilder().leaseManagementConfig().gracefulLeaseHandoffConfig();
+
+        final long testGracefulLeaseHandoffTimeoutMillis =
+                defaultGracefulLeaseHandoffConfig.gracefulLeaseHandoffTimeoutMillis() + 12345;
+        final boolean testGracefulLeaseHandoffEnabled =
+                !defaultGracefulLeaseHandoffConfig.isGracefulLeaseHandoffEnabled();
+
+        final MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setGracefulLeaseHandoffTimeoutMillis(testGracefulLeaseHandoffTimeoutMillis);
+        configuration.setIsGracefulLeaseHandoffEnabled(testGracefulLeaseHandoffEnabled);
+
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig =
+                resolvedConfiguration.leaseManagementConfig.gracefulLeaseHandoffConfig();
+
+        assertEquals(
+                testGracefulLeaseHandoffTimeoutMillis, gracefulLeaseHandoffConfig.gracefulLeaseHandoffTimeoutMillis());
+        assertEquals(testGracefulLeaseHandoffEnabled, gracefulLeaseHandoffConfig.isGracefulLeaseHandoffEnabled());
+    }
+
+    @Test
+    public void testGracefulLeaseHandoffUsesDefaults() {
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                baseConfiguration().resolvedConfiguration(shardRecordProcessorFactory);
+
+        final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig =
+                resolvedConfiguration.leaseManagementConfig.gracefulLeaseHandoffConfig();
+
+        final LeaseManagementConfig.GracefulLeaseHandoffConfig defaultGracefulLeaseHandoffConfig =
+                getTestConfigsBuilder().leaseManagementConfig().gracefulLeaseHandoffConfig();
+
+        assertEquals(defaultGracefulLeaseHandoffConfig, gracefulLeaseHandoffConfig);
+    }
+
+    @Test
+    public void testWorkerUtilizationAwareAssignmentConfig() {
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+
+        configuration.setInMemoryWorkerMetricsCaptureFrequencyMillis(123);
+        configuration.setWorkerMetricsReporterFreqInMillis(123);
+        configuration.setNoOfPersistedMetricsPerWorkerMetrics(123);
+        configuration.setDisableWorkerMetrics(true);
+        configuration.setMaxThroughputPerHostKBps(.123);
+        configuration.setDampeningPercentage(12);
+        configuration.setReBalanceThresholdPercentage(12);
+        configuration.setAllowThroughputOvershoot(false);
+        configuration.setVarianceBalancingFrequency(12);
+        configuration.setWorkerMetricsEMAAlpha(.123);
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+        LeaseManagementConfig leaseManagementConfig = resolvedConfiguration.leaseManagementConfig;
+        LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig();
+
+        assertEquals(config.inMemoryWorkerMetricsCaptureFrequencyMillis(), 123);
+        assertEquals(config.workerMetricsReporterFreqInMillis(), 123);
+        assertEquals(config.noOfPersistedMetricsPerWorkerMetrics(), 123);
+        assertTrue(config.disableWorkerMetrics());
+        assertEquals(config.maxThroughputPerHostKBps(), .123, .25);
+        assertEquals(config.dampeningPercentage(), 12);
+        assertEquals(config.reBalanceThresholdPercentage(), 12);
+        assertFalse(config.allowThroughputOvershoot());
+        assertEquals(config.varianceBalancingFrequency(), 12);
+        assertEquals(config.workerMetricsEMAAlpha(), .123, .25);
+    }
+
+    @Test
+    public void testWorkerUtilizationAwareAssignmentConfigUsesDefaults() {
+        final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig defaultWorkerUtilAwareAssignmentConfig =
+                getTestConfigsBuilder().leaseManagementConfig().workerUtilizationAwareAssignmentConfig();
+
+        final MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setVarianceBalancingFrequency(
+                defaultWorkerUtilAwareAssignmentConfig.varianceBalancingFrequency() + 12345);
+
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig resolvedWorkerUtilAwareAssignmentConfig =
+                resolvedConfiguration.leaseManagementConfig.workerUtilizationAwareAssignmentConfig();
+
+        assertNotEquals(defaultWorkerUtilAwareAssignmentConfig, resolvedWorkerUtilAwareAssignmentConfig);
+
+        // apart from the single updated configuration, all other config values should be equal to the default
+        resolvedWorkerUtilAwareAssignmentConfig.varianceBalancingFrequency(
+                defaultWorkerUtilAwareAssignmentConfig.varianceBalancingFrequency());
+        assertEquals(defaultWorkerUtilAwareAssignmentConfig, resolvedWorkerUtilAwareAssignmentConfig);
+    }
+
+    @Test
+    public void testWorkerMetricsTableConfigBean() {
+        final BillingMode testWorkerMetricsTableBillingMode = BillingMode.PROVISIONED;
+
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+
+        configuration.setWorkerMetricsTableName("testTable");
+        configuration.setWorkerMetricsBillingMode(testWorkerMetricsTableBillingMode);
+        configuration.setWorkerMetricsReadCapacity(123);
+        configuration.setWorkerMetricsWriteCapacity(123);
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+        LeaseManagementConfig leaseManagementConfig = resolvedConfiguration.leaseManagementConfig;
+        LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationConfig =
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig();
+        LeaseManagementConfig.WorkerMetricsTableConfig workerMetricsConfig =
+                workerUtilizationConfig.workerMetricsTableConfig();
+
+        assertEquals(workerMetricsConfig.tableName(), "testTable");
+        assertEquals(workerMetricsConfig.billingMode(), testWorkerMetricsTableBillingMode);
+        assertEquals(workerMetricsConfig.readCapacity(), 123);
+        assertEquals(workerMetricsConfig.writeCapacity(), 123);
+    }
+
+    @Test
+    public void testWorkerMetricsTableConfigUsesDefaults() {
+        final LeaseManagementConfig.WorkerMetricsTableConfig defaultWorkerMetricsTableConfig = getTestConfigsBuilder()
+                .leaseManagementConfig()
+                .workerUtilizationAwareAssignmentConfig()
+                .workerMetricsTableConfig();
+
+        final MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setWorkerMetricsBillingMode(Arrays.stream(BillingMode.values())
+                .filter(billingMode -> billingMode != defaultWorkerMetricsTableConfig.billingMode())
+                .findFirst()
+                .orElseThrow(NoSuchElementException::new));
+
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        final LeaseManagementConfig.WorkerMetricsTableConfig resolvedWorkerMetricsTableConfig = resolvedConfiguration
+                .leaseManagementConfig
+                .workerUtilizationAwareAssignmentConfig()
+                .workerMetricsTableConfig();
+
+        assertNotEquals(defaultWorkerMetricsTableConfig, resolvedWorkerMetricsTableConfig);
+
+        // apart from the single updated configuration, all other config values should be equal to the default
+        resolvedWorkerMetricsTableConfig.billingMode(defaultWorkerMetricsTableConfig.billingMode());
+        assertEquals(defaultWorkerMetricsTableConfig, resolvedWorkerMetricsTableConfig);
+    }
+
+    @Test
+    public void testCoordinatorStateTableConfigBean() {
+        final BillingMode testWorkerMetricsTableBillingMode = BillingMode.PAY_PER_REQUEST;
+
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+
+        configuration.setCoordinatorStateTableName("testTable");
+        configuration.setCoordinatorStateBillingMode(testWorkerMetricsTableBillingMode);
+        configuration.setCoordinatorStateReadCapacity(123);
+        configuration.setCoordinatorStateWriteCapacity(123);
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+        CoordinatorConfig coordinatorConfig = resolvedConfiguration.getCoordinatorConfig();
+        CoordinatorConfig.CoordinatorStateTableConfig coordinatorStateConfig =
+                coordinatorConfig.coordinatorStateTableConfig();
+        assertEquals(coordinatorStateConfig.tableName(), "testTable");
+        assertEquals(coordinatorStateConfig.billingMode(), testWorkerMetricsTableBillingMode);
+        assertEquals(coordinatorStateConfig.readCapacity(), 123);
+        assertEquals(coordinatorStateConfig.writeCapacity(), 123);
+    }
+
+    @Test
+    public void testCoordinatorStateTableConfigUsesDefaults() {
+        final CoordinatorConfig.CoordinatorStateTableConfig defaultCoordinatorStateTableConfig =
+                getTestConfigsBuilder().coordinatorConfig().coordinatorStateTableConfig();
+
+        final MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setCoordinatorStateWriteCapacity(defaultCoordinatorStateTableConfig.writeCapacity() + 12345);
+
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        final CoordinatorConfig.CoordinatorStateTableConfig resolvedCoordinatorStateTableConfig =
+                resolvedConfiguration.coordinatorConfig.coordinatorStateTableConfig();
+
+        assertNotEquals(defaultCoordinatorStateTableConfig, resolvedCoordinatorStateTableConfig);
+
+        // apart from the single updated configuration, all other config values should be equal to the default
+        resolvedCoordinatorStateTableConfig.writeCapacity(defaultCoordinatorStateTableConfig.writeCapacity());
+        assertEquals(defaultCoordinatorStateTableConfig, resolvedCoordinatorStateTableConfig);
     }
 
     @Test
@@ -265,5 +470,44 @@ public class MultiLangDaemonConfigurationTest {
                 (FanOutConfig) resolvedConfiguration.getRetrievalConfig().retrievalSpecificConfig();
 
         assertThat(fanOutConfig.consumerArn(), equalTo(consumerArn));
+    }
+
+    @Test
+    public void testClientVersionConfig() {
+        final CoordinatorConfig.ClientVersionConfig testClientVersionConfig =
+                CoordinatorConfig.ClientVersionConfig.CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X;
+
+        final MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setClientVersionConfig(testClientVersionConfig);
+
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        final CoordinatorConfig coordinatorConfig = resolvedConfiguration.coordinatorConfig;
+
+        assertEquals(testClientVersionConfig, coordinatorConfig.clientVersionConfig());
+    }
+
+    @Test
+    public void testClientVersionConfigUsesDefault() {
+        final MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                baseConfiguration().resolvedConfiguration(shardRecordProcessorFactory);
+
+        final CoordinatorConfig coordinatorConfig = resolvedConfiguration.coordinatorConfig;
+
+        assertEquals(
+                getTestConfigsBuilder().coordinatorConfig().clientVersionConfig(),
+                coordinatorConfig.clientVersionConfig());
+    }
+
+    private ConfigsBuilder getTestConfigsBuilder() {
+        return new ConfigsBuilder(
+                DUMMY_STREAM_NAME,
+                DUMMY_APPLICATION_NAME,
+                Mockito.mock(KinesisAsyncClient.class),
+                Mockito.mock(DynamoDbAsyncClient.class),
+                Mockito.mock(CloudWatchAsyncClient.class),
+                "dummyWorkerIdentifier",
+                shardRecordProcessorFactory);
     }
 }

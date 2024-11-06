@@ -61,6 +61,7 @@ import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
+import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 import static software.amazon.kinesis.common.DiagnosticUtils.takeDelayedDeliveryActionIfRequired;
@@ -109,6 +110,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private boolean wasReset = false;
     private Instant lastEventDeliveryTime = Instant.EPOCH;
     private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
+    private final ThrottlingReporter throttlingReporter;
 
     @Data
     @Accessors(fluent = true)
@@ -233,6 +235,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             @NonNull final MetricsFactory metricsFactory,
             @NonNull final String operation,
             @NonNull final String shardId,
+            final ThrottlingReporter throttlingReporter,
             final long awaitTerminationTimeoutMillis) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
@@ -248,6 +251,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
         this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
         Validate.notEmpty(operation, "Operation cannot be empty");
+        this.throttlingReporter = throttlingReporter;
         this.operation = operation;
         this.streamId = this.getRecordsRetrievalStrategy.dataFetcher().getStreamIdentifier();
         this.streamAndShardId = this.streamId.serialize() + ":" + shardId;
@@ -279,7 +283,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             final long idleMillisBetweenCalls,
             final MetricsFactory metricsFactory,
             final String operation,
-            final String shardId) {
+            final String shardId,
+            final ThrottlingReporter throttlingReporter) {
         this(
                 maxPendingProcessRecordsInput,
                 maxByteSize,
@@ -291,6 +296,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 metricsFactory,
                 operation,
                 shardId,
+                throttlingReporter,
                 DEFAULT_AWAIT_TERMINATION_TIMEOUT_MILLIS);
     }
 
@@ -555,6 +561,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                             recordsRetrieved.lastBatchSequenceNumber);
                     addArrivedRecordsInput(recordsRetrieved);
                     drainQueueForRequests();
+                    throttlingReporter.success();
                 } catch (PositionResetException pse) {
                     throw pse;
                 } catch (RetryableRetrievalException rre) {
@@ -584,10 +591,11 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
 
                     publisherSession.dataFetcher().restartIterator();
                 } catch (ProvisionedThroughputExceededException e) {
-                    // Update the lastSuccessfulCall if we get a throttling exception so that we back off idleMillis
-                    // for the next call
-                    lastSuccessfulCall = Instant.now();
-                    log.error("{} :  Exception thrown while fetching records from Kinesis", streamAndShardId, e);
+                    log.error(
+                            "{} : ProvisionedThroughputExceededException thrown while fetching records from Kinesis",
+                            streamAndShardId,
+                            e);
+                    throttlingReporter.throttled();
                 } catch (SdkException e) {
                     log.error("{} :  Exception thrown while fetching records from Kinesis", streamAndShardId, e);
                 } finally {

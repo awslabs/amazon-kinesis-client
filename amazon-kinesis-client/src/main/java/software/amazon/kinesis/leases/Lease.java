@@ -46,7 +46,11 @@ import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
             "lastCounterIncrementNanos",
             "childShardIds",
             "pendingCheckpointState",
-            "isMarkedForLeaseSteal"
+            "isMarkedForLeaseSteal",
+            "throughputKBps",
+            "checkpointOwner",
+            "checkpointOwnerTimeoutTimestampMillis",
+            "isExpiredOrUnassigned"
         })
 @ToString
 public class Lease {
@@ -104,6 +108,33 @@ public class Lease {
     @Setter
     private boolean isMarkedForLeaseSteal;
 
+    /**
+     * If true, this indicates that lease is ready to be immediately reassigned.
+     */
+    @Setter
+    private boolean isExpiredOrUnassigned;
+
+    /**
+     * Throughput in Kbps for the lease.
+     */
+    private Double throughputKBps;
+
+    /**
+     * Owner of the checkpoint. The attribute is used for graceful shutdowns to indicate the owner that
+     * is allowed to write the checkpoint.
+     */
+    @Setter
+    private String checkpointOwner;
+
+    /**
+     * This field is used for tracking when the shutdown was requested on the lease so we can expire it. This is
+     * deliberately not persisted in DynamoDB because leaseOwner are expected to transfer lease from itself to the
+     * next owner during shutdown. If the worker dies before shutdown the lease will just become expired then we can
+     * pick it up. If for some reason worker is not able to shut down and continues holding onto the lease
+     * this timeout will kick in and force a lease transfer.
+     */
+    @Setter
+    private Long checkpointOwnerTimeoutTimestampMillis;
     /**
      * Count of distinct lease holders between checkpoints.
      */
@@ -243,6 +274,54 @@ public class Lease {
     }
 
     /**
+     * @return true if checkpoint owner is set. Indicating a requested shutdown.
+     */
+    public boolean shutdownRequested() {
+        return checkpointOwner != null;
+    }
+
+    /**
+     * Check whether lease should be blocked on pending checkpoint. We DON'T block if
+     * - lease is expired (Expired lease should be assigned right away) OR
+     *          ----- at this point we know lease is assigned -----
+     * - lease is shardEnd (No more processing possible) OR
+     * - lease is NOT requested for shutdown OR
+     * - lease shutdown expired
+     *
+     * @param currentTimeMillis current time in milliseconds
+     * @return true if lease is blocked on pending checkpoint
+     */
+    public boolean blockedOnPendingCheckpoint(long currentTimeMillis) {
+        // using ORs and negate
+        return !(isExpiredOrUnassigned
+                || ExtendedSequenceNumber.SHARD_END.equals(checkpoint)
+                || !shutdownRequested()
+                // if shutdown requested then checkpointOwnerTimeoutTimestampMillis should present
+                || currentTimeMillis - checkpointOwnerTimeoutTimestampMillis >= 0);
+    }
+
+    /**
+     * Check whether lease is eligible for graceful shutdown. It's eligible if
+     * - lease is still assigned (not expired) AND
+     * - lease is NOT shardEnd (No more processing possible AND
+     * - lease is NOT requested for shutdown
+     *
+     * @return true if lease is eligible for graceful shutdown
+     */
+    public boolean isEligibleForGracefulShutdown() {
+        return !isExpiredOrUnassigned && !ExtendedSequenceNumber.SHARD_END.equals(checkpoint) && !shutdownRequested();
+    }
+
+    /**
+     * Need to handle the case during graceful shutdown where leaseOwner isn't the current owner
+     *
+     * @return the actual owner
+     */
+    public String actualOwner() {
+        return checkpointOwner == null ? leaseOwner : checkpointOwner;
+    }
+
+    /**
      * @return true if lease is not currently owned
      */
     private boolean isUnassigned() {
@@ -344,6 +423,15 @@ public class Lease {
     }
 
     /**
+     * Sets throughputKbps.
+     *
+     * @param throughputKBps may not be null
+     */
+    public void throughputKBps(double throughputKBps) {
+        this.throughputKBps = throughputKBps;
+    }
+
+    /**
      * Set the hash range key for this shard.
      * @param hashKeyRangeForLease
      */
@@ -370,6 +458,8 @@ public class Lease {
      * @return A deep copy of this object.
      */
     public Lease copy() {
-        return new Lease(this);
+        final Lease lease = new Lease(this);
+        lease.checkpointOwner(this.checkpointOwner);
+        return lease;
     }
 }

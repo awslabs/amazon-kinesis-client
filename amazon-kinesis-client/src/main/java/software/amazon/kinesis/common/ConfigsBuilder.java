@@ -256,7 +256,8 @@ public class ConfigsBuilder {
      * @return LeaseManagementConfig
      */
     public LeaseManagementConfig leaseManagementConfig() {
-        return new LeaseManagementConfig(tableName(), dynamoDBClient(), kinesisClient(), workerIdentifier());
+        return new LeaseManagementConfig(
+                tableName(), applicationName(), dynamoDBClient(), kinesisClient(), workerIdentifier());
     }
 
     /**

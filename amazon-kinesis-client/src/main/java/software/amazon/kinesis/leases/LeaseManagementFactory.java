@@ -15,9 +15,12 @@
 
 package software.amazon.kinesis.leases;
 
+import java.util.concurrent.ConcurrentMap;
+
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.coordinator.DeletedStreamListProvider;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
+import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.metrics.MetricsFactory;
 
 /**
@@ -26,10 +29,27 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 public interface LeaseManagementFactory {
     LeaseCoordinator createLeaseCoordinator(MetricsFactory metricsFactory);
 
-    ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory);
+    default LeaseCoordinator createLeaseCoordinator(
+            MetricsFactory metricsFactory, ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
 
+    /**
+     * @deprecated This method is never invoked, please remove implementation of this method
+     *               as it will be removed in future releases.
+     */
+    @Deprecated
+    default ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory) {
+        throw new UnsupportedOperationException("Deprecated");
+    }
+
+    /**
+     * @deprecated This method is never invoked, please remove implementation of this method
+     *               as it will be removed in future releases.
+     */
+    @Deprecated
     default ShardSyncTaskManager createShardSyncTaskManager(MetricsFactory metricsFactory, StreamConfig streamConfig) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Deprecated");
     }
 
     default ShardSyncTaskManager createShardSyncTaskManager(
@@ -41,10 +61,17 @@ public interface LeaseManagementFactory {
 
     DynamoDBLeaseRefresher createLeaseRefresher();
 
-    ShardDetector createShardDetector();
+    /**
+     * @deprecated This method is never invoked, please remove implementation of this method
+     *               as it will be removed in future releases.
+     */
+    @Deprecated
+    default ShardDetector createShardDetector() {
+        throw new UnsupportedOperationException("Deprecated");
+    }
 
     default ShardDetector createShardDetector(StreamConfig streamConfig) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Not implemented");
     }
 
     LeaseCleanupManager createLeaseCleanupManager(MetricsFactory metricsFactory);

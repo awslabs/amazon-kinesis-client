@@ -18,7 +18,12 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.leases.Lease;
+import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.ShardInfo;
+import software.amazon.kinesis.leases.exceptions.DependencyException;
+import software.amazon.kinesis.leases.exceptions.InvalidStateException;
+import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.events.ShutdownRequestedInput;
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer;
 import software.amazon.kinesis.processor.ShardRecordProcessor;
@@ -33,23 +38,41 @@ public class ShutdownNotificationTask implements ConsumerTask {
     private final ShardRecordProcessor shardRecordProcessor;
     private final RecordProcessorCheckpointer recordProcessorCheckpointer;
     private final ShutdownNotification shutdownNotification;
-    //    TODO: remove if not used
     private final ShardInfo shardInfo;
+    private final LeaseCoordinator leaseCoordinator;
 
     @Override
     public TaskResult call() {
+        final String leaseKey = ShardInfo.getLeaseKey(shardInfo);
+        final Lease currentShardLease = leaseCoordinator.getCurrentlyHeldLease(leaseKey);
         try {
             try {
                 shardRecordProcessor.shutdownRequested(ShutdownRequestedInput.builder()
                         .checkpointer(recordProcessorCheckpointer)
                         .build());
+                attemptLeaseTransfer(currentShardLease);
             } catch (Exception ex) {
                 return new TaskResult(ex);
             }
-
             return new TaskResult(null);
         } finally {
-            shutdownNotification.shutdownNotificationComplete();
+            if (shutdownNotification != null) {
+                shutdownNotification.shutdownNotificationComplete();
+            } else {
+                // shutdownNotification is null if this is a shard level graceful shutdown instead of a worker level
+                // one. We need to drop lease like what's done in the shutdownNotificationComplete so we can
+                // transition to next state.
+                leaseCoordinator.dropLease(currentShardLease);
+            }
+        }
+    }
+
+    private void attemptLeaseTransfer(Lease lease)
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        if (lease != null && lease.shutdownRequested()) {
+            if (leaseCoordinator.workerIdentifier().equals(lease.checkpointOwner())) {
+                leaseCoordinator.leaseRefresher().assignLease(lease, lease.leaseOwner());
+            }
         }
     }
 

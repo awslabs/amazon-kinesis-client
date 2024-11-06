@@ -14,7 +14,7 @@
  */
 package software.amazon.kinesis.multilang;
 
-import com.amazonaws.regions.Regions;
+import software.amazon.awssdk.regions.Region;
 
 /**
  * Defines methods to process {@link NestedPropertyKey}s.
@@ -26,11 +26,11 @@ public interface NestedPropertyProcessor {
      *
      * @param serviceEndpoint the service endpoint either with or without the protocol
      *      (e.g., https://sns.us-west-1.amazonaws.com, sns.us-west-1.amazonaws.com)
-     * @param signingRegion the region to use for SigV4 signing of requests (e.g. us-west-1)
+     * @param signingRegion the region to use for the client (e.g. us-west-1)
      *
-     * @see #acceptEndpointRegion(Regions)
-     * @see <a href="https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/client/builder/AwsClientBuilder.EndpointConfiguration.html">
-     *     AwsClientBuilder.EndpointConfiguration</a>
+     * @see #acceptEndpointRegion(Region)
+     * @see <a href="https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/core/client/builder/SdkClientBuilder.html#endpointOverride(java.net.URI)">
+     *     AwsClientBuilder.endpointOverride</a>
      */
     void acceptEndpoint(String serviceEndpoint, String signingRegion);
 
@@ -42,7 +42,7 @@ public interface NestedPropertyProcessor {
      *
      * @see #acceptEndpoint(String, String)
      */
-    void acceptEndpointRegion(Regions region);
+    void acceptEndpointRegion(Region region);
 
     /**
      * Set the external id, an optional field to designate who can assume an IAM role.

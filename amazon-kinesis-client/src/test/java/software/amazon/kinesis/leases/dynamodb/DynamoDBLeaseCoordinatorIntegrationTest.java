@@ -19,16 +19,23 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.kinesis.checkpoint.dynamodb.DynamoDBCheckpointer;
+import software.amazon.kinesis.common.DdbTableConfig;
+import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider;
+import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCoordinator;
+import software.amazon.kinesis.leases.LeaseManagementConfig;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
@@ -44,6 +51,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class DynamoDBLeaseCoordinatorIntegrationTest {
@@ -79,7 +88,12 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                     dynamoDBClient,
                     new DynamoDBLeaseSerializer(),
                     useConsistentReads,
-                    TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
+                    TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK,
+                    LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
+                    new DdbTableConfig(),
+                    LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
+                    LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
+                    DefaultSdkAutoConstructList.getInstance());
         }
         leaseRefresher.createLeaseTableIfNotExists(10L, 10L);
 
@@ -104,17 +118,27 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                 leaseRefresher,
                 WORKER_ID,
                 LEASE_DURATION_MILLIS,
+                LeaseManagementConfig.DEFAULT_ENABLE_PRIORITY_LEASE_ASSIGNMENT,
                 EPSILON_MILLIS,
                 MAX_LEASES_FOR_WORKER,
                 MAX_LEASES_TO_STEAL_AT_ONE_TIME,
                 MAX_LEASE_RENEWER_THREAD_COUNT,
                 INITIAL_LEASE_TABLE_READ_CAPACITY,
                 INITIAL_LEASE_TABLE_WRITE_CAPACITY,
-                metricsFactory);
+                metricsFactory,
+                new LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig(),
+                LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
+                new ConcurrentHashMap<>());
         dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseRefresher);
         dynamoDBCheckpointer.operation(OPERATION);
 
-        coordinator.start();
+        MigrationAdaptiveLeaseAssignmentModeProvider mockModeProvider =
+                mock(MigrationAdaptiveLeaseAssignmentModeProvider.class, Mockito.RETURNS_MOCKS);
+        when(mockModeProvider.getLeaseAssignmentMode())
+                .thenReturn(LeaseAssignmentMode.WORKER_UTILIZATION_AWARE_ASSIGNMENT);
+        when(mockModeProvider.dynamicModeChangeSupportNeeded()).thenReturn(false);
+
+        coordinator.start(mockModeProvider);
     }
 
     /**

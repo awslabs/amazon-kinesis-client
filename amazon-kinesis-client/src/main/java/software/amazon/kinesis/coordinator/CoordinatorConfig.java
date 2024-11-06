@@ -18,6 +18,7 @@ package software.amazon.kinesis.coordinator;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.experimental.Accessors;
+import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.leases.NoOpShardPrioritization;
 import software.amazon.kinesis.leases.ShardPrioritization;
 
@@ -27,6 +28,14 @@ import software.amazon.kinesis.leases.ShardPrioritization;
 @Data
 @Accessors(fluent = true)
 public class CoordinatorConfig {
+
+    private static final int PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT = 1;
+
+    public CoordinatorConfig(final String applicationName) {
+        this.applicationName = applicationName;
+        this.coordinatorStateTableConfig = new CoordinatorStateTableConfig(applicationName);
+    }
+
     /**
      * Application name used by checkpointer to checkpoint.
      *
@@ -96,4 +105,53 @@ public class CoordinatorConfig {
      * <p>Default value: 1000L</p>
      */
     private long schedulerInitializationBackoffTimeMillis = 1000L;
+
+    /**
+     * Version the KCL needs to operate in. For more details check the KCLv3 migration
+     * documentation.
+     */
+    public enum ClientVersionConfig {
+        /**
+         * For an application that was operating with previous KCLv2.x, during
+         * upgrade to KCLv3.x, a migration process is needed due to the incompatible
+         * changes between the 2 versions. During the migration process, application
+         * must use ClientVersion=CLIENT_VERSION_COMPATIBLE_WITH_2x so that it runs in
+         * a compatible mode until all workers in the cluster have upgraded to the version
+         * running 3.x version (which is determined based on workers emitting WorkerMetricStats)
+         * Once all known workers are in 3.x mode, the library auto toggles to 3.x mode;
+         * but prior to that it runs in a mode compatible with 2.x workers.
+         * This version also allows rolling back to the compatible mode from the
+         * auto-toggled 3.x mode.
+         */
+        CLIENT_VERSION_CONFIG_COMPATIBLE_WITH_2X,
+        /**
+         * A new application operating with KCLv3.x will use this value. Also, an application
+         * that has successfully upgraded to 3.x version and no longer needs the ability
+         * for a rollback to a 2.x compatible version, will use this value. In this version,
+         * KCL will operate with new algorithms introduced in 3.x which is not compatible
+         * with prior versions. And once in this version, rollback to 2.x is not supported.
+         */
+        CLIENT_VERSION_CONFIG_3X,
+    }
+
+    /**
+     * Client version KCL must operate in, by default it operates in 3.x version which is not
+     * compatible with prior versions.
+     */
+    private ClientVersionConfig clientVersionConfig = ClientVersionConfig.CLIENT_VERSION_CONFIG_3X;
+
+    public static class CoordinatorStateTableConfig extends DdbTableConfig {
+        private CoordinatorStateTableConfig(final String applicationName) {
+            super(applicationName, "CoordinatorState");
+        }
+    }
+
+    /**
+     * Configuration to control how the CoordinatorState DDB table is created, such as table name,
+     * billing mode, provisioned capacity. If no table name is specified, the table name will
+     * default to applicationName-CoordinatorState. If no billing more is chosen, default is
+     * On-Demand.
+     */
+    @NonNull
+    private final CoordinatorStateTableConfig coordinatorStateTableConfig;
 }

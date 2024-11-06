@@ -91,10 +91,12 @@ public class ShutdownTaskTest {
      */
     private static final String SHARD_ID = "shardId-0";
 
+    private static final String LEASE_OWNER = "leaseOwner";
     private static final ShardInfo SHARD_INFO =
             new ShardInfo(SHARD_ID, "concurrencyToken", Collections.emptySet(), ExtendedSequenceNumber.LATEST);
 
     private ShutdownTask task;
+    private Lease lease;
 
     @Mock
     private RecordsPublisher recordsPublisher;
@@ -135,11 +137,11 @@ public class ShutdownTaskTest {
         when(hierarchicalShardSyncer.createLeaseForChildShard(
                         Matchers.any(ChildShard.class), Matchers.any(StreamIdentifier.class)))
                 .thenReturn(childLease);
-        setupLease(SHARD_ID, Collections.emptyList());
+        lease = setupLease(SHARD_ID, Collections.emptyList());
 
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
-        when(shardDetector.streamIdentifier()).thenReturn(STREAM_IDENTIFIER);
 
+        when(shardDetector.streamIdentifier()).thenReturn(STREAM_IDENTIFIER);
         task = createShutdownTask(SHARD_END, constructChildrenFromSplit());
     }
 
@@ -361,7 +363,7 @@ public class ShutdownTaskTest {
     }
 
     private Lease setupLease(final String leaseKey, final Collection<String> parentShardIds) throws Exception {
-        final Lease lease = LeaseHelper.createLease(leaseKey, "leaseOwner", parentShardIds);
+        final Lease lease = LeaseHelper.createLease(leaseKey, LEASE_OWNER, parentShardIds);
         when(leaseCoordinator.getCurrentlyHeldLease(lease.leaseKey())).thenReturn(lease);
         when(leaseRefresher.getLease(lease.leaseKey())).thenReturn(lease);
         return lease;

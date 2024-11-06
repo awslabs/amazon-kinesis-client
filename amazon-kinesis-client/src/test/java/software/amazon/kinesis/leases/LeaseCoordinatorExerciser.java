@@ -25,15 +25,21 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.swing.BoxLayout;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
 import lombok.extern.slf4j.Slf4j;
+import org.mockito.Mockito;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.kinesis.common.DdbTableConfig;
+import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider;
+import software.amazon.kinesis.coordinator.MigrationAdaptiveLeaseAssignmentModeProvider.LeaseAssignmentMode;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseCoordinator;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseRefresher;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
@@ -46,6 +52,9 @@ import software.amazon.kinesis.metrics.CloudWatchMetricsFactory;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.metrics.MetricsLevel;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @Slf4j
 public class LeaseCoordinatorExerciser {
@@ -73,7 +82,18 @@ public class LeaseCoordinatorExerciser {
                 dynamoDBClient,
                 new DynamoDBLeaseSerializer(),
                 true,
-                TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK);
+                TableCreatorCallback.NOOP_TABLE_CREATOR_CALLBACK,
+                LeaseManagementConfig.DEFAULT_REQUEST_TIMEOUT,
+                new DdbTableConfig(),
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_DELETION_PROTECTION_ENABLED,
+                LeaseManagementConfig.DEFAULT_LEASE_TABLE_PITR_ENABLED,
+                DefaultSdkAutoConstructList.getInstance());
+
+        MigrationAdaptiveLeaseAssignmentModeProvider mockModeProvider =
+                mock(MigrationAdaptiveLeaseAssignmentModeProvider.class, Mockito.RETURNS_MOCKS);
+        when(mockModeProvider.getLeaseAssignmentMode())
+                .thenReturn(LeaseAssignmentMode.WORKER_UTILIZATION_AWARE_ASSIGNMENT);
+        when(mockModeProvider.dynamicModeChangeSupportNeeded()).thenReturn(false);
 
         if (leaseRefresher.createLeaseTableIfNotExists()) {
             log.info("Waiting for newly created lease table");
@@ -102,13 +122,17 @@ public class LeaseCoordinatorExerciser {
                     leaseRefresher,
                     workerIdentifier,
                     leaseDurationMillis,
+                    LeaseManagementConfig.DEFAULT_ENABLE_PRIORITY_LEASE_ASSIGNMENT,
                     epsilonMillis,
                     MAX_LEASES_FOR_WORKER,
                     MAX_LEASES_TO_STEAL_AT_ONE_TIME,
                     MAX_LEASE_RENEWER_THREAD_COUNT,
                     INITIAL_LEASE_TABLE_READ_CAPACITY,
                     INITIAL_LEASE_TABLE_WRITE_CAPACITY,
-                    metricsFactory);
+                    metricsFactory,
+                    new LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig(),
+                    LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
+                    new ConcurrentHashMap<>());
 
             coordinators.add(coord);
         }
@@ -144,7 +168,7 @@ public class LeaseCoordinatorExerciser {
                         button.setLabel("Start " + coord.workerIdentifier());
                     } else {
                         try {
-                            coord.start();
+                            coord.start(mockModeProvider);
                         } catch (LeasingException e) {
                             log.error("{}", e);
                         }
@@ -238,7 +262,7 @@ public class LeaseCoordinatorExerciser {
         frame.setVisible(true);
 
         for (LeaseCoordinator coord : coordinators) {
-            coord.start();
+            coord.start(mockModeProvider);
         }
     }
 }

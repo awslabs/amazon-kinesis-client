@@ -21,11 +21,14 @@ import java.util.concurrent.Executors;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseIntegrationBillingModePayPerRequestTest;
 import software.amazon.kinesis.leases.LeaseRenewer;
+import software.amazon.kinesis.leases.LeaseStatsRecorder;
 import software.amazon.kinesis.leases.exceptions.LeasingException;
+import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -42,6 +45,11 @@ public class DynamoDBLeaseRenewerBillingModePayPerRequestIntegrationTest
     // This test case's leases last 2 seconds
     private static final long LEASE_DURATION_MILLIS = 2000L;
 
+    @Mock
+    private LeaseStatsRecorder leaseStatsRecorder;
+
+    private static final MetricsFactory NULL_METRICS_FACTORY = new NullMetricsFactory();
+
     private LeaseRenewer renewer;
 
     @Before
@@ -51,7 +59,9 @@ public class DynamoDBLeaseRenewerBillingModePayPerRequestIntegrationTest
                 "foo",
                 LEASE_DURATION_MILLIS,
                 Executors.newCachedThreadPool(),
-                new NullMetricsFactory());
+                NULL_METRICS_FACTORY,
+                leaseStatsRecorder,
+                lease -> {});
     }
 
     @Test
@@ -162,7 +172,7 @@ public class DynamoDBLeaseRenewerBillingModePayPerRequestIntegrationTest
     }
 
     @Test
-    public void testUpdateLostLease() throws LeasingException {
+    public void testUpdateLostLease() throws Exception {
         TestHarnessBuilder builder = new TestHarnessBuilder(leaseRefresher);
 
         builder.withLease("1", "foo").build();
@@ -262,7 +272,13 @@ public class DynamoDBLeaseRenewerBillingModePayPerRequestIntegrationTest
         builder.withLease(shardId, owner);
         Map<String, Lease> leases = builder.build();
         DynamoDBLeaseRenewer renewer = new DynamoDBLeaseRenewer(
-                leaseRefresher, owner, 30000L, Executors.newCachedThreadPool(), new NullMetricsFactory());
+                leaseRefresher,
+                owner,
+                30000L,
+                Executors.newCachedThreadPool(),
+                NULL_METRICS_FACTORY,
+                leaseStatsRecorder,
+                lease -> {});
         renewer.initialize();
         Map<String, Lease> heldLeases = renewer.getCurrentlyHeldLeases();
         assertThat(heldLeases.size(), equalTo(leases.size()));
@@ -277,7 +293,13 @@ public class DynamoDBLeaseRenewerBillingModePayPerRequestIntegrationTest
         builder.withLease(shardId, owner);
         Map<String, Lease> leases = builder.build();
         DynamoDBLeaseRenewer renewer = new DynamoDBLeaseRenewer(
-                leaseRefresher, owner, 30000L, Executors.newCachedThreadPool(), new NullMetricsFactory());
+                leaseRefresher,
+                owner,
+                30000L,
+                Executors.newCachedThreadPool(),
+                NULL_METRICS_FACTORY,
+                leaseStatsRecorder,
+                lease -> {});
         renewer.initialize();
         Map<String, Lease> heldLeases = renewer.getCurrentlyHeldLeases();
         assertThat(heldLeases.size(), equalTo(leases.size()));

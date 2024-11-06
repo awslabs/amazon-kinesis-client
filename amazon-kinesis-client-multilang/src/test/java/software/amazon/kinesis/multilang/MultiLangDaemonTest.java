@@ -157,7 +157,7 @@ public class MultiLangDaemonTest {
 
         MultiLangDaemon.MultiLangDaemonArguments arguments = new MultiLangDaemon.MultiLangDaemonArguments();
 
-        daemon.propertiesFile(arguments);
+        daemon.validateAndGetPropertiesFileName(arguments);
     }
 
     @Test
@@ -166,7 +166,7 @@ public class MultiLangDaemonTest {
         MultiLangDaemon.MultiLangDaemonArguments arguments = new MultiLangDaemon.MultiLangDaemonArguments();
         arguments.parameters = Collections.singletonList(expectedPropertiesFile);
 
-        String propertiesFile = daemon.propertiesFile(arguments);
+        String propertiesFile = daemon.validateAndGetPropertiesFileName(arguments);
 
         assertThat(propertiesFile, equalTo(expectedPropertiesFile));
     }
@@ -180,7 +180,7 @@ public class MultiLangDaemonTest {
         arguments.parameters = Collections.singletonList(propertiesArgument);
         arguments.propertiesFile = propertiesOptions;
 
-        String propertiesFile = daemon.propertiesFile(arguments);
+        String propertiesFile = daemon.validateAndGetPropertiesFileName(arguments);
 
         assertThat(propertiesFile, equalTo(propertiesOptions));
     }
@@ -193,7 +193,7 @@ public class MultiLangDaemonTest {
         MultiLangDaemon.MultiLangDaemonArguments arguments = new MultiLangDaemon.MultiLangDaemonArguments();
         arguments.parameters = Arrays.asList("parameter1", "parameter2");
 
-        daemon.propertiesFile(arguments);
+        daemon.validateAndGetPropertiesFileName(arguments);
     }
 
     @Test

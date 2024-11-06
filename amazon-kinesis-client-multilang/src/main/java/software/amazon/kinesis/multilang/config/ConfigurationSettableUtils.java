@@ -93,7 +93,20 @@ public class ConfigurationSettableUtils {
                             try {
                                 setter = b.configurationClass().getMethod(setterName, value.getClass());
                             } catch (NoSuchMethodException e) {
-                                throw new RuntimeException(e);
+                                // find if there is a setter which is not the exact parameter type
+                                // but is assignable from the type
+                                for (Method method : b.configurationClass().getMethods()) {
+                                    Class<?>[] parameterTypes = method.getParameterTypes();
+                                    if (method.getName().equals(setterName)
+                                            && parameterTypes.length == 1
+                                            && parameterTypes[0].isAssignableFrom(value.getClass())) {
+                                        setter = method;
+                                        break;
+                                    }
+                                }
+                                if (setter == null) {
+                                    throw new RuntimeException(e);
+                                }
                             }
                         }
                         try {

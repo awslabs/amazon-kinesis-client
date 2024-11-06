@@ -71,7 +71,7 @@ public class ShardSyncTaskManager {
     /**
      * Constructor.
      *
-     * <p>NOTE: This constructor is deprecated and will be removed in a future release.</p>
+     * @deprecated This constructor is deprecated and will be removed in a future release.
      *
      * @param shardDetector
      * @param leaseRefresher
@@ -92,18 +92,16 @@ public class ShardSyncTaskManager {
             long shardSyncIdleTimeMillis,
             ExecutorService executorService,
             MetricsFactory metricsFactory) {
-        this.shardDetector = shardDetector;
-        this.leaseRefresher = leaseRefresher;
-        this.initialPositionInStream = initialPositionInStream;
-        this.cleanupLeasesUponShardCompletion = cleanupLeasesUponShardCompletion;
-        this.garbageCollectLeases = true;
-        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
-        this.shardSyncIdleTimeMillis = shardSyncIdleTimeMillis;
-        this.executorService = executorService;
-        this.hierarchicalShardSyncer = new HierarchicalShardSyncer();
-        this.metricsFactory = metricsFactory;
-        this.shardSyncRequestPending = new AtomicBoolean(false);
-        this.lock = new ReentrantLock();
+        this(
+                shardDetector,
+                leaseRefresher,
+                initialPositionInStream,
+                cleanupLeasesUponShardCompletion,
+                ignoreUnexpectedChildShards,
+                shardSyncIdleTimeMillis,
+                executorService,
+                new HierarchicalShardSyncer(),
+                metricsFactory);
     }
 
     /**

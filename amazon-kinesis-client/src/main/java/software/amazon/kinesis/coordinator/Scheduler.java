@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.reactivex.rxjava3.plugins.RxJavaPlugins;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -55,15 +57,23 @@ import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.utils.Validate;
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.CheckpointConfig;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.coordinator.assignment.LeaseAssignmentManager;
+import software.amazon.kinesis.coordinator.migration.MigrationStateMachine;
+import software.amazon.kinesis.coordinator.migration.MigrationStateMachineImpl;
+import software.amazon.kinesis.leader.DynamoDBLockBasedLeaderDecider;
+import software.amazon.kinesis.leader.MigrationAdaptiveLeaderDecider;
 import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseManagementConfig;
+import software.amazon.kinesis.leases.LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig;
+import software.amazon.kinesis.leases.LeaseManagementFactory;
 import software.amazon.kinesis.leases.LeaseRefresher;
 import software.amazon.kinesis.leases.LeaseSerializer;
 import software.amazon.kinesis.leases.MultiStreamLease;
@@ -98,6 +108,9 @@ import software.amazon.kinesis.retrieval.AggregatorUtil;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
 import software.amazon.kinesis.schemaregistry.SchemaRegistryDecoder;
+import software.amazon.kinesis.worker.WorkerMetricsSelector;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsDAO;
+import software.amazon.kinesis.worker.metricstats.WorkerMetricStatsManager;
 
 import static software.amazon.kinesis.common.ArnUtil.constructStreamArn;
 import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrategy.StreamsLeasesDeletionType;
@@ -109,6 +122,7 @@ import static software.amazon.kinesis.processor.FormerStreamsLeasesDeletionStrat
 @Getter
 @Accessors(fluent = true)
 @Slf4j
+@KinesisClientInternalApi
 public class Scheduler implements Runnable {
 
     private static final int PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT = 1;
@@ -157,6 +171,7 @@ public class Scheduler implements Runnable {
     private final long taskBackoffTimeMillis;
     private final boolean isMultiStreamMode;
     private final Map<StreamIdentifier, StreamConfig> currentStreamConfigMap = new StreamConfigMap();
+
     private final StreamTracker streamTracker;
     private final FormerStreamsLeasesDeletionStrategy formerStreamsLeasesDeletionStrategy;
     private final long listShardsBackoffTimeMillis;
@@ -167,12 +182,21 @@ public class Scheduler implements Runnable {
     private final AggregatorUtil aggregatorUtil;
     private final Function<StreamConfig, HierarchicalShardSyncer> hierarchicalShardSyncerProvider;
     private final long schedulerInitializationBackoffTimeMillis;
-    private final LeaderDecider leaderDecider;
+    private LeaderDecider leaderDecider;
     private final Map<StreamIdentifier, Instant> staleStreamDeletionMap = new HashMap<>();
     private final LeaseCleanupManager leaseCleanupManager;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
 
     private final DeletedStreamListProvider deletedStreamListProvider;
+
+    @Getter(AccessLevel.NONE)
+    private final MigrationStateMachine migrationStateMachine;
+
+    @Getter(AccessLevel.NONE)
+    private final DynamicMigrationComponentsInitializer migrationComponentsInitializer;
+
+    @Getter(AccessLevel.NONE)
+    private final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider;
 
     // Holds consumers for shards the worker is currently tracking. Key is shard
     // info, value is ShardConsumer.
@@ -180,6 +204,7 @@ public class Scheduler implements Runnable {
 
     private volatile boolean shutdown;
     private volatile long shutdownStartTimeMillis;
+
     private volatile boolean shutdownComplete = false;
 
     private final Object lock = new Object();
@@ -259,10 +284,31 @@ public class Scheduler implements Runnable {
         // Determine leaseSerializer based on availability of MultiStreamTracker.
         final LeaseSerializer leaseSerializer =
                 isMultiStreamMode ? new DynamoDBMultiStreamLeaseSerializer() : new DynamoDBLeaseSerializer();
-        this.leaseCoordinator = this.leaseManagementConfig
-                .leaseManagementFactory(leaseSerializer, isMultiStreamMode)
-                .createLeaseCoordinator(this.metricsFactory);
+
+        final LeaseManagementFactory leaseManagementFactory =
+                this.leaseManagementConfig.leaseManagementFactory(leaseSerializer, isMultiStreamMode);
+        this.leaseCoordinator =
+                leaseManagementFactory.createLeaseCoordinator(this.metricsFactory, shardInfoShardConsumerMap);
         this.leaseRefresher = this.leaseCoordinator.leaseRefresher();
+
+        final CoordinatorStateDAO coordinatorStateDAO = new CoordinatorStateDAO(
+                leaseManagementConfig.dynamoDBClient(), coordinatorConfig().coordinatorStateTableConfig());
+        this.leaseAssignmentModeProvider = new MigrationAdaptiveLeaseAssignmentModeProvider();
+        this.migrationComponentsInitializer = createDynamicMigrationComponentsInitializer(coordinatorStateDAO);
+        this.migrationStateMachine = new MigrationStateMachineImpl(
+                metricsFactory,
+                System::currentTimeMillis,
+                coordinatorStateDAO,
+                Executors.newScheduledThreadPool(
+                        2,
+                        new ThreadFactoryBuilder()
+                                .setNameFormat("MigrationStateMachine-%04d")
+                                .build()),
+                coordinatorConfig.clientVersionConfig(),
+                new Random(),
+                this.migrationComponentsInitializer,
+                leaseManagementConfig.workerIdentifier(),
+                Duration.ofMinutes(10).getSeconds());
 
         //
         // TODO: Figure out what to do with lease manage <=> checkpoint relationship
@@ -280,9 +326,8 @@ public class Scheduler implements Runnable {
         this.diagnosticEventFactory = diagnosticEventFactory;
         this.diagnosticEventHandler = new DiagnosticEventLogger();
         this.deletedStreamListProvider = new DeletedStreamListProvider();
-        this.shardSyncTaskManagerProvider = streamConfig -> this.leaseManagementConfig
-                .leaseManagementFactory(leaseSerializer, isMultiStreamMode)
-                .createShardSyncTaskManager(this.metricsFactory, streamConfig, this.deletedStreamListProvider);
+        this.shardSyncTaskManagerProvider = streamConfig -> leaseManagementFactory.createShardSyncTaskManager(
+                this.metricsFactory, streamConfig, this.deletedStreamListProvider);
         this.shardPrioritization = this.coordinatorConfig.shardPrioritization();
         this.cleanupLeasesUponShardCompletion = this.leaseManagementConfig.cleanupLeasesUponShardCompletion();
         this.skipShardSyncAtWorkerInitializationIfLeasesExist =
@@ -299,8 +344,6 @@ public class Scheduler implements Runnable {
             this.workerStateChangeListener =
                     this.coordinatorConfig.coordinatorFactory().createWorkerStateChangeListener();
         }
-        this.leaderDecider = new DeterministicShuffleShardSyncLeaderDecider(
-                leaseRefresher, Executors.newSingleThreadScheduledExecutor(), PERIODIC_SHARD_SYNC_MAX_WORKERS_DEFAULT);
         this.failoverTimeMillis = this.leaseManagementConfig.failoverTimeMillis();
         this.taskBackoffTimeMillis = this.lifecycleConfig.taskBackoffTimeMillis();
         this.listShardsBackoffTimeMillis = this.retrievalConfig.listShardsBackoffTimeInMillis();
@@ -315,7 +358,6 @@ public class Scheduler implements Runnable {
                 this.coordinatorConfig.schedulerInitializationBackoffTimeMillis();
         this.leaderElectedPeriodicShardSyncManager = new PeriodicShardSyncManager(
                 leaseManagementConfig.workerIdentifier(),
-                leaderDecider,
                 leaseRefresher,
                 currentStreamConfigMap,
                 shardSyncTaskManagerProvider,
@@ -325,12 +367,67 @@ public class Scheduler implements Runnable {
                 leaseManagementConfig.leasesRecoveryAuditorExecutionFrequencyMillis(),
                 leaseManagementConfig.leasesRecoveryAuditorInconsistencyConfidenceThreshold(),
                 leaderSynced);
-        this.leaseCleanupManager = this.leaseManagementConfig
-                .leaseManagementFactory(leaseSerializer, isMultiStreamMode)
-                .createLeaseCleanupManager(metricsFactory);
+        this.leaseCleanupManager = leaseManagementFactory.createLeaseCleanupManager(metricsFactory);
         this.schemaRegistryDecoder = this.retrievalConfig.glueSchemaRegistryDeserializer() == null
                 ? null
                 : new SchemaRegistryDecoder(this.retrievalConfig.glueSchemaRegistryDeserializer());
+    }
+
+    /**
+     * Depends on LeaseCoordinator and LeaseRefresher to be created first
+     */
+    private DynamicMigrationComponentsInitializer createDynamicMigrationComponentsInitializer(
+            final CoordinatorStateDAO coordinatorStateDAO) {
+        selectWorkerMetricsIfAvailable(leaseManagementConfig.workerUtilizationAwareAssignmentConfig());
+
+        final WorkerMetricStatsManager workerMetricsManager = new WorkerMetricStatsManager(
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().noOfPersistedMetricsPerWorkerMetrics(),
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricList(),
+                metricsFactory,
+                leaseManagementConfig
+                        .workerUtilizationAwareAssignmentConfig()
+                        .inMemoryWorkerMetricsCaptureFrequencyMillis());
+
+        final WorkerMetricStatsDAO workerMetricsDAO = new WorkerMetricStatsDAO(
+                leaseManagementConfig.dynamoDBClient(),
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsTableConfig(),
+                leaseManagementConfig.workerUtilizationAwareAssignmentConfig().workerMetricsReporterFreqInMillis());
+
+        return DynamicMigrationComponentsInitializer.builder()
+                .metricsFactory(metricsFactory)
+                .leaseRefresher(leaseRefresher)
+                .coordinatorStateDAO(coordinatorStateDAO)
+                .workerMetricsThreadPool(Executors.newScheduledThreadPool(
+                        1,
+                        new ThreadFactoryBuilder()
+                                .setNameFormat("worker-metrics-reporter")
+                                .build()))
+                .workerMetricsDAO(workerMetricsDAO)
+                .workerMetricsManager(workerMetricsManager)
+                .lamThreadPool(Executors.newScheduledThreadPool(
+                        1,
+                        new ThreadFactoryBuilder().setNameFormat("lam-thread").build()))
+                .lamCreator((lamThreadPool, leaderDecider) -> new LeaseAssignmentManager(
+                        leaseRefresher,
+                        workerMetricsDAO,
+                        leaderDecider,
+                        leaseManagementConfig.workerUtilizationAwareAssignmentConfig(),
+                        leaseCoordinator.workerIdentifier(),
+                        leaseManagementConfig.failoverTimeMillis(),
+                        metricsFactory,
+                        lamThreadPool,
+                        System::nanoTime,
+                        leaseManagementConfig.maxLeasesForWorker(),
+                        leaseManagementConfig.gracefulLeaseHandoffConfig()))
+                .adaptiveLeaderDeciderCreator(() -> new MigrationAdaptiveLeaderDecider(metricsFactory))
+                .deterministicLeaderDeciderCreator(() -> new DeterministicShuffleShardSyncLeaderDecider(
+                        leaseRefresher, Executors.newSingleThreadScheduledExecutor(), 1, metricsFactory))
+                .ddbLockBasedLeaderDeciderCreator(() -> DynamoDBLockBasedLeaderDecider.create(
+                        coordinatorStateDAO, leaseCoordinator.workerIdentifier(), metricsFactory))
+                .workerIdentifier(leaseCoordinator.workerIdentifier())
+                .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
+                .leaseAssignmentModeProvider(leaseAssignmentModeProvider)
+                .build();
     }
 
     /**
@@ -342,13 +439,19 @@ public class Scheduler implements Runnable {
             return;
         }
 
+        final MetricsScope metricsScope =
+                MetricsUtil.createMetricsWithOperation(metricsFactory, "Scheduler:Initialize");
+        boolean success = false;
         try {
             initialize();
+            success = true;
             log.info("Initialization complete. Starting worker loop.");
         } catch (RuntimeException e) {
             log.error("Unable to initialize after {} attempts. Shutting down.", maxInitializationAttempts, e);
             workerStateChangeListener.onAllInitializationAttemptsFailed(e);
             shutdown();
+        } finally {
+            MetricsUtil.addSuccess(metricsScope, "Initialize", success, MetricsLevel.SUMMARY);
         }
         while (!shouldShutdown()) {
             runProcessLoop();
@@ -363,14 +466,13 @@ public class Scheduler implements Runnable {
         synchronized (lock) {
             registerErrorHandlerForUndeliverableAsyncTaskExceptions();
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.INITIALIZING);
+
             boolean isDone = false;
             Exception lastException = null;
-
             for (int i = 0; (!isDone) && (i < maxInitializationAttempts); i++) {
                 try {
                     log.info("Initializing LeaseCoordinator attempt {}", (i + 1));
                     leaseCoordinator.initialize();
-
                     if (!skipShardSyncAtWorkerInitializationIfLeasesExist || leaseRefresher.isLeaseTableEmpty()) {
                         if (shouldInitiateLeaseSync()) {
                             log.info(
@@ -382,21 +484,29 @@ public class Scheduler implements Runnable {
                         log.info("Skipping shard sync per configuration setting (and lease table is not empty)");
                     }
 
+                    // Initialize the state machine after lease table has been initialized
+                    // Migration state machine creates and waits for GSI if necessary,
+                    // it must be initialized before starting leaseCoordinator, which runs LeaseDiscoverer
+                    // and that requires GSI to be present and active. (migrationStateMachine.initialize is idempotent)
+                    migrationStateMachine.initialize();
+                    leaderDecider = migrationComponentsInitializer.leaderDecider();
+
                     leaseCleanupManager.start();
 
                     // If we reach this point, then we either skipped the lease sync or did not have any exception
                     // for any of the shard sync in the previous attempt.
+
                     if (!leaseCoordinator.isRunning()) {
                         log.info("Starting LeaseCoordinator");
-                        leaseCoordinator.start();
+                        leaseCoordinator.start(leaseAssignmentModeProvider);
                     } else {
                         log.info("LeaseCoordinator is already running. No need to start it.");
                     }
                     log.info("Scheduling periodicShardSync");
-                    leaderElectedPeriodicShardSyncManager.start();
+                    leaderElectedPeriodicShardSyncManager.start(leaderDecider);
                     streamSyncWatch.start();
                     isDone = true;
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     log.error("Caught exception when initializing LeaseCoordinator", e);
                     lastException = e;
                 }
@@ -863,7 +973,7 @@ public class Scheduler implements Runnable {
                         leaseCoordinator, lease, notificationCompleteLatch, shutdownCompleteLatch);
                 ShardInfo shardInfo = DynamoDBLeaseCoordinator.convertLeaseToAssignment(lease);
                 ShardConsumer consumer = shardInfoShardConsumerMap.get(shardInfo);
-                if (consumer != null) {
+                if (consumer != null && !consumer.isShutdown()) {
                     consumer.gracefulShutdown(shutdownNotification);
                 } else {
                     //
@@ -912,6 +1022,8 @@ public class Scheduler implements Runnable {
             shutdown = true;
             shutdownStartTimeMillis = System.currentTimeMillis();
 
+            migrationStateMachine.shutdown();
+            migrationComponentsInitializer.shutdown();
             // Stop lease coordinator, so leases are not renewed or stolen from other workers.
             // Lost leases will force Worker to begin shutdown process for all shard consumers in
             // Worker.run().
@@ -1227,5 +1339,24 @@ public class Scheduler implements Runnable {
     @Deprecated
     public Future<Void> requestShutdown() {
         return null;
+    }
+
+    /**
+     * If WorkerMetricStats list is empty and the disable flag is false, select WorkerMetricStats automatically.
+     */
+    private void selectWorkerMetricsIfAvailable(
+            final WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig) {
+        try {
+            if (workerUtilizationAwareAssignmentConfig.workerMetricList().isEmpty()
+                    && !workerUtilizationAwareAssignmentConfig.disableWorkerMetrics()) {
+                workerUtilizationAwareAssignmentConfig.workerMetricList(
+                        WorkerMetricsSelector.create().getDefaultWorkerMetrics());
+            }
+        } catch (final Exception e) {
+            log.warn(
+                    "Exception encountered during WorkerMetricStats selection. If this is persistent please try setting the "
+                            + "WorkerMetricStats explicitly.",
+                    e);
+        }
     }
 }

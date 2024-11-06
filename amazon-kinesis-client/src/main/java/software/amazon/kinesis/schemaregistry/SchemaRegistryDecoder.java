@@ -7,7 +7,6 @@ import java.util.List;
 import com.amazonaws.services.schemaregistry.common.Schema;
 import com.amazonaws.services.schemaregistry.deserializers.GlueSchemaRegistryDeserializer;
 import lombok.extern.slf4j.Slf4j;
-import software.amazon.kinesis.common.KinesisClientLibraryPackage;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 
 /**
@@ -15,7 +14,7 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
  */
 @Slf4j
 public class SchemaRegistryDecoder {
-    private static final String USER_AGENT_APP_NAME = "kcl" + "-" + KinesisClientLibraryPackage.VERSION;
+    private static final String USER_AGENT_APP_NAME = "kcl" + "-" + "3.0.0";
     private final GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer;
 
     public SchemaRegistryDecoder(GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer) {
