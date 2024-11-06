@@ -27,9 +27,18 @@ get_current_jar() {
 }
 
 is_new_minor_release() {
+  is_new_major_release && return 1
+
   local latest_minor_version=$(echo "$LATEST_VERSION" | cut -d . -f 2)
   local current_minor_version=$(echo "$CURRENT_VERSION" | cut -d . -f 2)
   [[ "$latest_minor_version" != "$current_minor_version" ]]
+  return $?
+}
+
+is_new_major_release() {
+  local latest_major_version=$(echo "$LATEST_VERSION" | cut -d . -f 1)
+  local current_major_version=$(echo "$CURRENT_VERSION" | cut -d . -f 1)
+  [[ "$latest_major_version" != "$current_major_version" ]]
   return $?
 }
 
@@ -63,9 +72,9 @@ ignore_abstract_changes_in_interfaces() {
 # Checks if there are any methods in the latest version that were removed in the current version.
 find_removed_methods() {
   echo "Checking if methods in current version (v$CURRENT_VERSION) were removed from latest version (v$LATEST_VERSION)"
-  if is_new_minor_release
+  if is_new_minor_release || is_new_major_release
   then
-    echo "New minor release is being performed. Ignoring changes in classes marked with @KinesisClientInternalApi annotation."
+    echo "New minor/major release is being performed. Ignoring changes in classes marked with @KinesisClientInternalApi annotation."
   fi
   local latest_classes=$(
     jar tf $LATEST_JAR |
@@ -79,13 +88,20 @@ find_removed_methods() {
     grep -v 'software\.amazon\.kinesis\.retrieval\.kpl\.Messages')
   for class in $latest_classes
   do
-    if (is_kinesis_client_internal_api "$class" && is_new_minor_release) || is_non_public_class "$class"
+    if (is_kinesis_client_internal_api "$class" && (is_new_minor_release || is_new_major_release)) || is_non_public_class "$class"
     then
       continue
     fi
 
+    CURRENT_METHODS=$(javap -classpath "$CURRENT_JAR" "$class" 2>/dev/null)
+    if [ -z "$CURRENT_METHODS" ]
+    then
+        echo "Class $class was removed"
+        REMOVED_METHODS_FLAG=$TRUE
+        continue
+    fi
+
     LATEST_METHODS=$(javap -classpath "$LATEST_JAR" "$class")
-    CURRENT_METHODS=$(javap -classpath "$CURRENT_JAR" "$class")
 
     ignore_abstract_changes_in_interfaces "$class"
 
@@ -111,7 +127,7 @@ get_backwards_compatible_result() {
   if [[ $REMOVED_METHODS_FLAG == $TRUE ]]
   then
     echo "Current KCL version $CURRENT_VERSION is not backwards compatible with version $LATEST_VERSION. See output above for removed packages/methods."
-    exit 1
+    is_new_major_release || exit 1
   else
     echo "Current KCL version $CURRENT_VERSION is backwards compatible with version $LATEST_VERSION."
     exit 0
