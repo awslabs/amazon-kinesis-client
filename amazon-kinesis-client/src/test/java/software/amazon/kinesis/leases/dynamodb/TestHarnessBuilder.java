@@ -186,7 +186,7 @@ public class TestHarnessBuilder {
         return heldLeases;
     }
 
-    public void renewAllLeases() throws LeasingException {
+    public void renewAllLeases() throws Exception {
         for (Lease lease : leases.values()) {
             leaseRefresher.renewLease(lease);
         }

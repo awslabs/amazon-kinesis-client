@@ -15,6 +15,7 @@
 package software.amazon.kinesis.leases;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
@@ -101,6 +102,15 @@ public interface LeaseSerializer {
     Map<String, AttributeValueUpdate> getDynamoTakeLeaseUpdate(Lease lease, String newOwner);
 
     /**
+     * @param lease lease that needs to be assigned
+     * @param newOwner newLeaseOwner
+     * @return the attribute value map that takes a lease for a new owner
+     */
+    default Map<String, AttributeValueUpdate> getDynamoAssignLeaseUpdate(Lease lease, String newOwner) {
+        throw new UnsupportedOperationException("getDynamoAssignLeaseUpdate is not implemented");
+    }
+
+    /**
      * @param lease
      * @return the attribute value map that voids a lease
      */
@@ -127,8 +137,22 @@ public interface LeaseSerializer {
      */
     Collection<KeySchemaElement> getKeySchema();
 
+    default Collection<KeySchemaElement> getWorkerIdToLeaseKeyIndexKeySchema() {
+        return Collections.EMPTY_LIST;
+    }
+
+    default Collection<AttributeDefinition> getWorkerIdToLeaseKeyIndexAttributeDefinitions() {
+        return Collections.EMPTY_LIST;
+    }
+
     /**
      * @return attribute definitions for creating a DynamoDB table to store leases
      */
     Collection<AttributeDefinition> getAttributeDefinitions();
+
+    /**
+     * @param lease
+     * @return the attribute value map that includes lease throughput
+     */
+    Map<String, AttributeValueUpdate> getDynamoLeaseThroughputKbpsUpdate(Lease lease);
 }

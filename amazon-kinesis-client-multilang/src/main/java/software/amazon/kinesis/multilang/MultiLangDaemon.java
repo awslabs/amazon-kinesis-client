@@ -61,10 +61,10 @@ import software.amazon.kinesis.coordinator.Scheduler;
  * applicationName = PythonKCLSample
  *
  * # Users can change the credentials provider the KCL will use to retrieve credentials.
- * # The DefaultAWSCredentialsProviderChain checks several other providers, which is
+ * # The DefaultCredentialsProvider checks several other providers, which is
  * # described here:
- * # http://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/auth/DefaultAWSCredentialsProviderChain.html
- * AWSCredentialsProvider = DefaultAWSCredentialsProviderChain
+ * # https://sdk.amazonaws.com/java/api/2.0.0-preview-11/software/amazon/awssdk/auth/credentials/DefaultCredentialsProvider.html
+ * AwsCredentialsProvider = DefaultCredentialsProvider
  * </pre>
  */
 @Slf4j
@@ -141,7 +141,7 @@ public class MultiLangDaemon {
         }
     }
 
-    String propertiesFile(final MultiLangDaemonArguments arguments) {
+    String validateAndGetPropertiesFileName(final MultiLangDaemonArguments arguments) {
         String propertiesFile = "";
 
         if (CollectionUtils.isNotEmpty(arguments.parameters)) {
@@ -216,9 +216,9 @@ public class MultiLangDaemon {
         MultiLangDaemonArguments arguments = new MultiLangDaemonArguments();
         JCommander jCommander = daemon.buildJCommanderAndParseArgs(arguments, args);
         try {
-            String propertiesFile = daemon.propertiesFile(arguments);
+            String propertiesFileName = daemon.validateAndGetPropertiesFileName(arguments);
             daemon.configureLogging(arguments.logConfiguration);
-            MultiLangDaemonConfig config = daemon.buildMultiLangDaemonConfig(propertiesFile);
+            MultiLangDaemonConfig config = daemon.buildMultiLangDaemonConfig(propertiesFileName);
 
             Scheduler scheduler = daemon.buildScheduler(config);
             MultiLangRunner runner = new MultiLangRunner(scheduler);

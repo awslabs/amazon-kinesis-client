@@ -81,8 +81,20 @@ public class DynamoUtils {
         }
     }
 
+    public static AttributeValue createAttributeValue(Double doubleValue) {
+        if (doubleValue == null) {
+            throw new IllegalArgumentException("Double attributeValues cannot be null.");
+        }
+
+        return AttributeValue.builder().n(doubleValue.toString()).build();
+    }
+
     public static String safeGetString(Map<String, AttributeValue> dynamoRecord, String key) {
         AttributeValue av = dynamoRecord.get(key);
+        return safeGetString(av);
+    }
+
+    public static String safeGetString(AttributeValue av) {
         if (av == null) {
             return null;
         } else {
@@ -97,6 +109,15 @@ public class DynamoUtils {
             return new ArrayList<String>();
         } else {
             return av.ss();
+        }
+    }
+
+    public static Double safeGetDouble(Map<String, AttributeValue> dynamoRecord, String key) {
+        AttributeValue av = dynamoRecord.get(key);
+        if (av == null) {
+            return null;
+        } else {
+            return new Double(av.n());
         }
     }
 }

@@ -164,7 +164,6 @@ public class ShutdownTask implements ConsumerTask {
                 } else {
                     throwOnApplicationException(leaseKey, leaseLostAction, scope, startTime);
                 }
-
                 log.debug("Shutting down retrieval strategy for shard {}.", leaseKey);
                 recordsPublisher.shutdown();
 

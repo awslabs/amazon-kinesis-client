@@ -24,6 +24,7 @@ import software.amazon.awssdk.services.kinesis.model.Shard;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.checkpoint.ShardRecordProcessorCheckpointer;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.leases.LeaseStatsRecorder;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
@@ -65,6 +66,7 @@ public class ProcessTask implements ConsumerTask {
     private final AggregatorUtil aggregatorUtil;
     private final String shardInfoId;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
+    private final LeaseStatsRecorder leaseStatsRecorder;
 
     public ProcessTask(
             @NonNull ShardInfo shardInfo,
@@ -79,7 +81,8 @@ public class ProcessTask implements ConsumerTask {
             long idleTimeInMilliseconds,
             @NonNull AggregatorUtil aggregatorUtil,
             @NonNull MetricsFactory metricsFactory,
-            SchemaRegistryDecoder schemaRegistryDecoder) {
+            SchemaRegistryDecoder schemaRegistryDecoder,
+            @NonNull LeaseStatsRecorder leaseStatsRecorder) {
         this.shardInfo = shardInfo;
         this.shardInfoId = ShardInfo.getLeaseKey(shardInfo);
         this.shardRecordProcessor = shardRecordProcessor;
@@ -91,6 +94,7 @@ public class ProcessTask implements ConsumerTask {
         this.idleTimeInMilliseconds = idleTimeInMilliseconds;
         this.metricsFactory = metricsFactory;
         this.schemaRegistryDecoder = schemaRegistryDecoder;
+        this.leaseStatsRecorder = leaseStatsRecorder;
 
         if (!skipShardSyncAtWorkerInitializationIfLeasesExist) {
             this.shard = shardDetector.shard(shardInfo.shardId());
@@ -173,6 +177,7 @@ public class ProcessTask implements ConsumerTask {
                         recordProcessorCheckpointer.largestPermittedCheckpointValue()));
 
                 if (shouldCallProcessRecords(records)) {
+                    publishLeaseStats(records);
                     callProcessRecords(processRecordsInput, records);
                 }
                 success = true;
@@ -195,6 +200,15 @@ public class ProcessTask implements ConsumerTask {
             MetricsUtil.endScope(shardScope);
             MetricsUtil.endScope(appScope);
         }
+    }
+
+    private void publishLeaseStats(final List<KinesisClientRecord> records) {
+        leaseStatsRecorder.recordStats(LeaseStatsRecorder.LeaseStats.builder()
+                .bytes(records.stream()
+                        .mapToInt(record -> record.data().limit())
+                        .sum())
+                .leaseKey(ShardInfo.getLeaseKey(shardInfo))
+                .build());
     }
 
     private List<KinesisClientRecord> deaggregateAnyKplRecords(List<KinesisClientRecord> records) {

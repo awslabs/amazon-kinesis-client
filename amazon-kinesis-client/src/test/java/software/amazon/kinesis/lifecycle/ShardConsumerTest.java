@@ -31,7 +31,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
@@ -693,19 +692,13 @@ public class ShardConsumerTest {
         mockSuccessfulProcessing(taskBarrier);
 
         when(processingState.shutdownTransition(eq(ShutdownReason.REQUESTED))).thenReturn(shutdownRequestedState);
-        when(shutdownRequestedState.requiresDataAvailability()).thenReturn(false);
         when(shutdownRequestedState.createTask(any(), any(), any())).thenReturn(shutdownRequestedTask);
         when(shutdownRequestedState.taskType()).thenReturn(TaskType.SHUTDOWN_NOTIFICATION);
         when(shutdownRequestedTask.call()).thenReturn(new TaskResult(null));
 
         when(shutdownRequestedState.shutdownTransition(eq(ShutdownReason.REQUESTED)))
                 .thenReturn(shutdownRequestedAwaitState);
-        when(shutdownRequestedState.shutdownTransition(eq(ShutdownReason.LEASE_LOST)))
-                .thenReturn(shutdownState);
-        when(shutdownRequestedAwaitState.requiresDataAvailability()).thenReturn(false);
         when(shutdownRequestedAwaitState.createTask(any(), any(), any())).thenReturn(null);
-        when(shutdownRequestedAwaitState.shutdownTransition(eq(ShutdownReason.REQUESTED)))
-                .thenReturn(shutdownRequestedState);
         when(shutdownRequestedAwaitState.shutdownTransition(eq(ShutdownReason.LEASE_LOST)))
                 .thenReturn(shutdownState);
         when(shutdownRequestedAwaitState.taskType()).thenReturn(TaskType.SHUTDOWN_COMPLETE);
@@ -786,7 +779,6 @@ public class ShardConsumerTest {
                 Optional.of(1L),
                 shardConsumerArgument,
                 initialState,
-                Function.identity(),
                 1,
                 taskExecutionListener,
                 0);
@@ -842,7 +834,6 @@ public class ShardConsumerTest {
                 Optional.of(1L),
                 shardConsumerArgument,
                 initialState,
-                Function.identity(),
                 1,
                 taskExecutionListener,
                 0);
@@ -950,7 +941,6 @@ public class ShardConsumerTest {
                 Optional.of(1L),
                 shardConsumerArgument,
                 mockState,
-                Function.identity(),
                 1,
                 taskExecutionListener,
                 0);
@@ -1034,15 +1024,7 @@ public class ShardConsumerTest {
         // race condition we want.
         reset(mockState);
         AtomicBoolean successTransitionCalled = new AtomicBoolean(false);
-        when(mockState.successTransition()).then(input -> {
-            successTransitionCalled.set(true);
-            return mockState;
-        });
         AtomicBoolean shutdownTransitionCalled = new AtomicBoolean(false);
-        when(mockState.shutdownTransition(any())).then(input -> {
-            shutdownTransitionCalled.set(true);
-            return mockState;
-        });
         when(mockState.state()).then(input -> {
             if (successTransitionCalled.get() && shutdownTransitionCalled.get()) {
                 return ShardConsumerState.SHUTTING_DOWN;
@@ -1065,7 +1047,6 @@ public class ShardConsumerTest {
     private void mockSuccessfulShutdown(CyclicBarrier taskArriveBarrier, CyclicBarrier taskDepartBarrier) {
         when(shutdownState.createTask(eq(shardConsumerArgument), any(), any())).thenReturn(shutdownTask);
         when(shutdownState.taskType()).thenReturn(TaskType.SHUTDOWN);
-        when(shutdownTask.taskType()).thenReturn(TaskType.SHUTDOWN);
         when(shutdownTask.call()).thenAnswer(i -> {
             awaitBarrier(taskArriveBarrier);
             awaitBarrier(taskDepartBarrier);
@@ -1084,7 +1065,6 @@ public class ShardConsumerTest {
     private void mockSuccessfulProcessing(CyclicBarrier taskCallBarrier, CyclicBarrier taskInterlockBarrier) {
         when(processingState.createTask(eq(shardConsumerArgument), any(), any()))
                 .thenReturn(processingTask);
-        when(processingState.requiresDataAvailability()).thenReturn(true);
         when(processingState.taskType()).thenReturn(TaskType.PROCESS);
         when(processingTask.taskType()).thenReturn(TaskType.PROCESS);
         when(processingTask.call()).thenAnswer(i -> {
@@ -1117,7 +1097,6 @@ public class ShardConsumerTest {
             return initializeTaskResult;
         });
         when(initializeTaskResult.getException()).thenReturn(null);
-        when(initialState.requiresDataAvailability()).thenReturn(false);
         when(initialState.successTransition()).thenReturn(processingState);
         when(initialState.state()).thenReturn(ConsumerStates.ShardConsumerState.INITIALIZING);
     }
@@ -1131,10 +1110,8 @@ public class ShardConsumerTest {
         when(blockedOnParentsState.createTask(eq(shardConsumerArgument), any(), any()))
                 .thenReturn(blockedOnParentsTask);
         when(blockedOnParentsState.taskType()).thenReturn(TaskType.BLOCK_ON_PARENT_SHARDS);
-        when(blockedOnParentsTask.taskType()).thenReturn(TaskType.BLOCK_ON_PARENT_SHARDS);
         when(blockedOnParentsTask.call()).thenAnswer(i -> blockOnParentsTaskResult);
         when(blockOnParentsTaskResult.getException()).thenReturn(null);
-        when(blockedOnParentsState.requiresDataAvailability()).thenReturn(false);
         when(blockedOnParentsState.successTransition()).thenReturn(initialState);
         when(blockedOnParentsState.state()).thenReturn(ShardConsumerState.WAITING_ON_PARENT_SHARDS);
     }
@@ -1174,7 +1151,6 @@ public class ShardConsumerTest {
                 logWarningForTaskAfterMillis,
                 shardConsumerArgument,
                 state,
-                Function.identity(),
                 1,
                 taskExecutionListener,
                 0);

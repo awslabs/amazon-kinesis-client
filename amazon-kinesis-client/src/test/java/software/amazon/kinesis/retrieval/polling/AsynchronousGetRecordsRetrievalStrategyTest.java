@@ -80,7 +80,6 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         expectedResponses = GetRecordsResponse.builder().build();
 
         when(completionServiceSupplier.get()).thenReturn(completionService);
-        when(dataFetcherResult.getResult()).thenReturn(expectedResponses);
         when(dataFetcherResult.accept()).thenReturn(expectedResponses);
     }
 
@@ -116,8 +115,6 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(successfulFuture.get()).thenReturn(dataFetcherResult);
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
-        when(successfulFuture.isCancelled()).thenReturn(false);
-        when(blockedFuture.isCancelled()).thenReturn(true);
 
         GetRecordsResponse actualResults = strategy.getRecords(10);
 
@@ -158,8 +155,6 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(successfulFuture.get()).thenReturn(dataFetcherResult);
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
-        when(successfulFuture.isCancelled()).thenReturn(false);
-        when(blockedFuture.isCancelled()).thenReturn(true);
 
         GetRecordsResponse actualResult = strategy.getRecords(10);
 

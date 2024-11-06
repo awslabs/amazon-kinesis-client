@@ -38,6 +38,7 @@ import software.amazon.kinesis.leases.HierarchicalShardSyncer;
 import software.amazon.kinesis.leases.LeaseCleanupManager;
 import software.amazon.kinesis.leases.LeaseCoordinator;
 import software.amazon.kinesis.leases.LeaseRefresher;
+import software.amazon.kinesis.leases.LeaseStatsRecorder;
 import software.amazon.kinesis.leases.ShardDetector;
 import software.amazon.kinesis.leases.ShardInfo;
 import software.amazon.kinesis.leases.ShardObjectHelper;
@@ -83,6 +84,9 @@ public class ConsumerStatesTest {
 
     @Mock
     private LeaseRefresher leaseRefresher;
+
+    @Mock
+    private LeaseStatsRecorder leaseStatsRecorder;
 
     @Mock
     private Checkpointer checkpointer;
@@ -236,7 +240,7 @@ public class ConsumerStatesTest {
 
     @Test
     public void processingStateTestSynchronous() {
-
+        when(leaseCoordinator.leaseStatsRecorder()).thenReturn(leaseStatsRecorder);
         ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
         ConsumerTask task = state.createTask(argument, consumer, null);
 
@@ -268,7 +272,7 @@ public class ConsumerStatesTest {
 
     @Test
     public void processingStateTestAsynchronous() {
-
+        when(leaseCoordinator.leaseStatsRecorder()).thenReturn(leaseStatsRecorder);
         ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
         ConsumerTask task = state.createTask(argument, consumer, null);
 
@@ -300,7 +304,7 @@ public class ConsumerStatesTest {
 
     @Test
     public void processingStateRecordsFetcher() {
-
+        when(leaseCoordinator.leaseStatsRecorder()).thenReturn(leaseStatsRecorder);
         ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
         ConsumerTask task = state.createTask(argument, consumer, null);
 
