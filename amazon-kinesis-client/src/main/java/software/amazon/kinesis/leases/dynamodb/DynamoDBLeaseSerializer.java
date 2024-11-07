@@ -54,7 +54,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
     private static final String CHILD_SHARD_IDS_KEY = "childShardIds";
     private static final String STARTING_HASH_KEY = "startingHashKey";
     private static final String ENDING_HASH_KEY = "endingHashKey";
-    private static final String THROUGHOUT_PUT_KBPS = "throughputKBps";
+    private static final String THROUGHPUT_KBPS = "throughputKBps";
     private static final String CHECKPOINT_SEQUENCE_NUMBER_KEY = "checkpoint";
     static final String CHECKPOINT_OWNER = "checkpointOwner";
     static final String LEASE_OWNER_KEY = "leaseOwner";
@@ -113,7 +113,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
         }
 
         if (lease.throughputKBps() != null) {
-            result.put(THROUGHOUT_PUT_KBPS, DynamoUtils.createAttributeValue(lease.throughputKBps()));
+            result.put(THROUGHPUT_KBPS, DynamoUtils.createAttributeValue(lease.throughputKBps()));
         }
 
         if (lease.checkpointOwner() != null) {
@@ -155,8 +155,8 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
             leaseToUpdate.hashKeyRange(HashKeyRangeForLease.deserialize(startingHashKey, endingHashKey));
         }
 
-        if (DynamoUtils.safeGetDouble(dynamoRecord, THROUGHOUT_PUT_KBPS) != null) {
-            leaseToUpdate.throughputKBps(DynamoUtils.safeGetDouble(dynamoRecord, THROUGHOUT_PUT_KBPS));
+        if (DynamoUtils.safeGetDouble(dynamoRecord, THROUGHPUT_KBPS) != null) {
+            leaseToUpdate.throughputKBps(DynamoUtils.safeGetDouble(dynamoRecord, THROUGHPUT_KBPS));
         }
 
         if (DynamoUtils.safeGetString(dynamoRecord, CHECKPOINT_OWNER) != null) {
@@ -466,7 +466,7 @@ public class DynamoDBLeaseSerializer implements LeaseSerializer {
                 .value(DynamoUtils.createAttributeValue(lease.throughputKBps()))
                 .action(AttributeAction.PUT)
                 .build();
-        result.put(THROUGHOUT_PUT_KBPS, avu);
+        result.put(THROUGHPUT_KBPS, avu);
         return result;
     }
 
