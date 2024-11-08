@@ -383,7 +383,6 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         }
 
         leaseRenewalThreadpool.shutdownNow();
-        leaseCoordinatorThreadPool.shutdownNow();
         leaseGracefulShutdownHandler.stop();
         synchronized (shutdownLock) {
             leaseRenewer.clearCurrentlyHeldLeases();

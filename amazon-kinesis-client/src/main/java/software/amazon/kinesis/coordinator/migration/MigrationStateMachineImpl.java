@@ -126,7 +126,7 @@ public class MigrationStateMachineImpl implements MigrationStateMachine {
         if (!stateMachineThreadPool.isShutdown()) {
             stateMachineThreadPool.shutdown();
             try {
-                if (stateMachineThreadPool.awaitTermination(THREAD_POOL_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                if (!stateMachineThreadPool.awaitTermination(THREAD_POOL_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                     log.info(
                             "StateMachineThreadPool did not shutdown within {} seconds, forcefully shutting down",
                             THREAD_POOL_SHUTDOWN_TIMEOUT_SECONDS);
