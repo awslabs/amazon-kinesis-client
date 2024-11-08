@@ -87,7 +87,7 @@ public class MigrationClientVersion3xWithRollbackState implements MigrationClien
     }
 
     @Override
-    public void leave() {
+    public synchronized void leave() {
         if (entered && !left) {
             log.info("Leaving {}", this);
             cancelRollbackMonitor();
