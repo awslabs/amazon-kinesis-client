@@ -58,14 +58,18 @@ is_non_public_class() {
   return $?
 }
 
-# Ignore methods that change from abstract to non-abstract (and vice versa) if the class is an interface.
-ignore_abstract_changes_in_interfaces() {
+# Ignore methods that change from abstract to non-abstract (and vice-versa) if the class is an interface.\
+# Ignore methods that change from synchronized to non-synchronized (and vice-versa)
+ignore_non_breaking_changes() {
   local current_class="$1"
   local class_definition=$(javap -classpath "$LATEST_JAR" "$current_class" | head -2 | tail -1)
   if [[ $class_definition == *"interface"* ]]
   then
-    LATEST_METHODS=${LATEST_METHODS// abstract / }
-    CURRENT_METHODS=${CURRENT_METHODS// abstract / }
+    LATEST_METHODS=${LATEST_METHODS//abstract /}
+    CURRENT_METHODS=${CURRENT_METHODS//abstract /}
+  else
+    LATEST_METHODS=${LATEST_METHODS//synchronized /}
+    CURRENT_METHODS=${CURRENT_METHODS//synchronized /}
   fi
 }
 
@@ -103,7 +107,7 @@ find_removed_methods() {
 
     LATEST_METHODS=$(javap -classpath "$LATEST_JAR" "$class")
 
-    ignore_abstract_changes_in_interfaces "$class"
+    ignore_non_breaking_changes "$class"
 
     local removed_methods=$(diff <(echo "$LATEST_METHODS") <(echo "$CURRENT_METHODS") | grep '^<')
 

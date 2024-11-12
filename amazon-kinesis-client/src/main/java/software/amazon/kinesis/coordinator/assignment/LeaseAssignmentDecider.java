@@ -17,8 +17,10 @@ package software.amazon.kinesis.coordinator.assignment;
 
 import java.util.List;
 
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.Lease;
 
+@KinesisClientInternalApi
 public interface LeaseAssignmentDecider {
 
     /**

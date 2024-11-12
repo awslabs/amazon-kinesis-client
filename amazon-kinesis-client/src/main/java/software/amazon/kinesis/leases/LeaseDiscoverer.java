@@ -17,10 +17,12 @@ package software.amazon.kinesis.leases;
 
 import java.util.List;
 
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 
+@KinesisClientInternalApi
 public interface LeaseDiscoverer {
     /**
      * Identifies the leases that are assigned to the current worker but are not being tracked and processed by the
