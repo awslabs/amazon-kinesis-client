@@ -14,11 +14,13 @@
  */
 package software.amazon.kinesis.coordinator.migration;
 
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 
 /**
  * Interface of a state implementation for the MigrationStateMachine
  */
+@KinesisClientInternalApi
 public interface MigrationClientVersionState {
 
     /**

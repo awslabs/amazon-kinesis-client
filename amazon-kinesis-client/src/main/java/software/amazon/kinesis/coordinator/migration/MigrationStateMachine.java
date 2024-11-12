@@ -14,6 +14,7 @@
  */
 package software.amazon.kinesis.coordinator.migration;
 
+import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 
@@ -28,6 +29,7 @@ import software.amazon.kinesis.leases.exceptions.InvalidStateException;
  * 3. Instant roll-forwards - Once any issue has been mitigated, rollfowards are supported instantly
  *    with KCL Migration tool.
  */
+@KinesisClientInternalApi
 public interface MigrationStateMachine {
     /**
      * Initialize the state machine by identifying the initial state when the KCL worker comes up for the first time.

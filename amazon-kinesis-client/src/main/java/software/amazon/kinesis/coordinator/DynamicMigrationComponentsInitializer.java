@@ -223,6 +223,9 @@ public final class DynamicMigrationComponentsInitializer {
         workerMetricsThreadPool.shutdown();
         try {
             if (!lamThreadPool.awaitTermination(SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                log.info(
+                        "LamThreadPool did not shutdown in {}s, forcefully shutting down",
+                        SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS);
                 lamThreadPool.shutdownNow();
             }
         } catch (final InterruptedException e) {
@@ -232,6 +235,9 @@ public final class DynamicMigrationComponentsInitializer {
 
         try {
             if (!workerMetricsThreadPool.awaitTermination(SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                log.info(
+                        "WorkerMetricsThreadPool did not shutdown in {}s, forcefully shutting down",
+                        SCHEDULER_SHUTDOWN_TIMEOUT_SECONDS);
                 workerMetricsThreadPool.shutdownNow();
             }
         } catch (final InterruptedException e) {
