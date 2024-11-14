@@ -5,6 +5,16 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+### Release 3.0.1 (November 14, 2024)
+* [#1401](https://github.com/awslabs/amazon-kinesis-client/pull/1401) Fixed the lease graceful handoff behavior in the multi-stream processing mode
+* [#1398](https://github.com/awslabs/amazon-kinesis-client/pull/1398) Addressed several KCL 3.0 related issues raised via GitHub
+    * Fixed transitive dependencies and added a Maven plugin to catch potential transitive dependency issues at build time
+    * Removed the redundant shutdown of the leaseCoordinatorThreadPool
+    * Fixed typo THROUGHOUT_PUT_KBPS
+    * Fixed issues in scheduler shutdown sequence
+
+* Note: If you are using [multi-stream processing with KCL](https://docs.aws.amazon.com/streams/latest/dev/kcl-multi-stream.html), you need to use the release 3.0.1 or later.
+
 ### Release 3.0.0 (November 06, 2024)
 * New lease assignment / load balancing algorithm
     * KCL 3.x introduces a new lease assignment and load balancing algorithm. It assigns leases among workers based on worker utilization metrics and throughput on each lease, replacing the previous lease count-based lease assignment algorithm.
