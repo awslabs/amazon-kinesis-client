@@ -10,6 +10,7 @@ import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -107,6 +108,15 @@ public class LeaseTest {
     public void testIsEligibleForGracefulShutdownFalse_shutdownRequested_assertFalse() {
         eligibleForGracefulShutdownLease.checkpointOwner("owner");
         assertFalse(shutdownRequestedLease.isEligibleForGracefulShutdown());
+    }
+
+    @Test
+    public void testCopyingLease() {
+        final String checkpointOwner = "checkpointOwner";
+        final Lease original = new Lease();
+        original.checkpointOwner(checkpointOwner);
+        final Lease copy = original.copy();
+        assertEquals(checkpointOwner, copy.checkpointOwner());
     }
 
     private static Lease createLease(String leaseOwner, String leaseKey, long lastCounterIncrementNanos) {

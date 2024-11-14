@@ -163,6 +163,7 @@ public class Lease {
                 lease.childShardIds(),
                 lease.pendingCheckpointState(),
                 lease.hashKeyRangeForLease());
+        checkpointOwner(lease.checkpointOwner);
     }
 
     @Deprecated
@@ -458,8 +459,6 @@ public class Lease {
      * @return A deep copy of this object.
      */
     public Lease copy() {
-        final Lease lease = new Lease(this);
-        lease.checkpointOwner(this.checkpointOwner);
-        return lease;
+        return new Lease(this);
     }
 }
