@@ -14,7 +14,7 @@ import software.amazon.kinesis.retrieval.KinesisClientRecord;
  */
 @Slf4j
 public class SchemaRegistryDecoder {
-    private static final String USER_AGENT_APP_NAME = "kcl" + "-" + "3.0.0";
+    private static final String USER_AGENT_APP_NAME = "kcl" + "-" + "3.0.1";
     private final GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer;
 
     public SchemaRegistryDecoder(GlueSchemaRegistryDeserializer glueSchemaRegistryDeserializer) {
