@@ -3,6 +3,29 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.6.1 (2024-12-13)
+* [#1365](https://github.com/awslabs/amazon-kinesis-client/pull/1365) Add config to enable point in time recovery for the DynamoDB lease table created by KCL
+* [#1325](https://github.com/awslabs/amazon-kinesis-client/pull/1325) Add logic to sync from lease table on first app bootstrap
+* [#1372](https://github.com/awslabs/amazon-kinesis-client/pull/1372) Fix debug and trace level logging to log all worker loops
+* [#1319](https://github.com/awslabs/amazon-kinesis-client/pull/1319) Fix a race condition between ShardConsumer shutdown and initialization
+* [#1354](https://github.com/awslabs/amazon-kinesis-client/pull/1354) Fix bug where the in-memory lease is updated even when DDB fails to update
+* [#1363](https://github.com/awslabs/amazon-kinesis-client/pull/1363) Fix some of the warnings emitted by maven during build
+* [#1358](https://github.com/awslabs/amazon-kinesis-client/pull/1358) Remove ShutdownNotificationAware and update javadocs
+* [#1329](https://github.com/awslabs/amazon-kinesis-client/pull/1329) Remove unnecessary lambda
+* [#1340](https://github.com/awslabs/amazon-kinesis-client/pull/1340) Generate wrappers from proto files instead of shipping them directly
+* [#1332](https://github.com/awslabs/amazon-kinesis-client/pull/1332) Enforce consistent code style with palantir-java-format
+* [#1294](https://github.com/awslabs/amazon-kinesis-client/pull/1294) Upgrade org.apache.maven.plugins:maven-checkstyle-plugin from 3.3.0 to 3.3.1
+* [#1296](https://github.com/awslabs/amazon-kinesis-client/pull/1296) Upgrade org.apache.maven.plugins:maven-surefire-plugin from 3.1.2 to 3.2.5
+* [#1312](https://github.com/awslabs/amazon-kinesis-client/pull/1312) Upgrade commons-io:commons-io from 2.15.1 to 2.16.1
+* [#1331](https://github.com/awslabs/amazon-kinesis-client/pull/1331) Upgrade maven-compiler-plugin from 3.11.0 to 3.13.0
+* [#1335](https://github.com/awslabs/amazon-kinesis-client/pull/1335) Upgrade org.slf4j:slf4j-api from 2.0.7 to 2.0.13
+* [#1336](https://github.com/awslabs/amazon-kinesis-client/pull/1336) Upgrade io.reactivex.rxjava3:rxjava from 3.1.6 to 3.1.8
+* [#1337](https://github.com/awslabs/amazon-kinesis-client/pull/1337) Upgrade com.google.protobuf:protobuf-java from 3.21.12 to 4.27.0
+* [#1341](https://github.com/awslabs/amazon-kinesis-client/pull/1341) Upgrade awssdk.version from 2.25.11 to 2.25.64
+* [#1342](https://github.com/awslabs/amazon-kinesis-client/pull/1342) Upgrade org.apache.maven.plugins:maven-javadoc-plugin from 3.6.3 to 3.7.0
+* [#1343](https://github.com/awslabs/amazon-kinesis-client/pull/1343) Upgrade org.apache.maven.plugins:maven-failsafe-plugin from 3.1.2 to 3.2.5
+* [#1383](https://github.com/awslabs/amazon-kinesis-client/pull/1383) Upgrade com.google.protobuf:protobuf-java from 4.27.0 to 4.27.5
+ 
 ### Release 2.6.0 (2024-05-01)
 * [#1317](https://github.com/awslabs/amazon-kinesis-client/pull/1317) Add enablePriorityLeaseAssignment config
 * [#1320](https://github.com/awslabs/amazon-kinesis-client/pull/1320) Update lease taker to get unassigned leases
