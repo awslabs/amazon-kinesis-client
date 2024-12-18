@@ -97,11 +97,7 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 
 ## Notices
 
-### Recommended Upgrade for All Users of the 1.x Amazon Kinesis Client
-We recommend customers to migrate to 1.14.1 or newer to avoid [known bugs](https://github.com/awslabs/amazon-kinesis-client/issues/778) in 1.14.0 version
-
-### Recommended Upgrade for All Users of the 2.x Amazon Kinesis Client
-It's highly recommended for users of version 2.0 of the Amazon Kinesis Client to upgrade to version 2.0.3 or later. A [bug has been](https://github.com/awslabs/amazon-kinesis-client/issues/391) identified in versions prior to 2.0.3 that could cause records to be delivered to the wrong record processor.**
+We recommend all users to migrate to the latest respective versions to avoid known issues and benefit from all improvements.
 
 ## Giving Feedback
 
