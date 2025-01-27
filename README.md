@@ -55,6 +55,14 @@ To make it easier for developers to write record processors in other languages, 
 ## Using the KCL
 The recommended way to use the KCL for Java is to consume it from Maven.
 
+## 🚨Important: Do not use AWS SDK for Java versions 2.27.19 to 2.27.23 with KCL 3.x
+When using KCL 3.x with AWS SDK for Java versions 2.27.19 through 2.27.23, you may encounter the following DynamoDB exception:
+```
+software.amazon.awssdk.services.dynamodb.model.DynamoDbException: The document path provided in the update expression is invalid for update (Service: DynamoDb, Status Code: 400, Request ID: xxx)
+```
+This error occurs due to [a known issue](https://github.com/aws/aws-sdk-java-v2/issues/5584) in the AWS SDK for Java that affects the DynamoDB metadata table managed by KCL 3.x. The issue was introduced in version 2.27.19 and impacts all versions up to 2.27.23. The issue has been resolved in the AWS SDK for Java version 2.27.24. For optimal performance and stability, we recommend upgrading to version 2.28.0 or later.
+
+
 ### Version 3.x
   ``` xml
   <dependency>
