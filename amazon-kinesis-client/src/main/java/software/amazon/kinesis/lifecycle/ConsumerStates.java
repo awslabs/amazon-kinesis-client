@@ -263,7 +263,6 @@ class ConsumerStates {
                     throttlingReporter,
                     input,
                     argument.shouldCallProcessRecordsEvenForEmptyRecordList(),
-                    argument.idleTimeInMilliseconds(),
                     argument.aggregatorUtil(),
                     argument.metricsFactory(),
                     argument.schemaRegistryDecoder());

@@ -83,7 +83,6 @@ import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ProcessTaskTest {
-    private static final long IDLE_TIME_IN_MILLISECONDS = 100L;
     private static final Schema SCHEMA_REGISTRY_SCHEMA = new Schema("{}", "AVRO", "demoSchema");
     private static final byte[] SCHEMA_REGISTRY_PAYLOAD = new byte[] {01, 05, 03, 05};
 
@@ -157,7 +156,6 @@ public class ProcessTaskTest {
                 throttlingReporter,
                 processRecordsInput,
                 shouldCallProcessRecordsEvenForEmptyRecordList,
-                IDLE_TIME_IN_MILLISECONDS,
                 aggregatorUtil,
                 new NullMetricsFactory(),
                 schemaRegistryDecoder);

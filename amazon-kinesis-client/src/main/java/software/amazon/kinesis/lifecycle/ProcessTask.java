@@ -59,7 +59,6 @@ public class ProcessTask implements ConsumerTask {
     private final Shard shard;
     private final ThrottlingReporter throttlingReporter;
     private final boolean shouldCallProcessRecordsEvenForEmptyRecordList;
-    private final long idleTimeInMilliseconds;
     private final ProcessRecordsInput processRecordsInput;
     private final MetricsFactory metricsFactory;
     private final AggregatorUtil aggregatorUtil;
@@ -76,7 +75,6 @@ public class ProcessTask implements ConsumerTask {
             @NonNull ThrottlingReporter throttlingReporter,
             ProcessRecordsInput processRecordsInput,
             boolean shouldCallProcessRecordsEvenForEmptyRecordList,
-            long idleTimeInMilliseconds,
             @NonNull AggregatorUtil aggregatorUtil,
             @NonNull MetricsFactory metricsFactory,
             SchemaRegistryDecoder schemaRegistryDecoder) {
@@ -88,7 +86,6 @@ public class ProcessTask implements ConsumerTask {
         this.throttlingReporter = throttlingReporter;
         this.processRecordsInput = processRecordsInput;
         this.shouldCallProcessRecordsEvenForEmptyRecordList = shouldCallProcessRecordsEvenForEmptyRecordList;
-        this.idleTimeInMilliseconds = idleTimeInMilliseconds;
         this.metricsFactory = metricsFactory;
         this.schemaRegistryDecoder = schemaRegistryDecoder;
 
