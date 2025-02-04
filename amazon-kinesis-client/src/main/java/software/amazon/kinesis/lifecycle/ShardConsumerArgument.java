@@ -70,7 +70,6 @@ public class ShardConsumerArgument {
     private final long listShardsBackoffTimeInMillis;
     private final int maxListShardsRetryAttempts;
     private final boolean shouldCallProcessRecordsEvenForEmptyRecordList;
-    private final long idleTimeInMilliseconds;
 
     @NonNull
     private final InitialPositionInStreamExtended initialPositionInStream;
