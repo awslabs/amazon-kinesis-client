@@ -86,6 +86,8 @@ public class ShardConsumer {
 
     private ProcessRecordsInput shardEndProcessRecordsInput;
 
+    private final ConsumerTaskFactory taskFactory;
+
     public ShardConsumer(
             RecordsPublisher recordsPublisher,
             ExecutorService executorService,
@@ -103,7 +105,8 @@ public class ShardConsumer {
                 ConsumerStates.INITIAL_STATE,
                 8,
                 taskExecutionListener,
-                readTimeoutsToIgnoreBeforeWarning);
+                readTimeoutsToIgnoreBeforeWarning,
+                new KinesisConsumerTaskFactory());
     }
 
     //
@@ -119,6 +122,30 @@ public class ShardConsumer {
             int bufferSize,
             TaskExecutionListener taskExecutionListener,
             int readTimeoutsToIgnoreBeforeWarning) {
+        this(
+                recordsPublisher,
+                executorService,
+                shardInfo,
+                logWarningForTaskAfterMillis,
+                shardConsumerArgument,
+                initialState,
+                bufferSize,
+                taskExecutionListener,
+                readTimeoutsToIgnoreBeforeWarning,
+                new KinesisConsumerTaskFactory());
+    }
+
+    public ShardConsumer(
+            RecordsPublisher recordsPublisher,
+            ExecutorService executorService,
+            ShardInfo shardInfo,
+            Optional<Long> logWarningForTaskAfterMillis,
+            ShardConsumerArgument shardConsumerArgument,
+            ConsumerState initialState,
+            int bufferSize,
+            TaskExecutionListener taskExecutionListener,
+            int readTimeoutsToIgnoreBeforeWarning,
+            ConsumerTaskFactory taskFactory) {
         this.recordsPublisher = recordsPublisher;
         this.executorService = executorService;
         this.shardInfo = shardInfo;
@@ -134,6 +161,7 @@ public class ShardConsumer {
         if (this.shardInfo.isCompleted()) {
             markForShutdown(ShutdownReason.SHARD_END);
         }
+        this.taskFactory = taskFactory;
     }
 
     synchronized void handleInput(ProcessRecordsInput input, Subscription subscription) {
@@ -345,7 +373,7 @@ public class ShardConsumer {
                 .taskType(currentState.taskType())
                 .build();
         taskExecutionListener.beforeTaskExecution(taskExecutionListenerInput);
-        ConsumerTask task = currentState.createTask(shardConsumerArgument, ShardConsumer.this, input);
+        ConsumerTask task = currentState.createTask(shardConsumerArgument, ShardConsumer.this, input, taskFactory);
         if (task != null) {
             taskDispatchedAt = Instant.now();
             currentTask = task;
