@@ -34,13 +34,19 @@ interface ConsumerState {
      *            the consumer to use build the task, or execute state.
      * @param input
      *            the process input received, this may be null if it's a control message
+     * @param taskFactory
+     *            a factory for creating tasks
      * @return a valid task for this state or null if there is no task required.
      */
-    ConsumerTask createTask(ShardConsumerArgument consumerArgument, ShardConsumer consumer, ProcessRecordsInput input);
+    ConsumerTask createTask(
+            ShardConsumerArgument consumerArgument,
+            ShardConsumer consumer,
+            ProcessRecordsInput input,
+            ConsumerTaskFactory taskFactory);
 
     /**
      * Provides the next state of the consumer upon success of the task return by
-     * {@link ConsumerState#createTask(ShardConsumerArgument, ShardConsumer, ProcessRecordsInput)}.
+     * {@link ConsumerState#createTask(ShardConsumerArgument, ShardConsumer, ProcessRecordsInput, ConsumerTaskFactory)}.
      *
      * @return the next state that the consumer should transition to, this may be the same object as the current
      *         state.

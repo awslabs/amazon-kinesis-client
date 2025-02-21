@@ -127,6 +127,7 @@ public class ConsumerStatesTest {
     private long idleTimeInMillis = 1000L;
     private Optional<Long> logWarningForTaskAfterMillis = Optional.empty();
     private SchemaRegistryDecoder schemaRegistryDecoder = null;
+    private final ConsumerTaskFactory taskFactory = new KinesisConsumerTaskFactory();
 
     @Before
     public void setup() {
@@ -177,7 +178,7 @@ public class ConsumerStatesTest {
         ConsumerState state = ShardConsumerState.WAITING_ON_PARENT_SHARDS.consumerState();
         when(leaseCoordinator.leaseRefresher()).thenReturn(leaseRefresher);
 
-        ConsumerTask task = state.createTask(argument, consumer, null);
+        ConsumerTask task = state.createTask(argument, consumer, null, taskFactory);
 
         assertThat(task, taskWith(BlockOnParentShardTask.class, ShardInfo.class, "shardInfo", equalTo(shardInfo)));
         assertThat(
@@ -209,7 +210,7 @@ public class ConsumerStatesTest {
     @Test
     public void initializingStateTest() {
         ConsumerState state = ShardConsumerState.INITIALIZING.consumerState();
-        ConsumerTask task = state.createTask(argument, consumer, null);
+        ConsumerTask task = state.createTask(argument, consumer, null, taskFactory);
 
         assertThat(task, initTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
         assertThat(task, initTask(ShardRecordProcessor.class, "shardRecordProcessor", equalTo(shardRecordProcessor)));
@@ -242,7 +243,7 @@ public class ConsumerStatesTest {
     public void processingStateTestSynchronous() {
         when(leaseCoordinator.leaseStatsRecorder()).thenReturn(leaseStatsRecorder);
         ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
-        ConsumerTask task = state.createTask(argument, consumer, null);
+        ConsumerTask task = state.createTask(argument, consumer, null, taskFactory);
 
         assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
         assertThat(task, procTask(ShardRecordProcessor.class, "shardRecordProcessor", equalTo(shardRecordProcessor)));
@@ -274,7 +275,7 @@ public class ConsumerStatesTest {
     public void processingStateTestAsynchronous() {
         when(leaseCoordinator.leaseStatsRecorder()).thenReturn(leaseStatsRecorder);
         ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
-        ConsumerTask task = state.createTask(argument, consumer, null);
+        ConsumerTask task = state.createTask(argument, consumer, null, taskFactory);
 
         assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
         assertThat(task, procTask(ShardRecordProcessor.class, "shardRecordProcessor", equalTo(shardRecordProcessor)));
@@ -306,7 +307,7 @@ public class ConsumerStatesTest {
     public void processingStateRecordsFetcher() {
         when(leaseCoordinator.leaseStatsRecorder()).thenReturn(leaseStatsRecorder);
         ConsumerState state = ShardConsumerState.PROCESSING.consumerState();
-        ConsumerTask task = state.createTask(argument, consumer, null);
+        ConsumerTask task = state.createTask(argument, consumer, null, taskFactory);
 
         assertThat(task, procTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
         assertThat(task, procTask(ShardRecordProcessor.class, "shardRecordProcessor", equalTo(shardRecordProcessor)));
@@ -339,7 +340,7 @@ public class ConsumerStatesTest {
         ConsumerState state = ShardConsumerState.SHUTDOWN_REQUESTED.consumerState();
 
         consumer.gracefulShutdown(shutdownNotification);
-        ConsumerTask task = state.createTask(argument, consumer, null);
+        ConsumerTask task = state.createTask(argument, consumer, null, taskFactory);
 
         assertThat(
                 task,
@@ -373,7 +374,7 @@ public class ConsumerStatesTest {
     public void shutdownRequestCompleteStateTest() {
         ConsumerState state = ConsumerStates.SHUTDOWN_REQUEST_COMPLETION_STATE;
 
-        assertThat(state.createTask(argument, consumer, null), nullValue());
+        assertThat(state.createTask(argument, consumer, null, taskFactory), nullValue());
 
         assertThat(state.successTransition(), equalTo(state));
 
@@ -409,7 +410,7 @@ public class ConsumerStatesTest {
         childShards.add(leftChild);
         childShards.add(rightChild);
         when(processRecordsInput.childShards()).thenReturn(childShards);
-        ConsumerTask task = state.createTask(argument, consumer, processRecordsInput);
+        ConsumerTask task = state.createTask(argument, consumer, processRecordsInput, taskFactory);
 
         assertThat(task, shutdownTask(ShardInfo.class, "shardInfo", equalTo(shardInfo)));
         assertThat(
@@ -443,7 +444,7 @@ public class ConsumerStatesTest {
 
         ConsumerState state = ShardConsumerState.SHUTDOWN_COMPLETE.consumerState();
 
-        assertThat(state.createTask(argument, consumer, null), nullValue());
+        assertThat(state.createTask(argument, consumer, null, taskFactory), nullValue());
 
         assertThat(state.successTransition(), equalTo(state));
         for (ShutdownReason reason : ShutdownReason.values()) {
