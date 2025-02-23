@@ -88,7 +88,6 @@ import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
 import software.amazon.kinesis.lifecycle.ConsumerTaskFactory;
-import software.amazon.kinesis.lifecycle.KinesisConsumerTaskFactory;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.lifecycle.ShardConsumerArgument;
@@ -267,33 +266,6 @@ public class Scheduler implements Runnable {
             @NonNull final ProcessorConfig processorConfig,
             @NonNull final RetrievalConfig retrievalConfig,
             @NonNull final DiagnosticEventFactory diagnosticEventFactory) {
-        this(
-                checkpointConfig,
-                coordinatorConfig,
-                leaseManagementConfig,
-                lifecycleConfig,
-                metricsConfig,
-                processorConfig,
-                retrievalConfig,
-                diagnosticEventFactory,
-                new KinesisConsumerTaskFactory());
-    }
-
-    /**
-     * Customers do not currently have the ability to customize the DiagnosticEventFactory, but this visibility
-     * is desired for testing. This constructor is only used for testing to provide a mock DiagnosticEventFactory.
-     */
-    @VisibleForTesting
-    protected Scheduler(
-            @NonNull final CheckpointConfig checkpointConfig,
-            @NonNull final CoordinatorConfig coordinatorConfig,
-            @NonNull final LeaseManagementConfig leaseManagementConfig,
-            @NonNull final LifecycleConfig lifecycleConfig,
-            @NonNull final MetricsConfig metricsConfig,
-            @NonNull final ProcessorConfig processorConfig,
-            @NonNull final RetrievalConfig retrievalConfig,
-            @NonNull final DiagnosticEventFactory diagnosticEventFactory,
-            @NonNull final ConsumerTaskFactory taskFactory) {
         this.checkpointConfig = checkpointConfig;
         this.coordinatorConfig = coordinatorConfig;
         this.leaseManagementConfig = leaseManagementConfig;
@@ -401,7 +373,7 @@ public class Scheduler implements Runnable {
         this.schemaRegistryDecoder = this.retrievalConfig.glueSchemaRegistryDeserializer() == null
                 ? null
                 : new SchemaRegistryDecoder(this.retrievalConfig.glueSchemaRegistryDeserializer());
-        this.taskFactory = taskFactory;
+        this.taskFactory = leaseManagementConfig().consumerTaskFactory();
     }
 
     /**
