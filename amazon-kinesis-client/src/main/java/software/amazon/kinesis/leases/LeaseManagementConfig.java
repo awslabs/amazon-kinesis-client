@@ -45,6 +45,8 @@ import software.amazon.kinesis.common.StreamConfig;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseManagementFactory;
 import software.amazon.kinesis.leases.dynamodb.DynamoDBLeaseSerializer;
 import software.amazon.kinesis.leases.dynamodb.TableCreatorCallback;
+import software.amazon.kinesis.lifecycle.ConsumerTaskFactory;
+import software.amazon.kinesis.lifecycle.KinesisConsumerTaskFactory;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.worker.metric.WorkerMetric;
@@ -214,6 +216,8 @@ public class LeaseManagementConfig {
     private Duration dynamoDbRequestTimeout = DEFAULT_REQUEST_TIMEOUT;
 
     private BillingMode billingMode = BillingMode.PAY_PER_REQUEST;
+
+    private ConsumerTaskFactory consumerTaskFactory = new KinesisConsumerTaskFactory();
 
     private WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig =
             new WorkerUtilizationAwareAssignmentConfig();
