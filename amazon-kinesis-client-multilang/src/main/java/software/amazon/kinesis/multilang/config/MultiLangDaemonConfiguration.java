@@ -55,7 +55,6 @@ import software.amazon.kinesis.leases.ShardPrioritization;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.metrics.MetricsConfig;
 import software.amazon.kinesis.metrics.MetricsLevel;
-import software.amazon.kinesis.multilang.config.credentials.V2CredentialWrapper;
 import software.amazon.kinesis.processor.ProcessorConfig;
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
 import software.amazon.kinesis.retrieval.RetrievalConfig;
@@ -196,19 +195,19 @@ public class MultiLangDaemonConfiguration {
 
     private final BuilderDynaBean kinesisCredentialsProvider;
 
-    public void setAWSCredentialsProvider(String providerString) {
+    public void setAwsCredentialsProvider(String providerString) {
         kinesisCredentialsProvider.set("", providerString);
     }
 
     private final BuilderDynaBean dynamoDBCredentialsProvider;
 
-    public void setAWSCredentialsProviderDynamoDB(String providerString) {
+    public void setAwsCredentialsProviderDynamoDB(String providerString) {
         dynamoDBCredentialsProvider.set("", providerString);
     }
 
     private final BuilderDynaBean cloudWatchCredentialsProvider;
 
-    public void setAWSCredentialsProviderCloudWatch(String providerString) {
+    public void setAwsCredentialsProviderCloudWatch(String providerString) {
         cloudWatchCredentialsProvider.set("", providerString);
     }
 
@@ -282,9 +281,9 @@ public class MultiLangDaemonConfiguration {
         ArrayConverter arrayConverter = new ArrayConverter(String[].class, new StringConverter());
         arrayConverter.setDelimiter(',');
         convertUtilsBean.register(arrayConverter, String[].class);
-        AWSCredentialsProviderPropertyValueDecoder oldCredentialsDecoder =
-                new AWSCredentialsProviderPropertyValueDecoder();
-        Function<String, ?> converter = s -> new V2CredentialWrapper(oldCredentialsDecoder.decodeValue(s));
+        AwsCredentialsProviderPropertyValueDecoder credentialsDecoder =
+                new AwsCredentialsProviderPropertyValueDecoder();
+        Function<String, ?> converter = credentialsDecoder::decodeValue;
 
         this.kinesisCredentialsProvider = new BuilderDynaBean(
                 AwsCredentialsProvider.class, convertUtilsBean, converter, CREDENTIALS_DEFAULT_SEARCH_PATH);
