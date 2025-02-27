@@ -61,7 +61,7 @@ import software.amazon.kinesis.coordinator.Scheduler;
  * applicationName = PythonKCLSample
  *
  * # Users can change the credentials provider the KCL will use to retrieve credentials.
- * # The DefaultAWSCredentialsProviderChain checks several other providers, which is
+ * # The DefaultCredentialsProvider checks several other providers, which is
  * # described here:
  * # https://sdk.amazonaws.com/java/api/2.0.0-preview-11/software/amazon/awssdk/auth/credentials/DefaultCredentialsProvider.html
  * AwsCredentialsProvider = DefaultCredentialsProvider
