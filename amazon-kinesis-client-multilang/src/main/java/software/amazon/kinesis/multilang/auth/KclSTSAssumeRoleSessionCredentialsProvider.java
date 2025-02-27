@@ -21,11 +21,11 @@ import com.amazonaws.auth.AWSSessionCredentialsProvider;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider.Builder;
 import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration;
-import com.amazonaws.regions.Regions;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
 import software.amazon.kinesis.multilang.NestedPropertyKey;
 import software.amazon.kinesis.multilang.NestedPropertyProcessor;
+import software.amazon.awssdk.regions.Region;
 
 /**
  * An {@link AWSSessionCredentialsProvider} that is backed by STSAssumeRole.
@@ -73,7 +73,7 @@ public class KclSTSAssumeRoleSessionCredentialsProvider
     }
 
     @Override
-    public void acceptEndpointRegion(final Regions region) {
+    public void acceptEndpointRegion(final Region region) {
         final AWSSecurityTokenService stsClient =
                 AWSSecurityTokenServiceClient.builder().withRegion(region).build();
         builder.withStsClient(stsClient);
