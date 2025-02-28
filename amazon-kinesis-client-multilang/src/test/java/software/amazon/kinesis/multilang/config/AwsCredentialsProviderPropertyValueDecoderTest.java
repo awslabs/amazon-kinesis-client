@@ -124,7 +124,8 @@ public class AwsCredentialsProviderPropertyValueDecoderTest {
                 KclStsAssumeRoleCredentialsProvider.class.getSimpleName(), // name-only; needs prefix
                 StsAssumeRoleCredentialsProvider.class.getName(), // user passes full sts package path
                 StsAssumeRoleCredentialsProvider.class.getSimpleName())) {
-            final AwsCredentialsProvider provider = decoder.decodeValue(className + "|arn|sessionName");
+            final AwsCredentialsProvider provider =
+                    decoder.decodeValue(className + "|arn|sessionName|endpointRegion=us-east-1");
             assertNotNull(className, provider);
         }
     }

@@ -20,7 +20,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-public class KclSTSAssumeRoleSessionCredentialsProviderTest {
+public class KclStsAssumeRoleCredentialsProviderTest {
 
     private static final String ARN = "arn";
     private static final String SESSION_NAME = "sessionName";
@@ -31,22 +31,23 @@ public class KclSTSAssumeRoleSessionCredentialsProviderTest {
      */
     @Test
     public void testConstructorWithoutOptionalParams() {
-        new KclStsAssumeRoleCredentialsProvider(new String[] {ARN, SESSION_NAME});
+        new KclStsAssumeRoleCredentialsProvider(new String[] {ARN, SESSION_NAME, "endpointRegion=us-east-1"});
     }
 
     @Test
     public void testAcceptEndpoint() {
         // discovered exception during e2e testing; therefore, this test is
         // to simply verify the constructed STS client doesn't go *boom*
-        final KclStsAssumeRoleCredentialsProvider provider = new KclStsAssumeRoleCredentialsProvider(ARN, SESSION_NAME);
+        final KclStsAssumeRoleCredentialsProvider provider =
+                new KclStsAssumeRoleCredentialsProvider(ARN, SESSION_NAME, "endpointRegion=us-east-1");
         provider.acceptEndpoint("endpoint", "us-east-1");
     }
 
     @Test
     public void testVarArgs() {
         for (final String[] varargs : Arrays.asList(
-                new String[] {ARN, SESSION_NAME, "externalId=eid", "foo"},
-                new String[] {ARN, SESSION_NAME, "foo", "externalId=eid"})) {
+                new String[] {ARN, SESSION_NAME, "externalId=eid", "foo", "endpointRegion=us-east-1"},
+                new String[] {ARN, SESSION_NAME, "foo", "externalId=eid", "endpointRegion=us-east-1"})) {
             final VarArgsSpy provider = new VarArgsSpy(varargs);
             assertEquals("eid", provider.externalId);
         }
