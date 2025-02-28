@@ -26,11 +26,11 @@ public interface NestedPropertyProcessor {
      *
      * @param serviceEndpoint the service endpoint either with or without the protocol
      *      (e.g., https://sns.us-west-1.amazonaws.com, sns.us-west-1.amazonaws.com)
-     * @param signingRegion the region to use for SigV4 signing of requests (e.g. us-west-1)
+     * @param signingRegion the region to use for the client (e.g. us-west-1)
      *
      * @see #acceptEndpointRegion(Region)
-     * @see <a href="https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/client/builder/AwsClientBuilder.EndpointConfiguration.html">
-     *     AwsClientBuilder.EndpointConfiguration</a>
+     * @see <a href="https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/core/client/builder/SdkClientBuilder.html#endpointOverride(java.net.URI)">
+     *     AwsClientBuilder.endpointOverride</a>
      */
     void acceptEndpoint(String serviceEndpoint, String signingRegion);
 
