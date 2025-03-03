@@ -394,6 +394,34 @@ class DynamoDBLeaseRefresherTest {
     }
 
     @Test
+    void listLeasesParallelyWithDynamicTotalSegments_sanity()
+            throws ProvisionedThroughputException, DependencyException, InvalidStateException {
+        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
+        setupTable(leaseRefresher);
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "leaseOwner1"));
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease2", "leaseOwner2"));
+        final Map.Entry<List<Lease>, List<String>> response =
+                leaseRefresher.listLeasesParallelyWithDynamicTotalSegments(Executors.newFixedThreadPool(2));
+        assertEquals(2, response.getKey().size());
+        assertEquals(0, response.getValue().size());
+    }
+
+    @Test
+    void listLeasesParallelyWithDynamicTotalSegments_leaseWithFailingDeserialization_assertCorrectResponse()
+            throws ProvisionedThroughputException, DependencyException, InvalidStateException {
+        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
+        setupTable(leaseRefresher);
+        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "leaseOwner1"));
+        createAndPutBadLeaseEntryInTable();
+        final Map.Entry<List<Lease>, List<String>> response =
+                leaseRefresher.listLeasesParallelyWithDynamicTotalSegments(Executors.newFixedThreadPool(2));
+        assertEquals(1, response.getKey().size());
+        assertEquals("lease1", response.getKey().get(0).leaseKey());
+        assertEquals(1, response.getValue().size());
+        assertEquals("badLeaseKey", response.getValue().get(0));
+    }
+
+    @Test
     void initiateGracefulLeaseHandoff_sanity() throws Exception {
         DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
         setupTable(leaseRefresher);

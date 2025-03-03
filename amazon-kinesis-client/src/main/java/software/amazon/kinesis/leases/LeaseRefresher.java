@@ -151,6 +151,23 @@ public interface LeaseRefresher {
     List<Lease> listLeases() throws DependencyException, InvalidStateException, ProvisionedThroughputException;
 
     /**
+     * List all leases from the storage parallely by dynamically calculating total segments and
+     * deserialize into Lease objects. Returns the list of leaseKey
+     * that failed deserialize separately.
+     *
+     * @param threadPool        thread pool to use for parallel scan
+     * @return Pair of List of leases from the storage and List of items failed to deserialize
+     * @throws DependencyException            if DynamoDB scan fails in an unexpected way
+     * @throws InvalidStateException          if lease table does not exist
+     * @throws ProvisionedThroughputException if DynamoDB scan fails due to lack of capacity
+     */
+    default Map.Entry<List<Lease>, List<String>> listLeasesParallelyWithDynamicTotalSegments(
+            final ExecutorService threadPool)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+        throw new UnsupportedOperationException("listLeasesParallelyWithDynamicTotalSegments is not implemented");
+    }
+
+    /**
      * List all leases from the storage parallely and deserialize into Lease objects. Returns the list of leaseKey
      * that failed deserialize separately.
      *

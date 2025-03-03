@@ -122,6 +122,16 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     private static final String LEASE_OWNER_INDEX_QUERY_CONDITIONAL_EXPRESSION =
             String.format("%s = %s", LEASE_OWNER_KEY, DDB_LEASE_OWNER);
 
+    /**
+     * Default parallelism factor for scaling lease table.
+     */
+    private static final int DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR = 10;
+
+    private static final long NUMBER_OF_BYTES_PER_GB = 1024 * 1024 * 1024;
+    private static final double GB_PER_SEGMENT = 0.2;
+    private static final int MIN_SCAN_SEGMENTS = 1;
+    private static final int MAX_SCAN_SEGMENTS = 1000000;
+
     private static DdbTableConfig createDdbTableConfigFromBillingMode(final BillingMode billingMode) {
         final DdbTableConfig tableConfig = new DdbTableConfig();
         tableConfig.billingMode(billingMode);
@@ -547,6 +557,24 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
+    public Map.Entry<List<Lease>, List<String>> listLeasesParallelyWithDynamicTotalSegments(
+            final ExecutorService parallelScanExecutorService)
+            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
+
+        int parallelScanTotalSegment = DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR;
+        DescribeTableResponse describeTableResponse = describeLeaseTable();
+
+        if (describeTableResponse != null) {
+            parallelScanTotalSegment =
+                    getParallelScanTotalSegments(describeTableResponse.table().tableSizeBytes());
+        } else {
+            log.info("DescribeTable returned null so using default totalSegments : {}", parallelScanTotalSegment);
+        }
+
+        return listLeasesParallely(parallelScanExecutorService, parallelScanTotalSegment);
+    }
+
+    @Override
     public Map.Entry<List<Lease>, List<String>> listLeasesParallely(
             final ExecutorService parallelScanExecutorService, final int parallelScanTotalSegment)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
@@ -584,6 +612,35 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             throw new DependencyException(e);
         }
         return new AbstractMap.SimpleEntry<>(response, leaseItemFailedDeserialize);
+    }
+
+    /**
+     * Calculates the optimal number of parallel scan segments for a DynamoDB table based on its size.
+     * The calculation follows these rules:
+     *  - Each segment handles 0.2GB (214,748,364 bytes) of data
+     *  - For empty tables or tables smaller than 0.2GB, uses 1 segment
+     *  - Number of segments scales linearly with table size
+     *
+     * @return The number of segments to use for parallel scan, minimum 1
+     */
+    private int getParallelScanTotalSegments(double tableSizeBytes) {
+
+        int totalSegments = DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR;
+
+        try {
+            double tableSizeGB = tableSizeBytes / NUMBER_OF_BYTES_PER_GB;
+            totalSegments = (int) Math.ceil(tableSizeGB / GB_PER_SEGMENT);
+        } catch (Exception e) {
+            log.info(
+                    "Error while getting totalSegments so using default totalSegments : {}. Exception : {}",
+                    DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR,
+                    e.getMessage());
+            return totalSegments;
+        }
+
+        totalSegments = Math.min(Math.max(totalSegments, MIN_SCAN_SEGMENTS), MAX_SCAN_SEGMENTS);
+        log.info("TotalSegments for Lease table parallel scan : {}", totalSegments);
+        return totalSegments;
     }
 
     private List<Map<String, AttributeValue>> scanSegment(final int segment, final int parallelScanTotalSegment)

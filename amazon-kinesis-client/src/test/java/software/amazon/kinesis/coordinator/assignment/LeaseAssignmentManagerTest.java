@@ -46,7 +46,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.times;
@@ -730,7 +729,8 @@ class LeaseAssignmentManagerTest {
         final WorkerMetricStatsDAO mockedWorkerMetricsDAO = Mockito.mock(WorkerMetricStatsDAO.class);
         final LeaseRefresher mockedLeaseRefresher = Mockito.mock(LeaseRefresher.class);
 
-        when(mockedLeaseRefresher.listLeasesParallely(any(), anyInt())).thenThrow(new RuntimeException());
+        when(mockedLeaseRefresher.listLeasesParallelyWithDynamicTotalSegments(any()))
+                .thenThrow(new RuntimeException());
         when(mockedWorkerMetricsDAO.getAllWorkerMetricStats()).thenThrow(new RuntimeException());
 
         final LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
@@ -752,7 +752,7 @@ class LeaseAssignmentManagerTest {
 
         leaseAssignmentManagerRunnable.run();
 
-        verify(mockedLeaseRefresher, times(2)).listLeasesParallely(any(), anyInt());
+        verify(mockedLeaseRefresher, times(2)).listLeasesParallelyWithDynamicTotalSegments(any());
         verify(mockedWorkerMetricsDAO, times(2)).getAllWorkerMetricStats();
     }
 
