@@ -625,20 +625,9 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      */
     private int getParallelScanTotalSegments(double tableSizeBytes) {
 
-        int totalSegments = DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR;
-
-        try {
-            double tableSizeGB = tableSizeBytes / NUMBER_OF_BYTES_PER_GB;
-            totalSegments = (int) Math.ceil(tableSizeGB / GB_PER_SEGMENT);
-        } catch (Exception e) {
-            log.info(
-                    "Error while getting totalSegments so using default totalSegments : {}. Exception : {}",
-                    DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR,
-                    e.getMessage());
-            return totalSegments;
-        }
-
-        totalSegments = Math.min(Math.max(totalSegments, MIN_SCAN_SEGMENTS), MAX_SCAN_SEGMENTS);
+        double tableSizeGB = tableSizeBytes / NUMBER_OF_BYTES_PER_GB;
+        int totalSegments =
+                Math.min(Math.max((int) Math.ceil(tableSizeGB / GB_PER_SEGMENT), MIN_SCAN_SEGMENTS), MAX_SCAN_SEGMENTS);
         log.info("TotalSegments for Lease table parallel scan : {}", totalSegments);
         return totalSegments;
     }
