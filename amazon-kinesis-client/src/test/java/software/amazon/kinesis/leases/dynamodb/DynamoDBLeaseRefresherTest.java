@@ -401,7 +401,7 @@ class DynamoDBLeaseRefresherTest {
         leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "leaseOwner1"));
         leaseRefresher.createLeaseIfNotExists(createDummyLease("lease2", "leaseOwner2"));
         final Map.Entry<List<Lease>, List<String>> response =
-                leaseRefresher.listLeasesParallelyWithDynamicTotalSegments(Executors.newFixedThreadPool(2));
+                leaseRefresher.listLeasesParallely(Executors.newFixedThreadPool(2), 0);
         assertEquals(2, response.getKey().size());
         assertEquals(0, response.getValue().size());
     }
@@ -414,7 +414,7 @@ class DynamoDBLeaseRefresherTest {
         leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "leaseOwner1"));
         createAndPutBadLeaseEntryInTable();
         final Map.Entry<List<Lease>, List<String>> response =
-                leaseRefresher.listLeasesParallelyWithDynamicTotalSegments(Executors.newFixedThreadPool(2));
+                leaseRefresher.listLeasesParallely(Executors.newFixedThreadPool(2), 0);
         assertEquals(1, response.getKey().size());
         assertEquals("lease1", response.getKey().get(0).leaseKey());
         assertEquals(1, response.getValue().size());

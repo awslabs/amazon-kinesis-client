@@ -684,8 +684,8 @@ public final class LeaseAssignmentManager {
         }
 
         private CompletableFuture<Map.Entry<List<Lease>, List<String>>> loadLeaseListAsync() {
-            return CompletableFuture.supplyAsync(() -> loadWithRetry(() ->
-                    leaseRefresher.listLeasesParallelyWithDynamicTotalSegments(LEASE_ASSIGNMENT_CALL_THREAD_POOL)));
+            return CompletableFuture.supplyAsync(() ->
+                    loadWithRetry(() -> leaseRefresher.listLeasesParallely(LEASE_ASSIGNMENT_CALL_THREAD_POOL, 0)));
         }
 
         private <T> T loadWithRetry(final Callable<T> loadFunction) {

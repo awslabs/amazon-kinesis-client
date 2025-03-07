@@ -44,8 +44,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.times;
@@ -729,8 +731,7 @@ class LeaseAssignmentManagerTest {
         final WorkerMetricStatsDAO mockedWorkerMetricsDAO = Mockito.mock(WorkerMetricStatsDAO.class);
         final LeaseRefresher mockedLeaseRefresher = Mockito.mock(LeaseRefresher.class);
 
-        when(mockedLeaseRefresher.listLeasesParallelyWithDynamicTotalSegments(any()))
-                .thenThrow(new RuntimeException());
+        when(mockedLeaseRefresher.listLeasesParallely(any(), anyInt())).thenThrow(new RuntimeException());
         when(mockedWorkerMetricsDAO.getAllWorkerMetricStats()).thenThrow(new RuntimeException());
 
         final LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
@@ -752,7 +753,40 @@ class LeaseAssignmentManagerTest {
 
         leaseAssignmentManagerRunnable.run();
 
-        verify(mockedLeaseRefresher, times(2)).listLeasesParallelyWithDynamicTotalSegments(any());
+        verify(mockedLeaseRefresher, times(2)).listLeasesParallely(any(), anyInt());
+        verify(mockedWorkerMetricsDAO, times(2)).getAllWorkerMetricStats();
+    }
+
+    @Test
+    void performAssignment_testRetryBehavior_withDynamicTotalScanSegments()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+
+        final WorkerMetricStatsDAO mockedWorkerMetricsDAO = Mockito.mock(WorkerMetricStatsDAO.class);
+        final LeaseRefresher mockedLeaseRefresher = Mockito.mock(LeaseRefresher.class);
+
+        when(mockedLeaseRefresher.listLeasesParallely(any(), eq(0))).thenThrow(new RuntimeException());
+        when(mockedWorkerMetricsDAO.getAllWorkerMetricStats()).thenThrow(new RuntimeException());
+
+        final LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
+                mockedLeaseRefresher,
+                mockedWorkerMetricsDAO,
+                mockLeaderDecider,
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                TEST_LEADER_WORKER_ID,
+                100L,
+                new NullMetricsFactory(),
+                scheduledExecutorService,
+                System::nanoTime,
+                Integer.MAX_VALUE,
+                LeaseManagementConfig.GracefulLeaseHandoffConfig.builder()
+                        .isGracefulLeaseHandoffEnabled(false)
+                        .build());
+
+        leaseAssignmentManager.start();
+
+        leaseAssignmentManagerRunnable.run();
+
+        verify(mockedLeaseRefresher, times(2)).listLeasesParallely(any(), eq(0));
         verify(mockedWorkerMetricsDAO, times(2)).getAllWorkerMetricStats();
     }
 

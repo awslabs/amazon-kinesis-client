@@ -562,22 +562,23 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     }
 
     @Override
-    public Map.Entry<List<Lease>, List<String>> listLeasesParallelyWithDynamicTotalSegments(
-            final ExecutorService parallelScanExecutorService)
-            throws DependencyException, InvalidStateException, ProvisionedThroughputException {
-        return listLeasesParallely(parallelScanExecutorService, getParallelScanTotalSegments());
-    }
-
-    @Override
     public Map.Entry<List<Lease>, List<String>> listLeasesParallely(
             final ExecutorService parallelScanExecutorService, final int parallelScanTotalSegment)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final List<String> leaseItemFailedDeserialize = new ArrayList<>();
         final List<Lease> response = new ArrayList<>();
         final List<Future<List<Map<String, AttributeValue>>>> futures = new ArrayList<>();
-        for (int i = 0; i < parallelScanTotalSegment; ++i) {
+
+        final int totalSegments;
+        if (parallelScanTotalSegment > 0) {
+            totalSegments = parallelScanTotalSegment;
+        } else {
+            totalSegments = getParallelScanTotalSegments();
+        }
+
+        for (int i = 0; i < totalSegments; ++i) {
             final int segmentNumber = i;
-            futures.add(parallelScanExecutorService.submit(() -> scanSegment(segmentNumber, parallelScanTotalSegment)));
+            futures.add(parallelScanExecutorService.submit(() -> scanSegment(segmentNumber, totalSegments)));
         }
         try {
             for (final Future<List<Map<String, AttributeValue>>> future : futures) {
