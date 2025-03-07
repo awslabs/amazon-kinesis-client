@@ -130,7 +130,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     private static final long NUMBER_OF_BYTES_PER_GB = 1024 * 1024 * 1024;
     private static final double GB_PER_SEGMENT = 0.2;
     private static final int MIN_SCAN_SEGMENTS = 1;
-    private static final int MAX_SCAN_SEGMENTS = 1000000;
+    private static final int MAX_SCAN_SEGMENTS = 30;
 
     private static DdbTableConfig createDdbTableConfigFromBillingMode(final BillingMode billingMode) {
         final DdbTableConfig tableConfig = new DdbTableConfig();
