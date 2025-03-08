@@ -133,9 +133,10 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
     private static final int MIN_SCAN_SEGMENTS = 1;
     private static final int MAX_SCAN_SEGMENTS = 30;
 
-    private volatile Integer cachedTotalSegments;
-    private volatile Instant expirationTimeForTotalSegmentsCache;
+    private Integer cachedTotalSegments;
+    private Instant expirationTimeForTotalSegmentsCache;
     private static final Duration CACHE_DURATION_FOR_TOTAL_SEGMENTS = Duration.ofHours(2);
+    private final Object lock = new Object();
 
     private static DdbTableConfig createDdbTableConfigFromBillingMode(final BillingMode billingMode) {
         final DdbTableConfig tableConfig = new DdbTableConfig();
@@ -620,23 +621,25 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
      */
     private int getParallelScanTotalSegments() throws DependencyException {
         if (isTotalSegmentsCacheValid()) {
-            log.info("Cached value used : TotalSegments for Lease table parallel scan : {}", cachedTotalSegments);
             return cachedTotalSegments;
         }
-
         int parallelScanTotalSegments = DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR;
-        DescribeTableResponse describeTableResponse = describeLeaseTable();
-
-        if (describeTableResponse == null) {
-            log.info("DescribeTable returned null so using default totalSegments : {}", parallelScanTotalSegments);
-        } else {
-            final double tableSizeGB = (double) describeTableResponse.table().tableSizeBytes() / NUMBER_OF_BYTES_PER_GB;
-            parallelScanTotalSegments = Math.min(
-                    Math.max((int) Math.ceil(tableSizeGB / GB_PER_SEGMENT), MIN_SCAN_SEGMENTS), MAX_SCAN_SEGMENTS);
-            log.info("TotalSegments for Lease table parallel scan : {}", parallelScanTotalSegments);
+        synchronized(lock) {
+            if (isTotalSegmentsCacheValid()) {
+                return cachedTotalSegments;
+            }
+            DescribeTableResponse describeTableResponse = describeLeaseTable();
+            if (describeTableResponse == null) {
+                log.info("DescribeTable returned null so using default totalSegments : {}", parallelScanTotalSegments);
+            } else {
+                final double tableSizeGB = (double) describeTableResponse.table().tableSizeBytes() / NUMBER_OF_BYTES_PER_GB;
+                parallelScanTotalSegments = Math.min(
+                        Math.max((int) Math.ceil(tableSizeGB / GB_PER_SEGMENT), MIN_SCAN_SEGMENTS), MAX_SCAN_SEGMENTS);
+            }
+            cachedTotalSegments = parallelScanTotalSegments;
+            expirationTimeForTotalSegmentsCache = Instant.now().plus(CACHE_DURATION_FOR_TOTAL_SEGMENTS);
         }
-        cachedTotalSegments = parallelScanTotalSegments;
-        expirationTimeForTotalSegmentsCache = Instant.now().plus(CACHE_DURATION_FOR_TOTAL_SEGMENTS);
+        log.info("TotalSegments for Lease table parallel scan : {}", parallelScanTotalSegments);
         return parallelScanTotalSegments;
     }
 

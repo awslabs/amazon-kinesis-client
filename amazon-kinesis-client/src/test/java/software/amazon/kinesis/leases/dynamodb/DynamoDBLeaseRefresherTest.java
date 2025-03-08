@@ -11,6 +11,8 @@ import java.util.concurrent.Executors;
 import com.amazonaws.services.dynamodbv2.local.embedded.DynamoDBEmbedded;
 import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -22,6 +24,8 @@ import software.amazon.awssdk.services.dynamodb.model.GlobalSecondaryIndexDescri
 import software.amazon.awssdk.services.dynamodb.model.IndexStatus;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.dynamodb.model.TableStatus;
 import software.amazon.awssdk.services.dynamodb.model.UpdateContinuousBackupsRequest;
@@ -394,31 +398,150 @@ class DynamoDBLeaseRefresherTest {
     }
 
     @Test
-    void listLeasesParallelyWithDynamicTotalSegments_sanity()
+    public void listLeasesParallely_UseCachedTotalSegment()
             throws ProvisionedThroughputException, DependencyException, InvalidStateException {
-        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
-        setupTable(leaseRefresher);
-        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "leaseOwner1"));
-        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease2", "leaseOwner2"));
-        final Map.Entry<List<Lease>, List<String>> response =
-                leaseRefresher.listLeasesParallely(Executors.newFixedThreadPool(2), 0);
-        assertEquals(2, response.getKey().size());
-        assertEquals(0, response.getValue().size());
+        DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
+        final long oneGB_InBytes = 1073741824L;
+
+        when(mockDdbClient.describeTable(any(DescribeTableRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(DescribeTableResponse.builder()
+                        .table(TableDescription.builder()
+                                .tableName(TEST_LEASE_TABLE)
+                                .tableStatus(TableStatus.ACTIVE)
+                                .tableSizeBytes(oneGB_InBytes)
+                                .build())
+                        .build()));
+        when(mockDdbClient.scan(any(ScanRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(
+                        ScanResponse.builder().items(new ArrayList<>()).build()));
+
+        final LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                mockDdbClient,
+                new DynamoDBLeaseSerializer(),
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                true,
+                true,
+                new ArrayList<>());
+
+        leaseRefresher.listLeasesParallely(Executors.newFixedThreadPool(2), 0);
+        verify(mockDdbClient, times(5)).scan(any(ScanRequest.class));
+
+        // calling second to test cached value is used
+        leaseRefresher.listLeasesParallely(Executors.newFixedThreadPool(2), 0);
+
+        // verify if describe table is called once even when listLeasesParallely is called twice
+        verify(mockDdbClient, times(1)).describeTable(any(DescribeTableRequest.class));
+        verify(mockDdbClient, times(10)).scan(any(ScanRequest.class));
     }
 
     @Test
-    void listLeasesParallelyWithDynamicTotalSegments_leaseWithFailingDeserialization_assertCorrectResponse()
+    public void listLeasesParallely_DescribeTableNotCalledWhenSegmentGreaterThanZero()
             throws ProvisionedThroughputException, DependencyException, InvalidStateException {
-        DynamoDBLeaseRefresher leaseRefresher = createLeaseRefresher(new DdbTableConfig(), dynamoDbAsyncClient);
-        setupTable(leaseRefresher);
-        leaseRefresher.createLeaseIfNotExists(createDummyLease("lease1", "leaseOwner1"));
-        createAndPutBadLeaseEntryInTable();
-        final Map.Entry<List<Lease>, List<String>> response =
-                leaseRefresher.listLeasesParallely(Executors.newFixedThreadPool(2), 0);
-        assertEquals(1, response.getKey().size());
-        assertEquals("lease1", response.getKey().get(0).leaseKey());
-        assertEquals(1, response.getValue().size());
-        assertEquals("badLeaseKey", response.getValue().get(0));
+        DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
+
+        when(mockDdbClient.describeTable(any(DescribeTableRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(DescribeTableResponse.builder()
+                        .table(TableDescription.builder()
+                                .tableName(TEST_LEASE_TABLE)
+                                .tableStatus(TableStatus.ACTIVE)
+                                .tableSizeBytes(1000L)
+                                .build())
+                        .build()));
+        when(mockDdbClient.scan(any(ScanRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(
+                        ScanResponse.builder().items(new ArrayList<>()).build()));
+
+        final LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                mockDdbClient,
+                new DynamoDBLeaseSerializer(),
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                true,
+                true,
+                new ArrayList<>());
+
+        leaseRefresher.listLeasesParallely(Executors.newFixedThreadPool(2), 2);
+        verify(mockDdbClient, times(0)).describeTable(any(DescribeTableRequest.class));
+    }
+
+    @Test
+    public void listLeasesParallely_TotalSegmentIsDefaultWhenDescribeTableThrowsException()
+            throws ProvisionedThroughputException, DependencyException, InvalidStateException {
+        DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
+
+        when(mockDdbClient.describeTable(any(DescribeTableRequest.class)))
+                .thenThrow(ResourceNotFoundException.builder()
+                        .message("Mock table does not exist scenario")
+                        .build());
+
+        when(mockDdbClient.scan(any(ScanRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(
+                        ScanResponse.builder().items(new ArrayList<>()).build()));
+
+        final LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                mockDdbClient,
+                new DynamoDBLeaseSerializer(),
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                true,
+                true,
+                new ArrayList<>());
+
+        leaseRefresher.listLeasesParallely(Executors.newFixedThreadPool(2), 0);
+        verify(mockDdbClient, times(10)).scan(any(ScanRequest.class));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "0, 1", // 0
+        "1024, 1", // 1KB
+        "104857600, 1", // 100MB
+        "214748364, 1", // 0.2GB
+        "322122547, 2", // 1.3GB
+        "1073741824, 5", // 1GB
+        "2147483648, 10", // 2GB
+        "5368709120, 25", // 5GB
+    })
+    public void listLeasesParallely_TotalSegmentForDifferentTableSize(long tableSizeBytes, int totalSegments)
+            throws ProvisionedThroughputException, DependencyException, InvalidStateException {
+        DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
+
+        when(mockDdbClient.describeTable(any(DescribeTableRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(DescribeTableResponse.builder()
+                        .table(TableDescription.builder()
+                                .tableName(TEST_LEASE_TABLE)
+                                .tableStatus(TableStatus.ACTIVE)
+                                .tableSizeBytes(tableSizeBytes)
+                                .build())
+                        .build()));
+        when(mockDdbClient.scan(any(ScanRequest.class)))
+                .thenReturn(CompletableFuture.completedFuture(
+                        ScanResponse.builder().items(new ArrayList<>()).build()));
+
+        final LeaseRefresher leaseRefresher = new DynamoDBLeaseRefresher(
+                TEST_LEASE_TABLE,
+                mockDdbClient,
+                new DynamoDBLeaseSerializer(),
+                true,
+                NOOP_TABLE_CREATOR_CALLBACK,
+                Duration.ofSeconds(10),
+                new DdbTableConfig(),
+                true,
+                true,
+                new ArrayList<>());
+
+        leaseRefresher.listLeasesParallely(Executors.newFixedThreadPool(2), 0);
+        verify(mockDdbClient, times(totalSegments)).scan(any(ScanRequest.class));
     }
 
     @Test
