@@ -154,8 +154,9 @@ public interface LeaseRefresher {
      * List all leases from the storage parallely and deserialize into Lease objects. Returns the list of leaseKey
      * that failed deserialize separately.
      *
-     * @param threadPool        threadpool to use for parallel scan
-     * @param parallelismFactor no. of parallel scans
+     * @param threadPool        thread pool to use for parallel scan
+     * @param parallelismFactor no. of parallel scans.
+     *                          If parallelismFactor is 0 then parallelismFactor will be calculated based on table size
      * @return Pair of List of leases from the storage and List of items failed to deserialize
      * @throws DependencyException            if DynamoDB scan fails in an unexpected way
      * @throws InvalidStateException          if lease table does not exist

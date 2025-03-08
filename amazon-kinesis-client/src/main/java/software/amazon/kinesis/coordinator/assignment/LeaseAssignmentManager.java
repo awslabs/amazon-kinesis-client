@@ -86,11 +86,6 @@ public final class LeaseAssignmentManager {
      */
     private static final int DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER = 2;
 
-    /**
-     * Default parallelism factor for scaling lease table.
-     */
-    private static final int DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR = 10;
-
     private static final String FORCE_LEADER_RELEASE_METRIC_NAME = "ForceLeaderRelease";
 
     /**
@@ -689,8 +684,8 @@ public final class LeaseAssignmentManager {
         }
 
         private CompletableFuture<Map.Entry<List<Lease>, List<String>>> loadLeaseListAsync() {
-            return CompletableFuture.supplyAsync(() -> loadWithRetry(() -> leaseRefresher.listLeasesParallely(
-                    LEASE_ASSIGNMENT_CALL_THREAD_POOL, DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR)));
+            return CompletableFuture.supplyAsync(() ->
+                    loadWithRetry(() -> leaseRefresher.listLeasesParallely(LEASE_ASSIGNMENT_CALL_THREAD_POOL, 0)));
         }
 
         private <T> T loadWithRetry(final Callable<T> loadFunction) {
