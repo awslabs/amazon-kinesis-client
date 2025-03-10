@@ -27,10 +27,6 @@
 
   <artifactId>amazon-kinesis-client-multilang</artifactId>
 
-  <properties>
-    <aws-java-sdk.version>1.12.668</aws-java-sdk.version>
-  </properties>
-
   <dependencies>
     <dependency>
       <groupId>software.amazon.kinesis</groupId>
@@ -41,32 +37,6 @@
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sts</artifactId>
       <version>${awssdk.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk-core</artifactId>
-      <version>${aws-java-sdk.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>com.fasterxml.jackson.core</groupId>
-          <artifactId>jackson-databind</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>com.fasterxml.jackson.dataformat</groupId>
-          <artifactId>jackson-dataformat-cbor</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.apache.httpcomponents</groupId>
-          <artifactId>httpclient</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-
-    <dependency>
-        <groupId>com.amazonaws</groupId>
-        <artifactId>aws-java-sdk-sts</artifactId>
-        <version>${aws-java-sdk.version}</version>
     </dependency>
 
     <dependency>
