@@ -6,6 +6,10 @@ KCL multilang does not, and is not intended to, proxy the full breadth of the AW
 However, KCL now provides better extensibility to handle, and be enhanced to handle, additional configurations.
 This document should help multilang customers configure a suitable `CredentialProvider` (or contribute changes to support a new use case!).
 
+In KCL versions prior to 2.7, the AWSCredentialsProvider property expected AWS SDK v1 provider names. If you are using 
+KCL version 2.7 or beyond, ensure that you are passing an AWS SDK v2 credentials provider name to your AwsCredentialsProvider 
+property. See list of providers [here](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/migration-client-credentials.html#credentials-changes-mapping) and several examples below.
+
 ## Sample Provider Configuration
 
 In a Properties file, an `AwsCredentialsProperty` configuration might look like:

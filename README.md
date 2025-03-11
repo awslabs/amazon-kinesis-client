@@ -48,6 +48,9 @@ To make it easier for developers to write record processors in other languages, 
 ## Using the KCL
 The recommended way to use the KCL for Java is to consume it from Maven.
 
+## Must read if you are migrating to a version using KCL 2.7 or later
+KCL version 2.7.0 and beyond does not use the AWS SDK v1. Because of this, all multilang users upgrading from a prior version must update their multilang `.properties` AwsCredentialsProvider property to an AWS SDK v2 credential provider name. Please see the credentials provider name mapping [here](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/migration-client-credentials.html#credentials-changes-mapping), and reference our Configuring Credential Providers documentation [here](https://github.com/vincentvilo-aws/amazon-kinesis-client/blob/remove-sdk-v1/docs/multilang/configuring-credential-providers.md). If this is not done, your multilang KCL will fail to construct an AwsCredentialsProvider on startup.
+
 ### Version 2.x
   ``` xml
   <dependency>
