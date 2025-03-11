@@ -17,7 +17,6 @@ package software.amazon.kinesis.lifecycle;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
-import software.amazon.kinesis.retrieval.ThrottlingReporter;
 
 /**
  * Top level container for all the possible states a {@link ShardConsumer} can be in. The logic for creation of tasks,
@@ -121,11 +120,11 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(
-                ShardConsumerArgument consumerArgument, ShardConsumer consumer, ProcessRecordsInput input) {
-            return new BlockOnParentShardTask(
-                    consumerArgument.shardInfo(),
-                    consumerArgument.leaseCoordinator().leaseRefresher(),
-                    consumerArgument.parentShardPollIntervalMillis());
+                ShardConsumerArgument consumerArgument,
+                ShardConsumer consumer,
+                ProcessRecordsInput input,
+                ConsumerTaskFactory taskFactory) {
+            return taskFactory.createBlockOnParentTask(consumerArgument);
         }
 
         @Override
@@ -187,16 +186,11 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(
-                ShardConsumerArgument argument, ShardConsumer consumer, ProcessRecordsInput input) {
-            return new InitializeTask(
-                    argument.shardInfo(),
-                    argument.shardRecordProcessor(),
-                    argument.checkpoint(),
-                    argument.recordProcessorCheckpointer(),
-                    argument.initialPositionInStream(),
-                    argument.recordsPublisher(),
-                    argument.taskBackoffTimeMillis(),
-                    argument.metricsFactory());
+                ShardConsumerArgument argument,
+                ShardConsumer consumer,
+                ProcessRecordsInput input,
+                ConsumerTaskFactory taskFactory) {
+            return taskFactory.createInitializeTask(argument);
         }
 
         @Override
@@ -250,24 +244,11 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(
-                ShardConsumerArgument argument, ShardConsumer consumer, ProcessRecordsInput input) {
-            ThrottlingReporter throttlingReporter =
-                    new ThrottlingReporter(5, argument.shardInfo().shardId());
-            return new ProcessTask(
-                    argument.shardInfo(),
-                    argument.shardRecordProcessor(),
-                    argument.recordProcessorCheckpointer(),
-                    argument.taskBackoffTimeMillis(),
-                    argument.skipShardSyncAtWorkerInitializationIfLeasesExist(),
-                    argument.shardDetector(),
-                    throttlingReporter,
-                    input,
-                    argument.shouldCallProcessRecordsEvenForEmptyRecordList(),
-                    argument.idleTimeInMilliseconds(),
-                    argument.aggregatorUtil(),
-                    argument.metricsFactory(),
-                    argument.schemaRegistryDecoder(),
-                    argument.leaseCoordinator().leaseStatsRecorder());
+                ShardConsumerArgument argument,
+                ShardConsumer consumer,
+                ProcessRecordsInput input,
+                ConsumerTaskFactory taskFactory) {
+            return taskFactory.createProcessTask(argument, input);
         }
 
         @Override
@@ -331,14 +312,12 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(
-                ShardConsumerArgument argument, ShardConsumer consumer, ProcessRecordsInput input) {
+                ShardConsumerArgument argument,
+                ShardConsumer consumer,
+                ProcessRecordsInput input,
+                ConsumerTaskFactory taskFactory) {
             // TODO: notify shutdownrequested
-            return new ShutdownNotificationTask(
-                    argument.shardRecordProcessor(),
-                    argument.recordProcessorCheckpointer(),
-                    consumer.shutdownNotification(),
-                    argument.shardInfo(),
-                    consumer.shardConsumerArgument().leaseCoordinator());
+            return taskFactory.createShutdownNotificationTask(argument, consumer);
         }
 
         @Override
@@ -405,7 +384,10 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(
-                ShardConsumerArgument argument, ShardConsumer consumer, ProcessRecordsInput input) {
+                ShardConsumerArgument argument,
+                ShardConsumer consumer,
+                ProcessRecordsInput input,
+                ConsumerTaskFactory taskFactory) {
             return null;
         }
 
@@ -483,25 +465,12 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(
-                ShardConsumerArgument argument, ShardConsumer consumer, ProcessRecordsInput input) {
+                ShardConsumerArgument argument,
+                ShardConsumer consumer,
+                ProcessRecordsInput input,
+                ConsumerTaskFactory taskFactory) {
             // TODO: set shutdown reason
-            return new ShutdownTask(
-                    argument.shardInfo(),
-                    argument.shardDetector(),
-                    argument.shardRecordProcessor(),
-                    argument.recordProcessorCheckpointer(),
-                    consumer.shutdownReason(),
-                    argument.initialPositionInStream(),
-                    argument.cleanupLeasesOfCompletedShards(),
-                    argument.ignoreUnexpectedChildShards(),
-                    argument.leaseCoordinator(),
-                    argument.taskBackoffTimeMillis(),
-                    argument.recordsPublisher(),
-                    argument.hierarchicalShardSyncer(),
-                    argument.metricsFactory(),
-                    input == null ? null : input.childShards(),
-                    argument.streamIdentifier(),
-                    argument.leaseCleanupManager());
+            return taskFactory.createShutdownTask(argument, consumer, input);
         }
 
         @Override
@@ -569,7 +538,10 @@ class ConsumerStates {
 
         @Override
         public ConsumerTask createTask(
-                ShardConsumerArgument argument, ShardConsumer consumer, ProcessRecordsInput input) {
+                ShardConsumerArgument argument,
+                ShardConsumer consumer,
+                ProcessRecordsInput input,
+                ConsumerTaskFactory taskFactory) {
             return null;
         }
 

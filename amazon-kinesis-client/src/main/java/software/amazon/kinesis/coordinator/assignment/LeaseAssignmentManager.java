@@ -537,8 +537,8 @@ public final class LeaseAssignmentManager {
                     .filter(workerMetrics -> !workerMetrics.isValidWorkerMetric())
                     .map(WorkerMetricStats::getWorkerId)
                     .collect(Collectors.toList());
-            log.warn("List of workerIds with invalid entries : {}", listOfWorkerIdOfInvalidWorkerMetricsEntry);
             if (!listOfWorkerIdOfInvalidWorkerMetricsEntry.isEmpty()) {
+                log.warn("List of workerIds with invalid entries : {}", listOfWorkerIdOfInvalidWorkerMetricsEntry);
                 metricsScope.addData(
                         "NumWorkersWithInvalidEntry",
                         listOfWorkerIdOfInvalidWorkerMetricsEntry.size(),
@@ -567,8 +567,8 @@ public final class LeaseAssignmentManager {
 
             final Map.Entry<List<Lease>, List<String>> leaseListResponse = leaseListFuture.join();
             this.leaseList = leaseListResponse.getKey();
-            log.warn("Leases that failed deserialization : {}", leaseListResponse.getValue());
             if (!leaseListResponse.getValue().isEmpty()) {
+                log.warn("Leases that failed deserialization : {}", leaseListResponse.getValue());
                 MetricsUtil.addCount(
                         metricsScope,
                         "LeaseDeserializationFailureCount",

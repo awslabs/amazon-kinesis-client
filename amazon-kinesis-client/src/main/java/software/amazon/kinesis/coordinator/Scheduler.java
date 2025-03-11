@@ -87,6 +87,7 @@ import software.amazon.kinesis.leases.dynamodb.DynamoDBMultiStreamLeaseSerialize
 import software.amazon.kinesis.leases.exceptions.DependencyException;
 import software.amazon.kinesis.leases.exceptions.InvalidStateException;
 import software.amazon.kinesis.leases.exceptions.ProvisionedThroughputException;
+import software.amazon.kinesis.lifecycle.ConsumerTaskFactory;
 import software.amazon.kinesis.lifecycle.LifecycleConfig;
 import software.amazon.kinesis.lifecycle.ShardConsumer;
 import software.amazon.kinesis.lifecycle.ShardConsumerArgument;
@@ -188,6 +189,7 @@ public class Scheduler implements Runnable {
     private final SchemaRegistryDecoder schemaRegistryDecoder;
 
     private final DeletedStreamListProvider deletedStreamListProvider;
+    private final ConsumerTaskFactory taskFactory;
 
     @Getter(AccessLevel.NONE)
     private final MigrationStateMachine migrationStateMachine;
@@ -371,6 +373,7 @@ public class Scheduler implements Runnable {
         this.schemaRegistryDecoder = this.retrievalConfig.glueSchemaRegistryDeserializer() == null
                 ? null
                 : new SchemaRegistryDecoder(this.retrievalConfig.glueSchemaRegistryDeserializer());
+        this.taskFactory = leaseManagementConfig().consumerTaskFactory();
     }
 
     /**
