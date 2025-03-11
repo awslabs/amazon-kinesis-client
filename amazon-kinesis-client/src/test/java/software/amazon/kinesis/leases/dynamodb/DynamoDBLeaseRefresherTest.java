@@ -401,14 +401,14 @@ class DynamoDBLeaseRefresherTest {
     public void listLeasesParallely_UseCachedTotalSegment()
             throws ProvisionedThroughputException, DependencyException, InvalidStateException {
         DynamoDbAsyncClient mockDdbClient = mock(DynamoDbAsyncClient.class);
-        final long oneGB_InBytes = 1073741824L;
+        final long oneGBInBytes = 1073741824L;
 
         when(mockDdbClient.describeTable(any(DescribeTableRequest.class)))
                 .thenReturn(CompletableFuture.completedFuture(DescribeTableResponse.builder()
                         .table(TableDescription.builder()
                                 .tableName(TEST_LEASE_TABLE)
                                 .tableStatus(TableStatus.ACTIVE)
-                                .tableSizeBytes(oneGB_InBytes)
+                                .tableSizeBytes(oneGBInBytes)
                                 .build())
                         .build()));
         when(mockDdbClient.scan(any(ScanRequest.class)))
