@@ -622,11 +622,9 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         if (isTotalSegmentsCacheValid()) {
             return cachedTotalSegments;
         }
-        int parallelScanTotalSegments = DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR;
-        if (isTotalSegmentsCacheValid()) {
-            return cachedTotalSegments;
-        }
-        DescribeTableResponse describeTableResponse = describeLeaseTable();
+
+        int parallelScanTotalSegments = cachedTotalSegments == null ? DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR  : cachedTotalSegments;
+        final DescribeTableResponse describeTableResponse = describeLeaseTable();
         if (describeTableResponse == null) {
             log.info("DescribeTable returned null so using default totalSegments : {}", parallelScanTotalSegments);
         } else {
