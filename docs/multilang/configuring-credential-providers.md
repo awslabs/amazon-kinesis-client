@@ -24,7 +24,7 @@ For example, this configuration cannot set a regional endpoint (e.g., VPC use ca
 
 Leveraging nested properties, an `AwsCredentialsProperty` value might change to:
 ```
-AwsCredentialsProvider = KclSTSAssumeRoleSessionCredentialsProvider|<arn>|<sessionName>\
+AwsCredentialsProvider = KclStsAssumeRoleCredentialsProvider|<arn>|<sessionName>\
     |endpointRegion=us-east-1|externalId=spartacus
 ```
 N.B. Backslash (`\`) is for multi-line legibility and is not required.
@@ -68,7 +68,7 @@ A backwards-compatible addition might look like:
 
 Leveraging nested properties, an `AwsCredentialsProperty` value might look like:
 ```
-AwsCredentialsProvider = KclSTSAssumeRoleSessionCredentialsProvider|<arn>|<sessionName>\
+AwsCredentialsProvider = KclStsAssumeRoleCredentialsProvider|<arn>|<sessionName>\
     |endpointRegion=us-east-1|externalId=spartacus
 ```
 
