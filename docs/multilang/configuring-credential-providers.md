@@ -6,6 +6,11 @@ KCL multilang does not, and is not intended to, proxy the full breadth of the AW
 However, KCL now provides better extensibility to handle, and be enhanced to handle, additional configurations.
 This document should help multilang customers configure a suitable `CredentialProvider` (or contribute changes to support a new use case!).
 
+In KCL versions prior to 2.7, the `AWSCredentialsProvider` property used AWS SDK for Java 1.x provider names.
+When upgrading to KCL 2.7 or later, you must update to use AWS SDK v2 credentials provider names in your configuration.
+For a complete mapping of credential provider names between version 1.x and 2.x, see the [AWS SDK for Java migration guide — Credentials provider changes mapped between versions 1.x and 2.x](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/migration-client-credentials.html#credentials-changes-mapping). 
+You also can refer to the following examples.
+
 ## Sample Provider Configuration
 
 In a Properties file, an `AwsCredentialsProperty` configuration might look like:
@@ -24,7 +29,7 @@ For example, this configuration cannot set a regional endpoint (e.g., VPC use ca
 
 Leveraging nested properties, an `AwsCredentialsProperty` value might change to:
 ```
-AwsCredentialsProvider = KclSTSAssumeRoleSessionCredentialsProvider|<arn>|<sessionName>\
+AwsCredentialsProvider = KclStsAssumeRoleCredentialsProvider|<arn>|<sessionName>\
     |endpointRegion=us-east-1|externalId=spartacus
 ```
 N.B. Backslash (`\`) is for multi-line legibility and is not required.
@@ -68,7 +73,7 @@ A backwards-compatible addition might look like:
 
 Leveraging nested properties, an `AwsCredentialsProperty` value might look like:
 ```
-AwsCredentialsProvider = KclSTSAssumeRoleSessionCredentialsProvider|<arn>|<sessionName>\
+AwsCredentialsProvider = KclStsAssumeRoleCredentialsProvider|<arn>|<sessionName>\
     |endpointRegion=us-east-1|externalId=spartacus
 ```
 
