@@ -15,6 +15,7 @@
 package software.amazon.kinesis.leases.dynamodb;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -121,6 +122,20 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
     private static final String LEASE_OWNER_INDEX_QUERY_CONDITIONAL_EXPRESSION =
             String.format("%s = %s", LEASE_OWNER_KEY, DDB_LEASE_OWNER);
+
+    /**
+     * Default parallelism factor for scaling lease table.
+     */
+    private static final int DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR = 10;
+
+    private static final long NUMBER_OF_BYTES_PER_GB = 1024 * 1024 * 1024;
+    private static final double GB_PER_SEGMENT = 0.2;
+    private static final int MIN_SCAN_SEGMENTS = 1;
+    private static final int MAX_SCAN_SEGMENTS = 30;
+
+    private Integer cachedTotalSegments;
+    private Instant expirationTimeForTotalSegmentsCache;
+    private static final Duration CACHE_DURATION_FOR_TOTAL_SEGMENTS = Duration.ofHours(2);
 
     private static DdbTableConfig createDdbTableConfigFromBillingMode(final BillingMode billingMode) {
         final DdbTableConfig tableConfig = new DdbTableConfig();
@@ -553,9 +568,17 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         final List<String> leaseItemFailedDeserialize = new ArrayList<>();
         final List<Lease> response = new ArrayList<>();
         final List<Future<List<Map<String, AttributeValue>>>> futures = new ArrayList<>();
-        for (int i = 0; i < parallelScanTotalSegment; ++i) {
+
+        final int totalSegments;
+        if (parallelScanTotalSegment > 0) {
+            totalSegments = parallelScanTotalSegment;
+        } else {
+            totalSegments = getParallelScanTotalSegments();
+        }
+
+        for (int i = 0; i < totalSegments; ++i) {
             final int segmentNumber = i;
-            futures.add(parallelScanExecutorService.submit(() -> scanSegment(segmentNumber, parallelScanTotalSegment)));
+            futures.add(parallelScanExecutorService.submit(() -> scanSegment(segmentNumber, totalSegments)));
         }
         try {
             for (final Future<List<Map<String, AttributeValue>>> future : futures) {
@@ -584,6 +607,41 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             throw new DependencyException(e);
         }
         return new AbstractMap.SimpleEntry<>(response, leaseItemFailedDeserialize);
+    }
+
+    /**
+     * Calculates the optimal number of parallel scan segments for a DynamoDB table based on its size.
+     * The calculation follows these rules:
+     *  - Each segment handles 0.2GB (214,748,364 bytes) of data
+     *  - For empty tables or tables smaller than 0.2GB, uses 1 segment
+     *  - Number of segments scales linearly with table size
+     *
+     * @return The number of segments to use for parallel scan, minimum 1
+     */
+    private synchronized int getParallelScanTotalSegments() throws DependencyException {
+        if (isTotalSegmentsCacheValid()) {
+            return cachedTotalSegments;
+        }
+
+        int parallelScanTotalSegments =
+                cachedTotalSegments == null ? DEFAULT_LEASE_TABLE_SCAN_PARALLELISM_FACTOR : cachedTotalSegments;
+        final DescribeTableResponse describeTableResponse = describeLeaseTable();
+        if (describeTableResponse == null) {
+            log.info("DescribeTable returned null so using default totalSegments : {}", parallelScanTotalSegments);
+        } else {
+            final double tableSizeGB = (double) describeTableResponse.table().tableSizeBytes() / NUMBER_OF_BYTES_PER_GB;
+            parallelScanTotalSegments = Math.min(
+                    Math.max((int) Math.ceil(tableSizeGB / GB_PER_SEGMENT), MIN_SCAN_SEGMENTS), MAX_SCAN_SEGMENTS);
+
+            log.info("TotalSegments for Lease table parallel scan : {}", parallelScanTotalSegments);
+        }
+        cachedTotalSegments = parallelScanTotalSegments;
+        expirationTimeForTotalSegmentsCache = Instant.now().plus(CACHE_DURATION_FOR_TOTAL_SEGMENTS);
+        return parallelScanTotalSegments;
+    }
+
+    private boolean isTotalSegmentsCacheValid() {
+        return cachedTotalSegments != null && Instant.now().isBefore(expirationTimeForTotalSegmentsCache);
     }
 
     private List<Map<String, AttributeValue>> scanSegment(final int segment, final int parallelScanTotalSegment)
