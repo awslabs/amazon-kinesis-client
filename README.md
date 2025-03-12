@@ -68,7 +68,7 @@ This error occurs due to [a known issue](https://github.com/aws/aws-sdk-java-v2/
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>3.0.1</version>
+      <version>3.0.2</version>
   </dependency>
   ```
 
