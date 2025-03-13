@@ -52,7 +52,7 @@
     <sqlite4java.version>1.0.392</sqlite4java.version>
     <sqlite4java.native>libsqlite4java</sqlite4java.native>
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
-    <slf4j.version>2.0.13</slf4j.version>
+    <slf4j.version>2.0.17</slf4j.version>
     <gsr.version>1.1.19</gsr.version>
     <skipITs>true</skipITs>
   </properties>
