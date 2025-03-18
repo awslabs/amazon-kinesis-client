@@ -1,6 +1,13 @@
 # Amazon Kinesis Client Library for Java
 [![Build Status](https://travis-ci.org/awslabs/amazon-kinesis-client.svg?branch=master)](https://travis-ci.org/awslabs/amazon-kinesis-client)
 
+> [!IMPORTANT]
+> ### Amazon Kinesis Client Library (KCL) 1.x will reach end-of-support on January 30, 2026
+> Amazon Kinesis Client Library (KCL) 1.x will reach end-of-support on January 30, 2026. Accordingly, these versions will enter maintenance mode on April 17, 2025. During maintenance mode, AWS will provide updates only for critical bug fixes and security issues. Major versions in maintenance mode will not receive updates for new features or feature enhancements. If you’re using KCL 1.x, we recommend migrating to the latest versions. When migrating from KCL 1.x to 3.x, you will need to update interfaces and security credential providers in your application. For details about the end-of-support notice and required actions, see the following links:
+> * [AWS Blog: Announcing end-of-support for Amazon Kinesis Client Library 1.x and Amazon Kinesis Producer Library 0.x effective January 30, 2026](https://aws.amazon.com/blogs/big-data/announcing-end-of-support-for-amazon-kinesis-client-library-1-x-and-amazon-kinesis-producer-library-0-x-effective-january-30-2026/)
+> * [Kinesis documentation: KCL version lifecycle policy](https://docs.aws.amazon.com/streams/latest/dev/kcl-version-lifecycle-policy.html)
+> * [Kinesis documentation: Migrating from KCL 1.x to KCL 3.x](https://docs.aws.amazon.com/streams/latest/dev/kcl-migration-1-3.html)
+
 The **Amazon Kinesis Client Library (KCL) for Java** enables Java developers to easily consume and process data from [Amazon Kinesis Data Streams][kinesis].
 
 * [Kinesis Data Streams Product Page][kinesis]
@@ -62,13 +69,6 @@ The recommended way to use the KCL for Java is to consume it from Maven.
 > When using KCL 3.x with AWS SDK for Java versions 2.27.19 through 2.27.23, you may encounter the following DynamoDB exception:
 > ```software.amazon.awssdk.services.dynamodb.model.DynamoDbException: The document path provided in the update expression is invalid for update (Service: DynamoDb, Status Code: 400, Request ID: xxx)```.
 > This error occurs due to [a known issue](https://github.com/aws/aws-sdk-java-v2/issues/5584) in the AWS SDK for Java that affects the DynamoDB metadata table managed by KCL 3.x. The issue was introduced in version 2.27.19 and impacts all versions up to 2.27.23. The issue has been resolved in the AWS SDK for Java version 2.27.24. For optimal performance and stability, we recommend upgrading to version 2.28.0 or later.
-
-> [!IMPORTANT]
-> ### Amazon Kinesis Client Library (KCL) 1.x will reach end-of-support on January 30, 2026
-> Amazon Kinesis Client Library (KCL) 1.x will reach end-of-support on January 30, 2026. Accordingly, these versions will enter maintenance mode on April 17, 2025. During maintenance mode, AWS will provide updates only for critical bug fixes and security issues. Major versions in maintenance mode will not receive updates for new features or feature enhancements. If you’re using KCL 1.x, we recommend migrating to the latest versions. When migrating from KCL 1.x to 3.x, you will need to update interfaces and security credential providers in your application. For details about the end-of-support notice and required actions, see the following links:
-> * [AWS Blog: Announcing end-of-support for Amazon Kinesis Client Library 1.x and Amazon Kinesis Producer Library 0.x effective January 30, 2026](https://aws.amazon.com/blogs/big-data/announcing-end-of-support-for-amazon-kinesis-client-library-1-x-and-amazon-kinesis-producer-library-0-x-effective-january-30-2026/)
-> * [Kinesis documentation: KCL version lifecycle policy](https://docs.aws.amazon.com/streams/latest/dev/kcl-version-lifecycle-policy.html)
-> * [Kinesis documentation: Migrating from KCL 1.x to KCL 3.x](https://docs.aws.amazon.com/streams/latest/dev/kcl-migration-1-3.html)
 
 ### Version 3.x
   ``` xml
