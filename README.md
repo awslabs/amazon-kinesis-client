@@ -8,6 +8,8 @@
 > * [Kinesis documentation: KCL version lifecycle policy](https://docs.aws.amazon.com/streams/latest/dev/kcl-version-lifecycle-policy.html)
 > * [Kinesis documentation: Migrating from KCL 1.x to KCL 3.x](https://docs.aws.amazon.com/streams/latest/dev/kcl-migration-1-3.html)
 
+## Introduction
+
 The **Amazon Kinesis Client Library (KCL) for Java** enables Java developers to easily consume and process data from [Amazon Kinesis Data Streams][kinesis].
 
 * [Kinesis Data Streams Product Page][kinesis]
