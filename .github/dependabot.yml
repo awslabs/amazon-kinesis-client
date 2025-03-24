@@ -31,11 +31,7 @@ updates:
       interval: "weekly"
 
 #Dependabot auto-merge PRs for patch/minor versions that are related to critical vulnerabilities (maven)
-name: Dependabot auto-merge
 on: pull_request
-permissions:
-  pull-requests: write
-  contents: write
 jobs:
   dependabot:
     runs-on: ubuntu-latest
