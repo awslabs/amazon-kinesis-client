@@ -1,14 +1,14 @@
 version: 2
 updates:
-  # branch - master
-  - package-ecosystem: "maven"
-    directory: "/"
-    labels:
-      - "dependencies"
-      - "v3.x"
-    target-branch: "master"
-    schedule:
-      interval: "weekly"
+#  # branch - master
+#  - package-ecosystem: "maven"
+#    directory: "/"
+#    labels:
+#      - "dependencies"
+#      - "v3.x"
+#    target-branch: "master"
+#    schedule:
+#      interval: "weekly"
 
   # branch - v2.x
   - package-ecosystem: "maven"
