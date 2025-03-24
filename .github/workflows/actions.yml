@@ -17,10 +17,10 @@ jobs:
         uses: dependabot/fetch-metadata@v2
         with:
           alert-lookup: true
-          compat-lookup: true
           github-token: "${{ secrets.PAT_TOKEN }}"
       - name: Enable auto-merge for Dependabot PRs
-        if: (steps.dependabot-metadata.outputs.cvss == true && update_types == 'minor' || 'patch')
+        # if: (steps.dependabot-metadata.outputs.cvss == true && update_types == 'minor' || 'patch')
+        if: update_types == 'minor' || 'patch'
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
