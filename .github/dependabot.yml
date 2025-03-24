@@ -30,27 +30,32 @@ updates:
     schedule:
       interval: "weekly"
 
-  #Dependabot auto-merge PRs for patch/minor versions that are related to critical vulnerabilities
-  - name: Dependabot auto-merge
+  #Dependabot auto-merge PRs for patch/minor versions that are related to critical vulnerabilities (maven)
+  - package-ecosystem: "maven"
+    directory: "/"
+    target-branch: "master"
+    schedule:
+      interval: "daily"
+    name: Dependabot auto-merge
     on: pull_request
     permissions:
       pull-requests: write
       contents: write
-    jobs:
-      dependabot:
-        runs-on: ubuntu-latest #needed?
-        if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'owner/my_repo' #edit?
-        steps:
-          - name: Fetch Dependabot metadata
-            id: dependabot-metadata
-            uses: dependabot/fetch-metadata@v2
-            with:
-              alert-lookup: true
-              github-token: "${{ secrets.PAT_TOKEN }}"
-          - name: Enable auto-merge for security critical Dependabot PRs
-            #if: ${{contains(steps.dependabot-metadata.outputs.dependency-names, 'rails') && steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch'}}
-            if: steps.dependabot-metadata.outputs.cvss != '0'
-            run: gh pr merge --auto --merge "$PR_URL"
-            env:
-              PR_URL: ${{github.event.pull_request.html_url}}
-              GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      jobs:
+        dependabot:
+          runs-on: ubuntu-latest #needed?
+          if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'owner/my_repo' #edit?
+          steps:
+            - name: Fetch Dependabot metadata
+              id: dependabot-metadata
+              uses: dependabot/fetch-metadata@v2
+              with:
+                alert-lookup: true
+                github-token: "${{ secrets.PAT_TOKEN }}"
+            - name: Enable auto-merge for security critical Dependabot PRs
+              #if: ${{contains(steps.dependabot-metadata.outputs.dependency-names, 'rails') && steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch'}}
+              if: steps.dependabot-metadata.outputs.cvss != '0'
+              run: gh pr merge --auto --merge "$PR_URL"
+              env:
+                PR_URL: ${{github.event.pull_request.html_url}}
+                GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
