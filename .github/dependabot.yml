@@ -9,7 +9,6 @@ updates:
     target-branch: "master"
     schedule:
       interval: "weekly"
-
-permissions:
-  contents: write
-  pull-requests: write
+    permissions:
+      contents: write
+      pull-requests: write
