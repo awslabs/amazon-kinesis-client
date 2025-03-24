@@ -9,3 +9,23 @@ updates:
     target-branch: "master"
     schedule:
       interval: "weekly"
+
+  # branch - v2.x
+  - package-ecosystem: "maven"
+    directory: "/"
+    labels:
+      - "dependencies"
+      - "v2.x"
+    target-branch: "v2.x"
+    schedule:
+      interval: "weekly"
+
+  # branch - v1.x
+  - package-ecosystem: "maven"
+    directory: "/"
+    labels:
+      - "dependencies"
+      - "v1.x"
+    target-branch: "v1.x"
+    schedule:
+      interval: "weekly"
