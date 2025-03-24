@@ -20,7 +20,7 @@ jobs:
         id: dependabot-metadata
         uses: dependabot/fetch-metadata@v2
       - name: Enable auto-merge for Dependabot PRs
-        if: ${{contains(steps.dependabot-metadata.outputs.dependency-names, 'rails') && steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch'}}
+        if: ${{steps.dependabot-metadata.outputs.cvss == 'true' && (steps.dependabot-metadata.outputs.update-type == 'version-update:semver-patch' || steps.dependabot-metadata.outputs.update-type == 'version-update:semver-minor')}}
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
