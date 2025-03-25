@@ -29,3 +29,14 @@ updates:
     target-branch: "v1.x"
     schedule:
       interval: "weekly"
+
+  # branch - dependabot testing
+  - package-ecosystem: "maven"
+    directory: "/"
+#    labels:
+#      - "dependencies"
+#      - "v1.x"
+    target-branch: "dependabot-testing-from-github"
+    schedule:
+      interval: "daily"
+      time: "04:10"
