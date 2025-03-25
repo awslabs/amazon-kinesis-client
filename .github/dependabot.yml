@@ -31,12 +31,7 @@ updates:
       interval: "weekly"
 
   # branch - dependabot testing
-  - package-ecosystem: "maven"
-    directory: "/"
-#    labels:
-#      - "dependencies"
-#      - "v1.x"
-    target-branch: "dependabot-testing-from-github"
+  - package-ecosystem: "github-actions"
+    directory: /
     schedule:
       interval: "daily"
-      time: "04:10"
