@@ -32,6 +32,9 @@ updates:
 
   # branch - dependabot testing
   - package-ecosystem: "github-actions"
-    directory: /
+    directory: "/"
+    labels:
+      - "dependencies"
+      - "v3.x"
     schedule:
       interval: "daily"
