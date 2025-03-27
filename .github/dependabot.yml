@@ -29,12 +29,3 @@ updates:
     target-branch: "v1.x"
     schedule:
       interval: "weekly"
-
-  # branch - dependabot testing
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    labels:
-      - "dependencies"
-      - "v3.x"
-    schedule:
-      interval: "daily"
