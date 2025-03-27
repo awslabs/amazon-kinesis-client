@@ -22,9 +22,11 @@ jobs:
         id: metadata
         uses: dependabot/fetch-metadata@v2
         with:
+          alert-lookup: true
           github-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Enable auto-merge for Dependabot PRs
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major' # && cvss level > 0
+        # if: steps.metadata.outputs.update-type != 'version-update:semver-major' && cvss level > 0
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major' && steps.dependabot-metadata.outputs.cvss != 0
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
