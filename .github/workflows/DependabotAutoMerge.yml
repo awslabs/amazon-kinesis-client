@@ -14,8 +14,11 @@ permissions:
   pull-requests: write
 
 jobs:
+  build_check:
+    uses: ./.github/workflows/maven.yml@main
   dependabot:
     runs-on: ubuntu-latest
+    needs: build_check
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: Dependabot metadata
