@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build_check:
-    uses: ./.github/workflows/maven.yml@main
+    uses: ./.github/workflows/maven.yml
   dependabot:
     runs-on: ubuntu-latest
     needs: build_check
