@@ -42,13 +42,13 @@
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
-      <version>1.18.36</version>
+      <version>1.18.28</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>
-      <version>1.5.18</version>
+      <version>1.3.14</version>
     </dependency>
     <dependency>
       <groupId>com.beust</groupId>
@@ -102,7 +102,7 @@
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-junit-jupiter</artifactId>
-      <version>5.16.1</version>
+      <version>3.12.4</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -113,7 +113,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.14.0</version>
+          <version>3.13.0</version>
           <configuration>
             <release>8</release>
             <encoding>UTF-8</encoding>
@@ -151,7 +151,7 @@
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
-        <version>2.44.3</version> <!--last version to support java 8-->
+        <version>2.30.0</version> <!--last version to support java 8-->
         <configuration>
           <java>
             <palantirJavaFormat />
