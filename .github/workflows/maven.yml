@@ -11,9 +11,13 @@ on:
   push:
     branches:
       - "master"
+      - "v2.x"
+      - "v1.x"
   pull_request:
     branches:
       - "master"
+      - "v2.x"
+      - "v1.x"
 
 permissions:
   contents: write
