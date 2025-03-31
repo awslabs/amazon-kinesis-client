@@ -42,7 +42,7 @@ jobs:
           distribution: 'corretto'
       - name: Check backwards compatibility of changes
         run: .github/scripts/backwards_compatibility_check.sh
-  dependabot:
+  auto-merge:
     needs: [build]
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login == 'dependabot[bot]'
