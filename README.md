@@ -34,6 +34,12 @@ The **Amazon Kinesis Client Library for Java** (Amazon KCL) enables Java develop
 
 After you've downloaded the code from GitHub, you can build it using Maven. To disable GPG signing in the build, use this command: `mvn clean install -Dgpg.skip=true`
 
+## Running Integration Tests
+
+To run integration tests: `mvn -Dit.test=*IntegrationTest verify`.
+This will look for a default AWS profile specified in your local `.aws/credentials`.
+Optionally, you can provide the name of an IAM user/role to run tests with as a string using this command: `mvn -Dit.test=*IntegrationTest -DawsProfile="<IAM_USER>" verify`.
+
 ## Integration with the Kinesis Producer Library
 For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesis-guide-kpl]**, the KCL integrates without additional effort. When the KCL retrieves an aggregated Amazon Kinesis record consisting of multiple KPL user records, it will automatically invoke the KPL to extract the individual user records before returning them to the user.
 
