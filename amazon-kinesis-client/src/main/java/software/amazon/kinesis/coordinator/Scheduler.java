@@ -1167,7 +1167,8 @@ public class Scheduler implements Runnable {
                 lifecycleConfig.logWarningForTaskAfterMillis(),
                 argument,
                 lifecycleConfig.taskExecutionListener(),
-                lifecycleConfig.readTimeoutsToIgnoreBeforeWarning());
+                lifecycleConfig.readTimeoutsToIgnoreBeforeWarning(),
+                leaseManagementConfig.consumerTaskFactory());
     }
 
     /**
