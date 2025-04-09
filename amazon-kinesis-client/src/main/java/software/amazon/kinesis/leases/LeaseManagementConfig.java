@@ -115,6 +115,16 @@ public class LeaseManagementConfig {
     private long failoverTimeMillis = 10000L;
 
     /**
+     * Lease assignment interval in milliseconds - e.g. wait for this long between Lease assignment run.
+     *
+     * <p>Default value: 2 * {@link LeaseManagementConfig#failoverTimeMillis}</p>
+     */
+    private Long leaseAssignmentIntervalMillis;
+
+    public long leaseAssignmentIntervalMillis() {
+        return leaseAssignmentIntervalMillis != null ? leaseAssignmentIntervalMillis : 2 * failoverTimeMillis;
+    }
+    /**
      * Whether workers should take very expired leases at priority. A very expired lease is when a worker does not
      * renew its lease in 3 * {@link LeaseManagementConfig#failoverTimeMillis}. Very expired leases will be taken at
      * priority for a worker which disregards the target leases for the worker but obeys
@@ -489,7 +499,8 @@ public class LeaseManagementConfig {
                     isMultiStreamingMode,
                     leaseCleanupConfig(),
                     workerUtilizationAwareAssignmentConfig(),
-                    gracefulLeaseHandoffConfig);
+                    gracefulLeaseHandoffConfig,
+                    leaseAssignmentIntervalMillis());
         }
         return leaseManagementFactory;
     }
@@ -568,13 +579,13 @@ public class LeaseManagementConfig {
         private WorkerMetricsTableConfig workerMetricsTableConfig;
 
         /**
-         * Frequency to perform worker variance balancing. This value is used with respect to the LAM frequency,
-         * that is every third (as default) iteration of LAM the worker variance balancing will be performed.
-         * Setting it to 1 will make varianceBalancing run on every iteration of LAM and 2 on every 2nd iteration
+         * Frequency to perform worker variance balancing. This value is used with respect to the failoverTimeMillis,
+         * that is every six (as default) * failoverTimeMillis the worker variance balancing will be performed.
+         * Setting it to 1 will make varianceBalancing run on every failoverTimeMillis and 2 on every 2 * failoverTimeMillis
          * and so on.
-         * NOTE: LAM frequency = failoverTimeMillis
+         * NOTE: LAM frequency = {@link LeaseManagementConfig#leaseAssignmentIntervalMillis}
          */
-        private int varianceBalancingFrequency = 3;
+        private int varianceBalancingFrequency = 6;
 
         /**
          * Alpha value used for calculating exponential moving average of worker's metricStats. Selecting

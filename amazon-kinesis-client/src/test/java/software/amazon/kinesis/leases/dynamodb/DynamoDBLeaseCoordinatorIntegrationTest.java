@@ -71,6 +71,7 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
 
     private static DynamoDBLeaseRefresher leaseRefresher;
     private static DynamoDBCheckpointer dynamoDBCheckpointer;
+    private static final long LEASE_ASSIGNMENT_INTERVAL_MILLIS = 2 * LEASE_DURATION_MILLIS;
 
     private LeaseCoordinator coordinator;
     private final String leaseKey = "shd-1";
@@ -128,7 +129,8 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                 metricsFactory,
                 new LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig(),
                 LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
-                new ConcurrentHashMap<>());
+                new ConcurrentHashMap<>(),
+                LEASE_ASSIGNMENT_INTERVAL_MILLIS);
         dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseRefresher);
         dynamoDBCheckpointer.operation(OPERATION);
 

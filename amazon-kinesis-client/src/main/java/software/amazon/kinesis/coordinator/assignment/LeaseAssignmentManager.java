@@ -117,11 +117,13 @@ public final class LeaseAssignmentManager {
     private final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig;
     private boolean tookOverLeadershipInThisRun = false;
     private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
+    private final long leaseAssignmentIntervalMillis;
 
     private Future<?> managerFuture;
 
     private int noOfContinuousFailedAttempts = 0;
     private int lamRunCounter = 0;
+    private long varianceBasedBalancingLastRunTime;
 
     public synchronized void start() {
         if (isNull(managerFuture)) {
@@ -129,10 +131,7 @@ public final class LeaseAssignmentManager {
             // so reset the flag to refresh the state before processing during a restart of LAM.
             tookOverLeadershipInThisRun = false;
             managerFuture = executorService.scheduleWithFixedDelay(
-                    this::performAssignment,
-                    0L,
-                    leaseDurationMillis * DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER,
-                    TimeUnit.MILLISECONDS);
+                    this::performAssignment, 0L, (int) (leaseAssignmentIntervalMillis), TimeUnit.MILLISECONDS);
             log.info("Started LeaseAssignmentManager");
             return;
         }
@@ -240,6 +239,7 @@ public final class LeaseAssignmentManager {
 
             if (shouldRunVarianceBalancing()) {
                 final long balanceWorkerVarianceStartTime = System.currentTimeMillis();
+                this.varianceBasedBalancingLastRunTime = balanceWorkerVarianceStartTime;
                 final int totalNewAssignmentBeforeWorkerVarianceBalancing =
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size();
                 leaseAssignmentDecider.balanceWorkerVariance();
@@ -280,14 +280,15 @@ public final class LeaseAssignmentManager {
     }
 
     private boolean shouldRunVarianceBalancing() {
-        final boolean response = this.lamRunCounter == 0;
-        /*
-        To avoid lamRunCounter grow large, keep it within [0,varianceBalancingFrequency).
-        If varianceBalancingFrequency is 5 lamRunCounter value will be within 0 to 4 and method return true when
-        lamRunCounter is 0.
-         */
-        this.lamRunCounter = (this.lamRunCounter + 1) % config.varianceBalancingFrequency();
-        return response;
+
+        final long now = System.currentTimeMillis();
+        final long varianceBalancingInterval = leaseDurationMillis * config.varianceBalancingFrequency();
+
+        if (now - this.varianceBasedBalancingLastRunTime >= varianceBalancingInterval) {
+            this.varianceBasedBalancingLastRunTime = now;
+            return true;
+        }
+        return false;
     }
 
     /**

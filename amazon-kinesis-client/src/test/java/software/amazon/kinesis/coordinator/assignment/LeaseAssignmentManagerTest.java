@@ -17,6 +17,8 @@ import lombok.var;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
@@ -49,6 +51,7 @@ import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -430,7 +433,8 @@ class LeaseAssignmentManagerTest {
                 .anyMatch(lease -> lease.leaseOwner().equals(TEST_YIELD_WORKER_ID + "2")));
     }
 
-    @Test
+    // no needed since variance based load balancing is not longed tied to LAM run
+    // @Test
     void performAssignment_varianceBalanceFreq3_asserLoadBalancingEvery3Iteration() throws Exception {
         final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
@@ -481,6 +485,56 @@ class LeaseAssignmentManagerTest {
                 leaseRefresher.listLeases().stream()
                         .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
                         .count());
+    }
+
+    @Test
+    void performAssignment_varianceBalanceFreq3_asserLoadBalancingEveryVarianceBalancingFrequencyLeaseDuration()
+            throws Exception {
+        final int varianceBalancingFrequency = 3;
+        final long leaseDuration = Duration.ofMillis(1000).toMillis();
+        final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
+        config.varianceBalancingFrequency(varianceBalancingFrequency);
+
+        createLeaseAssignmentManager(config, leaseDuration, System::nanoTime, Integer.MAX_VALUE);
+
+        long balancingInterval = leaseDuration * varianceBalancingFrequency;
+        int varianceBalancingOccurred = 0;
+
+        // Initial run at time 0
+        setupConditionForVarianceBalancing();
+        long startTime = System.currentTimeMillis();
+        leaseAssignmentManagerRunnable.run();
+
+        // Check initial balancing at time 0
+        long leasesOwnedByWorker = leaseRefresher.listLeases().stream()
+                .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
+                .count();
+        if (leasesOwnedByWorker == 3L) {
+            varianceBalancingOccurred++;
+        }
+
+        // Run until we see the next balancing since LAM run is not tied to variance-based load balancing
+        long nextBalancingTime = startTime + balancingInterval;
+
+        while (System.currentTimeMillis() < (startTime + balancingInterval + 1000)) {
+            setupConditionForVarianceBalancing();
+            leaseAssignmentManagerRunnable.run();
+
+            leasesOwnedByWorker = leaseRefresher.listLeases().stream()
+                    .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
+                    .count();
+
+            if (leasesOwnedByWorker == 3L && System.currentTimeMillis() >= nextBalancingTime) {
+                varianceBalancingOccurred++;
+            }
+
+            Thread.sleep(100);
+        }
+
+        assertTrue(
+                varianceBalancingOccurred == 2,
+                "Expected varianceBalancingOccurred to be greater than 1, but was: " + varianceBalancingOccurred);
     }
 
     private void setupConditionForVarianceBalancing() throws Exception {
@@ -746,7 +800,8 @@ class LeaseAssignmentManagerTest {
                 Integer.MAX_VALUE,
                 LeaseManagementConfig.GracefulLeaseHandoffConfig.builder()
                         .isGracefulLeaseHandoffEnabled(false)
-                        .build());
+                        .build(),
+                100L);
 
         leaseAssignmentManager.start();
 
@@ -1134,6 +1189,62 @@ class LeaseAssignmentManagerTest {
         dynamoDbAsyncClient.putItem(putItemRequest);
     }
 
+    @Test
+    void testLeaseAssignmentSchedulingWithDefaultInterval() {
+        long failoverTimeMillis = 1000L;
+        ScheduledExecutorService mockExecutor = Mockito.mock(ScheduledExecutorService.class);
+
+        LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
+                leaseRefresher,
+                workerMetricsDAO,
+                mockLeaderDecider,
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                TEST_LEADER_WORKER_ID,
+                failoverTimeMillis,
+                new NullMetricsFactory(),
+                mockExecutor,
+                System::nanoTime,
+                Integer.MAX_VALUE,
+                gracefulLeaseHandoffConfig,
+                2 * failoverTimeMillis);
+
+        leaseAssignmentManager.start();
+
+        verify(mockExecutor)
+                .scheduleWithFixedDelay(
+                        any(Runnable.class), eq(0L), eq(2 * failoverTimeMillis), eq(TimeUnit.MILLISECONDS));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "1000, 500", // leaseAssignmentInterval smaller than failover
+        "1000, 1000", // leaseAssignmentInterval equal to failover
+        "1000, 2000", // leaseAssignmentInterval larger than failover
+    })
+    void testLeaseAssignmentWithDifferentIntervals(long failoverTimeMillis, long leaseAssignmentIntervalMillis) {
+        ScheduledExecutorService mockExecutor = Mockito.mock(ScheduledExecutorService.class);
+
+        LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
+                leaseRefresher,
+                workerMetricsDAO,
+                mockLeaderDecider,
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                TEST_LEADER_WORKER_ID,
+                failoverTimeMillis,
+                new NullMetricsFactory(),
+                mockExecutor,
+                System::nanoTime,
+                Integer.MAX_VALUE,
+                gracefulLeaseHandoffConfig,
+                leaseAssignmentIntervalMillis);
+
+        leaseAssignmentManager.start();
+
+        verify(mockExecutor)
+                .scheduleWithFixedDelay(
+                        any(Runnable.class), eq(0L), eq(leaseAssignmentIntervalMillis), eq(TimeUnit.MILLISECONDS));
+    }
+
     private LeaseAssignmentManager createLeaseAssignmentManager(
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
             final Long leaseDurationMillis,
@@ -1151,7 +1262,8 @@ class LeaseAssignmentManagerTest {
                 scheduledExecutorService,
                 nanoTimeProvider,
                 maxLeasesPerWorker,
-                gracefulLeaseHandoffConfig);
+                gracefulLeaseHandoffConfig,
+                2 * leaseDurationMillis);
         leaseAssignmentManager.start();
         return leaseAssignmentManager;
     }

@@ -249,7 +249,7 @@ public class PropertiesMappingE2ETest {
                         .workerUtilizationAwareAssignmentConfig()
                         .staleWorkerMetricsEntryCleanupDuration());
         assertEquals(
-                3,
+                6,
                 kclV3Config
                         .leaseManagementConfig
                         .workerUtilizationAwareAssignmentConfig()
