@@ -434,7 +434,7 @@ class LeaseAssignmentManagerTest {
     }
 
     // no needed since variance based load balancing is no longer tied to LAM run
-    // @Test
+    @Test
     void performAssignment_varianceBalanceFreq3_asserLoadBalancingEvery3Iteration() throws Exception {
         final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
@@ -470,53 +470,6 @@ class LeaseAssignmentManagerTest {
 
         setupConditionForVarianceBalancing();
         // 4th Run, expect re-balance
-        leaseAssignmentManagerRunnable.run();
-        assertEquals(
-                3L,
-                leaseRefresher.listLeases().stream()
-                        .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
-                        .count());
-    }
-
-    @Test
-    void performAssignment_varianceBalanceFreq3_asserLoadBalancingEveryVarianceBalancingFrequencyLeaseDuration()
-            throws Exception {
-
-        long multiplier = 1000_000;
-        final int varianceBalancingFrequency = 3;
-        final long leaseDurationMillis = Duration.ofMillis(1000).toMillis();
-
-        final IntervalTimeSupplier lamTimeSupplier = new IntervalTimeSupplier(3000 * multiplier);
-        final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
-                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
-        config.varianceBalancingFrequency(varianceBalancingFrequency);
-
-        createLeaseAssignmentManager(config, leaseDurationMillis, lamTimeSupplier, Integer.MAX_VALUE);
-
-        // Run at time 0, variance balance must be done
-        setupConditionForVarianceBalancing();
-        leaseAssignmentManagerRunnable.run();
-        assertEquals(
-                3L,
-                leaseRefresher.listLeases().stream()
-                        .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
-                        .count());
-
-        lamTimeSupplier.incrementCurrentTime(1000 * multiplier);
-
-        // Run at time 1, variance balance must not be done
-        setupConditionForVarianceBalancing();
-        leaseAssignmentManagerRunnable.run();
-        assertEquals(
-                1L,
-                leaseRefresher.listLeases().stream()
-                        .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
-                        .count());
-
-        lamTimeSupplier.incrementCurrentTime(2 * 1000 * multiplier);
-
-        // Run at time 3, variance balance must be done
-        setupConditionForVarianceBalancing();
         leaseAssignmentManagerRunnable.run();
         assertEquals(
                 3L,
@@ -1372,22 +1325,5 @@ class LeaseAssignmentManagerTest {
                         .item(TableSchema.fromBean(WorkerMetricStats.class).itemToMap(workerMetrics, false))
                         .build())
                 .join();
-    }
-
-    class IntervalTimeSupplier implements Supplier<Long> {
-        private long currentTime;
-
-        public IntervalTimeSupplier(long currentTime) {
-            this.currentTime = currentTime;
-        }
-
-        @Override
-        public Long get() {
-            return currentTime;
-        }
-
-        public void incrementCurrentTime(long currentTime) {
-            this.currentTime += currentTime;
-        }
     }
 }

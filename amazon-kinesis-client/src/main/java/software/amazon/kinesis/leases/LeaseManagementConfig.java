@@ -585,7 +585,7 @@ public class LeaseManagementConfig {
          * and so on.
          * NOTE: LAM frequency = failoverTimeMillis
          */
-        private int varianceBalancingFrequency = 6;
+        private int varianceBalancingFrequency = 3;
 
         /**
          * Alpha value used for calculating exponential moving average of worker's metricStats. Selecting
