@@ -434,7 +434,7 @@ class LeaseAssignmentManagerTest {
     }
 
     // no needed since variance based load balancing is no longer tied to LAM run
-    @Test
+    // @Test
     void performAssignment_varianceBalanceFreq3_asserLoadBalancingEvery3Iteration() throws Exception {
         final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
@@ -478,7 +478,7 @@ class LeaseAssignmentManagerTest {
                         .count());
     }
 
-    // @Test
+    @Test
     void performAssignment_varianceBalanceFreq3_asserLoadBalancingEveryVarianceBalancingFrequencyLeaseDuration()
             throws Exception {
 

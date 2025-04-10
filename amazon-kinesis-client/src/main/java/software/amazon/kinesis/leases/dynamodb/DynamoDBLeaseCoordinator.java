@@ -87,7 +87,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     private final LeaseDiscoverer leaseDiscoverer;
     private final long renewerIntervalMillis;
     private final long takerIntervalMillis;
-    private final long leaseDiscovererIntervalMillis;
+    private long leaseDiscovererIntervalMillis;
     private final ExecutorService leaseRenewalThreadpool;
     private final ExecutorService leaseDiscoveryThreadPool;
     private final LeaseRefresher leaseRefresher;
@@ -143,8 +143,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
             final MetricsFactory metricsFactory,
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
             final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
-            final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap,
-            final long leaseAssignmentIntervalMillis) {
+            final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap) {
         this.leaseRefresher = leaseRefresher;
         this.leaseRenewalThreadpool = createExecutorService(maxLeaseRenewerThreadCount, LEASE_RENEWAL_THREAD_FACTORY);
         this.leaseTaker = new DynamoDBLeaseTaker(leaseRefresher, workerIdentifier, leaseDurationMillis, metricsFactory)
@@ -154,7 +153,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         this.renewerIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, epsilonMillis);
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
         // Should run twice every leaseAssignmentIntervalMillis to identify new leases before expiry.
-        this.leaseDiscovererIntervalMillis = (leaseAssignmentIntervalMillis - epsilonMillis) / 2;
+        this.leaseDiscovererIntervalMillis = leaseDurationMillis - epsilonMillis;
         this.leaseStatsRecorder = new LeaseStatsRecorder(renewerIntervalMillis, System::currentTimeMillis);
         this.leaseGracefulShutdownHandler = LeaseGracefulShutdownHandler.create(
                 gracefulLeaseHandoffConfig.gracefulLeaseHandoffTimeoutMillis(), shardInfoShardConsumerMap, this);
@@ -190,6 +189,41 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 takerIntervalMillis,
                 maxLeasesForWorker,
                 maxLeasesToStealAtOneTime);
+    }
+
+    public DynamoDBLeaseCoordinator(
+            final LeaseRefresher leaseRefresher,
+            final String workerIdentifier,
+            final long leaseDurationMillis,
+            final boolean enablePriorityLeaseAssignment,
+            final long epsilonMillis,
+            final int maxLeasesForWorker,
+            final int maxLeasesToStealAtOneTime,
+            final int maxLeaseRenewerThreadCount,
+            final long initialLeaseTableReadCapacity,
+            final long initialLeaseTableWriteCapacity,
+            final MetricsFactory metricsFactory,
+            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
+            final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
+            final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap,
+            final long leaseAssignmentIntervalMillis) {
+
+        this(
+                leaseRefresher,
+                workerIdentifier,
+                leaseDurationMillis,
+                enablePriorityLeaseAssignment,
+                epsilonMillis,
+                maxLeasesForWorker,
+                maxLeasesToStealAtOneTime,
+                maxLeaseRenewerThreadCount,
+                initialLeaseTableReadCapacity,
+                initialLeaseTableWriteCapacity,
+                metricsFactory,
+                workerUtilizationAwareAssignmentConfig,
+                gracefulLeaseHandoffConfig,
+                shardInfoShardConsumerMap);
+        this.leaseDiscovererIntervalMillis = (leaseAssignmentIntervalMillis - epsilonMillis) / 2;
     }
 
     @RequiredArgsConstructor
