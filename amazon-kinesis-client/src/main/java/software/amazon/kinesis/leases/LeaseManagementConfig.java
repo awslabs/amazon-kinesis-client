@@ -580,12 +580,12 @@ public class LeaseManagementConfig {
 
         /**
          * Frequency to perform worker variance balancing. This value is used with respect to the LAM frequency,
-         * that is every sixth (as default) iteration of LAM the worker variance balancing will be performed.
+         * that is every twelfth (as default) iteration of LAM the worker variance balancing will be performed.
          * Setting it to 1 will make varianceBalancing run on every iteration of LAM and 2 on every 2nd iteration
          * and so on.
          * NOTE: LAM frequency = failoverTimeMillis
          */
-        private int varianceBalancingFrequency = 6;
+        private int varianceBalancingFrequency = 12;
 
         /**
          * Alpha value used for calculating exponential moving average of worker's metricStats. Selecting

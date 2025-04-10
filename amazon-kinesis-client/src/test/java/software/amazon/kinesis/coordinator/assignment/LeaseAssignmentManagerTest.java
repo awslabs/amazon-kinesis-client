@@ -789,7 +789,7 @@ class LeaseAssignmentManagerTest {
                 LeaseManagementConfig.GracefulLeaseHandoffConfig.builder()
                         .isGracefulLeaseHandoffEnabled(false)
                         .build(),
-                100L);
+                200L);
 
         leaseAssignmentManager.start();
 
