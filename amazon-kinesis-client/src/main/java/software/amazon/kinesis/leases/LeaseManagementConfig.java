@@ -579,11 +579,11 @@ public class LeaseManagementConfig {
         private WorkerMetricsTableConfig workerMetricsTableConfig;
 
         /**
-         * Frequency to perform worker variance balancing. This value is used with respect to the failoverTimeMillis,
-         * that is every six (as default) * failoverTimeMillis the worker variance balancing will be performed.
-         * Setting it to 1 will make varianceBalancing run on every failoverTimeMillis and 2 on every 2 * failoverTimeMillis
+         * Frequency to perform worker variance balancing. This value is used with respect to the LAM frequency,
+         * that is every sixth (as default) iteration of LAM the worker variance balancing will be performed.
+         * Setting it to 1 will make varianceBalancing run on every iteration of LAM and 2 on every 2nd iteration
          * and so on.
-         * NOTE: LAM frequency = {@link LeaseManagementConfig#leaseAssignmentIntervalMillis}
+         * NOTE: LAM frequency = failoverTimeMillis
          */
         private int varianceBalancingFrequency = 6;
 

@@ -279,16 +279,14 @@ public final class LeaseAssignmentManager {
     }
 
     private boolean shouldRunVarianceBalancing() {
-        final long nowNanos = nanoTimeProvider.get();
-        final long intervalMillis = leaseDurationMillis * config.varianceBalancingFrequency();
-
-        final long elapsedMillis = Math.abs(nowNanos - varianceBasedBalancingLastRunTime) / 1_000_000;
-
-        if (elapsedMillis >= intervalMillis) {
-            varianceBasedBalancingLastRunTime = nowNanos;
-            return true;
-        }
-        return false;
+        final boolean response = this.lamRunCounter == 0;
+        /*
+        To avoid lamRunCounter grow large, keep it within [0,varianceBalancingFrequency).
+        If varianceBalancingFrequency is 5 lamRunCounter value will be within 0 to 4 and method return true when
+        lamRunCounter is 0.
+         */
+        this.lamRunCounter = (this.lamRunCounter + 1) % config.varianceBalancingFrequency();
+        return response;
     }
 
     /**

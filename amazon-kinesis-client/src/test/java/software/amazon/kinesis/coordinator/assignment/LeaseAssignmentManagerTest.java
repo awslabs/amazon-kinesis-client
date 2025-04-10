@@ -434,7 +434,7 @@ class LeaseAssignmentManagerTest {
     }
 
     // no needed since variance based load balancing is no longer tied to LAM run
-    // @Test
+    @Test
     void performAssignment_varianceBalanceFreq3_asserLoadBalancingEvery3Iteration() throws Exception {
         final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
@@ -476,18 +476,9 @@ class LeaseAssignmentManagerTest {
                 leaseRefresher.listLeases().stream()
                         .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
                         .count());
-
-        setupConditionForVarianceBalancing();
-        // 5th Run, expect no re-balance
-        leaseAssignmentManagerRunnable.run();
-        assertEquals(
-                1L,
-                leaseRefresher.listLeases().stream()
-                        .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
-                        .count());
     }
 
-    @Test
+    // @Test
     void performAssignment_varianceBalanceFreq3_asserLoadBalancingEveryVarianceBalancingFrequencyLeaseDuration()
             throws Exception {
 
