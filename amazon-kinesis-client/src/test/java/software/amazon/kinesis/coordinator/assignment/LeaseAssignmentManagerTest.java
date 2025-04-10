@@ -490,51 +490,48 @@ class LeaseAssignmentManagerTest {
     @Test
     void performAssignment_varianceBalanceFreq3_asserLoadBalancingEveryVarianceBalancingFrequencyLeaseDuration()
             throws Exception {
+
+        long multiplier = 1000_000;
         final int varianceBalancingFrequency = 3;
-        final long leaseDuration = Duration.ofMillis(1000).toMillis();
+        final long leaseDurationMillis = Duration.ofMillis(1000).toMillis();
+
+        final IntervalTimeSupplier lamTimeSupplier = new IntervalTimeSupplier(3000 * multiplier);
         final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 10);
         config.varianceBalancingFrequency(varianceBalancingFrequency);
 
-        createLeaseAssignmentManager(config, leaseDuration, System::nanoTime, Integer.MAX_VALUE);
+        createLeaseAssignmentManager(config, leaseDurationMillis, lamTimeSupplier, Integer.MAX_VALUE);
 
-        long balancingInterval = leaseDuration * varianceBalancingFrequency;
-        int varianceBalancingOccurred = 0;
-
-        // Initial run at time 0
+        // Run at time 0, variance balance must be done
         setupConditionForVarianceBalancing();
-        long startTime = System.currentTimeMillis();
         leaseAssignmentManagerRunnable.run();
+        assertEquals(
+                3L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
+                        .count());
 
-        // Check initial balancing at time 0
-        long leasesOwnedByWorker = leaseRefresher.listLeases().stream()
-                .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
-                .count();
-        if (leasesOwnedByWorker == 3L) {
-            varianceBalancingOccurred++;
-        }
+        lamTimeSupplier.incrementCurrentTime(1000 * multiplier);
 
-        // Run until we see the next balancing since LAM run is not tied to variance-based load balancing
-        long nextBalancingTime = startTime + balancingInterval;
+        // Run at time 1, variance balance must not be done
+        setupConditionForVarianceBalancing();
+        leaseAssignmentManagerRunnable.run();
+        assertEquals(
+                1L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
+                        .count());
 
-        while (System.currentTimeMillis() < (startTime + balancingInterval + 1000)) {
-            setupConditionForVarianceBalancing();
-            leaseAssignmentManagerRunnable.run();
+        lamTimeSupplier.incrementCurrentTime(2 * 1000 * multiplier);
 
-            leasesOwnedByWorker = leaseRefresher.listLeases().stream()
-                    .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
-                    .count();
-
-            if (leasesOwnedByWorker == 3L && System.currentTimeMillis() >= nextBalancingTime) {
-                varianceBalancingOccurred++;
-            }
-
-            Thread.sleep(100);
-        }
-
-        assertTrue(
-                varianceBalancingOccurred == 2,
-                "Expected varianceBalancingOccurred to be greater than 1, but was: " + varianceBalancingOccurred);
+        // Run at time 3, variance balance must be done
+        setupConditionForVarianceBalancing();
+        leaseAssignmentManagerRunnable.run();
+        assertEquals(
+                3L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
+                        .count());
     }
 
     private void setupConditionForVarianceBalancing() throws Exception {
@@ -1384,5 +1381,22 @@ class LeaseAssignmentManagerTest {
                         .item(TableSchema.fromBean(WorkerMetricStats.class).itemToMap(workerMetrics, false))
                         .build())
                 .join();
+    }
+
+    class IntervalTimeSupplier implements Supplier<Long> {
+        private long currentTime;
+
+        public IntervalTimeSupplier(long currentTime) {
+            this.currentTime = currentTime;
+        }
+
+        @Override
+        public Long get() {
+            return currentTime;
+        }
+
+        public void incrementCurrentTime(long currentTime) {
+            this.currentTime += currentTime;
+        }
     }
 }

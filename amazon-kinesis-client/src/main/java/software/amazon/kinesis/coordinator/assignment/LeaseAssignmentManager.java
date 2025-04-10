@@ -239,7 +239,6 @@ public final class LeaseAssignmentManager {
 
             if (shouldRunVarianceBalancing()) {
                 final long balanceWorkerVarianceStartTime = System.currentTimeMillis();
-                this.varianceBasedBalancingLastRunTime = balanceWorkerVarianceStartTime;
                 final int totalNewAssignmentBeforeWorkerVarianceBalancing =
                         inMemoryStorageView.leaseToNewAssignedWorkerMap.size();
                 leaseAssignmentDecider.balanceWorkerVariance();
@@ -280,12 +279,13 @@ public final class LeaseAssignmentManager {
     }
 
     private boolean shouldRunVarianceBalancing() {
+        final long nowNanos = nanoTimeProvider.get();
+        final long intervalMillis = leaseDurationMillis * config.varianceBalancingFrequency();
 
-        final long now = System.currentTimeMillis();
-        final long varianceBalancingInterval = leaseDurationMillis * config.varianceBalancingFrequency();
+        final long elapsedMillis = Math.abs(nowNanos - varianceBasedBalancingLastRunTime) / 1_000_000;
 
-        if (now - this.varianceBasedBalancingLastRunTime >= varianceBalancingInterval) {
-            this.varianceBasedBalancingLastRunTime = now;
+        if (elapsedMillis >= intervalMillis) {
+            varianceBasedBalancingLastRunTime = nowNanos;
             return true;
         }
         return false;
