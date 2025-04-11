@@ -122,46 +122,19 @@ public final class LeaseAssignmentManager {
     private int noOfContinuousFailedAttempts = 0;
     private int lamRunCounter = 0;
 
-    @Deprecated
     public LeaseAssignmentManager(
-            LeaseRefresher leaseRefresher,
-            WorkerMetricStatsDAO workerMetricsDAO,
-            LeaderDecider leaderDecider,
-            LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
-            String workerIdentifier,
-            Long leaseDurationMillis,
-            MetricsFactory metricsFactory,
-            ScheduledExecutorService executorService,
-            Supplier<Long> nanoTimeProvider,
-            int maxLeasesForWorker,
-            LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig) {
-        this.leaseRefresher = leaseRefresher;
-        this.workerMetricsDAO = workerMetricsDAO;
-        this.leaderDecider = leaderDecider;
-        this.config = config;
-        this.currentWorkerId = workerIdentifier;
-        this.leaseDurationMillis = leaseDurationMillis;
-        this.metricsFactory = metricsFactory;
-        this.executorService = executorService;
-        this.nanoTimeProvider = nanoTimeProvider;
-        this.maxLeasesForWorker = maxLeasesForWorker;
-        this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
-        this.leaseAssignmentIntervalMillis = leaseDurationMillis * DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER;
-    }
-
-    public LeaseAssignmentManager(
-            LeaseRefresher leaseRefresher,
-            WorkerMetricStatsDAO workerMetricsDAO,
-            LeaderDecider leaderDecider,
-            LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
-            String workerIdentifier,
-            Long leaseDurationMillis,
-            MetricsFactory metricsFactory,
-            ScheduledExecutorService executorService,
-            Supplier<Long> nanoTimeProvider,
-            int maxLeasesForWorker,
-            LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
-            long leaseAssignmentIntervalMillis) {
+            final LeaseRefresher leaseRefresher,
+            final WorkerMetricStatsDAO workerMetricsDAO,
+            final LeaderDecider leaderDecider,
+            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
+            final String workerIdentifier,
+            final Long leaseDurationMillis,
+            final MetricsFactory metricsFactory,
+            final ScheduledExecutorService executorService,
+            final Supplier<Long> nanoTimeProvider,
+            final int maxLeasesForWorker,
+            final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
+            final long leaseAssignmentIntervalMillis) {
         this.leaseRefresher = leaseRefresher;
         this.workerMetricsDAO = workerMetricsDAO;
         this.leaderDecider = leaderDecider;
@@ -174,6 +147,34 @@ public final class LeaseAssignmentManager {
         this.maxLeasesForWorker = maxLeasesForWorker;
         this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
         this.leaseAssignmentIntervalMillis = leaseAssignmentIntervalMillis;
+    }
+
+    @Deprecated
+    public LeaseAssignmentManager(
+            final LeaseRefresher leaseRefresher,
+            final WorkerMetricStatsDAO workerMetricsDAO,
+            final LeaderDecider leaderDecider,
+            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
+            final String workerIdentifier,
+            final Long leaseDurationMillis,
+            final MetricsFactory metricsFactory,
+            final ScheduledExecutorService executorService,
+            final Supplier<Long> nanoTimeProvider,
+            final int maxLeasesForWorker,
+            final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig) {
+        this(
+                leaseRefresher,
+                workerMetricsDAO,
+                leaderDecider,
+                config,
+                workerIdentifier,
+                leaseDurationMillis,
+                metricsFactory,
+                executorService,
+                nanoTimeProvider,
+                maxLeasesForWorker,
+                gracefulLeaseHandoffConfig,
+                leaseDurationMillis * DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER);
     }
 
     public synchronized void start() {
