@@ -60,9 +60,9 @@ The implementation relies on DynamoDB table scans to gather a complete list of `
 ### **Leader election in KCL 3.x**  
 KCL 3.x implements leader election using `DynamoDBLockClient` library ([GitHub link](https://github.com/awslabs/amazon-dynamodb-lock-client/)). Instead of performing full table scans of lease entries and finding the first worker in the sorted list of leases, this implementation uses a lock-based mechanism stored in the DynamoDB coordinator state table. Each worker in KCL 3.x follows this process:  
 
-- 1) Reads a single lock entry from the DynamoDB lock table
-- 2) Validates the active status of the current lock owner by checking if the lock item gets constant heartbeat
-- 3) Claims leadership if the previous lock owner's heartbeat has expired, following a first-worker-wins model
+1. Reads a single lock entry from the DynamoDB lock table
+2. Validates the active status of the current lock owner by checking if the lock item gets constant heartbeat
+3. Claims leadership if the previous lock owner's heartbeat has expired, following a first-worker-wins model
 
 ### **Leader failure handling in KCL 3.x**  
 The `DynamoDBLockClient` library provides the core failure handling capabilities. It monitors and responds to various failure scenarios including network partitions, worker shutdowns, and overloaded workers. When a worker fails to maintain its heartbeat on the lock item, KCL 3.x automatically enables another worker to claim leadership.  
