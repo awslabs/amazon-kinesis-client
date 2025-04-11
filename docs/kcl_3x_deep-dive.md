@@ -3,10 +3,10 @@ This document
 
 - [Overview: Lease reassignments in KCL 3.x](#overview-lease-reassignments-in-kcl-3x)
 - [Motivation for moving from distributed to leader-based protocol](#motivation-for-moving-from-distributed-to-leader-based-protocol)
-- [How KCL 3.x manages leader election]
-- [How KCL 3.x captures throughput per shard]
-- [How KCL 3.x captures CPU utilization of worker hosts]
-- [How KCL 3.x performs lease assignments]
+- [How KCL 3.x manages leader election](#how-kcl-3x-manages-leader-election)
+- [How KCL 3.x captures throughput per shard](#how-kcl-3x-captures-throughput-per-shard)
+- [How KCL 3.x captures CPU utilization of worker hosts](#how-kcl-3x-captures-cpu-utilization-of-worker-hosts)
+- [How KCL 3.x performs lease assignments](#how-kcl-3x-performs-lease-assignments)
 
 ## Overview: Lease reassignments in KCL 3.x
 
