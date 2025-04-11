@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.CollectionUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
@@ -71,20 +70,13 @@ import static java.util.Objects.nonNull;
  * In the end, performs actual assignment by writing to storage.
  */
 @Slf4j
-@RequiredArgsConstructor
 @KinesisClientInternalApi
-public final class LeaseAssignmentManager {
+public class LeaseAssignmentManager {
 
     /**
      * Default number of continuous failure execution after which leadership is released.
      */
     private static final int DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER = 3;
-
-    /**
-     * Default multiplier for LAM frequency with respect to leaseDurationMillis (lease failover millis).
-     * If leaseDurationMillis is 10000 millis, default LAM frequency is 20000 millis.
-     */
-    private static final int DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER = 2;
 
     private static final String FORCE_LEADER_RELEASE_METRIC_NAME = "ForceLeaderRelease";
 
@@ -123,7 +115,60 @@ public final class LeaseAssignmentManager {
 
     private int noOfContinuousFailedAttempts = 0;
     private int lamRunCounter = 0;
-    private long varianceBasedBalancingLastRunTime;
+
+    @Deprecated
+    public LeaseAssignmentManager(
+            LeaseRefresher leaseRefresher,
+            WorkerMetricStatsDAO workerMetricsDAO,
+            LeaderDecider leaderDecider,
+            LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
+            String workerIdentifier,
+            Long leaseDurationMillis,
+            MetricsFactory metricsFactory,
+            ScheduledExecutorService executorService,
+            Supplier<Long> nanoTimeProvider,
+            int maxLeasesForWorker,
+            LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig) {
+        this.leaseRefresher = leaseRefresher;
+        this.workerMetricsDAO = workerMetricsDAO;
+        this.leaderDecider = leaderDecider;
+        this.config = config;
+        this.currentWorkerId = workerIdentifier;
+        this.leaseDurationMillis = leaseDurationMillis;
+        this.metricsFactory = metricsFactory;
+        this.executorService = executorService;
+        this.nanoTimeProvider = nanoTimeProvider;
+        this.maxLeasesForWorker = maxLeasesForWorker;
+        this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
+        this.leaseAssignmentIntervalMillis = 2 * leaseDurationMillis;
+    }
+
+    public LeaseAssignmentManager(
+            LeaseRefresher leaseRefresher,
+            WorkerMetricStatsDAO workerMetricsDAO,
+            LeaderDecider leaderDecider,
+            LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
+            String workerIdentifier,
+            Long leaseDurationMillis,
+            MetricsFactory metricsFactory,
+            ScheduledExecutorService executorService,
+            Supplier<Long> nanoTimeProvider,
+            int maxLeasesForWorker,
+            LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
+            long leaseAssignmentIntervalMillis) {
+        this.leaseRefresher = leaseRefresher;
+        this.workerMetricsDAO = workerMetricsDAO;
+        this.leaderDecider = leaderDecider;
+        this.config = config;
+        this.currentWorkerId = workerIdentifier;
+        this.leaseDurationMillis = leaseDurationMillis;
+        this.metricsFactory = metricsFactory;
+        this.executorService = executorService;
+        this.nanoTimeProvider = nanoTimeProvider;
+        this.maxLeasesForWorker = maxLeasesForWorker;
+        this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
+        this.leaseAssignmentIntervalMillis = leaseAssignmentIntervalMillis;
+    }
 
     public synchronized void start() {
         if (isNull(managerFuture)) {

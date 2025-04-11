@@ -741,8 +741,7 @@ class LeaseAssignmentManagerTest {
                 Integer.MAX_VALUE,
                 LeaseManagementConfig.GracefulLeaseHandoffConfig.builder()
                         .isGracefulLeaseHandoffEnabled(false)
-                        .build(),
-                200L);
+                        .build());
 
         leaseAssignmentManager.start();
 
@@ -1146,8 +1145,7 @@ class LeaseAssignmentManagerTest {
                 mockExecutor,
                 System::nanoTime,
                 Integer.MAX_VALUE,
-                gracefulLeaseHandoffConfig,
-                2 * failoverTimeMillis);
+                gracefulLeaseHandoffConfig);
 
         leaseAssignmentManager.start();
 
@@ -1203,8 +1201,7 @@ class LeaseAssignmentManagerTest {
                 scheduledExecutorService,
                 nanoTimeProvider,
                 maxLeasesPerWorker,
-                gracefulLeaseHandoffConfig,
-                2 * leaseDurationMillis);
+                gracefulLeaseHandoffConfig);
         leaseAssignmentManager.start();
         return leaseAssignmentManager;
     }

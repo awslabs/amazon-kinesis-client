@@ -419,7 +419,7 @@ public class Scheduler implements Runnable {
                         leaseManagementConfig.failoverTimeMillis(),
                         metricsFactory,
                         lamThreadPool,
-                        System::nanoTime,
+                        () -> System.nanoTime(),
                         leaseManagementConfig.maxLeasesForWorker(),
                         leaseManagementConfig.gracefulLeaseHandoffConfig(),
                         leaseManagementConfig.leaseAssignmentIntervalMillis()))

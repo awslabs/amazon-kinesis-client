@@ -129,6 +129,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      * @param metricsFactory
      *            Used to publish metrics about lease operations
      */
+    @Deprecated
     public DynamoDBLeaseCoordinator(
             final LeaseRefresher leaseRefresher,
             final String workerIdentifier,
@@ -152,7 +153,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 .withEnablePriorityLeaseAssignment(enablePriorityLeaseAssignment);
         this.renewerIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, epsilonMillis);
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
-        // Should run twice every leaseAssignmentIntervalMillis to identify new leases before expiry.
+        // Should run once every leaseDurationMillis to identify new leases before expiry.
         this.leaseDiscovererIntervalMillis = leaseDurationMillis - epsilonMillis;
         this.leaseStatsRecorder = new LeaseStatsRecorder(renewerIntervalMillis, System::currentTimeMillis);
         this.leaseGracefulShutdownHandler = LeaseGracefulShutdownHandler.create(
@@ -223,6 +224,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 workerUtilizationAwareAssignmentConfig,
                 gracefulLeaseHandoffConfig,
                 shardInfoShardConsumerMap);
+
+        // Should run twice every leaseAssignmentIntervalMillis to identify new leases before expiry.
         this.leaseDiscovererIntervalMillis = (leaseAssignmentIntervalMillis - epsilonMillis) / 2;
     }
 
