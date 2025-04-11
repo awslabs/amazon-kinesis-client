@@ -81,6 +81,12 @@ public class LeaseAssignmentManager {
     private static final String FORCE_LEADER_RELEASE_METRIC_NAME = "ForceLeaderRelease";
 
     /**
+     * Default multiplier for LAM frequency with respect to leaseDurationMillis (lease failover millis).
+     * If leaseDurationMillis is 10000 millis, default LAM frequency is 20000 millis.
+     */
+    private static final int DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER = 2;
+
+    /**
      * Default retry attempt for loading leases and workers before giving up.
      */
     private static final int DDB_LOAD_RETRY_ATTEMPT = 1;
@@ -140,7 +146,7 @@ public class LeaseAssignmentManager {
         this.nanoTimeProvider = nanoTimeProvider;
         this.maxLeasesForWorker = maxLeasesForWorker;
         this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
-        this.leaseAssignmentIntervalMillis = 2 * leaseDurationMillis;
+        this.leaseAssignmentIntervalMillis = leaseDurationMillis * DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER;
     }
 
     public LeaseAssignmentManager(

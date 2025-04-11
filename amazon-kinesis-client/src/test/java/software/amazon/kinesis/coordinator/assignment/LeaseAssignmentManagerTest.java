@@ -433,7 +433,6 @@ class LeaseAssignmentManagerTest {
                 .anyMatch(lease -> lease.leaseOwner().equals(TEST_YIELD_WORKER_ID + "2")));
     }
 
-    // no needed since variance based load balancing is no longer tied to LAM run
     @Test
     void performAssignment_varianceBalanceFreq3_asserLoadBalancingEvery3Iteration() throws Exception {
         final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config =
@@ -473,6 +472,15 @@ class LeaseAssignmentManagerTest {
         leaseAssignmentManagerRunnable.run();
         assertEquals(
                 3L,
+                leaseRefresher.listLeases().stream()
+                        .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
+                        .count());
+
+        setupConditionForVarianceBalancing();
+        // 5th Run, expect no re-balance
+        leaseAssignmentManagerRunnable.run();
+        assertEquals(
+                1L,
                 leaseRefresher.listLeases().stream()
                         .filter(lease -> lease.leaseOwner().equals(TEST_TAKE_WORKER_ID))
                         .count());

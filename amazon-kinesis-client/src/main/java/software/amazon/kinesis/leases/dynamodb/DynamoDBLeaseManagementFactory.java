@@ -146,6 +146,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      * @param workerUtilizationAwareAssignmentConfig
      * @param gracefulLeaseHandoffConfig
      */
+    @Deprecated
     public DynamoDBLeaseManagementFactory(
             final @NotNull KinesisAsyncClient kinesisClient,
             final @NotNull DynamoDbAsyncClient dynamoDBClient,
