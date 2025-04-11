@@ -71,20 +71,20 @@ import static java.util.Objects.nonNull;
  */
 @Slf4j
 @KinesisClientInternalApi
-public class LeaseAssignmentManager {
+public final class LeaseAssignmentManager {
 
     /**
      * Default number of continuous failure execution after which leadership is released.
      */
     private static final int DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER = 3;
 
-    private static final String FORCE_LEADER_RELEASE_METRIC_NAME = "ForceLeaderRelease";
-
     /**
      * Default multiplier for LAM frequency with respect to leaseDurationMillis (lease failover millis).
      * If leaseDurationMillis is 10000 millis, default LAM frequency is 20000 millis.
      */
     private static final int DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER = 2;
+
+    private static final String FORCE_LEADER_RELEASE_METRIC_NAME = "ForceLeaderRelease";
 
     /**
      * Default retry attempt for loading leases and workers before giving up.
