@@ -65,7 +65,7 @@ KCL 3.x implements leader election using `DynamoDBLockClient` library ([GitHub l
 - 3) Claims leadership if the previous lock owner's heartbeat has expired, following a first-worker-wins model
 
 ### **Leader failure handling in KCL 3.x**  
-The `DynamoDBLockClient` library ([GitHub link](https://github.com/awslabs/amazon-dynamodb-lock-client/)) provides the core failure handling capabilities. It monitors and responds to various failure scenarios including network partitions, worker shutdowns, and overloaded workers. When a worker fails to maintain its heartbeat on the lock item, KCL 3.x automatically enables another worker to claim leadership.  
+The `DynamoDBLockClient` library provides the core failure handling capabilities. It monitors and responds to various failure scenarios including network partitions, worker shutdowns, and overloaded workers. When a worker fails to maintain its heartbeat on the lock item, KCL 3.x automatically enables another worker to claim leadership.  
   
 KCL 3.x extends the base failure handling with additional safeguards for critical operations such as lease assignments. If there are three consecutive failures in lease assignment by a leader ([GitHub code ref](https://github.com/awslabs/amazon-kinesis-client/blob/68a7a9bf53e03bd9177bbf2fd234aca103d7f5dc/amazon-kinesis-client/src/main/java/software/amazon/kinesis/coordinator/assignment/LeaseAssignmentManager.java#L81)), KCL 3.x detects and releases the leadership to enable other workers to take the leadership and perform lease assignments. This dual-layer failure handling mechanism ensures both infrastructure-level and application-level failures are handled effectively.  
 
