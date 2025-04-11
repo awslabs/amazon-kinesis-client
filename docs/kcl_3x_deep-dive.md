@@ -1,5 +1,5 @@
 ## Introduction
-This document 
+This document explains the architectural changes in KCL 3.x regarding leader election and workload distribution, highlighting how KCL 3.x efficiently rebalances leases across workers using throughput metrics and CPU utilization.
 
 - [Overview: Lease reassignments in KCL 3.x](#overview-lease-reassignments-in-kcl-3x)
 - [Motivation for moving from distributed to leader-based protocol](#motivation-for-moving-from-distributed-to-leader-based-protocol)
