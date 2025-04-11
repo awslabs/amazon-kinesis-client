@@ -1,3 +1,13 @@
+## Introduction
+This document 
+
+- [Overview: Lease reassignments in KCL 3.x](#overview-lease-reassignments-in-kcl-3x)
+- [Motivation for moving from distributed to leader-based protocol](#motivation-for-moving-from-distributed-to-leader-based-protocol)
+- [How KCL 3.x manages leader election]
+- [How KCL 3.x captures throughput per shard]
+- [How KCL 3.x captures CPU utilization of worker hosts]
+- [How KCL 3.x performs lease assignments]
+
 ## Overview: Lease reassignments in KCL 3.x
 
 KCL 3.x rebalances leases based on the load (CPU utilization) on each worker with a goal of even distribution of load across workers. Unlike KCL 2.x where all workers scan the entire lease table to identify the lease assignment status and pick up unassigned leases or steal leases from existing workers, KCL 3.x achieves it by electing a leader worker scanning the entire lease table and do the lease assignment for the entire KCL workers. The following is the key differences in KCL 3.x.  
