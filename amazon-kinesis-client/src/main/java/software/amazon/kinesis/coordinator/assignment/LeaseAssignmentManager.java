@@ -41,6 +41,7 @@ import java.util.stream.Collectors;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.CollectionUtils;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
@@ -70,6 +71,7 @@ import static java.util.Objects.nonNull;
  * In the end, performs actual assignment by writing to storage.
  */
 @Slf4j
+@RequiredArgsConstructor
 @KinesisClientInternalApi
 public final class LeaseAssignmentManager {
 
@@ -121,33 +123,6 @@ public final class LeaseAssignmentManager {
 
     private int noOfContinuousFailedAttempts = 0;
     private int lamRunCounter = 0;
-
-    public LeaseAssignmentManager(
-            final LeaseRefresher leaseRefresher,
-            final WorkerMetricStatsDAO workerMetricsDAO,
-            final LeaderDecider leaderDecider,
-            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
-            final String workerIdentifier,
-            final Long leaseDurationMillis,
-            final MetricsFactory metricsFactory,
-            final ScheduledExecutorService executorService,
-            final Supplier<Long> nanoTimeProvider,
-            final int maxLeasesForWorker,
-            final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
-            final long leaseAssignmentIntervalMillis) {
-        this.leaseRefresher = leaseRefresher;
-        this.workerMetricsDAO = workerMetricsDAO;
-        this.leaderDecider = leaderDecider;
-        this.config = config;
-        this.currentWorkerId = workerIdentifier;
-        this.leaseDurationMillis = leaseDurationMillis;
-        this.metricsFactory = metricsFactory;
-        this.executorService = executorService;
-        this.nanoTimeProvider = nanoTimeProvider;
-        this.maxLeasesForWorker = maxLeasesForWorker;
-        this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
-        this.leaseAssignmentIntervalMillis = leaseAssignmentIntervalMillis;
-    }
 
     @Deprecated
     public LeaseAssignmentManager(
