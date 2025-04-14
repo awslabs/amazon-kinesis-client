@@ -74,5 +74,44 @@ The following configuration properties are discontinued in KCL 3.x:
 | maxLeasesToStealAtOneTime | LeaseManagementConfig | The maximum number of leases an application should attempt to steal at one time. KCL 3.x will ignore this configuration and reassign leases based on the resource utilization of workers. |
 | enablePriorityLeaseAssignment | LeaseManagementConfig | Controls whether workers should prioritize taking very expired leases (leases not renewed for 3x the failover time) and new shard leases, regardless of target lease counts but still respecting max lease limits. KCL 3.x will ignore this configuration and always spread expired leases across workers. |
 
+
 > [!Important]
 > You still must have the discontinued configuration properties during the migration from previous KCL verisons to KCL 3.x. During the migration, KCL workers will first start with the KCL 2.x compatible mode and switch to the KCL 3.x functionality mode when it detects that all KCL workers of the application are ready to run KCL 3.x. These discontinued configurations are needed while KCL workers are running the KCL 2.x compatible mode.
+
+
+## How to set custom table names for DynamoDB metadata tables used by KCL
+
+You can set a custom table names for DynamoDB metadata tables used by KCL such as lease table, worker metrics table, and coordinator state table, using `configsBuilder` in your main consumer application code. When you want to use custom names for the worker metrics table and coordinator state table, you should update the configuration of `workerMetricsTableConfig` and `coordinatorStateTableConfig`. You need to set the parameter `tableName` of these properties to the custom table names that you want to use. 
+
+### Lease table
+If you want to use a custom name for the lease table, set the `tableName` parameter of `configBuilder` like the following example. 
+```
+ConfigsBuilder configsBuilder = new ConfigsBuilder(
+            streamName, 
+            applicationName, 
+            kinesisClient, 
+            dynamoDbAsyncClient,
+            cloudWatchClient, 
+            UUID.randomUUID().toString(), 
+            new SampleRecordProcessorFactory()
+        ).tableName("CustomNameForLeaseTable");
+```
+
+### Worker metrics table
+If you want to use a custom name for the worker metrics table, set the `tableName` parameter of `workerMetricsTableConfig` like the following example. These two lines can be inserted below the code for configsBuilder creation. 
+```
+LeaseManagementConfig leaseManagementConfig = configsBuilder.leaseManagementConfig();
+leaseManagementConfig
+    .workerUtilizationAwareAssignmentConfig()
+    .workerMetricsTableConfig()
+    .tableName("CustomTableNameForWorkerMetricsTableTable");
+```
+
+### Coordinator state table
+If you want to use a custom name for the coordinator state table, set the `tableName` parameter of `coordinatorStateTableConfig` like the following example. These two lines can be inserted below the code for configsBuilder creation. 
+```
+CoordinatorConfig coordinatorConfig = configsBuilder.coordinatorConfig();
+coordinatorConfig
+    .coordinatorStateTableConfig()
+    .tableName("CustomTableNameForCoordinatorStateTable");
+```
