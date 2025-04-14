@@ -124,10 +124,7 @@ public final class LeaseAssignmentManager {
             // so reset the flag to refresh the state before processing during a restart of LAM.
             tookOverLeadershipInThisRun = false;
             managerFuture = executorService.scheduleWithFixedDelay(
-                    this::performAssignment,
-                    0L,
-                    (int) (leaseAssignmentIntervalMillis),
-                    TimeUnit.MILLISECONDS);
+                    this::performAssignment, 0L, (int) (leaseAssignmentIntervalMillis), TimeUnit.MILLISECONDS);
             log.info("Started LeaseAssignmentManager");
             return;
         }
