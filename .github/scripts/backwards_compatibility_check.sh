@@ -92,7 +92,7 @@ find_removed_methods() {
     grep -v 'software\.amazon\.kinesis\.retrieval\.kpl\.Messages')
   for class in $latest_classes
   do
-    if (is_kinesis_client_internal_api "$class" && (is_new_minor_release || is_new_major_release)) || is_non_public_class "$class"
+    if is_kinesis_client_internal_api "$class" || is_non_public_class "$class"
     then
       continue
     fi
@@ -117,10 +117,6 @@ find_removed_methods() {
     if [[ "$removed_methods" != "" ]]
     then
       REMOVED_METHODS_FLAG=$TRUE
-      if is_kinesis_client_internal_api "$class"
-      then
-        echo "Found removed methods in class with @KinesisClientInternalApi annotation. To resolve these issues, upgrade the current minor version or address these changes."
-      fi
       echo "$class does not have method(s):"
       echo "$removed_methods"
     fi
