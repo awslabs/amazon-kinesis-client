@@ -124,34 +124,6 @@ public final class LeaseAssignmentManager {
     private int noOfContinuousFailedAttempts = 0;
     private int lamRunCounter = 0;
 
-    @Deprecated
-    public LeaseAssignmentManager(
-            final LeaseRefresher leaseRefresher,
-            final WorkerMetricStatsDAO workerMetricsDAO,
-            final LeaderDecider leaderDecider,
-            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
-            final String workerIdentifier,
-            final Long leaseDurationMillis,
-            final MetricsFactory metricsFactory,
-            final ScheduledExecutorService executorService,
-            final Supplier<Long> nanoTimeProvider,
-            final int maxLeasesForWorker,
-            final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig) {
-        this(
-                leaseRefresher,
-                workerMetricsDAO,
-                leaderDecider,
-                config,
-                workerIdentifier,
-                leaseDurationMillis,
-                metricsFactory,
-                executorService,
-                nanoTimeProvider,
-                maxLeasesForWorker,
-                gracefulLeaseHandoffConfig,
-                leaseDurationMillis * DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER);
-    }
-
     public synchronized void start() {
         if (isNull(managerFuture)) {
             // LAM can be dynamically started/stopped and restarted during MigrationStateMachine execution

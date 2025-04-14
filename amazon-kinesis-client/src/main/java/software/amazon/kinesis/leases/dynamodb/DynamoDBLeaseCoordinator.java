@@ -194,41 +194,6 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 maxLeasesToStealAtOneTime);
     }
 
-    @Deprecated
-    public DynamoDBLeaseCoordinator(
-            final LeaseRefresher leaseRefresher,
-            final String workerIdentifier,
-            final long leaseDurationMillis,
-            final boolean enablePriorityLeaseAssignment,
-            final long epsilonMillis,
-            final int maxLeasesForWorker,
-            final int maxLeasesToStealAtOneTime,
-            final int maxLeaseRenewerThreadCount,
-            final long initialLeaseTableReadCapacity,
-            final long initialLeaseTableWriteCapacity,
-            final MetricsFactory metricsFactory,
-            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
-            final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
-            final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap) {
-
-        this(
-                leaseRefresher,
-                workerIdentifier,
-                leaseDurationMillis,
-                enablePriorityLeaseAssignment,
-                epsilonMillis,
-                maxLeasesForWorker,
-                maxLeasesToStealAtOneTime,
-                maxLeaseRenewerThreadCount,
-                initialLeaseTableReadCapacity,
-                initialLeaseTableWriteCapacity,
-                metricsFactory,
-                workerUtilizationAwareAssignmentConfig,
-                gracefulLeaseHandoffConfig,
-                shardInfoShardConsumerMap,
-                2 * leaseDurationMillis);
-    }
-
     @RequiredArgsConstructor
     private class LeaseDiscoveryRunnable implements Runnable {
         private final MigrationAdaptiveLeaseAssignmentModeProvider leaseAssignmentModeProvider;
