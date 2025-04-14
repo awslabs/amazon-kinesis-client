@@ -167,7 +167,8 @@ public class ConsumerStatesTest {
                 logWarningForTaskAfterMillis,
                 argument,
                 taskExecutionListener,
-                0));
+                0,
+                new KinesisConsumerTaskFactory()));
         when(recordProcessorCheckpointer.checkpointer()).thenReturn(checkpointer);
     }
 

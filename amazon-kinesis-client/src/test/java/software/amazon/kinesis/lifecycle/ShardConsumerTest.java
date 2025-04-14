@@ -781,7 +781,8 @@ public class ShardConsumerTest {
                 initialState,
                 1,
                 taskExecutionListener,
-                0);
+                0,
+                new KinesisConsumerTaskFactory());
 
         mockSuccessfulInitialize(null);
         mockSuccessfulProcessing(null);
@@ -836,7 +837,8 @@ public class ShardConsumerTest {
                 initialState,
                 1,
                 taskExecutionListener,
-                0);
+                0,
+                new KinesisConsumerTaskFactory());
 
         CyclicBarrier taskArriveBarrier = new CyclicBarrier(2);
         CyclicBarrier taskDepartBarrier = new CyclicBarrier(2);
@@ -943,7 +945,8 @@ public class ShardConsumerTest {
                 mockState,
                 1,
                 taskExecutionListener,
-                0);
+                0,
+                new KinesisConsumerTaskFactory());
 
         when(mockState.state()).thenReturn(ShardConsumerState.WAITING_ON_PARENT_SHARDS);
         when(mockState.taskType()).thenReturn(TaskType.BLOCK_ON_PARENT_SHARDS);
@@ -1155,6 +1158,7 @@ public class ShardConsumerTest {
                 state,
                 1,
                 taskExecutionListener,
-                0);
+                0,
+                new KinesisConsumerTaskFactory());
     }
 }
