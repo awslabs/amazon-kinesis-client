@@ -128,7 +128,8 @@ public class DynamoDBLeaseCoordinatorIntegrationTest {
                 metricsFactory,
                 new LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig(),
                 LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
-                new ConcurrentHashMap<>());
+                new ConcurrentHashMap<>(),
+                2 * LEASE_DURATION_MILLIS);
         dynamoDBCheckpointer = new DynamoDBCheckpointer(coordinator, leaseRefresher);
         dynamoDBCheckpointer.operation(OPERATION);
 

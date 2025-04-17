@@ -17,6 +17,8 @@ import lombok.var;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mockito;
 import software.amazon.awssdk.core.util.DefaultSdkAutoConstructList;
 import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
@@ -49,6 +51,7 @@ import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -746,7 +749,8 @@ class LeaseAssignmentManagerTest {
                 Integer.MAX_VALUE,
                 LeaseManagementConfig.GracefulLeaseHandoffConfig.builder()
                         .isGracefulLeaseHandoffEnabled(false)
-                        .build());
+                        .build(),
+                2 * 100L);
 
         leaseAssignmentManager.start();
 
@@ -1134,6 +1138,62 @@ class LeaseAssignmentManagerTest {
         dynamoDbAsyncClient.putItem(putItemRequest);
     }
 
+    @Test
+    void testLeaseAssignmentSchedulingWithDefaultInterval() {
+        long failoverTimeMillis = 1000L;
+        ScheduledExecutorService mockExecutor = Mockito.mock(ScheduledExecutorService.class);
+
+        LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
+                leaseRefresher,
+                workerMetricsDAO,
+                mockLeaderDecider,
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                TEST_LEADER_WORKER_ID,
+                failoverTimeMillis,
+                new NullMetricsFactory(),
+                mockExecutor,
+                System::nanoTime,
+                Integer.MAX_VALUE,
+                gracefulLeaseHandoffConfig,
+                2 * failoverTimeMillis);
+
+        leaseAssignmentManager.start();
+
+        verify(mockExecutor)
+                .scheduleWithFixedDelay(
+                        any(Runnable.class), eq(0L), eq(2 * failoverTimeMillis), eq(TimeUnit.MILLISECONDS));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "1000, 500", // leaseAssignmentInterval smaller than failover
+        "1000, 1000", // leaseAssignmentInterval equal to failover
+        "1000, 2000", // leaseAssignmentInterval larger than failover
+    })
+    void testLeaseAssignmentWithDifferentIntervals(long failoverTimeMillis, long leaseAssignmentIntervalMillis) {
+        ScheduledExecutorService mockExecutor = Mockito.mock(ScheduledExecutorService.class);
+
+        LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
+                leaseRefresher,
+                workerMetricsDAO,
+                mockLeaderDecider,
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                TEST_LEADER_WORKER_ID,
+                failoverTimeMillis,
+                new NullMetricsFactory(),
+                mockExecutor,
+                System::nanoTime,
+                Integer.MAX_VALUE,
+                gracefulLeaseHandoffConfig,
+                leaseAssignmentIntervalMillis);
+
+        leaseAssignmentManager.start();
+
+        verify(mockExecutor)
+                .scheduleWithFixedDelay(
+                        any(Runnable.class), eq(0L), eq(leaseAssignmentIntervalMillis), eq(TimeUnit.MILLISECONDS));
+    }
+
     private LeaseAssignmentManager createLeaseAssignmentManager(
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
             final Long leaseDurationMillis,
@@ -1151,7 +1211,8 @@ class LeaseAssignmentManagerTest {
                 scheduledExecutorService,
                 nanoTimeProvider,
                 maxLeasesPerWorker,
-                gracefulLeaseHandoffConfig);
+                gracefulLeaseHandoffConfig,
+                2 * leaseDurationMillis);
         leaseAssignmentManager.start();
         return leaseAssignmentManager;
     }

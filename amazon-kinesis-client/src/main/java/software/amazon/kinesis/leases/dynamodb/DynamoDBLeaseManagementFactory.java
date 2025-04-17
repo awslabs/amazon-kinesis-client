@@ -108,6 +108,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
     private final boolean isMultiStreamMode;
     private final LeaseCleanupConfig leaseCleanupConfig;
     private final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig;
+    private long leaseAssignmentIntervalMillis;
 
     /**
      * Constructor.
@@ -144,6 +145,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
      * @param leaseCleanupConfig
      * @param workerUtilizationAwareAssignmentConfig
      * @param gracefulLeaseHandoffConfig
+     * @param leaseAssignmentIntervalMillis
      */
     public DynamoDBLeaseManagementFactory(
             final @NotNull KinesisAsyncClient kinesisClient,
@@ -179,7 +181,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
             boolean isMultiStreamMode,
             final LeaseCleanupConfig leaseCleanupConfig,
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
-            final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig) {
+            final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
+            final long leaseAssignmentIntervalMillis) {
         this.kinesisClient = kinesisClient;
         this.dynamoDBClient = dynamoDBClient;
         this.tableName = tableName;
@@ -214,6 +217,7 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
         this.tags = tags;
         this.workerUtilizationAwareAssignmentConfig = workerUtilizationAwareAssignmentConfig;
         this.gracefulLeaseHandoffConfig = gracefulLeaseHandoffConfig;
+        this.leaseAssignmentIntervalMillis = leaseAssignmentIntervalMillis;
     }
 
     @Override
@@ -239,7 +243,8 @@ public class DynamoDBLeaseManagementFactory implements LeaseManagementFactory {
                 metricsFactory,
                 workerUtilizationAwareAssignmentConfig,
                 gracefulLeaseHandoffConfig,
-                shardInfoShardConsumerMap);
+                shardInfoShardConsumerMap,
+                leaseAssignmentIntervalMillis);
     }
 
     /**

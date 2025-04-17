@@ -132,7 +132,8 @@ public class LeaseCoordinatorExerciser {
                     metricsFactory,
                     new LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig(),
                     LeaseManagementConfig.GracefulLeaseHandoffConfig.builder().build(),
-                    new ConcurrentHashMap<>());
+                    new ConcurrentHashMap<>(),
+                    2 * leaseDurationMillis);
 
             coordinators.add(coord);
         }

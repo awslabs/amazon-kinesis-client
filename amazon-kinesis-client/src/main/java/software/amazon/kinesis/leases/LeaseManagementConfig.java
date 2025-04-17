@@ -115,6 +115,16 @@ public class LeaseManagementConfig {
     private long failoverTimeMillis = 10000L;
 
     /**
+     * Lease assignment interval in milliseconds - e.g. wait for this long between Lease assignment run.
+     *
+     * <p>Default value: 2 * {@link LeaseManagementConfig#failoverTimeMillis}</p>
+     */
+    private Long leaseAssignmentIntervalMillis;
+
+    public long leaseAssignmentIntervalMillis() {
+        return leaseAssignmentIntervalMillis != null ? leaseAssignmentIntervalMillis : 2 * failoverTimeMillis;
+    }
+    /**
      * Whether workers should take very expired leases at priority. A very expired lease is when a worker does not
      * renew its lease in 3 * {@link LeaseManagementConfig#failoverTimeMillis}. Very expired leases will be taken at
      * priority for a worker which disregards the target leases for the worker but obeys
@@ -489,7 +499,8 @@ public class LeaseManagementConfig {
                     isMultiStreamingMode,
                     leaseCleanupConfig(),
                     workerUtilizationAwareAssignmentConfig(),
-                    gracefulLeaseHandoffConfig);
+                    gracefulLeaseHandoffConfig,
+                    leaseAssignmentIntervalMillis());
         }
         return leaseManagementFactory;
     }

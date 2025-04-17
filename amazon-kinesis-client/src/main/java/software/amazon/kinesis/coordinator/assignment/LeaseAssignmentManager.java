@@ -80,12 +80,6 @@ public final class LeaseAssignmentManager {
      */
     private static final int DEFAULT_FAILURE_COUNT_TO_SWITCH_LEADER = 3;
 
-    /**
-     * Default multiplier for LAM frequency with respect to leaseDurationMillis (lease failover millis).
-     * If leaseDurationMillis is 10000 millis, default LAM frequency is 20000 millis.
-     */
-    private static final int DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER = 2;
-
     private static final String FORCE_LEADER_RELEASE_METRIC_NAME = "ForceLeaderRelease";
 
     /**
@@ -117,6 +111,7 @@ public final class LeaseAssignmentManager {
     private final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig;
     private boolean tookOverLeadershipInThisRun = false;
     private final Map<String, Lease> prevRunLeasesState = new HashMap<>();
+    private final long leaseAssignmentIntervalMillis;
 
     private Future<?> managerFuture;
 
@@ -129,10 +124,7 @@ public final class LeaseAssignmentManager {
             // so reset the flag to refresh the state before processing during a restart of LAM.
             tookOverLeadershipInThisRun = false;
             managerFuture = executorService.scheduleWithFixedDelay(
-                    this::performAssignment,
-                    0L,
-                    leaseDurationMillis * DEFAULT_LEASE_ASSIGNMENT_MANAGER_FREQ_MULTIPLIER,
-                    TimeUnit.MILLISECONDS);
+                    this::performAssignment, 0L, (int) (leaseAssignmentIntervalMillis), TimeUnit.MILLISECONDS);
             log.info("Started LeaseAssignmentManager");
             return;
         }

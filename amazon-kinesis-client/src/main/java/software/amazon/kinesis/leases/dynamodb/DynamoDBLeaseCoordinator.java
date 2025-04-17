@@ -128,6 +128,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
      *            Initial dynamodb lease table write iops if creating the lease table
      * @param metricsFactory
      *            Used to publish metrics about lease operations
+     * @param leaseAssignmentIntervalMillis
+     *            Interval at which Lease assignment manager runs
      */
     public DynamoDBLeaseCoordinator(
             final LeaseRefresher leaseRefresher,
@@ -143,7 +145,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
             final MetricsFactory metricsFactory,
             final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig workerUtilizationAwareAssignmentConfig,
             final LeaseManagementConfig.GracefulLeaseHandoffConfig gracefulLeaseHandoffConfig,
-            final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap) {
+            final ConcurrentMap<ShardInfo, ShardConsumer> shardInfoShardConsumerMap,
+            final long leaseAssignmentIntervalMillis) {
         this.leaseRefresher = leaseRefresher;
         this.leaseRenewalThreadpool = createExecutorService(maxLeaseRenewerThreadCount, LEASE_RENEWAL_THREAD_FACTORY);
         this.leaseTaker = new DynamoDBLeaseTaker(leaseRefresher, workerIdentifier, leaseDurationMillis, metricsFactory)
@@ -152,8 +155,8 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
                 .withEnablePriorityLeaseAssignment(enablePriorityLeaseAssignment);
         this.renewerIntervalMillis = getRenewerTakerIntervalMillis(leaseDurationMillis, epsilonMillis);
         this.takerIntervalMillis = (leaseDurationMillis + epsilonMillis) * 2;
-        // Should run once every leaseDurationMillis to identify new leases before expiry.
-        this.leaseDiscovererIntervalMillis = leaseDurationMillis - epsilonMillis;
+        // Should run twice every leaseAssignmentIntervalMillis to identify new leases before expiry.
+        this.leaseDiscovererIntervalMillis = (leaseAssignmentIntervalMillis / 2) - epsilonMillis;
         this.leaseStatsRecorder = new LeaseStatsRecorder(renewerIntervalMillis, System::currentTimeMillis);
         this.leaseGracefulShutdownHandler = LeaseGracefulShutdownHandler.create(
                 gracefulLeaseHandoffConfig.gracefulLeaseHandoffTimeoutMillis(), shardInfoShardConsumerMap, this);
