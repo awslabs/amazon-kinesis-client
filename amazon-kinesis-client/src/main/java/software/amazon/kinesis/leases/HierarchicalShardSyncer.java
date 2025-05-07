@@ -651,8 +651,8 @@ public class HierarchicalShardSyncer {
         return parentShardIds;
     }
 
-    public synchronized Lease createLeaseForChildShard(
-            final ChildShard childShard, final StreamIdentifier streamIdentifier) throws InvalidStateException {
+    public Lease createLeaseForChildShard(final ChildShard childShard, final StreamIdentifier streamIdentifier)
+            throws InvalidStateException {
         final MultiStreamArgs multiStreamArgs = new MultiStreamArgs(isMultiStreamMode, streamIdentifier);
 
         return multiStreamArgs.isMultiStreamMode()
