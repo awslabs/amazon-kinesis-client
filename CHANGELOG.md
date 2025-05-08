@@ -5,6 +5,11 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
+### Release 3.0.3 (May 7, 2025)
+* [#1464](https://github.com/awslabs/amazon-kinesis-client/pull/1464) Add config for LeaseAssignmentManager frequency and improve assignment time of newly created leases
+* [#1463](https://github.com/awslabs/amazon-kinesis-client/pull/1463) Extend ShardConsumer constructor to have ConsumerTaskFactory as a parameter to support [DynamoDB Streams Kinesis Adapter](https://github.com/awslabs/dynamodb-streams-kinesis-adapter) compatibility
+* [#1472](https://github.com/awslabs/amazon-kinesis-client/pull/1472) Remove unused synchronized keyword
+
 ### Release 3.0.2 (March 12, 2025)
 * [#1443](https://github.com/awslabs/amazon-kinesis-client/pull/1443) Reduce DynamoDB IOPS for smaller stream and worker count applications
 * The below two PRs are intended to support [DynamoDB Streams Kinesis Adapter](https://github.com/awslabs/dynamodb-streams-kinesis-adapter) compatibility
