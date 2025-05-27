@@ -42,7 +42,10 @@ To make it easier for developers to write record processors in other languages, 
 
 ## Release Notes
 
-### Latest Release (1.15.2 - Aug 14, 2024)
+### Latest Release (1.15.3 - May 27, 2025)
+* [#1475](https://github.com/awslabs/amazon-kinesis-client/pull/1475) Upgraded protobuf dependency from 4.27.1 to 4.31.0
+
+### Release (1.15.2 - Aug 14, 2024)
 * [#1371](https://github.com/awslabs/amazon-kinesis-client/pull/1371) Fix a bug in debug and trace logging levels for worker
 * [#1224](https://github.com/awslabs/amazon-kinesis-client/pull/1224) Modify RecordProcessorCheckpointer#advancePosition Metrics usage to ensure proper closure
 * [#1345](https://github.com/awslabs/amazon-kinesis-client/pull/1345) Generate wrappers from proto files instead of shipping them directly
