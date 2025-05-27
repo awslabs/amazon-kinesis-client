@@ -14,8 +14,6 @@
  */
 package software.amazon.kinesis.retrieval;
 
-import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
-
 /**
  * Represents the result from the DataFetcher, and allows the receiver to accept a result
  */
@@ -25,7 +23,7 @@ public interface DataFetcherResult {
      *
      * @return The result of the request, this can be null if the request failed.
      */
-    GetRecordsResponse getResult();
+    GetRecordsResponseAdapter getResult();
 
     /**
      * Accepts the result, and advances the shard iterator. A result from the data fetcher must be accepted before any
@@ -33,7 +31,7 @@ public interface DataFetcherResult {
      *
      * @return the result of the request, this can be null if the request failed.
      */
-    GetRecordsResponse accept();
+    GetRecordsResponseAdapter accept();
 
     /**
      * Indicates whether this result is at the end of the shard or not

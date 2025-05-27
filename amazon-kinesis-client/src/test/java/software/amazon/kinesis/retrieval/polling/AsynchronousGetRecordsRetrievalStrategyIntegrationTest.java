@@ -38,6 +38,8 @@ import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
+import software.amazon.kinesis.retrieval.KinesisGetRecordsResponseAdapter;
 
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -71,7 +73,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     private KinesisAsyncClient kinesisClient;
 
     private CompletionService<DataFetcherResult> completionService;
-    private GetRecordsResponse getRecordsResponse;
+    private GetRecordsResponseAdapter getRecordsResponse;
 
     private AsynchronousGetRecordsRetrievalStrategy getRecordsRetrivalStrategy;
     private KinesisDataFetcher dataFetcher;
@@ -97,7 +99,8 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
         completionService = spy(new ExecutorCompletionService<DataFetcherResult>(executorService));
         getRecordsRetrivalStrategy = new AsynchronousGetRecordsRetrievalStrategy(
                 dataFetcher, executorService, RETRY_GET_RECORDS_IN_SECONDS, completionServiceSupplier, "shardId-0001");
-        getRecordsResponse = GetRecordsResponse.builder().build();
+        getRecordsResponse = new KinesisGetRecordsResponseAdapter(
+                GetRecordsResponse.builder().build());
 
         when(completionServiceSupplier.get()).thenReturn(completionService);
         when(result.accept()).thenReturn(getRecordsResponse);
@@ -106,7 +109,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
     @Test
     public void oneRequestMultithreadTest() {
         when(result.accept()).thenReturn(null);
-        GetRecordsResponse getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
+        GetRecordsResponseAdapter getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
         verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords();
         verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
         assertNull(getRecordsResult);
@@ -117,7 +120,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
         ExecutorCompletionService<DataFetcherResult> completionService1 =
                 spy(new ExecutorCompletionService<DataFetcherResult>(executorService));
         when(completionServiceSupplier.get()).thenReturn(completionService1);
-        GetRecordsResponse getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
+        GetRecordsResponseAdapter getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
         verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords();
         verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
         assertThat(getRecordsResult, equalTo(getRecordsResponse));
@@ -127,7 +130,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
                 spy(new ExecutorCompletionService<DataFetcherResult>(executorService));
         when(completionServiceSupplier.get()).thenReturn(completionService2);
         getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
-        assertThat(getRecordsResult, nullValue(GetRecordsResponse.class));
+        assertThat(getRecordsResult, nullValue(GetRecordsResponseAdapter.class));
     }
 
     @Test(expected = ExpiredIteratorException.class)

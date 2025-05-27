@@ -66,8 +66,10 @@ import software.amazon.kinesis.leases.ShardObjectHelper;
 import software.amazon.kinesis.lifecycle.ShardConsumerNotifyingSubscriber;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.KinesisGetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
@@ -136,7 +138,7 @@ public class PrefetchRecordsPublisherTest {
     private ExecutorService executorService;
     private LinkedBlockingQueue<PrefetchRecordsPublisher.PrefetchRecordsRetrieved> spyQueue;
     private PrefetchRecordsPublisher getRecordsCache;
-    private GetRecordsResponse getRecordsResponse;
+    private GetRecordsResponseAdapter getRecordsResponse;
     private Record record;
 
     @Before
@@ -147,11 +149,11 @@ public class PrefetchRecordsPublisherTest {
         getRecordsCache = createPrefetchRecordsPublisher(0L);
         spyQueue = spy(getRecordsCache.getPublisherSession().prefetchRecordsQueue());
         records = spy(new ArrayList<>());
-        getRecordsResponse = GetRecordsResponse.builder()
+        getRecordsResponse = new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
                 .records(records)
                 .nextShardIterator(NEXT_SHARD_ITERATOR)
                 .childShards(Collections.emptyList())
-                .build();
+                .build());
 
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(getRecordsResponse);
     }
@@ -283,8 +285,8 @@ public class PrefetchRecordsPublisherTest {
     public void testGetRecordsWithInvalidResponse() {
         record = Record.builder().data(createByteBufferWithSize(SIZE_512_KB)).build();
 
-        GetRecordsResponse response =
-                GetRecordsResponse.builder().records(records).build();
+        GetRecordsResponseAdapter response = new KinesisGetRecordsResponseAdapter(
+                GetRecordsResponse.builder().records(records).build());
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(response);
         when(dataFetcher.isShardEndReached()).thenReturn(false);
 
@@ -319,10 +321,10 @@ public class PrefetchRecordsPublisherTest {
         childShards.add(leftChild);
         childShards.add(rightChild);
 
-        GetRecordsResponse response = GetRecordsResponse.builder()
+        GetRecordsResponseAdapter response = new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
                 .records(records)
                 .childShards(childShards)
-                .build();
+                .build());
         when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(response);
         when(dataFetcher.isShardEndReached()).thenReturn(true);
 
@@ -417,13 +419,13 @@ public class PrefetchRecordsPublisherTest {
 
     @Test(expected = IllegalStateException.class)
     public void testRequestRecordsOnSubscriptionAfterShutdown() {
-        GetRecordsResponse response = GetRecordsResponse.builder()
+        GetRecordsResponseAdapter response = new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
                 .records(Record.builder()
                         .data(SdkBytes.fromByteArray(new byte[] {1, 2, 3}))
                         .sequenceNumber("123")
                         .build())
                 .nextShardIterator(NEXT_SHARD_ITERATOR)
-                .build();
+                .build());
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
@@ -482,11 +484,11 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testRetryableRetrievalExceptionContinues() {
-        GetRecordsResponse response = GetRecordsResponse.builder()
+        GetRecordsResponseAdapter response = new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
                 .millisBehindLatest(100L)
                 .records(Collections.emptyList())
                 .nextShardIterator(NEXT_SHARD_ITERATOR)
-                .build();
+                .build());
         when(getRecordsRetrievalStrategy.getRecords(anyInt()))
                 .thenThrow(new RetryableRetrievalException("Timeout", new TimeoutException("Timeout")))
                 .thenReturn(response);
@@ -526,13 +528,14 @@ public class PrefetchRecordsPublisherTest {
         //
         final int[] sequenceNumberInResponse = {0};
 
-        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenAnswer(i -> GetRecordsResponse.builder()
-                .records(Record.builder()
-                        .data(SdkBytes.fromByteArray(new byte[] {1, 2, 3}))
-                        .sequenceNumber(++sequenceNumberInResponse[0] + "")
-                        .build())
-                .nextShardIterator(NEXT_SHARD_ITERATOR)
-                .build());
+        when(getRecordsRetrievalStrategy.getRecords(anyInt()))
+                .thenAnswer(i -> new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
+                        .records(Record.builder()
+                                .data(SdkBytes.fromByteArray(new byte[] {1, 2, 3}))
+                                .sequenceNumber(++sequenceNumberInResponse[0] + "")
+                                .build())
+                        .nextShardIterator(NEXT_SHARD_ITERATOR)
+                        .build()));
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -627,13 +630,13 @@ public class PrefetchRecordsPublisherTest {
         //
         // This test is to verify that the data consumption is not stuck in the case of an failed event delivery
         // to the subscriber.
-        GetRecordsResponse response = GetRecordsResponse.builder()
+        GetRecordsResponseAdapter response = new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
                 .records(Record.builder()
                         .data(SdkBytes.fromByteArray(new byte[] {1, 2, 3}))
                         .sequenceNumber("123")
                         .build())
                 .nextShardIterator(NEXT_SHARD_ITERATOR)
-                .build();
+                .build());
         when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
@@ -710,7 +713,7 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testResetClearsRemainingData() {
-        List<GetRecordsResponse> responses = Stream.iterate(0, i -> i + 1)
+        List<GetRecordsResponseAdapter> responses = Stream.iterate(0, i -> i + 1)
                 .limit(10)
                 .map(i -> {
                     Record record = Record.builder()
@@ -720,10 +723,10 @@ public class PrefetchRecordsPublisherTest {
                             .approximateArrivalTimestamp(Instant.now())
                             .build();
                     String nextIterator = "shard-iter-" + (i + 1);
-                    return GetRecordsResponse.builder()
+                    return new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
                             .records(record)
                             .nextShardIterator(nextIterator)
-                            .build();
+                            .build());
                 })
                 .collect(Collectors.toList());
 
@@ -778,7 +781,8 @@ public class PrefetchRecordsPublisherTest {
         try {
             // return a valid response to cause `lastSuccessfulCall` to initialize
             when(getRecordsRetrievalStrategy.getRecords(anyInt()))
-                    .thenReturn(GetRecordsResponse.builder().build());
+                    .thenReturn(new KinesisGetRecordsResponseAdapter(
+                            GetRecordsResponse.builder().build()));
             blockUntilRecordsAvailable();
         } catch (RuntimeException re) {
             Assert.fail("first call should succeed");
@@ -803,7 +807,8 @@ public class PrefetchRecordsPublisherTest {
     public void testProvisionedThroughputExceededExceptionReporter() {
         when(getRecordsRetrievalStrategy.getRecords(anyInt()))
                 .thenThrow(ProvisionedThroughputExceededException.builder().build())
-                .thenReturn(GetRecordsResponse.builder().build());
+                .thenReturn(new KinesisGetRecordsResponseAdapter(
+                        GetRecordsResponse.builder().build()));
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -822,20 +827,20 @@ public class PrefetchRecordsPublisherTest {
         return getRecordsCache.getPublisherSession().evictPublishedRecordAndUpdateDemand("shardId");
     }
 
-    private static class RetrieverAnswer implements Answer<GetRecordsResponse> {
+    private static class RetrieverAnswer implements Answer<GetRecordsResponseAdapter> {
 
-        private final List<GetRecordsResponse> responses;
-        private Iterator<GetRecordsResponse> iterator;
+        private final List<GetRecordsResponseAdapter> responses;
+        private Iterator<GetRecordsResponseAdapter> iterator;
 
-        public RetrieverAnswer(List<GetRecordsResponse> responses) {
+        public RetrieverAnswer(List<GetRecordsResponseAdapter> responses) {
             this.responses = responses;
             this.iterator = responses.iterator();
         }
 
         public void resetIteratorTo(String nextIterator) {
-            Iterator<GetRecordsResponse> newIterator = responses.iterator();
+            Iterator<GetRecordsResponseAdapter> newIterator = responses.iterator();
             while (newIterator.hasNext()) {
-                GetRecordsResponse current = newIterator.next();
+                GetRecordsResponseAdapter current = newIterator.next();
                 if (StringUtils.equals(nextIterator, current.nextShardIterator())) {
                     if (!newIterator.hasNext()) {
                         iterator = responses.iterator();
@@ -849,8 +854,8 @@ public class PrefetchRecordsPublisherTest {
         }
 
         @Override
-        public GetRecordsResponse answer(InvocationOnMock invocation) {
-            GetRecordsResponse response = iterator.next();
+        public GetRecordsResponseAdapter answer(InvocationOnMock invocation) {
+            GetRecordsResponseAdapter response = iterator.next();
             if (!iterator.hasNext()) {
                 iterator = responses.iterator();
             }

@@ -46,6 +46,27 @@ public class KinesisClientRecord {
     private final boolean aggregated;
     private final Schema schema;
 
+    protected KinesisClientRecord(
+            String sequenceNumber,
+            Instant approximateArrivalTimestamp,
+            ByteBuffer data,
+            String partitionKey,
+            EncryptionType encryptionType,
+            long subSequenceNumber,
+            String explicitHashKey,
+            boolean aggregated,
+            Schema schema) {
+        this.sequenceNumber = sequenceNumber;
+        this.approximateArrivalTimestamp = approximateArrivalTimestamp;
+        this.data = data;
+        this.partitionKey = partitionKey;
+        this.encryptionType = encryptionType;
+        this.subSequenceNumber = subSequenceNumber;
+        this.explicitHashKey = explicitHashKey;
+        this.aggregated = aggregated;
+        this.schema = schema;
+    }
+
     public static KinesisClientRecord fromRecord(Record record) {
         return KinesisClientRecord.builder()
                 .sequenceNumber(record.sequenceNumber())

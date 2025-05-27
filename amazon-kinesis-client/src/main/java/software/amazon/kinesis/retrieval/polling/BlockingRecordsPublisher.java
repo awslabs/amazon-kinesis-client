@@ -17,14 +17,13 @@ package software.amazon.kinesis.retrieval.polling;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.reactivestreams.Subscriber;
-import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.RequestDetails;
 import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
@@ -59,13 +58,11 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     }
 
     public ProcessRecordsInput getNextResult() {
-        GetRecordsResponse getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
-        final RequestDetails getRecordsRequestDetails = new RequestDetails(
-                getRecordsResult.responseMetadata().requestId(), Instant.now().toString());
+        GetRecordsResponseAdapter getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
+        final RequestDetails getRecordsRequestDetails =
+                new RequestDetails(getRecordsResult.requestId(), Instant.now().toString());
         setLastSuccessfulRequestDetails(getRecordsRequestDetails);
-        List<KinesisClientRecord> records = getRecordsResult.records().stream()
-                .map(KinesisClientRecord::fromRecord)
-                .collect(Collectors.toList());
+        List<KinesisClientRecord> records = getRecordsResult.records();
         return ProcessRecordsInput.builder()
                 .records(records)
                 .millisBehindLatest(getRecordsResult.millisBehindLatest())

@@ -30,6 +30,8 @@ import org.mockito.runners.MockitoJUnitRunner;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
+import software.amazon.kinesis.retrieval.KinesisGetRecordsResponseAdapter;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -73,11 +75,12 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
     @Mock
     private DataFetcherResult dataFetcherResult;
 
-    private GetRecordsResponse expectedResponses;
+    private GetRecordsResponseAdapter expectedResponses;
 
     @Before
     public void before() {
-        expectedResponses = GetRecordsResponse.builder().build();
+        expectedResponses = new KinesisGetRecordsResponseAdapter(
+                GetRecordsResponse.builder().build());
 
         when(completionServiceSupplier.get()).thenReturn(completionService);
         when(dataFetcherResult.accept()).thenReturn(expectedResponses);
@@ -93,7 +96,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(completionService.poll(anyLong(), any())).thenReturn(successfulFuture);
         when(successfulFuture.get()).thenReturn(dataFetcherResult);
 
-        GetRecordsResponse result = strategy.getRecords(10);
+        GetRecordsResponseAdapter result = strategy.getRecords(10);
 
         verify(executorService).isShutdown();
         verify(completionService).submit(any());
@@ -116,7 +119,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
 
-        GetRecordsResponse actualResults = strategy.getRecords(10);
+        GetRecordsResponseAdapter actualResults = strategy.getRecords(10);
 
         verify(completionService, times(2)).submit(any());
         verify(completionService, times(2)).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
@@ -156,7 +159,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
 
-        GetRecordsResponse actualResult = strategy.getRecords(10);
+        GetRecordsResponseAdapter actualResult = strategy.getRecords(10);
 
         verify(completionService, times(3)).submit(any());
         verify(completionService, times(3)).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
