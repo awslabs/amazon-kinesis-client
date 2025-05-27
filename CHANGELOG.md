@@ -7,7 +7,10 @@ Amazon Kinesis Client Library (KCL) 1.x will reach end-of-support on January 30,
 * [Kinesis documentation: KCL version lifecycle policy](https://docs.aws.amazon.com/streams/latest/dev/kcl-version-lifecycle-policy.html)
 * [Kinesis documentation: Migrating from KCL 1.x to KCL 3.x](https://docs.aws.amazon.com/streams/latest/dev/kcl-migration-1-3.html)
 
-### Latest Release (1.15.2 - Aug 14, 2024)
+### Latest Release (1.15.3 - May 27, 2025)
+* [#1475](https://github.com/awslabs/amazon-kinesis-client/pull/1475) Upgraded protobuf dependency from 4.27.1 to 4.31.0
+
+### Release (1.15.2 - Aug 14, 2024)
 * [#1371](https://github.com/awslabs/amazon-kinesis-client/pull/1371) Fix a bug in debug and trace logging levels for worker
 * [#1224](https://github.com/awslabs/amazon-kinesis-client/pull/1224) Modify RecordProcessorCheckpointer#advancePosition Metrics usage to ensure proper closure
 * [#1345](https://github.com/awslabs/amazon-kinesis-client/pull/1345) Generate wrappers from proto files instead of shipping them directly
