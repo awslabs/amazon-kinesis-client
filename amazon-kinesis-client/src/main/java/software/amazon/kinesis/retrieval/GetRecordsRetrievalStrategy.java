@@ -16,7 +16,6 @@ package software.amazon.kinesis.retrieval;
 
 import java.util.Optional;
 
-import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.retrieval.polling.DataFetcher;
 import software.amazon.kinesis.retrieval.polling.KinesisDataFetcher;
 
@@ -34,7 +33,7 @@ public interface GetRecordsRetrievalStrategy {
      * @throws IllegalStateException
      *             if the strategy has been shutdown.
      */
-    GetRecordsResponse getRecords(int maxRecords);
+    GetRecordsResponseAdapter getRecords(int maxRecords);
 
     /**
      * Releases any resources used by the strategy. Once the strategy is shutdown it is no longer safe to call

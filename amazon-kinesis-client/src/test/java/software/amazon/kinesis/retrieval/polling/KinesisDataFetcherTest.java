@@ -55,7 +55,9 @@ import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.processor.Checkpointer;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
+import software.amazon.kinesis.retrieval.KinesisGetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 
 import static org.hamcrest.CoreMatchers.isA;
@@ -433,7 +435,7 @@ public class KinesisDataFetcherTest {
         assertTrue(terminal.isShardEnd());
         assertNotNull(terminal.getResult());
 
-        final GetRecordsResponse terminalResult = terminal.getResult();
+        final GetRecordsResponseAdapter terminalResult = terminal.getResult();
         assertNotNull(terminalResult.records());
         assertEquals(0, terminalResult.records().size());
         assertNull(terminalResult.nextShardIterator());
@@ -540,12 +542,13 @@ public class KinesisDataFetcherTest {
     private DataFetcherResult assertAdvanced(
             GetRecordsResponse expectedResult, String previousValue, String nextValue) {
         DataFetcherResult acceptResult = kinesisDataFetcher.getRecords();
-        assertEquals(expectedResult, acceptResult.getResult());
+        KinesisGetRecordsResponseAdapter expectedResultAdapter = new KinesisGetRecordsResponseAdapter(expectedResult);
+        assertEquals(expectedResultAdapter, acceptResult.getResult());
 
         assertEquals(previousValue, kinesisDataFetcher.getNextIterator());
         assertFalse(kinesisDataFetcher.isShardEndReached());
 
-        assertEquals(expectedResult, acceptResult.accept());
+        assertEquals(expectedResultAdapter, acceptResult.accept());
         assertEquals(nextValue, kinesisDataFetcher.getNextIterator());
         if (nextValue == null) {
             assertTrue(kinesisDataFetcher.isShardEndReached());
@@ -557,7 +560,8 @@ public class KinesisDataFetcherTest {
     private DataFetcherResult assertNoAdvance(final GetRecordsResponse expectedResult, final String previousValue) {
         assertEquals(previousValue, kinesisDataFetcher.getNextIterator());
         DataFetcherResult noAcceptResult = kinesisDataFetcher.getRecords();
-        assertEquals(expectedResult, noAcceptResult.getResult());
+        KinesisGetRecordsResponseAdapter expectedResultAdapter = new KinesisGetRecordsResponseAdapter(expectedResult);
+        assertEquals(expectedResultAdapter, noAcceptResult.getResult());
 
         assertEquals(previousValue, kinesisDataFetcher.getNextIterator());
 

@@ -46,7 +46,9 @@ import software.amazon.kinesis.lifecycle.events.ProcessRecordsInput;
 import software.amazon.kinesis.metrics.MetricsFactory;
 import software.amazon.kinesis.metrics.NullMetricsFactory;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
+import software.amazon.kinesis.retrieval.KinesisGetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
@@ -305,11 +307,12 @@ public class PrefetchRecordsPublisherIntegrationTest {
 
         @Override
         public DataFetcherResult getRecords() {
-            GetRecordsResponse getRecordsResult = GetRecordsResponse.builder()
-                    .records(new ArrayList<>(records))
-                    .nextShardIterator(nextShardIterator)
-                    .millisBehindLatest(1000L)
-                    .build();
+            GetRecordsResponseAdapter getRecordsResult =
+                    new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
+                            .records(new ArrayList<>(records))
+                            .nextShardIterator(nextShardIterator)
+                            .millisBehindLatest(1000L)
+                            .build());
 
             return new AdvancingResult(getRecordsResult);
         }

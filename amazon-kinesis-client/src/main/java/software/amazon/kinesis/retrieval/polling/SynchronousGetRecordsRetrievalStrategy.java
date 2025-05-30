@@ -16,8 +16,8 @@ package software.amazon.kinesis.retrieval.polling;
 
 import lombok.Data;
 import lombok.NonNull;
-import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 
 /**
@@ -31,7 +31,7 @@ public class SynchronousGetRecordsRetrievalStrategy implements GetRecordsRetriev
     private final DataFetcher dataFetcher;
 
     @Override
-    public GetRecordsResponse getRecords(final int maxRecords) {
+    public GetRecordsResponseAdapter getRecords(final int maxRecords) {
         return dataFetcher.getRecords().accept();
     }
 

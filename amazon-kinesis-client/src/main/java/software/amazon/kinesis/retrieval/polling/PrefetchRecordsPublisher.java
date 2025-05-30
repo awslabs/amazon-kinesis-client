@@ -24,7 +24,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
 import lombok.AccessLevel;
@@ -41,7 +40,6 @@ import org.reactivestreams.Subscription;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
-import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.awssdk.services.kinesis.model.InvalidArgumentException;
 import software.amazon.awssdk.services.kinesis.model.ProvisionedThroughputExceededException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -55,6 +53,7 @@ import software.amazon.kinesis.metrics.MetricsScope;
 import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.metrics.ThreadSafeMetricsDelegatingFactory;
 import software.amazon.kinesis.retrieval.BatchUniqueIdentifier;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
@@ -534,12 +533,11 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             if (publisherSession.prefetchCounters().shouldGetNewRecords()) {
                 try {
                     sleepBeforeNextCall();
-                    GetRecordsResponse getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
+                    GetRecordsResponseAdapter getRecordsResult =
+                            getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
                     lastSuccessfulCall = Instant.now();
 
-                    final List<KinesisClientRecord> records = getRecordsResult.records().stream()
-                            .map(KinesisClientRecord::fromRecord)
-                            .collect(Collectors.toList());
+                    final List<KinesisClientRecord> records = getRecordsResult.records();
                     ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder()
                             .records(records)
                             .millisBehindLatest(getRecordsResult.millisBehindLatest())
