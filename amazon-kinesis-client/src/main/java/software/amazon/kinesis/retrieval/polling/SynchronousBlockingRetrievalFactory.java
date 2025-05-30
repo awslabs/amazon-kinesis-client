@@ -53,6 +53,7 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
     private final Duration kinesisRequestTimeout;
 
     private final Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider;
+    private final SleepTimeController sleepTimeController;
 
     public SynchronousBlockingRetrievalFactory(
             String streamName,
@@ -60,7 +61,8 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
             RecordsFetcherFactory recordsFetcherFactory,
             int maxRecords,
             Duration kinesisRequestTimeout,
-            Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider) {
+            Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider,
+            SleepTimeController sleepTimeController) {
         this.streamName = streamName;
         this.kinesisClient = kinesisClient;
         this.recordsFetcherFactory = recordsFetcherFactory;
@@ -68,6 +70,7 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
         this.kinesisRequestTimeout = kinesisRequestTimeout;
         this.dataFetcherProvider =
                 dataFetcherProvider == null ? defaultDataFetcherProvider(kinesisClient) : dataFetcherProvider;
+        this.sleepTimeController = sleepTimeController;
     }
 
     private static Function<DataFetcherProviderConfig, DataFetcher> defaultDataFetcherProvider(
@@ -96,6 +99,7 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
                 createGetRecordsRetrievalStrategy(shardInfo, streamConfig.streamIdentifier(), metricsFactory),
                 shardInfo.shardId(),
                 metricsFactory,
-                maxRecords);
+                maxRecords,
+                getSleepTimeController());
     }
 }

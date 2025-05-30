@@ -925,6 +925,7 @@ public class PrefetchRecordsPublisherTest {
                 PrefetchRecordsPublisherTest.class.getSimpleName(),
                 "shardId",
                 throttlingReporter,
-                1L);
+                1L,
+                new KinesisSleepTimeController());
     }
 }

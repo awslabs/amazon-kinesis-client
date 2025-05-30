@@ -15,7 +15,6 @@
 
 package software.amazon.kinesis.retrieval.polling;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -92,6 +91,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private final MetricsFactory metricsFactory;
     private final long idleMillisBetweenCalls;
     private Instant lastSuccessfulCall;
+    private Integer lastGetRecordsReturnedRecordsCount;
+    private Long lastMillisBehindLatest = null;
     private boolean isFirstGetCallTry = true;
     private final DefaultGetRecordsCacheDaemon defaultGetRecordsCacheDaemon;
     private boolean started = false;
@@ -110,6 +111,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private Instant lastEventDeliveryTime = Instant.EPOCH;
     private final RequestDetails lastSuccessfulRequestDetails = new RequestDetails();
     private final ThrottlingReporter throttlingReporter;
+    private final SleepTimeController sleepTimeController;
 
     @Data
     @Accessors(fluent = true)
@@ -235,7 +237,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             @NonNull final String operation,
             @NonNull final String shardId,
             final ThrottlingReporter throttlingReporter,
-            final long awaitTerminationTimeoutMillis) {
+            final long awaitTerminationTimeoutMillis,
+            final SleepTimeController sleepTimeController) {
         this.getRecordsRetrievalStrategy = getRecordsRetrievalStrategy;
         this.maxRecordsPerCall = maxRecordsPerCall;
         this.maxPendingProcessRecordsInput = maxPendingProcessRecordsInput;
@@ -255,6 +258,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         this.streamId = this.getRecordsRetrievalStrategy.dataFetcher().getStreamIdentifier();
         this.streamAndShardId = this.streamId.serialize() + ":" + shardId;
         this.awaitTerminationTimeoutMillis = awaitTerminationTimeoutMillis;
+        this.sleepTimeController = sleepTimeController;
     }
 
     /**
@@ -283,7 +287,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             final MetricsFactory metricsFactory,
             final String operation,
             final String shardId,
-            final ThrottlingReporter throttlingReporter) {
+            final ThrottlingReporter throttlingReporter,
+            final SleepTimeController sleepTimeController) {
         this(
                 maxPendingProcessRecordsInput,
                 maxByteSize,
@@ -296,7 +301,8 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 operation,
                 shardId,
                 throttlingReporter,
-                DEFAULT_AWAIT_TERMINATION_TIMEOUT_MILLIS);
+                DEFAULT_AWAIT_TERMINATION_TIMEOUT_MILLIS,
+                sleepTimeController);
     }
 
     @Override
@@ -536,6 +542,9 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     GetRecordsResponseAdapter getRecordsResult =
                             getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
                     lastSuccessfulCall = Instant.now();
+                    lastMillisBehindLatest = getRecordsResult.millisBehindLatest();
+                    lastGetRecordsReturnedRecordsCount =
+                            getRecordsResult.records().size();
 
                     final List<KinesisClientRecord> records = getRecordsResult.records();
                     ProcessRecordsInput processRecordsInput = ProcessRecordsInput.builder()
@@ -626,19 +635,22 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 isFirstGetCallTry = false;
                 return;
             }
-            // Add a sleep if lastSuccessfulCall is still null but this is not the first try to avoid retry storm
-            if (lastSuccessfulCall == null) {
-                Thread.sleep(idleMillisBetweenCalls);
-                return;
-            }
-            long timeSinceLastCall =
-                    Duration.between(lastSuccessfulCall, Instant.now()).abs().toMillis();
-            if (timeSinceLastCall < idleMillisBetweenCalls) {
-                Thread.sleep(idleMillisBetweenCalls - timeSinceLastCall);
+
+            SleepTimeControllerConfig sleepTimeControllerConfig = SleepTimeControllerConfig.builder()
+                    .lastSuccessfulCall(lastSuccessfulCall)
+                    .idleMillisBetweenCalls(idleMillisBetweenCalls)
+                    .lastRecordsCount(lastGetRecordsReturnedRecordsCount)
+                    .lastMillisBehindLatest(lastMillisBehindLatest)
+                    .build();
+            long sleepTimeMillis = sleepTimeController.getSleepTimeMillis(sleepTimeControllerConfig);
+            if (sleepTimeMillis > 0) {
+                Thread.sleep(sleepTimeMillis);
             }
 
             // avoid immediate-retry storms
             lastSuccessfulCall = null;
+            lastGetRecordsReturnedRecordsCount = null;
+            lastMillisBehindLatest = null;
         }
     }
 
