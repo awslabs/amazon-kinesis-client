@@ -15,6 +15,7 @@
 package software.amazon.kinesis.retrieval;
 
 import software.amazon.kinesis.metrics.MetricsFactory;
+import software.amazon.kinesis.retrieval.polling.SleepTimeController;
 
 /**
  * This factory is used to create the records fetcher to retrieve data from Kinesis for a given shard.
@@ -27,6 +28,7 @@ public interface RecordsFetcherFactory {
      * @param shardId ShardId of the shard that the fetcher will retrieve records for
      * @param metricsFactory MetricsFactory used to create metricScope
      * @param maxRecords Max number of records to be returned in a single get call
+     * @param sleepTimeController A controller to control the sleep time between get calls.
      *
      * @return RecordsPublisher used to get records from Kinesis.
      */
@@ -34,7 +36,8 @@ public interface RecordsFetcherFactory {
             GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
             String shardId,
             MetricsFactory metricsFactory,
-            int maxRecords);
+            int maxRecords,
+            SleepTimeController sleepTimeController);
 
     /**
      * Sets the maximum number of ProcessRecordsInput objects the RecordsPublisher can hold, before further requests are

@@ -41,7 +41,8 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
             GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
             String shardId,
             MetricsFactory metricsFactory,
-            int maxRecords) {
+            int maxRecords,
+            SleepTimeController sleepTimeController) {
 
         return new PrefetchRecordsPublisher(
                 maxPendingProcessRecordsInput,
@@ -59,7 +60,8 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
                 metricsFactory,
                 "ProcessTask",
                 shardId,
-                new ThrottlingReporter(maxConsecutiveThrottles, shardId));
+                new ThrottlingReporter(maxConsecutiveThrottles, shardId),
+                sleepTimeController);
     }
 
     @Override
