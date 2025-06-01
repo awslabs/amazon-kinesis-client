@@ -132,6 +132,15 @@ public class PollingConfig implements RetrievalSpecificConfig {
     private RecordsFetcherFactory recordsFetcherFactory = new SimpleRecordsFetcherFactory();
 
     /**
+     * The SleepTimeController used to control the sleep time between getRecords calls.
+     *
+     * <p>
+     * Default value: {@link KinesisSleepTimeController}
+     * </p>
+     */
+    private SleepTimeController sleepTimeController = new KinesisSleepTimeController();
+
+    /**
      * @Deprecated Use {@link PollingConfig#idleTimeBetweenReadsInMillis} instead
      */
     @Deprecated
@@ -185,7 +194,8 @@ public class PollingConfig implements RetrievalSpecificConfig {
                 recordsFetcherFactory,
                 maxRecords(),
                 kinesisRequestTimeout,
-                dataFetcherProvider);
+                dataFetcherProvider,
+                sleepTimeController);
     }
 
     @Override

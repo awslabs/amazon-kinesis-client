@@ -130,7 +130,8 @@ public class PrefetchRecordsPublisherIntegrationTest {
                 operation,
                 "test-shard",
                 new ThrottlingReporter(5, "test-shard"),
-                AWAIT_TERMINATION_TIMEOUT);
+                AWAIT_TERMINATION_TIMEOUT,
+                new KinesisSleepTimeController());
     }
 
     @Test
@@ -191,7 +192,8 @@ public class PrefetchRecordsPublisherIntegrationTest {
                 operation,
                 "test-shard-2",
                 new ThrottlingReporter(5, "test-shard"),
-                AWAIT_TERMINATION_TIMEOUT);
+                AWAIT_TERMINATION_TIMEOUT,
+                new KinesisSleepTimeController());
 
         getRecordsCache.start(extendedSequenceNumber, initialPosition);
         sleep(IDLE_MILLIS_BETWEEN_CALLS);

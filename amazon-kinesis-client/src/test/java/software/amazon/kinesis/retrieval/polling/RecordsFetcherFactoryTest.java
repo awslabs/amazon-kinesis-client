@@ -55,16 +55,16 @@ public class RecordsFetcherFactoryTest {
     @Ignore
     //    TODO: remove test no longer holds true
     public void createDefaultRecordsFetcherTest() {
-        RecordsPublisher recordsCache =
-                recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId, metricsFactory, 1);
+        RecordsPublisher recordsCache = recordsFetcherFactory.createRecordsFetcher(
+                getRecordsRetrievalStrategy, shardId, metricsFactory, 1, new KinesisSleepTimeController());
         assertThat(recordsCache, instanceOf(BlockingRecordsPublisher.class));
     }
 
     @Test
     public void createPrefetchRecordsFetcherTest() {
         recordsFetcherFactory.dataFetchingStrategy(DataFetchingStrategy.PREFETCH_CACHED);
-        RecordsPublisher recordsCache =
-                recordsFetcherFactory.createRecordsFetcher(getRecordsRetrievalStrategy, shardId, metricsFactory, 1);
+        RecordsPublisher recordsCache = recordsFetcherFactory.createRecordsFetcher(
+                getRecordsRetrievalStrategy, shardId, metricsFactory, 1, new KinesisSleepTimeController());
         assertThat(recordsCache, instanceOf(PrefetchRecordsPublisher.class));
     }
 }
