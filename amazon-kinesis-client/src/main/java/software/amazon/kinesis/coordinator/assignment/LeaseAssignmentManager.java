@@ -93,6 +93,11 @@ public final class LeaseAssignmentManager {
     private static final ExecutorService LEASE_ASSIGNMENT_CALL_THREAD_POOL =
             Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
+    /**
+     * Used for loading the lease table.
+     */
+    private static final ExecutorService DDB_TABLE_LOADER_THREAD_POOL = Executors.newFixedThreadPool(1);
+
     private static final String METRICS_LEASE_ASSIGNMENT_MANAGER = "LeaseAssignmentManager";
     private static final String METRICS_INCOMPLETE_EXPIRED_LEASES_ASSIGNMENT =
             "LeaseAssignmentManager.IncompleteExpiredLeasesAssignment";
@@ -513,12 +518,11 @@ public final class LeaseAssignmentManager {
          * Scans the LeaseTable and WorkerMetricStats in parallel and load the data and populate datastructures used
          * in lease assignment.
          */
-        public void loadInMemoryStorageView(final MetricsScope metricsScope) throws Exception {
+        public void loadInMemoryStorageView(final MetricsScope metricsScope) {
             final CompletableFuture<Map.Entry<List<Lease>, List<String>>> leaseListFuture = loadLeaseListAsync();
 
-            final CompletableFuture<List<WorkerMetricStats>> workerMetricsFuture = loadWorkerMetricStats();
-
-            final List<WorkerMetricStats> workerMetricsFromStorage = workerMetricsFuture.join();
+            final List<WorkerMetricStats> workerMetricsFromStorage =
+                    loadWithRetry(workerMetricsDAO::getAllWorkerMetricStats);
 
             final List<String> listOfWorkerIdOfInvalidWorkerMetricsEntry = workerMetricsFromStorage.stream()
                     .filter(workerMetrics -> !workerMetrics.isValidWorkerMetric())
@@ -671,13 +675,10 @@ public final class LeaseAssignmentManager {
             return workerToTotalAssignedThroughputMap.getOrDefault(workerId, 0D);
         }
 
-        private CompletableFuture<List<WorkerMetricStats>> loadWorkerMetricStats() {
-            return CompletableFuture.supplyAsync(() -> loadWithRetry(workerMetricsDAO::getAllWorkerMetricStats));
-        }
-
         private CompletableFuture<Map.Entry<List<Lease>, List<String>>> loadLeaseListAsync() {
-            return CompletableFuture.supplyAsync(() ->
-                    loadWithRetry(() -> leaseRefresher.listLeasesParallely(LEASE_ASSIGNMENT_CALL_THREAD_POOL, 0)));
+            return CompletableFuture.supplyAsync(
+                    () -> loadWithRetry(() -> leaseRefresher.listLeasesParallely(LEASE_ASSIGNMENT_CALL_THREAD_POOL, 0)),
+                    DDB_TABLE_LOADER_THREAD_POOL);
         }
 
         private <T> T loadWithRetry(final Callable<T> loadFunction) {
