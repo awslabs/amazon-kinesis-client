@@ -567,7 +567,7 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             throws DependencyException, InvalidStateException, ProvisionedThroughputException {
         final List<String> leaseItemFailedDeserialize = new ArrayList<>();
         final List<Lease> response = new ArrayList<>();
-        final List<Future<List<Map<String, AttributeValue>>>> futures = new ArrayList<>();
+        final List<Future<Void>> futures = new ArrayList<>();
 
         final int totalSegments;
         if (parallelScanTotalSegment > 0) {
@@ -578,21 +578,14 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
         for (int i = 0; i < totalSegments; ++i) {
             final int segmentNumber = i;
-            futures.add(parallelScanExecutorService.submit(() -> scanSegment(segmentNumber, totalSegments)));
+            futures.add(parallelScanExecutorService.submit(() -> {
+                scanSegment(segmentNumber, totalSegments, response, leaseItemFailedDeserialize);
+                return null;
+            }));
         }
         try {
-            for (final Future<List<Map<String, AttributeValue>>> future : futures) {
-                for (final Map<String, AttributeValue> item : future.get()) {
-                    try {
-                        response.add(serializer.fromDynamoRecord(item));
-                    } catch (final Exception e) {
-                        // If one or more leases failed to deserialize for some reason (e.g. corrupted lease etc
-                        // do not fail all list call. Capture failed deserialize item and return to caller.
-                        log.error("Failed to deserialize lease", e);
-                        // If a item exists in DDB then "leaseKey" should be always present as its primaryKey
-                        leaseItemFailedDeserialize.add(item.get(LEASE_KEY_KEY).s());
-                    }
-                }
+            for (final Future<Void> future : futures) {
+                future.get();
             }
         } catch (final ExecutionException e) {
             final Throwable throwable = e.getCause() != null ? e.getCause() : e;
@@ -644,10 +637,12 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
         return cachedTotalSegments != null && Instant.now().isBefore(expirationTimeForTotalSegmentsCache);
     }
 
-    private List<Map<String, AttributeValue>> scanSegment(final int segment, final int parallelScanTotalSegment)
+    private void scanSegment(
+            final int segment,
+            final int parallelScanTotalSegment,
+            final List<Lease> response,
+            final List<String> leaseItemFailedDeserialize)
             throws DependencyException {
-
-        final List<Map<String, AttributeValue>> response = new ArrayList<>();
 
         final AWSExceptionManager exceptionManager = createExceptionManager();
         exceptionManager.add(ResourceNotFoundException.class, t -> t);
@@ -665,7 +660,22 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
 
                 final ScanResponse scanResult =
                         FutureUtils.resolveOrCancelFuture(dynamoDBClient.scan(scanRequest), dynamoDbRequestTimeout);
-                response.addAll(scanResult.items());
+                // Synchronizing on response should be enough since response and leaseItemFailedDeserialize are modified
+                // together in the same synchronized block
+                synchronized (response) {
+                    for (final Map<String, AttributeValue> item : scanResult.items()) {
+                        try {
+                            response.add(serializer.fromDynamoRecord(item));
+                        } catch (final Exception e) {
+                            // If one or more leases failed to deserialize for some reason (e.g. corrupted lease etc
+                            // do not fail all list call. Capture failed deserialize item and return to caller.
+                            log.error("Failed to deserialize lease", e);
+                            // If an item exists in DDB then "leaseKey" should be always present as its primaryKey
+                            leaseItemFailedDeserialize.add(
+                                    item.get(LEASE_KEY_KEY).s());
+                        }
+                    }
+                }
                 if (scanResult.hasLastEvaluatedKey()) {
                     lastEvaluatedKey = scanResult.lastEvaluatedKey();
                 } else {
@@ -678,8 +688,6 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
                 throw new DependencyException(e);
             }
         } while (lastEvaluatedKey != null);
-
-        return response;
     }
 
     /**
