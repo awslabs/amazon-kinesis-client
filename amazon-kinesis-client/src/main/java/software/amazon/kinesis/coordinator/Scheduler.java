@@ -427,7 +427,11 @@ public class Scheduler implements Runnable {
                 .deterministicLeaderDeciderCreator(() -> new DeterministicShuffleShardSyncLeaderDecider(
                         leaseRefresher, Executors.newSingleThreadScheduledExecutor(), 1, metricsFactory))
                 .ddbLockBasedLeaderDeciderCreator(() -> DynamoDBLockBasedLeaderDecider.create(
-                        coordinatorStateDAO, leaseCoordinator.workerIdentifier(), metricsFactory))
+                        coordinatorStateDAO,
+                        leaseCoordinator.workerIdentifier(),
+                        metricsFactory,
+                        leaseManagementConfig.dynamoLockBasedLeaderLeaseDurationInSeconds(),
+                        leaseManagementConfig.dynamoLockBasedLeaderHeartbeatPeriodInSeconds()))
                 .workerIdentifier(leaseCoordinator.workerIdentifier())
                 .workerUtilizationAwareAssignmentConfig(leaseManagementConfig.workerUtilizationAwareAssignmentConfig())
                 .leaseAssignmentModeProvider(leaseAssignmentModeProvider)
