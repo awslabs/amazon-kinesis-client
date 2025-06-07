@@ -32,9 +32,9 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.kinesis.model.ExpiredIteratorException;
+import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
-import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 
 /**
@@ -87,11 +87,11 @@ public class AsynchronousGetRecordsRetrievalStrategy implements GetRecordsRetrie
     }
 
     @Override
-    public GetRecordsResponseAdapter getRecords(final int maxRecords) {
+    public GetRecordsResponse getRecords(final int maxRecords) {
         if (executorService.isShutdown()) {
             throw new IllegalStateException("Strategy has been shutdown");
         }
-        GetRecordsResponseAdapter result = null;
+        GetRecordsResponse result = null;
         CompletionService<DataFetcherResult> completionService = completionServiceSupplier.get();
         Set<Future<DataFetcherResult>> futures = new HashSet<>();
         Callable<DataFetcherResult> retrieverCall = createRetrieverCallable();

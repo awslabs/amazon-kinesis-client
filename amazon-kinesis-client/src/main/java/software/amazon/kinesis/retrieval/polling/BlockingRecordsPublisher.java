@@ -58,7 +58,7 @@ public class BlockingRecordsPublisher implements RecordsPublisher {
     }
 
     public ProcessRecordsInput getNextResult() {
-        GetRecordsResponseAdapter getRecordsResult = getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
+        GetRecordsResponseAdapter getRecordsResult = getRecordsRetrievalStrategy.getRecordsAdapter(maxRecordsPerCall);
         final RequestDetails getRecordsRequestDetails =
                 new RequestDetails(getRecordsResult.requestId(), Instant.now().toString());
         setLastSuccessfulRequestDetails(getRecordsRequestDetails);

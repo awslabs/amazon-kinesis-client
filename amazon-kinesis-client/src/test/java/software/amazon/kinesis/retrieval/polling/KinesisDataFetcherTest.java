@@ -287,7 +287,7 @@ public class KinesisDataFetcherTest {
                 new SynchronousGetRecordsRetrievalStrategy(kinesisDataFetcher);
         try {
             // Call records of dataFetcher which will throw an exception
-            getRecordsRetrievalStrategy.getRecords(MAX_RECORDS);
+            getRecordsRetrievalStrategy.getRecordsAdapter(MAX_RECORDS);
         } finally {
             // Test shard has reached the end
             assertTrue("Shard should reach the end", kinesisDataFetcher.isShardEndReached());
@@ -321,7 +321,7 @@ public class KinesisDataFetcherTest {
                 new SynchronousGetRecordsRetrievalStrategy(kinesisDataFetcher);
 
         // Call records of dataFetcher which will throw an exception
-        getRecordsRetrievalStrategy.getRecords(MAX_RECORDS);
+        getRecordsRetrievalStrategy.getRecordsAdapter(MAX_RECORDS);
     }
 
     @Test
@@ -433,9 +433,9 @@ public class KinesisDataFetcherTest {
 
         DataFetcherResult terminal = kinesisDataFetcher.getRecords();
         assertTrue(terminal.isShardEnd());
-        assertNotNull(terminal.getResult());
+        assertNotNull(terminal.getResultAdapter());
 
-        final GetRecordsResponseAdapter terminalResult = terminal.getResult();
+        final GetRecordsResponseAdapter terminalResult = terminal.getResultAdapter();
         assertNotNull(terminalResult.records());
         assertEquals(0, terminalResult.records().size());
         assertNull(terminalResult.nextShardIterator());
@@ -459,10 +459,10 @@ public class KinesisDataFetcherTest {
         when(record.sequenceNumber()).thenReturn(sequenceNumber);
 
         kinesisDataFetcher.initialize(InitialPositionInStream.LATEST.toString(), INITIAL_POSITION_LATEST);
-        assertEquals(getRecordsResult, kinesisDataFetcher.getRecords().accept());
+        assertEquals(getRecordsResult, kinesisDataFetcher.getRecords().acceptAdapter());
 
         kinesisDataFetcher.restartIterator();
-        assertEquals(restartGetRecordsResponse, kinesisDataFetcher.getRecords().accept());
+        assertEquals(restartGetRecordsResponse, kinesisDataFetcher.getRecords().acceptAdapter());
     }
 
     @Test
@@ -536,19 +536,19 @@ public class KinesisDataFetcherTest {
                 new SynchronousGetRecordsRetrievalStrategy(kinesisDataFetcher);
 
         // Call records of dataFetcher which will throw an exception
-        getRecordsRetrievalStrategy.getRecords(MAX_RECORDS);
+        getRecordsRetrievalStrategy.getRecordsAdapter(MAX_RECORDS);
     }
 
     private DataFetcherResult assertAdvanced(
             GetRecordsResponse expectedResult, String previousValue, String nextValue) {
         DataFetcherResult acceptResult = kinesisDataFetcher.getRecords();
         KinesisGetRecordsResponseAdapter expectedResultAdapter = new KinesisGetRecordsResponseAdapter(expectedResult);
-        assertEquals(expectedResultAdapter, acceptResult.getResult());
+        assertEquals(expectedResultAdapter, acceptResult.getResultAdapter());
 
         assertEquals(previousValue, kinesisDataFetcher.getNextIterator());
         assertFalse(kinesisDataFetcher.isShardEndReached());
 
-        assertEquals(expectedResultAdapter, acceptResult.accept());
+        assertEquals(expectedResultAdapter, acceptResult.acceptAdapter());
         assertEquals(nextValue, kinesisDataFetcher.getNextIterator());
         if (nextValue == null) {
             assertTrue(kinesisDataFetcher.isShardEndReached());
@@ -561,7 +561,7 @@ public class KinesisDataFetcherTest {
         assertEquals(previousValue, kinesisDataFetcher.getNextIterator());
         DataFetcherResult noAcceptResult = kinesisDataFetcher.getRecords();
         KinesisGetRecordsResponseAdapter expectedResultAdapter = new KinesisGetRecordsResponseAdapter(expectedResult);
-        assertEquals(expectedResultAdapter, noAcceptResult.getResult());
+        assertEquals(expectedResultAdapter, noAcceptResult.getResultAdapter());
 
         assertEquals(previousValue, kinesisDataFetcher.getNextIterator());
 
@@ -603,7 +603,7 @@ public class KinesisDataFetcherTest {
 
         assertEquals(
                 expectedRecords,
-                getRecordsRetrievalStrategy.getRecords(MAX_RECORDS).records());
+                getRecordsRetrievalStrategy.getRecordsAdapter(MAX_RECORDS).records());
         verify(kinesisClient, times(1)).getShardIterator(any(GetShardIteratorRequest.class));
         verify(kinesisClient, times(1)).getRecords(any(GetRecordsRequest.class));
     }

@@ -155,7 +155,8 @@ public class PrefetchRecordsPublisherTest {
                 .childShards(Collections.emptyList())
                 .build());
 
-        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(getRecordsResponse);
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(eq(MAX_RECORDS_PER_CALL)))
+                .thenReturn(getRecordsResponse);
     }
 
     @Test
@@ -234,14 +235,14 @@ public class PrefetchRecordsPublisherTest {
         assertEquals(new ArrayList<>(), result.childShards());
 
         verify(executorService).execute(any());
-        verify(getRecordsRetrievalStrategy, atLeast(1)).getRecords(eq(MAX_RECORDS_PER_CALL));
+        verify(getRecordsRetrievalStrategy, atLeast(1)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
     }
 
     @Test(expected = RuntimeException.class)
     public void testGetRecordsWithInitialFailures_LessThanRequiredWait_Throws() {
         getRecordsCache = createPrefetchRecordsPublisher(Duration.ofSeconds(1).toMillis());
         // Setup the retrieval strategy to fail initial calls before succeeding
-        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL)))
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(eq(MAX_RECORDS_PER_CALL)))
                 .thenThrow(new RetryableRetrievalException("Timed out"))
                 .thenThrow(new RetryableRetrievalException("Timed out again"))
                 .thenReturn(getRecordsResponse);
@@ -257,7 +258,7 @@ public class PrefetchRecordsPublisherTest {
     public void testGetRecordsWithInitialFailures_AdequateWait_Success() {
         getRecordsCache = createPrefetchRecordsPublisher(Duration.ofSeconds(1).toMillis());
         // Setup the retrieval strategy to fail initial calls before succeeding
-        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL)))
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(eq(MAX_RECORDS_PER_CALL)))
                 .thenThrow(new RetryableRetrievalException("Timed out"))
                 .thenThrow(new RetryableRetrievalException("Timed out again"))
                 .thenReturn(getRecordsResponse);
@@ -278,7 +279,7 @@ public class PrefetchRecordsPublisherTest {
 
         verify(executorService).execute(any());
         // Validate at least 3 calls were including the 2 failed ones
-        verify(getRecordsRetrievalStrategy, atLeast(3)).getRecords(eq(MAX_RECORDS_PER_CALL));
+        verify(getRecordsRetrievalStrategy, atLeast(3)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
     }
 
     @Test
@@ -287,7 +288,8 @@ public class PrefetchRecordsPublisherTest {
 
         GetRecordsResponseAdapter response = new KinesisGetRecordsResponseAdapter(
                 GetRecordsResponse.builder().records(records).build());
-        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(response);
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(eq(MAX_RECORDS_PER_CALL)))
+                .thenReturn(response);
         when(dataFetcher.isShardEndReached()).thenReturn(false);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
@@ -325,7 +327,8 @@ public class PrefetchRecordsPublisherTest {
                 .records(records)
                 .childShards(childShards)
                 .build());
-        when(getRecordsRetrievalStrategy.getRecords(eq(MAX_RECORDS_PER_CALL))).thenReturn(response);
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(eq(MAX_RECORDS_PER_CALL)))
+                .thenReturn(response);
         when(dataFetcher.isShardEndReached()).thenReturn(true);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
@@ -351,7 +354,7 @@ public class PrefetchRecordsPublisherTest {
         // Sleep for a few seconds for the cache to fill up.
         sleep(2000);
 
-        verify(getRecordsRetrievalStrategy, times(3)).getRecords(eq(MAX_RECORDS_PER_CALL));
+        verify(getRecordsRetrievalStrategy, times(3)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
         assertEquals(spyQueue.size(), 3);
     }
 
@@ -377,7 +380,7 @@ public class PrefetchRecordsPublisherTest {
         // Sleep for a few seconds for the cache to fill up.
         sleep(2000);
 
-        verify(getRecordsRetrievalStrategy, times(MAX_SIZE + 1)).getRecords(eq(MAX_RECORDS_PER_CALL));
+        verify(getRecordsRetrievalStrategy, times(MAX_SIZE + 1)).getRecordsAdapter(eq(MAX_RECORDS_PER_CALL));
         assertEquals(spyQueue.size(), MAX_SIZE);
     }
 
@@ -426,11 +429,11 @@ public class PrefetchRecordsPublisherTest {
                         .build())
                 .nextShardIterator(NEXT_SHARD_ITERATOR)
                 .build());
-        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(anyInt())).thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
-        verify(getRecordsRetrievalStrategy, timeout(100).atLeastOnce()).getRecords(anyInt());
+        verify(getRecordsRetrievalStrategy, timeout(100).atLeastOnce()).getRecordsAdapter(anyInt());
 
         when(executorService.isShutdown()).thenReturn(true);
         Subscriber<RecordsRetrieved> mockSubscriber = mock(Subscriber.class);
@@ -442,7 +445,7 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testExpiredIteratorException() {
-        when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL))
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(MAX_RECORDS_PER_CALL))
                 .thenThrow(ExpiredIteratorException.class)
                 .thenReturn(getRecordsResponse);
 
@@ -461,7 +464,7 @@ public class PrefetchRecordsPublisherTest {
     public void testExpiredIteratorExceptionWithIllegalStateException() {
         // This test validates that the daemon thread doesn't die when ExpiredIteratorException occurs with an
         // IllegalStateException.
-        when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL))
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(MAX_RECORDS_PER_CALL))
                 .thenThrow(ExpiredIteratorException.builder().build())
                 .thenReturn(getRecordsResponse)
                 .thenThrow(ExpiredIteratorException.builder().build())
@@ -489,7 +492,7 @@ public class PrefetchRecordsPublisherTest {
                 .records(Collections.emptyList())
                 .nextShardIterator(NEXT_SHARD_ITERATOR)
                 .build());
-        when(getRecordsRetrievalStrategy.getRecords(anyInt()))
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(anyInt()))
                 .thenThrow(new RetryableRetrievalException("Timeout", new TimeoutException("Timeout")))
                 .thenReturn(response);
 
@@ -501,7 +504,7 @@ public class PrefetchRecordsPublisherTest {
 
     @Test
     public void testInvalidArgumentExceptionIsRetried() {
-        when(getRecordsRetrievalStrategy.getRecords(MAX_RECORDS_PER_CALL))
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(MAX_RECORDS_PER_CALL))
                 .thenThrow(InvalidArgumentException.builder().build())
                 .thenReturn(getRecordsResponse);
 
@@ -528,7 +531,7 @@ public class PrefetchRecordsPublisherTest {
         //
         final int[] sequenceNumberInResponse = {0};
 
-        when(getRecordsRetrievalStrategy.getRecords(anyInt()))
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(anyInt()))
                 .thenAnswer(i -> new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
                         .records(Record.builder()
                                 .data(SdkBytes.fromByteArray(new byte[] {1, 2, 3}))
@@ -618,7 +621,7 @@ public class PrefetchRecordsPublisherTest {
                 throw new RuntimeException(e);
             }
         }
-        verify(getRecordsRetrievalStrategy, atLeast(expectedItems)).getRecords(anyInt());
+        verify(getRecordsRetrievalStrategy, atLeast(expectedItems)).getRecordsAdapter(anyInt());
         assertThat(receivedItems.get(), equalTo(expectedItems));
         assertFalse(recordNotInOrderMessage[0], isRecordNotInorder[0]);
     }
@@ -637,7 +640,7 @@ public class PrefetchRecordsPublisherTest {
                         .build())
                 .nextShardIterator(NEXT_SHARD_ITERATOR)
                 .build());
-        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenReturn(response);
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(anyInt())).thenReturn(response);
 
         getRecordsCache.start(sequenceNumber, initialPosition);
 
@@ -707,7 +710,7 @@ public class PrefetchRecordsPublisherTest {
                 throw new RuntimeException(e);
             }
         }
-        verify(getRecordsRetrievalStrategy, atLeast(expectedItems)).getRecords(anyInt());
+        verify(getRecordsRetrievalStrategy, atLeast(expectedItems)).getRecordsAdapter(anyInt());
         assertThat(receivedItems.get(), equalTo(expectedItems));
     }
 
@@ -732,7 +735,7 @@ public class PrefetchRecordsPublisherTest {
 
         RetrieverAnswer retrieverAnswer = new RetrieverAnswer(responses);
 
-        when(getRecordsRetrievalStrategy.getRecords(anyInt())).thenAnswer(retrieverAnswer);
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(anyInt())).thenAnswer(retrieverAnswer);
         doAnswer(a -> {
                     String resetTo = (String) a.getArgument(0);
                     retrieverAnswer.resetIteratorTo(resetTo);
@@ -752,7 +755,7 @@ public class PrefetchRecordsPublisherTest {
         blockUntilRecordsAvailable();
         blockUntilRecordsAvailable();
 
-        verify(getRecordsRetrievalStrategy, atLeast(2)).getRecords(anyInt());
+        verify(getRecordsRetrievalStrategy, atLeast(2)).getRecordsAdapter(anyInt());
 
         while (getRecordsCache.getPublisherSession().prefetchRecordsQueue().remainingCapacity() > 0) {
             Thread.yield();
@@ -780,7 +783,7 @@ public class PrefetchRecordsPublisherTest {
 
         try {
             // return a valid response to cause `lastSuccessfulCall` to initialize
-            when(getRecordsRetrievalStrategy.getRecords(anyInt()))
+            when(getRecordsRetrievalStrategy.getRecordsAdapter(anyInt()))
                     .thenReturn(new KinesisGetRecordsResponseAdapter(
                             GetRecordsResponse.builder().build()));
             blockUntilRecordsAvailable();
@@ -789,14 +792,14 @@ public class PrefetchRecordsPublisherTest {
         }
 
         try {
-            when(getRecordsRetrievalStrategy.getRecords(anyInt()))
+            when(getRecordsRetrievalStrategy.getRecordsAdapter(anyInt()))
                     .thenThrow(SdkException.builder()
                             .message("lose yourself to dance")
                             .build());
             blockUntilRecordsAvailable();
         } finally {
             // the successful call is the +1
-            verify(getRecordsRetrievalStrategy, times(expectedFailedCalls + 1)).getRecords(anyInt());
+            verify(getRecordsRetrievalStrategy, times(expectedFailedCalls + 1)).getRecordsAdapter(anyInt());
         }
     }
 
@@ -805,7 +808,7 @@ public class PrefetchRecordsPublisherTest {
      */
     @Test
     public void testProvisionedThroughputExceededExceptionReporter() {
-        when(getRecordsRetrievalStrategy.getRecords(anyInt()))
+        when(getRecordsRetrievalStrategy.getRecordsAdapter(anyInt()))
                 .thenThrow(ProvisionedThroughputExceededException.builder().build())
                 .thenReturn(new KinesisGetRecordsResponseAdapter(
                         GetRecordsResponse.builder().build()));

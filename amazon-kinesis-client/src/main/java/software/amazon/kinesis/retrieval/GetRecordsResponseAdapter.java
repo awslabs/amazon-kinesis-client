@@ -25,30 +25,35 @@ public interface GetRecordsResponseAdapter {
 
     /**
      * Returns the list of records retrieved from GetRecords.
+     *
      * @return list of {@link KinesisClientRecord}
      */
     List<KinesisClientRecord> records();
 
     /**
      * The number of milliseconds the response is from the tip of the stream.
+     *
      * @return long
      */
     Long millisBehindLatest();
 
     /**
      * Returns the list of child shards of the shard that was retrieved from GetRecords.
+     *
      * @return list of {@link ChildShard}
      */
     List<ChildShard> childShards();
 
     /**
      * Returns the next shard iterator to be used to retrieve next set of records.
+     *
      * @return String
      */
     String nextShardIterator();
 
     /**
      * Returns the request id of the GetRecords operation.
+     *
      * @return String containing the request id
      */
     String requestId();
