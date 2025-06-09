@@ -540,7 +540,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 try {
                     sleepBeforeNextCall();
                     GetRecordsResponseAdapter getRecordsResult =
-                            getRecordsRetrievalStrategy.getRecords(maxRecordsPerCall);
+                            getRecordsRetrievalStrategy.getRecordsAdapter(maxRecordsPerCall);
                     lastSuccessfulCall = Instant.now();
                     lastMillisBehindLatest = getRecordsResult.millisBehindLatest();
                     lastGetRecordsReturnedRecordsCount =

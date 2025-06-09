@@ -103,13 +103,13 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
                 GetRecordsResponse.builder().build());
 
         when(completionServiceSupplier.get()).thenReturn(completionService);
-        when(result.accept()).thenReturn(getRecordsResponse);
+        when(result.acceptAdapter()).thenReturn(getRecordsResponse);
     }
 
     @Test
     public void oneRequestMultithreadTest() {
-        when(result.accept()).thenReturn(null);
-        GetRecordsResponseAdapter getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
+        when(result.acceptAdapter()).thenReturn(null);
+        GetRecordsResponseAdapter getRecordsResult = getRecordsRetrivalStrategy.getRecordsAdapter(numberOfRecords);
         verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords();
         verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
         assertNull(getRecordsResult);
@@ -120,16 +120,16 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
         ExecutorCompletionService<DataFetcherResult> completionService1 =
                 spy(new ExecutorCompletionService<DataFetcherResult>(executorService));
         when(completionServiceSupplier.get()).thenReturn(completionService1);
-        GetRecordsResponseAdapter getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
+        GetRecordsResponseAdapter getRecordsResult = getRecordsRetrivalStrategy.getRecordsAdapter(numberOfRecords);
         verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords();
         verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());
         assertThat(getRecordsResult, equalTo(getRecordsResponse));
 
-        when(result.accept()).thenReturn(null);
+        when(result.acceptAdapter()).thenReturn(null);
         ExecutorCompletionService<DataFetcherResult> completionService2 =
                 spy(new ExecutorCompletionService<DataFetcherResult>(executorService));
         when(completionServiceSupplier.get()).thenReturn(completionService2);
-        getRecordsResult = getRecordsRetrivalStrategy.getRecords(numberOfRecords);
+        getRecordsResult = getRecordsRetrivalStrategy.getRecordsAdapter(numberOfRecords);
         assertThat(getRecordsResult, nullValue(GetRecordsResponseAdapter.class));
     }
 
@@ -146,7 +146,7 @@ public class AsynchronousGetRecordsRetrievalStrategyIntegrationTest {
         });
 
         try {
-            getRecordsRetrivalStrategy.getRecords(numberOfRecords);
+            getRecordsRetrivalStrategy.getRecordsAdapter(numberOfRecords);
         } finally {
             verify(dataFetcher, atLeast(getLeastNumberOfCalls())).getRecords();
             verify(executorService, atLeast(getLeastNumberOfCalls())).execute(any());

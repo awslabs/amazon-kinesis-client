@@ -83,7 +83,8 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
                 GetRecordsResponse.builder().build());
 
         when(completionServiceSupplier.get()).thenReturn(completionService);
-        when(dataFetcherResult.accept()).thenReturn(expectedResponses);
+        when(dataFetcherResult.accept())
+                .thenReturn(((KinesisGetRecordsResponseAdapter) expectedResponses).getRecordsResponse());
     }
 
     @Test
@@ -96,7 +97,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(completionService.poll(anyLong(), any())).thenReturn(successfulFuture);
         when(successfulFuture.get()).thenReturn(dataFetcherResult);
 
-        GetRecordsResponseAdapter result = strategy.getRecords(10);
+        GetRecordsResponseAdapter result = strategy.getRecordsAdapter(10);
 
         verify(executorService).isShutdown();
         verify(completionService).submit(any());
@@ -119,7 +120,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
 
-        GetRecordsResponseAdapter actualResults = strategy.getRecords(10);
+        GetRecordsResponseAdapter actualResults = strategy.getRecordsAdapter(10);
 
         verify(completionService, times(2)).submit(any());
         verify(completionService, times(2)).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
@@ -138,7 +139,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
 
         when(executorService.isShutdown()).thenReturn(true);
 
-        strategy.getRecords(10);
+        strategy.getRecordsAdapter(10);
     }
 
     @Test
@@ -159,7 +160,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
         when(successfulFuture.cancel(anyBoolean())).thenReturn(false);
         when(blockedFuture.cancel(anyBoolean())).thenReturn(true);
 
-        GetRecordsResponseAdapter actualResult = strategy.getRecords(10);
+        GetRecordsResponseAdapter actualResult = strategy.getRecordsAdapter(10);
 
         verify(completionService, times(3)).submit(any());
         verify(completionService, times(3)).poll(eq(RETRY_GET_RECORDS_IN_SECONDS), eq(TimeUnit.SECONDS));
@@ -184,7 +185,7 @@ public class AsynchronousGetRecordsRetrievalStrategyTest {
                         .build()));
 
         try {
-            strategy.getRecords(10);
+            strategy.getRecordsAdapter(10);
         } finally {
             verify(executorService).isShutdown();
             verify(completionService, times(2)).submit(any());

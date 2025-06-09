@@ -19,14 +19,18 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import software.amazon.awssdk.services.kinesis.model.ChildShard;
 import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 
+@Getter
 @RequiredArgsConstructor
-@EqualsAndHashCode
 @KinesisClientInternalApi
+@Accessors(fluent = true)
+@EqualsAndHashCode
 public class KinesisGetRecordsResponseAdapter implements GetRecordsResponseAdapter {
 
     private final GetRecordsResponse getRecordsResponse;
