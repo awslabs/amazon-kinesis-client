@@ -41,6 +41,17 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
             GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
             String shardId,
             MetricsFactory metricsFactory,
+            int maxRecords) {
+
+        return createRecordsFetcher(
+                getRecordsRetrievalStrategy, shardId, metricsFactory, maxRecords, new KinesisSleepTimeController());
+    }
+
+    @Override
+    public RecordsPublisher createRecordsFetcher(
+            GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+            String shardId,
+            MetricsFactory metricsFactory,
             int maxRecords,
             SleepTimeController sleepTimeController) {
 
