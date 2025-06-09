@@ -7,7 +7,7 @@ For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/aws
 ---
 ### Release (3.1.0 - June 09, 2025)
 * [#1481](https://github.com/awslabs/amazon-kinesis-client/pull/1481) Convert awssdk object to lease early to release memory
-* [#1480](https://github.com/awslabs/amazon-kinesis-client/pull/1480) Having a way to control sleep time in recordsfetcher
+* [#1480](https://github.com/awslabs/amazon-kinesis-client/pull/1480) Added the ability to control sleep time in recordsfetcher
 * [#1479](https://github.com/awslabs/amazon-kinesis-client/pull/1479) Overriding the DataFetcher to return a custom GetRecordsResponseAdapter so that customers can have custom logic to send data to KinesisClientRecord
 * [#1478](https://github.com/awslabs/amazon-kinesis-client/pull/1478) Bump commons-beanutils:commons-beanutils from 1.9.4 to 1.11.0 in /amazon-kinesis-client-multilang
 
