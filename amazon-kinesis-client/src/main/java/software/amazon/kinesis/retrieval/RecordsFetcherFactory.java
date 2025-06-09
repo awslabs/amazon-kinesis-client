@@ -28,7 +28,7 @@ public interface RecordsFetcherFactory {
      * @param shardId ShardId of the shard that the fetcher will retrieve records for
      * @param metricsFactory MetricsFactory used to create metricScope
      * @param maxRecords Max number of records to be returned in a single get call
-     * @param sleepTimeController A controller to control the sleep time between get calls.
+     * @param sleepTimeController A controller to control the sleep time between get calls
      *
      * @return RecordsPublisher used to get records from Kinesis.
      */
@@ -38,6 +38,23 @@ public interface RecordsFetcherFactory {
             MetricsFactory metricsFactory,
             int maxRecords,
             SleepTimeController sleepTimeController);
+
+    /**
+     * Returns a RecordsPublisher to be used for retrieving records for a given shard.
+     *
+     * @param getRecordsRetrievalStrategy GetRecordsRetrievalStrategy to be used with the RecordsPublisher
+     * @param shardId ShardId of the shard that the fetcher will retrieve records for
+     * @param metricsFactory MetricsFactory used to create metricScope
+     * @param maxRecords Max number of records to be returned in a single get call
+     *
+     * @return RecordsPublisher used to get records from Kinesis.
+     */
+    @Deprecated
+    RecordsPublisher createRecordsFetcher(
+            GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+            String shardId,
+            MetricsFactory metricsFactory,
+            int maxRecords);
 
     /**
      * Sets the maximum number of ProcessRecordsInput objects the RecordsPublisher can hold, before further requests are
