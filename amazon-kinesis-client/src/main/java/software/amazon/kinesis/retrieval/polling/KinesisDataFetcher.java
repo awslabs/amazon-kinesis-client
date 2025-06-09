@@ -46,10 +46,8 @@ import software.amazon.kinesis.metrics.MetricsUtil;
 import software.amazon.kinesis.retrieval.AWSExceptionManager;
 import software.amazon.kinesis.retrieval.DataFetcherProviderConfig;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
-import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.IteratorBuilder;
 import software.amazon.kinesis.retrieval.KinesisDataFetcherProviderConfig;
-import software.amazon.kinesis.retrieval.KinesisGetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
@@ -165,17 +163,17 @@ public class KinesisDataFetcher implements DataFetcher {
     final DataFetcherResult TERMINAL_RESULT = new DataFetcherResult() {
         // CHECKSTYLE.ON: MemberName
         @Override
-        public GetRecordsResponseAdapter getResult() {
-            return new KinesisGetRecordsResponseAdapter(GetRecordsResponse.builder()
+        public GetRecordsResponse getResult() {
+            return GetRecordsResponse.builder()
                     .millisBehindLatest(null)
                     .records(Collections.emptyList())
                     .nextShardIterator(null)
                     .childShards(Collections.emptyList())
-                    .build());
+                    .build();
         }
 
         @Override
-        public GetRecordsResponseAdapter accept() {
+        public GetRecordsResponse accept() {
             isShardEndReached = true;
             return getResult();
         }
@@ -189,15 +187,15 @@ public class KinesisDataFetcher implements DataFetcher {
     @Data
     class AdvancingResult implements DataFetcherResult {
 
-        final GetRecordsResponseAdapter result;
+        final GetRecordsResponse result;
 
         @Override
-        public GetRecordsResponseAdapter getResult() {
+        public GetRecordsResponse getResult() {
             return result;
         }
 
         @Override
-        public GetRecordsResponseAdapter accept() {
+        public GetRecordsResponse accept() {
             nextIterator = result.nextShardIterator();
             if (result.records() != null && !result.records().isEmpty()) {
                 lastKnownSequenceNumber = Iterables.getLast(result.records()).sequenceNumber();
@@ -333,13 +331,8 @@ public class KinesisDataFetcher implements DataFetcher {
         this.initialPositionInStream = initialPositionInStream;
     }
 
-    /**
-     * Retrieves the response based on the request.
-     *
-     * @param request the current get records request used to receive a response.
-     * @return GetRecordsResponse response for getRecords
-     */
-    private GetRecordsResponseAdapter getGetRecordsResponse(GetRecordsRequest request)
+    @Override
+    public GetRecordsResponse getGetRecordsResponse(GetRecordsRequest request)
             throws ExecutionException, InterruptedException, TimeoutException {
         final GetRecordsResponse response =
                 FutureUtils.resolveOrCancelFuture(kinesisClient.getRecords(request), maxFutureWait);
@@ -349,16 +342,11 @@ public class KinesisDataFetcher implements DataFetcher {
                     + ". childShards: " + response.childShards()
                     + ". Will retry GetRecords with the same nextIterator.");
         }
-        return new KinesisGetRecordsResponseAdapter(response);
+        return response;
     }
 
-    /**
-     * Gets the next set of records based on the iterator.
-     *
-     * @param nextIterator specified shard iterator for getting the next set of records
-     * @return {@link GetRecordsResponseAdapter}
-     */
-    private GetRecordsRequest getGetRecordsRequest(String nextIterator) {
+    @Override
+    public GetRecordsRequest getGetRecordsRequest(String nextIterator) {
         GetRecordsRequest.Builder builder = KinesisRequestsBuilder.getRecordsRequestBuilder()
                 .shardIterator(nextIterator)
                 .limit(maxRecords);
@@ -366,26 +354,16 @@ public class KinesisDataFetcher implements DataFetcher {
         return builder.build();
     }
 
-    /**
-     * Gets the next iterator based on the request.
-     *
-     * @param request used to obtain the next shard iterator
-     * @return next iterator string
-     */
-    private String getNextIterator(GetShardIteratorRequest request)
+    @Override
+    public String getNextIterator(GetShardIteratorRequest request)
             throws ExecutionException, InterruptedException, TimeoutException {
         final GetShardIteratorResponse result =
                 FutureUtils.resolveOrCancelFuture(kinesisClient.getShardIterator(request), maxFutureWait);
         return result.shardIterator();
     }
 
-    /**
-     * Gets the next set of records based on the iterator.
-     *
-     * @param nextIterator specified shard iterator for getting the next set of records
-     * @return {@link GetRecordsResponse}
-     */
-    private GetRecordsResponseAdapter getRecords(@NonNull final String nextIterator) {
+    @Override
+    public GetRecordsResponse getRecords(@NonNull final String nextIterator) {
         GetRecordsRequest request = getGetRecordsRequest(nextIterator);
 
         final MetricsScope metricsScope = MetricsUtil.createMetricsWithOperation(metricsFactory, OPERATION);
@@ -394,7 +372,7 @@ public class KinesisDataFetcher implements DataFetcher {
         boolean success = false;
         long startTime = System.currentTimeMillis();
         try {
-            final GetRecordsResponseAdapter response = getGetRecordsResponse(request);
+            final GetRecordsResponse response = getGetRecordsResponse(request);
             success = true;
             return response;
         } catch (ExecutionException e) {

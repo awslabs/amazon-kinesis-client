@@ -15,9 +15,17 @@
 
 package software.amazon.kinesis.retrieval.polling;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+
+import lombok.NonNull;
+import software.amazon.awssdk.services.kinesis.model.GetRecordsRequest;
+import software.amazon.awssdk.services.kinesis.model.GetRecordsResponse;
+import software.amazon.awssdk.services.kinesis.model.GetShardIteratorRequest;
 import software.amazon.kinesis.common.InitialPositionInStreamExtended;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.retrieval.DataFetcherResult;
+import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber;
 
 public interface DataFetcher {
@@ -81,4 +89,37 @@ public interface DataFetcher {
      * @return boolean to determine whether shard end is reached
      */
     boolean isShardEndReached();
+
+    /**
+     * Retrieves the response based on the request.
+     *
+     * @param request the current get records request used to receive a response.
+     * @return GetRecordsResponse response for getRecords
+     */
+    GetRecordsResponse getGetRecordsResponse(GetRecordsRequest request) throws Exception;
+
+    /**
+     * Gets the next set of records based on the iterator.
+     *
+     * @param nextIterator specified shard iterator for getting the next set of records
+     * @return {@link GetRecordsResponseAdapter}
+     */
+    GetRecordsRequest getGetRecordsRequest(String nextIterator);
+
+    /**
+     * Gets the next iterator based on the request.
+     *
+     * @param request used to obtain the next shard iterator
+     * @return next iterator string
+     */
+    String getNextIterator(GetShardIteratorRequest request)
+            throws ExecutionException, InterruptedException, TimeoutException;
+
+    /**
+     * Gets the next set of records based on the iterator.
+     *
+     * @param nextIterator specified shard iterator for getting the next set of records
+     * @return {@link GetRecordsResponse}
+     */
+    GetRecordsResponse getRecords(@NonNull final String nextIterator);
 }
