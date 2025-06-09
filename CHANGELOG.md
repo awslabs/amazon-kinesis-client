@@ -5,7 +5,7 @@ For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/aws
 For **2.x** release notes, please see [v2.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v2.x/CHANGELOG.md)
 
 ---
-### Release (3.1.0 - June 05, 2025)
+### Release (3.1.0 - June 09, 2025)
 * [#1485](https://github.com/awslabs/amazon-kinesis-client/pull/1485) Fixing backward compatibility issue in RecordsFetcherFactory
 * [#1481](https://github.com/awslabs/amazon-kinesis-client/pull/1481) Convert awssdk object to lease early to release memory
 * [#1480](https://github.com/awslabs/amazon-kinesis-client/pull/1480) Added the ability to control sleep time in recordsfetcher
