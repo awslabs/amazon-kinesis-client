@@ -121,12 +121,6 @@
       <version>${awssdk.version}</version>
     </dependency>
     <dependency>
-      <groupId>software.amazon.awssdk</groupId>
-      <artifactId>dynamodb-enhanced</artifactId>
-      <version>${awssdk.version}</version>
-    </dependency>
-
-    <dependency>
       <groupId>software.amazon.glue</groupId>
       <artifactId>schema-registry-serde</artifactId>
       <version>${gsr.version}</version>
