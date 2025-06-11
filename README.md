@@ -44,16 +44,16 @@ After you have downloaded the code from GitHub, you can build it using Maven. To
 this command: `mvn clean install -Dgpg.skip=true`.
 Note: This command does not run integration tests.
 
-To disable running unit tests in the build, add the property `-Dskip.ut=true`.
+To disable running unit tests in the build, add the property `-DskipUT=true`.
 
 ## Running Integration Tests
 
 Note that running integration tests creates AWS resources.
 Integration tests require valid AWS credentials.
 This will look for a default AWS profile specified in your local `.aws/credentials`.
-To run all integration tests: `mvn verify -DskipTests=false`.
-To run one integration tests, specify the integration test class: `mvn -Dit.test="BasicStreamConsumerIntegrationTest" -DskipTests=false verify`
-Optionally, you can provide the name of an IAM user/role to run tests with as a string using this command: `mvn -DskipTests=false -DawsProfile="<PROFILE_NAME>" verify`.
+To run all integration tests: `mvn verify -DskipIT=false`.
+To run one integration tests, specify the integration test class: `mvn -Dit.test="BasicStreamConsumerIntegrationTest" -DskipIT=false verify`
+Optionally, you can provide the name of an IAM user/role to run tests with as a string using this command: `mvn -DskipIT=false -DawsProfile="<PROFILE_NAME>" verify`.
 
 ## Integration with the Kinesis Producer Library
 For producer-side developers using the **[Kinesis Producer Library (KPL)][kinesis-guide-kpl]**, the KCL integrates without additional effort. When the KCL retrieves an aggregated Amazon Kinesis record consisting of multiple KPL user records, it will automatically invoke the KPL to extract the individual user records before returning them to the user.
