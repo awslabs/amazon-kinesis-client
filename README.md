@@ -44,7 +44,7 @@ After you have downloaded the code from GitHub, you can build it using Maven. To
 this command: `mvn clean install -Dgpg.skip=true`.
 Note: This command does not run integration tests.
 
-To disable running unit tests in the build, add the property `-Dskip.ut=true`.
+To disable running unit tests in the build, add the property `-DskipUTs=true`.
 
 ## Running Integration Tests
 

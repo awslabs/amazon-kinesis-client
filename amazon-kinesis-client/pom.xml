@@ -54,6 +54,7 @@
     <sqlite4java.libpath>${project.build.directory}/test-lib</sqlite4java.libpath>
     <slf4j.version>2.0.13</slf4j.version>
     <gsr.version>1.1.19</gsr.version>
+    <skipUTs>false</skipUTs>
     <skipITs>true</skipITs>
   </properties>
 
@@ -349,8 +350,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.5</version>
         <configuration>
-          <skipTests>${skip.ut}</skipTests>
-          <skipITs>${skipITs}</skipITs>
+          <skipTests>${skipUTs}</skipTests>
           <excludes>
             <exclude>**/*IntegrationTest.java</exclude>
           </excludes>
@@ -365,6 +365,7 @@
         <artifactId>maven-failsafe-plugin</artifactId>
         <version>3.2.5</version>
         <configuration>
+          <skipITs>${skipITs}</skipITs>
           <includes>
             <include>**/*IntegrationTest.java</include>
           </includes>
