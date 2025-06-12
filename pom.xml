@@ -157,7 +157,7 @@
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
-              <autoReleaseAfterClose>false</autoReleaseAfterClose>
+              <autoPublish>false</autoPublish>
             </configuration>
           </plugin>
         </plugins>
