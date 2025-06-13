@@ -282,6 +282,9 @@ public class LeaseManagementConfig {
     private long listShardsCacheAllowedAgeInSeconds = 30;
     private int cacheMissWarningModulus = 250;
 
+    private long dynamoLockBasedLeaderLeaseDurationInSeconds = 120;
+    private long dynamoLockBasedLeaderHeartbeatPeriodInSeconds = 30;
+
     private MetricsFactory metricsFactory = new NullMetricsFactory();
 
     @Deprecated
