@@ -22,6 +22,12 @@ import software.amazon.kinesis.retrieval.polling.SleepTimeController;
  */
 public interface RecordsFetcherFactory {
     /**
+     * Default value for millisBehindLatestThresholdForReducedTps.
+     * A value of 0 effectively disables the reduced TPS functionality.
+     */
+    long DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS = 0L;
+
+    /**
      * Returns a RecordsPublisher to be used for retrieving records for a given shard.
      *
      * @param getRecordsRetrievalStrategy GetRecordsRetrievalStrategy to be used with the RecordsPublisher
@@ -105,4 +111,15 @@ public interface RecordsFetcherFactory {
     void idleMillisBetweenCalls(long idleMillisBetweenCalls);
 
     long idleMillisBetweenCalls();
+
+    /**
+     * Sets the threshold for millisBehindLatest that will trigger reduced throughput when close to tip.
+     * When most recent record has millisBehindLatest less than this threshold, additional sleep time will be added.
+     * Sleep time will be the difference between time of last successful record retrieval and this threshold.
+     *
+     * @param millisBehindLatestThresholdForReducedTps Threshold in milliseconds.
+     */
+    void millisBehindLatestThresholdForReducedTps(long millisBehindLatestThresholdForReducedTps);
+
+    long millisBehindLatestThresholdForReducedTps();
 }

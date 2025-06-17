@@ -31,9 +31,19 @@ public class KinesisSleepTimeController implements SleepTimeController {
         }
         long timeSinceLastCall =
                 Duration.between(lastSuccessfulCall, Instant.now()).abs().toMillis();
+        long idleSleepTime = 0;
         if (timeSinceLastCall < idleMillisBetweenCalls) {
-            return idleMillisBetweenCalls - timeSinceLastCall;
+            idleSleepTime = idleMillisBetweenCalls - timeSinceLastCall;
         }
-        return 0;
+        long reducedTpsSleepTime = 0;
+        Long lastMillisBehindLatest = sleepTimeControllerConfig.lastMillisBehindLatest();
+        Long millisBehindThreshold = sleepTimeControllerConfig.millisBehindLatestThresholdForReducedTps();
+        if (lastMillisBehindLatest != null
+                && millisBehindThreshold != null
+                && lastMillisBehindLatest < millisBehindThreshold) {
+            reducedTpsSleepTime = millisBehindThreshold - timeSinceLastCall;
+        }
+
+        return Math.max(idleSleepTime, reducedTpsSleepTime);
     }
 }

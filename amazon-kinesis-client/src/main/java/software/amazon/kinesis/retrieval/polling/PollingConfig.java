@@ -60,6 +60,17 @@ public class PollingConfig implements RetrievalSpecificConfig {
     private boolean usePollingConfigIdleTimeValue;
 
     /**
+     * Millisecond threshold for millisBehindLatest that will trigger reduced throughput when close to tip.
+     * When most recent record has millisBehindLatest less than this threshold, additional sleep time will be added.
+     * Sleep time will be the difference between time of last successful record retrieval and this threshold.
+     * <p>
+     * Default value: 0
+     * </p>
+     */
+    private long millisBehindLatestThresholdForReducedTps =
+            RecordsFetcherFactory.DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS;
+
+    /**
      * @param kinesisClient Client used to access Kinesis services.
      */
     public PollingConfig(KinesisAsyncClient kinesisClient) {
@@ -188,6 +199,7 @@ public class PollingConfig implements RetrievalSpecificConfig {
         if (usePollingConfigIdleTimeValue) {
             recordsFetcherFactory.idleMillisBetweenCalls(idleTimeBetweenReadsInMillis);
         }
+        recordsFetcherFactory.millisBehindLatestThresholdForReducedTps(millisBehindLatestThresholdForReducedTps);
         return new SynchronousBlockingRetrievalFactory(
                 streamName(),
                 kinesisClient(),

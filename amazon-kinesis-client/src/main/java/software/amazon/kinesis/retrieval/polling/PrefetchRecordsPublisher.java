@@ -56,6 +56,7 @@ import software.amazon.kinesis.retrieval.GetRecordsResponseAdapter;
 import software.amazon.kinesis.retrieval.GetRecordsRetrievalStrategy;
 import software.amazon.kinesis.retrieval.KinesisClientRecord;
 import software.amazon.kinesis.retrieval.RecordsDeliveryAck;
+import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.RecordsRetrieved;
 import software.amazon.kinesis.retrieval.RetryableRetrievalException;
@@ -90,6 +91,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private final ExecutorService executorService;
     private final MetricsFactory metricsFactory;
     private final long idleMillisBetweenCalls;
+    private final long millisBehindLatestThresholdForReducedTps;
     private Instant lastSuccessfulCall;
     private Integer lastGetRecordsReturnedRecordsCount;
     private Long lastMillisBehindLatest = null;
@@ -223,7 +225,12 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
      * @param getRecordsRetrievalStrategy Retrieval strategy for the get records call
      * @param executorService Executor service for the cache
      * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
+     * @param metricsFactory MetricsFactory used to create metricScope
+     * @param operation Operation used for metrics
+     * @param shardId ShardId used for metrics
+     * @param throttlingReporter Reporter for throttling events
      * @param awaitTerminationTimeoutMillis maximum time to wait for graceful shutdown of executorService
+     * @param sleepTimeController Controller for sleep time between calls
      */
     public PrefetchRecordsPublisher(
             final int maxPendingProcessRecordsInput,
@@ -233,6 +240,60 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
             @NonNull final ExecutorService executorService,
             final long idleMillisBetweenCalls,
+            @NonNull final MetricsFactory metricsFactory,
+            @NonNull final String operation,
+            @NonNull final String shardId,
+            final ThrottlingReporter throttlingReporter,
+            final long awaitTerminationTimeoutMillis,
+            final SleepTimeController sleepTimeController) {
+        this(
+                maxPendingProcessRecordsInput,
+                maxByteSize,
+                maxRecordsCount,
+                maxRecordsPerCall,
+                getRecordsRetrievalStrategy,
+                executorService,
+                idleMillisBetweenCalls,
+                RecordsFetcherFactory.DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS,
+                metricsFactory,
+                operation,
+                shardId,
+                throttlingReporter,
+                awaitTerminationTimeoutMillis,
+                sleepTimeController);
+    }
+
+    /**
+     * Constructor for the PrefetchRecordsPublisher. This cache prefetches records from Kinesis and stores them in a
+     * LinkedBlockingQueue.
+     *
+     * @see PrefetchRecordsPublisher
+     *
+     * @param maxPendingProcessRecordsInput Max number of ProcessRecordsInput that can be held in the cache before
+     *                                     blocking
+     * @param maxByteSize Max byte size of the queue before blocking next get records call
+     * @param maxRecordsCount Max number of records in the queue across all ProcessRecordInput objects
+     * @param maxRecordsPerCall Max records to be returned per call
+     * @param getRecordsRetrievalStrategy Retrieval strategy for the get records call
+     * @param executorService Executor service for the cache
+     * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
+     * @param millisBehindLatestThresholdForReducedTps threshold for millisBehindLatest that will trigger reduced throughput
+     * @param metricsFactory MetricsFactory used to create metricScope
+     * @param operation Operation used for metrics
+     * @param shardId ShardId used for metrics
+     * @param throttlingReporter Reporter for throttling events
+     * @param awaitTerminationTimeoutMillis maximum time to wait for graceful shutdown of executorService
+     * @param sleepTimeController Controller for sleep time between calls
+     */
+    public PrefetchRecordsPublisher(
+            final int maxPendingProcessRecordsInput,
+            final int maxByteSize,
+            final int maxRecordsCount,
+            final int maxRecordsPerCall,
+            @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+            @NonNull final ExecutorService executorService,
+            final long idleMillisBetweenCalls,
+            final long millisBehindLatestThresholdForReducedTps,
             @NonNull final MetricsFactory metricsFactory,
             @NonNull final String operation,
             @NonNull final String shardId,
@@ -251,6 +312,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         this.executorService = executorService;
         this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
+        this.millisBehindLatestThresholdForReducedTps = millisBehindLatestThresholdForReducedTps;
         this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
         Validate.notEmpty(operation, "Operation cannot be empty");
         this.throttlingReporter = throttlingReporter;
@@ -275,6 +337,11 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
      * @param getRecordsRetrievalStrategy Retrieval strategy for the get records call
      * @param executorService Executor service for the cache
      * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
+     * @param metricsFactory MetricsFactory used to create metricScope
+     * @param operation Operation used for metrics
+     * @param shardId ShardId used for metrics
+     * @param throttlingReporter Reporter for throttling events
+     * @param sleepTimeController Controller for sleep time between calls
      */
     public PrefetchRecordsPublisher(
             final int maxPendingProcessRecordsInput,
@@ -297,6 +364,59 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 getRecordsRetrievalStrategy,
                 executorService,
                 idleMillisBetweenCalls,
+                RecordsFetcherFactory.DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS,
+                metricsFactory,
+                operation,
+                shardId,
+                throttlingReporter,
+                DEFAULT_AWAIT_TERMINATION_TIMEOUT_MILLIS,
+                sleepTimeController);
+    }
+
+    /**
+     * Constructor for the PrefetchRecordsPublisher. This cache prefetches records from Kinesis and stores them in a
+     * LinkedBlockingQueue.
+     *
+     * @see PrefetchRecordsPublisher
+     *
+     * @param maxPendingProcessRecordsInput Max number of ProcessRecordsInput that can be held in the cache before
+     *                                     blocking
+     * @param maxByteSize Max byte size of the queue before blocking next get records call
+     * @param maxRecordsCount Max number of records in the queue across all ProcessRecordInput objects
+     * @param maxRecordsPerCall Max records to be returned per call
+     * @param getRecordsRetrievalStrategy Retrieval strategy for the get records call
+     * @param executorService Executor service for the cache
+     * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
+     * @param millisBehindLatestThresholdForReducedTps threshold for millisBehindLatest that will trigger reduced throughput
+     * @param metricsFactory MetricsFactory used to create metricScope
+     * @param operation Operation used for metrics
+     * @param shardId ShardId used for metrics
+     * @param throttlingReporter Reporter for throttling events
+     * @param sleepTimeController Controller for sleep time between calls
+     */
+    public PrefetchRecordsPublisher(
+            final int maxPendingProcessRecordsInput,
+            final int maxByteSize,
+            final int maxRecordsCount,
+            final int maxRecordsPerCall,
+            final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
+            final ExecutorService executorService,
+            final long idleMillisBetweenCalls,
+            final long millisBehindLatestThresholdForReducedTps,
+            final MetricsFactory metricsFactory,
+            final String operation,
+            final String shardId,
+            final ThrottlingReporter throttlingReporter,
+            final SleepTimeController sleepTimeController) {
+        this(
+                maxPendingProcessRecordsInput,
+                maxByteSize,
+                maxRecordsCount,
+                maxRecordsPerCall,
+                getRecordsRetrievalStrategy,
+                executorService,
+                idleMillisBetweenCalls,
+                millisBehindLatestThresholdForReducedTps,
                 metricsFactory,
                 operation,
                 shardId,
@@ -641,6 +761,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     .idleMillisBetweenCalls(idleMillisBetweenCalls)
                     .lastRecordsCount(lastGetRecordsReturnedRecordsCount)
                     .lastMillisBehindLatest(lastMillisBehindLatest)
+                    .millisBehindLatestThresholdForReducedTps(millisBehindLatestThresholdForReducedTps)
                     .build();
             long sleepTimeMillis = sleepTimeController.getSleepTimeMillis(sleepTimeControllerConfig);
             if (sleepTimeMillis > 0) {
