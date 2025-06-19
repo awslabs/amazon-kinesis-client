@@ -94,7 +94,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private final long millisBehindLatestThresholdForReducedTps;
     private Instant lastSuccessfulCall;
     private Integer lastGetRecordsReturnedRecordsCount;
-    private Long lastMillisBehindLatest = null;
+    private Long lastMillisBehindLatest = Long.MAX_VALUE;
     private boolean isFirstGetCallTry = true;
     private final DefaultGetRecordsCacheDaemon defaultGetRecordsCacheDaemon;
     private boolean started = false;
