@@ -207,7 +207,7 @@ public class KinesisSleepTimeControllerTest {
         Instant now = Instant.now();
         long lastSuccessfulCallGap = 500;
         Instant lastSuccessfulCall = now.minusMillis(lastSuccessfulCallGap); // 500ms ago
-        long millisBehindLatestThresholdForReducedTps = 5000L;
+        long millisBehindLatestThresholdForReducedTps = 1000L;
         long smallMillisBehindLatest = 0L;
         SleepTimeControllerConfig sleepTimeControllerConfig = SleepTimeControllerConfig.builder()
                 .lastSuccessfulCall(lastSuccessfulCall)
