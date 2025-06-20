@@ -49,6 +49,12 @@ public class PollingConfig implements RetrievalSpecificConfig {
     public static final long MIN_IDLE_MILLIS_BETWEEN_READS = 200L;
 
     /**
+     * Default value for millisBehindLatestThresholdForReducedTps.
+     * A value of 0 effectively disables the reduced TPS functionality.
+     */
+    public static long DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS = 0L;
+
+    /**
      * Configurable functional interface to override the existing DataFetcher.
      */
     Function<DataFetcherProviderConfig, DataFetcher> dataFetcherProvider;
@@ -67,8 +73,7 @@ public class PollingConfig implements RetrievalSpecificConfig {
      * Default value: 0
      * </p>
      */
-    private long millisBehindLatestThresholdForReducedTps =
-            RecordsFetcherFactory.DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS;
+    private long millisBehindLatestThresholdForReducedTps = DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS;
 
     /**
      * @param kinesisClient Client used to access Kinesis services.

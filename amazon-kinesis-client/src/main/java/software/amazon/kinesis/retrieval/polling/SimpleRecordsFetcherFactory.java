@@ -26,6 +26,8 @@ import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
 
+import static software.amazon.kinesis.retrieval.polling.PollingConfig.DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS;
+
 @Slf4j
 @KinesisClientInternalApi
 public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {

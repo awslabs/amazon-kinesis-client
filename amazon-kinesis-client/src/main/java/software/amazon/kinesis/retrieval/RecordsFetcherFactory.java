@@ -22,12 +22,6 @@ import software.amazon.kinesis.retrieval.polling.SleepTimeController;
  */
 public interface RecordsFetcherFactory {
     /**
-     * Default value for millisBehindLatestThresholdForReducedTps.
-     * A value of 0 effectively disables the reduced TPS functionality.
-     */
-    long DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS = 0L;
-
-    /**
      * Returns a RecordsPublisher to be used for retrieving records for a given shard.
      *
      * @param getRecordsRetrievalStrategy GetRecordsRetrievalStrategy to be used with the RecordsPublisher
