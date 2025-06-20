@@ -65,6 +65,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.retrieval.polling.PollingConfig.DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS;
 import static software.amazon.kinesis.utils.BlockingUtils.blockUntilConditionSatisfied;
 import static software.amazon.kinesis.utils.BlockingUtils.blockUntilRecordsAvailable;
 
@@ -124,6 +125,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
                 getRecordsRetrievalStrategy,
                 executorService,
                 IDLE_MILLIS_BETWEEN_CALLS,
+                DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS,
                 new NullMetricsFactory(),
                 operation,
                 "test-shard",
@@ -186,6 +188,7 @@ public class PrefetchRecordsPublisherIntegrationTest {
                 getRecordsRetrievalStrategy2,
                 executorService2,
                 IDLE_MILLIS_BETWEEN_CALLS,
+                DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS,
                 new NullMetricsFactory(),
                 operation,
                 "test-shard-2",
