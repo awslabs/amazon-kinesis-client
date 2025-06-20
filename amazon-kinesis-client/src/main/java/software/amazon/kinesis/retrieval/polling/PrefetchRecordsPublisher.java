@@ -225,12 +225,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
      * @param executorService Executor service for the cache
      * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
      * @param millisBehindLatestThresholdForReducedTps threshold for millisBehindLatest that will trigger reduced throughput
-     * @param metricsFactory MetricsFactory used to create metricScope
-     * @param operation Operation used for metrics
-     * @param shardId ShardId used for metrics
-     * @param throttlingReporter Reporter for throttling events
      * @param awaitTerminationTimeoutMillis maximum time to wait for graceful shutdown of executorService
-     * @param sleepTimeController Controller for sleep time between calls
      */
     public PrefetchRecordsPublisher(
             final int maxPendingProcessRecordsInput,
@@ -284,11 +279,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
      * @param getRecordsRetrievalStrategy Retrieval strategy for the get records call
      * @param executorService Executor service for the cache
      * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
-     * @param metricsFactory MetricsFactory used to create metricScope
-     * @param operation Operation used for metrics
-     * @param shardId ShardId used for metrics
-     * @param throttlingReporter Reporter for throttling events
-     * @param sleepTimeController Controller for sleep time between calls
+     * @param millisBehindLatestThresholdForReducedTps threshold for millisBehindLatest that will trigger reduced throughput
      */
     public PrefetchRecordsPublisher(
             final int maxPendingProcessRecordsInput,
