@@ -323,6 +323,7 @@ public class KinesisClientLibConfiguratorTest {
                     "AwsCredentialsProvider = " + credentialName2 + ", " + credentialName1,
                     "workerId = w123",
                     "maxRecords = 10",
+                    "millisBehindLatestThresholdForReducedTps = 100",
                     "metricsMaxQueueSize = 20",
                     "applicationName = kinesis",
                     "retryGetRecordsInSeconds = 2",
@@ -334,6 +335,7 @@ public class KinesisClientLibConfiguratorTest {
         assertEquals(config.getStreamName(), "kinesis");
         assertEquals(config.getWorkerIdentifier(), "w123");
         assertEquals(config.getMaxRecords(), 10);
+        assertEquals(config.getMillisBehindLatestThresholdForReducedTps(), 100);
         assertEquals(config.getMetricsMaxQueueSize(), 20);
         assertThat(config.getRetryGetRecordsInSeconds(), equalTo(2));
         assertThat(config.getMaxGetRecordsThreadPool(), equalTo(1));

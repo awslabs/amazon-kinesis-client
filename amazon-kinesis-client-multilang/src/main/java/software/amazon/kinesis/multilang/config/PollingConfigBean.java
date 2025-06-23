@@ -41,6 +41,10 @@ public class PollingConfigBean implements RetrievalConfigBuilder {
 
         void setIdleTimeBetweenReadsInMillis(long value);
 
+        long getMillisBehindLatestThresholdForReducedTps();
+
+        void setMillisBehindLatestThresholdForReducedTps(long value);
+
         int getMaxRecords();
 
         void setMaxRecords(int value);
@@ -56,12 +60,16 @@ public class PollingConfigBean implements RetrievalConfigBuilder {
     private long idleTimeBetweenReadsInMillis;
 
     @ConfigurationSettable(configurationClass = PollingConfig.class)
+    private long millisBehindLatestThresholdForReducedTps;
+
+    @ConfigurationSettable(configurationClass = PollingConfig.class)
     private int maxRecords;
 
     public boolean anyPropertiesSet() {
         return retryGetRecordsInSeconds != null
                 || maxGetRecordsThreadPool != null
                 || idleTimeBetweenReadsInMillis != 0
+                || millisBehindLatestThresholdForReducedTps != 0
                 || maxRecords != 0;
     }
 

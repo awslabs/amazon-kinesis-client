@@ -21,4 +21,5 @@ public class SleepTimeControllerConfig {
     private long idleMillisBetweenCalls;
     private Integer lastRecordsCount;
     private Long lastMillisBehindLatest;
+    private Long millisBehindLatestThresholdForReducedTps;
 }

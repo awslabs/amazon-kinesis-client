@@ -105,4 +105,15 @@ public interface RecordsFetcherFactory {
     void idleMillisBetweenCalls(long idleMillisBetweenCalls);
 
     long idleMillisBetweenCalls();
+
+    /**
+     * Sets the threshold for millisBehindLatest that will trigger reduced throughput when close to tip.
+     * When most recent record has millisBehindLatest less than this threshold, additional sleep time will be added.
+     * Sleep time will be the difference between time of last successful record retrieval and this threshold.
+     *
+     * @param millisBehindLatestThresholdForReducedTps Threshold in milliseconds.
+     */
+    void millisBehindLatestThresholdForReducedTps(long millisBehindLatestThresholdForReducedTps);
+
+    long millisBehindLatestThresholdForReducedTps();
 }

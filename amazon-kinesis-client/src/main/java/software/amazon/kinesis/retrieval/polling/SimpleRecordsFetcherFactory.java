@@ -26,6 +26,8 @@ import software.amazon.kinesis.retrieval.RecordsFetcherFactory;
 import software.amazon.kinesis.retrieval.RecordsPublisher;
 import software.amazon.kinesis.retrieval.ThrottlingReporter;
 
+import static software.amazon.kinesis.retrieval.polling.PollingConfig.DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS;
+
 @Slf4j
 @KinesisClientInternalApi
 public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
@@ -33,6 +35,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     private int maxByteSize = 8 * 1024 * 1024;
     private int maxRecordsCount = 30000;
     private long idleMillisBetweenCalls = 1500L;
+    private long millisBehindLatestThresholdForReducedTps = DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS;
     private int maxConsecutiveThrottles = 5;
     private DataFetchingStrategy dataFetchingStrategy = DataFetchingStrategy.DEFAULT;
 
@@ -68,6 +71,7 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
                                 .setNameFormat("prefetch-cache-" + shardId + "-%04d")
                                 .build()),
                 idleMillisBetweenCalls,
+                millisBehindLatestThresholdForReducedTps,
                 metricsFactory,
                 "ProcessTask",
                 shardId,
@@ -123,5 +127,15 @@ public class SimpleRecordsFetcherFactory implements RecordsFetcherFactory {
     @Override
     public long idleMillisBetweenCalls() {
         return idleMillisBetweenCalls;
+    }
+
+    @Override
+    public void millisBehindLatestThresholdForReducedTps(long millisBehindLatestThresholdForReducedTps) {
+        this.millisBehindLatestThresholdForReducedTps = millisBehindLatestThresholdForReducedTps;
+    }
+
+    @Override
+    public long millisBehindLatestThresholdForReducedTps() {
+        return millisBehindLatestThresholdForReducedTps;
     }
 }

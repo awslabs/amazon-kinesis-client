@@ -201,4 +201,82 @@ public class KinesisSleepTimeControllerTest {
                 "Sleep time should be the same regardless of record count and millisBehindLatest",
                 Math.abs(sleepTime1 - sleepTime2) < 10); // Allow for minimal timing variations
     }
+
+    @Test
+    public void testGetSleepTimeMillisWithReducedTpsThresholdAtTip() {
+        Instant now = Instant.now();
+        long lastSuccessfulCallGap = 500;
+        Instant lastSuccessfulCall = now.minusMillis(lastSuccessfulCallGap); // 500ms ago
+        long millisBehindLatestThresholdForReducedTps = 1000L;
+        long smallMillisBehindLatest = 0L;
+        SleepTimeControllerConfig sleepTimeControllerConfig = SleepTimeControllerConfig.builder()
+                .lastSuccessfulCall(lastSuccessfulCall)
+                .idleMillisBetweenCalls(idleMillisBetweenCalls)
+                .lastRecordsCount(recordCount)
+                .lastMillisBehindLatest(smallMillisBehindLatest)
+                .millisBehindLatestThresholdForReducedTps(millisBehindLatestThresholdForReducedTps)
+                .build();
+        long sleepTime = controller.getSleepTimeMillis(sleepTimeControllerConfig);
+
+        // Should give the difference between lastSuccessfulCall and millisBehindLatestThresholdForReducedTps.
+        // In this case, the millisBehindLatestThresholdForReducedTps will be the greater wait time, as we are at tip.
+        assertTrue(
+                "Sleep time should be positive but less than millisBehindLatestThresholdForReducedTps",
+                sleepTime > 0 && sleepTime <= millisBehindLatestThresholdForReducedTps);
+
+        // The exact value will vary slightly due to execution time but should be close to 500ms. Absolute value
+        // confirms that we are not waiting sum of both wait times and exceeding the expected wait time.
+        long expectedApproxSleepTime = millisBehindLatestThresholdForReducedTps - lastSuccessfulCallGap;
+        assertTrue(
+                "Sleep time should be approximately " + expectedApproxSleepTime + "ms",
+                Math.abs(sleepTime - expectedApproxSleepTime) < 100); // Allow for small timing variations
+    }
+
+    @Test
+    public void testGetSleepTimeMillisWithReducedTpsThresholdBehindTip() {
+        Instant now = Instant.now();
+        Instant lastSuccessfulCall = now.minusMillis(idleMillisBetweenCalls); // no wait on idleMillisBetweenCalls
+        long millisBehindLatestThresholdForReducedTps = 2000L;
+        long equalMillisBehindLatest = 2001L;
+        SleepTimeControllerConfig sleepTimeControllerConfig = SleepTimeControllerConfig.builder()
+                .lastSuccessfulCall(lastSuccessfulCall)
+                .idleMillisBetweenCalls(idleMillisBetweenCalls)
+                .lastRecordsCount(recordCount)
+                .lastMillisBehindLatest(equalMillisBehindLatest)
+                .millisBehindLatestThresholdForReducedTps(millisBehindLatestThresholdForReducedTps)
+                .build();
+        long sleepTime = controller.getSleepTimeMillis(sleepTimeControllerConfig);
+
+        // Should be no wait time, as we are outside the millisBehindLatest threshold
+        assertEquals("Sleep time should be zero", 0, sleepTime);
+    }
+
+    @Test
+    public void testGetSleepTimeMillisWithReducedTpsThresholdHigherIdleMillisWait() {
+        Instant now = Instant.now();
+        long lastSuccessfulCallGap = 300;
+        Instant lastSuccessfulCall = now.minusMillis(lastSuccessfulCallGap); // 300ms ago
+        long millisBehindLatestThresholdForReducedTps = 200L;
+        long smallMillisBehindLatest = 0L;
+        SleepTimeControllerConfig sleepTimeControllerConfig = SleepTimeControllerConfig.builder()
+                .lastSuccessfulCall(lastSuccessfulCall)
+                .idleMillisBetweenCalls(idleMillisBetweenCalls)
+                .lastRecordsCount(recordCount)
+                .lastMillisBehindLatest(smallMillisBehindLatest)
+                .millisBehindLatestThresholdForReducedTps(millisBehindLatestThresholdForReducedTps)
+                .build();
+        long sleepTime = controller.getSleepTimeMillis(sleepTimeControllerConfig);
+
+        // Should give the difference between idleMillisBetweenCalls and lastSuccessfulCall.
+        // In this case, idleMillisBetweenCalls difference is greater than millisBehindLatestThresholdForReducedTps.
+        assertTrue(
+                "Sleep time should be positive but less than millisBehindLatestThresholdForReducedTps",
+                sleepTime > 0 && sleepTime <= idleMillisBetweenCalls);
+
+        // The exact value will vary slightly due to execution time, but should be close to 700ms
+        long expectedApproxSleepTime = idleMillisBetweenCalls - lastSuccessfulCallGap;
+        assertTrue(
+                "Sleep time should be approximately " + expectedApproxSleepTime + "ms",
+                Math.abs(sleepTime - expectedApproxSleepTime) < 100);
+    }
 }

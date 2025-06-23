@@ -101,6 +101,7 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static software.amazon.kinesis.retrieval.polling.PollingConfig.DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS;
 import static software.amazon.kinesis.utils.BlockingUtils.blockUntilConditionSatisfied;
 import static software.amazon.kinesis.utils.ProcessRecordsInputMatcher.eqProcessRecordsInput;
 
@@ -924,6 +925,7 @@ public class PrefetchRecordsPublisherTest {
                 getRecordsRetrievalStrategy,
                 executorService,
                 idleMillisBetweenCalls,
+                DEFAULT_MILLIS_BEHIND_LATEST_THRESHOLD_FOR_REDUCED_TPS,
                 new NullMetricsFactory(),
                 PrefetchRecordsPublisherTest.class.getSimpleName(),
                 "shardId",

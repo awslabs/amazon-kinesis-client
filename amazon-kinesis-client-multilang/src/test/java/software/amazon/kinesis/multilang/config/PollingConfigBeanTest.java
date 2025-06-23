@@ -42,6 +42,7 @@ public class PollingConfigBeanTest {
         pollingConfigBean.setMaxGetRecordsThreadPool(20);
         pollingConfigBean.setMaxRecords(5000);
         pollingConfigBean.setRetryGetRecordsInSeconds(30);
+        pollingConfigBean.setMillisBehindLatestThresholdForReducedTps(1000);
 
         ConvertUtilsBean convertUtilsBean = new ConvertUtilsBean();
         BeanUtilsBean utilsBean = new BeanUtilsBean(convertUtilsBean);
@@ -57,6 +58,9 @@ public class PollingConfigBeanTest {
         assertThat(
                 pollingConfig.idleTimeBetweenReadsInMillis(),
                 equalTo(pollingConfigBean.getIdleTimeBetweenReadsInMillis()));
+        assertThat(
+                pollingConfig.millisBehindLatestThresholdForReducedTps(),
+                equalTo(pollingConfigBean.getMillisBehindLatestThresholdForReducedTps()));
         assertThat(
                 pollingConfig.maxGetRecordsThreadPool(),
                 equalTo(Optional.of(pollingConfigBean.getMaxGetRecordsThreadPool())));

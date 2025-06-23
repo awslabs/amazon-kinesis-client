@@ -90,9 +90,10 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
     private final ExecutorService executorService;
     private final MetricsFactory metricsFactory;
     private final long idleMillisBetweenCalls;
+    private final long millisBehindLatestThresholdForReducedTps;
     private Instant lastSuccessfulCall;
     private Integer lastGetRecordsReturnedRecordsCount;
-    private Long lastMillisBehindLatest = null;
+    private Long lastMillisBehindLatest = Long.MAX_VALUE;
     private boolean isFirstGetCallTry = true;
     private final DefaultGetRecordsCacheDaemon defaultGetRecordsCacheDaemon;
     private boolean started = false;
@@ -223,6 +224,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
      * @param getRecordsRetrievalStrategy Retrieval strategy for the get records call
      * @param executorService Executor service for the cache
      * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
+     * @param millisBehindLatestThresholdForReducedTps threshold for millisBehindLatest that will trigger reduced throughput
      * @param awaitTerminationTimeoutMillis maximum time to wait for graceful shutdown of executorService
      */
     public PrefetchRecordsPublisher(
@@ -233,6 +235,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             @NonNull final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
             @NonNull final ExecutorService executorService,
             final long idleMillisBetweenCalls,
+            final long millisBehindLatestThresholdForReducedTps,
             @NonNull final MetricsFactory metricsFactory,
             @NonNull final String operation,
             @NonNull final String shardId,
@@ -251,6 +254,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
         this.executorService = executorService;
         this.metricsFactory = new ThreadSafeMetricsDelegatingFactory(metricsFactory);
         this.idleMillisBetweenCalls = idleMillisBetweenCalls;
+        this.millisBehindLatestThresholdForReducedTps = millisBehindLatestThresholdForReducedTps;
         this.defaultGetRecordsCacheDaemon = new DefaultGetRecordsCacheDaemon();
         Validate.notEmpty(operation, "Operation cannot be empty");
         this.throttlingReporter = throttlingReporter;
@@ -275,6 +279,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
      * @param getRecordsRetrievalStrategy Retrieval strategy for the get records call
      * @param executorService Executor service for the cache
      * @param idleMillisBetweenCalls maximum time to wait before dispatching the next get records call
+     * @param millisBehindLatestThresholdForReducedTps threshold for millisBehindLatest that will trigger reduced throughput
      */
     public PrefetchRecordsPublisher(
             final int maxPendingProcessRecordsInput,
@@ -284,6 +289,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
             final GetRecordsRetrievalStrategy getRecordsRetrievalStrategy,
             final ExecutorService executorService,
             final long idleMillisBetweenCalls,
+            final long millisBehindLatestThresholdForReducedTps,
             final MetricsFactory metricsFactory,
             final String operation,
             final String shardId,
@@ -297,6 +303,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                 getRecordsRetrievalStrategy,
                 executorService,
                 idleMillisBetweenCalls,
+                millisBehindLatestThresholdForReducedTps,
                 metricsFactory,
                 operation,
                 shardId,
@@ -641,6 +648,7 @@ public class PrefetchRecordsPublisher implements RecordsPublisher {
                     .idleMillisBetweenCalls(idleMillisBetweenCalls)
                     .lastRecordsCount(lastGetRecordsReturnedRecordsCount)
                     .lastMillisBehindLatest(lastMillisBehindLatest)
+                    .millisBehindLatestThresholdForReducedTps(millisBehindLatestThresholdForReducedTps)
                     .build();
             long sleepTimeMillis = sleepTimeController.getSleepTimeMillis(sleepTimeControllerConfig);
             if (sleepTimeMillis > 0) {
