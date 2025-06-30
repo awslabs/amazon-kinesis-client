@@ -505,6 +505,27 @@ public class MultiLangDaemonConfigurationTest {
                 coordinatorConfig.clientVersionConfig());
     }
 
+    @Test
+    public void testDefaultleaseAssignmentIntervalMillisLeaseAssignment() {
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        assertThat(resolvedConfiguration.leaseManagementConfig.leaseAssignmentIntervalMillis(), equalTo(20000L));
+    }
+
+    @Test
+    public void testSetleaseAssignmentIntervalMillisLeaseAssignment() {
+        MultiLangDaemonConfiguration configuration = baseConfiguration();
+        configuration.setLeaseAssignmentIntervalMillis(10000);
+
+        MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
+                configuration.resolvedConfiguration(shardRecordProcessorFactory);
+
+        assertThat(resolvedConfiguration.leaseManagementConfig.leaseAssignmentIntervalMillis(), equalTo(10000L));
+    }
+
     private ConfigsBuilder getTestConfigsBuilder() {
         return new ConfigsBuilder(
                 DUMMY_STREAM_NAME,

@@ -85,7 +85,8 @@ public class KinesisClientLibConfiguratorTest {
                     "AwsCredentialsProvider = " + credentialName1 + ", " + credentialName2,
                     "workerId = 123",
                     "failoverTimeMillis = 100",
-                    "shardSyncIntervalMillis = 500"
+                    "shardSyncIntervalMillis = 500",
+                    "leaseAssignmentIntervalMillis = 100"
                 },
                 '\n'));
 
@@ -94,6 +95,7 @@ public class KinesisClientLibConfiguratorTest {
         assertEquals(config.getWorkerIdentifier(), "123");
         assertEquals(config.getFailoverTimeMillis(), 100);
         assertEquals(config.getShardSyncIntervalMillis(), 500);
+        assertEquals(config.getLeaseAssignmentIntervalMillis(), 100);
     }
 
     @Test
