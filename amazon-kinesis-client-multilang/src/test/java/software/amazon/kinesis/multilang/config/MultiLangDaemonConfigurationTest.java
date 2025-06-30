@@ -506,7 +506,7 @@ public class MultiLangDaemonConfigurationTest {
     }
 
     @Test
-    public void testDefaultleaseAssignmentIntervalMillisLeaseAssignment() {
+    public void testDefaultleaseAssignmentIntervalMillis() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
 
         MultiLangDaemonConfiguration.ResolvedConfiguration resolvedConfiguration =
@@ -516,7 +516,7 @@ public class MultiLangDaemonConfigurationTest {
     }
 
     @Test
-    public void testSetleaseAssignmentIntervalMillisLeaseAssignment() {
+    public void testSetleaseAssignmentIntervalMillis() {
         MultiLangDaemonConfiguration configuration = baseConfiguration();
         configuration.setLeaseAssignmentIntervalMillis(10000);
 
