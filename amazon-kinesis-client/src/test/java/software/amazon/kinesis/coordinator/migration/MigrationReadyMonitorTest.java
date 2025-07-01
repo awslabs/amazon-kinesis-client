@@ -452,7 +452,7 @@ public class MigrationReadyMonitorTest {
                                         .build())
                                 .collect(Collectors.toList())));
 
-        // If there are fewer shards than workers, so not all workers have leases.
+        // If there are fewer shards than workers, not all workers can have leases.
         TEST_DATA_MAP.put(
                 TestDataType.WORKER_READY_CONDITION_MET_FEW_SHARDS,
                 new TestData(
