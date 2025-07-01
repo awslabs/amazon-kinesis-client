@@ -161,4 +161,10 @@ public interface LeaseCoordinator {
      * @return instance of {@link LeaseStatsRecorder}
      */
     LeaseStatsRecorder leaseStatsRecorder();
+
+    /**
+     * @return consumerId The consumerId of the lease table. For {@link DynamoDBLeaseCoordinator}, this is the
+     * hash of the lease table arn
+     */
+    String getConsumerId();
 }

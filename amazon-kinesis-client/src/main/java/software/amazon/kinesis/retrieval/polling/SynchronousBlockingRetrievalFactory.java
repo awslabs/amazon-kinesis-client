@@ -90,6 +90,19 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
         return new SynchronousGetRecordsRetrievalStrategy(dataFetcher);
     }
 
+    private GetRecordsRetrievalStrategy createGetRecordsRetrievalStrategy(
+            @NonNull final ShardInfo shardInfo,
+            @NonNull final StreamIdentifier streamIdentifier,
+            @NonNull final MetricsFactory metricsFactory,
+            String consumerId) {
+        final DataFetcherProviderConfig kinesisDataFetcherProviderConfig = new KinesisDataFetcherProviderConfig(
+                streamIdentifier, shardInfo.shardId(), metricsFactory, maxRecords, kinesisRequestTimeout, consumerId);
+
+        final DataFetcher dataFetcher = this.dataFetcherProvider.apply(kinesisDataFetcherProviderConfig);
+
+        return new SynchronousGetRecordsRetrievalStrategy(dataFetcher);
+    }
+
     @Override
     public RecordsPublisher createGetRecordsCache(
             @NonNull final ShardInfo shardInfo,
@@ -97,6 +110,20 @@ public class SynchronousBlockingRetrievalFactory implements RetrievalFactory {
             @NonNull final MetricsFactory metricsFactory) {
         return recordsFetcherFactory.createRecordsFetcher(
                 createGetRecordsRetrievalStrategy(shardInfo, streamConfig.streamIdentifier(), metricsFactory),
+                shardInfo.shardId(),
+                metricsFactory,
+                maxRecords,
+                getSleepTimeController());
+    }
+
+    public RecordsPublisher createGetRecordsCache(
+            @NonNull final ShardInfo shardInfo,
+            @NonNull final StreamConfig streamConfig,
+            @NonNull final MetricsFactory metricsFactory,
+            String consumerId) {
+        return recordsFetcherFactory.createRecordsFetcher(
+                createGetRecordsRetrievalStrategy(
+                        shardInfo, streamConfig.streamIdentifier(), metricsFactory, consumerId),
                 shardInfo.shardId(),
                 metricsFactory,
                 maxRecords,

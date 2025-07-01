@@ -89,4 +89,115 @@ public class ShardConsumerArgument {
 
     private final LeaseCleanupManager leaseCleanupManager;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
+
+    /**
+     * Consumer ID generated from lease table ARN to uniquely identify this KCL application
+     */
+    private String consumerId;
+
+    public ShardConsumerArgument(
+            @NonNull ShardInfo shardInfo,
+            @NonNull StreamIdentifier streamIdentifier,
+            LeaseCoordinator leaseCoordinator,
+            ExecutorService executorService,
+            RecordsPublisher recordsPublisher,
+            ShardRecordProcessor shardRecordProcessor,
+            Checkpointer checkpoint,
+            ShardRecordProcessorCheckpointer recordProcessorCheckpointer,
+            long parentShardPollIntervalMillis,
+            long taskBackoffTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+            long listShardsBackoffTimeMillis,
+            int maxListShardsRetryAttempts,
+            boolean shouldCallProcessRecordsEvenForEmptyRecordList,
+            long idleTimeInMilliseconds,
+            InitialPositionInStreamExtended initialPositionInStream,
+            boolean cleanupLeasesUponShardCompletion,
+            boolean ignoreUnexpectedChildShards,
+            ShardDetector shardDetector,
+            AggregatorUtil aggregatorUtil,
+            HierarchicalShardSyncer hierarchicalShardSyncer,
+            MetricsFactory metricsFactory,
+            @NonNull LeaseCleanupManager leaseCleanupManager,
+            SchemaRegistryDecoder schemaRegistryDecoder) {
+        this(
+                shardInfo,
+                streamIdentifier,
+                leaseCoordinator,
+                executorService,
+                recordsPublisher,
+                shardRecordProcessor,
+                checkpoint,
+                recordProcessorCheckpointer,
+                parentShardPollIntervalMillis,
+                taskBackoffTimeMillis,
+                skipShardSyncAtWorkerInitializationIfLeasesExist,
+                listShardsBackoffTimeMillis,
+                maxListShardsRetryAttempts,
+                shouldCallProcessRecordsEvenForEmptyRecordList,
+                idleTimeInMilliseconds,
+                initialPositionInStream,
+                cleanupLeasesUponShardCompletion,
+                ignoreUnexpectedChildShards,
+                shardDetector,
+                aggregatorUtil,
+                hierarchicalShardSyncer,
+                metricsFactory,
+                leaseCleanupManager,
+                schemaRegistryDecoder,
+                null);
+    }
+
+    public ShardConsumerArgument(
+            @NonNull ShardInfo shardInfo,
+            @NonNull StreamIdentifier streamIdentifier,
+            LeaseCoordinator leaseCoordinator,
+            ExecutorService executorService,
+            RecordsPublisher recordsPublisher,
+            ShardRecordProcessor shardRecordProcessor,
+            Checkpointer checkpoint,
+            ShardRecordProcessorCheckpointer recordProcessorCheckpointer,
+            long parentShardPollIntervalMillis,
+            long taskBackoffTimeMillis,
+            boolean skipShardSyncAtWorkerInitializationIfLeasesExist,
+            long listShardsBackoffTimeMillis,
+            int maxListShardsRetryAttempts,
+            boolean shouldCallProcessRecordsEvenForEmptyRecordList,
+            long idleTimeInMilliseconds,
+            InitialPositionInStreamExtended initialPositionInStream,
+            boolean cleanupLeasesUponShardCompletion,
+            boolean ignoreUnexpectedChildShards,
+            ShardDetector shardDetector,
+            AggregatorUtil aggregatorUtil,
+            HierarchicalShardSyncer hierarchicalShardSyncer,
+            MetricsFactory metricsFactory,
+            @NonNull LeaseCleanupManager leaseCleanupManager,
+            SchemaRegistryDecoder schemaRegistryDecoder,
+            String consumerId) {
+        this.shardInfo = shardInfo;
+        this.streamIdentifier = streamIdentifier;
+        this.leaseCoordinator = leaseCoordinator;
+        this.executorService = executorService;
+        this.recordsPublisher = recordsPublisher;
+        this.shardRecordProcessor = shardRecordProcessor;
+        this.checkpoint = checkpoint;
+        this.recordProcessorCheckpointer = recordProcessorCheckpointer;
+        this.parentShardPollIntervalMillis = parentShardPollIntervalMillis;
+        this.taskBackoffTimeMillis = taskBackoffTimeMillis;
+        this.skipShardSyncAtWorkerInitializationIfLeasesExist = skipShardSyncAtWorkerInitializationIfLeasesExist;
+        this.listShardsBackoffTimeInMillis = listShardsBackoffTimeMillis;
+        this.maxListShardsRetryAttempts = maxListShardsRetryAttempts;
+        this.shouldCallProcessRecordsEvenForEmptyRecordList = shouldCallProcessRecordsEvenForEmptyRecordList;
+        this.idleTimeInMilliseconds = idleTimeInMilliseconds;
+        this.initialPositionInStream = initialPositionInStream;
+        this.cleanupLeasesOfCompletedShards = cleanupLeasesUponShardCompletion;
+        this.ignoreUnexpectedChildShards = ignoreUnexpectedChildShards;
+        this.shardDetector = shardDetector;
+        this.aggregatorUtil = aggregatorUtil;
+        this.hierarchicalShardSyncer = hierarchicalShardSyncer;
+        this.metricsFactory = metricsFactory;
+        this.leaseCleanupManager = leaseCleanupManager;
+        this.schemaRegistryDecoder = schemaRegistryDecoder;
+        this.consumerId = consumerId;
+    }
 }

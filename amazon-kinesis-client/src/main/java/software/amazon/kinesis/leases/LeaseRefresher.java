@@ -350,4 +350,8 @@ public interface LeaseRefresher {
      */
     ExtendedSequenceNumber getCheckpoint(String leaseKey)
             throws ProvisionedThroughputException, InvalidStateException, DependencyException;
+
+    default String getLeaseTableIdentifier() throws DependencyException {
+        return "";
+    }
 }

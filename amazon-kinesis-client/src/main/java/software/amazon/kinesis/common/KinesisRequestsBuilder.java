@@ -37,6 +37,10 @@ public class KinesisRequestsBuilder {
         return appendUserAgent(ListShardsRequest.builder());
     }
 
+    public static ListShardsRequest.Builder listShardsRequestBuilder(String consumerId) {
+        return appendUserAgent(ListShardsRequest.builder(), consumerId);
+    }
+
     public static SubscribeToShardRequest.Builder subscribeToShardRequestBuilder() {
         return appendUserAgent(SubscribeToShardRequest.builder());
     }
@@ -45,8 +49,16 @@ public class KinesisRequestsBuilder {
         return appendUserAgent(GetRecordsRequest.builder());
     }
 
+    public static GetRecordsRequest.Builder getRecordsRequestBuilder(String consumerId) {
+        return appendUserAgent(GetRecordsRequest.builder(), consumerId);
+    }
+
     public static GetShardIteratorRequest.Builder getShardIteratorRequestBuilder() {
         return appendUserAgent(GetShardIteratorRequest.builder());
+    }
+
+    public static GetShardIteratorRequest.Builder getShardIteratorRequestBuilder(String consumerId) {
+        return appendUserAgent(GetShardIteratorRequest.builder(), consumerId);
     }
 
     public static DescribeStreamSummaryRequest.Builder describeStreamSummaryRequestBuilder() {
@@ -66,6 +78,16 @@ public class KinesisRequestsBuilder {
         return (T) builder.overrideConfiguration(AwsRequestOverrideConfiguration.builder()
                 .addApiName(ApiName.builder()
                         .name(RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT)
+                        .version(RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT_VERSION)
+                        .build())
+                .build());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends AwsRequest.Builder> T appendUserAgent(final T builder, String consumerId) {
+        return (T) builder.overrideConfiguration(AwsRequestOverrideConfiguration.builder()
+                .addApiName(ApiName.builder()
+                        .name(String.format("%s-%s", RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT, consumerId))
                         .version(RetrievalConfig.KINESIS_CLIENT_LIB_USER_AGENT_VERSION)
                         .build())
                 .build());

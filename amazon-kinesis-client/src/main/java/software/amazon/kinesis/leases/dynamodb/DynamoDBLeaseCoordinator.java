@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
@@ -102,6 +103,9 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
     private ScheduledExecutorService leaseCoordinatorThreadPool;
     private ScheduledFuture<?> leaseDiscoveryFuture;
     private ScheduledFuture<?> takerFuture;
+
+    @Getter
+    private String consumerId;
 
     private volatile boolean running = false;
 
@@ -273,6 +277,7 @@ public class DynamoDBLeaseCoordinator implements LeaseCoordinator {
         if (!isTableActive) {
             throw new DependencyException(new IllegalStateException("Creating table timeout"));
         }
+        this.consumerId = leaseRefresher.getLeaseTableIdentifier();
     }
 
     @Override

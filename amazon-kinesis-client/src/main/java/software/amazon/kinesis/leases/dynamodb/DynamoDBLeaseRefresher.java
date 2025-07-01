@@ -76,6 +76,7 @@ import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.common.DdbTableConfig;
 import software.amazon.kinesis.common.FutureUtils;
 import software.amazon.kinesis.common.StreamIdentifier;
+import software.amazon.kinesis.common.UserAgentUtils;
 import software.amazon.kinesis.leases.DynamoUtils;
 import software.amazon.kinesis.leases.Lease;
 import software.amazon.kinesis.leases.LeaseRefresher;
@@ -1403,6 +1404,12 @@ public class DynamoDBLeaseRefresher implements LeaseRefresher {
             checkpoint = lease.checkpoint();
         }
         return checkpoint;
+    }
+
+    @Override
+    public String getLeaseTableIdentifier() throws DependencyException {
+        DescribeTableResponse response = describeLeaseTable();
+        return nonNull(response) ? UserAgentUtils.getConsumerId(response.table().tableArn()) : "";
     }
 
     /*
