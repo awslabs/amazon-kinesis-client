@@ -94,7 +94,12 @@ public class MigrationReadyMonitorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"WORKER_READY_CONDITION_MET", "WORKER_READY_CONDITION_MET_MULTISTREAM_MODE_SANITY"})
+    @ValueSource(
+            strings = {
+                "WORKER_READY_CONDITION_MET",
+                "WORKER_READY_CONDITION_MET_FEW_SHARDS",
+                "WORKER_READY_CONDITION_MET_MULTISTREAM_MODE_SANITY"
+            })
     public void verifyNonLeaderDoesNotPerformMigrationChecks(final TestDataType testDataType) throws Exception {
         final TestData data = TEST_DATA_MAP.get(testDataType);
         when(mockTimeProvider.call()).thenReturn(1000L);
@@ -114,7 +119,12 @@ public class MigrationReadyMonitorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"WORKER_READY_CONDITION_MET", "WORKER_READY_CONDITION_MET_MULTISTREAM_MODE_SANITY"})
+    @ValueSource(
+            strings = {
+                "WORKER_READY_CONDITION_MET",
+                "WORKER_READY_CONDITION_MET_FEW_SHARDS",
+                "WORKER_READY_CONDITION_MET_MULTISTREAM_MODE_SANITY"
+            })
     public void verifyLeaderPerformMigrationChecks(final TestDataType testDataType) throws Exception {
         final TestData data = TEST_DATA_MAP.get(testDataType);
         when(mockTimeProvider.call()).thenReturn(1000L);
@@ -136,6 +146,7 @@ public class MigrationReadyMonitorTest {
     @ParameterizedTest
     @CsvSource({
         "false, WORKER_READY_CONDITION_MET",
+        "false, WORKER_READY_CONDITION_MET_FEW_SHARDS",
         "false, WORKER_READY_CONDITION_MET_MULTISTREAM_MODE_SANITY",
         "true, WORKER_READY_CONDITION_NOT_MET_WITH_ZERO_WORKER_STATS",
         "true, WORKER_READY_CONDITION_NOT_MET_WITH_PARTIAL_WORKER_STATS",
@@ -397,6 +408,7 @@ public class MigrationReadyMonitorTest {
 
     public enum TestDataType {
         WORKER_READY_CONDITION_MET,
+        WORKER_READY_CONDITION_MET_FEW_SHARDS,
         WORKER_READY_CONDITION_NOT_MET_WITH_ZERO_WORKER_STATS,
         WORKER_READY_CONDITION_NOT_MET_WITH_PARTIAL_WORKER_STATS,
         WORKER_READY_CONDITION_NOT_MET_WITH_ALL_INACTIVE_WORKER_STATS,
@@ -439,6 +451,16 @@ public class MigrationReadyMonitorTest {
                                         .lastUpdateTime(ACTIVE_WORKER_STATS_LAST_UPDATE_TIME)
                                         .build())
                                 .collect(Collectors.toList())));
+
+        // If there are fewer shards than workers, so not all workers have leases.
+        TEST_DATA_MAP.put(
+                TestDataType.WORKER_READY_CONDITION_MET_FEW_SHARDS,
+                new TestData(
+                        TEST_DATA_MAP
+                                .get(TestDataType.WORKER_READY_CONDITION_MET)
+                                .leaseList
+                                .subList(0, 1),
+                        TEST_DATA_MAP.get(TestDataType.WORKER_READY_CONDITION_MET).workerMetrics));
 
         TEST_DATA_MAP.put(
                 TestDataType.WORKER_READY_CONDITION_NOT_MET_WITH_ZERO_WORKER_STATS,

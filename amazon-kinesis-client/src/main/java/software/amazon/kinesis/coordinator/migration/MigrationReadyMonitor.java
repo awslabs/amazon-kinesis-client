@@ -200,7 +200,8 @@ public class MigrationReadyMonitor implements Runnable {
         // However, those leases should be assigned to another worker and so the check in the next
         // iteration could succeed. This is intentional to make sure all leases owners are accounted for
         // and the old owner does not come back up without worker metrics and reacquires the lease.
-        final boolean localWorkerMetricsReady = leaseOwners.equals(workersWithActiveWorkerMetrics);
+        // final boolean localWorkerMetricsReady = leaseOwners.equals(workersWithActiveWorkerMetrics);
+        final boolean localWorkerMetricsReady = workersWithActiveWorkerMetrics.containsAll(leaseOwners);
         if (localWorkerMetricsReady != workerMetricsReady) {
             workerMetricsReady = localWorkerMetricsReady;
             log.info("WorkerMetricStats status changed to {}", workerMetricsReady);
