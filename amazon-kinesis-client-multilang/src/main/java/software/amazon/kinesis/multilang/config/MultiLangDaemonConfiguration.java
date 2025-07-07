@@ -90,6 +90,9 @@ public class MultiLangDaemonConfiguration {
     private long failoverTimeMillis;
 
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
+    private long leaseAssignmentIntervalMillis;
+
+    @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
     private Boolean enablePriorityLeaseAssignment;
 
     @ConfigurationSettable(configurationClass = LeaseManagementConfig.class)
