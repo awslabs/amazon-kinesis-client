@@ -148,6 +148,7 @@ public class SchedulerTest {
     private static final String TEST_SHARD_ID = "shardId-000000000001";
     private static final InitialPositionInStreamExtended TEST_INITIAL_POSITION =
             InitialPositionInStreamExtended.newInitialPosition(InitialPositionInStream.TRIM_HORIZON);
+    private static final String CONSUMER_ID = "CONSUMER_ID";
 
     private Scheduler scheduler;
     private ShardRecordProcessorFactory shardRecordProcessorFactory;
@@ -224,10 +225,11 @@ public class SchedulerTest {
                 new RetrievalConfig(kinesisClient, streamName, applicationName).retrievalFactory(retrievalFactory);
         when(leaseCoordinator.leaseRefresher()).thenReturn(dynamoDBLeaseRefresher);
         when(leaseCoordinator.workerIdentifier()).thenReturn(workerIdentifier);
+        when(leaseCoordinator.getConsumerId()).thenReturn(CONSUMER_ID);
         when(dynamoDBLeaseRefresher.waitUntilLeaseOwnerToLeaseKeyIndexExists(anyLong(), anyLong()))
                 .thenReturn(true);
         when(retrievalFactory.createGetRecordsCache(
-                        any(ShardInfo.class), any(StreamConfig.class), any(MetricsFactory.class)))
+                        any(ShardInfo.class), any(StreamConfig.class), any(MetricsFactory.class), anyString()))
                 .thenReturn(recordsPublisher);
         when(kinesisClient.serviceClientConfiguration())
                 .thenReturn(KinesisServiceClientConfiguration.builder()
@@ -1432,7 +1434,7 @@ public class SchedulerTest {
                 .createStreamConfig(StreamIdentifier.multiStreamInstance(streamIdentifierSerializationForOrphan));
 
         final ArgumentCaptor<StreamConfig> streamConfigArgumentCaptor = ArgumentCaptor.forClass(StreamConfig.class);
-        verify(retrievalFactory).createGetRecordsCache(any(), streamConfigArgumentCaptor.capture(), any());
+        verify(retrievalFactory).createGetRecordsCache(any(), streamConfigArgumentCaptor.capture(), any(), anyString());
 
         final StreamConfig actualStreamConfigForOrphan = streamConfigArgumentCaptor.getValue();
         final Optional<Arn> streamArnForOrphan =

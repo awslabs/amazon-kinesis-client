@@ -89,6 +89,8 @@ public class KinesisDataFetcher implements DataFetcher {
     private final Duration maxFutureWait;
     private final String streamAndShardId;
 
+    private final String consumerId;
+
     @Deprecated
     public KinesisDataFetcher(
             KinesisAsyncClient kinesisClient,
@@ -103,7 +105,8 @@ public class KinesisDataFetcher implements DataFetcher {
                         shardId,
                         metricsFactory,
                         maxRecords,
-                        PollingConfig.DEFAULT_REQUEST_TIMEOUT));
+                        PollingConfig.DEFAULT_REQUEST_TIMEOUT),
+                null);
     }
 
     /**
@@ -120,6 +123,20 @@ public class KinesisDataFetcher implements DataFetcher {
      */
     public KinesisDataFetcher(
             KinesisAsyncClient kinesisClient, DataFetcherProviderConfig kinesisDataFetcherProviderConfig) {
+        this(kinesisClient, kinesisDataFetcherProviderConfig, null);
+    }
+
+    /**
+     * Constructs KinesisDataFetcher.
+     *
+     * @param kinesisClient
+     * @param kinesisDataFetcherProviderConfig
+     * @param consumerId
+     */
+    public KinesisDataFetcher(
+            KinesisAsyncClient kinesisClient,
+            DataFetcherProviderConfig kinesisDataFetcherProviderConfig,
+            String consumerId) {
         this.kinesisClient = kinesisClient;
         this.maxFutureWait = kinesisDataFetcherProviderConfig.getKinesisRequestTimeout();
         this.maxRecords = kinesisDataFetcherProviderConfig.getMaxRecords();
@@ -127,6 +144,7 @@ public class KinesisDataFetcher implements DataFetcher {
         this.shardId = kinesisDataFetcherProviderConfig.getShardId();
         this.streamIdentifier = kinesisDataFetcherProviderConfig.getStreamIdentifier();
         this.streamAndShardId = streamIdentifier.serialize() + ":" + shardId;
+        this.consumerId = consumerId;
     }
 
     @Getter
@@ -254,7 +272,7 @@ public class KinesisDataFetcher implements DataFetcher {
             throw new IllegalArgumentException("SequenceNumber should not be null: shardId " + shardId);
         }
 
-        GetShardIteratorRequest.Builder builder = KinesisRequestsBuilder.getShardIteratorRequestBuilder()
+        GetShardIteratorRequest.Builder builder = KinesisRequestsBuilder.getShardIteratorRequestBuilder(consumerId)
                 .streamName(streamIdentifier.streamName())
                 .shardId(shardId);
         streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));
@@ -347,7 +365,7 @@ public class KinesisDataFetcher implements DataFetcher {
 
     @Override
     public GetRecordsRequest getGetRecordsRequest(String nextIterator) {
-        GetRecordsRequest.Builder builder = KinesisRequestsBuilder.getRecordsRequestBuilder()
+        GetRecordsRequest.Builder builder = KinesisRequestsBuilder.getRecordsRequestBuilder(consumerId)
                 .shardIterator(nextIterator)
                 .limit(maxRecords);
         streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));

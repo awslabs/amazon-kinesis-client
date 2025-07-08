@@ -128,9 +128,10 @@ public class HierarchicalShardSyncer {
             final boolean isLeaseTableEmpty)
             throws DependencyException, InvalidStateException, ProvisionedThroughputException,
                     KinesisClientLibIOException, InterruptedException {
+        String consumerId = leaseRefresher.getLeaseTableIdentifier();
         final List<Shard> latestShards = isLeaseTableEmpty
-                ? getShardListAtInitialPosition(shardDetector, initialPosition)
-                : getShardList(shardDetector);
+                ? getShardListAtInitialPosition(shardDetector, initialPosition, consumerId)
+                : getShardList(shardDetector, consumerId);
         return checkAndCreateLeaseForNewShards(
                 shardDetector,
                 leaseRefresher,
@@ -296,7 +297,9 @@ public class HierarchicalShardSyncer {
     }
 
     private static List<Shard> getShardListAtInitialPosition(
-            @NonNull final ShardDetector shardDetector, InitialPositionInStreamExtended initialPositionInStreamExtended)
+            @NonNull final ShardDetector shardDetector,
+            InitialPositionInStreamExtended initialPositionInStreamExtended,
+            String consumerId)
             throws KinesisClientLibIOException, InterruptedException {
 
         final ShardFilter shardFilter = getShardFilterFromInitialPosition(initialPositionInStreamExtended);
@@ -305,7 +308,7 @@ public class HierarchicalShardSyncer {
         List<Shard> shards;
 
         for (int i = 0; i < RETRIES_FOR_COMPLETE_HASH_RANGE; i++) {
-            shards = shardDetector.listShardsWithFilter(shardFilter);
+            shards = shardDetector.listShardsWithFilter(shardFilter, consumerId);
 
             if (shards == null) {
                 throw new KinesisClientLibIOException("Stream " + streamName
@@ -323,11 +326,12 @@ public class HierarchicalShardSyncer {
                 + " was incomplete after " + RETRIES_FOR_COMPLETE_HASH_RANGE + " retries.");
     }
 
-    private List<Shard> getShardList(@NonNull final ShardDetector shardDetector) throws KinesisClientLibIOException {
+    private List<Shard> getShardList(@NonNull final ShardDetector shardDetector, String consumerId)
+            throws KinesisClientLibIOException {
         // Fallback to existing behavior for backward compatibility
         List<Shard> shardList = Collections.emptyList();
         try {
-            shardList = shardDetector.listShardsWithoutConsumingResourceNotFoundException();
+            shardList = shardDetector.listShardsWithoutConsumingResourceNotFoundException(consumerId);
         } catch (ResourceNotFoundException e) {
             if (nonNull(this.deletedStreamListProvider) && isMultiStreamMode) {
                 deletedStreamListProvider.add(StreamIdentifier.multiStreamInstance(streamIdentifier));

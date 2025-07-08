@@ -55,4 +55,9 @@ public interface RetrievalFactory {
             ShardInfo shardInfo, StreamConfig streamConfig, MetricsFactory metricsFactory) {
         return createGetRecordsCache(shardInfo, metricsFactory);
     }
+
+    default RecordsPublisher createGetRecordsCache(
+            ShardInfo shardInfo, StreamConfig streamConfig, MetricsFactory metricsFactory, String consumerId) {
+        return createGetRecordsCache(shardInfo, streamConfig, metricsFactory);
+    }
 }

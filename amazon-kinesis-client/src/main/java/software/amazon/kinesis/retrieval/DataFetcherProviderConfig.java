@@ -46,4 +46,6 @@ public interface DataFetcherProviderConfig {
      * Gets timeout for kinesis request.
      */
     Duration getKinesisRequestTimeout();
+
+    String consumerId();
 }

@@ -183,24 +183,42 @@ public class KinesisShardDetector implements ShardDetector {
 
     @Override
     @Synchronized
+    public List<Shard> listShards(String consumerId) {
+        return listShardsWithFilter(null, consumerId);
+    }
+
+    @Override
+    @Synchronized
     public List<Shard> listShardsWithoutConsumingResourceNotFoundException() {
-        return listShardsWithFilterInternal(null, THROW_RESOURCE_NOT_FOUND_EXCEPTION);
+        return listShardsWithFilterInternal(null, THROW_RESOURCE_NOT_FOUND_EXCEPTION, "");
+    }
+
+    @Override
+    @Synchronized
+    public List<Shard> listShardsWithoutConsumingResourceNotFoundException(String consumerId) {
+        return listShardsWithFilterInternal(null, THROW_RESOURCE_NOT_FOUND_EXCEPTION, consumerId);
     }
 
     @Override
     @Synchronized
     public List<Shard> listShardsWithFilter(ShardFilter shardFilter) {
-        return listShardsWithFilterInternal(shardFilter, !THROW_RESOURCE_NOT_FOUND_EXCEPTION);
+        return listShardsWithFilterInternal(shardFilter, !THROW_RESOURCE_NOT_FOUND_EXCEPTION, "");
+    }
+
+    @Override
+    @Synchronized
+    public List<Shard> listShardsWithFilter(ShardFilter shardFilter, String consumerId) {
+        return listShardsWithFilterInternal(shardFilter, !THROW_RESOURCE_NOT_FOUND_EXCEPTION, consumerId);
     }
 
     private List<Shard> listShardsWithFilterInternal(
-            ShardFilter shardFilter, boolean shouldPropagateResourceNotFoundException) {
+            ShardFilter shardFilter, boolean shouldPropagateResourceNotFoundException, String consumerId) {
         final List<Shard> shards = new ArrayList<>();
         ListShardsResponse result;
         String nextToken = null;
 
         do {
-            result = listShards(shardFilter, nextToken, shouldPropagateResourceNotFoundException);
+            result = listShards(shardFilter, nextToken, shouldPropagateResourceNotFoundException, consumerId);
 
             if (result == null) {
                 /*
@@ -223,8 +241,11 @@ public class KinesisShardDetector implements ShardDetector {
      *      handled by method and return Empty list or propagate the exception.
      */
     private ListShardsResponse listShards(
-            ShardFilter shardFilter, final String nextToken, final boolean shouldPropagateResourceNotFoundException) {
-        ListShardsRequest.Builder builder = KinesisRequestsBuilder.listShardsRequestBuilder();
+            ShardFilter shardFilter,
+            final String nextToken,
+            final boolean shouldPropagateResourceNotFoundException,
+            final String consumerId) {
+        ListShardsRequest.Builder builder = KinesisRequestsBuilder.listShardsRequestBuilder(consumerId);
         if (StringUtils.isEmpty(nextToken)) {
             builder.streamName(streamIdentifier.streamName()).shardFilter(shardFilter);
             streamIdentifier.streamArnOptional().ifPresent(arn -> builder.streamARN(arn.toString()));

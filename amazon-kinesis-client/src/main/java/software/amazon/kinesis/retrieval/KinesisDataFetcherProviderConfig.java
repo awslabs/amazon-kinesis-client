@@ -19,6 +19,8 @@ import java.time.Duration;
 
 import lombok.Data;
 import lombok.NonNull;
+import lombok.experimental.Accessors;
+import org.jetbrains.annotations.NotNull;
 import software.amazon.kinesis.common.StreamIdentifier;
 import software.amazon.kinesis.metrics.MetricsFactory;
 
@@ -42,4 +44,31 @@ public class KinesisDataFetcherProviderConfig implements DataFetcherProviderConf
 
     @NonNull
     private Duration kinesisRequestTimeout;
+
+    @Accessors(fluent = true)
+    private String consumerId;
+
+    public KinesisDataFetcherProviderConfig(
+            @NonNull StreamIdentifier streamIdentifier,
+            @NonNull String shardId,
+            @NonNull MetricsFactory metricsFactory,
+            int maxRecords,
+            @NonNull Duration kinesisRequestTimeout) {
+        this(streamIdentifier, shardId, metricsFactory, maxRecords, kinesisRequestTimeout, "");
+    }
+
+    public KinesisDataFetcherProviderConfig(
+            @NonNull StreamIdentifier streamIdentifier,
+            @NotNull String shardId,
+            @NonNull MetricsFactory metricsFactory,
+            int maxRecords,
+            @NotNull Duration kinesisRequestTimeout,
+            String consumerId) {
+        this.streamIdentifier = streamIdentifier;
+        this.shardId = shardId;
+        this.metricsFactory = metricsFactory;
+        this.maxRecords = maxRecords;
+        this.kinesisRequestTimeout = kinesisRequestTimeout;
+        this.consumerId = consumerId;
+    }
 }

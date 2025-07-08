@@ -188,6 +188,8 @@ public class Scheduler implements Runnable {
     private final LeaseCleanupManager leaseCleanupManager;
     private final SchemaRegistryDecoder schemaRegistryDecoder;
 
+    private volatile String consumerId = "";
+
     private final DeletedStreamListProvider deletedStreamListProvider;
     private final ConsumerTaskFactory taskFactory;
 
@@ -528,6 +530,7 @@ public class Scheduler implements Runnable {
             if (!isDone) {
                 throw new RuntimeException(lastException);
             }
+            this.consumerId = leaseCoordinator.getConsumerId();
             workerStateChangeListener.onWorkerStateChange(WorkerStateChangeListener.WorkerState.STARTED);
         }
     }
@@ -1134,8 +1137,9 @@ public class Scheduler implements Runnable {
             log.info("Created orphan {}", streamConfig);
         }
         Validate.notNull(streamConfig, "StreamConfig should not be null");
-        RecordsPublisher cache =
-                retrievalConfig.retrievalFactory().createGetRecordsCache(shardInfo, streamConfig, metricsFactory);
+        RecordsPublisher cache = retrievalConfig
+                .retrievalFactory()
+                .createGetRecordsCache(shardInfo, streamConfig, metricsFactory, consumerId);
         ShardConsumerArgument argument = new ShardConsumerArgument(
                 shardInfo,
                 streamConfig.streamIdentifier(),
@@ -1160,7 +1164,8 @@ public class Scheduler implements Runnable {
                 hierarchicalShardSyncerProvider.apply(streamConfig),
                 metricsFactory,
                 leaseCleanupManager,
-                schemaRegistryDecoder);
+                schemaRegistryDecoder,
+                this.consumerId);
         return new ShardConsumer(
                 cache,
                 executorService,
