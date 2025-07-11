@@ -192,7 +192,7 @@ public final class LeaseAssignmentManager {
             final InMemoryStorageView inMemoryStorageView = new InMemoryStorageView();
 
             WorkerIdExclusionMonitor exclusionMonitor = WorkerIdExclusionMonitor.getInstance();
-            if (exclusionMonitor.hasActivePattern()) {
+            if (exclusionMonitor != null && exclusionMonitor.hasActivePattern()) {
                 inMemoryStorageView.setWorkerIdExclusionRegex(exclusionMonitor.getPattern());
             }
 
@@ -211,7 +211,7 @@ public final class LeaseAssignmentManager {
                     inMemoryStorageView.getLeaseList(), inMemoryStorageView.getLeaseTableScanTime());
 
             List<Lease> expiredOrUnAssignedLeases = inMemoryStorageView.getLeaseList();
-            // If there is a new worker ID exclusion coordinate state in the coordinator table, then we will treat
+            // If there is a new worker ID exclusion coordinator state in the coordinator table, then we will treat
             // the entire lease list as expired/unassigned, causing all the leases to be reassigned.
             if (exclusionMonitor == null || !exclusionMonitor.hasNewState()) {
                 // This does not include the leases from the worker that has expired (based on WorkerMetricStats's
