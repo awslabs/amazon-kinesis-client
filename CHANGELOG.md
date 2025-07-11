@@ -3,6 +3,9 @@
 For **1.x** release notes, please see [v1.x/CHANGELOG.md](https://github.com/awslabs/amazon-kinesis-client/blob/v1.x/CHANGELOG.md)
 
 ---
+### Release 2.7.1 (2025-07-11)
+* [#1508](https://github.com/awslabs/amazon-kinesis-client/pull/1508) Upgrade schema-registry-common and schema-registry-serde from 1.1.19 to 1.1.24
+
 ### Release 2.7.0 (2025-03-11)
 * [#1444](https://github.com/awslabs/amazon-kinesis-client/pull/1444) Fully remove dependency on the AWS SDK for Java 1.x which will reach [end-of-support by December 31st, 2025](https://aws.amazon.com/blogs/developer/announcing-end-of-support-for-aws-sdk-for-java-v1-x-on-december-31-2025/).
   * The Glue Schema Registry integration functionality no longer depends on AWS SDK for Java 1.x. Previously, it required this as a transient dependency.
