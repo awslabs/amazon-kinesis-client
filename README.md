@@ -63,7 +63,7 @@ provider mapping and MultiLangDaemon credentials provider configuration guide.
   <dependency>
       <groupId>software.amazon.kinesis</groupId>
       <artifactId>amazon-kinesis-client</artifactId>
-      <version>2.7.0</version>
+      <version>2.7.1</version>
   </dependency>
   ```
 
