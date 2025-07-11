@@ -26,6 +26,17 @@
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>amazon-kinesis-client-multilang</artifactId>
+  <packaging>jar</packaging>
+  <name>Amazon Kinesis Client Library for Multilang</name>
+
+  <description>The Amazon Kinesis Client Library for Multilang enables developers to use the Amazon Kinesis Client Library for Java
+    on other languages.
+  </description>
+  <url>https://aws.amazon.com/kinesis</url>
+
+  <scm>
+    <url>https://github.com/awslabs/amazon-kinesis-client.git</url>
+  </scm>
 
   <dependencies>
     <dependency>
