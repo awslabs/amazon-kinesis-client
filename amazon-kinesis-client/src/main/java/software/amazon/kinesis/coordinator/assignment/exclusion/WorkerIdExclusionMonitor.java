@@ -63,7 +63,9 @@ public class WorkerIdExclusionMonitor implements Runnable {
     public static void create(
             CoordinatorStateDAO coordinatorStateDAO, ScheduledExecutorService scheduledExecutorService) {
         if (instance != null) {
-            throw new UnsupportedOperationException("Singleton class should only be instantiated once!");
+            log.warn("Singleton class should only be instantiated once!");
+            return;
+            // throw new UnsupportedOperationException("Singleton class should only be instantiated once!");
         } else {
             instance = new WorkerIdExclusionMonitor(coordinatorStateDAO, scheduledExecutorService);
         }
