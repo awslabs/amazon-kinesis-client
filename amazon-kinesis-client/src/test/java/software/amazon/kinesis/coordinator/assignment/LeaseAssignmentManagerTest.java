@@ -729,7 +729,6 @@ class LeaseAssignmentManagerTest {
     @Test
     void performAssignment_testRetryBehaviorForLeaseRefresher()
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-        final WorkerMetricStatsDAO mockedWorkerMetricsDAO = Mockito.mock(WorkerMetricStatsDAO.class);
         final LeaseRefresher mockedLeaseRefresher = Mockito.mock(LeaseRefresher.class);
 
         when(mockedLeaseRefresher.listLeasesParallely(any(), anyInt())).thenThrow(new RuntimeException());
