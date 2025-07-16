@@ -24,13 +24,16 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+import lombok.Getter;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.annotations.ThreadSafe;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 
+@Getter
 @Slf4j
 @ThreadSafe
 @KinesisClientInternalApi
@@ -49,6 +52,10 @@ public class WorkerIdExclusionMonitor implements Runnable {
     private volatile WorkerIdExclusionState currState;
     private volatile WorkerIdExclusionState prevState;
 
+    private Pattern activePattern;
+    private boolean onlyExcludingLeadership;
+    private boolean hasNewState;
+
     private WorkerIdExclusionMonitor(
             CoordinatorStateDAO coordinatorStateDAO, ScheduledExecutorService scheduledExecutorService) {
         this.coordinatorStateDAO = coordinatorStateDAO;
@@ -63,7 +70,8 @@ public class WorkerIdExclusionMonitor implements Runnable {
     public static void create(
             CoordinatorStateDAO coordinatorStateDAO, ScheduledExecutorService scheduledExecutorService) {
         if (instance != null) {
-            throw new UnsupportedOperationException("Singleton class should only be instantiated once!");
+            log.warn("Singleton class should only be instantiated once!");
+            return;
         } else {
             instance = new WorkerIdExclusionMonitor(coordinatorStateDAO, scheduledExecutorService);
         }
@@ -77,7 +85,19 @@ public class WorkerIdExclusionMonitor implements Runnable {
     public synchronized void run() {
         try {
             this.prevState = this.currState;
-            this.currState = getCurrentState();
+            this.currState = this.getCurrentState();
+
+            if (this.currState != null) {
+                this.hasNewState = !this.currState.equals(this.prevState);
+                this.onlyExcludingLeadership = this.currState.isOnlyExcludingLeadership();
+
+                if (!isExpired(this.currState)) {
+                    this.activePattern = this.currState.getRegex();
+                }
+            }
+        } catch (DynamoDbException ddbe) {
+            log.warn("Caught DynamoDB exception while trying to fetch the worker ID exclusion item from "
+                    + "the coordinator state table." + ddbe.getMessage());
         } catch (Exception e) {
             log.error("Caught exception during run! " + e.getMessage());
         }
@@ -92,39 +112,32 @@ public class WorkerIdExclusionMonitor implements Runnable {
         }
     }
 
-    private WorkerIdExclusionState getCurrentState() throws Exception {
-        return WorkerIdExclusionState.fromDynamoRecord(getDynamoRecord());
-    }
-
     private Map<String, AttributeValue> getDynamoRecord() throws Exception {
         return this.coordinatorStateDAO.getDynamoRecord(WorkerIdExclusionState.WORKER_ID_EXCLUSION_HASH_KEY);
     }
 
+    private WorkerIdExclusionState getCurrentState() throws Exception {
+        return WorkerIdExclusionState.fromDynamoRecord(getDynamoRecord());
+    }
+
     public synchronized boolean isExcluded(@NonNull String workerId) {
-        return hasActivePattern() && matches(workerId);
+        return !this.onlyExcludingLeadership && this.isLeaderExcluded(workerId);
     }
 
-    public synchronized boolean hasActivePattern() {
-        return this.currState != null && this.currState.getRegex() != null && !isExpired(this.currState);
+    public synchronized boolean isLeaderExcluded(@NonNull String workerId) {
+        return this.matches(this.activePattern, workerId);
     }
 
-    public synchronized Pattern getPattern() {
-        return this.currState == null ? null : this.currState.getRegex();
+    public boolean hasNewState() {
+        return this.hasNewState;
     }
 
-    public synchronized boolean hasNewState() {
-        return this.currState != null && !this.currState.equals(this.prevState);
-    }
-
-    private boolean matches(@NonNull String str) {
-        return this.currState.getRegex().pattern().matches(str);
+    public static boolean matches(Pattern pattern, @NonNull String workerId) {
+        return pattern == null ? false : Pattern.matches(pattern.pattern(), workerId);
     }
 
     public static boolean isExpired(@NonNull WorkerIdExclusionState state) {
-        return hasElapsed(state.getExpirationInstant().plus(CLOCK_SKEW_BUFFER_THRESHOLD));
-    }
-
-    public static boolean hasElapsed(Instant instant) {
-        return instant.isBefore(Instant.now());
+        Instant expiry = state.getExpirationInstant();
+        return expiry == null ? false : expiry.plus(CLOCK_SKEW_BUFFER_THRESHOLD).isBefore(Instant.now());
     }
 }

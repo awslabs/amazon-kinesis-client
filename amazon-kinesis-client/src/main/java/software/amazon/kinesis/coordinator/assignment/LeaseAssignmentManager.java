@@ -191,9 +191,11 @@ public final class LeaseAssignmentManager {
 
             final InMemoryStorageView inMemoryStorageView = new InMemoryStorageView();
 
+            // if there is a worker ID exclusion monitor running, get the active pattern (may be null)
+            // the InMemoryStorageView will filter the active worker IDs by the regex during the load
             WorkerIdExclusionMonitor exclusionMonitor = WorkerIdExclusionMonitor.getInstance();
-            if (exclusionMonitor != null && exclusionMonitor.hasActivePattern()) {
-                inMemoryStorageView.setWorkerIdExclusionRegex(exclusionMonitor.getPattern());
+            if (exclusionMonitor != null && !exclusionMonitor.isOnlyExcludingLeadership()) {
+                inMemoryStorageView.setWorkerIdExclusionRegex(exclusionMonitor.getActivePattern());
             }
 
             final long loadStartTime = System.currentTimeMillis();
@@ -211,9 +213,11 @@ public final class LeaseAssignmentManager {
                     inMemoryStorageView.getLeaseList(), inMemoryStorageView.getLeaseTableScanTime());
 
             List<Lease> expiredOrUnAssignedLeases = inMemoryStorageView.getLeaseList();
-            // If there is a new worker ID exclusion coordinator state in the coordinator table, then we will treat
+            // If there is a new worker exclusion coordinator state in the coordinator table, then we will treat
             // the entire lease list as expired/unassigned, causing all the leases to be reassigned.
-            if (exclusionMonitor == null || !exclusionMonitor.hasNewState()) {
+            if (exclusionMonitor == null
+                    || !exclusionMonitor.hasNewState()
+                    || exclusionMonitor.isOnlyExcludingLeadership()) {
                 // This does not include the leases from the worker that has expired (based on WorkerMetricStats's
                 // lastUpdateTime)
                 // but the lease is not expired (based on the leaseCounter on lease).
@@ -634,8 +638,7 @@ public final class LeaseAssignmentManager {
         }
 
         private boolean workerIdExcluded(@NonNull String workerId) {
-            return workerIdExclusionRegex != null
-                    && workerIdExclusionRegex.matcher(workerId).matches();
+            return workerIdExclusionRegex != null && Pattern.matches(workerIdExclusionRegex.pattern(), workerId);
         }
 
         private void updateWorkerThroughput(final String workerId, final double leaseThroughput) {
