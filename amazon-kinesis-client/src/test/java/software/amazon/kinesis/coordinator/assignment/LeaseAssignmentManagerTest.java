@@ -727,36 +727,42 @@ class LeaseAssignmentManagerTest {
     }
 
     @Test
-    void performAssignment_testRetryBehavior()
+    void performAssignment_testRetryBehaviorForLeaseRefresher()
             throws ProvisionedThroughputException, InvalidStateException, DependencyException {
-
-        final WorkerMetricStatsDAO mockedWorkerMetricsDAO = Mockito.mock(WorkerMetricStatsDAO.class);
         final LeaseRefresher mockedLeaseRefresher = Mockito.mock(LeaseRefresher.class);
 
         when(mockedLeaseRefresher.listLeasesParallely(any(), anyInt())).thenThrow(new RuntimeException());
-        when(mockedWorkerMetricsDAO.getAllWorkerMetricStats()).thenThrow(new RuntimeException());
 
-        final LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
-                mockedLeaseRefresher,
-                mockedWorkerMetricsDAO,
-                mockLeaderDecider,
+        createLeaseAssignmentManager(
                 getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
-                TEST_LEADER_WORKER_ID,
                 100L,
-                new NullMetricsFactory(),
-                scheduledExecutorService,
                 System::nanoTime,
                 Integer.MAX_VALUE,
-                LeaseManagementConfig.GracefulLeaseHandoffConfig.builder()
-                        .isGracefulLeaseHandoffEnabled(false)
-                        .build(),
-                2 * 100L);
-
-        leaseAssignmentManager.start();
+                mockedLeaseRefresher,
+                workerMetricsDAO);
 
         leaseAssignmentManagerRunnable.run();
 
         verify(mockedLeaseRefresher, times(2)).listLeasesParallely(any(), anyInt());
+    }
+
+    @Test
+    void performAssignment_testRetryBehaviorForWorkerMetricsDAO()
+            throws ProvisionedThroughputException, InvalidStateException, DependencyException {
+        final WorkerMetricStatsDAO mockedWorkerMetricsDAO = Mockito.mock(WorkerMetricStatsDAO.class);
+
+        when(mockedWorkerMetricsDAO.getAllWorkerMetricStats()).thenThrow(new RuntimeException());
+
+        createLeaseAssignmentManager(
+                getWorkerUtilizationAwareAssignmentConfig(Double.MAX_VALUE, 20),
+                100L,
+                System::nanoTime,
+                Integer.MAX_VALUE,
+                leaseRefresher,
+                mockedWorkerMetricsDAO);
+
+        leaseAssignmentManagerRunnable.run();
+
         verify(mockedWorkerMetricsDAO, times(2)).getAllWorkerMetricStats();
     }
 
@@ -1200,9 +1206,21 @@ class LeaseAssignmentManagerTest {
             final Supplier<Long> nanoTimeProvider,
             final int maxLeasesPerWorker) {
 
+        return createLeaseAssignmentManager(
+                config, leaseDurationMillis, nanoTimeProvider, maxLeasesPerWorker, leaseRefresher, workerMetricsDAO);
+    }
+
+    private LeaseAssignmentManager createLeaseAssignmentManager(
+            final LeaseManagementConfig.WorkerUtilizationAwareAssignmentConfig config,
+            final Long leaseDurationMillis,
+            final Supplier<Long> nanoTimeProvider,
+            final int maxLeasesPerWorker,
+            LeaseRefresher leaseRefresher,
+            WorkerMetricStatsDAO workerMetricStatsDao) {
+
         final LeaseAssignmentManager leaseAssignmentManager = new LeaseAssignmentManager(
                 leaseRefresher,
-                workerMetricsDAO,
+                workerMetricStatsDao,
                 mockLeaderDecider,
                 config,
                 TEST_LEADER_WORKER_ID,
