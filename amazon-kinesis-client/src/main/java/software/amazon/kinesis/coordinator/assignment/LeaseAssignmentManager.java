@@ -190,12 +190,14 @@ public final class LeaseAssignmentManager {
             log.info("Current worker {} is a leader, performing assignment", currentWorkerId);
 
             final InMemoryStorageView inMemoryStorageView = new InMemoryStorageView();
+            boolean reassignAllLeases = false;
 
             // if there is a worker ID exclusion monitor running, get the active pattern (may be null)
             // the InMemoryStorageView will filter the active worker IDs by the regex during the load
             WorkerIdExclusionMonitor exclusionMonitor = WorkerIdExclusionMonitor.getInstance();
             if (exclusionMonitor != null && !exclusionMonitor.isOnlyExcludingLeadership()) {
                 inMemoryStorageView.setWorkerIdExclusionRegex(exclusionMonitor.getActivePattern());
+                reassignAllLeases = exclusionMonitor.isNewState();
             }
 
             final long loadStartTime = System.currentTimeMillis();
@@ -215,9 +217,7 @@ public final class LeaseAssignmentManager {
             List<Lease> expiredOrUnAssignedLeases = inMemoryStorageView.getLeaseList();
             // If there is a new worker exclusion coordinator state in the coordinator table, then we will treat
             // the entire lease list as expired/unassigned, causing all the leases to be reassigned.
-            if (exclusionMonitor == null
-                    || !exclusionMonitor.hasNewState()
-                    || exclusionMonitor.isOnlyExcludingLeadership()) {
+            if (!reassignAllLeases) {
                 // This does not include the leases from the worker that has expired (based on WorkerMetricStats's
                 // lastUpdateTime)
                 // but the lease is not expired (based on the leaseCounter on lease).

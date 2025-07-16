@@ -114,7 +114,7 @@ public class DynamoDBLockBasedLeaderDecider implements LeaderDecider {
         // if there's a worker ID exclusion monitor running, check if own worker ID is excluded
         // this works based on a regex pattern written into the coordinator table, plus an expiration time
         WorkerIdExclusionMonitor exclusionMonitor = WorkerIdExclusionMonitor.getInstance();
-        if (exclusionMonitor != null && exclusionMonitor.isLeaderExcluded(workerId)) {
+        if (exclusionMonitor != null && exclusionMonitor.isExcludedFromLeadership(workerId)) {
             log.info("Worker : {} is not eligible to be leader based on exclusion pattern.", workerId);
             releaseLeadershipIfHeld();
             publishIsLeaderMetrics(false);

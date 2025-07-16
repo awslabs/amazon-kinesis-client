@@ -33,7 +33,6 @@ import software.amazon.awssdk.services.dynamodb.model.DynamoDbException;
 import software.amazon.kinesis.annotations.KinesisClientInternalApi;
 import software.amazon.kinesis.coordinator.CoordinatorStateDAO;
 
-@Getter
 @Slf4j
 @ThreadSafe
 @KinesisClientInternalApi
@@ -52,9 +51,14 @@ public class WorkerIdExclusionMonitor implements Runnable {
     private volatile WorkerIdExclusionState currState;
     private volatile WorkerIdExclusionState prevState;
 
+    @Getter
     private Pattern activePattern;
+
+    @Getter
     private boolean onlyExcludingLeadership;
-    private boolean hasNewState;
+
+    @Getter
+    private boolean newState;
 
     private WorkerIdExclusionMonitor(
             CoordinatorStateDAO coordinatorStateDAO, ScheduledExecutorService scheduledExecutorService) {
@@ -87,13 +91,11 @@ public class WorkerIdExclusionMonitor implements Runnable {
             this.prevState = this.currState;
             this.currState = this.getCurrentState();
 
-            if (this.currState != null) {
-                this.hasNewState = !this.currState.equals(this.prevState);
-                this.onlyExcludingLeadership = this.currState.isOnlyExcludingLeadership();
+            this.newState = !this.currState.equals(this.prevState);
+            this.onlyExcludingLeadership = this.currState.isOnlyExcludingLeadership();
 
-                if (!isExpired(this.currState)) {
-                    this.activePattern = this.currState.getRegex();
-                }
+            if (!isExpired(this.currState)) {
+                this.activePattern = this.currState.getRegex();
             }
         } catch (DynamoDbException ddbe) {
             log.warn("Caught DynamoDB exception while trying to fetch the worker ID exclusion item from "
@@ -121,15 +123,11 @@ public class WorkerIdExclusionMonitor implements Runnable {
     }
 
     public synchronized boolean isExcluded(@NonNull String workerId) {
-        return !this.onlyExcludingLeadership && this.isLeaderExcluded(workerId);
+        return !this.onlyExcludingLeadership && this.isExcludedFromLeadership(workerId);
     }
 
-    public synchronized boolean isLeaderExcluded(@NonNull String workerId) {
+    public synchronized boolean isExcludedFromLeadership(@NonNull String workerId) {
         return this.matches(this.activePattern, workerId);
-    }
-
-    public boolean hasNewState() {
-        return this.hasNewState;
     }
 
     public static boolean matches(Pattern pattern, @NonNull String workerId) {
