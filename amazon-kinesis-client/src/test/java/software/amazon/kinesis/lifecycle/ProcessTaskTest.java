@@ -92,7 +92,6 @@ public class ProcessTaskTest {
     private boolean skipShardSyncAtWorkerInitializationIfLeasesExist = true;
     private ShardInfo shardInfo;
 
-    @Mock
     private ProcessRecordsInput processRecordsInput;
 
     @Mock
@@ -125,6 +124,8 @@ public class ProcessTaskTest {
         when(checkpointer.checkpointer()).thenReturn(mock(Checkpointer.class));
 
         shardInfo = new ShardInfo(shardId, null, null, null);
+        processRecordsInput =
+                ProcessRecordsInput.builder().records(Collections.emptyList()).build();
     }
 
     private ProcessTask makeProcessTask(ProcessRecordsInput processRecordsInput) {
@@ -170,8 +171,8 @@ public class ProcessTaskTest {
 
     @Test
     public void testProcessTaskWithShardEndReached() {
+        processRecordsInput = processRecordsInput.toBuilder().isAtShardEnd(true).build();
         processTask = makeProcessTask(processRecordsInput);
-        when(processRecordsInput.isAtShardEnd()).thenReturn(true);
 
         TaskResult result = processTask.call();
         assertThat(result, shardEndTaskResult(true));
@@ -425,7 +426,9 @@ public class ProcessTaskTest {
                                 .build())
                         .build());
 
-        when(processRecordsInput.records()).thenReturn(Collections.singletonList(rawRecord));
+        processRecordsInput = processRecordsInput.toBuilder()
+                .records(Collections.singletonList(rawRecord))
+                .build();
         ProcessTask processTask = makeProcessTask(processRecordsInput, aggregatorUtil, false);
         ShardRecordProcessorOutcome outcome = testWithRecords(
                 processTask,
@@ -486,7 +489,8 @@ public class ProcessTaskTest {
                                 .build())
                         .build());
 
-        when(processRecordsInput.records()).thenReturn(rawRecords);
+        processRecordsInput =
+                processRecordsInput.toBuilder().records(rawRecords).build();
         ProcessTask processTask = makeProcessTask(processRecordsInput, aggregatorUtil, false);
         ShardRecordProcessorOutcome outcome = testWithRecords(
                 processTask,
@@ -499,7 +503,6 @@ public class ProcessTaskTest {
 
     @Test
     public void testProcessTask_WhenSchemaRegistryRecordsAreSent_ProcessesThemSuccessfully() {
-        processTask = makeProcessTask(processRecordsInput, glueSchemaRegistryDeserializer);
         final BigInteger sqn = new BigInteger(128, new Random());
         final BigInteger previousCheckpointSqn = BigInteger.valueOf(1);
         final String pk = UUID.randomUUID().toString();
@@ -512,7 +515,10 @@ public class ProcessTaskTest {
 
         final KinesisClientRecord nonSchemaRegistryRecord = makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
 
-        when(processRecordsInput.records()).thenReturn(ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord));
+        processRecordsInput = processRecordsInput.toBuilder()
+                .records(ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord))
+                .build();
+        processTask = makeProcessTask(processRecordsInput, glueSchemaRegistryDeserializer);
 
         doReturn(true).when(glueSchemaRegistryDeserializer).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
         doReturn(TEST_DATA).when(glueSchemaRegistryDeserializer).getData(SCHEMA_REGISTRY_PAYLOAD);
@@ -541,7 +547,6 @@ public class ProcessTaskTest {
 
     @Test
     public void testProcessTask_WhenSchemaRegistryDecodeCheckFails_IgnoresRecord() {
-        processTask = makeProcessTask(processRecordsInput, glueSchemaRegistryDeserializer);
         final BigInteger sqn = new BigInteger(128, new Random());
         final BigInteger previousCheckpointSqn = BigInteger.valueOf(1);
         final String pk = UUID.randomUUID().toString();
@@ -554,7 +559,10 @@ public class ProcessTaskTest {
 
         final KinesisClientRecord nonSchemaRegistryRecord = makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
 
-        when(processRecordsInput.records()).thenReturn(ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord));
+        processRecordsInput = processRecordsInput.toBuilder()
+                .records(ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord))
+                .build();
+        processTask = makeProcessTask(processRecordsInput, glueSchemaRegistryDeserializer);
 
         doThrow(new RuntimeException("Invalid data"))
                 .when(glueSchemaRegistryDeserializer)
@@ -576,7 +584,6 @@ public class ProcessTaskTest {
 
     @Test
     public void testProcessTask_WhenSchemaRegistryDecodingFails_IgnoresRecord() {
-        processTask = makeProcessTask(processRecordsInput, glueSchemaRegistryDeserializer);
         final BigInteger sqn = new BigInteger(128, new Random());
         final BigInteger previousCheckpointSqn = BigInteger.valueOf(1);
         final String pk = UUID.randomUUID().toString();
@@ -589,7 +596,10 @@ public class ProcessTaskTest {
 
         final KinesisClientRecord nonSchemaRegistryRecord = makeKinesisClientRecord(pk, sqn.toString(), ts.toInstant());
 
-        when(processRecordsInput.records()).thenReturn(ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord));
+        processRecordsInput = processRecordsInput.toBuilder()
+                .records(ImmutableList.of(schemaRegistryRecord, nonSchemaRegistryRecord))
+                .build();
+        processTask = makeProcessTask(processRecordsInput, glueSchemaRegistryDeserializer);
 
         doReturn(true).when(glueSchemaRegistryDeserializer).canDeserialize(SCHEMA_REGISTRY_PAYLOAD);
 
@@ -721,7 +731,7 @@ public class ProcessTaskTest {
             ExtendedSequenceNumber lastCheckpointValue,
             ExtendedSequenceNumber largestPermittedCheckpointValue,
             AggregatorUtil aggregatorUtil) {
-        when(processRecordsInput.records()).thenReturn(records);
+        processRecordsInput = processRecordsInput.toBuilder().records(records).build();
         return testWithRecords(
                 makeProcessTask(processRecordsInput, aggregatorUtil, skipShardSyncAtWorkerInitializationIfLeasesExist),
                 lastCheckpointValue,
